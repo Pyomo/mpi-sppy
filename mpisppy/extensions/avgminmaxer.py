@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # An extension to compute and output avg, min, max for
 # a component (e.g., first stage cost).
 # DLW, Feb 2019

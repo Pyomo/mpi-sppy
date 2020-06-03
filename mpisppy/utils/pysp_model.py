@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import os.path
 import pyomo.environ as pyo
 from pyomo.pysp.scenariotree.tree_structure_model import \

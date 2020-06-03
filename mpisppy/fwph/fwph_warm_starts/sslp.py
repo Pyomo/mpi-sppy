@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Test warm-starting the farmer example (no variable fixing here)
 '''
 import os

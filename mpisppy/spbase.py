@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
 # (DLW delete this comment): some of prep moved to init
 

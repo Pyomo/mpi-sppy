@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # update April 2020: BUT this really needs upper and lower bound spokes
 # dlw February 2019: PySP 2 for the sslp example
 

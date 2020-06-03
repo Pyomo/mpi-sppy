@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import mpisppy.examples.farmer.farmer as farmer
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo

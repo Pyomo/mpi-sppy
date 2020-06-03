@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Try a particular scenario as xhat. This is mainly for regression testing.
 # DLW, Feb 2019
 # This extension uses PHoptions["xhat_scenario_dict"] (keys are node names)

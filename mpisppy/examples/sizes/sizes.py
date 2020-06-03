@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import os
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.examples.sizes.models.ReferenceModel as ref

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # updated April 2020
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatlooper import XhatLooper

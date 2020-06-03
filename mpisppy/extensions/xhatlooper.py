@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # look for an xhat. 
 # Written to be the only extension or called from an extension "manager."
 # DLW, Jan 2019

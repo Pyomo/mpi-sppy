@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Utilities for reading and writing W and 
     x-bar values in and out of csv files. 
 

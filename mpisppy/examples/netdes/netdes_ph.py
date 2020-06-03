@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Solve the EF of the network problems
 '''
 from mpisppy.examples.netdes.netdes import scenario_creator, scenario_denouement

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Async Utility. Started by Bill Hart,
 #    simple generalization by Dave Woodruff 2019.
 # See doc/philosophy.rst

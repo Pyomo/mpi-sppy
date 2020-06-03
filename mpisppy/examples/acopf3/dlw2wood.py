@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # April 2020; dlw for aph experiments; do not release
 # mpiexec -np 2 python -m mpi4py dlw2wood.py 2 3
 

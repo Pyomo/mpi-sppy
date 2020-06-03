@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Solution to the Lagrangian relaxation of a hybrid solar-battery storage
     system from the paper:
 

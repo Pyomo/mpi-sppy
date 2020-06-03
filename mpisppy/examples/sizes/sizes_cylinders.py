@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import sys
 import copy
 import mpisppy.examples.sizes.sizes as sizes

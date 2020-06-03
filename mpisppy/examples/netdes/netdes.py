@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Implementation of a simple network design problem. See README for more info
 
     Created: 9 November 2019 by DTM

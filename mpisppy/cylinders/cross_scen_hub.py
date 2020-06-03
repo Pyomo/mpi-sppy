@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 from math import inf
 from pyomo.core.expr.numeric_expr import LinearExpression
 from mpisppy.cylinders.hub import PHHub

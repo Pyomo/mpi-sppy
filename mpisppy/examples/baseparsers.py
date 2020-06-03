@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # set up the most common parser args for mpi-sppy examples
 """ NOTE TO NEW USERS: just using these parsers will not, itself, do anything.
     You have to use the values when you create the dictionaries that are passed

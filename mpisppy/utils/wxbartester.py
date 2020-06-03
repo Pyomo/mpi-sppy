@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Driver script to test the w/xbar read/write extensions using UC 
 '''
 

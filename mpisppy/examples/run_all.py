@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Run a lot of examples; dlw May 2020
 # Not intended to be user-friendly.
 # Assumes you run from the examples directory.

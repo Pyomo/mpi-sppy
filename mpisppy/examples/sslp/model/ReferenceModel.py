@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # -*- coding: utf-8 -*-
 """
 Created on Fri Feb  8 11:49:24 2013

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import pyutilib.th as unittest
 import pyomo.environ as pyo
 import os.path

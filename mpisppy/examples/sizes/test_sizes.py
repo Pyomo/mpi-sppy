@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # updated 23 April 2020
 # Serial (not cylinders)
 # BTW: the name test_sizes is misleading. This is not a unittest.

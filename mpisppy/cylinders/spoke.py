@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import numpy as np
 import abc
 import enum

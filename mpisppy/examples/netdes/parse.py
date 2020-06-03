@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Parse data from an instance file
 
     TODO: Currently storing the (dense) adjacency matrix. Cheaper not to.

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 from mpisppy.utils.sputils import create_EF
 import mpisppy.spbase
 import pyomo.environ as pyo

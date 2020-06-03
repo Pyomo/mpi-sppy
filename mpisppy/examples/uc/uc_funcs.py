@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # April 2020: DLW asks: why are we using an environment variable and cb_data?
 # (maybe there is a super-computer reason)
 

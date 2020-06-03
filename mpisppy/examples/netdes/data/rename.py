@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import subprocess
 
 piper = subprocess.Popen(['ls'], 

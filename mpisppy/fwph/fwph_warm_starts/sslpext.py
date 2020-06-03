@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 from mpisppy.utils.wxbarreader import WXBarReader
 from mpisppy.utils.wxbarwriter import WXBarWriter
 import numpy as np

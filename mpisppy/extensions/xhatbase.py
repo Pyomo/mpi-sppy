@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import pyomo.environ as pyo
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
