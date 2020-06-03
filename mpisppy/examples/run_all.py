@@ -60,10 +60,6 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --no-fwph".format(solver_name))
-do_one("farmer", "farmer_lshapedhub.py", 2,
-       "3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 "
-       "--solver-name={} --no-fwph --threads=1".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
        "6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
@@ -108,6 +104,11 @@ do_one("uc", "uc_lshaped.py", 2,
        "--bundles-per-rank=0 --max-iterations=2 "
        "--default-rho=1 --num-scens=10 "
        "--solver-name={} --threads=1".format(solver_name))
+do_one("farmer", "farmer_lshapedhub.py", 2,
+       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--default-rho=1 "
+       "--solver-name={} --no-fwph --threads=1".format(solver_name))
+
 
 if len(badguys) > 0:
     print("\nBad Guys:")
