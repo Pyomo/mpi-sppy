@@ -1,0 +1,457 @@
+set Stages :=
+FirstStage SecondStage
+;
+
+set StageVariables[FirstStage] :=
+UnitOn[*,*]
+;
+
+set StageVariables[SecondStage] :=
+PowerGeneratedAboveMinimum[*,*]
+;
+
+set StageExpressions[SecondStage] := 
+MaximumPowerAvailable[*,*]
+PowerGenerated[*,*]
+;
+
+set StageDerivedVariables[FirstStage] :=
+StartupCost[*,*]
+ShutdownCost[*,*]
+;
+
+set StageDerivedVariables[SecondStage] :=
+UnitStart[*,*]
+UnitStop[*,*]
+ProductionCost[*,*]
+NondispatchablePowerUsed[*,*]
+ReserveShortfall[*]
+LoadGenerateMismatch[*,*]
+posLoadGenerateMismatch[*,*]
+negLoadGenerateMismatch[*,*]
+;
+
+param StageCost :=
+FirstStage StageCost[FirstStage]
+SecondStage StageCost[SecondStage]
+;
+set Nodes :=
+   Node_ROOT
+   Node_ROOT_99
+   Node_ROOT_62
+   Node_ROOT_28
+   Node_ROOT_54
+   Node_ROOT_94
+   Node_ROOT_90
+   Node_ROOT_42
+   Node_ROOT_93
+   Node_ROOT_49
+   Node_ROOT_6
+   Node_ROOT_81
+   Node_ROOT_25
+   Node_ROOT_1
+   Node_ROOT_61
+   Node_ROOT_48
+   Node_ROOT_88
+   Node_ROOT_91
+   Node_ROOT_52
+   Node_ROOT_18
+   Node_ROOT_87
+   Node_ROOT_11
+   Node_ROOT_85
+   Node_ROOT_37
+   Node_ROOT_44
+   Node_ROOT_3
+   Node_ROOT_86
+   Node_ROOT_64
+   Node_ROOT_68
+   Node_ROOT_10
+   Node_ROOT_50
+   Node_ROOT_76
+   Node_ROOT_40
+   Node_ROOT_46
+   Node_ROOT_77
+   Node_ROOT_97
+   Node_ROOT_67
+   Node_ROOT_60
+   Node_ROOT_72
+   Node_ROOT_43
+   Node_ROOT_98
+   Node_ROOT_59
+   Node_ROOT_7
+   Node_ROOT_41
+   Node_ROOT_9
+   Node_ROOT_0
+   Node_ROOT_31
+   Node_ROOT_92
+   Node_ROOT_2
+   Node_ROOT_56
+   Node_ROOT_23
+   Node_ROOT_63
+   Node_ROOT_19
+   Node_ROOT_36
+   Node_ROOT_30
+   Node_ROOT_24
+   Node_ROOT_14
+   Node_ROOT_32
+   Node_ROOT_21
+   Node_ROOT_22
+   Node_ROOT_75
+   Node_ROOT_17
+   Node_ROOT_58
+   Node_ROOT_45
+   Node_ROOT_79
+   Node_ROOT_13
+   Node_ROOT_47
+   Node_ROOT_80
+   Node_ROOT_8
+   Node_ROOT_26
+   Node_ROOT_38
+   Node_ROOT_66
+   Node_ROOT_78
+   Node_ROOT_29
+   Node_ROOT_74
+   Node_ROOT_84
+   Node_ROOT_35
+   Node_ROOT_57
+   Node_ROOT_51
+   Node_ROOT_20
+   Node_ROOT_70
+   Node_ROOT_39
+   Node_ROOT_4
+   Node_ROOT_53
+   Node_ROOT_5
+   Node_ROOT_15
+   Node_ROOT_96
+   Node_ROOT_69
+   Node_ROOT_83
+   Node_ROOT_27
+   Node_ROOT_55
+   Node_ROOT_95
+   Node_ROOT_16
+   Node_ROOT_89
+   Node_ROOT_34
+   Node_ROOT_12
+   Node_ROOT_65
+   Node_ROOT_73
+   Node_ROOT_82
+   Node_ROOT_71
+   Node_ROOT_33
+;
+
+param NodeStage :=
+   Node_ROOT FirstStage
+   Node_ROOT_99 SecondStage
+   Node_ROOT_62 SecondStage
+   Node_ROOT_28 SecondStage
+   Node_ROOT_54 SecondStage
+   Node_ROOT_94 SecondStage
+   Node_ROOT_90 SecondStage
+   Node_ROOT_42 SecondStage
+   Node_ROOT_93 SecondStage
+   Node_ROOT_49 SecondStage
+   Node_ROOT_6 SecondStage
+   Node_ROOT_81 SecondStage
+   Node_ROOT_25 SecondStage
+   Node_ROOT_1 SecondStage
+   Node_ROOT_61 SecondStage
+   Node_ROOT_48 SecondStage
+   Node_ROOT_88 SecondStage
+   Node_ROOT_91 SecondStage
+   Node_ROOT_52 SecondStage
+   Node_ROOT_18 SecondStage
+   Node_ROOT_87 SecondStage
+   Node_ROOT_11 SecondStage
+   Node_ROOT_85 SecondStage
+   Node_ROOT_37 SecondStage
+   Node_ROOT_44 SecondStage
+   Node_ROOT_3 SecondStage
+   Node_ROOT_86 SecondStage
+   Node_ROOT_64 SecondStage
+   Node_ROOT_68 SecondStage
+   Node_ROOT_10 SecondStage
+   Node_ROOT_50 SecondStage
+   Node_ROOT_76 SecondStage
+   Node_ROOT_40 SecondStage
+   Node_ROOT_46 SecondStage
+   Node_ROOT_77 SecondStage
+   Node_ROOT_97 SecondStage
+   Node_ROOT_67 SecondStage
+   Node_ROOT_60 SecondStage
+   Node_ROOT_72 SecondStage
+   Node_ROOT_43 SecondStage
+   Node_ROOT_98 SecondStage
+   Node_ROOT_59 SecondStage
+   Node_ROOT_7 SecondStage
+   Node_ROOT_41 SecondStage
+   Node_ROOT_9 SecondStage
+   Node_ROOT_0 SecondStage
+   Node_ROOT_31 SecondStage
+   Node_ROOT_92 SecondStage
+   Node_ROOT_2 SecondStage
+   Node_ROOT_56 SecondStage
+   Node_ROOT_23 SecondStage
+   Node_ROOT_63 SecondStage
+   Node_ROOT_19 SecondStage
+   Node_ROOT_36 SecondStage
+   Node_ROOT_30 SecondStage
+   Node_ROOT_24 SecondStage
+   Node_ROOT_14 SecondStage
+   Node_ROOT_32 SecondStage
+   Node_ROOT_21 SecondStage
+   Node_ROOT_22 SecondStage
+   Node_ROOT_75 SecondStage
+   Node_ROOT_17 SecondStage
+   Node_ROOT_58 SecondStage
+   Node_ROOT_45 SecondStage
+   Node_ROOT_79 SecondStage
+   Node_ROOT_13 SecondStage
+   Node_ROOT_47 SecondStage
+   Node_ROOT_80 SecondStage
+   Node_ROOT_8 SecondStage
+   Node_ROOT_26 SecondStage
+   Node_ROOT_38 SecondStage
+   Node_ROOT_66 SecondStage
+   Node_ROOT_78 SecondStage
+   Node_ROOT_29 SecondStage
+   Node_ROOT_74 SecondStage
+   Node_ROOT_84 SecondStage
+   Node_ROOT_35 SecondStage
+   Node_ROOT_57 SecondStage
+   Node_ROOT_51 SecondStage
+   Node_ROOT_20 SecondStage
+   Node_ROOT_70 SecondStage
+   Node_ROOT_39 SecondStage
+   Node_ROOT_4 SecondStage
+   Node_ROOT_53 SecondStage
+   Node_ROOT_5 SecondStage
+   Node_ROOT_15 SecondStage
+   Node_ROOT_96 SecondStage
+   Node_ROOT_69 SecondStage
+   Node_ROOT_83 SecondStage
+   Node_ROOT_27 SecondStage
+   Node_ROOT_55 SecondStage
+   Node_ROOT_95 SecondStage
+   Node_ROOT_16 SecondStage
+   Node_ROOT_89 SecondStage
+   Node_ROOT_34 SecondStage
+   Node_ROOT_12 SecondStage
+   Node_ROOT_65 SecondStage
+   Node_ROOT_73 SecondStage
+   Node_ROOT_82 SecondStage
+   Node_ROOT_71 SecondStage
+   Node_ROOT_33 SecondStage
+;
+
+set Children[Node_ROOT] := 
+   Node_ROOT_99   Node_ROOT_62   Node_ROOT_28   Node_ROOT_54   Node_ROOT_94   Node_ROOT_90   Node_ROOT_42   Node_ROOT_93   Node_ROOT_49   Node_ROOT_6   Node_ROOT_81   Node_ROOT_25   Node_ROOT_1   Node_ROOT_61   Node_ROOT_48   Node_ROOT_88   Node_ROOT_91   Node_ROOT_52   Node_ROOT_18   Node_ROOT_87   Node_ROOT_11   Node_ROOT_85   Node_ROOT_37   Node_ROOT_44   Node_ROOT_3   Node_ROOT_86   Node_ROOT_64   Node_ROOT_68   Node_ROOT_10   Node_ROOT_50   Node_ROOT_76   Node_ROOT_40   Node_ROOT_46   Node_ROOT_77   Node_ROOT_97   Node_ROOT_67   Node_ROOT_60   Node_ROOT_72   Node_ROOT_43   Node_ROOT_98   Node_ROOT_59   Node_ROOT_7   Node_ROOT_41   Node_ROOT_9   Node_ROOT_0   Node_ROOT_31   Node_ROOT_92   Node_ROOT_2   Node_ROOT_56   Node_ROOT_23   Node_ROOT_63   Node_ROOT_19   Node_ROOT_36   Node_ROOT_30   Node_ROOT_24   Node_ROOT_14   Node_ROOT_32   Node_ROOT_21   Node_ROOT_22   Node_ROOT_75   Node_ROOT_17   Node_ROOT_58   Node_ROOT_45   Node_ROOT_79   Node_ROOT_13   Node_ROOT_47   Node_ROOT_80   Node_ROOT_8   Node_ROOT_26   Node_ROOT_38   Node_ROOT_66   Node_ROOT_78   Node_ROOT_29   Node_ROOT_74   Node_ROOT_84   Node_ROOT_35   Node_ROOT_57   Node_ROOT_51   Node_ROOT_20   Node_ROOT_70   Node_ROOT_39   Node_ROOT_4   Node_ROOT_53   Node_ROOT_5   Node_ROOT_15   Node_ROOT_96   Node_ROOT_69   Node_ROOT_83   Node_ROOT_27   Node_ROOT_55   Node_ROOT_95   Node_ROOT_16   Node_ROOT_89   Node_ROOT_34   Node_ROOT_12   Node_ROOT_65   Node_ROOT_73   Node_ROOT_82   Node_ROOT_71   Node_ROOT_33;
+
+param ConditionalProbability :=
+   Node_ROOT 1.0
+   Node_ROOT_99 0.01
+   Node_ROOT_62 0.01
+   Node_ROOT_28 0.01
+   Node_ROOT_54 0.01
+   Node_ROOT_94 0.01
+   Node_ROOT_90 0.01
+   Node_ROOT_42 0.01
+   Node_ROOT_93 0.01
+   Node_ROOT_49 0.01
+   Node_ROOT_6 0.01
+   Node_ROOT_81 0.01
+   Node_ROOT_25 0.01
+   Node_ROOT_1 0.01
+   Node_ROOT_61 0.01
+   Node_ROOT_48 0.01
+   Node_ROOT_88 0.01
+   Node_ROOT_91 0.01
+   Node_ROOT_52 0.01
+   Node_ROOT_18 0.01
+   Node_ROOT_87 0.01
+   Node_ROOT_11 0.01
+   Node_ROOT_85 0.01
+   Node_ROOT_37 0.01
+   Node_ROOT_44 0.01
+   Node_ROOT_3 0.01
+   Node_ROOT_86 0.01
+   Node_ROOT_64 0.01
+   Node_ROOT_68 0.01
+   Node_ROOT_10 0.01
+   Node_ROOT_50 0.01
+   Node_ROOT_76 0.01
+   Node_ROOT_40 0.01
+   Node_ROOT_46 0.01
+   Node_ROOT_77 0.01
+   Node_ROOT_97 0.01
+   Node_ROOT_67 0.01
+   Node_ROOT_60 0.01
+   Node_ROOT_72 0.01
+   Node_ROOT_43 0.01
+   Node_ROOT_98 0.01
+   Node_ROOT_59 0.01
+   Node_ROOT_7 0.01
+   Node_ROOT_41 0.01
+   Node_ROOT_9 0.01
+   Node_ROOT_0 0.01
+   Node_ROOT_31 0.01
+   Node_ROOT_92 0.01
+   Node_ROOT_2 0.01
+   Node_ROOT_56 0.01
+   Node_ROOT_23 0.01
+   Node_ROOT_63 0.01
+   Node_ROOT_19 0.01
+   Node_ROOT_36 0.01
+   Node_ROOT_30 0.01
+   Node_ROOT_24 0.01
+   Node_ROOT_14 0.01
+   Node_ROOT_32 0.01
+   Node_ROOT_21 0.01
+   Node_ROOT_22 0.01
+   Node_ROOT_75 0.01
+   Node_ROOT_17 0.01
+   Node_ROOT_58 0.01
+   Node_ROOT_45 0.01
+   Node_ROOT_79 0.01
+   Node_ROOT_13 0.01
+   Node_ROOT_47 0.01
+   Node_ROOT_80 0.01
+   Node_ROOT_8 0.01
+   Node_ROOT_26 0.01
+   Node_ROOT_38 0.01
+   Node_ROOT_66 0.01
+   Node_ROOT_78 0.01
+   Node_ROOT_29 0.01
+   Node_ROOT_74 0.01
+   Node_ROOT_84 0.01
+   Node_ROOT_35 0.01
+   Node_ROOT_57 0.01
+   Node_ROOT_51 0.01
+   Node_ROOT_20 0.01
+   Node_ROOT_70 0.01
+   Node_ROOT_39 0.01
+   Node_ROOT_4 0.01
+   Node_ROOT_53 0.01
+   Node_ROOT_5 0.01
+   Node_ROOT_15 0.01
+   Node_ROOT_96 0.01
+   Node_ROOT_69 0.01
+   Node_ROOT_83 0.01
+   Node_ROOT_27 0.01
+   Node_ROOT_55 0.01
+   Node_ROOT_95 0.01
+   Node_ROOT_16 0.01
+   Node_ROOT_89 0.01
+   Node_ROOT_34 0.01
+   Node_ROOT_12 0.01
+   Node_ROOT_65 0.01
+   Node_ROOT_73 0.01
+   Node_ROOT_82 0.01
+   Node_ROOT_71 0.01
+   Node_ROOT_33 0.01
+;
+
+set Scenarios :=
+   Scenario_99   Scenario_62   Scenario_28   Scenario_54   Scenario_94   Scenario_90   Scenario_42   Scenario_93   Scenario_49   Scenario_6   Scenario_81   Scenario_25   Scenario_1   Scenario_61   Scenario_48   Scenario_88   Scenario_91   Scenario_52   Scenario_18   Scenario_87   Scenario_11   Scenario_85   Scenario_37   Scenario_44   Scenario_3   Scenario_86   Scenario_64   Scenario_68   Scenario_10   Scenario_50   Scenario_76   Scenario_40   Scenario_46   Scenario_77   Scenario_97   Scenario_67   Scenario_60   Scenario_72   Scenario_43   Scenario_98   Scenario_59   Scenario_7   Scenario_41   Scenario_9   Scenario_100   Scenario_31   Scenario_92   Scenario_2   Scenario_56   Scenario_23   Scenario_63   Scenario_19   Scenario_36   Scenario_30   Scenario_24   Scenario_14   Scenario_32   Scenario_21   Scenario_22   Scenario_75   Scenario_17   Scenario_58   Scenario_45   Scenario_79   Scenario_13   Scenario_47   Scenario_80   Scenario_8   Scenario_26   Scenario_38   Scenario_66   Scenario_78   Scenario_29   Scenario_74   Scenario_84   Scenario_35   Scenario_57   Scenario_51   Scenario_20   Scenario_70   Scenario_39   Scenario_4   Scenario_53   Scenario_5   Scenario_15   Scenario_96   Scenario_69   Scenario_83   Scenario_27   Scenario_55   Scenario_95   Scenario_16   Scenario_89   Scenario_34   Scenario_12   Scenario_65   Scenario_73   Scenario_82   Scenario_71   Scenario_33;
+
+param ScenarioLeafNode :=
+   Scenario_99 Node_ROOT_99
+   Scenario_62 Node_ROOT_62
+   Scenario_28 Node_ROOT_28
+   Scenario_54 Node_ROOT_54
+   Scenario_94 Node_ROOT_94
+   Scenario_90 Node_ROOT_90
+   Scenario_42 Node_ROOT_42
+   Scenario_93 Node_ROOT_93
+   Scenario_49 Node_ROOT_49
+   Scenario_6 Node_ROOT_6
+   Scenario_81 Node_ROOT_81
+   Scenario_25 Node_ROOT_25
+   Scenario_1 Node_ROOT_1
+   Scenario_61 Node_ROOT_61
+   Scenario_48 Node_ROOT_48
+   Scenario_88 Node_ROOT_88
+   Scenario_91 Node_ROOT_91
+   Scenario_52 Node_ROOT_52
+   Scenario_18 Node_ROOT_18
+   Scenario_87 Node_ROOT_87
+   Scenario_11 Node_ROOT_11
+   Scenario_85 Node_ROOT_85
+   Scenario_37 Node_ROOT_37
+   Scenario_44 Node_ROOT_44
+   Scenario_3 Node_ROOT_3
+   Scenario_86 Node_ROOT_86
+   Scenario_64 Node_ROOT_64
+   Scenario_68 Node_ROOT_68
+   Scenario_10 Node_ROOT_10
+   Scenario_50 Node_ROOT_50
+   Scenario_76 Node_ROOT_76
+   Scenario_40 Node_ROOT_40
+   Scenario_46 Node_ROOT_46
+   Scenario_77 Node_ROOT_77
+   Scenario_97 Node_ROOT_97
+   Scenario_67 Node_ROOT_67
+   Scenario_60 Node_ROOT_60
+   Scenario_72 Node_ROOT_72
+   Scenario_43 Node_ROOT_43
+   Scenario_98 Node_ROOT_98
+   Scenario_59 Node_ROOT_59
+   Scenario_7 Node_ROOT_7
+   Scenario_41 Node_ROOT_41
+   Scenario_9 Node_ROOT_9
+   Scenario_100 Node_ROOT_100
+   Scenario_31 Node_ROOT_31
+   Scenario_92 Node_ROOT_92
+   Scenario_2 Node_ROOT_2
+   Scenario_56 Node_ROOT_56
+   Scenario_23 Node_ROOT_23
+   Scenario_63 Node_ROOT_63
+   Scenario_19 Node_ROOT_19
+   Scenario_36 Node_ROOT_36
+   Scenario_30 Node_ROOT_30
+   Scenario_24 Node_ROOT_24
+   Scenario_14 Node_ROOT_14
+   Scenario_32 Node_ROOT_32
+   Scenario_21 Node_ROOT_21
+   Scenario_22 Node_ROOT_22
+   Scenario_75 Node_ROOT_75
+   Scenario_17 Node_ROOT_17
+   Scenario_58 Node_ROOT_58
+   Scenario_45 Node_ROOT_45
+   Scenario_79 Node_ROOT_79
+   Scenario_13 Node_ROOT_13
+   Scenario_47 Node_ROOT_47
+   Scenario_80 Node_ROOT_80
+   Scenario_8 Node_ROOT_8
+   Scenario_26 Node_ROOT_26
+   Scenario_38 Node_ROOT_38
+   Scenario_66 Node_ROOT_66
+   Scenario_78 Node_ROOT_78
+   Scenario_29 Node_ROOT_29
+   Scenario_74 Node_ROOT_74
+   Scenario_84 Node_ROOT_84
+   Scenario_35 Node_ROOT_35
+   Scenario_57 Node_ROOT_57
+   Scenario_51 Node_ROOT_51
+   Scenario_20 Node_ROOT_20
+   Scenario_70 Node_ROOT_70
+   Scenario_39 Node_ROOT_39
+   Scenario_4 Node_ROOT_4
+   Scenario_53 Node_ROOT_53
+   Scenario_5 Node_ROOT_5
+   Scenario_15 Node_ROOT_15
+   Scenario_96 Node_ROOT_96
+   Scenario_69 Node_ROOT_69
+   Scenario_83 Node_ROOT_83
+   Scenario_27 Node_ROOT_27
+   Scenario_55 Node_ROOT_55
+   Scenario_95 Node_ROOT_95
+   Scenario_16 Node_ROOT_16
+   Scenario_89 Node_ROOT_89
+   Scenario_34 Node_ROOT_34
+   Scenario_12 Node_ROOT_12
+   Scenario_65 Node_ROOT_65
+   Scenario_73 Node_ROOT_73
+   Scenario_82 Node_ROOT_82
+   Scenario_71 Node_ROOT_71
+   Scenario_33 Node_ROOT_33
+;

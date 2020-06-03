@@ -1,0 +1,87 @@
+set Stages := FirstStage SecondStage ;
+
+set Nodes := 
+RootNode
+Node1
+Node2
+Node3
+Node4
+Node5
+;
+
+param NodeStage := 
+RootNode FirstStage
+Node1 SecondStage
+Node2 SecondStage
+Node3 SecondStage
+Node4 SecondStage
+Node5 SecondStage
+;
+
+set Children[RootNode] := 
+Node1
+Node2
+Node3
+Node4
+Node5
+;
+
+param ConditionalProbability := 
+RootNode 1.0
+Node1 0.2
+Node2 0.2
+Node3 0.2
+Node4 0.2
+Node5 0.2
+;
+
+set Scenarios := 
+Scenario1
+Scenario2
+Scenario3
+Scenario4
+Scenario5
+;
+
+param ScenarioLeafNode := 
+Scenario1 Node1
+Scenario2 Node2
+Scenario3 Node3
+Scenario4 Node4
+Scenario5 Node5
+;
+
+set StageVariables[FirstStage] :=
+UnitOn[*,*]
+;
+
+set StageVariables[SecondStage] :=
+PowerGeneratedAboveMinimum[*,*]
+MaximumPowerAvailableAboveMinimum[*,*]
+;
+
+set StageDerivedVariables[FirstStage] :=
+StartupCost[*,*]
+ShutdownCost[*,*]
+;
+
+set StageDerivedVariables[SecondStage] :=
+TotalProductionCost[*]
+TotalNoLoadCost[*]
+UnitStart[*,*]
+UnitStop[*,*]
+ProductionCost[*,*]
+NondispatchablePowerUsed[*,*]
+LoadGenerateMismatch[*,*]
+posLoadGenerateMismatch[*,*]
+negLoadGenerateMismatch[*,*]
+ReserveShortfall[*]
+;
+
+param StageCost :=
+FirstStage  StageCost[FirstStage]
+SecondStage StageCost[SecondStage]
+;
+
+param ScenarioBasedData := False ;
+

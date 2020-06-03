@@ -1,0 +1,1364 @@
+set Stages := FirstStage SecondStage ;
+
+set Nodes := 
+RootNode
+Node1
+Node2
+Node3
+Node4
+Node5
+Node6
+Node7
+Node8
+Node9
+Node10
+Node11
+Node12
+Node13
+Node14
+Node15
+Node16
+Node17
+Node18
+Node19
+Node20
+Node21
+Node22
+Node23
+Node24
+Node25
+Node26
+Node27
+Node28
+Node29
+Node30
+Node31
+Node32
+Node33
+Node34
+Node35
+Node36
+Node37
+Node38
+Node39
+Node40
+Node41
+Node42
+Node43
+Node44
+Node45
+Node46
+Node47
+Node48
+Node49
+Node50
+Node51
+Node52
+Node53
+Node54
+Node55
+Node56
+Node57
+Node58
+Node59
+Node60
+Node61
+Node62
+Node63
+Node64
+Node65
+Node66
+Node67
+Node68
+Node69
+Node70
+Node71
+Node72
+Node73
+Node74
+Node75
+Node76
+Node77
+Node78
+Node79
+Node80
+Node81
+Node82
+Node83
+Node84
+Node85
+Node86
+Node87
+Node88
+Node89
+Node90
+Node91
+Node92
+Node93
+Node94
+Node95
+Node96
+Node97
+Node98
+Node99
+Node100
+;
+
+param NodeStage := 
+RootNode FirstStage
+Node1 SecondStage
+Node2 SecondStage
+Node3 SecondStage
+Node4 SecondStage
+Node5 SecondStage
+Node6 SecondStage
+Node7 SecondStage
+Node8 SecondStage
+Node9 SecondStage
+Node10 SecondStage
+Node11 SecondStage
+Node12 SecondStage
+Node13 SecondStage
+Node14 SecondStage
+Node15 SecondStage
+Node16 SecondStage
+Node17 SecondStage
+Node18 SecondStage
+Node19 SecondStage
+Node20 SecondStage
+Node21 SecondStage
+Node22 SecondStage
+Node23 SecondStage
+Node24 SecondStage
+Node25 SecondStage
+Node26 SecondStage
+Node27 SecondStage
+Node28 SecondStage
+Node29 SecondStage
+Node30 SecondStage
+Node31 SecondStage
+Node32 SecondStage
+Node33 SecondStage
+Node34 SecondStage
+Node35 SecondStage
+Node36 SecondStage
+Node37 SecondStage
+Node38 SecondStage
+Node39 SecondStage
+Node40 SecondStage
+Node41 SecondStage
+Node42 SecondStage
+Node43 SecondStage
+Node44 SecondStage
+Node45 SecondStage
+Node46 SecondStage
+Node47 SecondStage
+Node48 SecondStage
+Node49 SecondStage
+Node50 SecondStage
+Node51 SecondStage
+Node52 SecondStage
+Node53 SecondStage
+Node54 SecondStage
+Node55 SecondStage
+Node56 SecondStage
+Node57 SecondStage
+Node58 SecondStage
+Node59 SecondStage
+Node60 SecondStage
+Node61 SecondStage
+Node62 SecondStage
+Node63 SecondStage
+Node64 SecondStage
+Node65 SecondStage
+Node66 SecondStage
+Node67 SecondStage
+Node68 SecondStage
+Node69 SecondStage
+Node70 SecondStage
+Node71 SecondStage
+Node72 SecondStage
+Node73 SecondStage
+Node74 SecondStage
+Node75 SecondStage
+Node76 SecondStage
+Node77 SecondStage
+Node78 SecondStage
+Node79 SecondStage
+Node80 SecondStage
+Node81 SecondStage
+Node82 SecondStage
+Node83 SecondStage
+Node84 SecondStage
+Node85 SecondStage
+Node86 SecondStage
+Node87 SecondStage
+Node88 SecondStage
+Node89 SecondStage
+Node90 SecondStage
+Node91 SecondStage
+Node92 SecondStage
+Node93 SecondStage
+Node94 SecondStage
+Node95 SecondStage
+Node96 SecondStage
+Node97 SecondStage
+Node98 SecondStage
+Node99 SecondStage
+Node100 SecondStage
+;
+
+set Children[RootNode] := 
+Node1
+Node2
+Node3
+Node4
+Node5
+Node6
+Node7
+Node8
+Node9
+Node10
+Node11
+Node12
+Node13
+Node14
+Node15
+Node16
+Node17
+Node18
+Node19
+Node20
+Node21
+Node22
+Node23
+Node24
+Node25
+Node26
+Node27
+Node28
+Node29
+Node30
+Node31
+Node32
+Node33
+Node34
+Node35
+Node36
+Node37
+Node38
+Node39
+Node40
+Node41
+Node42
+Node43
+Node44
+Node45
+Node46
+Node47
+Node48
+Node49
+Node50
+Node51
+Node52
+Node53
+Node54
+Node55
+Node56
+Node57
+Node58
+Node59
+Node60
+Node61
+Node62
+Node63
+Node64
+Node65
+Node66
+Node67
+Node68
+Node69
+Node70
+Node71
+Node72
+Node73
+Node74
+Node75
+Node76
+Node77
+Node78
+Node79
+Node80
+Node81
+Node82
+Node83
+Node84
+Node85
+Node86
+Node87
+Node88
+Node89
+Node90
+Node91
+Node92
+Node93
+Node94
+Node95
+Node96
+Node97
+Node98
+Node99
+Node100
+;
+
+param ConditionalProbability := 
+RootNode 1.0
+Node1 0.01
+Node2 0.01
+Node3 0.01
+Node4 0.01
+Node5 0.01
+Node6 0.01
+Node7 0.01
+Node8 0.01
+Node9 0.01
+Node10 0.01
+Node11 0.01
+Node12 0.01
+Node13 0.01
+Node14 0.01
+Node15 0.01
+Node16 0.01
+Node17 0.01
+Node18 0.01
+Node19 0.01
+Node20 0.01
+Node21 0.01
+Node22 0.01
+Node23 0.01
+Node24 0.01
+Node25 0.01
+Node26 0.01
+Node27 0.01
+Node28 0.01
+Node29 0.01
+Node30 0.01
+Node31 0.01
+Node32 0.01
+Node33 0.01
+Node34 0.01
+Node35 0.01
+Node36 0.01
+Node37 0.01
+Node38 0.01
+Node39 0.01
+Node40 0.01
+Node41 0.01
+Node42 0.01
+Node43 0.01
+Node44 0.01
+Node45 0.01
+Node46 0.01
+Node47 0.01
+Node48 0.01
+Node49 0.01
+Node50 0.01
+Node51 0.01
+Node52 0.01
+Node53 0.01
+Node54 0.01
+Node55 0.01
+Node56 0.01
+Node57 0.01
+Node58 0.01
+Node59 0.01
+Node60 0.01
+Node61 0.01
+Node62 0.01
+Node63 0.01
+Node64 0.01
+Node65 0.01
+Node66 0.01
+Node67 0.01
+Node68 0.01
+Node69 0.01
+Node70 0.01
+Node71 0.01
+Node72 0.01
+Node73 0.01
+Node74 0.01
+Node75 0.01
+Node76 0.01
+Node77 0.01
+Node78 0.01
+Node79 0.01
+Node80 0.01
+Node81 0.01
+Node82 0.01
+Node83 0.01
+Node84 0.01
+Node85 0.01
+Node86 0.01
+Node87 0.01
+Node88 0.01
+Node89 0.01
+Node90 0.01
+Node91 0.01
+Node92 0.01
+Node93 0.01
+Node94 0.01
+Node95 0.01
+Node96 0.01
+Node97 0.01
+Node98 0.01
+Node99 0.01
+Node100 0.01
+;
+
+set Scenarios := 
+Scenario1
+Scenario2
+Scenario3
+Scenario4
+Scenario5
+Scenario6
+Scenario7
+Scenario8
+Scenario9
+Scenario10
+Scenario11
+Scenario12
+Scenario13
+Scenario14
+Scenario15
+Scenario16
+Scenario17
+Scenario18
+Scenario19
+Scenario20
+Scenario21
+Scenario22
+Scenario23
+Scenario24
+Scenario25
+Scenario26
+Scenario27
+Scenario28
+Scenario29
+Scenario30
+Scenario31
+Scenario32
+Scenario33
+Scenario34
+Scenario35
+Scenario36
+Scenario37
+Scenario38
+Scenario39
+Scenario40
+Scenario41
+Scenario42
+Scenario43
+Scenario44
+Scenario45
+Scenario46
+Scenario47
+Scenario48
+Scenario49
+Scenario50
+Scenario51
+Scenario52
+Scenario53
+Scenario54
+Scenario55
+Scenario56
+Scenario57
+Scenario58
+Scenario59
+Scenario60
+Scenario61
+Scenario62
+Scenario63
+Scenario64
+Scenario65
+Scenario66
+Scenario67
+Scenario68
+Scenario69
+Scenario70
+Scenario71
+Scenario72
+Scenario73
+Scenario74
+Scenario75
+Scenario76
+Scenario77
+Scenario78
+Scenario79
+Scenario80
+Scenario81
+Scenario82
+Scenario83
+Scenario84
+Scenario85
+Scenario86
+Scenario87
+Scenario88
+Scenario89
+Scenario90
+Scenario91
+Scenario92
+Scenario93
+Scenario94
+Scenario95
+Scenario96
+Scenario97
+Scenario98
+Scenario99
+Scenario100
+;
+
+param ScenarioLeafNode := 
+Scenario1 Node1
+Scenario2 Node2
+Scenario3 Node3
+Scenario4 Node4
+Scenario5 Node5
+Scenario6 Node6
+Scenario7 Node7
+Scenario8 Node8
+Scenario9 Node9
+Scenario10 Node10
+Scenario11 Node11
+Scenario12 Node12
+Scenario13 Node13
+Scenario14 Node14
+Scenario15 Node15
+Scenario16 Node16
+Scenario17 Node17
+Scenario18 Node18
+Scenario19 Node19
+Scenario20 Node20
+Scenario21 Node21
+Scenario22 Node22
+Scenario23 Node23
+Scenario24 Node24
+Scenario25 Node25
+Scenario26 Node26
+Scenario27 Node27
+Scenario28 Node28
+Scenario29 Node29
+Scenario30 Node30
+Scenario31 Node31
+Scenario32 Node32
+Scenario33 Node33
+Scenario34 Node34
+Scenario35 Node35
+Scenario36 Node36
+Scenario37 Node37
+Scenario38 Node38
+Scenario39 Node39
+Scenario40 Node40
+Scenario41 Node41
+Scenario42 Node42
+Scenario43 Node43
+Scenario44 Node44
+Scenario45 Node45
+Scenario46 Node46
+Scenario47 Node47
+Scenario48 Node48
+Scenario49 Node49
+Scenario50 Node50
+Scenario51 Node51
+Scenario52 Node52
+Scenario53 Node53
+Scenario54 Node54
+Scenario55 Node55
+Scenario56 Node56
+Scenario57 Node57
+Scenario58 Node58
+Scenario59 Node59
+Scenario60 Node60
+Scenario61 Node61
+Scenario62 Node62
+Scenario63 Node63
+Scenario64 Node64
+Scenario65 Node65
+Scenario66 Node66
+Scenario67 Node67
+Scenario68 Node68
+Scenario69 Node69
+Scenario70 Node70
+Scenario71 Node71
+Scenario72 Node72
+Scenario73 Node73
+Scenario74 Node74
+Scenario75 Node75
+Scenario76 Node76
+Scenario77 Node77
+Scenario78 Node78
+Scenario79 Node79
+Scenario80 Node80
+Scenario81 Node81
+Scenario82 Node82
+Scenario83 Node83
+Scenario84 Node84
+Scenario85 Node85
+Scenario86 Node86
+Scenario87 Node87
+Scenario88 Node88
+Scenario89 Node89
+Scenario90 Node90
+Scenario91 Node91
+Scenario92 Node92
+Scenario93 Node93
+Scenario94 Node94
+Scenario95 Node95
+Scenario96 Node96
+Scenario97 Node97
+Scenario98 Node98
+Scenario99 Node99
+Scenario100 Node100
+;
+
+set StageVariables[FirstStage] :=
+UnitOn[*,1]
+UnitOn[*,2]
+UnitOn[*,3]
+UnitOn[*,4]
+UnitOn[*,5]
+UnitOn[*,6]
+UnitOn[*,7]
+UnitOn[*,8]
+UnitOn[*,9]
+UnitOn[*,10]
+UnitOn[*,11]
+UnitOn[*,12]
+UnitOn[*,13]
+UnitOn[*,14]
+UnitOn[*,15]
+UnitOn[*,16]
+UnitOn[*,17]
+UnitOn[*,18]
+UnitOn[*,19]
+UnitOn[*,20]
+UnitOn[*,21]
+UnitOn[*,22]
+UnitOn[*,23]
+UnitOn[*,24]
+UnitOn[*,25]
+UnitOn[*,26]
+UnitOn[*,27]
+UnitOn[*,28]
+UnitOn[*,29]
+UnitOn[*,30]
+UnitOn[*,31]
+UnitOn[*,32]
+UnitOn[*,33]
+UnitOn[*,34]
+UnitOn[*,35]
+UnitOn[*,36]
+UnitOn[*,37]
+UnitOn[*,38]
+UnitOn[*,39]
+UnitOn[*,40]
+UnitOn[*,41]
+UnitOn[*,42]
+UnitOn[*,43]
+UnitOn[*,44]
+UnitOn[*,45]
+UnitOn[*,46]
+UnitOn[*,47]
+UnitOn[*,48]
+;
+
+set StageVariables[SecondStage] :=
+PowerGenerated[*,1]
+MaximumPowerAvailable[*,1]
+Angle[*,1]
+PowerGenerated[*,2]
+MaximumPowerAvailable[*,2]
+Angle[*,2]
+PowerGenerated[*,3]
+MaximumPowerAvailable[*,3]
+Angle[*,3]
+PowerGenerated[*,4]
+MaximumPowerAvailable[*,4]
+Angle[*,4]
+PowerGenerated[*,5]
+MaximumPowerAvailable[*,5]
+Angle[*,5]
+PowerGenerated[*,6]
+MaximumPowerAvailable[*,6]
+Angle[*,6]
+PowerGenerated[*,7]
+MaximumPowerAvailable[*,7]
+Angle[*,7]
+PowerGenerated[*,8]
+MaximumPowerAvailable[*,8]
+Angle[*,8]
+PowerGenerated[*,9]
+MaximumPowerAvailable[*,9]
+Angle[*,9]
+PowerGenerated[*,10]
+MaximumPowerAvailable[*,10]
+Angle[*,10]
+PowerGenerated[*,11]
+MaximumPowerAvailable[*,11]
+Angle[*,11]
+PowerGenerated[*,12]
+MaximumPowerAvailable[*,12]
+Angle[*,12]
+PowerGenerated[*,13]
+MaximumPowerAvailable[*,13]
+Angle[*,13]
+PowerGenerated[*,14]
+MaximumPowerAvailable[*,14]
+Angle[*,14]
+PowerGenerated[*,15]
+MaximumPowerAvailable[*,15]
+Angle[*,15]
+PowerGenerated[*,16]
+MaximumPowerAvailable[*,16]
+Angle[*,16]
+PowerGenerated[*,17]
+MaximumPowerAvailable[*,17]
+Angle[*,17]
+PowerGenerated[*,18]
+MaximumPowerAvailable[*,18]
+Angle[*,18]
+PowerGenerated[*,19]
+MaximumPowerAvailable[*,19]
+Angle[*,19]
+PowerGenerated[*,20]
+MaximumPowerAvailable[*,20]
+Angle[*,20]
+PowerGenerated[*,21]
+MaximumPowerAvailable[*,21]
+Angle[*,21]
+PowerGenerated[*,22]
+MaximumPowerAvailable[*,22]
+Angle[*,22]
+PowerGenerated[*,23]
+MaximumPowerAvailable[*,23]
+Angle[*,23]
+PowerGenerated[*,24]
+MaximumPowerAvailable[*,24]
+Angle[*,24]
+PowerGenerated[*,25]
+MaximumPowerAvailable[*,25]
+Angle[*,25]
+PowerGenerated[*,26]
+MaximumPowerAvailable[*,26]
+Angle[*,26]
+PowerGenerated[*,27]
+MaximumPowerAvailable[*,27]
+Angle[*,27]
+PowerGenerated[*,28]
+MaximumPowerAvailable[*,28]
+Angle[*,28]
+PowerGenerated[*,29]
+MaximumPowerAvailable[*,29]
+Angle[*,29]
+PowerGenerated[*,30]
+MaximumPowerAvailable[*,30]
+Angle[*,30]
+PowerGenerated[*,31]
+MaximumPowerAvailable[*,31]
+Angle[*,31]
+PowerGenerated[*,32]
+MaximumPowerAvailable[*,32]
+Angle[*,32]
+PowerGenerated[*,33]
+MaximumPowerAvailable[*,33]
+Angle[*,33]
+PowerGenerated[*,34]
+MaximumPowerAvailable[*,34]
+Angle[*,34]
+PowerGenerated[*,35]
+MaximumPowerAvailable[*,35]
+Angle[*,35]
+PowerGenerated[*,36]
+MaximumPowerAvailable[*,36]
+Angle[*,36]
+PowerGenerated[*,37]
+MaximumPowerAvailable[*,37]
+Angle[*,37]
+PowerGenerated[*,38]
+MaximumPowerAvailable[*,38]
+Angle[*,38]
+PowerGenerated[*,39]
+MaximumPowerAvailable[*,39]
+Angle[*,39]
+PowerGenerated[*,40]
+MaximumPowerAvailable[*,40]
+Angle[*,40]
+PowerGenerated[*,41]
+MaximumPowerAvailable[*,41]
+Angle[*,41]
+PowerGenerated[*,42]
+MaximumPowerAvailable[*,42]
+Angle[*,42]
+PowerGenerated[*,43]
+MaximumPowerAvailable[*,43]
+Angle[*,43]
+PowerGenerated[*,44]
+MaximumPowerAvailable[*,44]
+Angle[*,44]
+PowerGenerated[*,45]
+MaximumPowerAvailable[*,45]
+Angle[*,45]
+PowerGenerated[*,46]
+MaximumPowerAvailable[*,46]
+Angle[*,46]
+PowerGenerated[*,47]
+MaximumPowerAvailable[*,47]
+Angle[*,47]
+PowerGenerated[*,48]
+MaximumPowerAvailable[*,48]
+Angle[*,48]
+;
+
+
+set StageDerivedVariables[FirstStage] :=
+StartupCost[*,1]
+ShutdownCost[*,1]
+StartupCost[*,2]
+ShutdownCost[*,2]
+StartupCost[*,3]
+ShutdownCost[*,3]
+StartupCost[*,4]
+ShutdownCost[*,4]
+StartupCost[*,5]
+ShutdownCost[*,5]
+StartupCost[*,6]
+ShutdownCost[*,6]
+StartupCost[*,7]
+ShutdownCost[*,7]
+StartupCost[*,8]
+ShutdownCost[*,8]
+StartupCost[*,9]
+ShutdownCost[*,9]
+StartupCost[*,10]
+ShutdownCost[*,10]
+StartupCost[*,11]
+ShutdownCost[*,11]
+StartupCost[*,12]
+ShutdownCost[*,12]
+StartupCost[*,13]
+ShutdownCost[*,13]
+StartupCost[*,14]
+ShutdownCost[*,14]
+StartupCost[*,15]
+ShutdownCost[*,15]
+StartupCost[*,16]
+ShutdownCost[*,16]
+StartupCost[*,17]
+ShutdownCost[*,17]
+StartupCost[*,18]
+ShutdownCost[*,18]
+StartupCost[*,19]
+ShutdownCost[*,19]
+StartupCost[*,20]
+ShutdownCost[*,20]
+StartupCost[*,21]
+ShutdownCost[*,21]
+StartupCost[*,22]
+ShutdownCost[*,22]
+StartupCost[*,23]
+ShutdownCost[*,23]
+StartupCost[*,24]
+ShutdownCost[*,24]
+StartupCost[*,25]
+ShutdownCost[*,25]
+StartupCost[*,26]
+ShutdownCost[*,26]
+StartupCost[*,27]
+ShutdownCost[*,27]
+StartupCost[*,28]
+ShutdownCost[*,28]
+StartupCost[*,29]
+ShutdownCost[*,29]
+StartupCost[*,30]
+ShutdownCost[*,30]
+StartupCost[*,31]
+ShutdownCost[*,31]
+StartupCost[*,32]
+ShutdownCost[*,32]
+StartupCost[*,33]
+ShutdownCost[*,33]
+StartupCost[*,34]
+ShutdownCost[*,34]
+StartupCost[*,35]
+ShutdownCost[*,35]
+StartupCost[*,36]
+ShutdownCost[*,36]
+StartupCost[*,37]
+ShutdownCost[*,37]
+StartupCost[*,38]
+ShutdownCost[*,38]
+StartupCost[*,39]
+ShutdownCost[*,39]
+StartupCost[*,40]
+ShutdownCost[*,40]
+StartupCost[*,41]
+ShutdownCost[*,41]
+StartupCost[*,42]
+ShutdownCost[*,42]
+StartupCost[*,43]
+ShutdownCost[*,43]
+StartupCost[*,44]
+ShutdownCost[*,44]
+StartupCost[*,45]
+ShutdownCost[*,45]
+StartupCost[*,46]
+ShutdownCost[*,46]
+StartupCost[*,47]
+ShutdownCost[*,47]
+StartupCost[*,48]
+ShutdownCost[*,48]
+;
+
+set StageDerivedVariables[SecondStage] :=
+TotalProductionCost[*]
+TotalNoLoadCost[*]
+delta[*,*,*]
+UnitStart[*,1]
+UnitStop[*,1]
+ProductionCost[*,1]
+LinePower[*,1]
+NondispatchablePowerUsed[*,1]
+UnitStart[*,2]
+UnitStop[*,2]
+ProductionCost[*,2]
+LinePower[*,2]
+NondispatchablePowerUsed[*,2]
+UnitStart[*,3]
+UnitStop[*,3]
+ProductionCost[*,3]
+LinePower[*,3]
+NondispatchablePowerUsed[*,3]
+UnitStart[*,4]
+UnitStop[*,4]
+ProductionCost[*,4]
+LinePower[*,4]
+NondispatchablePowerUsed[*,4]
+UnitStart[*,5]
+UnitStop[*,5]
+ProductionCost[*,5]
+LinePower[*,5]
+NondispatchablePowerUsed[*,5]
+UnitStart[*,6]
+UnitStop[*,6]
+ProductionCost[*,6]
+LinePower[*,6]
+NondispatchablePowerUsed[*,6]
+UnitStart[*,7]
+UnitStop[*,7]
+ProductionCost[*,7]
+LinePower[*,7]
+NondispatchablePowerUsed[*,7]
+UnitStart[*,8]
+UnitStop[*,8]
+ProductionCost[*,8]
+LinePower[*,8]
+NondispatchablePowerUsed[*,8]
+UnitStart[*,9]
+UnitStop[*,9]
+ProductionCost[*,9]
+LinePower[*,9]
+NondispatchablePowerUsed[*,9]
+UnitStart[*,10]
+UnitStop[*,10]
+ProductionCost[*,10]
+LinePower[*,10]
+NondispatchablePowerUsed[*,10]
+UnitStart[*,11]
+UnitStop[*,11]
+ProductionCost[*,11]
+LinePower[*,11]
+NondispatchablePowerUsed[*,11]
+UnitStart[*,12]
+UnitStop[*,12]
+ProductionCost[*,12]
+LinePower[*,12]
+NondispatchablePowerUsed[*,12]
+UnitStart[*,13]
+UnitStop[*,13]
+ProductionCost[*,13]
+LinePower[*,13]
+NondispatchablePowerUsed[*,13]
+UnitStart[*,14]
+UnitStop[*,14]
+ProductionCost[*,14]
+LinePower[*,14]
+NondispatchablePowerUsed[*,14]
+UnitStart[*,15]
+UnitStop[*,15]
+ProductionCost[*,15]
+LinePower[*,15]
+NondispatchablePowerUsed[*,15]
+UnitStart[*,16]
+UnitStop[*,16]
+ProductionCost[*,16]
+LinePower[*,16]
+NondispatchablePowerUsed[*,16]
+UnitStart[*,17]
+UnitStop[*,17]
+ProductionCost[*,17]
+LinePower[*,17]
+NondispatchablePowerUsed[*,17]
+UnitStart[*,18]
+UnitStop[*,18]
+ProductionCost[*,18]
+LinePower[*,18]
+NondispatchablePowerUsed[*,18]
+UnitStart[*,19]
+UnitStop[*,19]
+ProductionCost[*,19]
+LinePower[*,19]
+NondispatchablePowerUsed[*,19]
+UnitStart[*,20]
+UnitStop[*,20]
+ProductionCost[*,20]
+LinePower[*,20]
+NondispatchablePowerUsed[*,20]
+UnitStart[*,21]
+UnitStop[*,21]
+ProductionCost[*,21]
+LinePower[*,21]
+NondispatchablePowerUsed[*,21]
+UnitStart[*,22]
+UnitStop[*,22]
+ProductionCost[*,22]
+LinePower[*,22]
+NondispatchablePowerUsed[*,22]
+UnitStart[*,23]
+UnitStop[*,23]
+ProductionCost[*,23]
+LinePower[*,23]
+NondispatchablePowerUsed[*,23]
+UnitStart[*,24]
+UnitStop[*,24]
+ProductionCost[*,24]
+LinePower[*,24]
+NondispatchablePowerUsed[*,24]
+UnitStart[*,25]
+UnitStop[*,25]
+ProductionCost[*,25]
+LinePower[*,25]
+NondispatchablePowerUsed[*,25]
+UnitStart[*,26]
+UnitStop[*,26]
+ProductionCost[*,26]
+LinePower[*,26]
+NondispatchablePowerUsed[*,26]
+UnitStart[*,27]
+UnitStop[*,27]
+ProductionCost[*,27]
+LinePower[*,27]
+NondispatchablePowerUsed[*,27]
+UnitStart[*,28]
+UnitStop[*,28]
+ProductionCost[*,28]
+LinePower[*,28]
+NondispatchablePowerUsed[*,28]
+UnitStart[*,29]
+UnitStop[*,29]
+ProductionCost[*,29]
+LinePower[*,29]
+NondispatchablePowerUsed[*,29]
+UnitStart[*,30]
+UnitStop[*,30]
+ProductionCost[*,30]
+LinePower[*,30]
+NondispatchablePowerUsed[*,30]
+UnitStart[*,31]
+UnitStop[*,31]
+ProductionCost[*,31]
+LinePower[*,31]
+NondispatchablePowerUsed[*,31]
+UnitStart[*,32]
+UnitStop[*,32]
+ProductionCost[*,32]
+LinePower[*,32]
+NondispatchablePowerUsed[*,32]
+UnitStart[*,33]
+UnitStop[*,33]
+ProductionCost[*,33]
+LinePower[*,33]
+NondispatchablePowerUsed[*,33]
+UnitStart[*,34]
+UnitStop[*,34]
+ProductionCost[*,34]
+LinePower[*,34]
+NondispatchablePowerUsed[*,34]
+UnitStart[*,35]
+UnitStop[*,35]
+ProductionCost[*,35]
+LinePower[*,35]
+NondispatchablePowerUsed[*,35]
+UnitStart[*,36]
+UnitStop[*,36]
+ProductionCost[*,36]
+LinePower[*,36]
+NondispatchablePowerUsed[*,36]
+UnitStart[*,37]
+UnitStop[*,37]
+ProductionCost[*,37]
+LinePower[*,37]
+NondispatchablePowerUsed[*,37]
+UnitStart[*,38]
+UnitStop[*,38]
+ProductionCost[*,38]
+LinePower[*,38]
+NondispatchablePowerUsed[*,38]
+UnitStart[*,39]
+UnitStop[*,39]
+ProductionCost[*,39]
+LinePower[*,39]
+NondispatchablePowerUsed[*,39]
+UnitStart[*,40]
+UnitStop[*,40]
+ProductionCost[*,40]
+LinePower[*,40]
+NondispatchablePowerUsed[*,40]
+UnitStart[*,41]
+UnitStop[*,41]
+ProductionCost[*,41]
+LinePower[*,41]
+NondispatchablePowerUsed[*,41]
+UnitStart[*,42]
+UnitStop[*,42]
+ProductionCost[*,42]
+LinePower[*,42]
+NondispatchablePowerUsed[*,42]
+UnitStart[*,43]
+UnitStop[*,43]
+ProductionCost[*,43]
+LinePower[*,43]
+NondispatchablePowerUsed[*,43]
+UnitStart[*,44]
+UnitStop[*,44]
+ProductionCost[*,44]
+LinePower[*,44]
+NondispatchablePowerUsed[*,44]
+UnitStart[*,45]
+UnitStop[*,45]
+ProductionCost[*,45]
+LinePower[*,45]
+NondispatchablePowerUsed[*,45]
+UnitStart[*,46]
+UnitStop[*,46]
+ProductionCost[*,46]
+LinePower[*,46]
+NondispatchablePowerUsed[*,46]
+UnitStart[*,47]
+UnitStop[*,47]
+ProductionCost[*,47]
+LinePower[*,47]
+NondispatchablePowerUsed[*,47]
+UnitStart[*,48]
+UnitStop[*,48]
+ProductionCost[*,48]
+LinePower[*,48]
+NondispatchablePowerUsed[*,48]
+LoadGenerateMismatch[*,1]
+posLoadGenerateMismatch[*,1]
+negLoadGenerateMismatch[*,1]
+ReserveShortfall[1]
+LoadGenerateMismatch[*,2]
+posLoadGenerateMismatch[*,2]
+negLoadGenerateMismatch[*,2]
+ReserveShortfall[2]
+LoadGenerateMismatch[*,3]
+posLoadGenerateMismatch[*,3]
+negLoadGenerateMismatch[*,3]
+ReserveShortfall[3]
+LoadGenerateMismatch[*,4]
+posLoadGenerateMismatch[*,4]
+negLoadGenerateMismatch[*,4]
+ReserveShortfall[4]
+LoadGenerateMismatch[*,5]
+posLoadGenerateMismatch[*,5]
+negLoadGenerateMismatch[*,5]
+ReserveShortfall[5]
+LoadGenerateMismatch[*,6]
+posLoadGenerateMismatch[*,6]
+negLoadGenerateMismatch[*,6]
+ReserveShortfall[6]
+LoadGenerateMismatch[*,7]
+posLoadGenerateMismatch[*,7]
+negLoadGenerateMismatch[*,7]
+ReserveShortfall[7]
+LoadGenerateMismatch[*,8]
+posLoadGenerateMismatch[*,8]
+negLoadGenerateMismatch[*,8]
+ReserveShortfall[8]
+LoadGenerateMismatch[*,9]
+posLoadGenerateMismatch[*,9]
+negLoadGenerateMismatch[*,9]
+ReserveShortfall[9]
+LoadGenerateMismatch[*,10]
+posLoadGenerateMismatch[*,10]
+negLoadGenerateMismatch[*,10]
+ReserveShortfall[10]
+LoadGenerateMismatch[*,11]
+posLoadGenerateMismatch[*,11]
+negLoadGenerateMismatch[*,11]
+ReserveShortfall[11]
+LoadGenerateMismatch[*,12]
+posLoadGenerateMismatch[*,12]
+negLoadGenerateMismatch[*,12]
+ReserveShortfall[12]
+LoadGenerateMismatch[*,13]
+posLoadGenerateMismatch[*,13]
+negLoadGenerateMismatch[*,13]
+ReserveShortfall[13]
+LoadGenerateMismatch[*,14]
+posLoadGenerateMismatch[*,14]
+negLoadGenerateMismatch[*,14]
+ReserveShortfall[14]
+LoadGenerateMismatch[*,15]
+posLoadGenerateMismatch[*,15]
+negLoadGenerateMismatch[*,15]
+ReserveShortfall[15]
+LoadGenerateMismatch[*,16]
+posLoadGenerateMismatch[*,16]
+negLoadGenerateMismatch[*,16]
+ReserveShortfall[16]
+LoadGenerateMismatch[*,17]
+posLoadGenerateMismatch[*,17]
+negLoadGenerateMismatch[*,17]
+ReserveShortfall[17]
+LoadGenerateMismatch[*,18]
+posLoadGenerateMismatch[*,18]
+negLoadGenerateMismatch[*,18]
+ReserveShortfall[18]
+LoadGenerateMismatch[*,19]
+posLoadGenerateMismatch[*,19]
+negLoadGenerateMismatch[*,19]
+ReserveShortfall[19]
+LoadGenerateMismatch[*,20]
+posLoadGenerateMismatch[*,20]
+negLoadGenerateMismatch[*,20]
+ReserveShortfall[20]
+LoadGenerateMismatch[*,21]
+posLoadGenerateMismatch[*,21]
+negLoadGenerateMismatch[*,21]
+ReserveShortfall[21]
+LoadGenerateMismatch[*,22]
+posLoadGenerateMismatch[*,22]
+negLoadGenerateMismatch[*,22]
+ReserveShortfall[22]
+LoadGenerateMismatch[*,23]
+posLoadGenerateMismatch[*,23]
+negLoadGenerateMismatch[*,23]
+ReserveShortfall[23]
+LoadGenerateMismatch[*,24]
+posLoadGenerateMismatch[*,24]
+negLoadGenerateMismatch[*,24]
+ReserveShortfall[24]
+LoadGenerateMismatch[*,25]
+posLoadGenerateMismatch[*,25]
+negLoadGenerateMismatch[*,25]
+ReserveShortfall[25]
+LoadGenerateMismatch[*,26]
+posLoadGenerateMismatch[*,26]
+negLoadGenerateMismatch[*,26]
+ReserveShortfall[26]
+LoadGenerateMismatch[*,27]
+posLoadGenerateMismatch[*,27]
+negLoadGenerateMismatch[*,27]
+ReserveShortfall[27]
+LoadGenerateMismatch[*,28]
+posLoadGenerateMismatch[*,28]
+negLoadGenerateMismatch[*,28]
+ReserveShortfall[28]
+LoadGenerateMismatch[*,29]
+posLoadGenerateMismatch[*,29]
+negLoadGenerateMismatch[*,29]
+ReserveShortfall[29]
+LoadGenerateMismatch[*,30]
+posLoadGenerateMismatch[*,30]
+negLoadGenerateMismatch[*,30]
+ReserveShortfall[30]
+LoadGenerateMismatch[*,31]
+posLoadGenerateMismatch[*,31]
+negLoadGenerateMismatch[*,31]
+ReserveShortfall[31]
+LoadGenerateMismatch[*,32]
+posLoadGenerateMismatch[*,32]
+negLoadGenerateMismatch[*,32]
+ReserveShortfall[32]
+LoadGenerateMismatch[*,33]
+posLoadGenerateMismatch[*,33]
+negLoadGenerateMismatch[*,33]
+ReserveShortfall[33]
+LoadGenerateMismatch[*,34]
+posLoadGenerateMismatch[*,34]
+negLoadGenerateMismatch[*,34]
+ReserveShortfall[34]
+LoadGenerateMismatch[*,35]
+posLoadGenerateMismatch[*,35]
+negLoadGenerateMismatch[*,35]
+ReserveShortfall[35]
+LoadGenerateMismatch[*,36]
+posLoadGenerateMismatch[*,36]
+negLoadGenerateMismatch[*,36]
+ReserveShortfall[36]
+LoadGenerateMismatch[*,37]
+posLoadGenerateMismatch[*,37]
+negLoadGenerateMismatch[*,37]
+ReserveShortfall[37]
+LoadGenerateMismatch[*,38]
+posLoadGenerateMismatch[*,38]
+negLoadGenerateMismatch[*,38]
+ReserveShortfall[38]
+LoadGenerateMismatch[*,39]
+posLoadGenerateMismatch[*,39]
+negLoadGenerateMismatch[*,39]
+ReserveShortfall[39]
+LoadGenerateMismatch[*,40]
+posLoadGenerateMismatch[*,40]
+negLoadGenerateMismatch[*,40]
+ReserveShortfall[40]
+LoadGenerateMismatch[*,41]
+posLoadGenerateMismatch[*,41]
+negLoadGenerateMismatch[*,41]
+ReserveShortfall[41]
+LoadGenerateMismatch[*,42]
+posLoadGenerateMismatch[*,42]
+negLoadGenerateMismatch[*,42]
+ReserveShortfall[42]
+LoadGenerateMismatch[*,43]
+posLoadGenerateMismatch[*,43]
+negLoadGenerateMismatch[*,43]
+ReserveShortfall[43]
+LoadGenerateMismatch[*,44]
+posLoadGenerateMismatch[*,44]
+negLoadGenerateMismatch[*,44]
+ReserveShortfall[44]
+LoadGenerateMismatch[*,45]
+posLoadGenerateMismatch[*,45]
+negLoadGenerateMismatch[*,45]
+ReserveShortfall[45]
+LoadGenerateMismatch[*,46]
+posLoadGenerateMismatch[*,46]
+negLoadGenerateMismatch[*,46]
+ReserveShortfall[46]
+LoadGenerateMismatch[*,47]
+posLoadGenerateMismatch[*,47]
+negLoadGenerateMismatch[*,47]
+ReserveShortfall[47]
+LoadGenerateMismatch[*,48]
+posLoadGenerateMismatch[*,48]
+negLoadGenerateMismatch[*,48]
+ReserveShortfall[48]
+;
+
+param StageCost :=
+FirstStage  StageCost[FirstStage]
+SecondStage StageCost[SecondStage]
+;
+

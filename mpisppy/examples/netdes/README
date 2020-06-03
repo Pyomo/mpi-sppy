@@ -1,0 +1,26 @@
+This directory contains test instances for a simple two-stage stochastic
+network design problem.  The problem is posed on a connected network G, with
+nodes V and edges E, and finite scenario set K.
+
+    min \sum_{e\in E} c_e x_e + \sum_{k\in K} Pr(k) \sum_{e\in E} f_e^k y_e^k
+     st Flow balance for each node v in V and scenario k in K
+        (d^k_i = demand at node i under scenario k)
+  (**)  0 <= y_e^k <= u_e^k x_e for all edges e and scenarios k
+        x_e \in {0,1} for all edges e
+
+The constraints (**) say that we can only send flow on edge e in the second
+stage (controlled by the y variables) if we built the edge e in the first stage
+(controlled by the x variables)
+
+Instance data is stored in files which use the following naming convention:
+    
+    network-nn-kk-dd-id.dat
+
+where 
+    
+    nn = number of nodes in network
+    kk = number of scenarios
+    dd = density of graph (either L=Low or H=High)
+    id = ID number of instance (10 per nn-kk-dd combination)
+
+Best known solutions are provided in solutions.dat

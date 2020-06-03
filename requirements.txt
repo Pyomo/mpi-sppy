@@ -1,0 +1,5 @@
+mpi4py
+numpy==1.16.2
+pyutilib
+pyomo
+scipy==1.2.1
