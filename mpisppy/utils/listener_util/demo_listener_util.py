@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Demonstrate some uses of listener_util.py for asynchronous computing.
 # This very silly and of limited value.
 # DLW March 2019

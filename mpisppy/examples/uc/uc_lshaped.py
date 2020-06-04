@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # general example driver for farmer with cylinders
 
 import mpisppy.examples.uc.uc_funcs as uc

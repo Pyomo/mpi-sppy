@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpi4py import MPI
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator

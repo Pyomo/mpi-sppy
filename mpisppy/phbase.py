@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' PH Base and utility functions - March 2020 modifications to support spbase.py
 
     Based on mpi4py (but should run with, or without, mpi)

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Base and utility functions for mpisppy
 import pyomo.environ as pyo
 import re

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # scenario_tree.py; PySP 2.0 scenario structure
 # ALL INDEXES ARE ZERO-BASED
 import logging

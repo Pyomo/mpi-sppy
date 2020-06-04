@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 from pyomo.environ import *
 
 # TBD - we can't get the rho scale factor into the callback easily, so we hard-code for now.

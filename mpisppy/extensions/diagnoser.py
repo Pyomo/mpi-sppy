@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # An extension to output diagnostic information at each iteration
 # to a file for each scenario.
 # DLW, March 2019

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Implementation of the Frank-Wolfe Progressive Hedging (FW-PH) algorithm
     described in the paper:
 

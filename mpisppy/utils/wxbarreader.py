@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' An extension to initialize PH weights and/or PH xbar values from csv files.
 
     To use, specify either or both of the following keys to the PHoptions dict:

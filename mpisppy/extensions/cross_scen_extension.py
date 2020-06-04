@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 from mpisppy.extensions.extension import PHExtension
 from pyomo.pysp.phutils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn

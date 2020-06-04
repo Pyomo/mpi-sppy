@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Provide some test for mpisppy.0
 # Author: David L. Woodruff (circa January 2019)
 """

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # updated april 26
 # mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3
 # (see the first lines of main() to change instances)

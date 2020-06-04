@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # udpated April 20
 # specific xhat supplied (copied from xhatlooper_bounder by DLW, Dec 2019)
 

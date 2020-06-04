@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' An extension for warm-starting the farmer problem with FWPH weights.
     Right now there is a lot of extra crap floating around in here to be
     cleaned up.

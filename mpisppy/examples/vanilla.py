@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 """ Plain versions of dictionaries that can be modified for each example
     as needed.
     ASSUME the corresponding args have been set up.

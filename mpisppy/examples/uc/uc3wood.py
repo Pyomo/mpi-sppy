@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # updated 23April2020
 # dlw August 2019: 3driver caller for the uc example; unix path names
 

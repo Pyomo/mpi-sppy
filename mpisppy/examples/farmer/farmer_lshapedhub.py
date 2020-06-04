@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # general example driver for farmer with cylinders and an l-shape hub
 # NOTE: as of June 2020, it does not use the vanilla cylinders
 

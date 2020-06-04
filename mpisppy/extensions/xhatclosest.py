@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # dlw, Feb 2018. Code for closes scenario to xbar
 # TODO Apr. 2020 Eliminate old references to companiondriver
 import numpy as np

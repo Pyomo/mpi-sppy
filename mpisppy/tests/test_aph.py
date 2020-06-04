@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 # Provide some test for aph under mpisppy.0
 # Author: David L. Woodruff (circa September 2019)
 """

@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import numpy as np

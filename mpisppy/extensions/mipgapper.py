@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 """ Code for a mipgap schedule. This can be used
     as the only extension, but it could also be called from a "master"
     extension.

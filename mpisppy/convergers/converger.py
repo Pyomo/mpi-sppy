@@ -1,3 +1,4 @@
+# This software is distributed under the 3-clause BSD License.
 ''' Base class for converger objects
 
     DTM Dec 2019
