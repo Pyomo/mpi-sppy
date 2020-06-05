@@ -24,7 +24,7 @@ jobs:
           pip3 install --upgrade pip
           pip3 install pyomo pandas mpi4py
           pip3 install setuptools
-	  
+
       - name: setup the program
         run: |
           python3 setup.py develop
