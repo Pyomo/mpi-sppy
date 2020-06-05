@@ -22,8 +22,7 @@ jobs:
           apt-get update && apt-get install -y mpich
           pip install wheel
           pip install --upgrade pip
-          pip install pyomo pandas mpi4py
-          pip install setuptools
+          pip install pyomo pandas mpi4py setuptools
 
       - name: setup the program
         run: |
@@ -31,4 +30,4 @@ jobs:
 
       - name: run tests
         run: |
-          python mpisspy/tests/test_ef_ph.py
+          python mpisppy/tests/test_ef_ph.py
