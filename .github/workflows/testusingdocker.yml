@@ -24,8 +24,8 @@ jobs:
           pip3 install --upgrade pip
           pip3 install pyomo pandas mpi4py
           pip3 install setuptools
-          python3 setup.py develop
+          python setup.py develop
 
       - name: run tests
         run: |
-          python3 mpisspy/tests/test_ef_ph.py
+          python mpisspy/tests/test_ef_ph.py
