@@ -36,6 +36,9 @@ try:
     persistent_available = pyo.SolverFactory(persistentsolvername).available()
 except:
     persistent_available = False
+# TBD: cplex persistent does not work with some versions of Pyomo (June 2020)
+if solvername == "cplex":
+    persistent_available = False
 
 def _get_ph_base_options():
     BasePHoptions = {}
