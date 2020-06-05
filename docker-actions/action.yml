@@ -1,7 +1,0 @@
-# action for using a docker file for testing; dlw June 2020
-name: 'Docker-based test'
-description: 'Use docker for testing mpi-sppy'
-inputs: {}
-runs:
-   using: 'docker'
-   image: 'Dockerfile'
