@@ -13,22 +13,22 @@ jobs:
     container:
         image: davidwin87/cplex_trial_core_image:latest
         env:
-          PATH: /opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux:/usr/bin:/usr/sbin:/bin:/sbin:/usr/local/bin:/usr/local/sbin
+          PATH: :/usr/local/bin:/usr/local/sbin:usr/sbin:/usr/bin:/sbin:/bin:/opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux
 
     steps:
       - uses: actions/checkout@v2
       - name: Install dependencies
         run: |
           apt-get update && apt-get install -y mpich
-          pip3 install wheel
-          pip3 install --upgrade pip
-          pip3 install pyomo pandas mpi4py
-          pip3 install setuptools
+          pip install wheel
+          pip install --upgrade pip
+          pip install pyomo pandas mpi4py
+          pip install setuptools
 
       - name: setup the program
         run: |
-          python3 setup.py develop
+          python setup.py develop
 
       - name: run tests
         run: |
-          python3 mpisspy/tests/test_ef_ph.py
+          python mpisspy/tests/test_ef_ph.py
