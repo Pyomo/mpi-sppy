@@ -13,7 +13,7 @@ jobs:
     container:
         image: davidwin87/cplex_trial_core_image:latest
         env:
-          PATH: /opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux:/usr/bin:/usr/opt
+          PATH: /opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux:/usr/bin:/usr/sbin:/bin:/sbin
 
     steps:
       - uses: actions/checkout@v2
