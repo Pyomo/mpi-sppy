@@ -8,6 +8,8 @@ on:
 
 jobs:
   build:
+
+    runs-on: ubuntu-latest
     container:
         image: davidwin87/cplex_trial_core_image:latest
         env:
