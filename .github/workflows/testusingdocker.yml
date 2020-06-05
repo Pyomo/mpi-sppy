@@ -22,7 +22,8 @@ jobs:
           apt-get update && apt-get install -y mpich
           pip3 install wheel
           pip3 install --upgrade pip
-          pip3 install pyomo pandas mpi4py setuptools
+          pip3 install pyomo pandas mpi4py
+	  pip3 install setuptools
           python3 setup.py develop
 
       - name: run tests
