@@ -211,19 +211,34 @@ def lagrangian_args(inparser):
 def xhatlooper_args(inparser):
     parser = inparser
     parser.add_argument('--with-xhatlooper',
-                        help="have an xhatlooper spoke (default)",
+                        help="have an xhatlooper spoke",
                         dest='with_xhatlooper',
                         action='store_true')
     parser.add_argument('--no-xhatlooper',
-                        help="do not have an xhatlooper spoke",
+                        help="do not have an xhatlooper spoke (default)",
                         dest='with_xhatlooper',
                         action='store_false')
-    parser.set_defaults(with_xhatlooper=True)
+    parser.set_defaults(with_xhatlooper=False)
     parser.add_argument("--xhat-scen-limit",
                         help="scenario limit xhat looper to try (default 3)",
                         dest="xhat_scen_limit",
                         type=int,
                         default=3)
+
+    return parser
+
+
+def xhatshuffle_args(inparser):
+    parser = inparser
+    parser.add_argument('--with-xhatshuffle',
+                        help="have an xhatshuffle spoke (default)",
+                        dest='with_xhatshuffle',
+                        action='store_true')
+    parser.add_argument('--no-xhatshuffle',
+                        help="do not have an xhatshuffle spoke",
+                        dest='with_xhatshuffle',
+                        action='store_false')
+    parser.set_defaults(with_xhatshuffle=True)
 
     return parser
 
