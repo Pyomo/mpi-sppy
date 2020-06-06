@@ -134,14 +134,11 @@ class PHBase(mpisppy.spbase.SPBase):
         # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    v = node.nonant_vardata_list[i]
-                    local_concats["OnlyReduce"][ndn][i] += \
-                        (s.PySP_prob / node.cond_prob) * v._value
-                    local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
-                        (s.PySP_prob / node.cond_prob) * v._value * v._value
+            for (ndn, i), nonant in s._nonant_indexes.items():
+                local_concats["OnlyReduce"][ndn][i] += \
+                    (s.PySP_prob / node.cond_prob) * nonant._value
+                local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
+                    (s.PySP_prob / node.cond_prob) * nonant._value * nonant._value
 
         # compute node xbar values(reduction)
         if synchronizer is None:
@@ -205,17 +202,14 @@ class PHBase(mpisppy.spbase.SPBase):
     def Update_W(self, verbose):
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens        
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    xdiff = node.nonant_vardata_list[i]._value \
-                            - s._xbars[ndn,i]._value
-                    s._Ws[ndn,i]._value += pyo.value(s._PHrho[ndn,i]) * xdiff
-                    if verbose and self.rank == self.rank0:
-                        print ("rank, node, scen, var, W", ndn, k,
-                               self.rank, node.nonant_vardata_list[i].name,
-                               pyo.value(s._Ws[ndn,i]))
+            for ndn_i, nonant in s._nonant_indexes.items():
+                xdiff = nonant._value \
+                        - s._xbars[ndn_i]._value
+                s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
+                if verbose and self.rank == self.rank0:
+                    print ("rank, node, scen, var, W", ndn, k,
+                           self.rank, nonant.name,
+                           pyo.value(s._Ws[ndn_i]))
 
     def convergence_diff(self):
         """ Assumes the scenarios are up to date
@@ -227,14 +221,11 @@ class PHBase(mpisppy.spbase.SPBase):
         local_diff = np.zeros(1)
         varcount = 0
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    xval = node.nonant_vardata_list[i]._value
-                    xdiff = xval - s._xbars[(ndn,i)]._value
-                    local_diff[0] += abs(xdiff)
-                    varcount += 1
+            for ndn_i, nonant in s._nonant_indexes.items():
+                xval = nonant._value
+                xdiff = xval - s._xbars[ndn_i]._value
+                local_diff[0] += abs(xdiff)
+                varcount += 1
         local_diff[0] /= varcount
 
         self.comms["ROOT"].Allreduce(local_diff, global_diff, op=mpi.SUM)
@@ -356,13 +347,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._PySP_original_fixedness = [None] * clen
                 s._PySP_original_nonants = np.zeros(clen, dtype='d')
 
-            ci = 0 # index into cache
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    xvar = node.nonant_vardata_list[i]
-                    s._PySP_original_fixedness[ci]  = xvar.is_fixed()
-                    s._PySP_original_nonants[ci]  = xvar._value
-                    ci += 1
+            for ci, xvar in enumerate(s._nonant_indexes.values()):
+                s._PySP_original_fixedness[ci]  = xvar.is_fixed()
+                s._PySP_original_nonants[ci]  = xvar._value
 
     def _restore_original_nonants(self):
         """ Restore the saved values and fix status 
@@ -385,16 +372,11 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("restore_original_nonants called for a bundle")
                 raise
 
-            nlens = s._PySP_nlens
-            ci = 0 # index into cache
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    this_vardata = node.nonant_vardata_list[i]
-                    this_vardata._value = s._PySP_original_nonants[ci]
-                    this_vardata.fixed = s._PySP_original_fixedness[ci]
-                    if persistent_solver != None:
-                        persistent_solver.update_var(this_vardata)
-                    ci += 1
+            for ci, vardata in enumerate(s._nonant_indexes.values()):
+                vardata._value = s._PySP_original_nonants[ci]
+                vardata.fixed = s._PySP_original_fixedness[ci]
+                if persistent_solver != None:
+                    persistent_solver.update_var(vardata)
 
     def _save_nonants(self):
         """ Save the values and fixedness status of the Vars that are
@@ -414,13 +396,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._PySP_nonant_cache = np.zeros(clen, dtype='d')
                 s._PySP_fixedness_cache = [None for _ in range(clen)]
 
-            ci = 0 # index into cache
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    xvar = node.nonant_vardata_list[i]
-                    s._PySP_nonant_cache[ci]  = xvar._value
-                    s._PySP_fixedness_cache[ci]  = xvar.is_fixed()
-                    ci += 1
+            for ci, xvar in enumerate(s._nonant_indexes.values()):
+                s._PySP_nonant_cache[ci]  = xvar._value
+                s._PySP_fixedness_cache[ci]  = xvar.is_fixed()
 
     def _restore_nonants(self):
         """ Restore the saved values and fix status 
@@ -439,17 +417,12 @@ class PHBase(mpisppy.spbase.SPBase):
                 if (sputils.is_persistent(s._solver_plugin)):
                     persistent_solver = s._solver_plugin
 
-            nlens = s._PySP_nlens
-            ci = 0 # index into cache
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    this_vardata = node.nonant_vardata_list[i]
-                    this_vardata._value = s._PySP_nonant_cache[ci]
-                    this_vardata.fixed = s._PySP_fixedness_cache[ci]
-                    ci += 1
+            for ci, vardata in enumerate(s._nonant_indexes.values()):
+                vardata._value = s._PySP_nonant_cache[ci]
+                vardata.fixed = s._PySP_fixedness_cache[ci]
 
-                    if not self.bundling and persistent_solver is not None:
-                        persistent_solver.update_var(this_vardata)
+                if not self.bundling and persistent_solver is not None:
+                    persistent_solver.update_var(vardata)
 
 
         if self.bundling:  # we might need to update subproblem peristent solvers
@@ -466,11 +439,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 for sname, scen in self.local_scenarios.items():
                     if sname not in self.names_in_bundles[rank_local][bunnum]:
                         break
-                    nlens = scen._PySP_nlens
-                    for node in scen._PySPnode_list:
-                        for i in range(nlens[node.name]):
-                            this_vardata = node.nonant_vardata_list[i]
-                            persistent_solver.update_var(this_vardata)
+                    for vardata in scen._nonant_indexes.values():
+                        persistent_solver.update_var(vardata)
 
     def _fix_nonants(self, cache):
         """ Fix the Vars subject to non-anticipativity at given values.
@@ -536,12 +506,8 @@ class PHBase(mpisppy.spbase.SPBase):
         # do, they had better put their fixedness back to its correct state.)
         self._save_nonants()
         for k,s in self.local_scenarios.items():        
-            nlens = s._PySP_nlens
-            ci = 0 # index into cache
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    s._PySP_fixedness_cache[ci] = s._PySP_original_fixedness[ci]
-                    ci += 1
+            for ci, _ in enumerate(s._nonant_indexes):
+                s._PySP_fixedness_cache[ci] = s._PySP_original_fixedness[ci]
         self._restore_nonants()
 
         
@@ -549,8 +515,6 @@ class PHBase(mpisppy.spbase.SPBase):
         """ Copy the W values for noants *for all local scenarios*
         Args:
             cache (np vector) to receive the W's for all local scenarios
-
-        WARNING: We are counting on Pyomo indexes not to change order.
 
         NOTE: This is not the same as the nonant Vars because it puts all local W
               values into the same cache and the cache is *not* attached to the scenario.
@@ -563,6 +527,19 @@ class PHBase(mpisppy.spbase.SPBase):
                 cache[ci] = pyo.value(model._Ws[ix])
                 ci += 1
 
+    def _put_nonant_cache(self, cache):
+        """ Put the value in the cache for noants *for all local scenarios*
+        Args:
+            cache (np vector) to receive the nonant's for all local scenarios
+
+        """
+        ci = 0 # Cache index
+        for model in self.local_scenarios.values():
+            for i,_ in enumerate(model._nonant_indexes):
+                assert(ci < len(cache))
+                model._PySP_nonant_cache[i] = cache[ci]
+                ci += 1
+
     def W_from_flat_list(self, flat_list):
         ''' Set the W values *for all local scenarios* from one list
 
@@ -571,10 +548,9 @@ class PHBase(mpisppy.spbase.SPBase):
         '''
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
-            for node in model._PySPnode_list:
-                for i in range(model._PySP_nlens[node.name]):
-                    model._Ws[node.name,i].value = flat_list[ci]
-                    ci += 1
+            for ndn_i in model._nonant_indexes:
+                model._Ws[ndn_i].value = flat_list[ci]
+                ci += 1
         
         # That is it, unless we are using a persistent solver
         using_persistent = all(
@@ -590,17 +566,13 @@ class PHBase(mpisppy.spbase.SPBase):
                 solver = model._solver_plugin
                 for sname in self.names_in_bundles[self.rank][bundle_num]:
                     smodel = self.local_scenarios[sname]
-                    for node in smodel._PySPnode_list:
-                        for i in range(smodel._PySP_nlens[node.name]):
-                            vardata = node.nonant_vardata_list[i]
-                            solver.update_var(vardata)
+                    for vardata in smodel._nonant_indexes.values():
+                        solver.update_var(vardata)
         else:
             for model in self.local_scenarios.values():
                 solver = model._solver_plugin
-                for node in model._PySPnode_list:
-                    for i in range(model._PySP_nlens[node.name]):
-                        vardata = node.nonant_vardata_list[i]
-                        solver.update_var(vardata)
+                for vardata in model._nonant_indexes.values():
+                    solver.update_var(vardata)
 
     def _update_E1(self):
         """ Add up the probabilities of all scenarios using a reduce call.
@@ -996,32 +968,29 @@ class PHBase(mpisppy.spbase.SPBase):
             else:
                 lin_prox = False
 
-            for node in scenario._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    xvar = node.nonant_vardata_list[i]
-                    ph_term = 0
-                    # Dual term (weights W)
-                    if (add_duals):
-                        ph_term += \
-                            scenario._PHW_on[ndn,i] * scenario._Ws[ndn,i] * xvar
-                    # Prox term (quadratic)
-                    if (add_prox):
-                        if (xvar.is_binary() and lin_prox):
-                            ph_term += scenario._PHprox_on[(ndn,i)] * \
-                                (scenario._PHrho[(ndn,i)] /2.0) * \
-                                (xvar - 2.0 * scenario._xbars[(ndn,i)] * xvar \
-                                 - scenario._xbars[(ndn,i)] \
-                                 * scenario._xbars[(ndn,i)])
-                        else:
-                            ph_term += scenario._PHprox_on[(ndn,i)] * \
-                                (scenario._PHrho[(ndn,i)] /2.0) * \
-                                (xvar - scenario._xbars[(ndn,i)]) * \
-                                (xvar - scenario._xbars[(ndn,i)])
-                    if (is_min_problem):
-                        objfct.expr += ph_term
+            for ndn_i, xvar in scenario._nonant_indexes.items():
+                ph_term = 0
+                # Dual term (weights W)
+                if (add_duals):
+                    ph_term += \
+                        scenario._PHW_on[ndn_i] * scenario._Ws[ndn_i] * xvar
+                # Prox term (quadratic)
+                if (add_prox):
+                    if (xvar.is_binary() and lin_prox):
+                        ph_term += scenario._PHprox_on[ndn_i] * \
+                            (scenario._PHrho[ndn_i] /2.0) * \
+                            (xvar - 2.0 * scenario._xbars[ndn_i] * xvar \
+                             - scenario._xbars[ndn_i] \
+                             * scenario._xbars[ndn_i])
                     else:
-                        objfct.expr -= ph_term
+                        ph_term += scenario._PHprox_on[ndn_i] * \
+                            (scenario._PHrho[ndn_i] /2.0) * \
+                            (xvar - scenario._xbars[ndn_i]) * \
+                            (xvar - scenario._xbars[ndn_i])
+                if (is_min_problem):
+                    objfct.expr += ph_term
+                else:
+                    objfct.expr -= ph_term
 
                         
     def attach_Lens_async(self):

@@ -128,20 +128,17 @@ class APH(ph_base.PHBase):  # ??????
     #============================
     def Update_y(self, verbose):
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens        
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    # pyo.value vs. _value ??
-                    xzdiff = node.nonant_vardata_list[i]._value \
-                            - s._zs[(ndn,i)]._value
-                    s._ys[(ndn,i)]._value = pyo.value(s._Ws[(ndn,i)]) \
-                                          + pyo.value(s._PHrho[(ndn,i)]) \
-                                          * xzdiff
-                    if verbose and self.rank == self.rank0:
-                        print ("rank, node, scen, var, y", ndn, k,
-                               self.rank, node.nonant_vardata_list[i].name,
-                               pyo.value(s._ys[(ndn,i)]))
+            for (ndn,i), xvar in s._nonant_indexes.items():
+                # pyo.value vs. _value ??
+                xzdiff = xvar._value \
+                        - s._zs[(ndn,i)]._value
+                s._ys[(ndn,i)]._value = pyo.value(s._Ws[(ndn,i)]) \
+                                      + pyo.value(s._PHrho[(ndn,i)]) \
+                                      * xzdiff
+                if verbose and self.rank == self.rank0:
+                    print ("rank, node, scen, var, y", ndn, k,
+                           self.rank, node.nonant_vardata_list[i].name,
+                           pyo.value(s._ys[(ndn,i)]))
 
 
     #============================***********=========
@@ -189,20 +186,18 @@ class APH(ph_base.PHBase):  # ??????
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    s._xbars[(ndn,i)]._value \
-                        = self.node_concats["FirstReduce"][ndn][i]
-                    s._xsqbars[(ndn,i)]._value \
-                        = self.node_concats["FirstReduce"][ndn][nlens[ndn]+i]
-                    s._ybars[(ndn,i)]._value \
-                        = self.node_concats["FirstReduce"][ndn][2*nlens[ndn]+i]
+            for (ndn,i) in s._nonant_indexes:
+                s._xbars[(ndn,i)]._value \
+                    = self.node_concats["FirstReduce"][ndn][i]
+                s._xsqbars[(ndn,i)]._value \
+                    = self.node_concats["FirstReduce"][ndn][nlens[ndn]+i]
+                s._ybars[(ndn,i)]._value \
+                    = self.node_concats["FirstReduce"][ndn][2*nlens[ndn]+i]
 
-                    if verbose and self.rank == self.rank0:
-                        print ("rank, scen, node, var, xbar:",
-                               self.rank,k,ndn,node.nonant_vardata_list[i].name,
-                               pyo.value(s._xbars[(ndn,i)]))
+                if verbose and self.rank == self.rank0:
+                    print ("rank, scen, node, var, xbar:",
+                           self.rank,k,ndn,node.nonant_vardata_list[i].name,
+                           pyo.value(s._xbars[(ndn,i)]))
 
         # There is one tau_summand for the rank; global_tau is out of date when
         # we get here because we could not compute it until the averages were.
@@ -218,17 +213,14 @@ class APH(ph_base.PHBase):  # ??????
             if sname not in self.uk:
                 self.uk[sname] = {}
             nlens = s._PySP_nlens        
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    xvar = node.nonant_vardata_list[i]
-                    self.uk[sname][(ndn,i)] = xvar._value \
-                                              - pyo.value(s._xbars[(ndn,i)])
-                    # compute the unorm and vnorm
-                    scen_unorm += self.uk[sname][(ndn,i)] \
-                                  * self.uk[sname][(ndn,i)]
-                    scen_vnorm += pyo.value(s._ybars[(ndn,i)]) \
-                                  * pyo.value(s._ybars[(ndn,i)])
+            for (ndn,i), xvar in s._nonant_indexes.items():
+                self.uk[sname][(ndn,i)] = xvar._value \
+                                          - pyo.value(s._xbars[(ndn,i)])
+                # compute the unorm and vnorm
+                scen_unorm += self.uk[sname][(ndn,i)] \
+                              * self.uk[sname][(ndn,i)]
+                scen_vnorm += pyo.value(s._ybars[(ndn,i)]) \
+                              * pyo.value(s._ybars[(ndn,i)])
             self.local_punorm += pyo.value(s.PySP_prob) * scen_unorm
             self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
             new_tau_summand += pyo.value(s.PySP_prob) \
@@ -249,13 +241,10 @@ class APH(ph_base.PHBase):  # ??????
         self.phi_summand = 0.0
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
-            nlens = s._PySP_nlens        
-            for node in s._PySPnode_list:
-                ndn = node.name
-                for i in range(nlens[ndn]):
-                    xvar = node.nonant_vardata_list[i]
-                    self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
-                        *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
+            for (ndn,i), xvar in s._nonant_indexes.items():
+                xvar = node.nonant_vardata_list[i]
+                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
+                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
             self.phis[k] *= pyo.value(s.PySP_prob)
             self.phi_summand += self.phis[k]
 
@@ -341,11 +330,11 @@ class APH(ph_base.PHBase):  # ??????
             for node in s._PySPnode_list:
                 ndn = node.name
                 for i in range(nlens[node.name]):
-                    v = node.nonant_vardata_list[i]
+                    v_value = node.nonant_vardata_list[i]._value
                     self.local_concats["FirstReduce"][node.name][i] += \
-                        (s.PySP_prob / node.cond_prob) * v._value
+                        (s.PySP_prob / node.cond_prob) * v_value
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
-                        += (s.PySP_prob / node.cond_prob) * v._value * v._value
+                        += (s.PySP_prob / node.cond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
                         += (s.PySP_prob / node.cond_prob) \
                            * pyo.value(s._ys[(node.name,i)])
@@ -575,15 +564,12 @@ class APH(ph_base.PHBase):  # ??????
                 
             objfct = find_active_objective(scenario, True)
                 
-            for node in scenario._PySPnode_list:
-                ndn = node.name
-                for i in range(scenario._PySP_nlens[ndn]):
-                    xvar = node.nonant_vardata_list[i]
-                    # proximal term
-                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
-                        (scenario._PHrho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._zs[(ndn,i)]) * \
-                        (xvar - scenario._zs[(ndn,i)])
+            for (ndn,i), xvar in scenario._nonant_indexes.items():
+                # proximal term
+                objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
+                    (scenario._PHrho[(ndn,i)] /2.0) * \
+                    (xvar - scenario._zs[(ndn,i)]) * \
+                    (xvar - scenario._zs[(ndn,i)])
 
         # End APH-specific Prep
         

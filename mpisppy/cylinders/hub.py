@@ -391,11 +391,9 @@ class PHHub(Hub):
         ci = 0  ## index to self.nonant_send_buffer
         nonant_send_buffer = self.nonant_send_buffer
         for k, s in self.opt.local_scenarios.items():
-            for node in s._PySPnode_list:
-                for i in range(s._PySP_nlens[node.name]):
-                    xvar = node.nonant_vardata_list[i]
-                    nonant_send_buffer[ci] = xvar._value
-                    ci += 1
+            for xvar in s._nonant_indexes.values():
+                nonant_send_buffer[ci] = xvar._value
+                ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
         for idx in self.nonant_spoke_indices:
             self.hub_to_spoke(nonant_send_buffer, idx)

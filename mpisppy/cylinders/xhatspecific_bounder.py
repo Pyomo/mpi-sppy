@@ -69,26 +69,6 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
 
         return xhatter
 
-    def _populate_nonant_caches(self):
-        ''' We could use split, but I will use a loop to split scenarios
-            This is a hack to use the _PySP_nonant_cache
-
-            DTM: Does this function exist in PHBase?
-        '''
-        opt = self.opt
-        ci = 0 # index into source
-        for s in opt.local_scenarios.values():
-            itarget = 0 # index into target
-            for node in s._PySPnode_list:
-                for i in range(s._PySP_nlens[node.name]):
-                    try:
-                        s._PySP_nonant_cache[itarget] = self.localnonants[ci]
-                    except IndexError as e:
-                        print("itarget={}, ci={}".format(itarget, ci))
-                        raise e
-                    itarget += 1
-                    ci += 1
-
     def main(self):
         """
         Entry point. Communicates with the optimization companion.
@@ -118,7 +98,7 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
                               format(rank_global))
                 logging.debug('  localnonants={}'.format(str(self.localnonants)))
 
-                self._populate_nonant_caches()  # don't really need all caches
+                self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 self.opt._restore_nonants()
                 innerbound = xhatter.xhat_tryit(xhat_scenario_dict)
 

@@ -60,21 +60,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         self.id_fix_list_fct = self.fixeroptions["id_fix_list_fct"]
         self.dprogress = ph.PHoptions["display_progress"]
         self.fixed_so_far = 0
-        self._n2n = {}  # use the function _name_to_node, not this thing directly
         self.boundtol = self.fixeroptions["boundtol"]
-        
-    def _name_to_node(self, s, ndn):
-        # Build up a dictionary as called
-        if (s, ndn) in self._n2n:
-            return self._n2n[(s, ndn)]
-        else:
-            for node in s._PySPnode_list:
-                if node.name == ndn:
-                    self._n2n[(s, ndn)] = node
-                    return node
-            raise RuntimeError("Tree node name=%s not found on scenario=%s",
-                               ndn, s.name)
-
 
     def populate(self, local_scenarios):
         # [(ndn, i)] = iter count (i indexes into nonantlist)
@@ -127,20 +113,18 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def _update_fix_counts(self):
         nodesdone = []  # avoid multiple updates of a node's Vars
         for k,s in self.local_scenarios.items():
-            for (ndn, i) in s._PySP_conv_iter_count:
-                node = self._name_to_node(s, ndn)
-                xvar = node.nonant_vardata_list[i]
+            for ndn_i, xvar in s._nonant_indexes.items():
                 if xvar.is_fixed():
                     continue
-                xb = pyo.value(s._xbars[(ndn,i)])
-                diff = xb * xb - pyo.value(s._xsqbars[(ndn,i)])
-                tolval = self.threshold[(ndn, i)]
+                xb = pyo.value(s._xbars[ndn_i])
+                diff = xb * xb - pyo.value(s._xsqbars[ndn_i])
+                tolval = self.threshold[ndn_i]
                 tolval *= tolval  # the tol is on sqrt
                 if -diff < tolval and diff < tolval:
                     ##print ("debug += diff, tolval", diff, tolval)
-                    s._PySP_conv_iter_count[(ndn,i)] += 1
+                    s._PySP_conv_iter_count[ndn_i] += 1
                 else:
-                    s._PySP_conv_iter_count[(ndn,i)] = 0
+                    s._PySP_conv_iter_count[ndn_i] = 0
                     ##print ("debug reset fix diff, tolval", diff, tolval)
                     
     def iter0(self, local_scenarios):
@@ -172,8 +156,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 except:
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
-                node = self._name_to_node(s, ndn)
-                xvar = node.nonant_vardata_list[i]
+                xvar = s._nonant_indexes[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
                     diff = xb * xb - pyo.value(s._xsqbars[(ndn,i)])
@@ -256,8 +239,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
                 tolval = self.threshold[(ndn, i)]
-                node = self._name_to_node(s, ndn)
-                xvar = node.nonant_vardata_list[i]
+                xvar = s._nonant_indexes[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
                     fx = s._PySP_conv_iter_count[(ndn,i)]

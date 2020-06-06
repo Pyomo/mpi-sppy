@@ -374,7 +374,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     for scenario_name in mip.scen_list
                     for ix in range(mip.num_leaf_vars[scenario_name])]
             else:
-                x_indices = mip._nonant_indexes
+                x_indices = mip._nonant_indexes.keys()
                 y_indices = [('LEAF', ix) for ix in range(len(qp.y))]
 
             y_indices = pyo.Set(initialize=y_indices)
@@ -967,7 +967,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 x_source = QP.x
 
             QP._Ws = pyo.Param(
-                m_source._nonant_indexes, mutable=True, initialize=m_source._Ws
+                m_source._nonant_indexes.keys(), mutable=True, initialize=m_source._Ws
             )
             # rhos are attached to each scenario, not each bundle (should they be?)
             ph_term = pyo.quicksum((

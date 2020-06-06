@@ -20,10 +20,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         vbuflen = 0
         self.nonant_per_scen = 0
         for s in self.opt.local_scenarios.values():
-            vbuflen += sum(s._PySP_nlens.values())
-            if len(s._PySPnode_list) != 1:
-                raise RuntimeError('CrossScenarioCutSpoke only supports '
-                                   'two-stage models at this time')
+            vbuflen += len(s._nonant_indexes)
         local_scen_count = len(self.opt.local_scenario_names)
         self.nonant_per_scen = int(vbuflen / local_scen_count)
 
