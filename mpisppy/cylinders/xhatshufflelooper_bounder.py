@@ -168,11 +168,11 @@ class XhatTryer(PHBase):
         pass
 
 
-class XhatShuffleLooper(spoke.InnerBoundNonantSpoke):
+class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatbase_prep(self):
         if self.opt.multistage:
-            raise RuntimeError('The XhatShuffleLooper only supports '
+            raise RuntimeError('The XhatShuffleInnerBound only supports '
                                'two-stage models at this time.')
 
         verbose = self.opt.options['verbose']
@@ -181,7 +181,7 @@ class XhatShuffleLooper(spoke.InnerBoundNonantSpoke):
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
         if not isinstance(self.opt, XhatTryer):
-            raise RuntimeError("XhatShuffleLooper must be used with XhatTryer.")
+            raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
             
         xhatter = XhatBase(self.opt)
 

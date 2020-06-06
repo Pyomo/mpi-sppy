@@ -12,6 +12,7 @@ def _parse_args():
     parser = baseparsers.make_multistage_parser()
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.xhatlooper_args(parser)
+    parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
     args = parser.parse_args()
