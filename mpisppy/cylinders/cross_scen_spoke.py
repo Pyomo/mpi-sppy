@@ -77,11 +77,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # create an index of these non_ant_copies to be in the same
         # order as PH, used below
         nonants = dict()
-        nlens = arb_scen._PySP_nlens
-        for node in arb_scen._PySPnode_list:
-            for i in range(nlens[node.name]):
-                vid = id(node.nonant_vardata_list[i])
-                nonants[node.name, i] = nonant_vid_to_copy_map[vid]
+        for ndn_i, nonant in arb_scen._nonant_indexes.items():
+            vid = id(nonant)
+            nonants[ndn_i] = nonant_vid_to_copy_map[vid]
 
         self.master_nonants = nonants
         self.opt.master.eta = pyo.Var(self.opt.all_scenario_names)
@@ -113,11 +111,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         etas = dict()
         ci = 0
         for k, s in opt.local_scenarios.items():
-            nlens = s._PySP_nlens
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    nonants[k, node.name, i] = all_nonants_and_etas[ci]
-                    ci += 1
+            for ndn, i in s._nonant_indexes:
+                nonants[k, ndn, i] = all_nonants_and_etas[ci]
+                ci += 1
 
         # get all the etas
         for k, s in opt.local_scenarios.items():
