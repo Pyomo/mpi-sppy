@@ -129,7 +129,7 @@ class SPBase(object):
                 List of index names owned by the local rank
 
             Notes:
-                Called within PH_Prep
+                Called within __init__
 
                 Modified by dlw for companiondriver use: opt, lb, and ub each get
                 a full set of scenarios. So name_to_rank gives the rank within

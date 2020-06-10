@@ -146,8 +146,8 @@ def xhatspecific_spoke(args,
                        scenario_denouement,
                        all_scenario_names,
                        scenario_dict,
-                       all_nodenames,
-                       BFs,
+                       all_nodenames=None,
+                       BFs=None,
                        cb_data=None):
     
     shoptions = shared_options(args)
@@ -157,7 +157,8 @@ def xhatspecific_spoke(args,
                                      shoptions["iterk_solver_options"],
                                      "xhat_scenario_dict": scenario_dict,
                                      "csvname": "specific.csv"}
-    xhat_options["branching_factors"] = BFs
+    if BFs:
+        xhat_options["branching_factors"] = BFs
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatspecific_dict = {
