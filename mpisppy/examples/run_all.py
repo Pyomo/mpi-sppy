@@ -56,6 +56,11 @@ def do_one(dirname, progname, np, argstring):
     os.chdir("..")
 
 
+do_one("uc", "uc_cylinders.py", 4,
+       "--bundles-per-rank=0 --max-iterations=2 "
+       "--default-rho=1 --num-scens=3 "
+       "--solver-name={}".format(solver_name))
+quit()
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
