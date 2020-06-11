@@ -15,6 +15,7 @@ def _parse_args():
     parser = baseparsers.make_parser(num_scens_reqd=False)
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.fwph_args(parser)
+    parser = baseparsers.xhatlshaped_args(parser)
     parser.add_argument("--threads",
                         help="Value for threads option (e.g. 1; default None)",
                         dest="threads",
@@ -34,6 +35,7 @@ def main():
 
     num_scen = args.num_scens
     with_fwph = args.with_fwph
+    with_xhatlshaped = args.with_xhatlshaped
 
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
@@ -79,9 +81,14 @@ def main():
         fw_spoke["opt_kwargs"]["PH_options"]["rel_gap"] = 1e-5
         fw_spoke["opt_kwargs"]["rho_setter"] = uc.scenario_rhos
 
+    if with_xhatlshaped:
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, cb_data=cb_data)
+
     list_of_spoke_dict = list()
     if with_fwph:
         list_of_spoke_dict.append(fw_spoke)
+    if with_xhatlshaped:
+        list_of_spoke_dict.append(xhatlshaped_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 

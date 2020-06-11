@@ -14,6 +14,7 @@ from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound, XhatTryer
+from mpisppy.cylinders.lshaped_bounder import LShapedXhatTryer, XhatLShapedInnerBound
 from mpisppy.cylinders.hub import PHHub
 
 
@@ -169,7 +170,6 @@ def xhatshuffle_spoke(args,
     return xhatlooper_dict
 
 
-# this xhatspecific_spoke is for multistage
 def xhatspecific_spoke(args,
                        scenario_creator,
                        scenario_denouement,
@@ -203,3 +203,26 @@ def xhatspecific_spoke(args,
         },
     }
     return xhatspecific_dict
+
+def xhatlshaped_spoke(args,
+                      scenario_creator,
+                      scenario_denouement,
+                      all_scenario_names,
+                      cb_data=None):
+    
+    shoptions = shared_options(args)
+    xhat_options = copy.deepcopy(shoptions)
+    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+
+    xhatlshaped_dict = {
+        "spoke_class": XhatLShapedInnerBound,
+        "spoke_kwargs": dict(),
+        "opt_class": LShapedXhatTryer,
+        "opt_kwargs": {
+            "PHoptions": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "cb_data": cb_data,
+        },
+    }
+    return xhatlshaped_dict

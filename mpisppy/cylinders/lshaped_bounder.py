@@ -29,7 +29,7 @@ class LShapedXhatTryer(XhatTryer):
                 if (sputils.is_persistent(s._solver_plugin)):
                     persistent_solver = s._solver_plugin
 
-            for var in s._nonant_indexes.values()
+            for var in s._nonant_indexes.values():
                 var.fix()
                 if not self.bundling and persistent_solver is not None:
                     persistent_solver.update_var(var)
@@ -66,7 +66,7 @@ class LShapedXhatTryer(XhatTryer):
         self._fix_nonants_at_value()
 
         self.solve_loop(solver_options=self.current_solver_options, 
-                        verbose=verbose, tee=tee)
+                        verbose=verbose)
 
         feasP = self.feas_prob()
         if feasP != self.E1:
@@ -86,11 +86,10 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
         if not isinstance(self.opt, LShapedXhatTryer):
             raise RuntimeError("XhatLShapedInnerBound must be used with LShapedXhatTryer.")
 
-        self.opt.PH_Prep()  
+        self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
 
         self.opt.subproblem_creation(verbose)
 
-        #self.opt._save_original_nonants()
         self.opt._create_solvers()
 
         teeme = False
@@ -126,26 +125,25 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
     def main(self):
 
         self.xhatlshaped_prep()
+        is_minimizing = self.opt.is_minimizing
 
-        self.ib = inf if self.is_minimizing else -inf
+        self.ib = inf if is_minimizing else -inf
 
         #xh_iter = 1
         while not self.got_kill_signal():
 
             if self.new_nonants:
                 
+                self.opt._put_nonant_cache(self.localnonants)
+                self.opt._restore_nonants()
                 obj = self.opt.calculate_incumbent()
 
                 if obj is None:
                     continue
 
-                update = (obj < self.ib) if self.is_minimizing else (self.ib < obj)
+                update = (obj < self.ib) if is_minimizing else (self.ib < obj)
                 if update:
                     self.bound = obj
                     self.ib = obj
 
-                    ## we'll cache the best nonants
-                    self.opt._save_nonants()
-
-        ## do something with saved nonants?
-        self.opt._restore_nonants()
+        ## TODO: Save somewhere?

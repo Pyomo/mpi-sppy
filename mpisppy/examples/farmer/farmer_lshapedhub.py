@@ -17,6 +17,7 @@ def _parse_args():
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
+    parser = baseparsers.xhatlshaped_args(parser)
     parser.add_argument("--crops-mult",
                         help="There will be 3x this many crops (default 1)",
                         dest="crops_mult",
@@ -38,6 +39,7 @@ def main():
     crops_mult = args.crops_mult
     with_fwph = args.with_fwph
     with_xhatspecific = args.with_xhatspecific
+    with_xhatlshaped = args.with_xhatlshaped
 
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
@@ -90,6 +92,8 @@ def main():
         xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
                                                         xhat_scenario_dict,
                                                         cb_data=cb_data)
+    if with_xhatlshaped:
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, cb_data=cb_data)
 
 
     list_of_spoke_dict = list()
@@ -97,6 +101,8 @@ def main():
         list_of_spoke_dict.append(fw_spoke)
     if with_xhatspecific:
         list_of_spoke_dict.append(xhatspecific_spoke)
+    if with_xhatlshaped:
+        list_of_spoke_dict.append(xhatlshaped_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 
