@@ -72,6 +72,12 @@ def _common_args(inparser):
                         action='store_false')
     parser.set_defaults(with_display_timing=False)
 
+    parser.add_argument("--max-solver-threads",
+                        help="Limit on threads per solver (default None)",
+                        dest="max_solver_threads",
+                        type=int,
+                        default=None)
+
     parser.add_argument("--intra-hub-conv-thresh",
                         help="Within hub convergence threshold (default 0)",
                         dest="intra_hub_conv_thresh",
@@ -204,6 +210,18 @@ def lagrangian_args(inparser):
                         dest='with_lagrangian',
                         action='store_false')
     parser.set_defaults(with_lagrangian=True)
+
+    parser.add_argument("--lagrangian-iter0-mipgap",
+                        help="lgr. iter0 solver option mipgap (default None)",
+                        dest="lagrangian_iter0_mipgap",
+                        type=float,
+                        default=None)
+
+    parser.add_argument("--lagrangian-iterk-mipgap",
+                        help="lgr. iterk solver option mipgap (default None)",
+                        dest="lagrangian_iterk_mipgap",
+                        type=float,
+                        default=None)
 
     return parser
 

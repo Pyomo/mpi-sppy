@@ -34,6 +34,8 @@ class Gapper(mpisppy.extensions.extension.Extension):
         self.ph.current_solver_options["mipgap"] = float(mipgap)
         
     def pre_iter0(self):
+        if self.mipgapdict is None:
+            return
         if 0 in self.mipgapdict:
             self.set_mipgap(self.mipgapdict[0])
                                         
@@ -41,6 +43,8 @@ class Gapper(mpisppy.extensions.extension.Extension):
         return
 
     def miditer(self):
+        if self.mipgapdict is None:
+            return
         PHIter = self.ph._PHIter
         if PHIter in self.mipgapdict:
             self.set_mipgap(self.mipgapdict[PHIter])
