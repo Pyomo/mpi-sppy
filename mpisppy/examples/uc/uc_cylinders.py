@@ -74,24 +74,26 @@ def main():
         multi_ext = {"ext_classes": [Fixer, Gapper]}
     else:
         multi_ext = {"ext_classes": [Gapper]}
-    hub_dict["opt_kwargs"]["PHoptions"]["PHextension_kwargs"] = multi_ext
+    hub_dict["opt_kwargs"]["PH_extension_kwargs"] = multi_ext
 
     if with_fixer:
         hub_dict["opt_kwargs"]["PHoptions"]["fixeroptions"] = {
-            "verbose": False,
+            "verbose": args.with_verbose,
             "boundtol": fixer_tol,
             "id_fix_list_fct": uc.id_fix_list_fct,
         }
     if args.ph_mipgap_json is not None:
         mipgapdict = json.load(args.ph_mipgap_json)
+    else:
+        mipgapdict = None
+    hub_dict["opt_kwargs"]["PHoptions"]["gapperoptions"] = {
+        "verbose": args.with_verbose,
+        "mipgapdict": mipgapdict
+        }
         
     if args.default_rho is None:
         # since we are using a rho_setter anyway
         hub_dict.opt_kwargs.PHoptions["defaultPHrho"] = 1  
-        hub_dict["opt_kwargs"]["PHoptions"]["gapperoptions"] = {
-            "verbose": verbose,
-            "mipgapdict": mipgapdict
-        }
     ### end ph spoke ###
     
     # FWPH spoke
