@@ -11,7 +11,7 @@ from mpisppy.examples import vanilla
 
 
 def _parse_args():
-    parser = baseparsers.make_parser(num_scen_reqd=False)
+    parser = baseparsers.make_parser(num_scens_reqd=False)
     parser.add_argument("--instance-name",
                         help="sslp instance name (e.g., sslp_15_45_10)",
                         dest="instance_name",
@@ -22,7 +22,7 @@ def _parse_args():
     parser = baseparsers.xhatlooper_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
-    parser = baseparsers.xhatlooper_args(parser)
+    parser = baseparsers.xhatshuffle_args(parser)
     args = parser.parse_args()
     return args
 
@@ -40,6 +40,7 @@ def main():
     with_fixer = args.with_fixer
     fixer_tol = args.fixer_tol
     with_xhatlooper = args.with_xhatlooper
+    with_xhatshuffle = args.with_xhatshuffle
     with_lagrangian = args.with_lagrangian
 
     if args.default_rho is None:
@@ -84,6 +85,10 @@ def main():
     # xhat looper bound spoke
     if with_xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, cb_data=cb_data)
+
+    # xhat shuffle bound spoke
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, cb_data=cb_data)
        
     list_of_spoke_dict = list()
     if with_fwph:
@@ -92,6 +97,8 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if with_xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 

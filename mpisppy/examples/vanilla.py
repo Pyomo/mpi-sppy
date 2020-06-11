@@ -13,6 +13,7 @@ from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
+from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound, XhatTryer
 from mpisppy.cylinders.hub import PHHub
 
 
@@ -130,6 +131,34 @@ def xhatlooper_spoke(args,
         "spoke_class": XhatLooperInnerBound,
         "spoke_kwargs": dict(),
         "opt_class": PHBase,
+        "opt_kwargs": {
+            "PHoptions": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "cb_data": cb_data,
+        },
+    }
+    return xhatlooper_dict
+
+
+def xhatshuffle_spoke(args,
+               scenario_creator,
+               scenario_denouement,
+               all_scenario_names,
+               cb_data=None):
+
+    shoptions = shared_options(args)
+    xhat_options = copy.deepcopy(shoptions)
+    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhat_options["xhat_looper_options"] = {
+        "xhat_solver_options": shoptions["iterk_solver_options"],
+        "dump_prefix": "delme",
+        "csvname": "looper.csv",
+    }
+    xhatlooper_dict = {
+        "spoke_class": XhatShuffleInnerBound,
+        "spoke_kwargs": dict(),
+        "opt_class": XhatTryer,
         "opt_kwargs": {
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,

@@ -16,6 +16,7 @@ def _parse_args():
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatlooper_args(parser)
+    parser = baseparsers.xhatshuffle_args(parser)
     args = parser.parse_args()
     return args
 
@@ -28,6 +29,7 @@ def main():
 
     with_fwph = args.with_fwph
     with_xhatlooper = args.with_xhatlooper
+    with_xhatshuffle = args.with_xhatshuffle
     with_lagrangian = args.with_lagrangian
     with_fixer = args.with_fixer
     fixer_tol = args.fixer_tol
@@ -78,6 +80,10 @@ def main():
     # xhat looper bound spoke
     if with_xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, cb_data=cb_data)
+
+    # xhat shuffle bound spoke
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, cb_data=cb_data)
        
     list_of_spoke_dict = list()
     if with_fwph:
@@ -86,6 +92,8 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if with_xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 

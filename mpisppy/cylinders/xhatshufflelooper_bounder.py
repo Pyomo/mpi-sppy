@@ -168,11 +168,11 @@ class XhatTryer(PHBase):
         pass
 
 
-class XhatShuffleLooper(spoke.InnerBoundNonantSpoke):
+class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatbase_prep(self):
         if self.opt.multistage:
-            raise RuntimeError('The XhatShuffleLooper only supports '
+            raise RuntimeError('The XhatShuffleInnerBound only supports '
                                'two-stage models at this time.')
 
         verbose = self.opt.options['verbose']
@@ -181,12 +181,12 @@ class XhatShuffleLooper(spoke.InnerBoundNonantSpoke):
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
         if not isinstance(self.opt, XhatTryer):
-            raise RuntimeError("XhatShuffleLooper must be used with XhatTryer.")
+            raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
             
         xhatter = XhatBase(self.opt)
 
         self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
-        logger.debug(f"  xhatlooper spoke back from PH_Prep rank {self.rank_global}")
+        logger.debug(f"  xhatshuffle spoke back from PH_Prep rank {self.rank_global}")
 
         self.opt.subproblem_creation(verbose)
 
@@ -261,7 +261,7 @@ class XhatShuffleLooper(spoke.InnerBoundNonantSpoke):
 
     def main(self):
         verbose = self.opt.options["verbose"] # typing aid  
-        logger.debug(f"Entering main on xhatcontinuouslooper spoke rank {self.rank_global}")
+        logger.debug(f"Entering main on xhatshuffle spoke rank {self.rank_global}")
 
         self.xhatbase_prep()
         self.ib = inf if self.is_minimizing else -inf
@@ -280,11 +280,11 @@ class XhatShuffleLooper(spoke.InnerBoundNonantSpoke):
         xh_iter = 1
         while not self.got_kill_signal():
             if (xh_iter-1) % 10000 == 0:
-                logger.debug(f'   Xhatlooper loop iter={xh_iter} on rank {self.rank_global}')
-                logger.debug(f'   Xhatlooper got from opt on rank {self.rank_global}')
+                logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.rank_global}')
+                logger.debug(f'   Xhatshuffle got from opt on rank {self.rank_global}')
 
             if self.new_nonants:
-                logger.debug(f'   *Xhatlooper loop iter={xh_iter}')
+                logger.debug(f'   *Xhatshuffle loop iter={xh_iter}')
                 logger.debug(f'   *got a new one! on rank {self.rank_global}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
