@@ -51,16 +51,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         ##get the nonants off an arbitrary scenario
         arb_scen = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
-        non_ants_ind = arb_scen._PySPnode_list[0].nonant_list
-        non_ants = list()
-
-        # NOTE: this loop is designed to mirror the LShaped code
-        for var in non_ants_ind:
-            if var.is_indexed():
-                for var_data in var.values():
-                    non_ants.append(var_data)
-            else:
-                non_ants.append(var)
+        non_ants = arb_scen._PySPnode_list[0].nonant_list
 
         # add copies of the nonanticipatory variables to the master problem
         # NOTE: the LShaped code expects the nonant vars to be in a particular
