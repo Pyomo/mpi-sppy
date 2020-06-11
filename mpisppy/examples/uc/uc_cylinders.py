@@ -6,7 +6,7 @@
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliPHExtensions
 import sys
-import copy
+import json
 import mpisppy.examples.uc.uc_funcs as uc
 
 from mpisppy.utils.sputils import spin_the_wheel
@@ -18,16 +18,16 @@ from mpisppy.examples import vanilla
 
 
 def _parse_args():
-    parser = baseparsers.make_parser()
+    parser = baseparsers.make_parser("uc_cylinders")
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.fixer_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatlooper_args(parser)
     parser = baseparsers.xhatshuffle_args(parser)
-    parser.add_argument("--ph-mipgap-json",
+    parser.add_argument("--ph-mipgaps-json",
                         help="json file with mipgap schedule (default None)",
-                        dest="ph_mipgap_json",
+                        dest="ph_mipgaps_json",
                         type=str,
                         default=None)                
     
@@ -82,8 +82,10 @@ def main():
             "boundtol": fixer_tol,
             "id_fix_list_fct": uc.id_fix_list_fct,
         }
-    if args.ph_mipgap_json is not None:
-        mipgapdict = json.load(args.ph_mipgap_json)
+    if args.ph_mipgaps_json is not None:
+        with open(args.ph_mipgaps_json) as fin:
+            din = json.load(fin)
+        mipgapdict = {int(i): din[i] for i in din}
     else:
         mipgapdict = None
     hub_dict["opt_kwargs"]["PHoptions"]["gapperoptions"] = {

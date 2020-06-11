@@ -29,6 +29,9 @@ def shared_options(args):
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
     }
+    if args.max_solver_threads is not None:
+        shoptions["iter0_solver_options"]["threads"] = args.max_solver_threads
+        shoptions["iterk_solver_options"]["threads"] = args.max_solver_threads
     return shoptions
 
 
@@ -109,6 +112,12 @@ def lagrangian_spoke(args,
             'scenario_denouement': scenario_denouement,
         }
     }
+    if args.lagrangian_iter0_mipgap is not None:
+        lagrangian_spoke["opt_kwargs"]["PHoptions"]["iter0_solver_options"]\
+            ["mipgap"] = args.lagrangian_iter0_mipgap
+    if args.lagrangian_iterk_mipgap is not None:
+        lagrangian_spoke["opt_kwargs"]["PHoptions"]["iterk_solver_options"]\
+            ["mipgap"] = args.lagrangian_iterk_mipgap
     return lagrangian_spoke
 
         

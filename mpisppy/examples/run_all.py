@@ -100,18 +100,20 @@ if egret_avail():
 print("\nSlow runs ahead...\n")
 do_one("uc", "uc_cylinders.py", 4,
        "--bundles-per-rank=0 --max-iterations=2 "
-       "--default-rho=1 --num-scens=3 "
+       "--default-rho=1 --num-scens=3 --max-solver-threads=4 "
+       "--lagrangian-iter0-mipgap=1e-7 "
+       " --ph-mipgaps-json=phmipgaps.json "
        "--solver-name={}".format(solver_name))
+do_one("farmer", "farmer_lshapedhub.py", 2,
+       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--default-rho=1 "
+       "--solver-name={} --no-fwph --threads=1".format(solver_name))
 do_one("uc", "uc3wood.py", 3, "10 0 2 fixer")
 do_one("uc", "uc4wood.py", 4, "10 0 2 fixer")
 do_one("uc", "uc_lshaped.py", 2,
        "--bundles-per-rank=0 --max-iterations=2 "
        "--default-rho=1 --num-scens=10 "
        "--solver-name={} --threads=1".format(solver_name))
-do_one("farmer", "farmer_lshapedhub.py", 2,
-       "3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 "
-       "--solver-name={} --no-fwph --threads=1".format(solver_name))
 
 
 if len(badguys) > 0:
