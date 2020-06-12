@@ -16,13 +16,9 @@ def _parse_args():
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.xhatlshaped_args(parser)
-    parser.add_argument("--threads",
-                        help="Value for threads option (e.g. 1; default None)",
-                        dest="threads",
-                        type=int,
-                        default=None)
     args = parser.parse_args()
-    # Is this still true (dlw, June 2020)?
+    # Need default_rho for FWPH, without you get 
+    # uninitialized numeric value error
     if args.with_fwph and args.default_rho is None:
         print("Must specify a default_rho if using FWPH")
         quit()
@@ -46,14 +42,16 @@ def main():
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
     # Options for the L-shaped method at the hub
-    spo = None if args.threads is None else {"threads": args.threads}    
+    spo = None if args.max_solver_threads is None else {"threads": args.max_solver_threads}
     options = {
         "master_solver": args.solver_name,
         "sp_solver": args.solver_name,
-        # "sp_solver_options" : spo,
-        # "valid_eta_lb": dict(),
+        "sp_solver_options" : spo,
+        "master_solver_options" : spo,
+        "valid_eta_lb": {n:0. for n in all_scenario_names},
         "max_iter": 10,
         "verbose": False,
+        "master_scenarios":[all_scenario_names[len(all_scenario_names)//2]],
    }
     
     # L-shaped hub

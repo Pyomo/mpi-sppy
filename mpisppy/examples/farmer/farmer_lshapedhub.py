@@ -16,19 +16,18 @@ def _parse_args():
     parser = baseparsers.make_parser(num_scens_reqd=True)
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.fwph_args(parser)
-    parser = baseparsers.xhatspecific_args(parser)
     parser = baseparsers.xhatlshaped_args(parser)
     parser.add_argument("--crops-mult",
                         help="There will be 3x this many crops (default 1)",
                         dest="crops_mult",
                         type=int,
                         default=1)                
-    parser.add_argument("--threads",
-                        help="Value for threads option (e.g. 1; default None)",
-                        dest="threads",
-                        type=int,
-                        default=None)
     args = parser.parse_args()
+    # Need default_rho for FWPH, without you get 
+    # uninitialized numeric value error
+    if args.with_fwph and args.default_rho is None:
+        print("Must specify a default_rho if using FWPH")
+        quit()
     return args
 
 
@@ -38,7 +37,6 @@ def main():
     num_scen = args.num_scens
     crops_mult = args.crops_mult
     with_fwph = args.with_fwph
-    with_xhatspecific = args.with_xhatspecific
     with_xhatlshaped = args.with_xhatlshaped
 
     scenario_creator = farmer.scenario_creator
@@ -51,7 +49,7 @@ def main():
 
     # Options for the L-shaped method at the hub
     # Bounds only valid for 3 scenarios, I think? Need to ask Chris
-    spo = None if args.threads is None else {"threads": args.threads}
+    spo = None if args.max_solver_threads is None else {"threads": args.max_solver_threads}
     options = {
         "master_solver": args.solver_name,
         "sp_solver": args.solver_name,
@@ -88,10 +86,6 @@ def main():
     # lshaped (they're all the same)
     xhat_scenario_dict = {"ROOT": all_scenario_names[0]}
     
-    if with_xhatspecific:
-        xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
-                                                        xhat_scenario_dict,
-                                                        cb_data=cb_data)
     if with_xhatlshaped:
         xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, cb_data=cb_data)
 
@@ -99,8 +93,6 @@ def main():
     list_of_spoke_dict = list()
     if with_fwph:
         list_of_spoke_dict.append(fw_spoke)
-    if with_xhatspecific:
-        list_of_spoke_dict.append(xhatspecific_spoke)
     if with_xhatlshaped:
         list_of_spoke_dict.append(xhatlshaped_spoke)
 
