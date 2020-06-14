@@ -1,9 +1,10 @@
 name: weekly mpi-sppy tests
 # but daily to get started
+
 on:
   schedule:
     # min hr dayofmonth month dayofweek 
-    cron: "14 2 * * 0-6"
+    - cron: "14 2 * * 0-6"
 
 jobs:
   build:
