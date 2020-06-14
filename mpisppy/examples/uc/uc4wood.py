@@ -86,7 +86,7 @@ if __name__ == "__main__":
         "display_progress": False,
         "tee-rank0-solves": False,
         "iter0_solver_options" : {
-            "mipgap": 1e-7, # So the trivial bound is accurate
+            "mipgap": 1e-7, # So the trivial bound is accurate (but wastes time in hub)
             "threads": 2,
         },
         "iterk_solver_options": {
