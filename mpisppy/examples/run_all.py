@@ -1,5 +1,5 @@
 # This software is distributed under the 3-clause BSD License.
-# Run a lot of examples; dlw May 2020
+# Run a lot of examples for regression testing; dlw May 2020
 # Not intended to be user-friendly.
 # Assumes you run from the examples directory.
 # Optional command line arguments: solver_name mpiexec_arg
@@ -55,7 +55,9 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname].append(runstring)
     os.chdir("..")
 
-# for farmer, the first arg is num_scens and is required
+do_one("farmer", "farmer_ef.py", 1,
+       "1 3 {}".format(solver_name))
+# for farmer_cylinders, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 "
@@ -93,10 +95,11 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--BFs=3,3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
+do_one("uc", "uc_ef", 1, solver_name)
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, "2 3 2 0")
-
+    
 print("\nSlow runs ahead...\n")
 do_one("uc", "uc_cylinders.py", 4,
        "--bundles-per-rank=0 --max-iterations=2 "
