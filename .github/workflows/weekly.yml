@@ -1,3 +1,6 @@
+# NOTE: this is not working properly because the system
+#  call children can run forever under mpi...
+
 name: weekly mpi-sppy tests
 # but daily to get started
 
@@ -28,7 +31,9 @@ jobs:
         run: |
           python setup.py develop
 
+      # if this starts working, the timeout needs to be longer
       - name: run tests
+        timeout-minutes: 20
         run: |
           cd mpisppy/examples
           python run_all.py cplex
