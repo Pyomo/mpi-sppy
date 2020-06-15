@@ -55,9 +55,9 @@ def main():
         "sp_solver": args.solver_name,
         "sp_solver_options" : spo,
         "valid_eta_lb": {i: -432000 for i in all_scenario_names},
-        "max_iter": 100,
+        "max_iter": args.max_iterations,
         "verbose": False,
-        #"master_scenarios":[all_scenario_names[0]]
+        "master_scenarios":[all_scenario_names[len(all_scenario_names)//2]]
    }
     
     # L-shaped hub

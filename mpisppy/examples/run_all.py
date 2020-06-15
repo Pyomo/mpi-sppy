@@ -57,6 +57,10 @@ def do_one(dirname, progname, np, argstring):
 
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
+do_one("farmer", "farmer_lshapedhub.py", 2,
+       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--solver-name={} --rel-gap=0.0 "
+       "--no-fwph --max-solver-threads=1".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
@@ -95,28 +99,37 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--BFs=3,3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
-do_one("uc", "uc_ef", 1, solver_name)
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, "2 3 2 0")
     
 print("\nSlow runs ahead...\n")
+# 3-scenario UC
+do_one("uc", "uc_ef.py", 1, solver_name)
+do_one("uc", "uc_lshaped.py", 2,
+       "--bundles-per-rank=0 --max-iterations=4 "
+       "--default-rho=1 --num-scens=3 "
+       "--solver-name={} --max-solver-threads=1 --no-fwph".format(solver_name))
 do_one("uc", "uc_cylinders.py", 4,
        "--bundles-per-rank=0 --max-iterations=2 "
-       "--default-rho=1 --num-scens=3 --max-solver-threads=4 "
+       "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
        "--lagrangian-iter0-mipgap=1e-7 "
-       " --ph-mipgaps-json=phmipgaps.json "
+       "--ph-mipgaps-json=phmipgaps.json "
        "--solver-name={}".format(solver_name))
-do_one("farmer", "farmer_lshapedhub.py", 2,
-       "3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 "
-       "--solver-name={} --no-fwph --threads=1".format(solver_name))
-do_one("uc", "uc3wood.py", 3, "10 0 2 fixer")
-do_one("uc", "uc4wood.py", 4, "10 0 2 fixer")
-do_one("uc", "uc_lshaped.py", 2,
-       "--bundles-per-rank=0 --max-iterations=2 "
-       "--default-rho=1 --num-scens=10 "
-       "--solver-name={} --threads=1".format(solver_name))
+# 10-scenario UC
+do_one("uc", "uc_cylinders.py", 3,
+       "--bundles-per-rank=5 --max-iterations=2 "
+       "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+       "--lagrangian-iter0-mipgap=1e-7 "
+       "--ph-mipgaps-json=phmipgaps.json "
+       "--no-fwph "
+       "--solver-name={}".format(solver_name))
+do_one("uc", "uc_cylinders.py", 4,
+       "--bundles-per-rank=5 --max-iterations=2 "
+       "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+       "--lagrangian-iter0-mipgap=1e-7 "
+       "--ph-mipgaps-json=phmipgaps.json "
+       "--solver-name={}".format(solver_name))
 
 
 if len(badguys) > 0:
