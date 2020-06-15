@@ -107,7 +107,7 @@ print("\nSlow runs ahead...\n")
 # 3-scenario UC
 do_one("uc", "uc_ef.py", 1, solver_name)
 do_one("uc", "uc_lshaped.py", 2,
-       "--bundles-per-rank=0 --max-iterations=4 "
+       "--bundles-per-rank=0 --max-iterations=5 "
        "--default-rho=1 --num-scens=3 "
        "--solver-name={} --max-solver-threads=1 --no-fwph".format(solver_name))
 do_one("uc", "uc_cylinders.py", 4,

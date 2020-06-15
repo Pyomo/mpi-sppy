@@ -43,7 +43,7 @@ def main():
 
     # Options for the L-shaped method at the hub
     spo = None if args.max_solver_threads is None else {"threads": args.max_solver_threads}
-    spo['mipgap'] = 0.01
+    spo['mipgap'] = 0.005
     options = {
         "master_solver": args.solver_name,
         "sp_solver": args.solver_name,
