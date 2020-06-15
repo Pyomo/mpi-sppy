@@ -1,0 +1,34 @@
+name: weekly mpi-sppy tests
+# but daily to get started
+
+on:
+  schedule:
+    # min hr dayofmonth month dayofweek 
+    - cron: "14 2 * * 0-6"
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    container:
+        image: davidwin87/cplex_trial_core_image:latest
+        env:
+          PATH: :/usr/local/bin:/usr/local/sbin:usr/sbin:/usr/bin:/sbin:/bin:/opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux
+
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install dependencies
+        run: |
+          apt-get update && apt-get install -y mpich
+          pip install wheel
+          pip install --upgrade pip
+          pip install pyomo pandas mpi4py setuptools
+
+      - name: setup the program
+        run: |
+          python setup.py develop
+
+      - name: run tests
+        run: |
+          cd mpisppy/examples
+          python run_all.py cplex
