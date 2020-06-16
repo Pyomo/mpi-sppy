@@ -137,7 +137,7 @@ class APH(ph_base.PHBase):  # ??????
                                       * xzdiff
                 if verbose and self.rank == self.rank0:
                     print ("rank, node, scen, var, y", ndn, k,
-                           self.rank, node.nonant_vardata_list[i].name,
+                           self.rank, xvar.name,
                            pyo.value(s._ys[(ndn,i)]))
 
 
@@ -196,7 +196,7 @@ class APH(ph_base.PHBase):  # ??????
 
                 if verbose and self.rank == self.rank0:
                     print ("rank, scen, node, var, xbar:",
-                           self.rank,k,ndn,node.nonant_vardata_list[i].name,
+                           self.rank,k,ndn,s._nonant_indexes[ndn,i].name,
                            pyo.value(s._xbars[(ndn,i)]))
 
         # There is one tau_summand for the rank; global_tau is out of date when

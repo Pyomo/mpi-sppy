@@ -134,11 +134,14 @@ class PHBase(mpisppy.spbase.SPBase):
         # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
-            for (ndn, i), nonant in s._nonant_indexes.items():
-                local_concats["OnlyReduce"][ndn][i] += \
-                    (s.PySP_prob / node.cond_prob) * nonant._value
-                local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
-                    (s.PySP_prob / node.cond_prob) * nonant._value * nonant._value
+            for node in s._PySPnode_list:
+                ndn = node.name
+                for i, v in enumerate(node.nonant_vardata_list):
+                    v = node.nonant_vardata_list[i]
+                    local_concats["OnlyReduce"][ndn][i] += \
+                        (s.PySP_prob / node.cond_prob) * v._value
+                    local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
+                        (s.PySP_prob / node.cond_prob) * v._value * v._value
 
         # compute node xbar values(reduction)
         if synchronizer is None:
@@ -189,14 +192,16 @@ class PHBase(mpisppy.spbase.SPBase):
                          format(k, self.rank))
             
             nlens = s._PySP_nlens        
-            for (ndn, i) in s._nonant_indexes:
-                s._xbars[(ndn,i)]._value = node_concats["OnlyReduce"][ndn][i]
-                s._xsqbars[(ndn,i)]._value \
-                    = node_concats["OnlyReduce"][ndn][nlens[ndn]+i]
-                if verbose and self.rank == self.rank0:
-                    print ("rank, scen, node, var, xbar:",
-                           self.rank, k, ndn, node.nonant_vardata_list[i].name,
-                           pyo.value(s._xbars[(ndn,i)]))
+            for node in s._PySPnode_list:
+                ndn = node.name
+                for i in range(nlens[ndn]):
+                    s._xbars[(ndn,i)]._value = node_concats["OnlyReduce"][ndn][i]
+                    s._xsqbars[(ndn,i)]._value \
+                        = node_concats["OnlyReduce"][ndn][nlens[ndn]+i]
+                    if verbose and self.rank == self.rank0:
+                        print ("rank, scen, node, var, xbar:",
+                               self.rank, k, ndn, node.nonant_vardata_list[i].name,
+                               pyo.value(s._xbars[(ndn,i)]))
 
 
     def Update_W(self, verbose):
@@ -207,7 +212,7 @@ class PHBase(mpisppy.spbase.SPBase):
                         - s._xbars[ndn_i]._value
                 s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
                 if verbose and self.rank == self.rank0:
-                    print ("rank, node, scen, var, W", ndn, k,
+                    print ("rank, node, scen, var, W", ndn_i[0], k,
                            self.rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
 
