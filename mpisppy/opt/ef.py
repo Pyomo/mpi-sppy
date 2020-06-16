@@ -42,6 +42,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         )
 
     def solve_extensive_form(self, tee=False):
+        if "persistent" in self.options["solver"]:
+            self.solver.set_instance(self.ef)
         results = self.solver.solve(self.ef, tee=tee)
         return results
 

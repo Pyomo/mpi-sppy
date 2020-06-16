@@ -92,9 +92,10 @@ class CrossScenarioExtension(PHExtension):
                     linear_coefs[i] *= scen_prob
 
             for i,(x,y) in enumerate(repn.quadratic_vars):
+                # only multiply through once
                 if id(x) not in nonant_ids:
                     quadratic_coefs[i] *= scen_prob
-                if id(y) not in nonant_ids:
+                elif id(y) not in nonant_ids:
                     quadratic_coefs[i] *= scen_prob
 
             # NOTE: the LShaped code negates the objective, so

@@ -19,7 +19,11 @@ def main():
     ef = sputils.create_EF(scenario_names, scenario_creator, creator_options={'cb_data':cb_data})
 
     solver = pyo.SolverFactory(solver_name)
-    solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+    if 'persistent' in solver_name:
+        solver.set_instance(ef, symbolic_solver_labels=True)
+        solver.solve(tee=True)
+    else:
+        solver.solve(ef, tee=True, symbolic_solver_labels=True,)
 
     print(f"EF objective: {pyo.value(ef.EF_Obj)}")
 

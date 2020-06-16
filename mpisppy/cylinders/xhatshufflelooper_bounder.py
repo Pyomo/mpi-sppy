@@ -233,25 +233,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         ## option drive this? (could be dangerous)
         self.random_seed = 42
 
-    def _populate_nonant_caches(self):
-        ''' We could use split, but I will use a loop to split scenarios
-            This is a hack to use the _PySP_nonant_cache
-
-            DTM: Does this function exist in PHBase?
-        '''
-        opt = self.opt
-        ci = 0 # index into source
-        for s in opt.local_scenarios.values():
-            itarget = 0 # index into target
-            for node in s._PySPnode_list:
-                for i in range(s._PySP_nlens[node.name]):
-                    try:
-                        s._PySP_nonant_cache[itarget] = self.localnonants[ci]
-                    except IndexError as e:
-                        print("itarget={}, ci={}".format(itarget, ci))
-                        raise e
-                    itarget += 1
-                    ci += 1
 
     def try_scenario(self, scenario):
         obj = self.xhatter._try_one({"ROOT":scenario},
@@ -308,7 +289,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
                 # update the caches
-                self._populate_nonant_caches()
+                self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
 
                 # reset the scenarios we've tried

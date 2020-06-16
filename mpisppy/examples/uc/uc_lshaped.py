@@ -15,13 +15,10 @@ def _parse_args():
     parser = baseparsers.make_parser(num_scens_reqd=False)
     parser = baseparsers.two_sided_args(parser)
     parser = baseparsers.fwph_args(parser)
-    parser.add_argument("--threads",
-                        help="Value for threads option (e.g. 1; default None)",
-                        dest="threads",
-                        type=int,
-                        default=None)
+    parser = baseparsers.xhatlshaped_args(parser)
     args = parser.parse_args()
-    # Is this still true (dlw, June 2020)?
+    # Need default_rho for FWPH, without you get 
+    # uninitialized numeric value error
     if args.with_fwph and args.default_rho is None:
         print("Must specify a default_rho if using FWPH")
         quit()
@@ -34,6 +31,7 @@ def main():
 
     num_scen = args.num_scens
     with_fwph = args.with_fwph
+    with_xhatlshaped = args.with_xhatlshaped
 
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
@@ -44,14 +42,17 @@ def main():
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
     # Options for the L-shaped method at the hub
-    spo = None if args.threads is None else {"threads": args.threads}    
+    spo = None if args.max_solver_threads is None else {"threads": args.max_solver_threads}
+    spo['mipgap'] = 0.005
     options = {
         "master_solver": args.solver_name,
         "sp_solver": args.solver_name,
-        # "sp_solver_options" : spo,
-        # "valid_eta_lb": dict(),
-        "max_iter": 10,
+        "sp_solver_options" : spo,
+        "master_solver_options" : spo,
+        "valid_eta_lb": {n:0. for n in all_scenario_names},
+        "max_iter": args.max_iterations,
         "verbose": False,
+        "master_scenarios":[all_scenario_names[len(all_scenario_names)//2]],
    }
     
     # L-shaped hub
@@ -79,9 +80,14 @@ def main():
         fw_spoke["opt_kwargs"]["PH_options"]["rel_gap"] = 1e-5
         fw_spoke["opt_kwargs"]["rho_setter"] = uc.scenario_rhos
 
+    if with_xhatlshaped:
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, cb_data=cb_data)
+
     list_of_spoke_dict = list()
     if with_fwph:
         list_of_spoke_dict.append(fw_spoke)
+    if with_xhatlshaped:
+        list_of_spoke_dict.append(xhatlshaped_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 

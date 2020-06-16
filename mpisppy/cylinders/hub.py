@@ -134,6 +134,17 @@ class Hub(SPCommunicator):
                 self.remote_lengths[idx - 1] + 1
             )
 
+    def initialize_nonants(self):
+        """ Initialize the buffer for the hub to send nonants
+            to the appropriate spokes
+        """
+        self.nonant_send_buffer = None
+        for idx in self.nonant_spoke_indices:
+            if self.nonant_send_buffer is None:
+                self.nonant_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+            elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
+                raise RuntimeError("Nonant buffers disagree on size")
+
     def initialize_spoke_indices(self):
         """ Figure out what types of spokes we have, 
             and sort them into the appropriate classes.
@@ -300,10 +311,8 @@ class PHHub(Hub):
             )
 
     def sync_with_spokes(self):
-        """ Returns a boolean. If True, then PH will terminate
-
-        Side-effects:
-            Manages communication with Bound Spokes
+        """
+            Manages communication with Spokes
         """
         if self.has_w_spokes:
             self.send_ws()
@@ -353,6 +362,21 @@ class PHHub(Hub):
         """ Hub notifies its SPBase child about itself """
         self.opt.ph_main(spcomm=self)
 
+    def send_nonants(self):
+        """ Gather nonants and send them to the appropriate spokes
+            TODO: Will likely fail with bundling
+        """
+        self.opt._save_nonants()
+        ci = 0  ## index to self.nonant_send_buffer
+        nonant_send_buffer = self.nonant_send_buffer
+        for k, s in self.opt.local_scenarios.items():
+            for xvar in s._nonant_indexes.values():
+                nonant_send_buffer[ci] = xvar._value
+                ci += 1
+        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        for idx in self.nonant_spoke_indices:
+            self.hub_to_spoke(nonant_send_buffer, idx)
+
     def initialize_ws(self):
         """ Initialize the buffer for the hub to send dual weights
             to the appropriate spokes
@@ -364,17 +388,6 @@ class PHHub(Hub):
             elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
                 raise RuntimeError("W buffers disagree on size")
 
-    def initialize_nonants(self):
-        """ Initialize the buffer for the hub to send nonants
-            to the appropriate spokes
-        """
-        self.nonant_send_buffer = None
-        for idx in self.nonant_spoke_indices:
-            if self.nonant_send_buffer is None:
-                self.nonant_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
-            elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
-                raise RuntimeError("Nonant buffers disagree on size")
-
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
         """
@@ -382,23 +395,6 @@ class PHHub(Hub):
         logging.debug("hub is sending Ws={}".format(self.w_send_buffer))
         for idx in self.w_spoke_indices:
             self.hub_to_spoke(self.w_send_buffer, idx)
-
-    def send_nonants(self):
-        """ Gather nonants and send them to the appropriate spokes
-            TODO: Will likely fail with bundling
-        """
-        self.opt._save_nonants()
-        ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.nonant_send_buffer
-        for k, s in self.opt.local_scenarios.items():
-            for node in s._PySPnode_list:
-                for i in range(s._PySP_nlens[node.name]):
-                    xvar = node.nonant_vardata_list[i]
-                    nonant_send_buffer[ci] = xvar._value
-                    ci += 1
-        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
-        for idx in self.nonant_spoke_indices:
-            self.hub_to_spoke(nonant_send_buffer, idx)
 
 
 class LShapedHub(Hub):
@@ -424,7 +420,7 @@ class LShapedHub(Hub):
         if self.has_w_spokes:
             raise RuntimeError("LShaped hub does not compute dual weights (Ws)")
         if self.has_nonant_spokes:
-            raise RuntimeError("LShaped hub does not compute nonants")
+            self.initialize_nonants()
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
             raise RuntimeError(
                 "A Spoke providing both inner and outer "
@@ -444,25 +440,30 @@ class LShapedHub(Hub):
                 "will not cause the hub to terminate"
             )
 
-    def opt_callback(self):
-        """ Returns a boolean. If True, then LShaped will terminate
+        ## we call this multiple per iteration,
+        ## so that cannot be relied upon
+        self.print_init = True
 
-        Side-effects:
-            Manages communication with Bound Spokes
-
-            Notes:
-            
-            The L-shaped method produces outer bounds during execution (in
-            contrast to PH, say). So we first check the outer bound produced by
-            the hub, then check with the spokes.
+    def sync_with_spokes(self, send_nonants):
+        """ 
+        Manages communication with Bound Spokes
         """
-        bound = self.opt._LShaped_bound
-        self.BestOuterBound = self.OuterBoundUpdate(bound)
-
+        if send_nonants and self.has_nonant_spokes:
+            self.send_nonants()
         if self.has_outerbound_spokes:
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+
+    def is_converged(self):
+        """ Returns a boolean. If True, then LShaped will terminate
+
+        Side-effects:
+            The L-shaped method produces outer bounds during execution,
+            so we will check it as well.
+        """
+        bound = self.opt._LShaped_bound
+        self.BestOuterBound = self.OuterBoundUpdate(bound)
 
         ## log some output
         if self.rank_global == 0:
@@ -471,9 +472,10 @@ class LShapedHub(Hub):
             best_solution = self.BestInnerBound
             best_bound = self.BestOuterBound
             elapsed = time.time() - self.inst_time
-            if self.opt.iter == 0:
+            if self.print_init:
                 row = f'{"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s} {"Wall Time":>8s}'
                 print(row, flush=True)
+                self.print_init = False
             row = f"{best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f} {elapsed:8.2f}s"
             print(row, flush=True)
 
@@ -491,34 +493,21 @@ class LShapedHub(Hub):
     def main(self):
         self.opt.lshaped_algorithm(spcomm=self)
 
-
-class CrossScenarioHub(PHHub):
-    def initialize_spoke_indices(self):
-        super().initialize_spoke_indices()
-        for (i, spoke) in enumerate(self.spokes):
-            # TODO: Figure out here what the index i
-            # of the spoke is that's doing the L-shaped business
-            self.cut_gen_spoke_index = 0
-
-
-    def sync_with_spokes(self):
-        super().sync_with_spokes()
-        self.get_from_lshaped()
-        self.send_to_lshaped()
-
-    def get_from_lshaped(self):
-        ## TODO
-        idx = self.cut_gen_spoke_index
-        receive_buffer = np.empty(5, dtype="d") # Must be doubles
-        is_new = self.hub_from_spoke(receive_buffer, idx)
-        if is_new:
-            stuff = receive_buffer
-
-    def send_to_lshaped(self):
-        ## TODO
-        stuff_to_send = np.empty(5, dtype="d") # Must be doubles
-        idx = self.cut_gen_spoke_index
-        self.hub_to_spoke(stuff_to_send, idx)
+    def send_nonants(self):
+        """ Gather nonants and send them to the appropriate spokes
+            TODO: Will likely fail with bundling
+        """
+        ci = 0  ## index to self.nonant_send_buffer
+        nonant_send_buffer = self.nonant_send_buffer
+        for k, s in self.opt.local_scenarios.items():
+            nonant_to_master_var_map = s._subproblem_to_master_vars_map
+            for xvar in s._nonant_indexes.values():
+                ## Grab the value from the associated master variable
+                nonant_send_buffer[ci] = nonant_to_master_var_map[xvar]._value
+                ci += 1
+        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        for idx in self.nonant_spoke_indices:
+            self.hub_to_spoke(nonant_send_buffer, idx)
 
 
 class APHHub(PHHub):

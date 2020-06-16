@@ -63,26 +63,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
 
         return xhatter
 
-    def _populate_nonant_caches(self):
-        ''' We could use split, but I will use a loop to split scenarios
-            This is a hack to use the _PySP_nonant_cache
-
-            DTM: Does this function exist in PHBase?
-        '''
-        opt = self.opt
-        ci = 0 # index into source
-        for s in opt.local_scenarios.values():
-            itarget = 0 # index into target
-            for node in s._PySPnode_list:
-                for i in range(s._PySP_nlens[node.name]):
-                    try:
-                        s._PySP_nonant_cache[itarget] = self.localnonants[ci]
-                    except IndexError as e:
-                        print("itarget={}, ci={}".format(itarget, ci))
-                        raise e
-                    itarget += 1
-                    ci += 1
-
     def main(self):
         verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatlooper spoke rank {self.rank_global}")
@@ -102,7 +82,7 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   *got a new one! on rank {self.rank_global}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
-                self._populate_nonant_caches()
+                self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
                 upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit)
 

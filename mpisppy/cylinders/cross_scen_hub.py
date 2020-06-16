@@ -52,12 +52,9 @@ class CrossScenarioHub(PHHub):
         # get all the nonants
         all_nonants_and_etas = self.all_nonants_and_etas
         for k, s in self.opt.local_scenarios.items():
-            nlens = s._PySP_nlens
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    xvar = node.nonant_vardata_list[i]
-                    all_nonants_and_etas[ci] = xvar._value
-                    ci += 1
+            for xvar in s._nonant_indexes.values():
+                all_nonants_and_etas[ci] = xvar._value
+                ci += 1
 
         # get all the etas
         for k, s in self.opt.local_scenarios.items():
@@ -84,7 +81,6 @@ class CrossScenarioHub(PHHub):
                 persistent_solver = sputils.is_persistent(b._solver_plugin)
                 ## get an arbitrary scenario
                 s = opt.local_scenarios[b.scen_list[0]]
-                nlens = s._PySP_nlens
                 for idx, k in enumerate(opt.all_scenario_names):
                     row = coefs[row_len*idx:row_len*(idx+1)]
                     # the row could be all zeros,
@@ -96,12 +92,11 @@ class CrossScenarioHub(PHHub):
                     linear_const = row[0]
                     linear_coefs = list(row[1:])
                     linear_vars = [b.eta[k]]
-                    for node in s._PySPnode_list:
-                        ndn = node.name
-                        for i in range(nlens[ndn]):
-                            ## for bundles, we add the constrains only
-                            ## to the reference first stage variables
-                            linear_vars.append(b.ref_vars[ndn,i])
+
+                    for ndn_i in s._nonant_indexes:
+                        ## for bundles, we add the constrains only
+                        ## to the reference first stage variables
+                        linear_vars.append(b.ref_vars[ndn_i])
 
                     cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
                                                 linear_vars=linear_vars)
@@ -112,7 +107,6 @@ class CrossScenarioHub(PHHub):
         else:
             for sn,s in opt.local_subproblems.items():
                 persistent_solver = sputils.is_persistent(s._solver_plugin)
-                nlens = s._PySP_nlens
                 for idx, k in enumerate(opt.all_scenario_names):
                     row = coefs[row_len*idx:row_len*(idx+1)]
                     # the row could be all zeros,
@@ -124,9 +118,7 @@ class CrossScenarioHub(PHHub):
                     linear_const = row[0]
                     linear_coefs = list(row[1:])
                     linear_vars = [s.eta[k]]
-                    for node in s._PySPnode_list:
-                        for i in range(nlens[node.name]):
-                            linear_vars.append(node.nonant_vardata_list[i])
+                    linear_vars.extend(s._nonant_indexes.values())
 
                     cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
                                                 linear_vars=linear_vars)

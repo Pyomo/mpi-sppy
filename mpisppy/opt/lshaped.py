@@ -10,11 +10,14 @@ import mpisppy.spbase as spbase
 from mpi4py import MPI
 # from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
 from pyomo.core.plugins.transform.relax_integrality import RelaxIntegrality
+from pyomo.pysp.phutils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from pyomo.core import (
     Objective, SOSConstraint, Constraint, Var
 )
-from pyomo.core.expr.visitor import identify_variables, replace_expressions
+from pyomo.core.expr.visitor import identify_variables
+from pyomo.repn.standard_repn import generate_standard_repn
+from pyomo.core.expr.numeric_expr import LinearExpression
 
 
 def _del_con(c):
@@ -25,7 +28,6 @@ def _del_con(c):
         assert parent is c
         c.parent_block().del_component(c)
 
-
 def _del_var(v):
     parent = v.parent_component()
     if parent.is_indexed():
@@ -35,74 +37,40 @@ def _del_var(v):
         block = v.parent_block()
         block.del_component(v)
 
+def _get_nonant_ids(instance):
+    assert len(instance._PySPnode_list) == 1
+    # set comprehension
+    nonant_list = instance._PySPnode_list[0].nonant_vardata_list
+    return nonant_list, { id(var) for var in nonant_list }
 
-def _seperate_variables(instance):
-    """ Pulls the non_ant variable list from the PySPnode_list, identifies
-        these as first stage variables and identifies the remaining as second
-        stage variables
+def _get_nonant_ids_EF(instance):
+    assert len(instance._PySP_nlens) == 1
+
+    ndn, nlen = list(instance._PySP_nlens.items())[0]
+
+    ## this is for the cut variables, so we just need (and want)
+    ## exactly one set of them
+    nonant_list = list(instance.ref_vars[ndn,i] for i in range(nlen))
+
+    ## this is for adjusting the objective, so needs all the nonants
+    ## in the EF
+    snames = instance._PySP_subscen_names
+
+    nonant_ids = set()
+    for s in snames:
+        nonant_ids.update( (id(v) for v in \
+                getattr(instance, s)._PySPnode_list[0].nonant_vardata_list)
+                )
+    return nonant_list, nonant_ids 
+
+def _first_stage_only(constr_data, nonant_ids):
+    """ iterates through the constraint in a scenario and returns if it only
+        has first stage variables
     """
-    var_dict = dict()
-    var_dict['stage1'] = list()
-    var_dict['stage2'] = list()
-    stage1_ids = list()
-    indx_to_stage = dict()
-    indx = 0
-
-    for nonant in instance._PySPnode_list:
-        for var in nonant.nonant_list:
-            if var.is_indexed():
-                for var_data in var.values():
-                    var_dict['stage1'].append(var_data)
-                    stage1_ids.append(id(var_data))
-            else:
-                var_dict['stage1'].append(var)
-                stage1_ids.append(id(var))
-
-    for var in instance.component_objects(Var, active=True, descend_into=True):
-        if var.is_indexed():
-            for var_data in var.values():
-                if id(var_data) not in stage1_ids:
-                    var_dict['stage2'].append(var_data)
-                    indx_to_stage[indx] = 2
-                    indx += 1
-                else:
-                    indx_to_stage[indx] = 1
-                    indx += 1
-        else:
-            if id(var) not in stage1_ids:
-                indx_to_stage[indx] = 2
-                indx += 1
-                var_dict['stage2'].append(var)
-            else:
-                indx_to_stage[indx] = 1
-                indx += 1
-
-    return var_dict, indx_to_stage
-
-
-def _get_stage(constr_data, id_dict):
-    """ iterates through the constraints in a scenario and labels them as first
-        or second stage based on the highest stage variable in the constraint
-    """
-    has_stage_1 = False
-    has_stage_2 = False
     for var in identify_variables(constr_data.body):
-        if id(var) in id_dict['stage2']:
-            has_stage_2 = True
-            break
-        elif id(var) in id_dict['stage1']:
-            has_stage_1 = True
-        else:
-            print("Variable unaccounted for?")
-            exit(-1)
-    if has_stage_2:
-        return 1
-    elif has_stage_1:
-        return 0
-    else:
-        print("should never reach this point...")
-        exit(-1)
-
+        if id(var) not in nonant_ids: 
+            return False
+    return True
 
 class LShapedMethod(spbase.SPBase):
     def __init__(
@@ -145,11 +113,13 @@ class LShapedMethod(spbase.SPBase):
             rank0=rank0,
             cb_data=cb_data,
         )
+        if self.multistage:
+            raise Exception("LShaped does not currently support multiple stages")
         self.options = options
         self.options_check()
         self.all_scenario_names = all_scenario_names
         self.master = None
-        self.master_vars = list()
+        self.master_vars = None
         self.scenario_count = len(all_scenario_names)
 
         self.store_subproblems = False
@@ -184,55 +154,8 @@ class LShapedMethod(spbase.SPBase):
             self.options["sp_solver_options"] = dict()
         self._options_check(required, self.options)
 
-    def create_master(self, scenario_name):
-        """ creates a ConcreteModel from one of the problem scenarios then
-            modifies the model to serve as the master problem 
-        """
-        self.master = self.scenario_creator(scenario_name, cb_data=self.cb_data)
-        master = self.master
-        if self.relax_master:
-            RelaxIntegrality().apply_to(master)
-
-        # check if the indx to stage mapping exists
-        # if it does use it to create stage dict, if not call _serperate_variables
-        if self.indx_to_stage is not None:
-            var_dict = split_up_vars_by_stage()
-        else:
-            var_dict, self.indx_to_stage = _seperate_variables(master)
-
-        # iterates through the variables and stores the first stage variables
-        # as master vars and creates a sub map used to remove second stage
-        # variables from the objective
-        sub_map = dict()
-        for var_data in var_dict['stage2']:
-            sub_map[id(var_data)] = 0.
-        for var_data in var_dict['stage1']:
-            self.master_vars.append(var_data)
-            sub_map[id(var_data)] = var_data
-
-        # iterates through constraints and removes second stage constraints from the model
-        # the id dict is used to improve the speed of identifying the stage each variables belongs to
-        id_dict = {'stage1':dict(), 'stage2':dict()}
-        for v in var_dict['stage1']:
-            id_dict['stage1'][id(v)] = 0.
-        for v in var_dict['stage2']:
-            id_dict['stage2'][id(v)] = 0.
-
-        for constr_data in list(itertools.chain(
-                master.component_data_objects(SOSConstraint, active=True, descend_into=True)
-                , master.component_data_objects(Constraint, active=True, descend_into=True))):
-            if _get_stage(constr_data, id_dict) > 0:
-                _del_con(constr_data)
-
-        # creates the eta variables for scenarios that are NOT selected to be
-        # included in the master problem
-        if self.has_master_scens:
-            eta_indx = [scenario_name for scenario_name in self.all_scenario_names
-                        if scenario_name not in self.master_scenarios]
-        else:
-            eta_indx = self.all_scenario_names
-
-        master.eta = pyo.Var(eta_indx, within=pyo.Reals)
+    def _add_master_etas(self, master, index):
+        master.eta = pyo.Var(index, within=pyo.Reals)
         if self.has_valid_eta_lb:
             for scen, eta in master.eta.items():
                 eta.setlb(self.valid_eta_lb[scen])
@@ -240,100 +163,218 @@ class LShapedMethod(spbase.SPBase):
             for eta in master.eta.values():
                 eta.setlb((-sys.maxsize - 1) * 1. / len(self.all_scenario_names))
 
+    def _create_master_no_scenarios(self):
+
+        # using the first scenario as a basis
+        master = self.scenario_creator(self.all_scenario_names[0], 
+                                    node_names=None, cb_data=self.cb_data)
+
+        if self.relax_master:
+            RelaxIntegrality().apply_to(master)
+
+        nonant_list, nonant_ids = _get_nonant_ids(master)
+
+        self.master_vars = nonant_list
+
+        for constr_data in list(itertools.chain(
+                master.component_data_objects(SOSConstraint, active=True, descend_into=True)
+                , master.component_data_objects(Constraint, active=True, descend_into=True))):
+            if not _first_stage_only(constr_data, nonant_ids):
+                _del_con(constr_data)
+
+        # delete the second stage variables
+        for var in list(master.component_data_objects(Var, active=True, descend_into=True)):
+            if id(var) not in nonant_ids:
+                _del_var(var)
+
+        self._add_master_etas(master, self.all_scenario_names)
+
         # pulls the current objective expression, adds in the eta variables,
         # and removes the second stage variables from the expression
-        objs = list(master.component_data_objects(Objective, descend_into=False, active=True))
-        if len(objs) > 1:
-            raise Exception("Error: Cannot handle multiple objectives")
-        obj_sense = objs[0].sense
-        expr = replace_expressions(objs[0], sub_map, remove_named_expressions=False)
+        obj = find_active_objective(master)
+
+        repn = generate_standard_repn(obj.expr, quadratic=True)
+        if len(repn.nonlinear_vars) > 0:
+            raise ValueError("LShaped does not support models with nonlinear objective functions")
+
+        linear_vars = list()
+        linear_coefs = list()
+        quadratic_vars = list()
+        quadratic_coefs = list()
+        ## we'll assume the constant is part of stage 1 (wlog it is), just
+        ## like the first-stage bits of the objective
+        constant = repn.constant 
+
+        ## only keep the first stage variables in the objective
+        for coef, var in zip(repn.linear_coefs, repn.linear_vars):
+            id_var = id(var)
+            if id_var in nonant_ids:
+                linear_vars.append(var)
+                linear_coefs.append(coef)
+        for coef, (x,y) in zip(repn.quadratic_coefs, repn.quadratic_vars):
+            id_x = id(x)
+            id_y = id(y)
+            if id_x in nonant_ids and id_y in nonant_ids:
+                quadratic_coefs.append(coef)
+                quadratic_vars.append((x,y))
 
         # checks if model sense is max, if so negates the objective
-        if obj_sense == pyo.maximize:
-            expr = -expr
+        if not self.is_minimizing:
+            for i,coef in enumerate(linear_coefs):
+                linear_coefs[i] = -coef
+            for i,coef in enumerate(quadratic_coefs):
+                quadratic_coefs[i] = -coef
 
-        expr = expr + sum(master.eta.values())
-        master.del_component(objs[0])
+        # add the etas
+        for var in master.eta.values():
+            linear_vars.append(var)
+            linear_coefs.append(1)
 
-        # deletes the second stage variables
-        for var in var_dict['stage2']:
-            _del_var(var)
+        expr = LinearExpression(constant=constant, linear_coefs=linear_coefs,
+                                linear_vars=linear_vars)
+        if quadratic_coefs:
+            expr += pyo.quicksum(
+                        (coef*x*y for coef,(x,y) in zip(quadratic_coefs, quadratic_vars))
+                    )
 
-        # add selected scenarios to the master problem
-        if self.has_master_scens:
-            expr = self.add_master_scenarios(master, expr, obj_sense)
+        master.del_component(obj)
 
         # set master objective function
         master.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
+
+        self.master = master
+
+    def _create_master_with_scenarios(self):
+
+        ef_scenarios = self.master_scenarios
+
+        ## we want the correct probabilities to be set when
+        ## calling create_EF
+        if len(ef_scenarios) > 1:
+            def scenario_creator_wrapper(name, **creator_options):
+                scenario = self.scenario_creator(name, **creator_options)
+                if not hasattr(scenario, 'PySP_prob'):
+                    scenario.PySP_prob = 1./len(self.all_scenario_names)
+                return scenario
+            master = sputils.create_EF(ef_scenarios, scenario_creator_wrapper,
+                    creator_options={'node_names':None, 'cb_data':self.cb_data})
+
+            nonant_list, nonant_ids = _get_nonant_ids_EF(master)
+        else:
+            master = self.scenario_creator(ef_scenarios[0], node_names=None,
+                                            cb_data=self.cb_data)
+            if not hasattr(master, 'PySP_prob'):
+                master.PySP_prob = 1./len(self.all_scenario_names)
+
+            nonant_list, nonant_ids = _get_nonant_ids(master)
+
+        self.master_vars = nonant_list
+
+        # creates the eta variables for scenarios that are NOT selected to be
+        # included in the master problem
+        eta_indx = [scenario_name for scenario_name in self.all_scenario_names
+                        if scenario_name not in self.master_scenarios]
+        self._add_master_etas(master, eta_indx)
+
+        obj = find_active_objective(master)
+
+        repn = generate_standard_repn(obj.expr, quadratic=True)
+        if len(repn.nonlinear_vars) > 0:
+            raise ValueError("LShaped does not support models with nonlinear objective functions")
+        linear_vars = list(repn.linear_vars)
+        linear_coefs = list(repn.linear_coefs)
+        quadratic_coefs = list(repn.quadratic_coefs)
+
+        # adjust coefficients by scenario/bundle probability
+        scen_prob = master.PySP_prob
+        for i,var in enumerate(repn.linear_vars):
+            if id(var) not in nonant_ids:
+                linear_coefs[i] *= scen_prob
+
+        for i,(x,y) in enumerate(repn.quadratic_vars):
+            # only multiply through once
+            if id(x) not in nonant_ids:
+                quadratic_coefs[i] *= scen_prob
+            elif id(y) not in nonant_ids:
+                quadratic_coefs[i] *= scen_prob
+
+        # NOTE: the LShaped code negates the objective, so
+        #       we do the same here for consistency
+        if not self.is_minimizing:
+            for i,coef in enumerate(linear_coefs):
+                linear_coefs[i] = -coef
+            for i,coef in enumerate(quadratic_coefs):
+                quadratic_coefs[i] = -coef
+
+        # add the etas
+        for var in master.eta.values():
+            linear_vars.append(var)
+            linear_coefs.append(1)
+
+        expr = LinearExpression(constant=repn.constant, linear_coefs=linear_coefs,
+                                linear_vars=linear_vars)
+        if repn.quadratic_vars:
+            expr += pyo.quicksum(
+                (coef*x*y for coef,(x,y) in zip(quadratic_coefs, repn.quadratic_vars))
+            )
+
+        master.del_component(obj)
+
+        # set master objective function
+        master.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
+
+        self.master = master
+
+    def _create_shadow_master(self):
+
+        master = pyo.ConcreteModel()
+
+        arb_scen = self.local_scenarios[self.local_scenario_names[0]]
+        nonants = arb_scen._PySPnode_list[0].nonant_vardata_list
+
+        master_vars = list()
+        for v in nonants:
+            nonant_shadow = pyo.Var(name=v.name)
+            master.add_component(v.name, nonant_shadow)
+            master_vars.append(nonant_shadow)
         
-    def add_master_scenarios(self, master, expr, obj_sense):
-        for scenario_name in self.master_scenarios:
-            # Scenarios have not yet been assigned 
-            # to ranks so you have to call the 
-            # scenario_creator again
-            instance = self.scenario_creator(scenario_name, cb_data=self.cb_data)
-            RelaxIntegrality().apply_to(instance)
-            var_dict = self.split_up_vars_by_stage(instance)
+        if self.has_master_scens:
+            eta_indx = [scenario_name for scenario_name in self.all_scenario_names
+                            if scenario_name not in self.master_scenarios]
+        else:
+            eta_indx = self.all_scenario_names
+        self._add_master_etas(master, eta_indx)
 
+        master.obj = None
+        self.master = master
+        self.master_vars = master_vars
 
-            # create sub map to remove first stage variables from scenario objective function
-            sub_map = dict()
-            for var_data in var_dict['stage1']:
-                sub_map[id(var_data)] = 0.
-            for var_data in var_dict['stage2']:
-                sub_map[id(var_data)] = var_data
-
-            # pull the scenario objective expression and add it to the master objective expression
-            scen_objs = list(instance.component_data_objects(Objective, descend_into=False, active=True))
-            scen_expr = replace_expressions(scen_objs[0], sub_map, remove_named_expressions=False)
-
-            if not hasattr(instance, "PySP_prob"):
-                instance.PySP_prob = 1. / self.scenario_count
-
-            # checks if model sense is max, if so negates scenario objective expression
-            if obj_sense == pyo.maximize:
-                scen_expr = -scen_expr
-
-            expr += instance.PySP_prob * scen_expr
-            instance.del_component(scen_objs[0])
-
-            # add the scenario model block to the master problem
-            master.add_component(scenario_name, instance)
-            constr_list = pyo.ConstraintList()
-            master.add_component(scenario_name + "NonAntConstr", constr_list)
-
-            # add nonanticipatory constraints
-            temp_var_list = list()
-            for var_data in var_dict['stage1']:
-                temp_var_list.append(var_data)
-            for var_data, mvar_data in zip(temp_var_list, self.master_vars):
-                constr_list.add(var_data - mvar_data == 0.)
-        return expr
-
-    def split_up_vars_by_stage(self, instance):
-        var_dict = {"stage1": list(), "stage2": list()}
-        indx = 0
-        for var in instance.component_objects(Var, active=True, descend_into=True):
-            if var.is_indexed():
-                for var_data in var.values():
-                    stage = self.indx_to_stage[indx]
-                    if stage == 1:
-                        var_dict['stage1'].append(var_data)
-                    elif stage == 2:
-                        var_dict['stage2'].append(var_data)
-                    else:
-                        raise RuntimeError("Variable is neither stage 1 or stage 2")
-                    indx += 1
+    def create_master(self):
+        """ creates a ConcreteModel from one of the problem scenarios then
+            modifies the model to serve as the master problem 
+        """
+        if self.rank == self.rank0:
+            if self.has_master_scens:
+                self._create_master_with_scenarios()
             else:
-                stage = self.indx_to_stage[indx]
-                if stage == 1:
-                    var_dict['stage1'].append(var)
-                elif stage == 2:
-                    var_dict['stage2'].append(var)
-                else:
-                    raise RuntimeError("Variable is neither stage 1 or stage 2")
-                indx += 1
-        return var_dict
+                self._create_master_no_scenarios()
+        else: 
+            ## if we're not rank0, just create a master to
+            ## hold the nonants and etas; rank0 will do 
+            ## the optimizing
+            self._create_shadow_master()
+        
+    def attach_nonant_var_map(self, scenario_name):
+        instance = self.local_scenarios[scenario_name]
+
+        subproblem_to_master_vars_map = pyo.ComponentMap()
+        for var, mvar in zip(instance._nonant_indexes.values(), self.master_vars):
+            if var.name not in mvar.name:
+                raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
+            subproblem_to_master_vars_map[var] = mvar 
+
+        # this is for interefacing with PH code
+        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
     def create_subproblem(self, scenario_name):
         """ the subproblem creation function passed into the
@@ -342,95 +383,85 @@ class LShapedMethod(spbase.SPBase):
         instance = self.local_scenarios[scenario_name]
         # relaxes any integrality constraints for the subproblem
         RelaxIntegrality().apply_to(instance)
-        # var_dict = _seperate_variables(instance)
 
-        # check if the indx to stage mapping exists
-        # if it does use it to create stage dict, if not call _serperate_variables
-        if self.indx_to_stage is not None:
-            indx_to_stage = self.indx_to_stage
-            var_dict = dict()
-            var_dict['stage1'] = list()
-            var_dict['stage2'] = list()
-            indx = 0
-            for var in instance.component_objects(Var, active=True, descend_into=True):
-                if var.is_indexed():
-                    for var_data in var.values():
-                        stage = indx_to_stage[indx]
-                        if stage == 1:
-                            var_dict['stage1'].append(var_data)
-                        elif stage == 2:
-                            var_dict['stage2'].append(var_data)
-                        else:
-                            print("should not have reached this point")
-                            exit(-1)
-                        indx += 1
-                else:
-                    stage = indx_to_stage[indx]
-                    if stage == 1:
-                        var_dict['stage1'].append(var)
-                    elif stage == 2:
-                        var_dict['stage2'].append(var)
-                    else:
-                        print("should not have reached this point")
-                        exit(-1)
-                    indx += 1
-        else:
-            var_dict, self.indx_to_stage = _seperate_variables(instance)
+        nonant_list, nonant_ids = _get_nonant_ids(instance) 
 
         # iterates through constraints and removes first stage constraints from the model
         # the id dict is used to improve the speed of identifying the stage each variables belongs to
-        id_dict = {'stage1':dict(),
-                   'stage2':dict()}
-        for v in var_dict['stage1']:
-            id_dict['stage1'][id(v)] = 0.
-        for v in var_dict['stage2']:
-            id_dict['stage2'][id(v)] = 0.
-
         for constr_data in list(itertools.chain(
                 instance.component_data_objects(SOSConstraint, active=True, descend_into=True)
                 , instance.component_data_objects(Constraint, active=True, descend_into=True))):
-            if _get_stage(constr_data, id_dict) < 1:
+            if _first_stage_only(constr_data, nonant_ids):
                 _del_con(constr_data)
 
         # creates the sub map to remove first stage variables from objective expression
         complicating_vars_map = pyo.ComponentMap()
-        var_list = list()
-        sub_map = dict()
-        for var_data in var_dict['stage1']:
-            var_data.setlb(None)
-            var_data.setub(None)
-            var_list.append(var_data)
-            sub_map[id(var_data)] = 0.0
-        for var_data in var_dict['stage2']:
-            sub_map[id(var_data)] = var_data
+        subproblem_to_master_vars_map = pyo.ComponentMap()
 
         # creates the complicating var map that connects the first stage variables in the sub problem to those in
-        # the master problem
-        for var, mvar in zip(var_list, self.master_vars):
-            if var.name != mvar.name:
+        # the master problem -- also set the bounds on the subproblem master vars to be none for better cuts
+        for var, mvar in zip(nonant_list, self.master_vars):
+            if var.name not in mvar.name: # mvar.name may be part of a bundle
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
             complicating_vars_map[mvar] = var
+            subproblem_to_master_vars_map[var] = mvar 
+
+            var.setlb(None)
+            var.setub(None)
+
+        # this is for interefacing with PH code
+        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
         # pulls the scenario objective expression, removes the first stage variables, and sets the new objective
-        objs = list(instance.component_data_objects(Objective, descend_into=False, active=True))
-
-        if len(objs) > 1:
-            raise Exception("Error: Can not handle multiple objectives")
-
-        obj_sense = objs[0].sense
-        expr = replace_expressions(objs[0], sub_map)
-
-        # checks if model sense is max, if so negates the objective
-        if obj_sense == pyo.maximize:
-            expr = -expr
-
-        instance.del_component(objs[0])
+        obj = find_active_objective(instance)
 
         if not hasattr(instance, "PySP_prob"):
             instance.PySP_prob = 1. / self.scenario_count
+        PySP_prob = instance.PySP_prob
 
-        # set sub problem objective function
-        instance.obj = pyo.Objective(expr=expr * instance.PySP_prob, sense=pyo.minimize)
+        repn = generate_standard_repn(obj.expr, quadratic=True)
+        if len(repn.nonlinear_vars) > 0:
+            raise ValueError("LShaped does not support models with nonlinear objective functions")
+
+        linear_vars = list()
+        linear_coefs = list()
+        quadratic_vars = list()
+        quadratic_coefs = list()
+        ## we'll assume the constant is part of stage 1 (wlog it is), just
+        ## like the first-stage bits of the objective
+        constant = repn.constant 
+
+        ## only keep the first stage variables in the objective
+        for coef, var in zip(repn.linear_coefs, repn.linear_vars):
+            id_var = id(var)
+            if id_var not in nonant_ids:
+                linear_vars.append(var)
+                linear_coefs.append(PySP_prob*coef)
+        for coef, (x,y) in zip(repn.quadratic_coefs, repn.quadratic_vars):
+            id_x = id(x)
+            id_y = id(y)
+            if id_x not in nonant_ids or id_y not in nonant_ids:
+                quadratic_coefs.append(PySP_prob*coef)
+                quadratic_vars.append((x,y))
+
+        # checks if model sense is max, if so negates the objective
+        if not self.is_minimizing:
+            for i,coef in enumerate(linear_coefs):
+                linear_coefs[i] = -coef
+            for i,coef in enumerate(quadratic_coefs):
+                quadratic_coefs[i] = -coef
+
+        expr = LinearExpression(constant=constant, linear_coefs=linear_coefs,
+                                linear_vars=linear_vars)
+        if quadratic_coefs:
+            expr += pyo.quicksum(
+                        (coef*x*y for coef,(x,y) in zip(quadratic_coefs, quadratic_vars))
+                    )
+
+        instance.del_component(obj)
+
+        # set master objective function
+        instance.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
 
         if self.store_subproblems:
             self.subproblems[scenario_name] = instance
@@ -454,11 +485,8 @@ class LShapedMethod(spbase.SPBase):
         master_solver = self.options["master_solver"]
         sp_solver = self.options["sp_solver"]
 
-        # sets the first scenario in the scenario name list to serve as the "basis" for creating the master problem
-        master_basis = self.all_scenario_names[0]
-
         # creates the master problem
-        self.create_master(master_basis)
+        self.create_master()
         m = self.master
         assert hasattr(m, "obj")
 
@@ -482,33 +510,37 @@ class LShapedMethod(spbase.SPBase):
         # and let it internally handle which ranks get which scenarios
         if self.has_master_scens:
             sub_scenarios = [
-                scenario_name for scenario_name in self.all_scenario_names
+                scenario_name for scenario_name in self.local_scenario_names
                 if scenario_name not in self.master_scenarios
             ]
         else:
-            sub_scenarios = self.all_scenario_names
+            sub_scenarios = self.local_scenario_names
         for scenario_name in self.local_scenario_names:
-            subproblem_fn_kwargs = dict()
-            subproblem_fn_kwargs['scenario_name'] = scenario_name
-            m.bender.add_subproblem(
-                subproblem_fn=self.create_subproblem,
-                subproblem_fn_kwargs=subproblem_fn_kwargs,
-                master_eta=m.eta[scenario_name],
-                subproblem_solver=sp_solver,
-                subproblem_solver_options=self.options["sp_solver_options"]
-            )
+            if scenario_name in sub_scenarios:
+                subproblem_fn_kwargs = dict()
+                subproblem_fn_kwargs['scenario_name'] = scenario_name
+                m.bender.add_subproblem(
+                    subproblem_fn=self.create_subproblem,
+                    subproblem_fn_kwargs=subproblem_fn_kwargs,
+                    master_eta=m.eta[scenario_name],
+                    subproblem_solver=sp_solver,
+                    subproblem_solver_options=self.options["sp_solver_options"]
+                )
+            else:
+                self.attach_nonant_var_map(scenario_name)
 
-        opt = pyo.SolverFactory(master_solver)
-        if opt is None:
-            raise Exception("Error: Failed to Create Master Solver")
+        if self.rank == self.rank0:
+            opt = pyo.SolverFactory(master_solver)
+            if opt is None:
+                raise Exception("Error: Failed to Create Master Solver")
 
-        # set options
-        for k,v in self.options["master_solver_options"].items():
-            opt.options[k] = v
+            # set options
+            for k,v in self.options["master_solver_options"].items():
+                opt.options[k] = v
 
-        is_persistent = sputils.is_persistent(opt)
-        if is_persistent:
-            opt.set_instance(m)
+            is_persistent = sputils.is_persistent(opt)
+            if is_persistent:
+                opt.set_instance(m)
 
         t = time.time()
         res, t1, t2 = None, None, None
@@ -552,10 +584,20 @@ class LShapedMethod(spbase.SPBase):
 
             if self.rank != self.rank0:
                 for i, var in enumerate(self.master_vars):
-                    var.set_value(x_vals[i])
+                    var._value = x_vals[i]
                 for i, eta in enumerate(m.eta.values()):
-                    eta.set_value(eta_vals[i])
+                    eta._value = eta_vals[i]
             t1 = time.time() - t1
+
+            # The hub object takes precedence over the converger
+            # We'll send the nonants now, and check for a for
+            # convergence
+            if spcomm:
+                spcomm.sync_with_spokes(send_nonants=True)
+                converged = spcomm.is_converged()
+                if converged:
+                    break
+
             t2 = time.time()
             cuts_added = m.bender.generate_cut()
             t2 = time.time() - t2
@@ -579,7 +621,8 @@ class LShapedMethod(spbase.SPBase):
                     break
             # The hub object takes precedence over the converger
             if spcomm:
-                converged = spcomm.opt_callback()
+                spcomm.sync_with_spokes(send_nonants=False)
+                converged = spcomm.is_converged()
                 if converged:
                     break
             if converger:

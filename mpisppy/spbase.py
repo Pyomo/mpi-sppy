@@ -9,6 +9,7 @@ import datetime as dt
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
+from collections import OrderedDict
 from mpi4py import MPI
 
 logger = logging.getLogger("PHBase")
@@ -128,7 +129,7 @@ class SPBase(object):
                 List of index names owned by the local rank
 
             Notes:
-                Called within PH_Prep
+                Called within __init__
 
                 Modified by dlw for companiondriver use: opt, lb, and ub each get
                 a full set of scenarios. So name_to_rank gives the rank within
@@ -212,20 +213,14 @@ class SPBase(object):
         self.scenarios_constructed = True
 
     def attach_nonant_indexes(self):
-        snametonodes = {
-            sname: [node for node in scenario._PySPnode_list]
-            for (sname, scenario) in self.local_scenarios.items()
-        }
         for (sname, scenario) in self.local_scenarios.items():
-
-            def nonant_index_rule(scenario):
-                return [
-                    (node.name, ix)
-                    for node in snametonodes[sname]
-                    for ix in range(scenario._PySP_nlens[node.name])
-                ]
-
-            scenario._nonant_indexes = pyo.Set(dimen=2, initialize=nonant_index_rule)
+            _nonant_indexes = OrderedDict() #paranoia
+            nlens = scenario._PySP_nlens        
+            for node in scenario._PySPnode_list:
+                ndn = node.name
+                for i in range(nlens[ndn]):
+                    _nonant_indexes[ndn,i] = node.nonant_vardata_list[i]
+            scenario._nonant_indexes = _nonant_indexes
 
     def attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():

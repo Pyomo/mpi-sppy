@@ -153,7 +153,7 @@ class _BoundNonantLenSpoke(_BoundSpoke):
 
         vbuflen = 0
         for s in self.opt.local_scenarios.values():
-            vbuflen += sum(s._PySP_nlens[n.name] for n in s._PySPnode_list)
+            vbuflen += len(s._nonant_indexes)
 
         self._make_windows(1, vbuflen)
         self._locals = np.zeros(vbuflen + 1) # Also has kill signal

@@ -32,19 +32,13 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         localwinnername = None
         for k, s in self.opt.local_scenarios.items():
             dist = 0
-            if len(s._PySPnode_list) > 1:
-                raise RuntimeError("xhatclosest not done for multi-stage")
-            for node in s._PySPnode_list:
-                ndn = node.name
-                nlens = s._PySP_nlens 
-                for i in range(nlens[ndn]):
-                    xvar = node.nonant_vardata_list[i]
-                    diff = pyo.value(xvar)
-                    variance = pyo.value(s._xsqbars[(ndn,i)]) \
-                      - pyo.value(s._xbars[(ndn,i)])*pyo.value(s._xbars[(ndn,i)])
-                    if variance > 0:
-                        stdev = np.sqrt(variance)
-                        dist += min(3, abs(diff)/stdev)
+            for ndn_i, xvar in s._nonant_indexes.items():
+                diff = pyo.value(xvar)
+                variance = pyo.value(s._xsqbars[ndn_i]) \
+                  - pyo.value(s._xbars[ndn_i])*pyo.value(s._xbars[ndn_i])
+                if variance > 0:
+                    stdev = np.sqrt(variance)
+                    dist += min(3, abs(diff)/stdev)
             if localwinnername is None:
                 localmindist[0] = dist
                 localwinnername = k

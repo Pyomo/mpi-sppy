@@ -20,10 +20,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         vbuflen = 0
         self.nonant_per_scen = 0
         for s in self.opt.local_scenarios.values():
-            vbuflen += sum(s._PySP_nlens.values())
-            if len(s._PySPnode_list) != 1:
-                raise RuntimeError('CrossScenarioCutSpoke only supports '
-                                   'two-stage models at this time')
+            vbuflen += len(s._nonant_indexes)
         local_scen_count = len(self.opt.local_scenario_names)
         self.nonant_per_scen = int(vbuflen / local_scen_count)
 
@@ -54,16 +51,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         ##get the nonants off an arbitrary scenario
         arb_scen = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
-        non_ants_ind = arb_scen._PySPnode_list[0].nonant_list
-        non_ants = list()
-
-        # NOTE: this loop is designed to mirror the LShaped code
-        for var in non_ants_ind:
-            if var.is_indexed():
-                for var_data in var.values():
-                    non_ants.append(var_data)
-            else:
-                non_ants.append(var)
+        non_ants = arb_scen._PySPnode_list[0].nonant_list
 
         # add copies of the nonanticipatory variables to the master problem
         # NOTE: the LShaped code expects the nonant vars to be in a particular
@@ -80,11 +68,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # create an index of these non_ant_copies to be in the same
         # order as PH, used below
         nonants = dict()
-        nlens = arb_scen._PySP_nlens
-        for node in arb_scen._PySPnode_list:
-            for i in range(nlens[node.name]):
-                vid = id(node.nonant_vardata_list[i])
-                nonants[node.name, i] = nonant_vid_to_copy_map[vid]
+        for ndn_i, nonant in arb_scen._nonant_indexes.items():
+            vid = id(nonant)
+            nonants[ndn_i] = nonant_vid_to_copy_map[vid]
 
         self.master_nonants = nonants
         self.opt.master.eta = pyo.Var(self.opt.all_scenario_names)
@@ -116,11 +102,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         etas = dict()
         ci = 0
         for k, s in opt.local_scenarios.items():
-            nlens = s._PySP_nlens
-            for node in s._PySPnode_list:
-                for i in range(nlens[node.name]):
-                    nonants[k, node.name, i] = all_nonants_and_etas[ci]
-                    ci += 1
+            for ndn, i in s._nonant_indexes:
+                nonants[k, ndn, i] = all_nonants_and_etas[ci]
+                ci += 1
 
         # get all the etas
         for k, s in opt.local_scenarios.items():

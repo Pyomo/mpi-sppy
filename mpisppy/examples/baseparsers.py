@@ -275,3 +275,19 @@ def xhatspecific_args(inparser):
     parser.set_defaults(with_xhatspecific=True)
 
     return parser
+
+
+def xhatlshaped_args(inparser):
+    # we will not try to get the specification from the command line
+    parser = inparser
+    parser.add_argument('--with-xhatlshaped',
+                        help="have an xhatlshaped spoke (default)",
+                        dest='with_xhatlshaped',
+                        action='store_true')
+    parser.add_argument('--no-xhatlshaped',
+                        help="do not have an xhatlshaped spoke",
+                        dest='with_xhatlshaped',
+                        action='store_false')
+    parser.set_defaults(with_xhatlshaped=True)
+
+    return parser
