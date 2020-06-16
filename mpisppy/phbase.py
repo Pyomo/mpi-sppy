@@ -925,21 +925,21 @@ class PHBase(mpisppy.spbase.SPBase):
     def attach_Ws_and_prox(self):
         for (sname, scenario) in self.local_scenarios.items():
             # these are bound by index to the vardata list at the node
-            scenario._Ws = pyo.Param(scenario._nonant_indexes,
+            scenario._Ws = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize=0.0,
                                         mutable=True)
             
             # create ph objective terms, but disabled
-            scenario._PHW_on = pyo.Param(scenario._nonant_indexes,
+            scenario._PHW_on = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize=0.0,
                                         mutable=True)
             self.W_disabled = True
-            scenario._PHprox_on = pyo.Param(scenario._nonant_indexes,
+            scenario._PHprox_on = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize=0.0,
                                         mutable=True)
             self.prox_disabled = True
             # note that rho is per var and scenario here
-            scenario._PHrho = pyo.Param(scenario._nonant_indexes,
+            scenario._PHrho = pyo.Param(scenario._nonant_indexes.keys(),
                                         mutable=True,
                                         default=self.PHoptions["defaultPHrho"])
 
@@ -1342,10 +1342,10 @@ class PHBase(mpisppy.spbase.SPBase):
     def attach_xbars(self):
         for scenario in self.local_scenarios.values():
             scenario._xbars = pyo.Param(
-                scenario._nonant_indexes, initialize=0.0, mutable=True
+                scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
             )
             scenario._xsqbars = pyo.Param(
-                scenario._nonant_indexes, initialize=0.0, mutable=True
+                scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
             )
 
     def gather_var_values_to_root(self):

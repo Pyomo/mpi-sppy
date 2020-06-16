@@ -552,13 +552,13 @@ class APH(ph_base.PHBase):  # ??????
         # Begin APH-specific Prep
         for sname, scenario in self.local_scenarios.items():    
             # ys is plural of y
-            scenario._ys = pyo.Param(scenario._nonant_indexes,
+            scenario._ys = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize = 0.0,
                                         mutable = True)
-            scenario._ybars = pyo.Param(scenario._nonant_indexes,
+            scenario._ybars = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize = 0.0,
                                         mutable = True)
-            scenario._zs = pyo.Param(scenario._nonant_indexes,
+            scenario._zs = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize = 0.0,
                                         mutable = True)
                 

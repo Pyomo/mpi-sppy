@@ -705,7 +705,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     raise RuntimeError('Cannot currently specify '
                         'initial points while using bundles')
             else:
-                nonant_indices = model._nonant_indexes
+                nonant_indices = model._nonant_indexes.keys()
                 leaf_indices = model.leaf_vars.keys()
 
             ''' Convex comb. coefficients '''
