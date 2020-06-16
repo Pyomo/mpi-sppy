@@ -137,7 +137,6 @@ class PHBase(mpisppy.spbase.SPBase):
             for node in s._PySPnode_list:
                 ndn = node.name
                 for i, v in enumerate(node.nonant_vardata_list):
-                    v = node.nonant_vardata_list[i]
                     local_concats["OnlyReduce"][ndn][i] += \
                         (s.PySP_prob / node.cond_prob) * v._value
                     local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
