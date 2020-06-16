@@ -46,8 +46,9 @@ def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
     runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
                 format(mpiexec_arg, np, progname, argstring)
-    print('\n'+runstring)
-    code = os.system(runstring)
+    # The top process output seems to be cached by github actions
+    # so we need oputput in the system call to help debug
+    code = os.system("echo {} && {}".format(runstring, runstring))
     if code != 0:
         if dirname not in badguys:
             badguys[dirname] = [runstring]
