@@ -8,9 +8,9 @@ from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.opt.ph
-import ACtree as etree
+import mpisppy.examples.acopf3.ACtree as etree
 import mpisppy.opt.aph
-import rho_setter
+import mpisppy.examples.acopf3.rho_setter as rho_setter
 
 import os
 import sys
