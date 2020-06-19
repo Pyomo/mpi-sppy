@@ -30,9 +30,15 @@ def shared_options(args):
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
     }
-    if args.max_solver_threads is not None:
+    def _hasit(argname):
+        return hasattr(args, argname) and getattr(args, argname) is not None
+    if _hasit("max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = args.max_solver_threads
         shoptions["iterk_solver_options"]["threads"] = args.max_solver_threads
+    if _hasit("iter0_mipgap"):
+        shoptions["iter0_solver_options"]["mipgap"] = args.iter0_mipgap
+    if _hasit("iterk_mipgap"):
+        shoptions["iterk_solver_options"]["mipgap"] = args.iterk_mipgap
     return shoptions
 
 

@@ -2,10 +2,12 @@
 # Run a lot of examples for regression testing; dlw May 2020
 # Not intended to be user-friendly.
 # Assumes you run from the examples directory.
-# Optional command line arguments: solver_name mpiexec_arg
+# Optional command line arguments: solver_name mpiexec_arg nouc
 # E.g. python run_all.py
 #      python run_all.py cplex
 #      python run_all.py gurobi_persistent --oversubscribe
+#      python run_all.py gurobi_persistent -envall nouc
+#      (envall does nothing; it is just a place-holder)
 
 import os
 import sys
@@ -16,11 +18,19 @@ if len(sys.argv) > 1:
 
 # Use oversubscribe if your computer does not have enough cores.
 # Don't use this unless you have to.
-# (This may not be allowed on versions of mpiexec)
-mpiexec_arg = ""  # "--oversubscribe"
+# (This may not be allowed on some versions of mpiexec)
+mpiexec_arg = ""  # "--oversubscribe" or "-envall"
 if len(sys.argv) > 2:
     mpiexec_arg = sys.argv[2]
 
+# set nouc for testing with community solvers
+nouc = False
+if len(sys.argv) > 3:
+    nouc = True
+    if sys.argv[3] != "nouc":
+        raise RuntimeError("Third arg can only be nouc (you have {})".\
+                           format(sys.argv[3]))
+    
 badguys = dict()
 
 def egret_avail():
@@ -84,11 +94,13 @@ do_one("sizes",
        3,
        "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
        "--default-rho=1 "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--solver-name={} --no-fwph".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",
        4,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
@@ -103,34 +115,35 @@ do_one("hydro", "hydro_cylinders.py", 3,
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, "2 3 2 0")
-    
-print("\nSlow runs ahead...\n")
-# 3-scenario UC
-do_one("uc", "uc_ef.py", 1, solver_name)
-do_one("uc", "uc_lshaped.py", 2,
-       "--bundles-per-rank=0 --max-iterations=5 "
-       "--default-rho=1 --num-scens=3 "
-       "--solver-name={} --max-solver-threads=1 --no-fwph".format(solver_name))
-do_one("uc", "uc_cylinders.py", 4,
-       "--bundles-per-rank=0 --max-iterations=2 "
-       "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
-       "--lagrangian-iter0-mipgap=1e-7 "
-       "--ph-mipgaps-json=phmipgaps.json "
-       "--solver-name={}".format(solver_name))
-# 10-scenario UC
-do_one("uc", "uc_cylinders.py", 3,
-       "--bundles-per-rank=5 --max-iterations=2 "
-       "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-       "--lagrangian-iter0-mipgap=1e-7 "
-       "--ph-mipgaps-json=phmipgaps.json "
-       "--no-fwph "
-       "--solver-name={}".format(solver_name))
-do_one("uc", "uc_cylinders.py", 4,
-       "--bundles-per-rank=5 --max-iterations=2 "
-       "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-       "--lagrangian-iter0-mipgap=1e-7 "
-       "--ph-mipgaps-json=phmipgaps.json "
-       "--solver-name={}".format(solver_name))
+
+if not nouc:
+    print("\nSlow runs ahead...\n")
+    # 3-scenario UC
+    do_one("uc", "uc_ef.py", 1, solver_name)
+    do_one("uc", "uc_lshaped.py", 2,
+           "--bundles-per-rank=0 --max-iterations=5 "
+           "--default-rho=1 --num-scens=3 "
+           "--solver-name={} --max-solver-threads=1 --no-fwph".format(solver_name))
+    do_one("uc", "uc_cylinders.py", 4,
+           "--bundles-per-rank=0 --max-iterations=2 "
+           "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
+           "--lagrangian-iter0-mipgap=1e-7 "
+           "--ph-mipgaps-json=phmipgaps.json "
+           "--solver-name={}".format(solver_name))
+    # 10-scenario UC
+    do_one("uc", "uc_cylinders.py", 3,
+           "--bundles-per-rank=5 --max-iterations=2 "
+           "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+           "--lagrangian-iter0-mipgap=1e-7 "
+           "--ph-mipgaps-json=phmipgaps.json "
+           "--no-fwph "
+           "--solver-name={}".format(solver_name))
+    do_one("uc", "uc_cylinders.py", 4,
+           "--bundles-per-rank=5 --max-iterations=2 "
+           "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+           "--lagrangian-iter0-mipgap=1e-7 "
+           "--ph-mipgaps-json=phmipgaps.json "
+           "--solver-name={}".format(solver_name))
 
 
 if len(badguys) > 0:

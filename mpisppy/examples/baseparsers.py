@@ -141,6 +141,22 @@ def two_sided_args(inparser):
 
     return parser
 
+def mip_options(inparser):
+    parser = inparser
+    parser.add_argument("--iter0-mipgap",
+                        help="mip gap option for iteration 0 (default None)",
+                        dest="iter0_mipgap",
+                        type=float,
+                        default=None)
+
+    parser.add_argument("--iterk-mipgap",
+                        help="mip gap option non-zero iterations (default None)",
+                        dest="iterk_mipgap",
+                        type=float,
+                        default=None)
+
+    return parser
+
 def fixer_args(inparser):
     parser = inparser
     parser.add_argument('--with-fixer',

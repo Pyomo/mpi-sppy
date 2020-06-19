@@ -12,6 +12,7 @@ from mpisppy.examples import vanilla
 def _parse_args():
     parser = baseparsers.make_parser()
     parser = baseparsers.two_sided_args(parser)
+    parser = baseparsers.mip_options(parser)
     parser = baseparsers.fixer_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
