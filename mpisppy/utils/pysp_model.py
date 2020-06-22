@@ -52,7 +52,7 @@ class PySPModel:
                     scenario_creator
 
     Properties:
-      scenario_names (list):
+      all_scenario_names (list):
                     A list of scenario names base on the pysp model for
                     use in mpisppy
       scenario_creator (fct):
@@ -217,7 +217,7 @@ class PySPModel:
         return self._mpisppy_instance_creator
 
     @property
-    def scenario_names(self):
+    def all_scenario_names(self):
         return self._scenario_names
 
     @property

@@ -7,7 +7,7 @@ from mpisppy.opt.ef import ExtensiveForm
 def _print_usage():
     print('Usage: "sizes_pysp.py num_scen solver" where num_scen is 3 or 10 and solver is a pyomo solver name')
 
-if len(sys.argv) < 2:
+if len(sys.argv) < 3:
     _print_usage()
     sys.exit()
 elif int(sys.argv[1]) not in [3,10]:
@@ -33,7 +33,7 @@ sizes = PySPModel(scenario_creator='./models/ReferenceModel.py',
 
 
 ef = ExtensiveForm(options={'solver':solver}, 
-                   all_scenario_names=sizes.scenario_names,
+                   all_scenario_names=sizes.all_scenario_names,
                    scenario_creator=sizes.scenario_creator,
                    model_name='sizes_EF')
 
