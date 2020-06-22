@@ -52,12 +52,14 @@ class PySPModel:
                     scenario_creator
 
     Properties:
-      scenario_creator (fct):
-                    A scenario creator function based on the pysp model
-                    for use in mpisppy
       scenario_names (list):
                     A list of scenario names base on the pysp model for
                     use in mpisppy
+      scenario_creator (fct):
+                    A scenario creator function based on the pysp model
+                    for use in mpisppy
+      scenario_denouement (fct):
+                    A blank scenario_denouement function for use in mpisppy
     """
     def __init__(self, scenario_creator, tree_model=None,
             scenarios_dir=None,
@@ -217,3 +219,7 @@ class PySPModel:
     @property
     def scenario_names(self):
         return self._scenario_names
+
+    @property
+    def scenario_denouement(self):
+        return lambda *args,**kwargs: None
