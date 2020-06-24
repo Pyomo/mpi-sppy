@@ -89,6 +89,7 @@ do_one("farmer", "farmer_cylinders.py", 2,
        "6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --no-fwph --no-lagrangian".format(solver_name))
+do_one("farmer", "farmer_pysp.py", 1, solver_name)
 do_one("sizes",
        "sizes_cylinders.py",
        3,
@@ -102,6 +103,7 @@ do_one("sizes",
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
        4,

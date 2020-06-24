@@ -1,5 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
 import os.path
+from inspect import signature
 import pyomo.environ as pyo
 from pyomo.pysp.scenariotree.tree_structure_model import \
         CreateAbstractScenarioTreeModel, ScenarioTreeModelFromNetworkX
@@ -145,17 +146,29 @@ class PySPModel:
                 model = self.pysp_instance_creator(
                         os.path.join(self.scenarios_dir,scenario_name+'.dat'))
             else:
-                ## support both callback types, but pass in Nones for 
+                ## try to support both callback types, but pass in Nones for 
                 ## args that aren't scenario_name
+                # TBD (use inspect to match kwargs with signature)
                 try:
                     model = self.pysp_instance_creator(None,
                                                        scenario_name,
                                                        None,
                                                        **kwargs)
                 except TypeError:
-                    model = self.pysp_instance_creator(scenario_name,
-                                                       None,
-                                                       **kwargs)
+                    try:
+                        model = self.pysp_instance_creator(scenario_name,
+                                                           **kwargs)
+                    except TypeError:
+                        try:
+                            model = self.pysp_instance_creator(scenario_name, None)
+                            for key,val in kwargs.items():
+                                if val is not None:
+                                    print("WARNING: did not use {}={}".\
+                                          format(key, val))
+                        except:
+                            print("signature=",
+                                  str(signature(self.pysp_instance_creator)))
+                            raise RuntimeError("Could not match callback")
 
             ## extract the first stage cost expression
             stage_cost_expr = getattr(model, first_stage_cost_name)

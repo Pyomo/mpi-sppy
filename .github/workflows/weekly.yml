@@ -6,7 +6,7 @@ name: weekly mpi-sppy tests
 on:
   schedule:
     # min hr dayofmonth month dayofweek 
-    - cron: "14 2 * * 0-6"
+    - cron: "14 2 * * 1"
 
 jobs:
   build:
@@ -24,9 +24,8 @@ jobs:
         run: |
           python setup.py develop
 
-      # if this starts working, the timeout needs to be longer
       - name: run tests
-        timeout-minutes: 20
+        timeout-minutes: 30
         run: |
           cd mpisppy/examples
           # envall does nothing

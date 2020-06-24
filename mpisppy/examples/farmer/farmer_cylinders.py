@@ -32,11 +32,6 @@ def main():
     num_scen = args.num_scens
     CropsMult = args.crops_mult
     
-    with_fwph = args.with_fwph
-    with_xhatlooper = args.with_xhatlooper
-    with_xhatshuffle = args.with_xhatshuffle
-    with_lagrangian = args.with_lagrangian
-
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
     if args.default_rho is None and rho_setter is None:
         raise RuntimeError("No rho_setter so there must be --default-rho") 
@@ -57,32 +52,32 @@ def main():
                               rho_setter = rho_setter)
 
     # FWPH spoke
-    if with_fwph:
+    if args.with_fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, cb_data=cb_data)
 
     # Standard Lagrangian bound spoke
-    if with_lagrangian:
+    if args.with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               cb_data=cb_data,
                                               rho_setter = rho_setter)
 
     # xhat looper bound spoke
-    if with_xhatlooper:
+    if args.with_xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, cb_data=cb_data)
 
     # xhat shuffle bound spoke
-    if with_xhatshuffle:
+    if args.with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, cb_data=cb_data)
 
         
     list_of_spoke_dict = list()
-    if with_fwph:
+    if args.with_fwph:
         list_of_spoke_dict.append(fw_spoke)
-    if with_lagrangian:
+    if args.with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if with_xhatlooper:
+    if args.with_xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
-    if with_xhatshuffle:
+    if args.with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)

@@ -19,11 +19,21 @@ except:
     _print_usage()
     sys.exit()
 
-farmer = PySPModel(scenario_creator='./concrete/ReferenceModel.py',
-                   tree_model='./ScenarioStructure.dat')
+farmer = PySPModel(scenario_creator='./PySP/concrete/ReferenceModel.py',
+                   tree_model='./PySP/ScenarioStructure.dat')
 
-ph = PH( PHoptions = {'default_rho': 1.0,
-                      'solver':sys.argv[1],},
+phoptions = {'defaultPHrho': 1.0,
+             'solvername':sys.argv[1],
+             'PHIterLimit': 50,
+             'convthresh': 0.01,
+             'verbose': False,
+             'display_progress': True,
+             'display_timing': False,
+             'iter0_solver_options': None,
+             'iterk_solver_options': None
+             }
+
+ph = PH( PHoptions = phoptions,
          all_scenario_names = farmer.all_scenario_names,
          scenario_creator = farmer.scenario_creator,
          scenario_denouement = farmer.scenario_denouement,
