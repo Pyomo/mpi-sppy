@@ -307,3 +307,33 @@ def xhatlshaped_args(inparser):
     parser.set_defaults(with_xhatlshaped=True)
 
     return parser
+
+def slamup_args(inparser):
+    # we will not try to get the specification from the command line
+    parser = inparser
+    parser.add_argument('--with-slamup',
+                        help="have an slamup spoke (default)",
+                        dest='with_slamup',
+                        action='store_true')
+    parser.add_argument('--no-slamup',
+                        help="do not have an slamup spoke",
+                        dest='with_slamup',
+                        action='store_false')
+    parser.set_defaults(with_slamup=True)
+
+    return parser
+
+def slamdown_args(inparser):
+    # we will not try to get the specification from the command line
+    parser = inparser
+    parser.add_argument('--with-slamdown',
+                        help="have an slamdown spoke (default)",
+                        dest='with_slamdown',
+                        action='store_true')
+    parser.add_argument('--no-slamdown',
+                        help="do not have an slamdown spoke",
+                        dest='with_slamdown',
+                        action='store_false')
+    parser.set_defaults(with_slamdown=True)
+
+    return parser

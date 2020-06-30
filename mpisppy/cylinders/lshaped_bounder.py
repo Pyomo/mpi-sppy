@@ -9,82 +9,15 @@ import mpisppy.cylinders.spoke as spoke
 from math import inf
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from mpisppy.phbase import PHBase
-from mpisppy.cylinders.xhatshufflelooper_bounder import XhatTryer
-
-# custom PH-subclass for LShaped incuments
-class LShapedXhatTryer(XhatTryer):
-    """
-    Basic incumbent solution tryer for LShaped
-    """
-
-    def _fix_nonants_at_value(self):
-        """ Fix the Vars subject to non-anticipativity at their current values.
-            Loop over the scenarios to restore, but loop over subproblems
-            to alert persistent solvers.
-        """
-        for k,s in self.local_scenarios.items():
-
-            persistent_solver = None
-            if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-
-            for var in s._nonant_indexes.values():
-                var.fix()
-                if not self.bundling and persistent_solver is not None:
-                    persistent_solver.update_var(var)
-
-        if self.bundling:  # we might need to update persistent solvers
-            rank_local = self.rank
-            for k,s in self.local_subproblems.items():
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-                else:
-                    break  # all solvers should be the same
-
-                # the bundle number is the last number in the name
-                bunnum = sputils.extract_num(k)
-                # for the scenarios in this bundle, update Vars
-                for sname, scen in self.local_scenarios.items():
-                    if sname not in self.names_in_bundles[rank_local][bunnum]:
-                        break
-                    for var in scen._nonant_indexes.values():
-                        persistent_solver.update_var(var)
-
-    def calculate_incumbent(self, verbose=False):
-        """
-        Calculates the current incumbent
-
-        Args:
-            solver_options (dict): passed through to the solver
-            verbose (boolean): controls debugging output
-        Returns:
-            xhatobjective (float or None): the objective function
-                or None if one could not be obtained.
-        """
-
-        self._fix_nonants_at_value()
-
-        self.solve_loop(solver_options=self.current_solver_options, 
-                        verbose=verbose)
-
-        feasP = self.feas_prob()
-        if feasP != self.E1:
-            return None
-        else:
-            if verbose and self.rank == self.rank0:
-                print("  Feasible xhat found")
-            return self.Eobjective(verbose=verbose)
-
-
+from mpisppy.utils.xhat_tryer import XhatTryer
 
 class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatlshaped_prep(self):
         verbose = self.opt.options['verbose']
 
-        if not isinstance(self.opt, LShapedXhatTryer):
-            raise RuntimeError("XhatLShapedInnerBound must be used with LShapedXhatTryer.")
+        if not isinstance(self.opt, XhatTryer):
+            raise RuntimeError("XhatLShapedInnerBound must be used with XhatTryer.")
 
         self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
 
@@ -136,7 +69,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
                 
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
-                obj = self.opt.calculate_incumbent()
+                obj = self.opt.calculate_incumbent(fix_nonants=True)
 
                 if obj is None:
                     continue

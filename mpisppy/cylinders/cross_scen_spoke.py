@@ -51,19 +51,21 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         ##get the nonants off an arbitrary scenario
         arb_scen = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
-        non_ants = arb_scen._PySPnode_list[0].nonant_list
+        non_ants = arb_scen._PySPnode_list[0].nonant_vardata_list
 
         # add copies of the nonanticipatory variables to the master problem
         # NOTE: the LShaped code expects the nonant vars to be in a particular
         #       order and with a particular *name*.
         #       We're also creating an index for reference against later 
         nonant_vid_to_copy_map = dict()
+        master_vars = list()
         for v in non_ants:
             non_ant_copy = pyo.Var(name=v.name)
             self.opt.master.add_component(v.name, non_ant_copy)
-            self.opt.master_vars.append(non_ant_copy)
+            master_vars.append(non_ant_copy)
             nonant_vid_to_copy_map[id(v)] = non_ant_copy
 
+        self.opt.master_vars = master_vars
 
         # create an index of these non_ant_copies to be in the same
         # order as PH, used below

@@ -9,12 +9,14 @@ import copy
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
 from mpisppy.fwph.fwph import FWPH
+from mpisppy.utils.xhat_tryer import XhatTryer
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
-from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound, XhatTryer
-from mpisppy.cylinders.lshaped_bounder import LShapedXhatTryer, XhatLShapedInnerBound
+from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
+from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
+from mpisppy.cylinders.slam_heuristic import SlamUpHeuristic, SlamDownHeuristic
 from mpisppy.cylinders.hub import PHHub
 
 
@@ -232,7 +234,7 @@ def xhatlshaped_spoke(args,
     xhatlshaped_dict = {
         "spoke_class": XhatLShapedInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": LShapedXhatTryer,
+        "opt_class": XhatTryer,
         "opt_kwargs": {
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
@@ -241,3 +243,47 @@ def xhatlshaped_spoke(args,
         },
     }
     return xhatlshaped_dict
+
+def slamup_spoke(args,
+               scenario_creator,
+               scenario_denouement,
+               all_scenario_names,
+               cb_data=None):
+
+    shoptions = shared_options(args)
+    xhat_options = copy.deepcopy(shoptions)
+    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhatlooper_dict = {
+        "spoke_class": SlamUpHeuristic,
+        "spoke_kwargs": dict(),
+        "opt_class": XhatTryer,
+        "opt_kwargs": {
+            "PHoptions": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "cb_data": cb_data,
+        },
+    }
+    return xhatlooper_dict
+
+def slamdown_spoke(args,
+               scenario_creator,
+               scenario_denouement,
+               all_scenario_names,
+               cb_data=None):
+
+    shoptions = shared_options(args)
+    xhat_options = copy.deepcopy(shoptions)
+    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhatlooper_dict = {
+        "spoke_class": SlamDownHeuristic,
+        "spoke_kwargs": dict(),
+        "opt_class": XhatTryer,
+        "opt_kwargs": {
+            "PHoptions": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "cb_data": cb_data,
+        },
+    }
+    return xhatlooper_dict
