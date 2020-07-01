@@ -8,8 +8,6 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import pyutilib.th as unittest
-
-import os
 from math import log10, floor
 import pyomo.environ as pyo
 import mpisppy.opt.aph
@@ -21,6 +19,10 @@ from mpisppy.examples.sizes.sizes import scenario_creator, \
                                        _rho_setter
 
 __version__ = 0.3
+
+import mpi4py.MPI as mpi
+fullcomm = mpi.COMM_WORLD
+rank_global = fullcomm.Get_rank()
 
 solvers = ["gurobi", "cplex"]
 
@@ -94,7 +96,7 @@ class Test_aph_sizes(unittest.TestCase):
                               scenario_denouement,
                               cb_data=3)
 
-        conv, obj, tbound = aph.APH_main()
+        conv, obj, tbound = aph.APH_main(spcomm=None)
         print ("objthing={}, (was=-2435908)".format(obj))
         print ("tbound ={} (was=224106)".format(tbound))
 
@@ -107,47 +109,10 @@ class Test_aph_sizes(unittest.TestCase):
         aph = mpisppy.opt.aph.APH(PHoptions, self.all10_scenario_names,
                               scenario_creator, scenario_denouement,
                               cb_data=10)
-        conv, obj, tbound = aph.APH_main()
+        conv, obj, tbound = aph.APH_main(spcomm=None)
         print ("objthing={}, (was=224712.9)".format(obj))
         print ("tbound ={} (was=223168.5)".format(tbound))
 
-    @unittest.skipIf(True,"skipping - needs edits")        
-    def test_xhat_extension(self):
-        """ Make sure least one of the xhat extensions runs.
-        """
-        from mpisppy.xhatlooper import XhatLooper
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 0
-        PHoptions["xhat_looper_options"] =  {"xhat_solver_options":\
-                                             PHoptions["iterk_solver_options"],
-                                             "scen_limit": 3}
-
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
-        conv, basic_obj, tbound = ph.ph_main(PH_extensions=XhatLooper)
-        xhatobj = ph.extobject.xhatlooper_obj # a bit hackish...
-        print ("xhatobj", xhatobj)
-        self.assertGreaterEqual(xhatobj, tbound)
-
-    @unittest.skipIf(True,"skipping - needs edits")        
-    def test_lagrangian_bound(self):
-        """ Make sure the lagrangian bound is at least a bound
-        """
-        from mpisppy.xhatlooper import XhatLooper
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 0
-        PHoptions["xhat_looper_options"] =  {"xhat_solver_options":\
-                                             PHoptions["iterk_solver_options"],
-                                             "scen_limit": 3}
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
-        conv, basic_obj, tbound = ph.ph_main(PH_extensions=XhatLooper)
-        xhatobj = ph.extobject.xhatlooper_obj
-        dopts = sputils.option_string_to_dict("mipgap=0.0001")
-        objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
-        self.assertGreaterEqual(xhatobj, objbound)
 
 if __name__ == '__main__':
     unittest.main()

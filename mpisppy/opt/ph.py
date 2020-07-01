@@ -29,7 +29,7 @@ class PH(mpisppy.phbase.PHBase):
         Execute the PH algorithm.
 
         Args:
-            spcomm (MPI comm): the "intra" comm to use
+            spcomm (SPCommunitator object): for communication inter and intra
         Returns:
             conv, Eobj, trivial_bound: 
                         The first two CANNOT BE EASILY INTERPRETED. 

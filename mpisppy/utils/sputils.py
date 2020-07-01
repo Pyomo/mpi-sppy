@@ -1,5 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 # Base and utility functions for mpisppy
+# Note to developers: things called spcomm are way more than just a comm; SPCommunicator
+
 import pyomo.environ as pyo
 import re
 import time
@@ -88,7 +90,8 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     # Create the SPCommunicator object (hub/spoke) with
     # the appropriate SPBase object attached
     if rank_inter == 0: # Hub
-        spcomm = sp_class(opt, fullcomm, intercomm, intracomm, list_of_spoke_dict, **sp_kwargs) 
+        spcomm = sp_class(opt, fullcomm, intercomm, intracomm,
+                          list_of_spoke_dict, **sp_kwargs) 
     else: # Spokes
         spcomm = sp_class(opt, fullcomm, intercomm, intracomm, **sp_kwargs) 
 

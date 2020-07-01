@@ -1,15 +1,26 @@
 # This software is distributed under the 3-clause BSD License.
 # APH
+"""
+TBD: dlw june 2020 look at this code in phbase:
+            if spcomm is not None: 
+                spcomm.sync_with_spokes()
+                if spcomm.is_converged():
+                    break    
+
+"""
+
+
 import numpy as np
 import math
 import re
 import shutil
-import mpi4py.MPI as mpi
 import collections
 from pyutilib.misc.timing import TicTocTimer
 import time
 import logging
 import datetime as dt
+import mpi4py
+import mpi4py.MPI as mpi
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from pyomo.pysp.phutils import find_active_objective
@@ -17,9 +28,10 @@ import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base  # factor some day...
 import mpisppy.utils.sputils as sputils
 
-from mpi4py import MPI
-comm_global = MPI.COMM_WORLD
-rank_global = comm_global.Get_rank()
+
+fullcomm = mpi.COMM_WORLD
+rank_global = fullcomm.Get_rank()
+
 
 logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
@@ -242,7 +254,7 @@ class APH(ph_base.PHBase):  # ??????
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
             for (ndn,i), xvar in s._nonant_indexes.items():
-                xvar = node.nonant_vardata_list[i]
+                ### xvar = node.nonant_vardata_list[i] hideous bug... delete this
                 self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
                     *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
             self.phis[k] *= pyo.value(s.PySP_prob)
@@ -450,7 +462,7 @@ class APH(ph_base.PHBase):  # ??????
         """ Loop for the main iterations (called by synchronizer).
 
         Args:
-        spcomm (mpi comm object): intra comm
+        spcomm (SPCommunitator object): to communicate intra and inter
 
         Updates: 
             self.conv (): APH convergence
@@ -487,7 +499,8 @@ class APH(ph_base.PHBase):  # ??????
 
             # The hub object takes precedence 
             # over the converger
-            if spcomm is not None: 
+            #### mpi4py.MPI.Intracomm
+            if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
                 spcomm.sync_with_spokes()
                 if spcomm.is_converged():
                     break    
@@ -533,7 +546,7 @@ class APH(ph_base.PHBase):  # ??????
 
         """Execute the APH algorithm.
         Args:
-            spcomm (MPI comm): the "intra" comm to use
+            spcomm (SPCommunitator object): for intra or inter communications
 
         Returns:
             conv, Eobj, trivial_bound: 
@@ -546,7 +559,6 @@ class APH(ph_base.PHBase):  # ??????
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
-        assert(spcomm is not None)
         self.PH_Prep(attach_prox=False)
 
         # Begin APH-specific Prep
@@ -590,7 +602,7 @@ class APH(ph_base.PHBase):  # ??????
                                                     sleep_secs = sleep_secs,
                                                     asynch = True,
                                                     listener_gigs = listener_gigs)
-        args = [spcomm]
+        args = [spcomm.intracomm] if spcomm is not None else [fullcomm]
         kwargs = None  # {"PH_extensions": PH_extensions}
         self.synchronizer.run(args, kwargs)
 
