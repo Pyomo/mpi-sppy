@@ -3,6 +3,8 @@ import numpy as np
 import abc
 import enum
 import logging
+import time
+import os
 
 from mpi4py import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
@@ -95,6 +97,21 @@ class Spoke(SPCommunicator):
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
+    def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
+        super().__init__(spbase_object, fullcomm, intercomm, intracomm)
+        if 'trace_prefix' in spbase_object.options and \
+                spbase_object.options['trace_prefix'] is not None:
+            trace_prefix = spbase_object.options['trace_prefix']
+
+            filen = trace_prefix+self.__class__.__name__+'.csv'
+            if os.path.exists(filen):
+                raise RuntimeError(f"Spoke trace file {filen} already exists!")
+            with open(filen, 'w') as f:
+                f.write("time,bound\n")
+            self.trace_filen = filen
+            self.start_time = spbase_object.start_time
+        else:
+            self.trace_filen = None
 
     def make_windows(self):
         """ Makes the bound window and a remote window to
@@ -112,6 +129,7 @@ class _BoundSpoke(Spoke):
 
     @bound.setter
     def bound(self, value):
+        self._append_trace(value)
         self._bound[0] = value
         self.spoke_to_hub(self._bound)
 
@@ -120,6 +138,12 @@ class _BoundSpoke(Spoke):
         self.spoke_from_hub(self._kill_sig)
         kill = self._kill_sig[-1] == -1
         return kill
+
+    def _append_trace(self, value):
+        if self.trace_filen is None:
+            return
+        with open(self.trace_filen, 'a') as f:
+            f.write(f"{time.time()-self.start_time},{value}\n")
 
     @abc.abstractmethod
     def main(self):

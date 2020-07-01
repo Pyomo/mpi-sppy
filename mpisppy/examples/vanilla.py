@@ -31,6 +31,7 @@ def shared_options(args):
         "display_timing": args.with_display_timing,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
+        "trace_prefix" : args.trace_prefix,
     }
     def _hasit(argname):
         return hasattr(args, argname) and getattr(args, argname) is not None

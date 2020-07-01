@@ -84,6 +84,13 @@ def _common_args(inparser):
                         type=float,
                         default=0)
 
+    parser.add_argument("--trace-prefix",
+                        help="Prefix for bound spoke trace files. If None "
+                             "bound spoke trace files are not written.",
+                        dest="trace_prefix",
+                        type=str,
+                        default=None)
+
     return parser
     
 def make_parser(progname=None, num_scens_reqd=False):
