@@ -11,14 +11,18 @@ from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
 
 # Hub and spoke SPCommunicator classes
-from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
+from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 
 # extensions for the hub
 from mpisppy.extensions.extension import MultiPHExtension
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
+from mpisppy.cylinders.hub import PHHub 
 from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.opt.lshaped import LShapedMethod
+
+from mpisppy.utils.xhat_tryer import XhatTryer
 
 
 
@@ -63,12 +67,12 @@ if __name__ == "__main__":
     cb_data={'use_integer': True, "CropsMult": CropsMult, "sense":pyo.maximize}
 
     hub_ph_options = {
-        "solvername": "gurobi_persistent",
+        "solvername": "xpress_persistent",
         'bundles_per_rank': bundles_per_rank,  # 0 = no bundles
         "asynchronousPH": False,
         "PHIterLimit": PHIterLimit,
         "defaultPHrho": 0.5,
-        "convthresh": 0.001,
+        "convthresh": 0.0,
         "subsolvedirectives": None,
         "verbose": False,
         "display_timing": False,
@@ -76,10 +80,11 @@ if __name__ == "__main__":
         "tee-rank0-solves": False,
         "iter0_solver_options": None,
         "iterk_solver_options": None,
-        "cross_scen_options":{"valid_eta_bound": {i:1e9 for i in all_scenario_names}},
+        "cross_scen_options":{"check_bound_improve_iterations":2}, 
     }
 
     multi_ext = { 'ext_classes' : [CrossScenarioExtension] }
+    #multi_ext = { 'ext_classes' : [] }
 
     # PH hub
     hub_dict = {
@@ -110,9 +115,9 @@ if __name__ == "__main__":
         }
 
     ub_spoke = {
-        'spoke_class': XhatLooperInnerBound,
+        'spoke_class': XhatShuffleInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,
+        "opt_class": XhatTryer,
         'opt_kwargs': {
             'PHoptions': ph_options,
             'all_scenario_names': all_scenario_names,
@@ -123,8 +128,8 @@ if __name__ == "__main__":
     }
 
     ls_options = {
-        "master_solver": "gurobi_persistent",
-        "sp_solver": "gurobi_persistent",
+        "master_solver": "xpress_persistent",
+        "sp_solver": "xpress_persistent",
         "sp_solver_options": {"threads":1},
        }
     cut_spoke = {
@@ -140,7 +145,21 @@ if __name__ == "__main__":
         },
     }
 
-    list_of_spoke_dict = (ub_spoke, cut_spoke)
+    lagrangian_spoke = {
+        "spoke_class": LagrangianOuterBound,
+        "spoke_kwargs": dict(),
+        "opt_class": PHBase,   
+        'opt_kwargs': {
+            'PHoptions': hub_ph_options,
+            'all_scenario_names': all_scenario_names,
+            'scenario_creator': scenario_creator,
+            "cb_data": cb_data,
+            'scenario_denouement': scenario_denouement,
+        },
+    }
+
+    list_of_spoke_dict = (ub_spoke, cut_spoke, ) #lagrangian_spoke)
+    #list_of_spoke_dict = (ub_spoke, )
 
     spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
 

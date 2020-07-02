@@ -1197,8 +1197,7 @@ class PHBase(mpisppy.spbase.SPBase):
         return self.trivial_bound
 
     def iterk_loop(self,
-                   synchronizer=None,
-                   spcomm=None):
+                    synchronizer=None):
         """ local to main, really; however, it needs to be called
         directly by the Synchronizer, so main is in three parts (March 2019)
 
@@ -1245,9 +1244,9 @@ class PHBase(mpisppy.spbase.SPBase):
 
             # The hub object takes precedence 
             # over the converger
-            if spcomm is not None: 
-                spcomm.sync_with_spokes()
-                if spcomm.is_converged():
+            if self.spcomm is not None:
+                self.spcomm.sync()
+                if self.spcomm.is_converged():
                     break    
             if have_converger:
                 if self.convobject.is_converged():

@@ -140,9 +140,14 @@ class FWPH(mpisppy.phbase.PHBase):
 
         return best_bound
 
-    def fwph_main(self, spcomm=None):
+    def fwph_main(self):
         self.t0 = time.time()
         best_bound = self.fw_prep()
+
+        # FWPH takes some time to initialize
+        # If run as a spoke, check for convergence here
+        if self.spcomm and self.spcomm.is_converged():
+            return None, None, None
 
         # The body of the algorithm
         for itr in range(self.PHoptions['PHIterLimit']):
@@ -159,15 +164,15 @@ class FWPH(mpisppy.phbase.PHBase):
                 best_bound = np.minimum(best_bound, self._local_bound)
 
             ## Hubs/spokes take precedence over convergers
-            if (spcomm):
-                converged = spcomm.opt_callback()
-                if (converged):
+            if self.spcomm:
+                if self.spcomm.is_converged():
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, np.nan, secs)
                     if (self.rank == self.rank0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
+                self.spcomm.sync()
             if (self.PH_converger):
                 self.Compute_Xbar(self.PHoptions['verbose'], None)
                 diff = self.convobject.convergence_value()

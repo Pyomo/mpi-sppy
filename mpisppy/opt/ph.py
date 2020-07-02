@@ -24,12 +24,10 @@ class PH(mpisppy.phbase.PHBase):
     # uncomment the line below to get per-rank profile outputs, which can 
     # be examined with snakeviz (or your favorite profile output analyzer)
     #@profile(filename="profile_out")
-    def ph_main(self, spcomm=None):
+    def ph_main(self):
         """
         Execute the PH algorithm.
 
-        Args:
-            spcomm (SPCommunitator object): for communication inter and intra
         Returns:
             conv, Eobj, trivial_bound: 
                         The first two CANNOT BE EASILY INTERPRETED. 
@@ -70,7 +68,7 @@ class PH(mpisppy.phbase.PHBase):
                       "PH_converger": None}
             synchronizer.run(args, kwargs)
         else:
-            self.iterk_loop(spcomm=spcomm)
+            self.iterk_loop()
 
         Eobj = self.post_loops(self.PH_extensions)
 

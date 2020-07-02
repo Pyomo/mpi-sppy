@@ -4,6 +4,7 @@
 
 import time
 import logging
+import weakref
 import numpy as np
 import datetime as dt
 import pyomo.environ as pyo
@@ -93,6 +94,9 @@ class SPBase(object):
         self.create_communicators()
         self.set_sense()
         self.set_multistage()
+
+        ## SPCommunicator object
+        self._spcomm = None
 
     def set_sense(self, comm=None):
         """ Check to confirm that all the models constructed by scenario_crator
@@ -315,3 +319,16 @@ class SPBase(object):
         missing = [option for option in required_options if option not in given_options] 
         if missing:
             raise ValueError(f"Missing the following required options: {', '.join(missing)}")
+
+    @property
+    def spcomm(self):
+        if self._spcomm is None:
+            return None
+        return self._spcomm()
+
+    @spcomm.setter
+    def spcomm(self, value):
+        if self._spcomm is None:
+            self._spcomm = weakref.ref(value)
+        else:
+            raise RuntimeError("SPBase.spcomm should only be set once")

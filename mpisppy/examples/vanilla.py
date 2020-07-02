@@ -8,6 +8,7 @@ import copy
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
+from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.fwph.fwph import FWPH
 from mpisppy.utils.xhat_tryer import XhatTryer
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
@@ -17,8 +18,12 @@ from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamUpHeuristic, SlamDownHeuristic
+from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
+from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.hub import PHHub
 
+def _hasit(args, argname):
+    return hasattr(args, argname) and getattr(args, argname) is not None
 
 def shared_options(args):
     shoptions = {
@@ -33,14 +38,12 @@ def shared_options(args):
         "iterk_solver_options": dict(),
         "trace_prefix" : args.trace_prefix,
     }
-    def _hasit(argname):
-        return hasattr(args, argname) and getattr(args, argname) is not None
-    if _hasit("max_solver_threads"):
+    if _hasit(args, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = args.max_solver_threads
         shoptions["iterk_solver_options"]["threads"] = args.max_solver_threads
-    if _hasit("iter0_mipgap"):
+    if _hasit(args, "iter0_mipgap"):
         shoptions["iter0_solver_options"]["mipgap"] = args.iter0_mipgap
-    if _hasit("iterk_mipgap"):
+    if _hasit(args, "iterk_mipgap"):
         shoptions["iterk_solver_options"]["mipgap"] = args.iterk_mipgap
     return shoptions
 
@@ -57,8 +60,13 @@ def ph_hub(args,
     PHoptions["convthresh"] = args.intra_hub_conv_thresh
     PHoptions["bundles_per_rank"] = args.bundles_per_rank
 
+    if _hasit(args, "with_cross_scenario_cuts") and args.with_cross_scenario_cuts:
+        hub_class = CrossScenarioHub
+    else:
+        hub_class = PHHub
+
     hub_dict = {
-        "hub_class": PHHub,
+        "hub_class": hub_class,
         "hub_kwargs": {"options": {"rel_gap": args.rel_gap,
                                    "abs_gap": args.abs_gap}},
         "opt_class": PH,
@@ -288,3 +296,34 @@ def slamdown_spoke(args,
         },
     }
     return xhatlooper_dict
+
+def cross_scenario_cut_spoke(args, 
+               scenario_creator,
+               scenario_denouement,
+               all_scenario_names,
+               cb_data=None):
+
+    if _hasit(args, "max_solver_threads"):
+        sp_solver_options = {"threads":args.max_solver_threads}
+    else:
+        sp_solver_options = dict() 
+
+    ls_options = { "master_solver" : args.solver_name,
+                   "sp_solver": args.solver_name,
+                   "sp_solver_options" : sp_solver_options,
+                    "verbose": args.with_verbose,
+                 }
+    cut_spoke = {
+        "spoke_class": CrossScenarioCutSpoke,
+        "spoke_kwargs": dict(),
+        "opt_class": LShapedMethod,
+        "opt_kwargs": {
+            "options": ls_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_denouement": scenario_denouement,
+            "cb_data": cb_data,
+            },
+        }
+
+    return cut_spoke

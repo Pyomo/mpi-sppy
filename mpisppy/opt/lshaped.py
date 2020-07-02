@@ -137,6 +137,11 @@ class LShapedMethod(spbase.SPBase):
         self.valid_eta_lb = None
         if "valid_eta_lb" in options:
             self.valid_eta_lb = options["valid_eta_lb"]
+            self.compute_eta_bound = False
+        else: # fit the user does not provide a bound, compute one
+            self.valid_eta_lb = { scen :  (-sys.maxsize - 1) * 1. / len(self.all_scenario_names) \
+                                    for scen in self.all_scenario_names }
+            self.compute_eta_bound = True
 
         self.cb_data = cb_data
         self.indx_to_stage = None
@@ -155,13 +160,9 @@ class LShapedMethod(spbase.SPBase):
         self._options_check(required, self.options)
 
     def _add_master_etas(self, master, index):
-        master.eta = pyo.Var(index, within=pyo.Reals)
-        if self.has_valid_eta_lb:
-            for scen, eta in master.eta.items():
-                eta.setlb(self.valid_eta_lb[scen])
-        else:
-            for eta in master.eta.values():
-                eta.setlb((-sys.maxsize - 1) * 1. / len(self.all_scenario_names))
+        def _eta_bounds(m, s):
+            return (self.valid_eta_lb[s],None)
+        master.eta = pyo.Var(index, within=pyo.Reals, bounds=_eta_bounds)
 
     def _create_master_no_scenarios(self):
 
@@ -349,6 +350,23 @@ class LShapedMethod(spbase.SPBase):
         self.master = master
         self.master_vars = master_vars
 
+    def set_eta_bounds(self):
+        if self.compute_eta_bound:
+            ## for scenarios not in self.local_scenarios, these will be a large negative number
+            this_etas_lb = np.fromiter((self.valid_eta_lb[scen] for scen in self.all_scenario_names),
+                                    float, count=len(self.all_scenario_names))
+
+            all_etas_lb = np.empty_like(this_etas_lb)
+
+            self.mpicomm.Allreduce(this_etas_lb, all_etas_lb, op=MPI.MAX)
+
+            for idx, s in enumerate(self.all_scenario_names):
+                self.valid_eta_lb[s] = all_etas_lb[idx]
+            
+            # master may not have etas for every scenarios
+            for s, v in self.master.eta.items():
+                v.setlb(self.valid_eta_lb[s])
+
     def create_master(self):
         """ creates a ConcreteModel from one of the problem scenarios then
             modifies the model to serve as the master problem 
@@ -381,36 +399,8 @@ class LShapedMethod(spbase.SPBase):
             BendersCutsGenerator 
         """
         instance = self.local_scenarios[scenario_name]
-        # relaxes any integrality constraints for the subproblem
-        RelaxIntegrality().apply_to(instance)
 
         nonant_list, nonant_ids = _get_nonant_ids(instance) 
-
-        # iterates through constraints and removes first stage constraints from the model
-        # the id dict is used to improve the speed of identifying the stage each variables belongs to
-        for constr_data in list(itertools.chain(
-                instance.component_data_objects(SOSConstraint, active=True, descend_into=True)
-                , instance.component_data_objects(Constraint, active=True, descend_into=True))):
-            if _first_stage_only(constr_data, nonant_ids):
-                _del_con(constr_data)
-
-        # creates the sub map to remove first stage variables from objective expression
-        complicating_vars_map = pyo.ComponentMap()
-        subproblem_to_master_vars_map = pyo.ComponentMap()
-
-        # creates the complicating var map that connects the first stage variables in the sub problem to those in
-        # the master problem -- also set the bounds on the subproblem master vars to be none for better cuts
-        for var, mvar in zip(nonant_list, self.master_vars):
-            if var.name not in mvar.name: # mvar.name may be part of a bundle
-                raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
-            complicating_vars_map[mvar] = var
-            subproblem_to_master_vars_map[var] = mvar 
-
-            var.setlb(None)
-            var.setub(None)
-
-        # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
         # pulls the scenario objective expression, removes the first stage variables, and sets the new objective
         obj = find_active_objective(instance)
@@ -431,7 +421,7 @@ class LShapedMethod(spbase.SPBase):
         ## like the first-stage bits of the objective
         constant = repn.constant 
 
-        ## only keep the first stage variables in the objective
+        ## only keep the second stage variables in the objective
         for coef, var in zip(repn.linear_coefs, repn.linear_vars):
             id_var = id(var)
             if id_var not in nonant_ids:
@@ -460,15 +450,67 @@ class LShapedMethod(spbase.SPBase):
 
         instance.del_component(obj)
 
-        # set master objective function
+        # set subproblem objective function
         instance.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
+
+        ## need to do this here for validity if computing the eta bound
+        if self.relax_master:
+            # relaxes any integrality constraints for the subproblem
+            RelaxIntegrality().apply_to(instance)
+
+        if self.compute_eta_bound:
+            opt = pyo.SolverFactory(self.options["sp_solver"])
+            if self.options["sp_solver_options"]:
+                for k,v in self.options["sp_solver_options"].items():
+                    opt.options[k] = v
+
+            if sputils.is_persistent(opt):
+                opt.set_instance(instance)
+                res = opt.solve(tee=False)
+            else:
+                opt.solve(instance, tee=False)
+
+            eta_lb = res.Problem[0].Lower_bound
+
+            self.valid_eta_lb[scenario_name] = eta_lb
+
+        # if not done above
+        if not self.relax_master:
+            # relaxes any integrality constraints for the subproblem
+            RelaxIntegrality().apply_to(instance)
+
+        # iterates through constraints and removes first stage constraints from the model
+        # the id dict is used to improve the speed of identifying the stage each variables belongs to
+        for constr_data in list(itertools.chain(
+                instance.component_data_objects(SOSConstraint, active=True, descend_into=True)
+                , instance.component_data_objects(Constraint, active=True, descend_into=True))):
+            if _first_stage_only(constr_data, nonant_ids):
+                _del_con(constr_data)
+
+        # creates the sub map to remove first stage variables from objective expression
+        complicating_vars_map = pyo.ComponentMap()
+        subproblem_to_master_vars_map = pyo.ComponentMap()
+
+        # creates the complicating var map that connects the first stage variables in the sub problem to those in
+        # the master problem -- also set the bounds on the subproblem master vars to be none for better cuts
+        for var, mvar in zip(nonant_list, self.master_vars):
+            if var.name not in mvar.name: # mvar.name may be part of a bundle
+                raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
+            complicating_vars_map[mvar] = var
+            subproblem_to_master_vars_map[var] = mvar 
+
+            var.setlb(None)
+            var.setub(None)
+
+        # this is for interefacing with PH code
+        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
         if self.store_subproblems:
             self.subproblems[scenario_name] = instance
 
         return instance, complicating_vars_map
 
-    def lshaped_algorithm(self, converger=None, spcomm=None):
+    def lshaped_algorithm(self, converger=None):
         """ function that runs the lshaped.py algorithm
         """
         if converger:
@@ -528,6 +570,10 @@ class LShapedMethod(spbase.SPBase):
                 )
             else:
                 self.attach_nonant_var_map(scenario_name)
+
+        # set the eta bounds if computed
+        # by self.create_subproblem
+        self.set_eta_bounds()
 
         if self.rank == self.rank0:
             opt = pyo.SolverFactory(master_solver)
@@ -592,10 +638,9 @@ class LShapedMethod(spbase.SPBase):
             # The hub object takes precedence over the converger
             # We'll send the nonants now, and check for a for
             # convergence
-            if spcomm:
-                spcomm.sync_with_spokes(send_nonants=True)
-                converged = spcomm.is_converged()
-                if converged:
+            if self.spcomm:
+                self.spcomm.sync(send_nonants=True)
+                if self.spcomm.is_converged():
                     break
 
             t2 = time.time()
@@ -620,10 +665,9 @@ class LShapedMethod(spbase.SPBase):
                 if len(cuts_added) == 0:
                     break
             # The hub object takes precedence over the converger
-            if spcomm:
-                spcomm.sync_with_spokes(send_nonants=False)
-                converged = spcomm.is_converged()
-                if converged:
+            if self.spcomm:
+                self.spcomm.sync(send_nonants=False)
+                if self.spcomm.is_converged():
                     break
             if converger:
                 converger.convergence_value()

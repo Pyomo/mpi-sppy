@@ -92,6 +92,27 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                                                  master_eta=self.opt.master.eta[scen],
                                                  subproblem_solver=self.opt.options["sp_solver"],
                                                  subproblem_solver_options=self.opt.options["sp_solver_options"])
+            ## this can take some time, so return early if we get a kill signal
+            if self.got_kill_signal():
+                return
+
+        self.opt.set_eta_bounds()
+        self._eta_lb_array = np.fromiter(
+                (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
+                dtype='d', count=len(self.opt.all_scenario_names))
+        self.make_eta_lb_cut()
+
+    def make_eta_lb_cut(self):
+        ## we'll be storing a matrix as an array
+        ## row_len is the length of each row
+        row_len = 1+1+len(self.master_nonants)
+        all_coefs = np.zeros( self.nscen*row_len+1, dtype='d')
+        for idx, k in enumerate(self.opt.all_scenario_names):
+            ## cut_array -- [ constant, eta_coef, *nonant_coefs ]
+            ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
+            all_coefs[row_len*idx] = self._eta_lb_array[idx]
+            all_coefs[row_len*idx+1] = -1
+        self.spoke_to_hub(all_coefs)
 
     def make_cut(self):
 
@@ -122,6 +143,12 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # Allreduce the etas to take the minimum
         global_eta_vals = np.empty(self.nscen, dtype='d')
         self.intracomm.Allreduce(min_eta_vals, global_eta_vals, op=MPI.MIN)
+
+        eta_lb_viol = (global_eta_vals + np.full_like(global_eta_vals, 1e-3) \
+                        < self._eta_lb_array).any()
+        if eta_lb_viol:
+            self.make_eta_lb_cut()
+            return
 
         # set the master etas to be the minimum from every scenario
         master_etas = opt.master.eta

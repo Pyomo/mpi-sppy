@@ -310,7 +310,7 @@ class PHHub(Hub):
                 "will not cause the hub to terminate"
             )
 
-    def sync_with_spokes(self):
+    def sync(self):
         """
             Manages communication with Spokes
         """
@@ -322,6 +322,9 @@ class PHHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+
+    def sync_with_spokes(self):
+        self.sync()
 
     def is_converged(self):
         if not (self.has_innerbound_spokes and self.has_outerbound_spokes):
@@ -359,8 +362,8 @@ class PHHub(Hub):
         return abs_gap_satisfied or rel_gap_satisfied
 
     def main(self):
-        """ Hub notifies its SPBase child about itself """
-        self.opt.ph_main(spcomm=self)
+        """ SPComm gets attached in self.__init__ """
+        self.opt.ph_main()
 
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
@@ -444,7 +447,7 @@ class LShapedHub(Hub):
         ## so that cannot be relied upon
         self.print_init = True
 
-    def sync_with_spokes(self, send_nonants):
+    def sync(self, send_nonants=True):
         """ 
         Manages communication with Bound Spokes
         """
@@ -491,7 +494,8 @@ class LShapedHub(Hub):
         return abs_gap_satisfied or rel_gap_satisfied
 
     def main(self):
-        self.opt.lshaped_algorithm(spcomm=self)
+        """ SPComm gets attached in self.__init__ """ 
+        self.opt.lshaped_algorithm()
 
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
@@ -560,6 +564,6 @@ class APHHub(PHHub):
 
 
     def main(self):
-        """ Hub notifies its SPBase child about itself """
+        """ SPComm gets attached by self.__init___; holding APH harmless """
         self.opt.APH_main(spcomm=self)
 

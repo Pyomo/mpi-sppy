@@ -49,7 +49,7 @@ def main():
         "sp_solver": args.solver_name,
         "sp_solver_options" : spo,
         "master_solver_options" : spo,
-        "valid_eta_lb": {n:0. for n in all_scenario_names},
+        #"valid_eta_lb": {n:0. for n in all_scenario_names},
         "max_iter": args.max_iterations,
         "verbose": False,
         "master_scenarios":[all_scenario_names[len(all_scenario_names)//2]],

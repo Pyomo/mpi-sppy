@@ -1,5 +1,5 @@
 # This software is distributed under the 3-clause BSD License.
-from math import inf
+from math import inf, isfinite
 from pyomo.core.expr.numeric_expr import LinearExpression
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
@@ -21,8 +21,9 @@ class CrossScenarioHub(PHHub):
         # number of nonant variables
         self.nonant_len = len(arb_scen._nonant_indexes)
 
-        # save the best bound so far
+        # save the best bounds so far
         self.best_inner_bound = inf
+        self.best_outer_bound = -inf
 
     def initialize_spoke_indices(self):
         super().initialize_spoke_indices()
@@ -30,8 +31,8 @@ class CrossScenarioHub(PHHub):
             if spoke["spoke_class"] == CrossScenarioCutSpoke:
                 self.cut_gen_spoke_index = i + 1
 
-    def sync_with_spokes(self):
-        super().sync_with_spokes()
+    def sync(self):
+        super().sync()
         self.send_to_cross_cuts()
         self.get_from_cross_cuts()
 
@@ -129,15 +130,19 @@ class CrossScenarioHub(PHHub):
         # NOTE: the LShaped code negates the objective, so
         #       we do the same here for consistency
         ib = self.BestInnerBound
+        ob = self.BestOuterBound
         if not opt.is_minimizing:
             ib = -ib
-        add_cut = (ib < self.best_inner_bound)
+            ob = -ob
+        add_cut = (isfinite(ib) or isfinite(ob)) and \
+                ((ib < self.best_inner_bound) or (ob > self.best_outer_bound))
         if add_cut:
             self.best_inner_bound = ib
+            self.best_outer_bound = ob
             for sn,s in opt.local_subproblems.items():
                 persistent_solver = sputils.is_persistent(s._solver_plugin)
                 prior_outer_iter = list(s._ib_constr.keys())
-                s._ib_constr[outer_iter] = (None, s._EF_obj, ib)
+                s._ib_constr[outer_iter] = (ob, s._EF_obj, ib)
                 if persistent_solver:
                     s._solver_plugin.add_constraint(s._ib_constr[outer_iter])
                 # remove other ib constraints (we only need the tightest)

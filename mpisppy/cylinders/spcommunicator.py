@@ -35,11 +35,25 @@ class SPCommunicator:
         self.inst_time = time.time() # For diagnostics
         self.options = options
 
+        # attach the SPCommunicator to
+        # the SPBase object
+        self.opt.spcomm = self
+
     @abc.abstractmethod
     def main(self):
         """ Every hub/spoke must have a main function
         """
         pass
+
+    def sync(self):
+        """ Every hub/spoke may have a sync function
+        """
+        pass
+
+    def is_converged(self):
+        """ Every hub/spoke may have a is_converged function
+        """
+        return False
 
     def free_windows(self):
         """

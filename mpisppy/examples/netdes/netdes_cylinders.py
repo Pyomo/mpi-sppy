@@ -7,6 +7,7 @@ import mpisppy.examples.netdes.netdes as netdes
 from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.examples import baseparsers
 from mpisppy.examples import vanilla
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 
 def _parse_args():
@@ -22,6 +23,7 @@ def _parse_args():
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.slamup_args(parser)
+    parser = baseparsers.cross_scenario_cuts_args(parser)
     args = parser.parse_args()
     return args
 
@@ -40,6 +42,7 @@ def main():
     with_xhatshuffle = args.with_xhatshuffle
     with_lagrangian = args.with_lagrangian
     with_slamup = args.with_slamup
+    with_cross_scenario_cuts = args.with_cross_scenario_cuts
 
     if args.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
@@ -52,11 +55,19 @@ def main():
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
+    if with_cross_scenario_cuts:
+        ph_ext = CrossScenarioExtension
+    else:
+        ph_ext = None
+
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
                               cb_data=cb_data,
-                              ph_extensions=None,
+                              ph_extensions=ph_ext,
                               rho_setter = None)
+
+    if with_cross_scenario_cuts:
+        hub_dict["opt_kwargs"]["PHoptions"]["cross_scen_options"] = {"check_bound_improve_iterations" : 4}
 
     # FWPH spoke
     if with_fwph:
@@ -80,6 +91,10 @@ def main():
     if with_slamup:
         slamup_spoke = vanilla.slamup_spoke(*beans, cb_data=cb_data)
 
+    # cross scenario cut spoke
+    if with_cross_scenario_cuts:
+        cross_scenario_cut_spoke = vanilla.cross_scenario_cut_spoke(*beans, cb_data=cb_data)
+
     list_of_spoke_dict = list()
     if with_fwph:
         list_of_spoke_dict.append(fw_spoke)
@@ -91,6 +106,8 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if with_slamup:
         list_of_spoke_dict.append(slamup_spoke)
+    if with_cross_scenario_cuts:
+        list_of_spoke_dict.append(cross_scenario_cut_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 
