@@ -12,19 +12,17 @@ from math import log10, floor
 import pyomo.environ as pyo
 import mpisppy.opt.aph
 import mpisppy.phbase
-import mpisppy.utils.sputils as sputils
-import mpisppy.examples.sizes.models.ReferenceModel as ref
 from mpisppy.examples.sizes.sizes import scenario_creator, \
                                        scenario_denouement, \
                                        _rho_setter
 
-__version__ = 0.3
+__version__ = 0.31
 
 import mpi4py.MPI as mpi
 fullcomm = mpi.COMM_WORLD
 rank_global = fullcomm.Get_rank()
 
-solvers = ["gurobi", "cplex"]
+solvers = ["xpress", "gurobi", "cplex"]
 
 for solvername in solvers:
     solver_available = pyo.SolverFactory(solvername).available()
