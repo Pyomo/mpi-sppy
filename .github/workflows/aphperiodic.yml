@@ -1,6 +1,6 @@
 # periodic tests of aph
 
-name: weekly mpi-sppy tests
+name: periodic aph tests
 
 on:
   schedule:

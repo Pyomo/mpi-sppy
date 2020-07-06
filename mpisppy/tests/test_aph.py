@@ -7,6 +7,7 @@ IMPORTANT:
 version matter a lot, so we often just do smoke tests.
 """
 
+import sys
 import pyutilib.th as unittest
 from math import log10, floor
 import pyomo.environ as pyo
@@ -16,21 +17,19 @@ from mpisppy.examples.sizes.sizes import scenario_creator, \
                                        scenario_denouement, \
                                        _rho_setter
 
+solvers = ["xpress_persistent", "gurobi_persistent", "cplex"]
 __version__ = 0.31
+
+for solvername in solvers:
+    solver_available = pyo.SolverFactory(solvername).available(exception_flag=False)
+    if solver_available:
+        break
+    
+__version__ = 0.32
 
 import mpi4py.MPI as mpi
 fullcomm = mpi.COMM_WORLD
 rank_global = fullcomm.Get_rank()
-
-solvers = ["xpress", "gurobi", "cplex"]
-
-for solvername in solvers:
-    solver_available = pyo.SolverFactory(solvername).available()
-    if solver_available:
-        break
-
-persistentsolvername = solvername+"_persistent"
-persistent_available = pyo.SolverFactory(persistentsolvername).available()
 
 #*****************************************************************************
 class Test_aph_sizes(unittest.TestCase):
