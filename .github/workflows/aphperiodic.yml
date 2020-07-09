@@ -24,7 +24,7 @@ jobs:
           python setup.py develop
 
       - name: run tests
-        timeout-minutes: 30
+        timeout-minutes: 100
         run: |
           cd mpisppy/tests
           # envall does nothing
