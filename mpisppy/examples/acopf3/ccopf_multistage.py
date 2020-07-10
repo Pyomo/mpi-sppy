@@ -7,10 +7,7 @@ from egret.data.model_data import ModelData
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.opt.ph
 import mpisppy.examples.acopf3.ACtree as etree
-import mpisppy.opt.aph
-import mpisppy.examples.acopf3.rho_setter as rho_setter
 
 import os
 import sys
@@ -66,7 +63,7 @@ def pysp2_callback(scenario_name,
                     node_names=None,
                     cb_data=None):
     """
-    mpisppy signature for scenario creation. Basically, just call the PySP1 fct.
+    mpisppy signature for scenario creation.
     Then find a starting solution for the scenario if solver option is not None.
     Note that stage numbers are one-based.
 
@@ -88,10 +85,7 @@ def pysp2_callback(scenario_name,
 
     etree = cb_data["etree"]
     solver = cb_data["solver"]
-    """
-    inst = pysp_instance_creation_callback(scenario_tree_model = etree,
-                                           scenario_name = scenario_name)
-    """
+
     def lines_up_and_down(stage_md_dict, enode):
         # local routine to configure the lines in stage_md_dict for the scenario
         LinesDown = []
@@ -279,7 +273,7 @@ if __name__ == "__main__":
                            format(nscen, n_proc))
     cb_data = dict()
     cb_data["solver"] = solver # can be None
-    cb_data["tee"] = False # for inialization solve
+    cb_data["tee"] = False # for inialization solves
     cb_data["epath"] = egret_path_to_data
     md_dict = _md_dict(cb_data)
 
@@ -331,129 +325,5 @@ if __name__ == "__main__":
     print("EF objective value for case {}={}".\
           format(pyo.value(casename), pyo.value(ef.EF_Obj)))
 
-    quit()
 
 
-    # Junk from here down.... as of April 27, 2020
-    # create an arbitrary xhat for xhatspecific to use
-    xhat_dict = {"ROOT": "Scenario_1"}
-    for i in range(branching_factors[0]):
-        xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(1 + i*branching_factors[1])
-    
-    doef = False
-    if doef:
-        ''' solve the EF '''
-    start_time = dt.datetime.now()
-    
-    ''' "solve" using PH '''
-    print ("starting ph/aph work")
-    all_nodenames = cb_data["etree"].All_Nonleaf_Nodenames()
-    
-    PHoptions = dict()
-    PHoptions["solvername"] = "ipopt"
-    PHoptions["PHIterLimit"] = PHIterLimit
-    PHoptions["defaultPHrho"] = 1
-    PHoptions["convthresh"] = 0.001
-    PHoptions["subsolvedirectives"] = None
-    PHoptions["verbose"] = False
-    PHoptions["display_timing"] = True
-    PHoptions["display_progress"] = True
-    PHoptions["iter0_solver_options"] = None
-    PHoptions["iterk_solver_options"] = None
-    PHoptions["branching_factors"] = branching_factors
-    """
-    PHoptions["xhat_looper_options"] =  {"xhat_solver_options":\
-                                         PHoptions["iterk_solver_options"],
-                                         "scen_limit": 3,
-                                         "dump_prefix": "delme",
-                                         "csvname": "looper.csv"}
-    """
-    xhat_solver_options = dict()
-    xhat_solver_options ["Tee"] = True # special for Xhat
-    PHoptions["xhat_specific_options"] = {"xhat_solver_options":
-                                          xhat_solver_options,
-                                          "xhat_scenario_dict": xhat_dict,
-                                          "csvname": "specific.csv"}
-    # try to do something interesting for bundles per rank
-    if scenperbun > 0:
-        PHoptions["bundles_per_rank"] = int((nscen / n_proc) / scenperbun)
-    if rank == 0:
-        appfile = "acopf.app"
-        if not os.path.isfile(appfile):
-            with open(appfile, "w") as f:
-                f.write("datetime, hostname, BF1, BF2, seed, solver, n_proc")
-                f.write(", bunperank, PHIterLimit, convthresh")
-                f.write(", PH_xhatobj, trivialbnd")
-                f.write(", PH_lastiter, PH_wallclock, aph_frac_needed")
-                f.write(", APH_xhatobj, trivialbnd")
-                f.write(", APH_lastiter, APH_wallclock")
-        if "bundles_per_rank" in PHoptions:
-            nbunstr = str(PHoptions["bundles_per_rank"])
-        else:
-            nbunstr = "0"
-        oline = "\n"+ str(start_time)+","+socket.gethostname()
-        oline += ","+str(branching_factors[0])+","+str(branching_factors[1])
-        oline += ", "+str(seed) + ", "+str(PHoptions["solvername"])
-        oline += ", "+str(n_proc) + ", "+ nbunstr
-        oline += ", "+str(PHoptions["PHIterLimit"])
-        oline += ", "+str(PHoptions["convthresh"])
-
-        with open(appfile, "a") as f:
-            f.write(oline)
-        print(oline)
-
-    doph = True
-    if doph:
-        ph = mpisppy.opt.ph.PH(PHoptions,
-                                  scenario_names,
-                                  pysp2_callback,
-                                  scenario_denouement,
-                                  all_nodenames=all_nodenames)
-
-        conv, obj, tbound = ph.ph_main(rho_setter=rho_setter.ph_rhosetter_callback, 
-                                       PH_extensions = XhatSpecific,
-                                       cb_data = cb_data)
-        phxhat = str(ph._xhat_specific_obj_final)
-        phLastIter = str(ph._PHIter)
-        if rank == 0:
-             print ("Trival bound =",tbound)
-    else:
-        phxhat = "N/A"
-        phLastIter = "N/A"
-        tbound = "N/A"
-
-    ###ph._disable_W_and_prox()
-    ###e_obj = ph.Eobjective()
-    if rank == 0:
-         ###print ("unweighted e_obj={}".format(e_obj))
-         print ("x_hat obj={}".format(phxhat))
-    ph_end_time = dt.datetime.now()
-    if rank == 0:
-        with open(appfile, "a") as f:
-            f.write(", "+phxhat
-                    +", "+str(tbound)+", "+phLastIter)
-            f.write(", "+str((ph_end_time - start_time).total_seconds()))
-
-    """ aph """
-    print ("staring aph work")
-    PHoptions["async_frac_needed"] = 0.5
-    PHoptions["async_sleep_secs"] = 0.5
-    if rank == 0:
-        with open(appfile, "a") as f:
-            f.write(", "+str(PHoptions["async_frac_needed"]))
-    aph_start_time = dt.datetime.now()
-    aph = mpisppy.opt.aph.APH(PHoptions,
-                        scenario_names,
-                        pysp2_callback,
-                        scenario_denouement,
-                        all_nodenames=all_nodenames)
-    
-    conv, obj, tbound = aph.APH_main(rho_setter=None, 
-                                     PH_extensions = XhatSpecific,
-                                     cb_data = cb_data)
-    aph_end_time = dt.datetime.now()
-    if rank == 0:
-        with open(appfile, "a") as f:
-            f.write(", "+str(aph._xhat_specific_obj_final)\
-                    +", "+str(tbound)+", "+str(aph._PHIter))
-            f.write(", "+str((aph_end_time - aph_start_time).total_seconds()))
