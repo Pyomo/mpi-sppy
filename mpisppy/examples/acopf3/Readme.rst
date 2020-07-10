@@ -7,24 +7,31 @@ egret/thirdparty/get_pglib_opf.py and then you still
 might have to make sure the directories match.)
 
 
-Multi-stage
------------
+EF
+---
 
-- To get the EF and PH, use ``python ccopf_multistage.py bf1 bf2``
+- To get the EF use ``python ccopf_multistage.py bf1 bf2 iters scenperbund``
   where bf1 and bf2 are branching factors (e.g. 2 3 for a small test).
+Use 1 and 0 for iters and bundles
+for a small test use
+python ccopf_multistage.py bf1 bf2 2 3 1 0
 
   Edit the line in the py file that assigns `casename` to change the example that is run.
+
+PH
+--
   
 - To run with PH and a fixed scenario set for the upper bound use
-  ``mpiexec -np 2 python -m mpi4py ccopf2wood.py bf1 bf2``
+  ``mpiexec -np 2 python -m mpi4py ccopf2wood.py bf1 bf2 iters scenperbund``
   e.g.,
-  ``mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3``
+  ``mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3 2 0``
 
-The number of processors is restricted by the branching factors. See
-the `touse` documentation for more details; basically, multiples of the
+The number of processors is restricted by the branching factors; basically, multiples of the
 first branching factor.
 
   Edit the line in the py file that assigns `casename` to change the example that is run.
+
+
   
 To change other parameters, change these lines in ccopf2wood.py:
     # start options
