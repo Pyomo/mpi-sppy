@@ -32,9 +32,14 @@ class Spoke(SPCommunicator):
         self.remote_length = remote_length
         
         # Make the windows of the appropriate buffer sizes
-        # TODO: Spoke should not need to know how many other spokes there are.
+        # To do?: Spoke should not need to know how many other spokes there are.
         # Just call a single _make_window()? Do you need to create empty
         # windows?
+        # ANSWER (dlw July 2020): Since the windows have zero length and since
+        # the number of spokes is not expected to be large, it is probably OK.
+        # The (minor) benefit is that free_windows does not need to know if it
+        # was called by a hub or a spoke. If we ever move to dynamic spoke
+        # creation, then this needs to be reimagined.
         self.windows = [None for _ in range(self.n_spokes)]
         self.buffers = [None for _ in range(self.n_spokes)]
         for i in range(self.n_spokes):
