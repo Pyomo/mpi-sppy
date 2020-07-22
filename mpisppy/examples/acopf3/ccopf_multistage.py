@@ -7,7 +7,7 @@ from egret.data.model_data import ModelData
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.examples.acopf3.ACtree as etree
+import mpisppy.examples.acopf3.ACtree as ET
 
 import os
 import sys
@@ -32,7 +32,7 @@ def FixFast(minutes):
 def FixNever(minutes):
     return False
 
-def FixGaussian(minutes, mu, sigma):
+def FixGaussian(minutes, acstream, mu, sigma):
     """
     Return True if the line has been repaired.
     Args:
@@ -41,7 +41,7 @@ def FixGaussian(minutes, mu, sigma):
     """
     # spell it out...
     Z = (minutes-mu)/sigma
-    u = np.random.rand()
+    u = acstream.rand()
     retval = u < scipy.norm.cdf(Z)
     return retval
 
@@ -70,7 +70,7 @@ def pysp2_callback(scenario_name,
     Args:
         scenario_name (str): put the scenario number on the end 
         node_names (int): not used
-        cb_data: (dict) "etree", "solver", "epath", "tee"
+        cb_data: (dict) "etree", "solver", "epath", "tee", "acstream"
 
     Returns:
         scenario (pyo.ConcreteModel): the scenario instance
@@ -85,6 +85,10 @@ def pysp2_callback(scenario_name,
 
     etree = cb_data["etree"]
     solver = cb_data["solver"]
+    acstream = cb_data["acstream"]
+
+    # seed each scenario every time to avoid troubles
+    acstream.seed(etree.seed + scen_num)
 
     def lines_up_and_down(stage_md_dict, enode):
         # local routine to configure the lines in stage_md_dict for the scenario
@@ -291,14 +295,16 @@ if __name__ == "__main__":
     for this_branch in md_dict.elements("branch"):
         lines.append(this_branch[0])
     
-    cb_data["etree"] = etree.ACTree(number_of_stages,
-                                  branching_factors,
-                                  seed,
-                                  a_line_fails_prob,
-                                  stage_duration_minutes,
-                                  repair_fct,
-                                  lines)
+    cb_data["etree"] = ET.ACTree(number_of_stages,
+                                 branching_factors,
+                                 seed,
+                                 acstream,
+                                 a_line_fails_prob,
+                                 stage_duration_minutes,
+                                 repair_fct,
+                                 lines)
     cb_data["epath"] = egret_path_to_data
+    cb_data["actree"] = actree
 
     creator_options = {"cb_data": cb_data}
     scenario_names=["Scenario_"+str(i)\
@@ -324,6 +330,3 @@ if __name__ == "__main__":
             print ("   obj={}".format(pyo.value(smodel.objective)))
     print("EF objective value for case {}={}".\
           format(pyo.value(casename), pyo.value(ef.EF_Obj)))
-
-
-

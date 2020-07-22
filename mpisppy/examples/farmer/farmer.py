@@ -19,6 +19,9 @@ import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 
+# Use this random stream:
+farmerstream = np.random.RandomState()
+
 def scenario_creator(scenario_name,
                     node_names=None,
                     cb_data=None):
@@ -38,7 +41,9 @@ def scenario_creator(scenario_name,
 
     # The RNG is seeded with the scenario number so that it is
     # reproducible when used with multiple threads.
-    np.random.seed(scennum)
+    # NOTE: if you want to do replicates, you will need to pass a seed
+    # in cb_data then use seed+scennum as the seed argument.
+    farmerstream.seed(scennum)
 
     # Check for integer/continuous farmer (specified via cb_data)
     if (cb_data and 'use_integer' in cb_data):
@@ -153,7 +158,7 @@ def pysp_instance_creation_callback(scenario_name, node_names,
         # yield as in "crop yield"
         crop_base_name = cropname.rstrip("0123456789")
         if scengroupnum != 0:
-            return Yield[scenario_base_name][crop_base_name] + np.random.rand()
+            return Yield[scenario_base_name][crop_base_name]+farmerstream.rand()
         else:
             return Yield[scenario_base_name][crop_base_name]
 

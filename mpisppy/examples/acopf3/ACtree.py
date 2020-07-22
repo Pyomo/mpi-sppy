@@ -29,12 +29,13 @@ class ACTree():
         NumStages (int >= 2) Number of stages
         BFs (list of NumStages ints) Branching factor at each stage
         seed (int) the psuedo-random number seed
+        acstream (np.random.RandomState) the random number stream to use
         FailProb (float) prob for each line to fail
         StageDurations (list of Numstages ints) number of minutes per stage
         Repairer (function with argument t in minutes) returns True for repair
         LineList (list of int) All lines in the electric grid
     """
-    def __init__(self, NumStages, BFs, seed, FailProb,
+    def __init__(self, NumStages, BFs, seed, acstream, FailProb,
                  StageDurations, Repairer, LineList):
         self.NumStages = NumStages
         self.BFs = BFs
@@ -44,14 +45,14 @@ class ACTree():
         self.Repairer = Repairer
         self.LineList = LineList
 
-        np.random.seed(seed)
         self.numscens = 1
         for s in range(self.NumStages-1):
             self.numscens *= self.BFs[s]
         
         # now make the tree by making the root
         self.rootnode = TreeNode(None, self,
-                                 [i+1 for i in range(self.numscens)], "ROOT", 1.0)
+                                 [i+1 for i in range(self.numscens)],
+                                 "ROOT", 1.0, acstream)
 
     def Nodes_for_Scenario(self, scen_num):
         """
@@ -100,7 +101,7 @@ class TreeNode():
         kids (list of nodes) the children of this node
 
     """
-    def __init__(self, Parent, TreeInfo, ScenarioList, Name, CondProb):
+    def __init__(self, Parent, TreeInfo, ScenarioList, Name, CondProb, acstream):
 
         self.sn = 1 # to attach serial numbers where needed
         self.CondProb = CondProb
@@ -131,7 +132,7 @@ class TreeNode():
 
             # bring lines down?
             for line in self.LinesUp:
-                if np.random.rand() < TreeInfo.FailProb:
+                if acstream.rand() < TreeInfo.FailProb:
                     self.LinesUp.remove(line)
                     self.FailedLines.append\
                         ((line, TreeInfo.StageDurations[self.stage-1]))
@@ -154,7 +155,8 @@ class TreeNode():
                 newname = self.Name + "_" + str(b)
                 if self.stage < TreeInfo.NumStages:
                     prevbf = TreeInfo.BFs[self.stage-2]
-                    self.kids.append(TreeNode(self, TreeInfo, scenlist, newname, 1/prevbf))
+                    self.kids.append(TreeNode(self, TreeInfo, scenlist,
+                                              newname, 1/prevbf, acstream))
                     
     def pprint(self):
         print("Node Name={}, Stage={}".format(self.Name, self.stage))
@@ -165,7 +167,11 @@ class TreeNode():
         print("   FailedLines={}".format(self.FailedLines))
 
 if __name__ == "__main__":
-    testtree = ACTree(3, [3, 2], 1134, 0.2, [5,15,30], FixFast, [0,1,2,3,4,5])
+
+    acstream = np.random.RandomState()
+    
+    testtree = ACTree(3, [3, 2], 1134, acstream,
+                      0.2, [5,15,30], FixFast, [0,1,2,3,4,5])
     for sn in range(1,testtree.numscens+1):
         print ("nodes in scenario {}".format(sn))
         for node in testtree.Nodes_for_Scenario(sn):

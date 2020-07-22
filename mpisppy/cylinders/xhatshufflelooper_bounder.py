@@ -79,6 +79,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         ## option drive this? (could be dangerous)
         self.random_seed = 42
+        # Have a separate stream for shuffling
+        self.random_stream = random.Random()
 
 
     def try_scenario(self, scenario):
@@ -114,10 +116,11 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         self.ib = inf if self.is_minimizing else -inf
 
         # give all ranks the same seed
-        random.seed(self.random_seed)
+        self.random_stream.seed(self.random_seed)
         # shuffle the scenarios (i.e., sample without replacement)
-        shuffled_scenarios = random.sample(self.opt.all_scenario_names,
-                                            len(self.opt.all_scenario_names))
+        shuffled_scenarios = self.random_stream.sample(
+            self.opt.all_scenario_names,
+            len(self.opt.all_scenario_names))
         scenario_cycler = ScenarioCycler(shuffled_scenarios)
 
         def _vb(msg): 

@@ -3,6 +3,7 @@
 # mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3
 # (see the first lines of main() to change instances)
 import os
+import numpy as np
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
@@ -83,16 +84,19 @@ def main():
     lines = list()
     for this_branch in md_dict.elements("branch"):
         lines.append(this_branch[0])
-    
+
+    acstream = np.random.RandomState()
+        
     cb_data["etree"] = etree.ACTree(number_of_stages,
-                                  branching_factors,
-                                  seed,
-                                  a_line_fails_prob,
-                                  stage_duration_minutes,
-                                  repair_fct,
-                                  lines)
+                                    branching_factors,
+                                    seed,
+                                    acstream,
+                                    a_line_fails_prob,
+                                    stage_duration_minutes,
+                                    repair_fct,
+                                    lines)
     cb_data["epath"] = "/thirdparty/pglib-opf-master/pglib_opf_case3_lmbd.m"
-    
+    cb_data["acstream"] = acstream
 
     all_scenario_names=["Scenario_"+str(i)\
                         for i in range(1,len(cb_data["etree"].\

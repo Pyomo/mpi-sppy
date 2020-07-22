@@ -1082,6 +1082,7 @@ class PHBase(mpisppy.spbase.SPBase):
         else:
             for sname, s in self.local_scenarios.items():
                 self.local_subproblems[sname] = s
+                self.local_subproblems[sname].scen_list = [sname]
 
     def _create_solvers(self):
         for sname, s in self.local_subproblems.items(): # solver creation
