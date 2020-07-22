@@ -320,7 +320,7 @@ class FWPH(mpisppy.phbase.PHBase):
             for key in mip.y_indices:
                 coef_list.append(mip.leaf_vars[key].value)
                 constr_list.append(qp.eqy[key])
-            solver.add_column(new_var, 0, constr_list, coef_list)
+            solver.add_column(qp, new_var, 0, constr_list, coef_list)
             return
 
         # Add new variable and update \sum a_i = 1 constraint
