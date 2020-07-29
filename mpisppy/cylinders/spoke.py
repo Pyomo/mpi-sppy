@@ -104,7 +104,8 @@ class _BoundSpoke(Spoke):
     """
     def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
         super().__init__(spbase_object, fullcomm, intercomm, intracomm)
-        if 'trace_prefix' in spbase_object.options and \
+        if self.rank_intra == 0 and \
+                'trace_prefix' in spbase_object.options and \
                 spbase_object.options['trace_prefix'] is not None:
             trace_prefix = spbase_object.options['trace_prefix']
 
@@ -145,7 +146,7 @@ class _BoundSpoke(Spoke):
         return kill
 
     def _append_trace(self, value):
-        if self.trace_filen is None:
+        if self.rank_intra != 0 or self.trace_filen is None:
             return
         with open(self.trace_filen, 'a') as f:
             f.write(f"{time.time()-self.start_time},{value}\n")

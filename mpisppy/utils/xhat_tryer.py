@@ -113,7 +113,7 @@ class XhatTryer(PHBase):
                  s._PySP_feas_indicator = False
 
                  if gripe:
-                     print ("Solve failed for scenario", s.name)
+                     print ("xhat Solve failed for scenario", s.name)
                      if not solve_err:
                          print ("status=", results.solver.status)
                          print ("TerminationCondition=",

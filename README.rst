@@ -7,6 +7,7 @@ MPI
 ^^^
 
 A recent version of MPI and a compatible version of mpi4py are needed.
+
 Here are two methods that seem to work well for installation.
 
 #. Install OpenMPI and mpi4py using conda.
