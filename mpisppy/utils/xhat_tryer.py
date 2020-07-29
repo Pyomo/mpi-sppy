@@ -81,56 +81,13 @@ class XhatTryer(PHBase):
         for k,s in s_source.items():
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.rank))
 
-            ## no need to recompute objective
-            solve_start_time = time.time()
-            if (solver_options):
-                _vb("Using sub-problem solver options="
-                    + str(solver_options))
-                for option_key,option_value in solver_options.items():
-                    s._solver_plugin.options[option_key] = option_value
-
-            solve_keyword_args = dict()
-            if self.rank == self.rank0:
-                if tee is not None and tee is True:
-                    solve_keyword_args["tee"] = True
-            if (sputils.is_persistent(s._solver_plugin)):
-                solve_keyword_args["save_results"] = False
-            elif disable_pyomo_signal_handling:
-                solve_keyword_args["use_signal_handling"] = False
-
-            try:
-                results = s._solver_plugin.solve(s,
-                                                 **solve_keyword_args,
-                                                 load_solutions=False)
-                solve_err = False
-            except:
-                solve_err = True
-                
-            pyomo_solve_time = time.time() - solve_start_time
-            if solve_err or (results.solver.status != SolverStatus.ok) \
-                  or (results.solver.termination_condition \
-                        != TerminationCondition.optimal):
-                 s._PySP_feas_indicator = False
-
-                 if gripe:
-                     print ("xhat Solve failed for scenario", s.name)
-                     if not solve_err:
-                         print ("status=", results.solver.status)
-                         print ("TerminationCondition=",
-                                results.solver.termination_condition)
-            else:
-                 if sputils.is_persistent(s._solver_plugin):
-                     s._solver_plugin.load_vars()
-                 else:
-                     s.solutions.load_from(results)
-                 s._PySP_lb = results.Problem[0].Lower_bound
-                 s._PySP_feas_indicator = True
-            # TBD: get this ready for IPopt (e.g., check feas_prob every time)
-            # propogate down
-            if hasattr(s,"_PySP_subscen_names"): # must be a bundle
-                for sname in s._PySP_subscen_names:
-                     self.local_scenarios[sname]._PySP_feas_indicator\
-                         = s._PySP_feas_indicator
+            pyomo_solve_time = self.solve_one(solver_options, k, s,
+                                              dtiming=dtiming,
+                                              verbose=verbose,
+                                              tee=tee,
+                                              gripe=gripe,
+                disable_pyomo_signal_handling=disable_pyomo_signal_handling
+            )
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)

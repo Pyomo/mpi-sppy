@@ -860,7 +860,10 @@ class PHBase(mpisppy.spbase.SPBase):
              s._PySP_feas_indicator = False
 
              if gripe:
-                 print ("Solve failed for scenario", s.name)
+                 name = self.__class__.__name__
+                 if self.spcomm:
+                     name = self.spcomm.__class__.__name__
+                 print (f"[{name}] Solve failed for scenario {s.name}")
                  if not solve_err:
                      print ("status=", results.solver.status)
                      print ("TerminationCondition=",
