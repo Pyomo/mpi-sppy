@@ -1235,8 +1235,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         return self.trivial_bound
 
-    def iterk_loop(self,
-                    synchronizer=None):
+    def iterk_loop(self, synchronizer=None):
         """ local to main, really; however, it needs to be called
         directly by the Synchronizer, so main is in three parts (March 2019)
 

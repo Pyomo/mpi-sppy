@@ -40,6 +40,7 @@ class ACTree():
         self.NumStages = NumStages
         self.BFs = BFs
         self.seed = seed
+        acstream.seed(seed)
         self.FailProb = FailProb
         self.StageDurations = StageDurations
         self.Repairer = Repairer
@@ -112,11 +113,11 @@ class TreeNode():
             # Root node
             self.stage = 1
             self.FailedLines = []
-            self.LinesUp = copy.copy(TreeInfo.LineList)
+            self.LinesUp = copy.deepcopy(TreeInfo.LineList)
         else:
             self.stage = Parent.stage+1
-            self.FailedLines = copy.copy(Parent.FailedLines)
-            self.LinesUp = copy.copy(Parent.LinesUp)
+            self.FailedLines = copy.deepcopy(Parent.FailedLines)
+            self.LinesUp = copy.deepcopy(Parent.LinesUp)
             # bring lines up? (mo is minutes out)
             removals = list()
             for ell in range(len(self.FailedLines)):
@@ -170,7 +171,7 @@ if __name__ == "__main__":
 
     acstream = np.random.RandomState()
     
-    testtree = ACTree(3, [3, 2], 1134, acstream,
+    testtree = ACTree(3, [2, 2], 1134, acstream,
                       0.2, [5,15,30], FixFast, [0,1,2,3,4,5])
     for sn in range(1,testtree.numscens+1):
         print ("nodes in scenario {}".format(sn))

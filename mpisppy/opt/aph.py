@@ -41,8 +41,6 @@ logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
 """
 Delete this comment block; dlw May 2019
 - deal with "waiting out" a negative tau
-z- provide dispatch (z not now)
-- add some tests 
 """
 
 """ APH started by DLW, March 2019.
@@ -55,14 +53,6 @@ Note: we deviate from the paper's notation in the use of i and k
 (i is used here as an arbitrary index, usually into the nonants at a node and
 k is often used as the "key" (i.e., scenario name) for the local scenarios)
 """
-
-"""
-cryptic notes from dlw to dlw:
- ? We don't really want to do all "local_scenarios" every time if there 
-is more than one.
-cryptic reply from dlw to dlw (April 2019): Ikke n\aa. Sienere.
-"""
-
 
 class APH(ph_base.PHBase):  # ??????
     """
@@ -165,7 +155,7 @@ class APH(ph_base.PHBase):  # ??????
         Massive side-effects: e.g., update xbar etc.
         """
         # This does unsafe things, so it can only be called when the worker is
-        # in a tight loop in compute_averages that respects the data lock.
+        # in a tight loop that respects the data lock.
 
         verbose = self.PHoptions["verbose"]
         # See if we have enough xbars to proceed (need not be perfect)
@@ -254,7 +244,6 @@ class APH(ph_base.PHBase):  # ??????
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
             for (ndn,i), xvar in s._nonant_indexes.items():
-                ### xvar = node.nonant_vardata_list[i] hideous bug... delete this
                 self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
                     *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
             self.phis[k] *= pyo.value(s.PySP_prob)
@@ -364,6 +353,7 @@ class APH(ph_base.PHBase):  # ??????
                                               enable_side_gig = True,
                                               rednames = ["FirstReduce"],
                                               keep_up = True)
+        # The lock is something to worry about here.
         while self.synchronizer.global_quitting == 0 \
               and self.synchronizer.enable_side_gig:
             # Other ranks could be reporting, so keep looking for them.
@@ -456,6 +446,89 @@ class APH(ph_base.PHBase):  # ??????
             phc = self.PH_convobject(self, self.rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
 
+    
+    #==========
+    def _best_phis(self, use_scenarios_not_subproblems):
+        # dispatch based on phi
+        # note that when there is no bundling, scenarios are subproblems
+        # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
+        if use_scenarios_not_subproblems:
+            s_source = self.local_scenarios
+            phidict = self.phis
+        else:
+            s_source = self.local_subproblems
+            if not self.bundling:
+                phidict = self.phis
+            else:
+                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+        # dict(sorted(phidict.items(), key=lambda item: item[1]))
+        sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
+        ###for k,p in sortedbyphi.items():
+        ###print("rank={}, k={}, sortedbyphi[k]={}".format(rank_global, k, p))
+
+        return s_source, sortedbyphi
+
+    #====================================================================
+    def APH_solve_loop(self, solver_options=None,
+                       use_scenarios_not_subproblems=False,
+                       dtiming=False,
+                       gripe=False,
+                       disable_pyomo_signal_handling=False,
+                       tee=False,
+                       verbose=False,
+                       dispatch_frac=1):
+        """See phbase.solve_loop. Loop over self.local_subproblems and solve
+            them in a manner dicated by the arguments. In addition to
+            changing the Var values in the scenarios, update
+            _PySP_feas_indictor for each.
+
+        Args:
+            solver_options (dict or None): the scenario solver options
+            use_scenarios_not_subproblems (boolean): for use by bounds
+            dtiming (boolean): indicates that timing should be reported
+            gripe (boolean): output a message if a solve fails
+            disable_pyomo_signal_handling (boolean): set to true for asynch, 
+                                                     ignored for persistent solvers.
+            tee (boolean): show solver output to screen if possible
+            verbose (boolean): indicates verbose output
+            dispatch_frac (float): fraction to send out for solution based on phi
+        """
+        def _vb(msg): 
+            if verbose and self.rank == self.rank0:
+                print ("(rank0) " + msg)
+        _vb("Entering solve_loop function.")
+
+        logging.debug("  early APH solve_loop for rank={}".format(self.rank))
+
+        s_source, sortedbyphi = self._best_phis(use_scenarios_not_subproblems)
+        scnt = max(1, len(sortedbyphi) * dispatch_frac)
+        i = 0
+        for k,p in sortedbyphi.items():
+            s = s_source[k]
+            logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
+                          format(self.rank, k, p))
+            pyomo_solve_time = self.solve_one(solver_options, k, s,
+                                              dtiming=dtiming,
+                                              verbose=verbose,
+                                              tee=tee,
+                                              gripe=gripe,
+                disable_pyomo_signal_handling=disable_pyomo_signal_handling
+            )
+            i += 1
+            if i >= scnt:
+                logging.debug("Terminate APH_solve_loop after {}/{} subproblems (frac needed={})".\
+                              format(i, len(sortedbyphi), dispatch_frac))
+                break
+
+        if dtiming:
+            all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
+            if self.rank == self.rank0:
+                print("Pyomo solve times (seconds):")
+                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
+                      (np.min(all_pyomo_solve_times),
+                      np.mean(all_pyomo_solve_times),
+                      np.max(all_pyomo_solve_times)))
+
 
     #====================================================================
     def APH_iterk(self, spcomm):
@@ -475,8 +548,11 @@ class APH(ph_base.PHBase):  # ??????
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"] 
         self.conv = None
+        # The notion of an iteration is unclear
         # we enter after the iteration 0 solves, so do updates first
-        for self._PHIter in range(1, int(self.PHoptions["PHIterLimit"])+1):
+        for self._PHIter in range(1, self.PHoptions["PHIterLimit"]+1):
+            if self.synchronizer.global_quitting:
+                break
             iteration_start_time = time.time()
 
             if dprogress and self.rank == self.rank0:
@@ -496,12 +572,12 @@ class APH(ph_base.PHBase):  # ??????
             # do this as a listener side-gig and add another reduction.
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
+            logging.debug('post Compute_Convergence on rank {}'.format(self.rank))
 
-            # The hub object takes precedence 
-            # over the converger
-            #### mpi4py.MPI.Intracomm
+            # ORed checks for convergence
             if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
                 spcomm.sync_with_spokes()
+                logging.debug('post sync_with_spokes on rank {}'.format(self.rank))
                 if spcomm.is_converged():
                     break    
             if have_converger:
@@ -514,18 +590,25 @@ class APH(ph_base.PHBase):  # ??????
             # slight divergence from PH, where mid-iter is before conv
             if have_extensions:
                 self.extobject.miditer()
+            dispatch_frac = self.PHoptions["dispatch_frac"]\
+                            if "dispatch_frac" in self.PHoptions else 1
             
             teeme = ("tee-rank0-solves" in self.PHoptions) \
                  and (self.PHoptions["tee-rank0-solves"] == True)
             # Let the solve loop deal with persistent solvers & signal handling
-            self.solve_loop(solver_options = \
-                            self.current_solver_options,
-                            dtiming = dtiming,
-                            gripe = True,
-                            disable_pyomo_signal_handling = True,
-                            tee = teeme,
-                            verbose = verbose)
+            # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
+            # Aug2020 ... at least you would get dispatch
+            logging.debug('pre APH_solve_loop on rank {}'.format(self.rank))
+            self.APH_solve_loop(solver_options = \
+                                self.current_solver_options,
+                                dtiming=dtiming,
+                                gripe=True,
+                                disable_pyomo_signal_handling=True,
+                                tee=teeme,
+                                verbose=verbose,
+                                dispatch_frac=dispatch_frac)
 
+            logging.debug('post APH_solve_loop on rank {}'.format(self.rank))
             if have_extensions:
                 self.extobject.enditer()
 
@@ -602,7 +685,7 @@ class APH(ph_base.PHBase):  # ??????
                                                     sleep_secs = sleep_secs,
                                                     asynch = True,
                                                     listener_gigs = listener_gigs)
-        args = [spcomm.intracomm] if spcomm is not None else [fullcomm]
+        args = [spcomm] if spcomm is not None else [fullcomm]
         kwargs = None  # {"PH_extensions": PH_extensions}
         self.synchronizer.run(args, kwargs)
 

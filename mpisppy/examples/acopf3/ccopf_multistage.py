@@ -3,6 +3,7 @@
 # extended Fall 2019 by DLW
 import egret
 import egret.models.acopf as eac
+import egret.models.ac_relaxations as eac_relax
 from egret.data.model_data import ModelData
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
@@ -14,7 +15,6 @@ import sys
 import copy
 import scipy
 import socket
-import numpy as np
 import datetime as dt
 import mpi4py.MPI as mpi
 
@@ -70,7 +70,8 @@ def pysp2_callback(scenario_name,
     Args:
         scenario_name (str): put the scenario number on the end 
         node_names (int): not used
-        cb_data: (dict) "etree", "solver", "epath", "tee", "acstream"
+        cb_data: (dict) "etree", "solver", "epath", "tee", "acstream", 
+                        "convex_relaxation"
 
     Returns:
         scenario (pyo.ConcreteModel): the scenario instance
@@ -86,9 +87,9 @@ def pysp2_callback(scenario_name,
     etree = cb_data["etree"]
     solver = cb_data["solver"]
     acstream = cb_data["acstream"]
+    convex_relaxation = cb_data["convex_relaxation"] if "convex_relaxation"\
+                       in cb_data else False
 
-    # seed each scenario every time to avoid troubles
-    acstream.seed(etree.seed + scen_num)
 
     def lines_up_and_down(stage_md_dict, enode):
         # local routine to configure the lines in stage_md_dict for the scenario
@@ -116,7 +117,10 @@ def pysp2_callback(scenario_name,
     full_scenario_model.stage_models = dict()
 
     # the exact acopf model is hard-wired here:
-    acopf_model = eac.create_riv_acopf_model
+    if convex_relaxation:
+        acopf_model = eac_relax.create_soc_relaxation
+    else:
+        acopf_model = eac.create_riv_acopf_model
 
     # look at egret/data/model_data.py for the format specification of md_dict
     first_stage_md_dict = _md_dict(cb_data)

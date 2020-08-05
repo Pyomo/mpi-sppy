@@ -4,6 +4,8 @@ import random
 import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
+import numpy as np
+import mpi4py.MPI as mpi
 
 from math import inf
 from mpisppy.utils.xhat_tryer import XhatTryer
@@ -125,15 +127,30 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         def _vb(msg): 
             if self.verbose and self.opt.rank == self.opt.rank0:
-                print ("(rank0) " + msg)
+                print("(rank0) " + msg)
 
         xh_iter = 1
-        while not self.got_kill_signal():
-            if (xh_iter-1) % 10000 == 0:
+        local_time_to_die = np.zeros(1)
+        global_time_to_die = np.zeros(1)
+        while True:
+            ## NOTE: not all ranks may agree on when its time to die
+            ##       due to the hub ranks not all updating their buffers
+            ##       at the same time
+            if self.got_kill_signal():
+                local_time_to_die[0] = 1
+            ## NOTE: not doing *this* reduce may cause a hang in the self.try_scenario
+            ##       (one+ or more may decide to die, stranding the others)
+            self.intracomm.Allreduce(local_time_to_die, global_time_to_die, op=mpi.SUM)
+            if global_time_to_die[0] > 0:
+                break
+
+            if (xh_iter-1) % 100 == 0:
                 logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.rank_global}')
                 logger.debug(f'   Xhatshuffle got from opt on rank {self.rank_global}')
 
             if self.new_nonants:
+                # similar to above, not all ranks will agree on
+                # when there are new_nonants (in the same loop)
                 logger.debug(f'   *Xhatshuffle loop iter={xh_iter}')
                 logger.debug(f'   *got a new one! on rank {self.rank_global}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
@@ -142,20 +159,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
 
-                # reset the scenarios we've tried
-                # so far
-                scenario_cycler.begin_epoch()
-
-                # try the best so far when their are new nonant
-                best_scenario = scenario_cycler.best
-                _vb(f"   Trying best {best_scenario}")
-                if best_scenario is not None:
-                    self.try_scenario(best_scenario)
-
-                ## we could continue here -- as is, this will try
-                ## at least two scenarios per new_nonants, the best 
-                ## and the next off the cycle.
-
             next_scenario = scenario_cycler.get_next()
             if next_scenario is not None:
                 _vb(f"   Trying next {next_scenario}")
@@ -163,6 +166,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 if update:
                     _vb(f"   Updating best to {next_scenario}")
                     scenario_cycler.best = next_scenario
+            else:
+                scenario_cycler.begin_epoch()
 
             #_vb(f"    scenario_cycler._scenarios_this_epoch {scenario_cycler._scenarios_this_epoch}")
 

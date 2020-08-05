@@ -563,7 +563,26 @@ class APHHub(PHHub):
             )
 
 
+    def sync(self):
+        """
+            Manages communication with Spokes
+        """
+        if self.has_w_spokes:
+            self.send_ws()
+        if self.has_nonant_spokes:
+            self.send_nonants()
+        if self.has_outerbound_spokes:
+            self.receive_outerbounds()
+        if self.has_innerbound_spokes:
+            self.receive_innerbounds()
+
+
+    def sync_with_spokes(self):
+        self.sync()
+
+
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """
+        logger.critical("aph debug main in hub.py")
         self.opt.APH_main(spcomm=self)
 

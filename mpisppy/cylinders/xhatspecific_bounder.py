@@ -57,7 +57,7 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
             quit()
         feasP = self.opt.feas_prob()
         if feasP != self.opt.E1:
-            if opt.rank == opt.rank0:
+            if self.opt.rank == self.opt.rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_feas, E1=", feasP, self.opt.E1)
             quit()
