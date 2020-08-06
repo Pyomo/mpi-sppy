@@ -248,7 +248,7 @@ if __name__ == "__main__":
     import mpi4py.MPI as mpi
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
-    solvername = "ipopt"
+    solvername = "gurobi"
     solver = pyo.SolverFactory(solvername)
     casename = "pglib-opf-master/pglib_opf_case118_ieee.m"
     # pglib_opf_case3_lmbd.m
@@ -311,7 +311,7 @@ if __name__ == "__main__":
                                  lines)
     cb_data["epath"] = egret_path_to_data
     cb_data["acstream"] = acstream
-
+    cb_data["convex_relaxation"] = True
     creator_options = {"cb_data": cb_data}
     scenario_names=["Scenario_"+str(i)\
                     for i in range(1,len(cb_data["etree"].rootnode.ScenarioList)+1)]
@@ -322,6 +322,8 @@ if __name__ == "__main__":
                              pysp2_callback,
                              creator_options)
     results = solver.solve(ef, tee=True)
+    pyo.assert_optimal_termination(results)
+
     print('EF objective value:', pyo.value(ef.EF_Obj))
     sputils.ef_nonants_csv(ef, "vardump.csv")
     for (sname, smodel) in sputils.ef_scenarios(ef):
