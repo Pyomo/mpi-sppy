@@ -10,11 +10,13 @@ import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.examples.acopf3.ACtree as ET
 
+
 import os
 import sys
 import copy
 import scipy
 import socket
+import numpy as np
 import datetime as dt
 import mpi4py.MPI as mpi
 
@@ -242,7 +244,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 #=========================
 if __name__ == "__main__":
     # as of April 27, 2020 __main__ has been updated only for EF
-    print("EF only but you still have to give iters and bundles")
+    print("EF only")
     import mpi4py.MPI as mpi
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
@@ -260,12 +262,11 @@ if __name__ == "__main__":
     number_of_stages = 3
     stage_duration_minutes = [5, 15, 30]
 
-    if len(sys.argv) != number_of_stages + 2:
-        print ("Usage: python ccop_multistage bf1 bf2 iters scenperbun(!)")
+    if len(sys.argv) != number_of_stages:
+        print ("Usage: python ccop_multistage bf1 bf")
+        print ("e.g. python ccop_multistage 2 3")
         exit(1)
     branching_factors = [int(sys.argv[1]), int(sys.argv[2])]
-    PHIterLimit = int(sys.argv[3])
-    scenperbun = int(sys.argv[4])
 
     seed = 1134
     a_line_fails_prob = 0.2
@@ -298,7 +299,8 @@ if __name__ == "__main__":
     lines = list()
     for this_branch in md_dict.elements("branch"):
         lines.append(this_branch[0])
-    
+
+    acstream = np.random.RandomState()
     cb_data["etree"] = ET.ACTree(number_of_stages,
                                  branching_factors,
                                  seed,
@@ -308,7 +310,7 @@ if __name__ == "__main__":
                                  repair_fct,
                                  lines)
     cb_data["epath"] = egret_path_to_data
-    cb_data["actree"] = actree
+    cb_data["acstream"] = acstream
 
     creator_options = {"cb_data": cb_data}
     scenario_names=["Scenario_"+str(i)\
