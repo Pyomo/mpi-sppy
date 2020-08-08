@@ -55,6 +55,20 @@ class SPCommunicator:
         """
         return False
 
+    def allreduce_or(self, val):
+        #if 'X' not in self.__class__.__name__:
+        print(f"{self.__class__.__name__} rank {self.rank_global} in allreduce_or")
+            #return val
+        local_val = np.array([val], dtype='int8')
+        global_val = np.zeros(1, dtype='int8')
+        self.intracomm.Allreduce(local_val, global_val, op=MPI.LOR)
+        if global_val[0] > 0:
+            print(f"{self.__class__.__name__} rank {self.rank_global} returning True in allreduce_or")
+            return True
+        else:
+            print(f"{self.__class__.__name__} rank {self.rank_global} returning False in allreduce_or")
+            return False
+
     def free_windows(self):
         """
         """
