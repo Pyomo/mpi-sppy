@@ -1,5 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
 # the APH version of the xhat shuffle looper bounder
+# TBD: factor this or delete it!!!!!
 import logging
 import random
 import mpisppy.log
@@ -17,7 +18,7 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          level=logging.CRITICAL)                         
 logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
-class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
+class XhatAPHShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatbase_prep(self):
         if self.opt.multistage:
@@ -150,6 +151,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             next_scenario = scenario_cycler.get_next()
             if next_scenario is not None:
                 _vb(f"   Trying next {next_scenario}")
+                print(f"   rank {self.rank_global} trying next {next_scenario}")
                 # ??For APH you probably should update x as part of trying it,
                 # but you lose a lot of bundle advantage by doing that.
                 # (Maybe resolve the bundle... sort of a waste of time except
