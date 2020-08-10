@@ -15,7 +15,6 @@ class ConvergerSpokeType(enum.Enum):
     W_GETTER = 3
     NONANT_GETTER = 4
 
-SLEEP_TIME = 0.01
 
 class Spoke(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
@@ -24,8 +23,6 @@ class Spoke(SPCommunicator):
         self.remote_write_id = 0
         self.local_length = 0  # Does NOT include the + 1
         self.remote_length = 0  # Length on hub; does NOT include + 1
-
-        self.last_call_to_got_kill_signal = time.time()
 
     def _make_windows(self, local_length, remote_length):
         # Spokes notify the hub of the buffer sizes
@@ -95,32 +92,9 @@ class Spoke(SPCommunicator):
             return True
         return False
 
-    def got_kill_signal(self):
-        """ Spoke should call this method at least every iteration
-            to see if the Hub terminated
-        """
-        # Spokes can sometimes call this frequently in a tight loop,
-        # causing the Allreduces to become out of sync
-        diff = time.time() - self.last_call_to_got_kill_signal
-        if diff < SLEEP_TIME:
-            time.sleep(SLEEP_TIME - diff)
-        self.last_call_to_got_kill_signal = time.time()
-        return self.allreduce_or(self._got_kill_signal())
-
     @abc.abstractmethod
     def main(self):
-        """
-        The main call for the Spoke. Derived classe
-        should call the got_kill_signal method 
-        regularly to ensure all ranks terminate 
-        with the Hub.
-        """
-        pass
-
-    @abc.abstractmethod
-    def _got_kill_signal(self):
-        """ Every spoke needs a way to get the signal to terminate
-            from the hub
+        """ Every spoke needs a main
         """
         pass
 
@@ -165,7 +139,7 @@ class _BoundSpoke(Spoke):
         self._bound[0] = value
         self.spoke_to_hub(self._bound)
 
-    def _got_kill_signal(self):
+    def got_kill_signal(self):
         """Looks for the kill signal and returns True if sent"""
         self.spoke_from_hub(self._kill_sig)
         kill = self._kill_sig[-1] == -1
@@ -176,6 +150,16 @@ class _BoundSpoke(Spoke):
             return
         with open(self.trace_filen, 'a') as f:
             f.write(f"{time.time()-self.start_time},{value}\n")
+
+    @abc.abstractmethod
+    def main(self):
+        """
+        The main call for the Spoke. Derived classe
+        should call the got_kill_signal method 
+        regularly to ensure all ranks terminate 
+        with PH OPT.
+        """
+        pass
 
 
 class _BoundNonantLenSpoke(_BoundSpoke):
@@ -207,12 +191,23 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         self._new_locals = False
 
 
-    def _got_kill_signal(self):
+    def got_kill_signal(self):
         """ returns True if a kill signal was received, 
             and refreshes the array and _locals"""
         self._new_locals = self.spoke_from_hub(self._locals)
         kill = self._locals[-1] == -1
         return kill
+
+    @abc.abstractmethod
+    def main(self):
+        """
+        The main call for the Spoke. Derived classes
+        should call the got_kill_signal method 
+        regularly to ensure all ranks terminate 
+        with PH OPT, and to update the data coming
+        from PH OPT.
+        """
+        pass
 
 
 class InnerBoundSpoke(_BoundSpoke):

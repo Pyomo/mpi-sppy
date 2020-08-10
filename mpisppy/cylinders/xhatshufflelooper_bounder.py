@@ -4,6 +4,7 @@ import random
 import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
+import numpy as np
 import mpi4py.MPI as mpi
 
 from math import inf
@@ -129,7 +130,19 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 print("(rank0) " + msg)
 
         xh_iter = 1
-        while not self.got_kill_signal():
+        local_time_to_die = np.zeros(1)
+        global_time_to_die = np.zeros(1)
+        while True:
+            ## NOTE: not all ranks may agree on when its time to die
+            ##       due to the hub ranks not all updating their buffers
+            ##       at the same time
+            if self.got_kill_signal():
+                local_time_to_die[0] = 1
+            ## NOTE: not doing *this* reduce may cause a hang in the self.try_scenario
+            ##       (one+ or more may decide to die, stranding the others)
+            self.intracomm.Allreduce(local_time_to_die, global_time_to_die, op=mpi.SUM)
+            if global_time_to_die[0] > 0:
+                break
 
             if (xh_iter-1) % 100 == 0:
                 logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.rank_global}')
