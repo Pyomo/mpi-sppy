@@ -1,7 +1,8 @@
 #!/bin/bash
 rm *.csv
 SEED=1134
-SNAME="gurobi_persistent"
+#SNAME="gurobi_persistent"
+SNAME="cplex"
 
 LOC="../../../mpisppy/examples/farmer"
 
