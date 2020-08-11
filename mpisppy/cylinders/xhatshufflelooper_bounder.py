@@ -1,4 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
+import os
+import time
 import logging
 import random
 import mpisppy.log
@@ -94,7 +96,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 print ("(rank0) " + msg)
 
         if self.running_trace_filen is not None:
-            with open(self.running_trace_filen, "a"):
+            with open(self.running_trace_filen, "a") as f:
                 f.write(f"{time.time()},{scenario.name},{obj}\n")
         if obj is None:
             _vb(f"    Infeasible {scenario}")
@@ -118,10 +120,11 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.rank_global}")
 
         # Start code to support running trace (for debug)
+        self.opt.options["running_trace_prefix"] = "DLWdebug_"  # hack
         if self.rank_intra == 0 and \
-                'running_trace_prefix' in spbase_object.options and \
-                spbase_object.options['running_trace_prefix'] is not None:
-            trace_prefix = spbase_object.options['running_trace_prefix']
+                'running_trace_prefix' in self.opt.options and \
+                self.opt.options['running_trace_prefix'] is not None:
+            running_trace_prefix = self.opt.options['running_trace_prefix']
 
             filen = running_trace_prefix+self.__class__.__name__+'.csv'
             if os.path.exists(filen):
@@ -129,7 +132,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             with open(filen, 'w') as f:
                 f.write("time,scen,value\n")
             self.running_trace_filen = filen
-            self.running_start_time = spbase_object.start_time
         else:
             self.running_trace_filen = None
         # end code to support running trace
