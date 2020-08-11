@@ -96,7 +96,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         if self.running_trace_filen is not None:
             with open(self.running_trace_filen, "a") as f:
-                f.write(f"{time.time()},{scenario.name},{obj}\n")
+                f.write(f"{time.time()},{scenario},{obj}\n")
         if obj is None:
             _vb(f"    Infeasible {scenario}")
             return False
