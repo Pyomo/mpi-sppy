@@ -102,6 +102,11 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     spcomm.main()
     if rank_inter == 0: # If this is the hub
         spcomm.send_terminate()
+        if rank_intra == 0:
+            print("Hub algorithm complete, waiting for termination barrier")
+
+    fullcomm.Barrier()
+
     spcomm.free_windows()
 
     return spcomm, opt_dict

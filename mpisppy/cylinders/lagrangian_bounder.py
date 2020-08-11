@@ -45,6 +45,7 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
             rho_setter = self.opt.rho_setter
 
         self.lagrangian_prep()
+
         self.trivial_bound = self.lagrangian()
 
         self.bound = self.trivial_bound
