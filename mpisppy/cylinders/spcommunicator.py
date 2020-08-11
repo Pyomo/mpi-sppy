@@ -55,6 +55,15 @@ class SPCommunicator:
         """
         return False
 
+    def allreduce_or(self, val):
+        local_val = np.array([val], dtype='int8')
+        global_val = np.zeros(1, dtype='int8')
+        self.intracomm.Allreduce(local_val, global_val, op=MPI.LOR)
+        if global_val[0] > 0:
+            return True
+        else:
+            return False
+
     def free_windows(self):
         """
         """

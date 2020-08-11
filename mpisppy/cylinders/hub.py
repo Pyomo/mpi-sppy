@@ -33,7 +33,7 @@ class Hub(SPCommunicator):
         pass
 
     @abc.abstractmethod
-    def sync_with_spokes(self):
+    def sync(self):
         """ To be called within the whichever optimization algorithm
             is being run on the hub (e.g. PH)
         """
