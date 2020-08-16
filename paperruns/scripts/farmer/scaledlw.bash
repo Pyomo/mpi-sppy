@@ -5,6 +5,7 @@ SNAME="gurobi_persistent"
 
 LOC="../../../mpisppy/examples/farmer"
 
+
 CROPSMULT=500
 SCENCNT=1000
 SCENPERBUN=50   # be sure this divides SCENCNT

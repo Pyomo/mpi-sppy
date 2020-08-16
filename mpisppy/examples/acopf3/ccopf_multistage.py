@@ -194,7 +194,7 @@ def pysp2_callback(scenario_name,
     inst.PySP_prob = 1 / etree.numscens
     # solve it so subsequent code will have a good start
     if solver is not None:
-        solver.solve(inst)
+        solver.solve(inst, tee=True) #symbolic_solver_labels=True, keepfiles=True)
 
     # attachments
     inst._enodes = enodes
@@ -250,6 +250,9 @@ if __name__ == "__main__":
     # start options
     solvername = "gurobi"
     solver = pyo.SolverFactory(solvername)
+    if "gurobi" in solvername:
+        solver.options["BarHomogeneous"] = 1
+
     casename = "pglib-opf-master/pglib_opf_case118_ieee.m"
     # pglib_opf_case3_lmbd.m
     # pglib_opf_case118_ieee.m
@@ -321,6 +324,7 @@ if __name__ == "__main__":
     ef = sputils.create_EF(scenario_names,
                              pysp2_callback,
                              creator_options)
+    ###solver.options["BarHomogeneous"] = 1
     results = solver.solve(ef, tee=True)
     pyo.assert_optimal_termination(results)
 
