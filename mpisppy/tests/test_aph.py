@@ -1,5 +1,5 @@
 # This software is distributed under the 3-clause BSD License.
-# Provide some test for aph under mpisppy.0
+# Provide some test for aph under mpi-sppy.
 # Author: David L. Woodruff (circa September 2019)
 """
 IMPORTANT:
@@ -17,15 +17,13 @@ from mpisppy.examples.sizes.sizes import scenario_creator, \
                                        scenario_denouement, \
                                        _rho_setter
 
+__version__ = 0.4
 solvers = ["xpress_persistent", "gurobi_persistent", "cplex"]
-__version__ = 0.31
 
 for solvername in solvers:
     solver_available = pyo.SolverFactory(solvername).available(exception_flag=False)
     if solver_available:
         break
-    
-__version__ = 0.32
 
 import mpi4py.MPI as mpi
 fullcomm = mpi.COMM_WORLD
@@ -107,8 +105,28 @@ class Test_aph_sizes(unittest.TestCase):
                               scenario_creator, scenario_denouement,
                               cb_data=10)
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("objthing={}, (was=224712.9)".format(obj))
-        print ("tbound ={} (was=223168.5)".format(tbound))
+        print ("bundle objthing={}, (was=224712.9)".format(obj))
+        print ("bundle tbound ={} (was=223168.5)".format(tbound))
+
+        
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solvername,))
+    def test_APHgamma(self):
+        PHoptions = self._copy_of_base_options()
+        PHoptions["PHIterLimit"] = 2
+        PHoptions["async_frac_needed"] = 0.5
+        PHoptions["async_sleep_secs"] = 0.5
+        a = 2
+        PHoptions["APHgamma"] = a
+        aph = mpisppy.opt.aph.APH(PHoptions,
+                              self.all3_scenario_names,
+                              scenario_creator,
+                              scenario_denouement,
+                              cb_data=3)
+
+        conv, obj, tbound = aph.APH_main(spcomm=None)
+        print (f"APHgamma={a}; objthing={obj}")
+        print ("tbound ={}".format(tbound))
 
 
 if __name__ == '__main__':

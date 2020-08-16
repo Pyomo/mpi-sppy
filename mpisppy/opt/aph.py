@@ -110,6 +110,9 @@ class APH(ph_base.PHBase):  # ??????
         self.local_pwnorm = 0
         self.local_pznorm = 0
         self.conv = None
+        self.APHgamma = 1 if "APHgamma" not in PHoptions\
+                        else PHoptions["APHgamma"]
+        assert(self.APHgamma > 0)
 
     #============================
     def setup_Lens(self):
@@ -226,7 +229,7 @@ class APH(ph_base.PHBase):  # ??????
             self.local_punorm += pyo.value(s.PySP_prob) * scen_unorm
             self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
             new_tau_summand += pyo.value(s.PySP_prob) \
-                               * (scen_unorm + scen_vnorm)
+                               * (scen_unorm + scen_vnorm/self.APHgamma)
             
         # tauk is the expecation of the sum sum of squares; update for this calc
         logging.debug('  in side-gig, old global_tau={}'.format(self.global_tau))
@@ -411,7 +414,7 @@ class APH(ph_base.PHBase):  # ??????
                 s._Ws[(ndn,i)] = Ws 
                 self.local_pwnorm += probs * Ws * Ws
                 zs = pyo.value(s._zs[(ndn,i)])\
-                     + self.theta * pyo.value(s._ybars[(ndn,i)])
+                     + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
                 s._zs[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
         # ? so they will be there next time? (we really need a third reduction)
@@ -703,6 +706,7 @@ if __name__ == "__main__":
     PHopt["solvername"] = "cplex"
     PHopt["PHIterLimit"] = 5
     PHopt["defaultPHrho"] = 1
+    PHopt["APHgamma"] = 1
     PHopt["convthresh"] = 0.001
     PHopt["verbose"] = True
     PHopt["display_timing"] = True
