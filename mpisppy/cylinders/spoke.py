@@ -6,16 +6,18 @@ import logging
 import time
 import os
 
+# for SLEEP_TIME
+import mpisppy.cylinders as cylinders
+
 from mpi4py import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
+
 
 class ConvergerSpokeType(enum.Enum):
     OUTER_BOUND = 1
     INNER_BOUND = 2
     W_GETTER = 3
     NONANT_GETTER = 4
-
-SLEEP_TIME = 0.01
 
 class Spoke(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
@@ -102,10 +104,10 @@ class Spoke(SPCommunicator):
         # Spokes can sometimes call this frequently in a tight loop,
         # causing the Allreduces to become out of sync
         diff = time.time() - self.last_call_to_got_kill_signal
-        if diff < SLEEP_TIME:
-            time.sleep(SLEEP_TIME - diff)
+        if diff < cylinders.SPOKE_SLEEP_TIME:
+            time.sleep(cylinders.SPOKE_SLEEP_TIME - diff)
         self.last_call_to_got_kill_signal = time.time()
-        return self.allreduce_or(self._got_kill_signal())
+        return self._got_kill_signal()
 
     @abc.abstractmethod
     def main(self):

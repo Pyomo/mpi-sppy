@@ -28,12 +28,6 @@ class Hub(SPCommunicator):
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # ^^^ Does NOT include +1
 
-    def is_converged(self):
-        """ The hub should call this to halt the optimization algorithm on the
-            hub before any local convergers.
-        """
-        return self.allreduce_or(self._is_converged())
-
     @abc.abstractmethod
     def setup_hub(self):
         pass
@@ -46,7 +40,7 @@ class Hub(SPCommunicator):
         pass
 
     @abc.abstractmethod
-    def _is_converged(self):
+    def is_converged(self):
         """ The hub has the ability to halt the optimization algorithm on the
             hub before any local convergers.
         """
@@ -332,7 +326,7 @@ class PHHub(Hub):
     def sync_with_spokes(self):
         self.sync()
 
-    def _is_converged(self):
+    def is_converged(self):
         if not (self.has_innerbound_spokes and self.has_outerbound_spokes):
             if self.opt._PHIter == 1:
                 logger.warning(
@@ -365,12 +359,7 @@ class PHHub(Hub):
             if "abs_gap" in self.options:
                 abs_gap = self.compute_gap(compute_relative=False)
                 abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
-        converged = abs_gap_satisfied or rel_gap_satisfied
-        #if converged:
-        #    print(f"{self.__class__.__name__} rank {self.rank_global} converged!")
-        #else:
-        #    print(f"{self.__class__.__name__} rank {self.rank_global} *not* converged!")
-        return converged 
+        return abs_gap_satisfied or rel_gap_satisfied
 
     def main(self):
         """ SPComm gets attached in self.__init__ """
@@ -469,7 +458,7 @@ class LShapedHub(Hub):
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
 
-    def _is_converged(self):
+    def is_converged(self):
         """ Returns a boolean. If True, then LShaped will terminate
 
         Side-effects:

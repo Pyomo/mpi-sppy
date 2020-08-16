@@ -2,6 +2,7 @@
 # general example driver for farmer with cylinders
 
 import mpisppy.examples.farmer.farmer as farmer
+import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
@@ -79,6 +80,8 @@ def main():
         list_of_spoke_dict.append(xhatlooper_spoke)
     if args.with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+
+    mpisppy.cylinders.SPOKE_SLEEP_TIME = 0.1
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 

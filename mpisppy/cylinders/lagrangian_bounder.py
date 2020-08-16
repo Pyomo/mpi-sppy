@@ -1,6 +1,5 @@
 # This software is distributed under the 3-clause BSD License.
 import mpisppy.cylinders.spoke
-import time
 
 class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
@@ -37,8 +36,7 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
             own--the Lagrangian spoke doesn't need to check again.  '''
 
         # Compute the resulting bound
-        #return self.opt.Ebound(verbose)
-        return self.opt.Ebound(True)
+        return self.opt.Ebound(verbose)
 
     def main(self):
         # The rho_setter should be attached to the opt object
@@ -48,24 +46,13 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
         self.lagrangian_prep()
 
-        lr_st_time = time.time()
         self.trivial_bound = self.lagrangian()
-        lr_time = time.time() - lr_st_time
-
-        wait_time = lr_time/100.
-        print(f"rank {self.rank_global}, wait_time {wait_time}")
 
         self.bound = self.trivial_bound
 
         dk_iter = 1
         while not self.got_kill_signal():
             if self.new_Ws:
-                print(f"LagrangianOuterBound rank {self.rank_global} found new_Ws")
                 self.opt.W_from_flat_list(self.localWs) # Sets the weights
-                bound = self.lagrangian()
-                print(f"LagrangianOuterBound rank {self.rank_global} sending bound {bound}") 
-                self.bound = bound
-                print(f"LagrangianOuterBound rank {self.rank_global} back from self.lagrangian()") 
-            #else:
-            #    time.sleep(wait_time)
+                self.bound = self.lagrangian()
             dk_iter += 1
