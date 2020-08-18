@@ -119,7 +119,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.rank_global}")
 
         # Start code to support running trace (for debug)
-        self.opt.options["running_trace_prefix"] = "DLWdebug_"  # hack
+        #######self.opt.options["running_trace_prefix"] = "DLWdebug_"  # hack
         if self.rank_intra == 0 and \
                 'running_trace_prefix' in self.opt.options and \
                 self.opt.options['running_trace_prefix'] is not None:
