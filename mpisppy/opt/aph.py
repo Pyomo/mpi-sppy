@@ -554,6 +554,7 @@ class APH(ph_base.PHBase):  # ??????
         # The notion of an iteration is unclear
         # we enter after the iteration 0 solves, so do updates first
         for self._PHIter in range(1, self.PHoptions["PHIterLimit"]+1):
+            print(f"rank{self.rank_global} iterk loop for iter={self._PHIter}")
             if self.synchronizer.global_quitting:
                 break
             iteration_start_time = time.time()
@@ -563,10 +564,13 @@ class APH(ph_base.PHBase):  # ??????
                 print ("Initiating APH Iteration",self._PHIter)
                 print("")
 
+            print(f"rank{self.rank_global} pre update y")
             self.Update_y(verbose)
+            print(f"rank{self.rank_global} post update y")
             # Compute xbar, etc
             logging.debug('pre Compute_Averages on rank {}'.format(self.rank))
             self.Compute_Averages(verbose)
+            print(f'post Compute_Averages; rank={self.rank_global}; tau={tau}')
             logging.debug('post Compute_Averages on rank {}'.format(self.rank))
             if self.global_tau <= 0:
                 logging.debug('***tau is 0 on rank {}'.format(self.rank))
