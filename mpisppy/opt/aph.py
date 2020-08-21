@@ -33,7 +33,7 @@ fullcomm = mpi.COMM_WORLD
 rank_global = fullcomm.Get_rank()
 
 
-logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
+logging.basicConfig(level=logging.DEBUG, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
             )
 
@@ -275,7 +275,7 @@ class APH(ph_base.PHBase):  # ??????
         """Gather ybar, xbar and x squared bar for each node 
            and also distribute the values back to the scenarios.
            Compute the tau summand from self and distribute back tauk
-           (tau_k is a scalar and special with respect to snchronizing).
+           (tau_k is a scalar and special with respect to synchronizing).
            Compute the phi summand and reduce it.
 
         Args:
@@ -315,7 +315,12 @@ class APH(ph_base.PHBase):  # ??????
                 = np.zeros(mylen, dtype='d') 
             self.node_concats["SecondReduce"]["ROOT"]\
                 = np.zeros(mylen, dtype='d')
-        else: # concats are here, just zero them out.
+        else: # concats are here, just zero them out. 
+            """ delete this comment block after sept 2020:
+            DLW Aug 2020: why zero?
+            We zero them so we can use an accumulator in the next loop and
+              that seems to be OK.
+            """
             nodenames = []
             for k,s in self.local_scenarios.items():
                 nlens = s._PySP_nlens        
@@ -328,7 +333,9 @@ class APH(ph_base.PHBase):  # ??????
             self.local_concats["SecondReduce"]["ROOT"].fill(0)
             self.node_concats["SecondReduce"]["ROOT"].fill(0)
 
-        # compute the locals and concat them for the first reduce
+        # Compute the locals and concat them for the first reduce.
+        # We don't need to lock here because the direct buffer are only accessed
+        # by compute_global_data.
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
             for node in s._PySPnode_list:
@@ -336,7 +343,9 @@ class APH(ph_base.PHBase):  # ??????
                 for i in range(nlens[node.name]):
                     v_value = node.nonant_vardata_list[i]._value
                     self.local_concats["FirstReduce"][node.name][i] += \
-                        (s.PySP_prob / node.cond_prob) * v_value
+                        (s.PySP_prob / node.cond_prob) * v_value                 
+                    logging.debug("  rank= {} scen={}, i={}, v_value={}".\
+                                  format(rank_global, k, i, v_value))
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
                         += (s.PySP_prob / node.cond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
@@ -399,8 +408,8 @@ class APH(ph_base.PHBase):  # ??????
             self.theta = 0
         else:
             self.theta = self.global_phi * self.nu / self.global_tau
-        logging.debug('Assigned theta {} on rank {}'\
-                      .format(self.theta, self.rank))
+        logging.debug('Iter {} assigned theta {} on rank {}'\
+                      .format(self._PHIter, self.theta, self.rank))
 
         oldpw = self.local_pwnorm
         oldpz = self.local_pznorm
@@ -417,6 +426,8 @@ class APH(ph_base.PHBase):  # ??????
                      + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
                 s._zs[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
+                logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
+                              format(rank_global, k, i, Ws, zs))
         # ? so they will be there next time? (we really need a third reduction)
         self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwnorm
         self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pznorm
@@ -554,7 +565,6 @@ class APH(ph_base.PHBase):  # ??????
         # The notion of an iteration is unclear
         # we enter after the iteration 0 solves, so do updates first
         for self._PHIter in range(1, self.PHoptions["PHIterLimit"]+1):
-            print(f"rank{self.rank_global} iterk loop for iter={self._PHIter}")
             if self.synchronizer.global_quitting:
                 break
             iteration_start_time = time.time()
@@ -564,13 +574,10 @@ class APH(ph_base.PHBase):  # ??????
                 print ("Initiating APH Iteration",self._PHIter)
                 print("")
 
-            print(f"rank{self.rank_global} pre update y")
             self.Update_y(verbose)
-            print(f"rank{self.rank_global} post update y")
             # Compute xbar, etc
             logging.debug('pre Compute_Averages on rank {}'.format(self.rank))
             self.Compute_Averages(verbose)
-            print(f'post Compute_Averages; rank={self.rank_global}; tau={tau}')
             logging.debug('post Compute_Averages on rank {}'.format(self.rank))
             if self.global_tau <= 0:
                 logging.debug('***tau is 0 on rank {}'.format(self.rank))
@@ -676,7 +683,7 @@ class APH(ph_base.PHBase):  # ??????
         # End APH-specific Prep
         
         self.subproblem_creation(self.PHoptions["verbose"])
-        
+
         trivial_bound = self.Iter0()
         self.setup_Lens()
 
