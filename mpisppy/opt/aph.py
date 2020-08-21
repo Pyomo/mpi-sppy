@@ -98,7 +98,6 @@ class APH(ph_base.PHBase):  # ??????
                          rho_setter=rho_setter)
 
         self.phis = {} # phi values, indexed by scenario names
-        self.nu = 1 # might be changed dynamically by an extension
         self.tau_summand = 0  # place holder for iteration 1 reduce
         self.phi_summand = 0
         self.global_tau = 0
@@ -113,6 +112,12 @@ class APH(ph_base.PHBase):  # ??????
         self.APHgamma = 1 if "APHgamma" not in PHoptions\
                         else PHoptions["APHgamma"]
         assert(self.APHgamma > 0)
+        # TBD: use a property decorator for nu to enforce 0 < nu < 2
+        self.nu = 1 # might be changed dynamically by an extension
+        if "APHnu" in PHoptions:
+            self.nu = PHoptions["APHnu"]
+        assert 0 < self.nu and self.nu < 2
+        self.dispatchrecord = dict()   # for local subproblems
 
     #============================
     def setup_Lens(self):
@@ -129,6 +134,15 @@ class APH(ph_base.PHBase):  # ??????
         self.Lens["FirstReduce"]["ROOT"] += self.n_proc  # for time of update
         # tau, phi, punorm, pvnorm, pwnorm, pznorm, secs
         self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc 
+
+
+    #============================
+    def setup_dispatchrecord(self):
+        # Start with a small number for iteration to randomize fist dispatch.
+        for sname in self.local_subproblems:
+            r = np.random.rand()                                                
+            self.dispatchrecord[sname] = [(r,0)]
+
 
     #============================
     def Update_y(self, verbose):
@@ -461,27 +475,6 @@ class APH(ph_base.PHBase):  # ??????
             logging.debug("PH converger called (returned {})".format(phc))
 
     
-    #==========
-    def _best_phis(self, use_scenarios_not_subproblems):
-        # dispatch based on phi
-        # note that when there is no bundling, scenarios are subproblems
-        # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
-        if use_scenarios_not_subproblems:
-            s_source = self.local_scenarios
-            phidict = self.phis
-        else:
-            s_source = self.local_subproblems
-            if not self.bundling:
-                phidict = self.phis
-            else:
-                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
-        # dict(sorted(phidict.items(), key=lambda item: item[1]))
-        sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
-        ###for k,p in sortedbyphi.items():
-        ###print("rank={}, k={}, sortedbyphi[k]={}".format(rank_global, k, p))
-
-        return s_source, sortedbyphi
-
     #====================================================================
     def APH_solve_loop(self, solver_options=None,
                        use_scenarios_not_subproblems=False,
@@ -507,18 +500,76 @@ class APH(ph_base.PHBase):  # ??????
             verbose (boolean): indicates verbose output
             dispatch_frac (float): fraction to send out for solution based on phi
         """
+        #==========
         def _vb(msg): 
             if verbose and self.rank == self.rank0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
 
+
+        #==========
+        def _best_phis():
+            # for dispatch based on phi
+            # note that when there is no bundling, scenarios are subproblems
+            # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
+            if use_scenarios_not_subproblems:
+                s_source = self.local_scenarios
+                phidict = self.phis
+            else:
+                s_source = self.local_subproblems
+                if not self.bundling:
+                    phidict = self.phis
+                else:
+                    phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+            # dict(sorted(phidict.items(), key=lambda item: item[1]))
+            sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
+            ###for k,p in sortedbyphi.items():
+            ###print("rank={}, k={}, sortedbyphi[k]={}".format(rank_global, k, p))
+
+            return s_source, sortedbyphi
+
+
+        #========
+        def _dispatch_list(scnt):
+            # Return the entire source dict and list of scnt (subproblems,phi) 
+            # pairs for dispatch.
+            retval = list()  # the list to return
+            s_source, sortedbyphi = _best_phis()
+            i = 0
+            for k,p in sortedbyphi.items():
+                if p < 0:
+                    retval.append(k,p)
+                    i += 1
+                    if i >= scnt:
+                        logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
+                                      format(i, len(sortedbyphi), dispatch_frac))
+                        break
+            # If we are still here, there were not enough w/negative phi values.
+            # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
+            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                 key=lambda item: item[1][-1])}
+            for k,t in sortedbyI.items():
+                retval.append((k, sortedbyphi[k]))  # sname, phi
+                i += 1
+                if i >= scnt:
+                    logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
+                                  format(i, len(sortedbyphi), dispatch_frac))
+                    break
+            print("debug dispatch list=",retval)
+            return s_source, retval
+
+
+        # body of fct starts hare
         logging.debug("  early APH solve_loop for rank={}".format(self.rank))
 
-        s_source, sortedbyphi = self._best_phis(use_scenarios_not_subproblems)
-        scnt = max(1, len(sortedbyphi) * dispatch_frac)
-        i = 0
-        for k,p in sortedbyphi.items():
+        scnt = max(1, len(self.dispatchrecord) * dispatch_frac)
+        s_source, dlist = _dispatch_list(scnt)
+        for dguy in dlist:
+            k = dguy[0]   # name of who to dispatch
+            p = dguy[1]   # phi
+            print(f"debug in aph.py k={k}, p={p}")
             s = s_source[k]
+            self.dispatchrecord[k].append((self._PHIter, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.rank, k, p))
             pyomo_solve_time = self.solve_one(solver_options, k, s,
@@ -528,11 +579,6 @@ class APH(ph_base.PHBase):  # ??????
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
             )
-            i += 1
-            if i >= scnt:
-                logging.debug("Terminate APH_solve_loop after {}/{} subproblems (frac needed={})".\
-                              format(i, len(sortedbyphi), dispatch_frac))
-                break
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
@@ -686,6 +732,7 @@ class APH(ph_base.PHBase):  # ??????
 
         trivial_bound = self.Iter0()
         self.setup_Lens()
+        self.setup_dispatchrecord()
 
         sleep_secs = self.PHoptions["async_sleep_secs"]
 
@@ -704,6 +751,12 @@ class APH(ph_base.PHBase):  # ??????
         self.synchronizer.run(args, kwargs)
 
         Eobj = self.post_loops()
+
+        print("Debug: here's the dispatch record")
+        for k,v in self.dispatchrecord.items():
+            print(k, v)
+            print()
+        print("End dispatch record")
 
         return self.conv, Eobj, trivial_bound
 
