@@ -159,6 +159,18 @@ class APH(ph_base.PHBase):  # ??????
                            self.rank, xvar.name,
                            pyo.value(s._ys[(ndn,i)]))
 
+    #============================
+    def compute_phis_summand(self):
+        # update phis, return summand
+        summand = 0.0
+        for k,s in self.local_scenarios.items():
+            self.phis[k] = 0.0
+            for (ndn,i), xvar in s._nonant_indexes.items():
+                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
+                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
+            self.phis[k] *= pyo.value(s.PySP_prob)
+            summand += self.phis[k]
+        return summand
 
     #============================***********=========
     def listener_side_gig(self, synchro):
@@ -257,14 +269,7 @@ class APH(ph_base.PHBase):  # ??????
         if self.global_tau <= 0:
             logging.debug('  *** Negative tau={} on rank {}'\
                           .format(self.global_tau, self.rank))
-        self.phi_summand = 0.0
-        for k,s in self.local_scenarios.items():
-            self.phis[k] = 0.0
-            for (ndn,i), xvar in s._nonant_indexes.items():
-                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
-                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
-            self.phis[k] *= pyo.value(s.PySP_prob)
-            self.phi_summand += self.phis[k]
+        self.phi_summand = self.compute_phis_summand()
 
         # prepare for the reduction that will take place after this side-gig
         self.local_concats["SecondReduce"]["ROOT"][0] = self.tau_summand
@@ -348,7 +353,7 @@ class APH(ph_base.PHBase):  # ??????
             self.node_concats["SecondReduce"]["ROOT"].fill(0)
 
         # Compute the locals and concat them for the first reduce.
-        # We don't need to lock here because the direct buffer are only accessed
+        # We don't need to lock here because the direct buffers are only accessed
         # by compute_global_data.
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
@@ -538,7 +543,7 @@ class APH(ph_base.PHBase):  # ??????
             i = 0
             for k,p in sortedbyphi.items():
                 if p < 0:
-                    retval.append(k,p)
+                    retval.append((k,p))
                     i += 1
                     if i >= scnt:
                         logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
@@ -632,7 +637,8 @@ class APH(ph_base.PHBase):  # ??????
             # do this as a listener side-gig and add another reduction.
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
-            logging.debug('post Compute_Convergence on rank {}'.format(self.rank))
+            psum = self.compute_phis_summand() # post-step phis for dispatch
+            logging.debug('phisum={} on rank {}'.format(psum, self.rank))
 
             # ORed checks for convergence
             if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
@@ -731,6 +737,7 @@ class APH(ph_base.PHBase):  # ??????
         self.subproblem_creation(self.PHoptions["verbose"])
 
         trivial_bound = self.Iter0()
+
         self.setup_Lens()
         self.setup_dispatchrecord()
 
