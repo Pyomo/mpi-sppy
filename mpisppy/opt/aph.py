@@ -33,7 +33,7 @@ fullcomm = mpi.COMM_WORLD
 rank_global = fullcomm.Get_rank()
 
 
-logging.basicConfig(level=logging.DEBUG, # level=logging.CRITICAL, DEBUG
+logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
             )
 
@@ -146,18 +146,29 @@ class APH(ph_base.PHBase):  # ??????
 
     #============================
     def Update_y(self, verbose):
-        for k,s in self.local_scenarios.items():
-            for (ndn,i), xvar in s._nonant_indexes.items():
-                # pyo.value vs. _value ??
-                xzdiff = xvar._value \
-                        - s._zs[(ndn,i)]._value
-                s._ys[(ndn,i)]._value = pyo.value(s._Ws[(ndn,i)]) \
-                                      + pyo.value(s._PHrho[(ndn,i)]) \
-                                      * xzdiff
-                if verbose and self.rank == self.rank0:
-                    print ("rank, node, scen, var, y", ndn, k,
-                           self.rank, xvar.name,
-                           pyo.value(s._ys[(ndn,i)]))
+        # compute the new y (or set to zero if it is iter 1)
+        # iter 1 is iter 0 post-solves when seen from the paper
+                       
+        if self._PHIter != 1:
+            for k,s in self.local_scenarios.items():
+                for (ndn,i), xvar in s._nonant_indexes.items():
+                    # pyo.value vs. _value ??
+                    xzdiff = xvar._value \
+                            - s._zs[(ndn,i)]._value
+                    s._ys[(ndn,i)]._value = pyo.value(s._Ws[(ndn,i)]) \
+                                          + pyo.value(s._PHrho[(ndn,i)]) \
+                                          * xzdiff
+                    if verbose and self.rank == self.rank0:
+                        print ("node, scen, var, y", ndn, k,
+                               self.rank, xvar.name,
+                               pyo.value(s._ys[(ndn,i)]))
+        else:
+            for k,s in self.local_scenarios.items():
+                for (ndn,i), xvar in s._nonant_indexes.items():
+                    s._ys[(ndn,i)]._value = 0
+            if verbose and self.rank == self.rank0:
+                print ("All y=0 for iter1")
+
 
     #============================
     def compute_phis_summand(self):
@@ -448,8 +459,12 @@ class APH(ph_base.PHBase):  # ??????
                 Ws = pyo.value(s._Ws[(ndn,i)]) + Wupdate
                 s._Ws[(ndn,i)] = Ws 
                 self.local_pwnorm += probs * Ws * Ws
-                zs = pyo.value(s._zs[(ndn,i)])\
+                # iter 1 is iter 0 post-solves when seen from the paper
+                if self._PHIter != 1:
+                    zs = pyo.value(s._zs[(ndn,i)])\
                      + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
+                else:
+                     zs = pyo.value(s._xbars[(ndn,i)])
                 s._zs[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
@@ -632,7 +647,6 @@ class APH(ph_base.PHBase):  # ??????
                 print ("Initiating APH Iteration",self._PHIter)
                 print("")
 
-            # iter 1 is iter 0 post-solves when seen from the paper
             self.Update_y(verbose)
             # Compute xbar, etc
             logging.debug('pre Compute_Averages on rank {}'.format(self.rank))
@@ -646,10 +660,12 @@ class APH(ph_base.PHBase):  # ??????
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
             phisum = self.compute_phis_summand() # post-step phis for dispatch
+            """
             if phisum < -0.1 or phisum > 0.1:
                 print('phisum={} on rank {} at iter {}'.format(phisum, self.rank, self._PHIter))
                 print("##### HEY! drop this test when ther are multiplet compute ranks !!!!")
                 quit()
+            """
             logging.debug('phisum={} on rank {}'.format(phisum, self.rank))
 
             # ORed checks for convergence
