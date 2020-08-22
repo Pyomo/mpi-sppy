@@ -33,7 +33,7 @@ fullcomm = mpi.COMM_WORLD
 rank_global = fullcomm.Get_rank()
 
 
-logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
+logging.basicConfig(level=logging.DEBUG, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
             )
 
@@ -570,7 +570,8 @@ class APH(ph_base.PHBase):  # ??????
                     if i >= scnt:
                         logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
                                       format(i, len(sortedbyphi), dispatch_frac))
-                        break
+                        return s_source, retval
+
             # If we are still here, there were not enough w/negative phi values.
             # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
             sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
@@ -631,6 +632,10 @@ class APH(ph_base.PHBase):  # ??????
         logging.debug('==== enter iterk on rank {}'.format(self.rank))
         verbose = self.PHoptions["verbose"]
         have_extensions = self.PH_extensions is not None
+        # put dispatch_frac on the object so extensions can modify it
+        self.dispatch_frac = self.PHoptions["dispatch_frac"]\
+                             if "dispatch_frac" in self.PHoptions else 1
+
         have_converger = self.PH_converger is not None
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"] 
@@ -684,14 +689,15 @@ class APH(ph_base.PHBase):  # ??????
             # slight divergence from PH, where mid-iter is before conv
             if have_extensions:
                 self.extobject.miditer()
-            dispatch_frac = self.PHoptions["dispatch_frac"]\
-                            if "dispatch_frac" in self.PHoptions else 1
             
             teeme = ("tee-rank0-solves" in self.PHoptions) \
                  and (self.PHoptions["tee-rank0-solves"] == True)
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
             # Aug2020 ... at least you would get dispatch
+            if self._PHIter == 1:
+                savefrac = self.dispatch_frac
+                self.dispatch_frac = 1   # to get a decent w for everyone
             logging.debug('pre APH_solve_loop on rank {}'.format(self.rank))
             self.APH_solve_loop(solver_options = \
                                 self.current_solver_options,
@@ -700,9 +706,11 @@ class APH(ph_base.PHBase):  # ??????
                                 disable_pyomo_signal_handling=True,
                                 tee=teeme,
                                 verbose=verbose,
-                                dispatch_frac=dispatch_frac)
+                                dispatch_frac=self.dispatch_frac)
 
             logging.debug('post APH_solve_loop on rank {}'.format(self.rank))
+            if self._PHIter == 1:
+                 self.dispatch_frac = savefrac
             if have_extensions:
                 self.extobject.enditer()
 
