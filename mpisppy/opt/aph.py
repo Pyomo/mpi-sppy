@@ -160,21 +160,14 @@ class APH(ph_base.PHBase):  # ??????
                            pyo.value(s._ys[(ndn,i)]))
 
     #============================
-    def compute_phis_summand(self, straightup=False):
+    def compute_phis_summand(self):
         # update phis, return summand
-        # straightup essentially lets us undo the iter1 excaption for the post step iter1
         summand = 0.0
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
-            # iter 1 is iter 0 post-solves when seen from the paper
-            if self._PHIter != 1 or straightup:
-                for (ndn,i), xvar in s._nonant_indexes.items():
-                    self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
-                        *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
-            else:
-                for (ndn,i), xvar in s._nonant_indexes.items():
-                    barx = pyo.value(s._xbars[(ndn,i)])
-                    self.phis[k] += (barx - xvar._value) * (barx - xvar._value)
+            for (ndn,i), xvar in s._nonant_indexes.items():
+                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
+                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
             self.phis[k] *= pyo.value(s.PySP_prob)
             summand += self.phis[k]
         return summand
@@ -264,11 +257,7 @@ class APH(ph_base.PHBase):  # ??????
                 scen_vnorm += pyo.value(s._ybars[(ndn,i)]) \
                               * pyo.value(s._ybars[(ndn,i)])
             self.local_punorm += pyo.value(s.PySP_prob) * scen_unorm
-            # iter 1 is iter 0 post-solves when seen from the paper
-            if self._PHIter != 1:
-                self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
-            else:
-                self.local_pvnorm += pyo.value(s.PySP_prob) * scen_unorm
+            self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
             new_tau_summand += pyo.value(s.PySP_prob) \
                                * (scen_unorm + scen_vnorm/self.APHgamma)
                 
@@ -459,11 +448,8 @@ class APH(ph_base.PHBase):  # ??????
                 Ws = pyo.value(s._Ws[(ndn,i)]) + Wupdate
                 s._Ws[(ndn,i)] = Ws 
                 self.local_pwnorm += probs * Ws * Ws
-                if self._PHIter != 1:  # post-solves iter 0 in the paper
-                    zs = pyo.value(s._zs[(ndn,i)])\
-                         + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
-                else:
-                    zs = pyo.value(s._zs[(ndn,i)]) + Wupdate/self.APHgamma
+                zs = pyo.value(s._zs[(ndn,i)])\
+                     + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
                 s._zs[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
@@ -646,6 +632,7 @@ class APH(ph_base.PHBase):  # ??????
                 print ("Initiating APH Iteration",self._PHIter)
                 print("")
 
+            # iter 1 is iter 0 post-solves when seen from the paper
             self.Update_y(verbose)
             # Compute xbar, etc
             logging.debug('pre Compute_Averages on rank {}'.format(self.rank))
@@ -658,7 +645,7 @@ class APH(ph_base.PHBase):  # ??????
             # do this as a listener side-gig and add another reduction.
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
-            phisum = self.compute_phis_summand(straightup=True) # post-step phis for dispatch
+            phisum = self.compute_phis_summand() # post-step phis for dispatch
             if phisum < -0.1 or phisum > 0.1:
                 print('phisum={} on rank {} at iter {}'.format(phisum, self.rank, self._PHIter))
                 print("##### HEY! drop this test when ther are multiplet compute ranks !!!!")
