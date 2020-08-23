@@ -573,6 +573,8 @@ class APH(ph_base.PHBase):  # ??????
                         return s_source, retval
 
             # If we are still here, there were not enough w/negative phi values.
+            if i == 0 and self.nu == 1.0:
+                print(f"WARNING: no negavie phi on rank {self.rank}")
             # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
             sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                  key=lambda item: item[1][-1])}
@@ -597,7 +599,6 @@ class APH(ph_base.PHBase):  # ??????
         for dguy in dlist:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
-            print(f"debug in aph.py k={k}, p={p}")
             s = s_source[k]
             self.dispatchrecord[k].append((self._PHIter, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
@@ -667,13 +668,7 @@ class APH(ph_base.PHBase):  # ??????
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
             phisum = self.compute_phis_summand() # post-step phis for dispatch
-            """
-            if phisum < -0.1 or phisum > 0.1:
-                print('phisum={} on rank {} at iter {}'.format(phisum, self.rank, self._PHIter))
-                print("##### HEY! drop this test when ther are multiplet compute ranks !!!!")
-                quit()
-            """
-            logging.debug('phisum={} on rank {}'.format(phisum, self.rank))
+            logging.debug('phisum={} after step on {}'.format(phisum, self.rank))
 
             # ORed checks for convergence
             if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
