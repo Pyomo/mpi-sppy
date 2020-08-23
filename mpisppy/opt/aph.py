@@ -33,7 +33,7 @@ fullcomm = mpi.COMM_WORLD
 rank_global = fullcomm.Get_rank()
 
 
-logging.basicConfig(level=logging.DEBUG, # level=logging.CRITICAL, DEBUG
+logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
             )
 
@@ -577,6 +577,8 @@ class APH(ph_base.PHBase):  # ??????
             sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                  key=lambda item: item[1][-1])}
             for k,t in sortedbyI.items():
+                if k in retval:
+                    continue
                 retval.append((k, sortedbyphi[k]))  # sname, phi
                 i += 1
                 if i >= scnt:

@@ -284,7 +284,11 @@ if __name__ == "__main__":
         raise RuntimeError("nscen={} must be a multiple of n_proc={}".\
                            format(nscen, n_proc))
     cb_data = dict()
-    cb_data["solver"] = solver # can be None
+    cb_data["convex_relaxation"] = True
+    if cb_data["convex_relaxation"]:
+        cb_data["solver"] = None
+    else:
+        cb_data["solver"] = solver  # try to get a good starting point
     cb_data["tee"] = False # for inialization solves
     cb_data["epath"] = egret_path_to_data
     md_dict = _md_dict(cb_data)
@@ -314,7 +318,6 @@ if __name__ == "__main__":
                                  lines)
     cb_data["epath"] = egret_path_to_data
     cb_data["acstream"] = acstream
-    cb_data["convex_relaxation"] = True
     creator_options = {"cb_data": cb_data}
     scenario_names=["Scenario_"+str(i)\
                     for i in range(1,len(cb_data["etree"].rootnode.ScenarioList)+1)]
@@ -325,6 +328,9 @@ if __name__ == "__main__":
                              pysp2_callback,
                              creator_options)
     ###solver.options["BarHomogeneous"] = 1
+    if "gurobi" in solvername:
+        solver.options["BarHomogeneous"] = 1
+
     results = solver.solve(ef, tee=True)
     pyo.assert_optimal_termination(results)
 
