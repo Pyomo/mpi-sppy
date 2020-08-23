@@ -573,8 +573,8 @@ class APH(ph_base.PHBase):  # ??????
                         return s_source, retval
 
             # If we are still here, there were not enough w/negative phi values.
-            if i == 0 and self.nu == 1.0:
-                print(f"WARNING: no negavie phi on rank {self.rank}")
+            if i == 0 and self.nu == 1.0 and self._PHIter > 1:
+                print(f"WARNING: no negative phi on rank {self.rank}")
             # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
             sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                  key=lambda item: item[1][-1])}
