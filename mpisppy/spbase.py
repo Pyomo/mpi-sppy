@@ -13,6 +13,8 @@ import mpisppy.utils.sputils as sputils
 from collections import OrderedDict
 from mpi4py import MPI
 
+from mpisppy import tt_timer
+
 logger = logging.getLogger("PHBase")
 logger.setLevel(logging.WARN)
 
@@ -79,6 +81,10 @@ class SPBase(object):
         self.rank = self.mpicomm.Get_rank()
         self.n_proc = self.mpicomm.Get_size()
         self.rank0 = rank0
+        self.rank_global = MPI.COMM_WORLD.Get_rank()
+
+        if self.rank_global == 0:
+            tt_timer.toc("Start SPBase.__init__" ,delta=False)
 
         # Call various initialization methods
         self.attach_scenario_rank_maps()
