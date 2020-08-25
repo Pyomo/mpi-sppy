@@ -129,5 +129,25 @@ class Test_aph_sizes(unittest.TestCase):
         print ("tbound ={}".format(tbound))
 
 
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solvername,))
+    def test_use_lag(self):
+        PHoptions = self._copy_of_base_options()
+        PHoptions["PHIterLimit"] = 2
+        PHoptions["async_frac_needed"] = 0.5
+        PHoptions["async_sleep_secs"] = 0.5
+        a = 2
+        PHoptions["APHuse_lag"] = True
+        aph = mpisppy.opt.aph.APH(PHoptions,
+                              self.all3_scenario_names,
+                              scenario_creator,
+                              scenario_denouement,
+                              cb_data=3)
+
+        conv, obj, tbound = aph.APH_main(spcomm=None)
+        print (f"use lag objthing={obj}")
+        print ("tbound ={}".format(tbound))
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -109,6 +109,8 @@ class APH(ph_base.PHBase):  # ??????
         self.local_pwnorm = 0
         self.local_pznorm = 0
         self.conv = None
+        self.use_lag = False if "APHuse_lag" not in PHoptions\
+                        else PHoptions["APHuse_lag"]
         self.APHgamma = 1 if "APHgamma" not in PHoptions\
                         else PHoptions["APHgamma"]
         assert(self.APHgamma > 0)
@@ -152,12 +154,16 @@ class APH(ph_base.PHBase):  # ??????
         if self._PHIter != 1:
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._nonant_indexes.items():
+                    if not self.use_lag:
+                        z_touse = s._zs[(ndn,i)]._value
+                        W_touse = pyo.value(s._Ws[(ndn,i)])
+                    else:
+                        z_touse = s._zs_foropt[(ndn,i)]._value
+                        W_touse = pyo.value(s._Ws_foropt[(ndn,i)])
                     # pyo.value vs. _value ??
-                    xzdiff = xvar._value \
-                            - s._zs[(ndn,i)]._value
-                    s._ys[(ndn,i)]._value = pyo.value(s._Ws[(ndn,i)]) \
+                    s._ys[(ndn,i)]._value = W_touse \
                                           + pyo.value(s._PHrho[(ndn,i)]) \
-                                          * xzdiff
+                                          * (xvar._value - z_touse)
                     if verbose and self.rank == self.rank0:
                         print ("node, scen, var, y", ndn, k,
                                self.rank, xvar.name,
@@ -501,7 +507,32 @@ class APH(ph_base.PHBase):  # ??????
             phc = self.PH_convobject(self, self.rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
 
-    
+
+    #==========
+    def _update_foropt(self, dlist):
+        # dlist is a list of subproblem names that were dispatched
+        assert self.use_lag
+        """
+        if not self.bundling:
+            phidict = self.phis
+        else:
+            phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]]}
+        """
+        
+        if not self.bundling:
+            for dl in dlist:
+                scenario = self.local_scenarios[dl[0]]
+                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
+                    scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
+        else:
+            for dl in dlist:
+                for scenario in local_subproblems[dl[0]].scen_list:
+                    for (ndn,i), xvar in scenario._nonant_indexes.items():
+                        scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
+                        scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
+
+
     #====================================================================
     def APH_solve_loop(self, solver_options=None,
                        use_scenarios_not_subproblems=False,
@@ -526,6 +557,9 @@ class APH(ph_base.PHBase):  # ??????
             tee (boolean): show solver output to screen if possible
             verbose (boolean): indicates verbose output
             dispatch_frac (float): fraction to send out for solution based on phi
+
+        Returns:
+            dlist (list of str): the subproblems that were dispatched
         """
         #==========
         def _vb(msg): 
@@ -619,7 +653,8 @@ class APH(ph_base.PHBase):  # ??????
                       (np.min(all_pyomo_solve_times),
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
-
+        return dlist
+    
 
     #====================================================================
     def APH_iterk(self, spcomm):
@@ -696,14 +731,14 @@ class APH(ph_base.PHBase):  # ??????
                 savefrac = self.dispatch_frac
                 self.dispatch_frac = 1   # to get a decent w for everyone
             logging.debug('pre APH_solve_loop on rank {}'.format(self.rank))
-            self.APH_solve_loop(solver_options = \
-                                self.current_solver_options,
-                                dtiming=dtiming,
-                                gripe=True,
-                                disable_pyomo_signal_handling=True,
-                                tee=teeme,
-                                verbose=verbose,
-                                dispatch_frac=self.dispatch_frac)
+            dlist = self.APH_solve_loop(solver_options = \
+                                        self.current_solver_options,
+                                        dtiming=dtiming,
+                                        gripe=True,
+                                        disable_pyomo_signal_handling=True,
+                                        tee=teeme,
+                                        verbose=verbose,
+                                        dispatch_frac=self.dispatch_frac)
 
             logging.debug('post APH_solve_loop on rank {}'.format(self.rank))
             if self._PHIter == 1:
@@ -719,6 +754,8 @@ class APH(ph_base.PHBase):  # ??????
                       % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" \
                       % (dt.datetime.now() - self.startdt).total_seconds())
+            if self.use_lag:
+                self._update_foropt(dlist)
 
         logging.debug('Setting synchronizer.quitting on rank %d' % self.rank)
         self.synchronizer.quitting = 1
@@ -741,29 +778,52 @@ class APH(ph_base.PHBase):  # ??????
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
-        self.PH_Prep(attach_prox=False)
+        self.PH_Prep(attach_duals=False, attach_prox=False)
 
         # Begin APH-specific Prep
         for sname, scenario in self.local_scenarios.items():    
             # ys is plural of y
             scenario._ys = pyo.Param(scenario._nonant_indexes.keys(),
-                                        initialize = 0.0,
-                                        mutable = True)
+                                     initialize = 0.0,
+                                     mutable = True)
             scenario._ybars = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize = 0.0,
                                         mutable = True)
             scenario._zs = pyo.Param(scenario._nonant_indexes.keys(),
-                                        initialize = 0.0,
-                                        mutable = True)
+                                     initialize = 0.0,
+                                     mutable = True)
+            # lag: we will support lagging back only to the last solve
+            # IMPORTANT: pyomo does not support a second reference so no:
+            # scenario._zs_foropt = scenario._zs
+            
+            if self.use_lag:
+                scenario._zs_foropt = pyo.Param(scenario._nonant_indexes.keys(),
+                                         initialize = 0.0,
+                                         mutable = True)
+                scenario._Ws_foropt = pyo.Param(scenario._nonant_indexes.keys(),
+                                         initialize = 0.0,
+                                         mutable = True)
                 
             objfct = find_active_objective(scenario, True)
                 
-            for (ndn,i), xvar in scenario._nonant_indexes.items():
-                # proximal term
-                objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
-                    (scenario._PHrho[(ndn,i)] /2.0) * \
-                    (xvar - scenario._zs[(ndn,i)]) * \
-                    (xvar - scenario._zs[(ndn,i)])
+            if self.use_lag:
+                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    # proximal term
+                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
+                        (scenario._PHrho[(ndn,i)] /2.0) * \
+                        (xvar - scenario._zs_foropt[(ndn,i)]) * \
+                        (xvar - scenario._zs_foropt[(ndn,i)])
+                    # W term
+                    scenario._PHW_on[ndn,i] * scenario._Ws_foropt[ndn,i] * xvar
+            else:
+                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    # proximal term
+                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
+                        (scenario._PHrho[(ndn,i)] /2.0) * \
+                        (xvar - scenario._zs[(ndn,i)]) * \
+                        (xvar - scenario._zs[(ndn,i)])
+                    # W term
+                    scenario._PHW_on[ndn,i] * scenario._Ws[ndn,i] * xvar
 
         # End APH-specific Prep
         
