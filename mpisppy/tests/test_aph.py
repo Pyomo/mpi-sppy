@@ -149,5 +149,21 @@ class Test_aph_sizes(unittest.TestCase):
         print ("tbound ={}".format(tbound))
 
 
+    def test_lags_bundles(self):
+        PHoptions = self._copy_of_base_options()
+        PHoptions["PHIterLimit"] = 2
+        PHoptions["bundles_per_rank"] = 2
+        PHoptions["async_frac_needed"] = 0.5
+        PHoptions["async_sleep_secs"] = 0.5
+        PHoptions["APHuse_lag"] = True
+        aph = mpisppy.opt.aph.APH(PHoptions, self.all10_scenario_names,
+                              scenario_creator, scenario_denouement,
+                              cb_data=10)
+        conv, obj, tbound = aph.APH_main(spcomm=None)
+        print ("uselag bundle objthing={}, (pre-lag was=224712.9)".format(obj))
+        print ("bundle tbound ={} (was=223168.5)".format(tbound))
+
+
+
 if __name__ == '__main__':
     unittest.main()

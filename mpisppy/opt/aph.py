@@ -527,7 +527,8 @@ class APH(ph_base.PHBase):  # ??????
                     scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
         else:
             for dl in dlist:
-                for scenario in local_subproblems[dl[0]].scen_list:
+                for sname in self.local_subproblems[dl[0]].scen_list:
+                    scenario = self.local_scenarios[sname]
                     for (ndn,i), xvar in scenario._nonant_indexes.items():
                         scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
                         scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
