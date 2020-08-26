@@ -120,7 +120,7 @@ def pysp2_callback(scenario_name,
 
     # the exact acopf model is hard-wired here:
     if convex_relaxation:
-        acopf_model = eac_relax.create_soc_relaxation
+        acopf_model = eac_relax.create_soc_relaxation(use_linear_relaxation=False)
     else:
         acopf_model = eac.create_riv_acopf_model
 
