@@ -119,6 +119,8 @@ class APH(ph_base.PHBase):  # ??????
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems
 
+        self.use_lag = False
+
     #============================
     def setup_Lens(self):
         """ We need to know the lengths of c-style vectors for listener_util
@@ -741,29 +743,52 @@ class APH(ph_base.PHBase):  # ??????
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
-        self.PH_Prep(attach_prox=False)
+        self.PH_Prep(attach_duals=False, attach_prox=False)
 
         # Begin APH-specific Prep
         for sname, scenario in self.local_scenarios.items():    
             # ys is plural of y
             scenario._ys = pyo.Param(scenario._nonant_indexes.keys(),
-                                        initialize = 0.0,
-                                        mutable = True)
+                                     initialize = 0.0,
+                                     mutable = True)
             scenario._ybars = pyo.Param(scenario._nonant_indexes.keys(),
                                         initialize = 0.0,
                                         mutable = True)
             scenario._zs = pyo.Param(scenario._nonant_indexes.keys(),
-                                        initialize = 0.0,
-                                        mutable = True)
+                                     initialize = 0.0,
+                                     mutable = True)
+            # lag: we will support lagging back only to the last solve
+            # IMPORTANT: pyomo does not support a second reference so no:
+            # scenario._zs_touse = scenario._zs
+            
+            if self.use_lag:
+                scenario._zs_touse = pyo.Param(scenario._nonant_indexes.keys(),
+                                         initialize = 0.0,
+                                         mutable = True)
+                scenario._Ws_touse = pyo.Param(scenario._nonant_indexes.keys(),
+                                         initialize = 0.0,
+                                         mutable = True)
                 
             objfct = find_active_objective(scenario, True)
                 
-            for (ndn,i), xvar in scenario._nonant_indexes.items():
-                # proximal term
-                objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
-                    (scenario._PHrho[(ndn,i)] /2.0) * \
-                    (xvar - scenario._zs[(ndn,i)]) * \
-                    (xvar - scenario._zs[(ndn,i)])
+            if self.use_lag:
+                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    # proximal term
+                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
+                        (scenario._PHrho[(ndn,i)] /2.0) * \
+                        (xvar - scenario._zs_touse[(ndn,i)]) * \
+                        (xvar - scenario._zs_touse[(ndn,i)])
+                    # W term
+                    scenario._PHW_on[ndn_i] * scenario._Ws_touse[ndn_i] * xvar
+            else:
+                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    # proximal term
+                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
+                        (scenario._PHrho[(ndn,i)] /2.0) * \
+                        (xvar - scenario._zs[(ndn,i)]) * \
+                        (xvar - scenario._zs[(ndn,i)])
+                    # W term
+                    scenario._PHW_on[ndn,i] * scenario._Ws[ndn,i] * xvar
 
         # End APH-specific Prep
         

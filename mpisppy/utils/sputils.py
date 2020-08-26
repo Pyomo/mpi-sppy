@@ -11,6 +11,7 @@ from mpi4py import MPI
 from pyomo.pysp.phutils import find_active_objective
 from pyomo.core.expr.numeric_expr import LinearExpression
 
+from mpisppy import tt_timer
 
 def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     """ top level for the hub and spoke system
@@ -67,6 +68,7 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     intercomm, intracomm = make_comms(n_spokes, fullcomm=fullcomm)
     rank_inter = intercomm.Get_rank()
     rank_intra = intracomm.Get_rank()
+    rank_global = fullcomm.Get_rank()
 
     # Assign hub/spokes to individual ranks
     if rank_inter == 0: # This rank is a hub
@@ -99,15 +101,19 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     spcomm.make_windows()
     if rank_inter == 0:
         spcomm.setup_hub()
+    if rank_global == 0:
+        tt_timer.toc("Starting spcomm.main()", delta=False)
     spcomm.main()
     if rank_inter == 0: # If this is the hub
         spcomm.send_terminate()
-        if rank_intra == 0:
-            print("Hub algorithm complete, waiting for termination barrier")
 
+    if rank_global == 0:
+        tt_timer.toc("Hub algorithm complete, waiting for termination barrier", delta=False)
     fullcomm.Barrier()
 
     spcomm.free_windows()
+    if rank_global == 0:
+        tt_timer.toc("Windows freed", delta=False)
 
     return spcomm, opt_dict
     
