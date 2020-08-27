@@ -249,6 +249,7 @@ if __name__ == "__main__":
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
     solvername = "gurobi"
+    print(f"Solving with {solvername}")
     solver = pyo.SolverFactory(solvername)
     if "gurobi" in solvername:
         solver.options["BarHomogeneous"] = 1
@@ -285,6 +286,7 @@ if __name__ == "__main__":
                            format(nscen, n_proc))
     cb_data = dict()
     cb_data["convex_relaxation"] = True
+    print(f"Convex relaxation={convex_relaxation}")
     if cb_data["convex_relaxation"]:
         cb_data["solver"] = None
     else:
