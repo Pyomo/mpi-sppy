@@ -110,14 +110,14 @@ def pysp2_callback(scenario_name,
                                format(this_branch[0], scenario_name))
     def _egret_model(md_dict):
         # the exact acopf model is hard-wired here:
-        if convex_relaxation:
+        if not convex_relaxation:
             pyomod, mdict = eac.create_riv_acopf_model(md_dict, 
                                             include_feasibility_slack=True)
 
         else:
-            pyomod, mdict = eac._relax.create_soc_relaxation(md_dict, 
-                                            include_feasibility_slack=True,
-                                            use_linear_relaxation=False)
+            pyomod, mdict = eac_relax.create_soc_relaxation(md_dict, 
+                                                include_feasibility_slack=True,
+                                                use_linear_relaxation=False)
         return pyomod, mdict
 
     # pull the number off the end of the scenario name
