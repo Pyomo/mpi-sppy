@@ -28,6 +28,7 @@ from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from pyomo.pysp.phutils import find_active_objective
 
 from mpi4py import MPI
+from mpisppy import tt_timer
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
@@ -75,6 +76,8 @@ class PHBase(mpisppy.spbase.SPBase):
                          rank0=rank0,
                          cb_data=cb_data)
 
+        if self.rank_global == 0:
+            tt_timer.toc("Start PHBase.__init__", delta=False)
 
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
@@ -1163,6 +1166,9 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self._PHIter = 0
         self._save_original_nonants()
+
+        if self.rank_global == 0:
+            tt_timer.toc("Creating solvers", delta=False)
         self._create_solvers()
         
         teeme = False
@@ -1171,6 +1177,8 @@ class PHBase(mpisppy.spbase.SPBase):
             
         if self.PHoptions["verbose"]:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.rank))
+        if self.rank_global == 0:
+            tt_timer.toc("Entering solve loop in PHBase.Iter0", delta=False)
 
         self.solve_loop(solver_options=self.current_solver_options,
                         dtiming=dtiming,
@@ -1285,18 +1293,20 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():
+                    if self.rank == self.rank0:
+                        tt_timer.toc("Cylinder convergence", delta=False)
                     break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
                     if self.rank == self.rank0:
-                        print("User-supplied converger determined termination criterion reached")
+                        tt_timer.toc("User-supplied converger determined termination criterion reached", delta=False)
                     break
             elif synchronizer is None and self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
                     if self.rank == self.rank0:
-                        print("PHBase Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]))
+                        tt_timer.toc("PHBase Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), delta=False)
                     break
 
             teeme = (

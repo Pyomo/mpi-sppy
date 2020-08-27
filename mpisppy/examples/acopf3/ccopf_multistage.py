@@ -108,7 +108,18 @@ def pysp2_callback(scenario_name,
                 print("enode.FailedLines=", enode.FailedLines)
                 raise RuntimeError("Branch (line) {} neither up nor down in scenario {}".\
                                format(this_branch[0], scenario_name))
-    
+    def _egret_model(md_dict):
+        # the exact acopf model is hard-wired here:
+        if convex_relaxation:
+            pyomod, mdict = eac.create_riv_acopf_model(md_dict, 
+                                            include_feasibility_slack=True)
+
+        else:
+            pyomod, mdict = eac._relax.create_soc_relaxation(md_dict, 
+                                            include_feasibility_slack=True,
+                                            use_linear_relaxation=False)
+        return pyomod, mdict
+
     # pull the number off the end of the scenario name
     scen_num = sputils.extract_num(scenario_name)
     #print ("debug scen_num=",scen_num)
@@ -118,20 +129,15 @@ def pysp2_callback(scenario_name,
     full_scenario_model = pyo.ConcreteModel()
     full_scenario_model.stage_models = dict()
 
-    # the exact acopf model is hard-wired here:
-    if convex_relaxation:
-        acopf_model = eac_relax.create_soc_relaxation
-    else:
-        acopf_model = eac.create_riv_acopf_model
-
     # look at egret/data/model_data.py for the format specification of md_dict
     first_stage_md_dict = _md_dict(cb_data)
     generator_set = first_stage_md_dict.attributes("generator")
     generator_names = generator_set["names"]
 
     # the following creates the first stage model
-    full_scenario_model.stage_models[1], model_dict = acopf_model(
-        first_stage_md_dict, include_feasibility_slack=True)
+    full_scenario_model.stage_models[1], model_dict = _egret_model(
+        first_stage_md_dict)
+
     full_scenario_model.stage_models[1].obj.deactivate()
     setattr(full_scenario_model,
             "stage_models_"+str(1),
@@ -145,7 +151,7 @@ def pysp2_callback(scenario_name,
         lines_up_and_down(stage_md_dict, enodes[stage-1])
         
         full_scenario_model.stage_models[stage], model_dict = \
-            acopf_model(stage_md_dict, include_feasibility_slack=True)
+            _egret_model(stage_md_dict)
         full_scenario_model.stage_models[stage].obj.deactivate()
         setattr(full_scenario_model,
                 "stage_models_"+str(stage),

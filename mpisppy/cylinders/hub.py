@@ -10,6 +10,8 @@ from mpisppy.cylinders.spcommunicator import SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
+from mpisppy import tt_timer
+
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
                          "hub.log",
@@ -345,10 +347,10 @@ class PHHub(Hub):
             best_bound = self.BestOuterBound
             elapsed = time.time() - self.inst_time
             if self.opt._PHIter == 1:
-                row = f'{"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s} {"Wall Time":>8s}'
-                print(row, flush=True)
-            row = f"{best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f} {elapsed:8.2f}s"
-            print(row, flush=True)
+                row = f'{"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s}'
+                tt_timer.toc(row, delta=False)
+            row = f"{best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f}"
+            tt_timer.toc(row, delta=False)
 
         abs_gap_satisfied = False
         rel_gap_satisfied = False
@@ -359,6 +361,10 @@ class PHHub(Hub):
             if "abs_gap" in self.options:
                 abs_gap = self.compute_gap(compute_relative=False)
                 abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
+        if abs_gap_satisfied and self.rank_global == 0:
+            tt_timer.toc(f"Terminating based on cylinder absolute gap {abs_gap:14.4f}", delta=False)
+        if rel_gap_satisfied and self.rank_global == 0:
+            tt_timer.toc(f"Terminating based on cylinder relative gap {rel_gap*100:12.4f}", delta=False)
         return abs_gap_satisfied or rel_gap_satisfied
 
     def main(self):
