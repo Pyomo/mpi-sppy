@@ -200,6 +200,7 @@ def pysp2_callback(scenario_name,
     inst.PySP_prob = 1 / etree.numscens
     # solve it so subsequent code will have a good start
     if solver is not None:
+        print(f"scenario creation callback is solving {scenario_name} on rank {rank}")
         solver.solve(inst)  #, tee=True) #symbolic_solver_labels=True, keepfiles=True)
 
     # attachments
