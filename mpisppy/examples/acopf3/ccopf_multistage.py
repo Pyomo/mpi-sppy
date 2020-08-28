@@ -200,7 +200,7 @@ def pysp2_callback(scenario_name,
     inst.PySP_prob = 1 / etree.numscens
     # solve it so subsequent code will have a good start
     if solver is not None:
-        solver.solve(inst, tee=True) #symbolic_solver_labels=True, keepfiles=True)
+        solver.solve(inst)  #, tee=True) #symbolic_solver_labels=True, keepfiles=True)
 
     # attachments
     inst._enodes = enodes
@@ -254,7 +254,7 @@ if __name__ == "__main__":
     import mpi4py.MPI as mpi
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
-    solvername = "cplex"
+    solvername = "gurobi"
     print(f"Solving with {solvername}")
     solver = pyo.SolverFactory(solvername)
     if "gurobi" in solvername:
@@ -294,8 +294,7 @@ if __name__ == "__main__":
     cb_data["convex_relaxation"] = True
     print(f"Convex relaxation={cb_data['convex_relaxation']}")
     if cb_data["convex_relaxation"]:
-        print("\nXXXXX relaxed *but* solving sub-problems to initialize anyway\n")
-        cb_data["solver"] = solver
+        cb_data["solver"] = None
     else:
         cb_data["solver"] = solver  # try to get a good starting point
     cb_data["tee"] = False # for inialization solves
