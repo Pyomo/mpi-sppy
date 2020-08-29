@@ -78,6 +78,24 @@ a candidate for x-hat for problems where feasibility is not an issue.
 The software `xhatshuffelooper` looks at maybe four or five x values per
 PH iteration, and fewer per APH iteration with dispatch fractions below 1.
 
+Convergence Metric
+^^^^^^^^^^^^^^^^^^
+
+At each iteration, the software outputs a convergence metric that is
+
+.. math::
+
+   \frac{||u||_{2}^{2}}{||w||_{2}^{2}}} + {||v||_{2}^{2}}{||z||_{2}^{2}}}
+
+where the norms are probability weighted.
+
+Dispatch
+^^^^^^^^
+
+Dispatch is based on most negative $\phi$ and if there are not
+enough negative $\phi$, then the least recently dispatched are
+dispatched to fill out the dispatch fraction.
+
 Notes about convex problems
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
@@ -94,6 +112,7 @@ The scripts for this example are currently in the paper repo in
 `farmer_driver.py`.  The driver references the model, which is in the
 `mpi-sppy` repo.  The `aph05.bash` script is intended
 to have a dispatch fraction of 1/2 (hence the 05 for 0.5 in the name).
+Aside: you can run PH with `quicky.bash`.
 
 ranks
 -----
