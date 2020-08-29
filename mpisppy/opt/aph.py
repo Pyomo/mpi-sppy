@@ -121,6 +121,8 @@ class APH(ph_base.PHBase):  # ??????
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems
 
+        self.use_lag = False
+
     #============================
     def setup_Lens(self):
         """ We need to know the lengths of c-style vectors for listener_util

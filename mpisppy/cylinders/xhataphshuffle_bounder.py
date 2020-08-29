@@ -1,5 +1,38 @@
 # This software is distributed under the 3-clause BSD License.
 # the APH version of the xhat shuffle looper bounder
+"""
+from a PR:
+
+bknueven reviewed 8 days ago
+mpisppy/cylinders/xhatshufflelooper_bounder.py
+            self.running_trace_filen = filen
+        else:
+            self.running_trace_filen = None
+        # end code to support running trace
+ @bknueven
+bknueven 8 days ago Member
+XhatShuffleInnerBound inherits from _BoundSpoke, which should be taking care of this already -- see the implementation of the bound setter and _append_trace of _BoundSpoke.
+
+@DLWoodruffReply…
+@bknueven
+bknueven reviewed 8 days ago
+mpisppy/cylinders/xhataphshuffle_bounder.py
+logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
+
+class XhatAPHShuffleInnerBound(spoke.InnerBoundNonantSpoke):
+
+ @bknueven
+bknueven 8 days ago Member
+For maintainability, it would be better if this inherited from XhatShuffleInnerBound and just overwrote a few methods, or the difference in logic was extracted out of XhatSuffleInnerBound into one method which this class overwrote.
+
+@DLWoodruffReply…
+@bknueven
+"""
+
+
+
+
+
 # TBD: factor this or delete it!!!!!
 import logging
 import random
