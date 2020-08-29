@@ -121,8 +121,6 @@ class APH(ph_base.PHBase):  # ??????
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems
 
-        self.use_lag = False
-
     #============================
     def setup_Lens(self):
         """ We need to know the lengths of c-style vectors for listener_util
@@ -520,7 +518,6 @@ class APH(ph_base.PHBase):  # ??????
         else:
             phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]]}
         """
-        
         if not self.bundling:
             for dl in dlist:
                 scenario = self.local_scenarios[dl[0]]
@@ -624,7 +621,6 @@ class APH(ph_base.PHBase):  # ??????
                     logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
                                   format(i, len(sortedbyphi), dispatch_frac))
                     break
-            print("debug dispatch list=",retval)
             return s_source, retval
 
 
