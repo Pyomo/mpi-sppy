@@ -31,23 +31,23 @@ name used in args parser for examples.
      - "PHIterLimit"
      - --max-iterations
      - A termination criterion
-   * - :math: `\rho`
+   * - :math:`\rho`
      - "defaultPHrho"
      - --default-rho
      - Proximal term multiplier in objective and y update
-   * - :math: `\nu`
+   * - :math:`\nu`
      - "APHnu"
      - --aph-nu
      - Step size multiplier (e.g. 0.5; default 1)
-   * - :math: `\gamma`
+   * - :math:`\gamma`
      - "APHgamma"
      - --aph-gamma
      - Primal vs. dual emphasis (0,2) default 1; larger is primal
-   * - :math: `I_{k}`
+   * - :math:`I_{k}`
      - "dispatch_frac"
      - --dispatch-frac
      - Fraction of subproblems at each rank to dispatch
-   * - :math: `I_{k}`
+   * - :math:`I_{k}`
      - "async_frac_needed"
      - --aph-frac-needed
      - Fraction of ranks to wait for (default 1)
@@ -55,7 +55,7 @@ name used in args parser for examples.
      - "async_sleep_secs"
      - --listener-sleep-secs
      - The software hangs if too small (default 0.5)
-   * - :math: `d(i,k)`
+   * - :math:`d(i,k)`
      - "APHuse_lag"
      - --with-aph-lag
      - In step 7,8 use w and z from last solve for i
@@ -85,15 +85,14 @@ At each iteration, the software outputs a convergence metric that is
 
 .. math::
 
-   \frac{||u||_{2}^{2}}{||w||_{2}^{2}}} + {||v||_{2}^{2}}{||z||_{2}^{2}}}
-
+   \frac{||u||_{2}^{2}}{||w||_{2}^{2}} + \frac{||v||_{2}^{2}}{||z||_{2}^{2}}
 where the norms are probability weighted.
 
 Dispatch
 ^^^^^^^^
 
-Dispatch is based on most negative $\phi$ and if there are not
-enough negative $\phi$, then the least recently dispatched are
+Dispatch is based on most negative :math:`\phi` and if there are not
+enough negative :math:`\phi`, then the least recently dispatched are
 dispatched to fill out the dispatch fraction.
 
 Notes about convex problems
