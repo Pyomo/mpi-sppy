@@ -1,0 +1,95 @@
+.. _sec-aph::
+
+APH
+===
+
+The code is based on "Algorithm 2: Asynchronous projective hedging
+(APH) -- Algorithm 1 specialize to the setup S1-S4" from "Asynchronous
+Projective Hedging for Stochastic Programming"
+http://www.optimization-online.org/DB_HTML/2018/10/6895.html
+
+Options
+^^^^^^^
+
+The following table lists the simple options. The column labeled ``Paper``
+gives an indication of what parameter in the paper is related to the
+parameter in the software (the parameters with Greek letters are one-to-one
+and the other are not). The column
+labeled ``PHoptions`` gives the name in the options dictionary
+passed to the APH constructor. The column labeled ``Parser`` gives the
+name used in args parser for examples.
+
+.. list-table:: APH Options
+   :widths: 10 15 15 30
+   :header-rows: 1
+
+   * - Paper
+     - PHoptions
+     - Parser
+     - Description
+   * - ...
+     - "PHIterLimit"
+     - --max-iterations
+     - A termination criterion
+   * - :math: `\rho`
+     - "defaultPHrho"
+     - --default-rho
+     - Proximal term multiplier in objective and y update
+   * - :math: `\nu`
+     - "APHnu"
+     - --aph-nu
+     - Step size multiplier (e.g. 0.5; default 1)
+   * - :math: `\gamma`
+     - "APHgamma"
+     - --aph-gamma
+     - Primal vs. dual emphasis (0,2) default 1; larger is primal
+   * - :math: `I_{k}`
+     - "dispatch_frac"
+     - --dispatch-frac
+     - Fraction of subproblems at each rank to dispatch
+   * - :math: `I_{k}`
+     - "async_frac_needed"
+     - --aph-frac-needed
+     - Fraction of ranks to wait for (default 1)
+   * -
+     - "async_sleep_secs"
+     - --listener-sleep-secs
+     - The software hangs if too small (default 0.5)
+   * - :math: `d(i,k)`
+     - "APHuse_lag"
+     - --with-aph-lag
+     - In step 7,8 use w and z from last solve for i
+       
+Most of these could be varied iteration by iteration using callback extensions.
+
+x-hat
+^^^^^
+
+In addition to the notation in the paper, the software has the concept of
+x-hat, which is a solution that is implementable and admissible (feasible
+for all scenarios). Asynchronously and in parallel with APH there is
+software that continuously uses the x values found by APH to evaluate
+as potential best x-hat values.
+
+The current xhat software is not specialized for APH. For APH with
+very low dispatch fractions, one might want to also look at z as
+a candidate for x-hat for problems where feasibility is not an issue.
+
+The software `xhatshuffelooper` looks at maybe four or five x values per
+PH iteration, and fewer per APH iteration with dispatch fractions below 1.
+
+Notes about convex problems
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+For the convex problems that we have looked at, the variance in solve
+times is not very high, so the frac needed parameter should be high and
+probably should just always be 1.  With fewer hub ranks than sub-problems, the
+dispatch frac option should be used.
+
+farmer
+^^^^^^
+
+The scripts for this example are currently in the paper repo in
+`AsyncPH/experiments/challange/farmer`; the driver is
+`farmer_driver.py`.  The driver references the model, which is in the
+mpi-sppy repo.
