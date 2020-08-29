@@ -113,7 +113,7 @@ def main():
 
     PHoptions = dict()
     if cb_data["convex_relaxation"]:
-        PHoptions["solvername"] = "cplex"
+        PHoptions["solvername"] = "gurobi"
         if "gurobi" in PHoptions["solvername"]:
             PHoptions["iter0_solver_options"] = {"BarHomogeneous": 1}
             PHoptions["iterk_solver_options"] = {"BarHomogeneous": 1}
@@ -166,6 +166,7 @@ def main():
 
 
     # PH hub
+    PHoptions["tee-rank0-solves"] = True
     hub_dict = {
         "hub_class": PHHub,
         "hub_kwargs": {"options": None},
