@@ -92,4 +92,14 @@ farmer
 The scripts for this example are currently in the paper repo in
 `AsyncPH/experiments/challange/farmer`; the driver is
 `farmer_driver.py`.  The driver references the model, which is in the
-mpi-sppy repo.
+`mpi-sppy` repo.  The `aph05.bash` script is intended
+to have a dispatch fraction of 1/2 (hence the 05 for 0.5 in the name).
+
+ranks
+-----
+
+The mpi-sspy software wants to know how many bundles per rank (0 means
+no bundles).  Meanwhile, mpiexec needs to know how many total
+ranks. For the farmer example, the only spoke is for xhat, so you need
+twice as many ranks for mpiexec in total as will be allocated to APH.
+
