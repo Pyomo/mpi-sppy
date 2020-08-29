@@ -13,10 +13,10 @@ from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
 # the problem
-import ACtree as etree
-from ccopf_multistage import pysp2_callback, scenario_denouement, _md_dict,\
-    FixFast, FixNever, FixGaussian
-import rho_setter
+import mpisppy.examples.acopf3.ACtree as etree
+from mpisppy.examples.acopf3.ccopf_multistage import pysp2_callback,\
+    scenario_denouement, _md_dict, FixFast, FixNever, FixGaussian
+import  mpisppy.examples.acopf3.rho_setter as rho_setter
 
 import pyomo.environ as pyo
 import socket
@@ -62,13 +62,22 @@ def main():
     for i in range(branching_factors[0]):
         xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(1 + i*branching_factors[1])
 
-    # for initialization solve
-    solver = pyo.SolverFactory(solvername)
-
     cb_data = dict()
-    cb_data["solver"] = solver # can be None
-    cb_data["tee"] = False # for inialization solve
+    cb_data["convex_relaxation"] = True
     cb_data["epath"] = egret_path_to_data
+    if cb_data["convex_relaxation"]:
+        # for initialization solve
+        solvername = "gurobi"
+        solver = pyo.SolverFactory(solvername)
+        cb_data["solver"] = None
+        ##if "gurobi" in solvername:
+            ##solver.options["BarHomogeneous"] = 1
+    else:
+        solvername = "ipopt"
+        solver = pyo.SolverFactory(solvername)
+        if "gurobi" in solvername:
+            solver.options["BarHomogeneous"] = 1
+        cb_data["solver"] = solver
     md_dict = _md_dict(cb_data)
 
     if verbose:
@@ -95,7 +104,6 @@ def main():
                                     stage_duration_minutes,
                                     repair_fct,
                                     lines)
-    cb_data["epath"] = "/thirdparty/pglib-opf-master/pglib_opf_case3_lmbd.m"
     cb_data["acstream"] = acstream
 
     all_scenario_names=["Scenario_"+str(i)\
@@ -104,7 +112,18 @@ def main():
     all_nodenames = cb_data["etree"].All_Nonleaf_Nodenames()
 
     PHoptions = dict()
-    PHoptions["solvername"] = "ipopt"
+    if cb_data["convex_relaxation"]:
+        PHoptions["solvername"] = "cplex"
+        if "gurobi" in PHoptions["solvername"]:
+            PHoptions["iter0_solver_options"] = {"BarHomogeneous": 1}
+            PHoptions["iterk_solver_options"] = {"BarHomogeneous": 1}
+        else:
+            PHoptions["iter0_solver_options"] = None
+            PHoptions["iterk_solver_options"] = None
+    else:
+        PHoptions["solvername"] = "ipopt"
+        PHoptions["iter0_solver_options"] = None
+        PHoptions["iterk_solver_options"] = None
     PHoptions["PHIterLimit"] = PHIterLimit
     PHoptions["defaultPHrho"] = 1
     PHoptions["convthresh"] = 0.001
