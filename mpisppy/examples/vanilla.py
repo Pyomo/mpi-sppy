@@ -36,6 +36,7 @@ def shared_options(args):
         "display_timing": args.with_display_timing,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
+        "tee-rank0-solves": args.tee_rank0_solves,
         "trace_prefix" : args.trace_prefix,
     }
     if _hasit(args, "max_solver_threads"):

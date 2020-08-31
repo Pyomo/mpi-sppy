@@ -91,6 +91,18 @@ def _common_args(inparser):
                         type=str,
                         default=None)
 
+    parser.add_argument("--with-tee-rank0-solves",
+                        help="Some cylinders support tee of rank 0 solves."
+                        "(With multiple cylinder this could be confusing.)",
+                        dest="tee_rank0_solves",
+                        action='store_true')
+    parser.add_argument("--no-tee-rank0-solves",
+                        help="Some cylinders support tee of rank 0 solves.",
+                        dest="tee_rank0_solves",
+                        action='store_false')
+    parser.set_defaults(tee_rank0_solves=False)
+
+
     return parser
     
 def make_parser(progname=None, num_scens_reqd=False):

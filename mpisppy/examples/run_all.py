@@ -89,6 +89,10 @@ do_one("farmer", "farmer_cylinders.py", 2,
        "6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --no-fwph --no-lagrangian".format(solver_name))
+do_one("farmer", "farmer_cylinders.py", 3,
+       "3 --bundles-per-rank=0 --max-iterations=1 "
+       "--default-rho=1 --with-tee-rank0-solves "
+       "--solver-name={} --no-fwph".format(solver_name))
 do_one("farmer", "farmer_pysp.py", 1, solver_name)
 do_one("sizes",
        "sizes_cylinders.py",
