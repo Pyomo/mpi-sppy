@@ -468,7 +468,7 @@ class LShapedMethod(spbase.SPBase):
                 opt.set_instance(instance)
                 res = opt.solve(tee=False)
             else:
-                opt.solve(instance, tee=False)
+                res = opt.solve(instance, tee=False)
 
             eta_lb = res.Problem[0].Lower_bound
 
