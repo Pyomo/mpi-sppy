@@ -89,6 +89,14 @@ def fwph_spoke(args,
                all_scenario_names,
                cb_data=None):
     shoptions = shared_options(args)
+
+    mip_solver_options, qp_solver_options = dict(), dict()
+    if _hasit(args, "max_solver_threads"):
+        mip_solver_options["threads"] = args.max_solver_threads
+        qp_solver_options["threads"] = args.max_solver_threads
+    if _hasit(args, "fwph_mipgap"):
+        mip_solver_options["mipgap"] = args.fwph_mipgap
+
     fw_options = {
         "FW_iter_limit": args.fwph_iter_limit,
         "FW_weight": args.fwph_weight,
@@ -96,6 +104,8 @@ def fwph_spoke(args,
         "stop_check_tol": args.fwph_stop_check_tol,
         "solvername": args.solver_name,
         "FW_verbose": args.with_verbose,
+        "mip_solver_options" : mip_solver_options,
+        "qp_solver_options" : qp_solver_options,
     }
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,

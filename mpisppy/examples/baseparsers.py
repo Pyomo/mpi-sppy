@@ -173,7 +173,6 @@ def mip_options(inparser):
                         dest="iterk_mipgap",
                         type=float,
                         default=None)
-
     return parser
 
 def fixer_args(inparser):
@@ -231,6 +230,12 @@ def fwph_args(inparser):
                         dest="fwph_stop_check_tol",
                         type=float,
                         default=1e-4)
+
+    parser.add_argument("--fwph-mipgap",
+                        help="mip gap option FW subproblems iterations (default None)",
+                        dest="fwph_mipgap",
+                        type=float,
+                        default=None)
 
     return parser
 
