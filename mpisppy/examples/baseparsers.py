@@ -91,6 +91,18 @@ def _common_args(inparser):
                         type=str,
                         default=None)
 
+    parser.add_argument("--with-tee-rank0-solves",
+                        help="Some cylinders support tee of rank 0 solves."
+                        "(With multiple cylinder this could be confusing.)",
+                        dest="tee_rank0_solves",
+                        action='store_true')
+    parser.add_argument("--no-tee-rank0-solves",
+                        help="Some cylinders support tee of rank 0 solves.",
+                        dest="tee_rank0_solves",
+                        action='store_false')
+    parser.set_defaults(tee_rank0_solves=False)
+
+
     return parser
     
 def make_parser(progname=None, num_scens_reqd=False):
@@ -161,7 +173,6 @@ def mip_options(inparser):
                         dest="iterk_mipgap",
                         type=float,
                         default=None)
-
     return parser
 
 def fixer_args(inparser):
@@ -219,6 +230,12 @@ def fwph_args(inparser):
                         dest="fwph_stop_check_tol",
                         type=float,
                         default=1e-4)
+
+    parser.add_argument("--fwph-mipgap",
+                        help="mip gap option FW subproblems iterations (default None)",
+                        dest="fwph_mipgap",
+                        type=float,
+                        default=None)
 
     return parser
 

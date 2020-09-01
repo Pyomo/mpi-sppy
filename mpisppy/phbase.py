@@ -941,6 +941,8 @@ class PHBase(mpisppy.spbase.SPBase):
             s_source = self.local_subproblems
         for k,s in s_source.items():
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.rank))
+            if tee:
+                print(f"Tee solve for {k} on global rank {self.rank_global}")
             pyomo_solve_time = self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
                                               verbose=verbose,
