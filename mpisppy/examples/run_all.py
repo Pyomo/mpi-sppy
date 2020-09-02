@@ -128,26 +128,26 @@ if not nouc:
     do_one("uc", "uc_ef.py", 1, solver_name)
     do_one("uc", "uc_lshaped.py", 2,
            "--bundles-per-rank=0 --max-iterations=5 "
-           "--default-rho=1 --num-scens=3 "
+           "--default-rho=1 --num-scens=3 --no-cross-scenario-cuts "
            "--solver-name={} --max-solver-threads=1 --no-fwph".format(solver_name))
     do_one("uc", "uc_cylinders.py", 4,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 "
+           "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json "
            "--solver-name={}".format(solver_name))
     # 10-scenario UC
     do_one("uc", "uc_cylinders.py", 3,
            "--bundles-per-rank=5 --max-iterations=2 "
            "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 "
+           "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json "
            "--no-fwph "
            "--solver-name={}".format(solver_name))
     do_one("uc", "uc_cylinders.py", 4,
            "--bundles-per-rank=5 --max-iterations=2 "
            "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 "
+           "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json "
            "--solver-name={}".format(solver_name))
 
