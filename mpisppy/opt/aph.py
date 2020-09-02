@@ -584,8 +584,6 @@ class APH(ph_base.PHBase):  # ??????
                     phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
             # dict(sorted(phidict.items(), key=lambda item: item[1]))
             sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
-            ###for k,p in sortedbyphi.items():
-            ###print("rank={}, k={}, sortedbyphi[k]={}".format(rank_global, k, p))
 
             return s_source, sortedbyphi
 
@@ -749,6 +747,9 @@ class APH(ph_base.PHBase):  # ??????
                 print("")
                 print("After APH Iteration",self._PHIter)
                 print("Convergence Metric=",self.conv)
+                print('   punorm={} pwnorm={} pvnorm={} pznorm={})'\
+                      .format(self.global_punorm, self.global_pwnorm,
+                              self.global_pvnorm, self.global_pznorm))
                 print("Iteration time: %6.2f" \
                       % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" \
@@ -851,7 +852,7 @@ class APH(ph_base.PHBase):  # ??????
 
         Eobj = self.post_loops()
 
-        print("Debug: here's the dispatch record")
+        print(f"Debug: here's the dispatch record for rank={self.rank_global}")
         for k,v in self.dispatchrecord.items():
             print(k, v)
             print()
