@@ -15,6 +15,7 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.examples import baseparsers
 from mpisppy.examples import vanilla
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 
 def _parse_args():
@@ -78,7 +79,6 @@ def main():
         multi_ext = {"ext_classes": [Gapper]}
     if with_cross_scenario_cuts:
         multi_ext["ext_classes"].append(CrossScenarioExtension)
-    else:
         
     hub_dict["opt_kwargs"]["PH_extension_kwargs"] = multi_ext
     if with_cross_scenario_cuts:
