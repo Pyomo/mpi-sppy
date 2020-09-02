@@ -8,8 +8,8 @@ import sys
 import mpisppy.spbase as spbase
 
 from mpi4py import MPI
-# from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
-from pyomo.core.plugins.transform.relax_integrality import RelaxIntegrality
+from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
+##from pyomo.core.plugins.transform.relax_integrality import RelaxIntegrality
 from pyomo.pysp.phutils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from pyomo.core import (
@@ -171,7 +171,7 @@ class LShapedMethod(spbase.SPBase):
                                     node_names=None, cb_data=self.cb_data)
 
         if self.relax_master:
-            RelaxIntegrality().apply_to(master)
+            RelaxIntegerVars().apply_to(master)
 
         nonant_list, nonant_ids = _get_nonant_ids(master)
 
@@ -456,7 +456,7 @@ class LShapedMethod(spbase.SPBase):
         ## need to do this here for validity if computing the eta bound
         if self.relax_master:
             # relaxes any integrality constraints for the subproblem
-            RelaxIntegrality().apply_to(instance)
+            RelaxIntegerVars().apply_to(instance)
 
         if self.compute_eta_bound:
             opt = pyo.SolverFactory(self.options["sp_solver"])
@@ -477,7 +477,7 @@ class LShapedMethod(spbase.SPBase):
         # if not done above
         if not self.relax_master:
             # relaxes any integrality constraints for the subproblem
-            RelaxIntegrality().apply_to(instance)
+            RelaxIntegerVars().apply_to(instance)
 
         # iterates through constraints and removes first stage constraints from the model
         # the id dict is used to improve the speed of identifying the stage each variables belongs to

@@ -375,4 +375,11 @@ def cross_scenario_cuts_args(inparser):
                         action='store_false')
     parser.set_defaults(with_cross_scenario_cuts=True)
 
+    parser.add_argument("--cross-scenario-iter-cnt",
+                        help="cross scen check bound improve iterations "
+                        "(default 4)",
+                        dest="cross_scenario_iter_cnt",
+                        type=int,
+                        default=4)
+
     return parser
