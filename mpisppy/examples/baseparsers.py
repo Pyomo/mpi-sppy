@@ -102,6 +102,12 @@ def _common_args(inparser):
                         action='store_false')
     parser.set_defaults(tee_rank0_solves=False)
 
+    parser.add_argument("--auxilliary",
+                        help="Free text for use by hackers (default '').",
+                        dest="auxilliary",
+                        type=str,
+                        default='')
+
 
     return parser
     
