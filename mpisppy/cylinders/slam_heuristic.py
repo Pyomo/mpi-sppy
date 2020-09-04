@@ -129,6 +129,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
 class SlamUpHeuristic(_SlamHeuristic):
 
+    converger_spoke_char = 'U'
+
     @property
     def numpy_op(self):
         return np.amax
@@ -138,6 +140,8 @@ class SlamUpHeuristic(_SlamHeuristic):
         return mpi.MAX
 
 class SlamDownHeuristic(_SlamHeuristic):
+
+    converger_spoke_char = 'D'
 
     @property
     def numpy_op(self):

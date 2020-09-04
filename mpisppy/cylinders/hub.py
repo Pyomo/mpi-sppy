@@ -29,6 +29,7 @@ class Hub(SPCommunicator):
         self.spokes = spokes  # List of dicts
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # ^^^ Does NOT include +1
+        self.print_init = True
 
     @abc.abstractmethod
     def setup_hub(self):
@@ -78,18 +79,69 @@ class Hub(SPCommunicator):
         else:
             return abs_gap
 
+    def get_update_string(self):
+        if self.latest_ib_name is None and \
+                self.latest_ob_name is None:
+            return '   '
+        if self.latest_ib_name is None:
+            return self.latest_ob_name + '  '
+        if self.latest_ob_name is None:
+            return '  ' + self.latest_ib_name
+        return self.latest_ob_name+' '+self.latest_ib_name
+
+    def log_output(self):
+        if self.rank_global != 0:
+            return
+        rel_gap = self.compute_gap(compute_relative=True)
+        abs_gap = self.compute_gap(compute_relative=False)
+        best_solution = self.BestInnerBound
+        best_bound = self.BestOuterBound
+        update_source = self.get_update_string()
+        if self.print_init:
+            row = f'{"   "} {"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s}'
+            tt_timer.toc(row, delta=False)
+            self.print_init = False
+        row = f"{update_source} {best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f}"
+        tt_timer.toc(row, delta=False)
+
+    def log_and_determine_termination(self):
+        abs_gap_satisfied = False
+        rel_gap_satisfied = False
+        if hasattr(self,"options") and self.options is not None:
+            if "rel_gap" in self.options:
+                rel_gap = self.compute_gap(compute_relative=True)
+                rel_gap_satisfied = rel_gap <= self.options["rel_gap"]
+            if "abs_gap" in self.options:
+                abs_gap = self.compute_gap(compute_relative=False)
+                abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
+        if abs_gap_satisfied and self.rank_global == 0:
+            tt_timer.toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:14.4f}", delta=False)
+        if rel_gap_satisfied and self.rank_global == 0:
+            tt_timer.toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.4f}", delta=False)
+        return abs_gap_satisfied or rel_gap_satisfied
+
+    def hub_finalize(self):
+        if self.has_outerbound_spokes:
+            self.receive_outerbounds()
+        if self.has_innerbound_spokes:
+            self.receive_innerbounds()
+
+        self.print_init = True
+        self.log_output()
+
     def receive_innerbounds(self):
         """ Get inner bounds from inner bound spokes
             NOTE: Does not check if there _are_ innerbound spokes
             (but should be harmless to call if there are none)
         """
         logging.debug("Hub is trying to receive from InnerBounds")
+        self.latest_ib_name = None
         for idx in self.innerbound_spoke_indices:
             is_new = self.hub_from_spoke(self.innerbound_receive_buffers[idx], idx)
             if is_new:
                 bound = self.innerbound_receive_buffers[idx][0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
-                self.BestInnerBound = self.InnerBoundUpdate(bound)
+                self.BestInnerBound = self.InnerBoundUpdate(bound, idx)
         logging.debug("ph back from InnerBounds")
 
     def receive_outerbounds(self):
@@ -98,25 +150,48 @@ class Hub(SPCommunicator):
             (but should be harmless to call if there are none)
         """
         logging.debug("Hub is trying to receive from OuterBounds")
+        self.latest_ob_name = None
         for idx in self.outerbound_spoke_indices:
             is_new = self.hub_from_spoke(self.outerbound_receive_buffers[idx], idx)
             if is_new:
                 bound = self.outerbound_receive_buffers[idx][0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
-                self.BestOuterBound = self.OuterBoundUpdate(bound)
+                self.BestOuterBound = self.OuterBoundUpdate(bound, idx)
         logging.debug("ph back from OuterBounds")
+
+    def OuterBoundUpdate(self, new_bound, idx=None):
+        current_bound = self.BestOuterBound
+        if self._outer_bound_update(new_bound, current_bound):
+            if idx is None:
+                self.latest_ob_name = '*'
+            else:
+                self.latest_ob_name = self.outerbound_spoke_names[idx]
+            return new_bound
+        else:
+            return current_bound
+
+    def InnerBoundUpdate(self, new_bound, idx=None):
+        current_bound = self.BestInnerBound
+        if self._inner_bound_update(new_bound, current_bound):
+            if idx is None:
+                self.latest_ib_name = '*'
+            else:
+                self.latest_ib_name = self.innerbound_spoke_names[idx]
+            return new_bound
+        else:
+            return current_bound
 
     def initialize_bound_values(self):
         if self.opt.is_minimizing:
             self.BestInnerBound = inf
             self.BestOuterBound = -inf
-            self.InnerBoundUpdate = lambda x: min(x, self.BestInnerBound)
-            self.OuterBoundUpdate = lambda x: max(x, self.BestOuterBound)
+            self._inner_bound_update = lambda new, old : (new < old)
+            self._outer_bound_update = lambda new, old : (new > old)
         else:
             self.BestInnerBound = -inf
             self.BestOuterBound = inf
-            self.InnerBoundUpdate = lambda x: max(x, self.BestInnerBound)
-            self.OuterBoundUpdate = lambda x: min(x, self.BestOuterBound)
+            self._inner_bound_update = lambda new, old : (new > old)
+            self._outer_bound_update = lambda new, old : (new < old)
 
     def initialize_outer_bound_buffers(self):
         """ Initialize value of BestOuterBound, and outer bound receive buffers
@@ -158,14 +233,19 @@ class Hub(SPCommunicator):
         self.nonant_spoke_indices = set()
         self.w_spoke_indices = set()
 
+        self.outerbound_spoke_names = dict()
+        self.innerbound_spoke_names = dict()
+
         for (i, spoke) in enumerate(self.spokes):
             spoke_class = spoke["spoke_class"]
             if hasattr(spoke_class, "converger_spoke_types"):
                 for cst in spoke_class.converger_spoke_types:
                     if cst == ConvergerSpokeType.OUTER_BOUND:
                         self.outerbound_spoke_indices.add(i + 1)
+                        self.outerbound_spoke_names[i+1] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.INNER_BOUND:
                         self.innerbound_spoke_indices.add(i + 1)
+                        self.innerbound_spoke_names[i+1] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.W_GETTER:
                         self.w_spoke_indices.add(i + 1)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
@@ -340,32 +420,9 @@ class PHHub(Hub):
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
 
         ## log some output
-        if self.rank_global == 0:
-            rel_gap = self.compute_gap(compute_relative=True)
-            abs_gap = self.compute_gap(compute_relative=False)
-            best_solution = self.BestInnerBound
-            best_bound = self.BestOuterBound
-            elapsed = time.time() - self.inst_time
-            if self.opt._PHIter == 1:
-                row = f'{"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s}'
-                tt_timer.toc(row, delta=False)
-            row = f"{best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f}"
-            tt_timer.toc(row, delta=False)
+        self.log_output()
 
-        abs_gap_satisfied = False
-        rel_gap_satisfied = False
-        if hasattr(self,"options") and self.options is not None:
-            if "rel_gap" in self.options:
-                rel_gap = self.compute_gap(compute_relative=True)
-                rel_gap_satisfied = rel_gap <= self.options["rel_gap"]
-            if "abs_gap" in self.options:
-                abs_gap = self.compute_gap(compute_relative=False)
-                abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
-        if abs_gap_satisfied and self.rank_global == 0:
-            tt_timer.toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:14.4f}", delta=False)
-        if rel_gap_satisfied and self.rank_global == 0:
-            tt_timer.toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.4f}", delta=False)
-        return abs_gap_satisfied or rel_gap_satisfied
+        return self.log_and_determine_termination()
 
     def main(self):
         """ SPComm gets attached in self.__init__ """
@@ -449,10 +506,6 @@ class LShapedHub(Hub):
                 "will not cause the hub to terminate"
             )
 
-        ## we call this multiple per iteration,
-        ## so that cannot be relied upon
-        self.print_init = True
-
     def sync(self, send_nonants=True):
         """ 
         Manages communication with Bound Spokes
@@ -475,29 +528,9 @@ class LShapedHub(Hub):
         self.BestOuterBound = self.OuterBoundUpdate(bound)
 
         ## log some output
-        if self.rank_global == 0:
-            rel_gap = self.compute_gap(compute_relative=True)
-            abs_gap = self.compute_gap(compute_relative=False)
-            best_solution = self.BestInnerBound
-            best_bound = self.BestOuterBound
-            elapsed = time.time() - self.inst_time
-            if self.print_init:
-                row = f'{"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s} {"Wall Time":>8s}'
-                print(row, flush=True)
-                self.print_init = False
-            row = f"{best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f} {elapsed:8.2f}s"
-            print(row, flush=True)
+        self.log_output()
 
-        abs_gap_satisfied = False
-        rel_gap_satisfied = False
-        if hasattr(self,"options") and self.options is not None:
-            if "rel_gap" in self.options:
-                rel_gap = self.compute_gap(compute_relative=True)
-                rel_gap_satisfied = rel_gap <= self.options["rel_gap"]
-            if "abs_gap" in self.options:
-                abs_gap = self.compute_gap(compute_relative=False)
-                abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
-        return abs_gap_satisfied or rel_gap_satisfied
+        return self.log_and_determine_termination()
 
     def main(self):
         """ SPComm gets attached in self.__init__ """ 

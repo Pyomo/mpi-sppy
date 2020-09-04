@@ -14,6 +14,8 @@ logger = logging.getLogger("mpisppy.cylinders.xhatlooper_bounder")
 
 class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
 
+    converger_spoke_char = 'X'
+
     def xhatlooper_prep(self):
         verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
