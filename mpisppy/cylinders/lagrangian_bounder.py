@@ -3,6 +3,8 @@ import mpisppy.cylinders.spoke
 
 class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
+    converger_spoke_char = 'L'
+
     def lagrangian_prep(self):
         verbose = self.opt.options['verbose']
         # Split up PH_Prep? Prox option is important for APH.
@@ -38,6 +40,10 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         # Compute the resulting bound
         return self.opt.Ebound(verbose)
 
+    def _set_weights_and_solve(self):
+        self.opt.W_from_flat_list(self.localWs) # Sets the weights
+        return self.lagrangian()
+
     def main(self):
         # The rho_setter should be attached to the opt object
         rho_setter = None
@@ -53,6 +59,15 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         dk_iter = 1
         while not self.got_kill_signal():
             if self.new_Ws:
-                self.opt.W_from_flat_list(self.localWs) # Sets the weights
-                self.bound = self.lagrangian()
+                self.bound = self._set_weights_and_solve()
             dk_iter += 1
+
+    def finalize(self):
+        '''
+        Do one final lagrangian pass with the final
+        PH weights. Useful for when PH convergence
+        and/or iteration limit is the cause of termination
+        '''
+        self.final_bound = self._set_weights_and_solve()
+        self.bound = self.final_bound
+        return self.final_bound

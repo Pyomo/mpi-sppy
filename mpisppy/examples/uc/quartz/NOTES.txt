@@ -1,0 +1,17 @@
+Simple interactive tests on pdebug queue:
+
+# UC - extensive form
+srun -p pdebug -N 1 -n 1 python uc_ef.py gurobi
+
+# UC - 3 scenario PH without FW
+srun -p pdebug -N 1 -n 9 python uc_cylinders.py --bundles-per-rank=0 --max-iterations=20 --default-rho=1.0 --num-scens=3 --max-solver-threads=2 --solver-name=gurobi_persistent --no-fwph --rel-gap=0.0001
+
+# UC - 3 scenario PH with FW
+srun -p pdebug -N 1 -n 12 python uc_cylinders.py --bundles-per-rank=0 --max-iterations=20 --default-rho=1.0 --num-scens=3 --max-solver-threads=2 --solver-name=gurobi_persistent
+
+# UC - 10 scenario PH with FW
+srun -p pdebug -N 2 -n 40 python uc_cylinders.py --bundles-per-rank=0 --max-iterations=10 --default-rho=1.0 --num-scens=10 --max-solver-threads=2 --solver-name=gurobi_persistent
+
+# UC - 25 scenario PH with FW
+srun -p pdebug -N 3 -n 100 python uc_cylinders.py --bundles-per-rank=0 --max-iterations=10 --default-rho=1.0 --num-scens=25 --max-solver-threads=2 --solver-name=gurobi_persistent
+

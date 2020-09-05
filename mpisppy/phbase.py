@@ -1291,7 +1291,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 self.extobject.miditer()
 
             # The hub object takes precedence 
-            # over the converger
+            # over the converger, such that
+            # the spokes will always have the
+            # latest data, even at termination
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():

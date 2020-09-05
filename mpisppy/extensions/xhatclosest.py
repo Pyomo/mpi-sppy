@@ -66,10 +66,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         else:
             globalwinnername = None
 
-        if self.opt.companiondriver is not None:
-            sroot = int(globalwinrank[0]) // (self.opt.companiondriver.n_spokes+1)
-        else:
-            sroot = globalwinrank[0] # Backwards compatibility
+        sroot = globalwinrank[0]
 
         sname = self.comms["ROOT"].bcast(globalwinnername, root=sroot)
         _vb("Trying scenario "+sname)

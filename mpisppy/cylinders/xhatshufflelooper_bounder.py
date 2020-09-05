@@ -20,6 +20,8 @@ logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
 class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
+    converger_spoke_char = 'X'
+
     def xhatbase_prep(self):
         if self.opt.multistage:
             raise RuntimeError('The XhatShuffleInnerBound only supports '
@@ -79,6 +81,9 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         self.solver_options = self.opt.options["xhat_looper_options"]["xhat_solver_options"]
         self.is_minimizing = self.opt.is_minimizing
         self.xhatter = xhatter
+
+        self.best_nonants = None
+        self.best_scenario = None
 
         ## option drive this? (could be dangerous)
         self.random_seed = 42
@@ -175,6 +180,13 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 if update:
                     _vb(f"   Updating best to {next_scenario}")
                     scenario_cycler.best = next_scenario
+                    if next_scenario in self.opt.local_scenarios:
+                        s = self.opt.local_scenarios[next_scenario]
+                        self.best_nonants = s._PySP_nonant_cache.copy()
+                        self.best_scenario = next_scenario
+                    else:
+                        self.best_nonants = None
+                        self.best_scenario = next_scenario
             else:
                 scenario_cycler.begin_epoch()
 
@@ -182,6 +194,58 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
             xh_iter += 1
 
+    def finalize(self):
+        ''' This function restores the best nonants found,
+            and re-solves every subproblem to find the best
+            so far scenario tree solution
+        '''
+        # if we haven't found a best at all, then this
+        # will be false for every rank. If we have found
+        # a best, this should be true in exactly one rank
+        best_available_local = (self.best_nonants is not None)
+        best_available_global = self.allreduce_or(best_available_local)
+
+        if not best_available_global:
+            self.solution_found = False
+            return None
+
+        ## code largely borrowed from xhatbase
+        xhats = dict()
+        scenario_rank = self.xhatter.scenario_name_to_rank["ROOT"][self.best_scenario]
+        xhats["ROOT"] = self.opt.comms["ROOT"].bcast(self.best_nonants, root=scenario_rank)
+
+        self.opt._fix_nonants(xhats)
+
+        # Special Tee option for xhat
+        sopt = self.solver_options
+        tee=False
+        if self.solver_options is not None and "Tee" in self.solver_options:
+            sopt = dict(self.solver_options)
+            tee = sopt["Tee"]
+            del sopt["Tee"]
+
+        self.opt.solve_loop(solver_options=sopt,
+                           dis_W=True, dis_prox=True,
+                           verbose=False,
+                           tee=tee)
+
+        ## NOTE: this should be feasible here,
+        ##       if not we've done something wrong
+        feasP = self.opt.feas_prob()
+        if feasP != self.opt.E1:
+            raise RuntimeError("Found infeasible solution which was feasible before")
+
+        obj = self.opt.Eobjective(verbose=False)
+
+        if obj != self.ib:
+            if self.rank_intra == 0:
+                print(f"WARNING: {self.__class__.__name__} best inner bound is different "
+                        f"from objective calculated in finalize")
+                print(f"Best inner bound: {self.ib}")
+                print(f"Current objective: {obj}")
+        self.solution_found = True
+        self.final_bound = obj
+        return obj
 
 class ScenarioCycler:
 

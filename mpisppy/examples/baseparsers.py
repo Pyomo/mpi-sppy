@@ -79,10 +79,10 @@ def _common_args(inparser):
                         default=None)
 
     parser.add_argument("--intra-hub-conv-thresh",
-                        help="Within hub convergence threshold (default 0)",
+                        help="Within hub convergence threshold (default 1e-10)",
                         dest="intra_hub_conv_thresh",
                         type=float,
-                        default=0)
+                        default=1e-10)
 
     parser.add_argument("--trace-prefix",
                         help="Prefix for bound spoke trace files. If None "

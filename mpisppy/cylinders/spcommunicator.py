@@ -16,6 +16,8 @@ import abc
 import time
 from mpi4py import MPI
 
+# for SLEEP_TIME
+import mpisppy.cylinders as cylinders
 
 class SPCommunicator:
     """ Notes: TODO
@@ -54,6 +56,24 @@ class SPCommunicator:
         """ Every hub/spoke may have a is_converged function
         """
         return False
+
+    def finalize(self):
+        """ Every hub/spoke may have a finalize function,
+            which does some final calculations/flushing to
+            disk after convergence
+        """
+        pass
+
+    def hub_finalize(self):
+        """ Every hub may have another finalize function,
+            which collects any results from finalize
+
+            Spokes use the implementation below, which just
+            puts a small sleep in so windows are not freed
+            too soon.
+        """
+        ## give the hub the chance to catch new values
+        time.sleep(cylinders.SPOKE_SLEEP_TIME)
 
     def allreduce_or(self, val):
         local_val = np.array([val], dtype='int8')

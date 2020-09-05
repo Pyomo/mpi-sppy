@@ -37,3 +37,5 @@ At least on some US Department of Energy (e.g., at Lawrence Livermore National L
 export MPICH_ASYNC_PROGRESS=1
 
 Without this setting, we have observed run-times increase by a factor of between 2 and 4, due to non-blocking point-to-point calls apparently being treated as blocking. 
+
+Further, without this setting and in situations with a large number of ranks (e.g., >> 10), we have observed mpi-sppy stalling once scenario instances are created. 
