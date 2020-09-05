@@ -16,6 +16,8 @@ fullcom_n_proc = fullcomm.Get_size()
 ############################################################################
 class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
 
+    converger_spoke_char = 'S'
+
     def ib_prep(self):
         """
         Set up the objects needed for bounding.

@@ -222,6 +222,7 @@ class InnerBoundSpoke(_BoundSpoke):
         Hub, and do not need information from the main PH OPT hub.
     """
     converger_spoke_types = (ConvergerSpokeType.INNER_BOUND,)
+    converger_spoke_char = 'I'
 
 
 class OuterBoundSpoke(_BoundSpoke):
@@ -229,6 +230,7 @@ class OuterBoundSpoke(_BoundSpoke):
         Hub, and do not need information from the main PH OPT hub.
     """
     converger_spoke_types = (ConvergerSpokeType.OUTER_BOUND,)
+    converger_spoke_char = 'O'
 
 
 class _BoundWSpoke(_BoundNonantLenSpoke):
