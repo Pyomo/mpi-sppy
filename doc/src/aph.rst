@@ -95,14 +95,6 @@ Dispatch is based on most negative :math:`\phi` and if there are not
 enough negative :math:`\phi`, then the least recently dispatched are
 dispatched to fill out the dispatch fraction.
 
-Notes about convex problems
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-For the convex problems that we have looked at, the variance in solve
-times is not very high, so the frac needed parameter should be high and
-probably should just always be 1.  With fewer hub ranks than sub-problems, the
-dispatch frac option should be used.
-
 farmer
 ^^^^^^
 
@@ -121,3 +113,19 @@ no bundles).  Meanwhile, mpiexec needs to know how many total
 ranks. For the farmer example, the only spoke is for xhat, so you need
 twice as many ranks for mpiexec in total as will be allocated to APH.
 
+A Peek Under the Hood
+^^^^^^^^^^^^^^^^^^^^^
+
+The APH implementation has a listener thread that continuously does
+MPI reductions and a worker thread that does most of the work. A wrinkle
+is that the listenter thread does a `side gig` if enough ranks have reported
+(the "async_frac_needed" option) because after it has
+done the reductions to get u and v and needs to do some calculations, and
+then reductions to compute tau and theta.
+It turns out to have been easier to implement the general notion of side
+gigs in the general-purpose listener software than it would have been
+to something special purpose.  The side gig that is implemented for
+APH checks to see if there are enough ranks reporting.
+
+Lags are supported with if blocks that control how the objective
+function is constructed and how y is updated.
