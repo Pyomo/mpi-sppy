@@ -32,6 +32,23 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
+        # Start code to support running trace. TBD: factor this up?
+        if self.rank_intra == 0 and \
+                'suffle_running_trace_prefix' in self.opt.options and \
+                self.opt.options['shuffle_running_trace_prefix'] is not None:
+            running_trace_prefix =\
+                            self.opt.options['shuffle_running_trace_prefix']
+
+            filen = running_trace_prefix+self.__class__.__name__+'.csv'
+            if os.path.exists(filen):
+                raise RuntimeError(f"running trace file {filen} already exists!")
+            with open(filen, 'w') as f:
+                f.write("time,scen,value\n")
+            self.running_trace_filen = filen
+        else:
+            self.running_trace_filen = None
+        # end code to support running trace
+        
         if not isinstance(self.opt, XhatTryer):
             raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
             
@@ -123,23 +140,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.rank_global}")
 
-        # Start code to support running trace (for debug)
-        #######self.opt.options["running_trace_prefix"] = "DLWdebug_"  # hack
-        if self.rank_intra == 0 and \
-                'running_trace_prefix' in self.opt.options and \
-                self.opt.options['running_trace_prefix'] is not None:
-            running_trace_prefix = self.opt.options['running_trace_prefix']
-
-            filen = running_trace_prefix+self.__class__.__name__+'.csv'
-            if os.path.exists(filen):
-                raise RuntimeError(f"running trace file {filen} already exists!")
-            with open(filen, 'w') as f:
-                f.write("time,scen,value\n")
-            self.running_trace_filen = filen
-        else:
-            self.running_trace_filen = None
-        # end code to support running trace
-        
         self.xhatbase_prep()
         self.ib = inf if self.is_minimizing else -inf
 
