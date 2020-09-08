@@ -13,6 +13,8 @@ from mpisppy.utils.xhat_tryer import XhatTryer
 
 class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
+    converger_spoke_char = 'X'
+
     def xhatlshaped_prep(self):
         verbose = self.opt.options['verbose']
 
