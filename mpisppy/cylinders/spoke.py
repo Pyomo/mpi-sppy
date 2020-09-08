@@ -264,6 +264,7 @@ class OuterBoundWSpoke(_BoundWSpoke):
         ConvergerSpokeType.OUTER_BOUND,
         ConvergerSpokeType.W_GETTER,
     )
+    converger_spoke_char = 'O'
 
 
 class _BoundNonantSpoke(_BoundNonantLenSpoke):
@@ -294,3 +295,4 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         ConvergerSpokeType.INNER_BOUND,
         ConvergerSpokeType.NONANT_GETTER,
     )
+    converger_spoke_char = 'I'
