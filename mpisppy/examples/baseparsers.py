@@ -382,4 +382,11 @@ def cross_scenario_cuts_args(inparser):
                         type=int,
                         default=4)
 
+    parser.add_argument("--eta-bounds-mipgap",
+                        help="mipgap for determining eta bounds for cross "
+                        "scenario cuts (default 0.01)",
+                        dest="eta_bounds_mipgap",
+                        type=float,
+                        default=0.01)
+
     return parser

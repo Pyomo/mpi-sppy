@@ -115,7 +115,7 @@ class Hub(SPCommunicator):
                 abs_gap = self.compute_gap(compute_relative=False)
                 abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
         if abs_gap_satisfied and self.rank_global == 0:
-            tt_timer.toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:14.4f}", delta=False)
+            tt_timer.toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}", delta=False)
         if rel_gap_satisfied and self.rank_global == 0:
             tt_timer.toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.4f}", delta=False)
         return abs_gap_satisfied or rel_gap_satisfied
