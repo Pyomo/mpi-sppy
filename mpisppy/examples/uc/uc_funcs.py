@@ -6,12 +6,14 @@ import os
 
 from pyomo.dataportal import DataPortal
 
-import mpisppy.examples.uc.ReferenceModel_OK as ReferenceModel_OK
-
 import mpisppy.scenario_tree as scenario_tree
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
+
+import egret.parsers.prescient_dat_parser as pdp
+import egret.data.model_data as md
+import egret.models.unit_commitment as uc
 
 # As of April 2020 we are using cb_data for this
 ##UC_NUMSCENS_ENV_VAR = "UC_NUM_SCENS"
@@ -21,19 +23,26 @@ def pysp_instance_creation_callback(scenario_name, node_names, cb_data):
     #print("Building instance for scenario =", scenario_name)
     scennum = sputils.extract_num(scenario_name)
 
-    uc_model = ReferenceModel_OK.model
+    uc_model_params = pdp.get_uc_model()
 
     # Now using cb_data
     ##path = os.environ[UC_NUMSCENS_ENV_VAR] + "scenarios_r1"
     path = cb_data["path"]
     
-    scenario_data = DataPortal(model=uc_model)
+    scenario_data = DataPortal(model=uc_model_params)
     scenario_data.load(filename=path+os.sep+"RootNode.dat")
     scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
 
-    scenario_instance = uc_model.create_instance(scenario_data,
-                                                 report_timing=False,
-                                                 name=scenario_name)
+    scenario_params = uc_model_params.create_instance(scenario_data,
+                                                      report_timing=False,
+                                                      name=scenario_name)
+
+    scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+
+    ## TODO: use the "power_balance_constraints" for now. In the future, networks should be
+    ##       handled with a custom callback -- also consider other base models
+    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md,
+                                                    network_constraints='power_balance_constraints')
     return scenario_instance
 
 def scenario_creator(scenario_name,
@@ -60,7 +69,7 @@ def pysp2_callback(scenario_name,
     instance._PySPnode_list = [scenario_tree.ScenarioNode("ROOT",
                                                           1.0,
                                                           1,
-                                                          instance.StageCost["FirstStage"],
+                                                          instance.StageCost["Stage_1"], #"Stage_1" hardcodes the commitments in all time periods
                                                           None,
                                                           [instance.UnitOn],
                                                           instance,
@@ -83,23 +92,20 @@ def _rho_setter(scenario_instance):
 
 def scenario_rhos(scenario_instance, rho_scale_factor=1.0):
     computed_rhos = []
-    for b in sorted(scenario_instance.Buses):
-        for t in sorted(scenario_instance.TimePeriods):
-            for g in sorted(scenario_instance.ThermalGeneratorsAtBus[b]):
-                max_capacity = pyo.value(scenario_instance.MaximumPowerOutput[g])
-                min_power = pyo.value(scenario_instance.MinimumPowerOutput[g])
-                max_power = pyo.value(scenario_instance.MaximumPowerOutput[g])
-                avg_power = min_power + ((max_power - min_power) / 2.0)
+    for t in scenario_instance.TimePeriods:
+        for g in scenario_instance.ThermalGenerators:
+            max_capacity = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
+            min_power = pyo.value(scenario_instance.MinimumPowerOutput[g,t])
+            max_power = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
+            avg_power = min_power + ((max_power - min_power) / 2.0)
 
-                min_cost = pyo.value(scenario_instance.MinimumProductionCost[g])
+            min_cost = pyo.value(scenario_instance.MinimumProductionCost[g,t])
 
-                fuel_cost = pyo.value(scenario_instance.FuelCost[g])
+            avg_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, avg_power) + min_cost
+            #max_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, max_power) + min_cost
 
-                avg_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, avg_power) + min_cost
-                max_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, max_power) + min_cost
-               
-                computed_rho = rho_scale_factor * avg_cost
-                computed_rhos.append((id(scenario_instance.UnitOn[g,t]), computed_rho))
+            computed_rho = rho_scale_factor * avg_cost
+            computed_rhos.append((id(scenario_instance.UnitOn[g,t]), computed_rho))
                              
     return computed_rhos
 
