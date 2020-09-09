@@ -29,7 +29,10 @@ class Hub(SPCommunicator):
         self.spokes = spokes  # List of dicts
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # ^^^ Does NOT include +1
+        # for logging
         self.print_init = True
+        self.latest_ib_name = None
+        self.latest_ob_name = None
 
     @abc.abstractmethod
     def setup_hub(self):
