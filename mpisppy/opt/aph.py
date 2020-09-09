@@ -98,7 +98,6 @@ class APH(ph_base.PHBase):  # ??????
                          rho_setter=rho_setter)
 
         self.phis = {} # phi values, indexed by scenario names
-        self.nu = 1 # might be changed dynamically by an extension
         self.tau_summand = 0  # place holder for iteration 1 reduce
         self.phi_summand = 0
         self.global_tau = 0
@@ -110,7 +109,17 @@ class APH(ph_base.PHBase):  # ??????
         self.local_pwnorm = 0
         self.local_pznorm = 0
         self.conv = None
-        self.use_lag = False
+        self.use_lag = False if "APHuse_lag" not in PHoptions\
+                        else PHoptions["APHuse_lag"]
+        self.APHgamma = 1 if "APHgamma" not in PHoptions\
+                        else PHoptions["APHgamma"]
+        assert(self.APHgamma > 0)
+        # TBD: use a property decorator for nu to enforce 0 < nu < 2
+        self.nu = 1 # might be changed dynamically by an extension
+        if "APHnu" in PHoptions:
+            self.nu = PHoptions["APHnu"]
+        assert 0 < self.nu and self.nu < 2
+        self.dispatchrecord = dict()   # for local subproblems
 
     #============================
     def setup_Lens(self):
@@ -128,21 +137,57 @@ class APH(ph_base.PHBase):  # ??????
         # tau, phi, punorm, pvnorm, pwnorm, pznorm, secs
         self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc 
 
+
+    #============================
+    def setup_dispatchrecord(self):
+        # Start with a small number for iteration to randomize fist dispatch.
+        for sname in self.local_subproblems:
+            r = np.random.rand()                                                
+            self.dispatchrecord[sname] = [(r,0)]
+
+
     #============================
     def Update_y(self, verbose):
-        for k,s in self.local_scenarios.items():
-            for (ndn,i), xvar in s._nonant_indexes.items():
-                # pyo.value vs. _value ??
-                xzdiff = xvar._value \
-                        - s._zs[(ndn,i)]._value
-                s._ys[(ndn,i)]._value = pyo.value(s._Ws[(ndn,i)]) \
-                                      + pyo.value(s._PHrho[(ndn,i)]) \
-                                      * xzdiff
-                if verbose and self.rank == self.rank0:
-                    print ("rank, node, scen, var, y", ndn, k,
-                           self.rank, xvar.name,
-                           pyo.value(s._ys[(ndn,i)]))
+        # compute the new y (or set to zero if it is iter 1)
+        # iter 1 is iter 0 post-solves when seen from the paper
+                       
+        if self._PHIter != 1:
+            for k,s in self.local_scenarios.items():
+                for (ndn,i), xvar in s._nonant_indexes.items():
+                    if not self.use_lag:
+                        z_touse = s._zs[(ndn,i)]._value
+                        W_touse = pyo.value(s._Ws[(ndn,i)])
+                    else:
+                        z_touse = s._zs_foropt[(ndn,i)]._value
+                        W_touse = pyo.value(s._Ws_foropt[(ndn,i)])
+                    # pyo.value vs. _value ??
+                    s._ys[(ndn,i)]._value = W_touse \
+                                          + pyo.value(s._PHrho[(ndn,i)]) \
+                                          * (xvar._value - z_touse)
+                    if verbose and self.rank == self.rank0:
+                        print ("node, scen, var, y", ndn, k,
+                               self.rank, xvar.name,
+                               pyo.value(s._ys[(ndn,i)]))
+        else:
+            for k,s in self.local_scenarios.items():
+                for (ndn,i), xvar in s._nonant_indexes.items():
+                    s._ys[(ndn,i)]._value = 0
+            if verbose and self.rank == self.rank0:
+                print ("All y=0 for iter1")
 
+
+    #============================
+    def compute_phis_summand(self):
+        # update phis, return summand
+        summand = 0.0
+        for k,s in self.local_scenarios.items():
+            self.phis[k] = 0.0
+            for (ndn,i), xvar in s._nonant_indexes.items():
+                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
+                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
+            self.phis[k] *= pyo.value(s.PySP_prob)
+            summand += self.phis[k]
+        return summand
 
     #============================***********=========
     def listener_side_gig(self, synchro):
@@ -154,6 +199,10 @@ class APH(ph_base.PHBase):  # ??????
         We are going to disable the side_gig on self if we
         updated tau and phi.
         Massive side-effects: e.g., update xbar etc.
+
+        Iter 1 (iter 0) in the paper is special: the v := u, which is a little
+        complicated because we only compute y-bar.        
+
         """
         # This does unsafe things, so it can only be called when the worker is
         # in a tight loop that respects the data lock.
@@ -227,7 +276,9 @@ class APH(ph_base.PHBase):  # ??????
             self.local_punorm += pyo.value(s.PySP_prob) * scen_unorm
             self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
             new_tau_summand += pyo.value(s.PySP_prob) \
-                               * (scen_unorm + scen_vnorm)
+                               * (scen_unorm + scen_vnorm/self.APHgamma)
+                
+
             
         # tauk is the expecation of the sum sum of squares; update for this calc
         logging.debug('  in side-gig, old global_tau={}'.format(self.global_tau))
@@ -241,14 +292,7 @@ class APH(ph_base.PHBase):  # ??????
         if self.global_tau <= 0:
             logging.debug('  *** Negative tau={} on rank {}'\
                           .format(self.global_tau, self.rank))
-        self.phi_summand = 0.0
-        for k,s in self.local_scenarios.items():
-            self.phis[k] = 0.0
-            for (ndn,i), xvar in s._nonant_indexes.items():
-                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
-                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
-            self.phis[k] *= pyo.value(s.PySP_prob)
-            self.phi_summand += self.phis[k]
+        self.phi_summand = self.compute_phis_summand()
 
         # prepare for the reduction that will take place after this side-gig
         self.local_concats["SecondReduce"]["ROOT"][0] = self.tau_summand
@@ -273,7 +317,7 @@ class APH(ph_base.PHBase):  # ??????
         """Gather ybar, xbar and x squared bar for each node 
            and also distribute the values back to the scenarios.
            Compute the tau summand from self and distribute back tauk
-           (tau_k is a scalar and special with respect to snchronizing).
+           (tau_k is a scalar and special with respect to synchronizing).
            Compute the phi summand and reduce it.
 
         Args:
@@ -313,7 +357,12 @@ class APH(ph_base.PHBase):  # ??????
                 = np.zeros(mylen, dtype='d') 
             self.node_concats["SecondReduce"]["ROOT"]\
                 = np.zeros(mylen, dtype='d')
-        else: # concats are here, just zero them out.
+        else: # concats are here, just zero them out. 
+            """ delete this comment block after sept 2020:
+            DLW Aug 2020: why zero?
+            We zero them so we can use an accumulator in the next loop and
+              that seems to be OK.
+            """
             nodenames = []
             for k,s in self.local_scenarios.items():
                 nlens = s._PySP_nlens        
@@ -326,7 +375,9 @@ class APH(ph_base.PHBase):  # ??????
             self.local_concats["SecondReduce"]["ROOT"].fill(0)
             self.node_concats["SecondReduce"]["ROOT"].fill(0)
 
-        # compute the locals and concat them for the first reduce
+        # Compute the locals and concat them for the first reduce.
+        # We don't need to lock here because the direct buffers are only accessed
+        # by compute_global_data.
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
             for node in s._PySPnode_list:
@@ -334,7 +385,9 @@ class APH(ph_base.PHBase):  # ??????
                 for i in range(nlens[node.name]):
                     v_value = node.nonant_vardata_list[i]._value
                     self.local_concats["FirstReduce"][node.name][i] += \
-                        (s.PySP_prob / node.cond_prob) * v_value
+                        (s.PySP_prob / node.cond_prob) * v_value                 
+                    logging.debug("  rank= {} scen={}, i={}, v_value={}".\
+                                  format(rank_global, k, i, v_value))
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
                         += (s.PySP_prob / node.cond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
@@ -397,8 +450,8 @@ class APH(ph_base.PHBase):  # ??????
             self.theta = 0
         else:
             self.theta = self.global_phi * self.nu / self.global_tau
-        logging.debug('Assigned theta {} on rank {}'\
-                      .format(self.theta, self.rank))
+        logging.debug('Iter {} assigned theta {} on rank {}'\
+                      .format(self._PHIter, self.theta, self.rank))
 
         oldpw = self.local_pwnorm
         oldpz = self.local_pznorm
@@ -408,13 +461,20 @@ class APH(ph_base.PHBase):  # ??????
         for k,s in self.local_scenarios.items():
             probs = pyo.value(s.PySP_prob)
             for (ndn, i) in s._nonant_indexes:
-                Ws = pyo.value(s._Ws[(ndn,i)]) + self.theta*self.uk[k][(ndn,i)]
+                Wupdate = self.theta * self.uk[k][(ndn,i)]
+                Ws = pyo.value(s._Ws[(ndn,i)]) + Wupdate
                 s._Ws[(ndn,i)] = Ws 
                 self.local_pwnorm += probs * Ws * Ws
-                zs = pyo.value(s._zs[(ndn,i)])\
-                     + self.theta * pyo.value(s._ybars[(ndn,i)])
+                # iter 1 is iter 0 post-solves when seen from the paper
+                if self._PHIter != 1:
+                    zs = pyo.value(s._zs[(ndn,i)])\
+                     + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
+                else:
+                     zs = pyo.value(s._xbars[(ndn,i)])
                 s._zs[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
+                logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
+                              format(rank_global, k, i, Ws, zs))
         # ? so they will be there next time? (we really need a third reduction)
         self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwnorm
         self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pznorm
@@ -447,27 +507,31 @@ class APH(ph_base.PHBase):  # ??????
             phc = self.PH_convobject(self, self.rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
 
-    
+
     #==========
-    def _best_phis(self, use_scenarios_not_subproblems):
-        # dispatch based on phi
-        # note that when there is no bundling, scenarios are subproblems
-        # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
-        if use_scenarios_not_subproblems:
-            s_source = self.local_scenarios
+    def _update_foropt(self, dlist):
+        # dlist is a list of subproblem names that were dispatched
+        assert self.use_lag
+        """
+        if not self.bundling:
             phidict = self.phis
         else:
-            s_source = self.local_subproblems
-            if not self.bundling:
-                phidict = self.phis
-            else:
-                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
-        # dict(sorted(phidict.items(), key=lambda item: item[1]))
-        sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
-        ###for k,p in sortedbyphi.items():
-        ###print("rank={}, k={}, sortedbyphi[k]={}".format(rank_global, k, p))
+            phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]]}
+        """
+        if not self.bundling:
+            for dl in dlist:
+                scenario = self.local_scenarios[dl[0]]
+                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
+                    scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
+        else:
+            for dl in dlist:
+                for sname in self.local_subproblems[dl[0]].scen_list:
+                    scenario = self.local_scenarios[sname]
+                    for (ndn,i), xvar in scenario._nonant_indexes.items():
+                        scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
+                        scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
 
-        return s_source, sortedbyphi
 
     #====================================================================
     def APH_solve_loop(self, solver_options=None,
@@ -493,19 +557,81 @@ class APH(ph_base.PHBase):  # ??????
             tee (boolean): show solver output to screen if possible
             verbose (boolean): indicates verbose output
             dispatch_frac (float): fraction to send out for solution based on phi
+
+        Returns:
+            dlist (list of str): the subproblems that were dispatched
         """
+        #==========
         def _vb(msg): 
             if verbose and self.rank == self.rank0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
 
+
+        #==========
+        def _best_phis():
+            # for dispatch based on phi
+            # note that when there is no bundling, scenarios are subproblems
+            # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
+            if use_scenarios_not_subproblems:
+                s_source = self.local_scenarios
+                phidict = self.phis
+            else:
+                s_source = self.local_subproblems
+                if not self.bundling:
+                    phidict = self.phis
+                else:
+                    phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+            # dict(sorted(phidict.items(), key=lambda item: item[1]))
+            sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
+
+            return s_source, sortedbyphi
+
+
+        #========
+        def _dispatch_list(scnt):
+            # Return the entire source dict and list of scnt (subproblems,phi) 
+            # pairs for dispatch.
+            retval = list()  # the list to return
+            s_source, sortedbyphi = _best_phis()
+            i = 0
+            for k,p in sortedbyphi.items():
+                if p < 0:
+                    retval.append((k,p))
+                    i += 1
+                    if i >= scnt:
+                        logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
+                                      format(i, len(sortedbyphi), dispatch_frac))
+                        return s_source, retval
+
+            # If we are still here, there were not enough w/negative phi values.
+            if i == 0 and self.nu == 1.0 and self._PHIter > 1:
+                print(f"WARNING: no negative phi on rank {self.rank}")
+            # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
+            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                 key=lambda item: item[1][-1])}
+            for k,t in sortedbyI.items():
+                if k in retval:
+                    continue
+                retval.append((k, sortedbyphi[k]))  # sname, phi
+                i += 1
+                if i >= scnt:
+                    logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
+                                  format(i, len(sortedbyphi), dispatch_frac))
+                    break
+            return s_source, retval
+
+
+        # body of fct starts hare
         logging.debug("  early APH solve_loop for rank={}".format(self.rank))
 
-        s_source, sortedbyphi = self._best_phis(use_scenarios_not_subproblems)
-        scnt = max(1, len(sortedbyphi) * dispatch_frac)
-        i = 0
-        for k,p in sortedbyphi.items():
+        scnt = max(1, len(self.dispatchrecord) * dispatch_frac)
+        s_source, dlist = _dispatch_list(scnt)
+        for dguy in dlist:
+            k = dguy[0]   # name of who to dispatch
+            p = dguy[1]   # phi
             s = s_source[k]
+            self.dispatchrecord[k].append((self._PHIter, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.rank, k, p))
             pyomo_solve_time = self.solve_one(solver_options, k, s,
@@ -515,11 +641,6 @@ class APH(ph_base.PHBase):  # ??????
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
             )
-            i += 1
-            if i >= scnt:
-                logging.debug("Terminate APH_solve_loop after {}/{} subproblems (frac needed={})".\
-                              format(i, len(sortedbyphi), dispatch_frac))
-                break
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
@@ -529,7 +650,8 @@ class APH(ph_base.PHBase):  # ??????
                       (np.min(all_pyomo_solve_times),
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
-
+        return dlist
+    
 
     #====================================================================
     def APH_iterk(self, spcomm):
@@ -545,6 +667,10 @@ class APH(ph_base.PHBase):  # ??????
         logging.debug('==== enter iterk on rank {}'.format(self.rank))
         verbose = self.PHoptions["verbose"]
         have_extensions = self.PH_extensions is not None
+        # put dispatch_frac on the object so extensions can modify it
+        self.dispatch_frac = self.PHoptions["dispatch_frac"]\
+                             if "dispatch_frac" in self.PHoptions else 1
+
         have_converger = self.PH_converger is not None
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"] 
@@ -573,7 +699,8 @@ class APH(ph_base.PHBase):  # ??????
             # do this as a listener side-gig and add another reduction.
             self.Update_theta_zw(verbose)
             self.Compute_Convergence()  # updates conv
-            logging.debug('post Compute_Convergence on rank {}'.format(self.rank))
+            phisum = self.compute_phis_summand() # post-step phis for dispatch
+            logging.debug('phisum={} after step on {}'.format(phisum, self.rank))
 
             # ORed checks for convergence
             if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
@@ -591,25 +718,28 @@ class APH(ph_base.PHBase):  # ??????
             # slight divergence from PH, where mid-iter is before conv
             if have_extensions:
                 self.extobject.miditer()
-            dispatch_frac = self.PHoptions["dispatch_frac"]\
-                            if "dispatch_frac" in self.PHoptions else 1
             
             teeme = ("tee-rank0-solves" in self.PHoptions) \
                  and (self.PHoptions["tee-rank0-solves"] == True)
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
             # Aug2020 ... at least you would get dispatch
+            if self._PHIter == 1:
+                savefrac = self.dispatch_frac
+                self.dispatch_frac = 1   # to get a decent w for everyone
             logging.debug('pre APH_solve_loop on rank {}'.format(self.rank))
-            self.APH_solve_loop(solver_options = \
-                                self.current_solver_options,
-                                dtiming=dtiming,
-                                gripe=True,
-                                disable_pyomo_signal_handling=True,
-                                tee=teeme,
-                                verbose=verbose,
-                                dispatch_frac=dispatch_frac)
+            dlist = self.APH_solve_loop(solver_options = \
+                                        self.current_solver_options,
+                                        dtiming=dtiming,
+                                        gripe=True,
+                                        disable_pyomo_signal_handling=True,
+                                        tee=teeme,
+                                        verbose=verbose,
+                                        dispatch_frac=self.dispatch_frac)
 
             logging.debug('post APH_solve_loop on rank {}'.format(self.rank))
+            if self._PHIter == 1:
+                 self.dispatch_frac = savefrac
             if have_extensions:
                 self.extobject.enditer()
 
@@ -617,10 +747,15 @@ class APH(ph_base.PHBase):  # ??????
                 print("")
                 print("After APH Iteration",self._PHIter)
                 print("Convergence Metric=",self.conv)
+                print('   punorm={} pwnorm={} pvnorm={} pznorm={})'\
+                      .format(self.global_punorm, self.global_pwnorm,
+                              self.global_pvnorm, self.global_pznorm))
                 print("Iteration time: %6.2f" \
                       % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" \
                       % (dt.datetime.now() - self.startdt).total_seconds())
+            if self.use_lag:
+                self._update_foropt(dlist)
 
         logging.debug('Setting synchronizer.quitting on rank %d' % self.rank)
         self.synchronizer.quitting = 1
@@ -659,13 +794,13 @@ class APH(ph_base.PHBase):  # ??????
                                      mutable = True)
             # lag: we will support lagging back only to the last solve
             # IMPORTANT: pyomo does not support a second reference so no:
-            # scenario._zs_touse = scenario._zs
+            # scenario._zs_foropt = scenario._zs
             
             if self.use_lag:
-                scenario._zs_touse = pyo.Param(scenario._nonant_indexes.keys(),
+                scenario._zs_foropt = pyo.Param(scenario._nonant_indexes.keys(),
                                          initialize = 0.0,
                                          mutable = True)
-                scenario._Ws_touse = pyo.Param(scenario._nonant_indexes.keys(),
+                scenario._Ws_foropt = pyo.Param(scenario._nonant_indexes.keys(),
                                          initialize = 0.0,
                                          mutable = True)
                 
@@ -676,10 +811,10 @@ class APH(ph_base.PHBase):  # ??????
                     # proximal term
                     objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
                         (scenario._PHrho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._zs_touse[(ndn,i)]) * \
-                        (xvar - scenario._zs_touse[(ndn,i)])
+                        (xvar - scenario._zs_foropt[(ndn,i)]) * \
+                        (xvar - scenario._zs_foropt[(ndn,i)])
                     # W term
-                    scenario._PHW_on[ndn_i] * scenario._Ws_touse[ndn_i] * xvar
+                    scenario._PHW_on[ndn,i] * scenario._Ws_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._nonant_indexes.items():
                     # proximal term
@@ -693,9 +828,11 @@ class APH(ph_base.PHBase):  # ??????
         # End APH-specific Prep
         
         self.subproblem_creation(self.PHoptions["verbose"])
-        
+
         trivial_bound = self.Iter0()
+
         self.setup_Lens()
+        self.setup_dispatchrecord()
 
         sleep_secs = self.PHoptions["async_sleep_secs"]
 
@@ -715,6 +852,12 @@ class APH(ph_base.PHBase):  # ??????
 
         Eobj = self.post_loops()
 
+        print(f"Debug: here's the dispatch record for rank={self.rank_global}")
+        for k,v in self.dispatchrecord.items():
+            print(k, v)
+            print()
+        print("End dispatch record")
+
         return self.conv, Eobj, trivial_bound
 
 #************************************************************
@@ -727,6 +870,7 @@ if __name__ == "__main__":
     PHopt["solvername"] = "cplex"
     PHopt["PHIterLimit"] = 5
     PHopt["defaultPHrho"] = 1
+    PHopt["APHgamma"] = 1
     PHopt["convthresh"] = 0.001
     PHopt["verbose"] = True
     PHopt["display_timing"] = True

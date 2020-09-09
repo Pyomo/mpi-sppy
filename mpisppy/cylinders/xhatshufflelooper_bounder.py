@@ -1,4 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
+import os
+import time
 import logging
 import random
 import mpisppy.log
@@ -30,6 +32,23 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
+        # Start code to support running trace. TBD: factor this up?
+        if self.rank_intra == 0 and \
+                'suffle_running_trace_prefix' in self.opt.options and \
+                self.opt.options['shuffle_running_trace_prefix'] is not None:
+            running_trace_prefix =\
+                            self.opt.options['shuffle_running_trace_prefix']
+
+            filen = running_trace_prefix+self.__class__.__name__+'.csv'
+            if os.path.exists(filen):
+                raise RuntimeError(f"running trace file {filen} already exists!")
+            with open(filen, 'w') as f:
+                f.write("time,scen,value\n")
+            self.running_trace_filen = filen
+        else:
+            self.running_trace_filen = None
+        # end code to support running trace
+        
         if not isinstance(self.opt, XhatTryer):
             raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
             
@@ -97,6 +116,9 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             if self.verbose and self.opt.rank == self.opt.rank0:
                 print ("(rank0) " + msg)
 
+        if self.running_trace_filen is not None:
+            with open(self.running_trace_filen, "a") as f:
+                f.write(f"{time.time()},{scenario},{obj}\n")
         if obj is None:
             _vb(f"    Infeasible {scenario}")
             return False

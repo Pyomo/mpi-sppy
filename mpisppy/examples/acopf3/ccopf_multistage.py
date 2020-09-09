@@ -108,7 +108,18 @@ def pysp2_callback(scenario_name,
                 print("enode.FailedLines=", enode.FailedLines)
                 raise RuntimeError("Branch (line) {} neither up nor down in scenario {}".\
                                format(this_branch[0], scenario_name))
-    
+    def _egret_model(md_dict):
+        # the exact acopf model is hard-wired here:
+        if not convex_relaxation:
+            pyomod, mdict = eac.create_riv_acopf_model(md_dict, 
+                                            include_feasibility_slack=True)
+
+        else:
+            pyomod, mdict = eac_relax.create_soc_relaxation(md_dict, 
+                                                include_feasibility_slack=True,
+                                                use_linear_relaxation=False)
+        return pyomod, mdict
+
     # pull the number off the end of the scenario name
     scen_num = sputils.extract_num(scenario_name)
     #print ("debug scen_num=",scen_num)
@@ -118,20 +129,15 @@ def pysp2_callback(scenario_name,
     full_scenario_model = pyo.ConcreteModel()
     full_scenario_model.stage_models = dict()
 
-    # the exact acopf model is hard-wired here:
-    if convex_relaxation:
-        acopf_model = eac_relax.create_soc_relaxation
-    else:
-        acopf_model = eac.create_riv_acopf_model
-
     # look at egret/data/model_data.py for the format specification of md_dict
     first_stage_md_dict = _md_dict(cb_data)
     generator_set = first_stage_md_dict.attributes("generator")
     generator_names = generator_set["names"]
 
     # the following creates the first stage model
-    full_scenario_model.stage_models[1], model_dict = acopf_model(
-        first_stage_md_dict, include_feasibility_slack=True)
+    full_scenario_model.stage_models[1], model_dict = _egret_model(
+        first_stage_md_dict)
+
     full_scenario_model.stage_models[1].obj.deactivate()
     setattr(full_scenario_model,
             "stage_models_"+str(1),
@@ -145,7 +151,7 @@ def pysp2_callback(scenario_name,
         lines_up_and_down(stage_md_dict, enodes[stage-1])
         
         full_scenario_model.stage_models[stage], model_dict = \
-            acopf_model(stage_md_dict, include_feasibility_slack=True)
+            _egret_model(stage_md_dict)
         full_scenario_model.stage_models[stage].obj.deactivate()
         setattr(full_scenario_model,
                 "stage_models_"+str(stage),
@@ -194,7 +200,8 @@ def pysp2_callback(scenario_name,
     inst.PySP_prob = 1 / etree.numscens
     # solve it so subsequent code will have a good start
     if solver is not None:
-        solver.solve(inst)
+        print(f"scenario creation callback is solving {scenario_name} on rank {rank}")
+        solver.solve(inst)  #, tee=True) #symbolic_solver_labels=True, keepfiles=True)
 
     # attachments
     inst._enodes = enodes
@@ -249,7 +256,11 @@ if __name__ == "__main__":
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
     solvername = "gurobi"
+    print(f"Solving with {solvername}")
     solver = pyo.SolverFactory(solvername)
+    if "gurobi" in solvername:
+        solver.options["BarHomogeneous"] = 1
+
     casename = "pglib-opf-master/pglib_opf_case118_ieee.m"
     # pglib_opf_case3_lmbd.m
     # pglib_opf_case118_ieee.m
@@ -281,7 +292,12 @@ if __name__ == "__main__":
         raise RuntimeError("nscen={} must be a multiple of n_proc={}".\
                            format(nscen, n_proc))
     cb_data = dict()
-    cb_data["solver"] = solver # can be None
+    cb_data["convex_relaxation"] = True
+    print(f"Convex relaxation={cb_data['convex_relaxation']}")
+    if cb_data["convex_relaxation"]:
+        cb_data["solver"] = None
+    else:
+        cb_data["solver"] = solver  # try to get a good starting point
     cb_data["tee"] = False # for inialization solves
     cb_data["epath"] = egret_path_to_data
     md_dict = _md_dict(cb_data)
@@ -311,7 +327,6 @@ if __name__ == "__main__":
                                  lines)
     cb_data["epath"] = egret_path_to_data
     cb_data["acstream"] = acstream
-    cb_data["convex_relaxation"] = True
     creator_options = {"cb_data": cb_data}
     scenario_names=["Scenario_"+str(i)\
                     for i in range(1,len(cb_data["etree"].rootnode.ScenarioList)+1)]
@@ -321,6 +336,10 @@ if __name__ == "__main__":
     ef = sputils.create_EF(scenario_names,
                              pysp2_callback,
                              creator_options)
+    ###solver.options["BarHomogeneous"] = 1
+    if "gurobi" in solvername:
+        solver.options["BarHomogeneous"] = 1
+
     results = solver.solve(ef, tee=True)
     pyo.assert_optimal_termination(results)
 
