@@ -51,7 +51,7 @@ def main():
     fixer_tol = args.fixer_tol
     with_cross_scenario_cuts = args.with_cross_scenario_cuts
 
-    scensavail = [3]
+    scensavail = [3,50,250]
     if num_scen not in scensavail:
         raise RuntimeError("num-scen was {}, but must be in {}".\
                            format(num_scen, scensavail))
