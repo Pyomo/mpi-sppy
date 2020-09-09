@@ -1,0 +1,34 @@
+
+set StageVariables[FirstStage] :=
+UnitOn[*,*]
+;
+
+set StageVariables[SecondStage] :=
+PowerGeneratedAboveMinimum[*,*]
+MaximumPowerAvailableAboveMinimum[*,*]
+;
+
+set StageDerivedVariables[FirstStage] :=
+StartupCost[*,*]
+ShutdownCost[*,*]
+;
+
+set StageDerivedVariables[SecondStage] :=
+TotalProductionCost[*]
+TotalNoLoadCost[*]
+UnitStart[*,*]
+UnitStop[*,*]
+ProductionCost[*,*]
+NondispatchablePowerUsed[*,*]
+LoadGenerateMismatch[*,*]
+posLoadGenerateMismatch[*,*]
+negLoadGenerateMismatch[*,*]
+ReserveShortfall[*]
+;
+
+param StageCost :=
+FirstStage  StageCost[FirstStage]
+SecondStage StageCost[SecondStage]
+;
+
+param ScenarioBasedData := False ;
