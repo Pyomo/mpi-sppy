@@ -7,6 +7,8 @@ import numpy as np
 import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
+from mpisppy import tt_timer
+
 class CrossScenarioCutSpoke(spoke.Spoke):
     def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
         super().__init__(spbase_object, fullcomm, intercomm, intracomm)
@@ -35,7 +37,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # send, receive
         self._make_windows(nscen*(self.nonant_per_scen + 1 + 1), nscen*local_scen_count + vbuflen)
 
-    def got_kill_signal(self):
+    def _got_kill_signal(self):
         ''' returns True if a kill signal was received,
             and refreshes the array and _locals'''
         self._new_locals = self.spoke_from_hub(self._locals)
@@ -81,6 +83,14 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         self.opt.master.bender.set_input(master_vars=self.opt.master_vars, 
                                             tol=1e-4, comm=self.intracomm)
         self.opt.master.bender.set_ls(self.opt)
+
+        ## the below for loop can take some time,
+        ## so return early if we get a kill signal,
+        ## but only after a barrier
+        self.intracomm.Barrier()
+        if self.got_kill_signal():
+            return
+
         # add the subproblems for all
         for scen in self.opt.all_scenario_names:
             subproblem_fn_kwargs = dict()
@@ -92,10 +102,17 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                                                  master_eta=self.opt.master.eta[scen],
                                                  subproblem_solver=self.opt.options["sp_solver"],
                                                  subproblem_solver_options=self.opt.options["sp_solver_options"])
-            ## this can take some time, so return early if we get a kill signal
-            if self.got_kill_signal():
-                return
 
+        ## the above for loop can take some time,
+        ## so return early if we get a kill signal,
+        ## but only after a barrier
+        self.intracomm.Barrier()
+        if self.got_kill_signal():
+            return
+
+        ## This call is blocking, depending on the
+        ## configuration. This necessitates the barrier
+        ## above.
         self.opt.set_eta_bounds()
         self._eta_lb_array = np.fromiter(
                 (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
@@ -259,7 +276,6 @@ class CrossScenarioCutSpoke(spoke.Spoke):
             else:
                 feas_cuts.append( np.array(cut_array, dtype='d') )
 
-        
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
         row_len = 1+1+len(master_nonants)
@@ -281,6 +297,3 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         while not (self.got_kill_signal()):
             if self._new_locals:
                 self.make_cut()
-
-        # fin
-        self.free_windows()

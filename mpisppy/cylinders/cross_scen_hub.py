@@ -25,6 +25,9 @@ class CrossScenarioHub(PHHub):
         self.best_inner_bound = inf
         self.best_outer_bound = -inf
 
+        # helping the extension track cuts
+        self.new_cuts = False
+
     def initialize_spoke_indices(self):
         super().initialize_spoke_indices()
         for (i, spoke) in enumerate(self.spokes):
@@ -150,3 +153,6 @@ class CrossScenarioHub(PHHub):
                     if persistent_solver:
                         s._solver_plugin.remove_constraint(s._ib_constr[it])
                     del s._ib_constr[it]
+
+        ## helping the extention track cuts
+        self.new_cuts = True
