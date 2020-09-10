@@ -31,8 +31,8 @@ class Hub(SPCommunicator):
         # ^^^ Does NOT include +1
         # for logging
         self.print_init = True
-        self.latest_ib_name = None
-        self.latest_ob_name = None
+        self.latest_ib_char = None
+        self.latest_ob_char = None
         self.last_ib_idx = None
         self.last_ob_idx = None
 
@@ -58,9 +58,9 @@ class Hub(SPCommunicator):
     def main(self):
         pass
 
-    def clear_latest_names(self):
-        self.latest_ib_name = None
-        self.latest_ob_name = None
+    def clear_latest_chars(self):
+        self.latest_ib_char = None
+        self.latest_ob_char = None
 
     def compute_gap(self, compute_relative=True):
         """ Compute the current absolute or relative gap, 
@@ -89,14 +89,14 @@ class Hub(SPCommunicator):
             return abs_gap
 
     def get_update_string(self):
-        if self.latest_ib_name is None and \
-                self.latest_ob_name is None:
+        if self.latest_ib_char is None and \
+                self.latest_ob_char is None:
             return '   '
-        if self.latest_ib_name is None:
-            return self.latest_ob_name + '  '
-        if self.latest_ob_name is None:
-            return '  ' + self.latest_ib_name
-        return self.latest_ob_name+' '+self.latest_ib_name
+        if self.latest_ib_char is None:
+            return self.latest_ob_char + '  '
+        if self.latest_ob_char is None:
+            return '  ' + self.latest_ib_char
+        return self.latest_ob_char+' '+self.latest_ib_char
 
     def log_output(self):
         if self.rank_global != 0:
@@ -112,7 +112,7 @@ class Hub(SPCommunicator):
             self.print_init = False
         row = f"{update_source} {best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f}"
         tt_timer.toc(row, delta=False)
-        self.clear_latest_names()
+        self.clear_latest_chars()
 
     def log_and_determine_termination(self):
         abs_gap_satisfied = False
@@ -171,10 +171,10 @@ class Hub(SPCommunicator):
         current_bound = self.BestOuterBound
         if self._outer_bound_update(new_bound, current_bound):
             if idx is None:
-                self.latest_ob_name = char
+                self.latest_ob_char = char
                 self.last_ob_idx = 0
             else:
-                self.latest_ob_name = self.outerbound_spoke_names[idx]
+                self.latest_ob_char = self.outerbound_spoke_chars[idx]
                 self.last_ob_idx = idx
             return new_bound
         else:
@@ -184,10 +184,10 @@ class Hub(SPCommunicator):
         current_bound = self.BestInnerBound
         if self._inner_bound_update(new_bound, current_bound):
             if idx is None:
-                self.latest_ib_name = char
+                self.latest_ib_char = char
                 self.last_ib_idx = 0
             else:
-                self.latest_ib_name = self.innerbound_spoke_names[idx]
+                self.latest_ib_char = self.innerbound_spoke_chars[idx]
                 self.last_ib_idx = idx
             return new_bound
         else:
@@ -245,8 +245,8 @@ class Hub(SPCommunicator):
         self.nonant_spoke_indices = set()
         self.w_spoke_indices = set()
 
-        self.outerbound_spoke_names = dict()
-        self.innerbound_spoke_names = dict()
+        self.outerbound_spoke_chars = dict()
+        self.innerbound_spoke_chars = dict()
 
         for (i, spoke) in enumerate(self.spokes):
             spoke_class = spoke["spoke_class"]
@@ -254,10 +254,10 @@ class Hub(SPCommunicator):
                 for cst in spoke_class.converger_spoke_types:
                     if cst == ConvergerSpokeType.OUTER_BOUND:
                         self.outerbound_spoke_indices.add(i + 1)
-                        self.outerbound_spoke_names[i+1] = spoke_class.converger_spoke_char
+                        self.outerbound_spoke_chars[i+1] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.INNER_BOUND:
                         self.innerbound_spoke_indices.add(i + 1)
-                        self.innerbound_spoke_names[i+1] = spoke_class.converger_spoke_char
+                        self.innerbound_spoke_chars[i+1] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.W_GETTER:
                         self.w_spoke_indices.add(i + 1)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
