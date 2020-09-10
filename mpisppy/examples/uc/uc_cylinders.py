@@ -13,6 +13,7 @@ from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.extensions.extension import MultiPHExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
+from mpisppy.extensions.xhatclosest import XhatClosest
 from mpisppy.examples import baseparsers
 from mpisppy.examples import vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
@@ -31,8 +32,19 @@ def _parse_args():
                         help="json file with mipgap schedule (default None)",
                         dest="ph_mipgaps_json",
                         type=str,
-                        default=None)                
-    
+                        default=None)
+    parser.add_argument("--solution-dir",
+                        help="writes a tree solution to the provided directory"
+                             " (default None)",
+                        dest="solution_dir",
+                        type=str,
+                        default=None)
+    parser.add_argument("--xhat-closest-tree",
+                        help="Uses XhatClosest to compute a tree solution after"
+                             " PH termination (default False)",
+                        action='store_true',
+                        dest='xhat_closest_tree',
+                        default=False)
     args = parser.parse_args()
     return args
 
@@ -72,15 +84,17 @@ def main():
                               cb_data=cb_data,
                               ph_extensions=MultiPHExtension,
                               rho_setter = rho_setter)
+
     # Extend and/or correct the vanilla dictionary
+    ext_classes =  [Gapper]
     if with_fixer:
-        multi_ext = {"ext_classes": [Fixer, Gapper]}
-    else:
-        multi_ext = {"ext_classes": [Gapper]}
+        ext_classes.append(Fixer)
     if with_cross_scenario_cuts:
-        multi_ext["ext_classes"].append(CrossScenarioExtension)
+        ext_classes.append(CrossScenarioExtension)
+    if args.xhat_closest_tree:
+        ext_classes.append(XhatClosest)
         
-    hub_dict["opt_kwargs"]["PH_extension_kwargs"] = multi_ext
+    hub_dict["opt_kwargs"]["PH_extension_kwargs"] = {"ext_classes" : ext_classes}
     if with_cross_scenario_cuts:
         hub_dict["opt_kwargs"]["PHoptions"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}
@@ -91,6 +105,12 @@ def main():
             "boundtol": fixer_tol,
             "id_fix_list_fct": uc.id_fix_list_fct,
         }
+    if args.xhat_closest_tree:
+        hub_dict["opt_kwargs"]["PHoptions"]["xhat_closest_options"] = {
+            "xhat_solver_options" : dict(),
+            "keep_solution" : True
+        }
+
     if args.ph_mipgaps_json is not None:
         with open(args.ph_mipgaps_json) as fin:
             din = json.load(fin)
@@ -141,7 +161,10 @@ def main():
     if with_cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cut_spoke)
 
-    spin_the_wheel(hub_dict, list_of_spoke_dict)
+    spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
+
+    if args.solution_dir is not None:
+        uc.write_solution(spcomm, opt_dict, args.solution_dir)
 
 
 if __name__ == "__main__":

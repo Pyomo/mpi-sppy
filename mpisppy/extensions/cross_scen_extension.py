@@ -109,7 +109,7 @@ class CrossScenarioExtension(PHExtension):
 
         #print(f"CrossScenarioExtension OB: {global_ob[0]}")
 
-        opt.spcomm.BestOuterBound = opt.spcomm.OuterBoundUpdate(global_ob[0])
+        opt.spcomm.BestOuterBound = opt.spcomm.OuterBoundUpdate(global_ob[0],'C')
 
         for k,s in opt.local_subproblems.items():
             s._EF_Obj.deactivate()

@@ -761,11 +761,14 @@ class APH(ph_base.PHBase):  # ??????
         self.synchronizer.quitting = 1
 
     #====================================================================
-    def APH_main(self, spcomm=None):
+    def APH_main(self, spcomm=None, finalize=True):
 
         """Execute the APH algorithm.
         Args:
             spcomm (SPCommunitator object): for intra or inter communications
+            finalize (bool, optional, default=True):
+                        If True, call self.post_loops(), if False, do not,
+                        and return None for Eobj
 
         Returns:
             conv, Eobj, trivial_bound: 
@@ -850,7 +853,10 @@ class APH(ph_base.PHBase):  # ??????
         kwargs = None  # {"PH_extensions": PH_extensions}
         self.synchronizer.run(args, kwargs)
 
-        Eobj = self.post_loops()
+        if finalize:
+            Eobj = self.post_loops()
+        else:
+            Eobj = None
 
         print(f"Debug: here's the dispatch record for rank={self.rank_global}")
         for k,v in self.dispatchrecord.items():

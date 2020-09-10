@@ -57,13 +57,16 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             """
         
      #**********
-    def _try_one(self, snamedict, solver_options=None, verbose=False):
+    def _try_one(self, snamedict, solver_options=None, verbose=False, restore_nonants=True):
         """ try the scenario named sname in self.opt.local_scenarios
        Args:
             snamedict (dict): key: scenario tree non-leaf name, val: scen name
                             the scen name can be None if it is not local
             solver_options (dict): passed through to the solver
             verbose (boolean): controls output
+            restore_nonants (bool): if True, restores the nonants to their original
+                                    values in all scenarios. If False, leaves the
+                                    nonants as they are in the tried scenario
        NOTE: The solve loop is with fixed nonants so W and rho do not
              matter to the optimization. When we want to check the obj
              value we need to drop them, but we don't need to re-optimize
@@ -146,6 +149,8 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
 
         feasP = self.opt.feas_prob()
         if feasP != self.opt.E1:
+            # restoring does no harm
+            # if this solution is infeasible
             self.opt._restore_nonants()
             return None
         else:
@@ -154,8 +159,9 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 self.opt.local_scenarios[sname].pprint()
             self.opt._disable_W_and_prox()
             obj = self.opt.Eobjective(verbose=verbose)
-            self.opt._restore_nonants()
-            self.opt._reenable_W_and_prox()  # not needed when a spoke
+            if restore_nonants:
+                self.opt._restore_nonants()
+                self.opt._reenable_W_and_prox()  # not needed when a spoke
             return obj
 
     #**********

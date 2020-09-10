@@ -8,7 +8,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 import mpi4py.MPI as mpi
 
-from math import inf
+from math import inf, isclose
 from mpisppy.utils.xhat_tryer import XhatTryer
 from mpisppy.extensions.xhatbase import XhatBase
 
@@ -237,7 +237,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         obj = self.opt.Eobjective(verbose=False)
 
-        if obj != self.ib:
+        if not isclose(obj,self.ib):
             if self.rank_intra == 0:
                 print(f"WARNING: {self.__class__.__name__} best inner bound is different "
                         f"from objective calculated in finalize")

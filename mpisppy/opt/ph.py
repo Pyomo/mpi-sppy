@@ -24,9 +24,14 @@ class PH(mpisppy.phbase.PHBase):
     # uncomment the line below to get per-rank profile outputs, which can 
     # be examined with snakeviz (or your favorite profile output analyzer)
     #@profile(filename="profile_out")
-    def ph_main(self):
+    def ph_main(self, finalize=True):
         """
         Execute the PH algorithm.
+
+        Args:
+            finalize (bool, optional, default=True):
+                        If True, call self.post_loops(), if False, do not,
+                        and return None for Eobj
 
         Returns:
             conv, Eobj, trivial_bound: 
@@ -70,7 +75,10 @@ class PH(mpisppy.phbase.PHBase):
         else:
             self.iterk_loop()
 
-        Eobj = self.post_loops(self.PH_extensions)
+        if finalize:
+            Eobj = self.post_loops(self.PH_extensions)
+        else:
+            Eobj = None
 
         return self.conv, Eobj, trivial_bound
 
