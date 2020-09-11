@@ -55,6 +55,12 @@ class Hub(SPCommunicator):
         pass
 
     @abc.abstractmethod
+    def current_iteration(self):
+        """ Returns the current iteration count - however the hub defines it.
+        """
+        pass
+
+    @abc.abstractmethod
     def main(self):
         pass
 
@@ -101,16 +107,17 @@ class Hub(SPCommunicator):
     def log_output(self):
         if self.rank_global != 0:
             return
+        current_iteration = self.current_iteration()
         rel_gap = self.compute_gap(compute_relative=True)
         abs_gap = self.compute_gap(compute_relative=False)
         best_solution = self.BestInnerBound
         best_bound = self.BestOuterBound
         update_source = self.get_update_string()
         if self.print_init:
-            row = f'{"   "} {"Best Bound":>14s} {"Best Incumbent":>14s} {"Rel. Gap (%)":>12s} {"Abs. Gap":>14s}'
+            row = f'{"Iter.":>5s}  {"   "}  {"Best Bound":>14s}  {"Best Incumbent":>14s}  {"Rel. Gap":>12s}  {"Abs. Gap":>14s}'
             tt_timer.toc(row, delta=False)
             self.print_init = False
-        row = f"{update_source} {best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f}"
+        row = f"{current_iteration:5d}  {update_source}  {best_bound:14.4f}  {best_solution:14.4f}  {rel_gap*100:12.4f}  {abs_gap:14.4f}"
         tt_timer.toc(row, delta=False)
         self.clear_latest_chars()
 
@@ -444,6 +451,10 @@ class PHHub(Hub):
 
         return self.log_and_determine_termination()
 
+    def current_iteration(self):
+        """ Return the current PH iteration."""
+        return self.opt._PHIter
+    
     def main(self):
         """ SPComm gets attached in self.__init__ """
         self.opt.ph_main(finalize=False)
@@ -557,6 +568,10 @@ class LShapedHub(Hub):
 
         return self.log_and_determine_termination()
 
+    def current_iteration(self):
+        """ Return the current L-shaped iteration."""
+        return self.opt.iter
+
     def main(self):
         """ SPComm gets attached in self.__init__ """ 
         self.opt.lshaped_algorithm()
@@ -644,6 +659,9 @@ class APHHub(PHHub):
     def sync_with_spokes(self):
         self.sync()
 
+    def current_iteration(self):
+        """ Return the current APH iteration."""
+        return self.opt._PHIter
 
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """
