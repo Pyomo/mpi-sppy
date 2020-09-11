@@ -31,8 +31,10 @@ class Hub(SPCommunicator):
         # ^^^ Does NOT include +1
         # for logging
         self.print_init = True
-        self.latest_ib_name = None
-        self.latest_ob_name = None
+        self.latest_ib_char = None
+        self.latest_ob_char = None
+        self.last_ib_idx = None
+        self.last_ob_idx = None
 
     @abc.abstractmethod
     def setup_hub(self):
@@ -55,6 +57,10 @@ class Hub(SPCommunicator):
     @abc.abstractmethod
     def main(self):
         pass
+
+    def clear_latest_chars(self):
+        self.latest_ib_char = None
+        self.latest_ob_char = None
 
     def compute_gap(self, compute_relative=True):
         """ Compute the current absolute or relative gap, 
@@ -83,14 +89,14 @@ class Hub(SPCommunicator):
             return abs_gap
 
     def get_update_string(self):
-        if self.latest_ib_name is None and \
-                self.latest_ob_name is None:
+        if self.latest_ib_char is None and \
+                self.latest_ob_char is None:
             return '   '
-        if self.latest_ib_name is None:
-            return self.latest_ob_name + '  '
-        if self.latest_ob_name is None:
-            return '  ' + self.latest_ib_name
-        return self.latest_ob_name+' '+self.latest_ib_name
+        if self.latest_ib_char is None:
+            return self.latest_ob_char + '  '
+        if self.latest_ob_char is None:
+            return '  ' + self.latest_ib_char
+        return self.latest_ob_char+' '+self.latest_ib_char
 
     def log_output(self):
         if self.rank_global != 0:
@@ -106,6 +112,7 @@ class Hub(SPCommunicator):
             self.print_init = False
         row = f"{update_source} {best_bound:14.4f} {best_solution:14.4f} {rel_gap*100:12.4f} {abs_gap:14.4f}"
         tt_timer.toc(row, delta=False)
+        self.clear_latest_chars()
 
     def log_and_determine_termination(self):
         abs_gap_satisfied = False
@@ -138,7 +145,6 @@ class Hub(SPCommunicator):
             (but should be harmless to call if there are none)
         """
         logging.debug("Hub is trying to receive from InnerBounds")
-        self.latest_ib_name = None
         for idx in self.innerbound_spoke_indices:
             is_new = self.hub_from_spoke(self.innerbound_receive_buffers[idx], idx)
             if is_new:
@@ -153,7 +159,6 @@ class Hub(SPCommunicator):
             (but should be harmless to call if there are none)
         """
         logging.debug("Hub is trying to receive from OuterBounds")
-        self.latest_ob_name = None
         for idx in self.outerbound_spoke_indices:
             is_new = self.hub_from_spoke(self.outerbound_receive_buffers[idx], idx)
             if is_new:
@@ -162,24 +167,28 @@ class Hub(SPCommunicator):
                 self.BestOuterBound = self.OuterBoundUpdate(bound, idx)
         logging.debug("ph back from OuterBounds")
 
-    def OuterBoundUpdate(self, new_bound, idx=None):
+    def OuterBoundUpdate(self, new_bound, idx=None, char='*'):
         current_bound = self.BestOuterBound
         if self._outer_bound_update(new_bound, current_bound):
             if idx is None:
-                self.latest_ob_name = '*'
+                self.latest_ob_char = char
+                self.last_ob_idx = 0
             else:
-                self.latest_ob_name = self.outerbound_spoke_names[idx]
+                self.latest_ob_char = self.outerbound_spoke_chars[idx]
+                self.last_ob_idx = idx
             return new_bound
         else:
             return current_bound
 
-    def InnerBoundUpdate(self, new_bound, idx=None):
+    def InnerBoundUpdate(self, new_bound, idx=None, char='*'):
         current_bound = self.BestInnerBound
         if self._inner_bound_update(new_bound, current_bound):
             if idx is None:
-                self.latest_ib_name = '*'
+                self.latest_ib_char = char
+                self.last_ib_idx = 0
             else:
-                self.latest_ib_name = self.innerbound_spoke_names[idx]
+                self.latest_ib_char = self.innerbound_spoke_chars[idx]
+                self.last_ib_idx = idx
             return new_bound
         else:
             return current_bound
@@ -236,8 +245,8 @@ class Hub(SPCommunicator):
         self.nonant_spoke_indices = set()
         self.w_spoke_indices = set()
 
-        self.outerbound_spoke_names = dict()
-        self.innerbound_spoke_names = dict()
+        self.outerbound_spoke_chars = dict()
+        self.innerbound_spoke_chars = dict()
 
         for (i, spoke) in enumerate(self.spokes):
             spoke_class = spoke["spoke_class"]
@@ -245,10 +254,10 @@ class Hub(SPCommunicator):
                 for cst in spoke_class.converger_spoke_types:
                     if cst == ConvergerSpokeType.OUTER_BOUND:
                         self.outerbound_spoke_indices.add(i + 1)
-                        self.outerbound_spoke_names[i+1] = spoke_class.converger_spoke_char
+                        self.outerbound_spoke_chars[i+1] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.INNER_BOUND:
                         self.innerbound_spoke_indices.add(i + 1)
-                        self.innerbound_spoke_names[i+1] = spoke_class.converger_spoke_char
+                        self.innerbound_spoke_chars[i+1] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.W_GETTER:
                         self.w_spoke_indices.add(i + 1)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
@@ -412,15 +421,23 @@ class PHHub(Hub):
         self.sync()
 
     def is_converged(self):
-        if not (self.has_innerbound_spokes and self.has_outerbound_spokes):
+        ## might as well get a bound, in this case
+        if self.opt._PHIter == 1:
+            self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
+
+        if not self.has_innerbound_spokes:
             if self.opt._PHIter == 1:
                 logger.warning(
                     "PHHub cannot compute convergence without "
-                    "both inner and outer bound spokes."
+                    "inner bound spokes."
                 )
             return False
-        if self.opt._PHIter == 1:
-            self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
+
+        if not self.has_outerbound_spokes:
+            if self.opt._PHIter == 1 and self.rank_global == 0:
+                tt_timer.toc(
+                    "Without outer bound spokes, no progress "
+                    "will be made on the Best Bound", delta=False)
 
         ## log some output
         self.log_output()
@@ -429,7 +446,12 @@ class PHHub(Hub):
 
     def main(self):
         """ SPComm gets attached in self.__init__ """
-        self.opt.ph_main()
+        self.opt.ph_main(finalize=False)
+
+    def finalize(self):
+        """ does PH.post_loops, returns Eobj """
+        Eobj = self.opt.post_loops(self.opt.PH_extensions)
+        return Eobj
 
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
@@ -626,5 +648,11 @@ class APHHub(PHHub):
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """
         logger.critical("aph debug main in hub.py")
-        self.opt.APH_main(spcomm=self)
+        self.opt.APH_main(spcomm=self, finalize=False)
 
+    def finalize(self):
+        """ does PH.post_loops, returns Eobj """
+        # NOTE: APH_main does NOT pass in PH_extensions
+        #       to APH.post_loops
+        Eobj = self.opt.post_loops()
+        return Eobj

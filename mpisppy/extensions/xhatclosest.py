@@ -16,7 +16,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         self.options = ph.PHoptions["xhat_closest_options"]
         self.solver_options = self.options["xhat_solver_options"]
 
-    def xhat_closest_to_xbar(self, verbose=False):
+    def xhat_closest_to_xbar(self, verbose=False, restore_nonants=True):
         """ Get a truncated z score and look for the closest overall.
 
         Returns:
@@ -75,7 +75,8 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         snamedict = {"ROOT": sname}
         obj = self._try_one(snamedict,
                             solver_options=self.solver_options,
-                            verbose=False)
+                            verbose=False,
+                            restore_nonants=restore_nonants)
         if obj is None:
             _vb("    Infeasible")
         else:
@@ -98,5 +99,10 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         pass
 
     def post_everything(self):
-        obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose)
+        # if we're keeping the solution, we *do not* restore the nonants
+        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
+        obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose, restore_nonants=restore_nonants)
         self.xhat_common_post_everything("closest to xbar", obj, srcsname)
+        self._final_xhat_closest_obj = obj
+        if self.opt.spcomm is not None:
+            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')

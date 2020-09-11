@@ -90,7 +90,7 @@ def _rho_setter(scenario_instance):
 
     return scenario_rhos(scenario_instance)
 
-def scenario_rhos(scenario_instance, rho_scale_factor=1.0):
+def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
     computed_rhos = []
     for t in scenario_instance.TimePeriods:
         for g in scenario_instance.ThermalGenerators:
@@ -192,3 +192,50 @@ def id_fix_list_fct(scenario_instance):
                                                      th=0.01, nb=None, lb=6, ub=6))
 
     return iter0tuples, iterktuples
+
+def write_solution(spcomm, opt_dict, solution_dir):
+    from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
+    from mpisppy.extensions.xhatclosest import XhatClosest
+    from mpisppy.opt.ph import PH
+
+    if spcomm.rank_global == 0:
+        if spcomm.last_ib_idx is None:
+            best_rank_inter = -1
+            print("No incumbent solution to print")
+        else:
+            best_rank_inter = spcomm.last_ib_idx
+    else:
+        best_rank_inter = None
+
+    best_rank_inter = spcomm.fullcomm.bcast(best_rank_inter, root=0)
+
+    if spcomm.rank_inter != best_rank_inter:
+        # Nothing to do
+        return
+    ## else this spoke/hub is the winner!
+
+    # do some checks, to make sure the solution we print will be nonantipative
+    if best_rank_inter != 0:
+        assert opt_dict["spoke_class"] in (XhatShuffleInnerBound, )
+    else: # this is the hub, TODO: also could check for XhatSpecific
+        assert opt_dict["opt_class"] in (PH, )
+        assert XhatClosest in opt_dict["opt_kwargs"]["PH_extension_kwargs"]["ext_classes"]
+        assert "keep_solution" in opt_dict["opt_kwargs"]["PHoptions"]["xhat_closest_options"]
+        assert opt_dict["opt_kwargs"]["PHoptions"]["xhat_closest_options"]["keep_solution"] is True
+
+    ## if we've passed the above checks, the scenarios should have the tree solution
+
+    ## make solution dir if it doesn't exist,
+    ## but only on rank 0
+    if spcomm.rank_intra == 0:
+        if not os.path.exists(solution_dir):
+            os.makedirs(solution_dir)
+
+    spcomm.intracomm.Barrier()
+
+    for sname, s in spcomm.opt.local_scenarios.items():
+        file_name = os.path.join(solution_dir, sname+'.json')
+        mds = uc._save_uc_results(s, relaxed=False)
+        mds.write(file_name)
+
+    return

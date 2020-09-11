@@ -19,7 +19,8 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     #==========
     def xhat_tryit(self,
                    xhat_scenario_dict,
-                   verbose=False):
+                   verbose=False,
+                   restore_nonants=True):
         """If your rank has
         the chosen guy, bcast, if not, recieve the bcast. In any event, fix the vars
         at the bcast values and see if it is feasible. 
@@ -44,7 +45,8 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
         _vb("   Solver options="+str(self.solver_options))
         obj = self._try_one(xhat_scenario_dict,
                             solver_options=self.solver_options,
-                            verbose=False)
+                            verbose=False,
+                            restore_nonants=restore_nonants)
         if obj is None:
             _vb("Infeasible")
         else:
@@ -66,10 +68,14 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
         pass
 
     def post_everything(self):
+        # if we're keeping the solution, we *do not* restore the nonants
+        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
         xhat_scenario_dict = self.options["xhat_scenario_dict"]
         obj = self.xhat_tryit(xhat_scenario_dict,
-                              verbose=self.verbose)
+                              verbose=self.verbose,
+                              restore_nonants=restore_nonants)
         # to make available to tester
         self._xhat_specific_obj_final = obj
         self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict)
-
+        if self.opt.spcomm is not None:
+            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')
