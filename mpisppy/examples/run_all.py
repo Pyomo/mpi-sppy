@@ -122,7 +122,7 @@ do_one("hydro", "hydro_cylinders.py", 3,
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, "2 3 2 0")
 
-if not nouc:
+if not nouc and egret_avail():
     print("\nSlow runs ahead...\n")
     # 3-scenario UC
     do_one("uc", "uc_ef.py", 1, solver_name)
