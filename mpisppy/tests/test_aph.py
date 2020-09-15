@@ -44,8 +44,8 @@ class Test_aph_sizes(unittest.TestCase):
         self.BasePHoptions["verbose"] = False
         self.BasePHoptions["display_timing"] = False
         self.BasePHoptions["display_progress"] = False
-        self.BasePHoptions["iter0_solver_options"] = {"mipgap": 0.01}
-        self.BasePHoptions["iterk_solver_options"] = {"mipgap": 0.001}
+        self.BasePHoptions["iter0_solver_options"] = {"mipgap": 0.1}
+        self.BasePHoptions["iterk_solver_options"] = {"mipgap": 0.02}
 
         self.BasePHoptions["display_progress"] = False
 

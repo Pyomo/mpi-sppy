@@ -96,8 +96,9 @@ class Test_sizes(unittest.TestCase):
     def test_ef_constructor(self):
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(self.all3_scenario_names,
-                                       scenario_creator,
-                                       creator_options={"cb_data": ScenCount})
+                                    scenario_creator,
+                                    creator_options={"cb_data": ScenCount},
+                                    suppress_warnings=True)
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -106,8 +107,9 @@ class Test_sizes(unittest.TestCase):
         solver = pyo.SolverFactory(PHoptions["solvername"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(self.all3_scenario_names,
-                                       scenario_creator,
-                                       creator_options={"cb_data": ScenCount})
+                                    scenario_creator,
+                                    creator_options={"cb_data": ScenCount},
+                                    suppress_warnings=True)
         results = solver.solve(ef, tee=False)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
         self.assertEqual(220000.0, sig2eobj)

@@ -16,6 +16,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         scenario_creator,
         model_name=None,
         scenario_creator_options=None,
+        suppress_warnings=False
     ):
         cb_data = None
         if scenario_creator_options is not None:
@@ -28,7 +29,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             cb_data=cb_data
         )
         if self.n_proc > 1 and self.rank == self.rank0:
-            logger.warning("WARNING: Creating an ExtensiveForm object in parallel. Why?")
+            logger.warning("Creating an ExtensiveForm object in parallel. Why?")
         if scenario_creator_options is None:
             scenario_creator_options = dict()
         required = ["solver"]
@@ -38,7 +39,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             all_scenario_names,
             scenario_creator,
             creator_options=scenario_creator_options,
-            EF_name=model_name
+            EF_name=model_name,
+            suppress_warnings=suppress_warnings,
         )
 
     def solve_extensive_form(self, tee=False):
