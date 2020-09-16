@@ -1265,7 +1265,9 @@ class PHBase(mpisppy.spbase.SPBase):
         dtiming = self.PHoptions["display_timing"]
         self.conv = None
 
-        for self._PHIter in range(1, int(self.PHoptions["PHIterLimit"])+1):
+        max_iterations = int(self.PHoptions["PHIterLimit"])
+
+        for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
 
             if dprogress and self.rank == self.rank0:
@@ -1310,7 +1312,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
                     if self.rank == self.rank0:
-                        tt_timer.toc("PHBase Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), delta=False)
+                        tt_timer.toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), delta=False)
                     break
 
             teeme = (
@@ -1335,6 +1337,10 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("Scaled PHBase Convergence Metric=",self.conv)
                 print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" % (dt.datetime.now() - self.startdt).total_seconds())
+
+            if (self._PHIter == max_iterations) and (self.rank == self.rank0):
+                tt_timer.toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, delta=False)
+                
         if synchronizer is not None:
             logger.debug('Setting synchronizer.quitting on rank %d' % self.rank)
             synchronizer.quitting = 1
