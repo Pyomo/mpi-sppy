@@ -104,9 +104,7 @@ class Hub(SPCommunicator):
             return '  ' + self.latest_ib_char
         return self.latest_ob_char+' '+self.latest_ib_char
 
-    def log_output(self):
-        if self.rank_global != 0:
-            return
+    def screen_trace(self):
         current_iteration = self.current_iteration()
         rel_gap = self.compute_gap(compute_relative=True)
         abs_gap = self.compute_gap(compute_relative=False)
@@ -121,7 +119,7 @@ class Hub(SPCommunicator):
         tt_timer.toc(row, delta=False)
         self.clear_latest_chars()
 
-    def log_and_determine_termination(self):
+    def determine_termination(self):
         abs_gap_satisfied = False
         rel_gap_satisfied = False
         if hasattr(self,"options") and self.options is not None:
@@ -143,8 +141,11 @@ class Hub(SPCommunicator):
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
 
-        self.print_init = True
-        self.log_output()
+        if self.rank_global == 0:
+            self.print_init = True
+            tt_timer.toc(f" ", delta=False)
+            tt_timer.toc(f"Statistics at termination", delta=False)
+            self.screen_trace()
 
     def receive_innerbounds(self):
         """ Get inner bounds from inner bound spokes
@@ -438,6 +439,11 @@ class PHHub(Hub):
                     "PHHub cannot compute convergence without "
                     "inner bound spokes."
                 )
+
+            ## you still want to output status, even without inner bounders configured
+            if self.rank_global == 0:                
+                self.screen_trace()
+                
             return False
 
         if not self.has_outerbound_spokes:
@@ -447,9 +453,10 @@ class PHHub(Hub):
                     "will be made on the Best Bound", delta=False)
 
         ## log some output
-        self.log_output()
+        if self.rank_global == 0:
+            self.screen_trace()
 
-        return self.log_and_determine_termination()
+        return self.determine_termination()
 
     def current_iteration(self):
         """ Return the current PH iteration."""
@@ -564,9 +571,10 @@ class LShapedHub(Hub):
         self.BestOuterBound = self.OuterBoundUpdate(bound)
 
         ## log some output
-        self.log_output()
+        if self.rank_global == 0:                
+            self.screen_trace()
 
-        return self.log_and_determine_termination()
+        return self.determine_termination()
 
     def current_iteration(self):
         """ Return the current L-shaped iteration."""
