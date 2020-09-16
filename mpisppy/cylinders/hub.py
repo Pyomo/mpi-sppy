@@ -143,7 +143,7 @@ class Hub(SPCommunicator):
 
         if self.rank_global == 0:
             self.print_init = True
-            tt_timer.toc(f"\n", delta=False)
+            tt_timer.toc(f" ", delta=False)
             tt_timer.toc(f"Statistics at termination", delta=False)
             self.log_output()
 
