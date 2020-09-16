@@ -104,7 +104,7 @@ class Hub(SPCommunicator):
             return '  ' + self.latest_ib_char
         return self.latest_ob_char+' '+self.latest_ib_char
 
-    def log_output(self):
+    def screen_trace(self):
         current_iteration = self.current_iteration()
         rel_gap = self.compute_gap(compute_relative=True)
         abs_gap = self.compute_gap(compute_relative=False)
@@ -145,7 +145,7 @@ class Hub(SPCommunicator):
             self.print_init = True
             tt_timer.toc(f" ", delta=False)
             tt_timer.toc(f"Statistics at termination", delta=False)
-            self.log_output()
+            self.screen_trace()
 
     def receive_innerbounds(self):
         """ Get inner bounds from inner bound spokes
@@ -442,7 +442,7 @@ class PHHub(Hub):
 
             ## you still want to output status, even without inner bounders configured
             if self.rank_global == 0:                
-                self.log_output()
+                self.screen_trace()
                 
             return False
 
@@ -454,7 +454,7 @@ class PHHub(Hub):
 
         ## log some output
         if self.rank_global == 0:
-            self.log_output()
+            self.screen_trace()
 
         return self.determine_termination()
 
@@ -572,7 +572,7 @@ class LShapedHub(Hub):
 
         ## log some output
         if self.rank_global == 0:                
-            self.log_output()
+            self.screen_trace()
 
         return self.determine_termination()
 
