@@ -43,9 +43,13 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             suppress_warnings=suppress_warnings,
         )
 
-    def solve_extensive_form(self, tee=False):
+    def solve_extensive_form(self, solver_options=None, tee=False):
         if "persistent" in self.options["solver"]:
             self.solver.set_instance(self.ef)
+        # Pass solver-specifiec (e.g. Gurobi, CPLEX) options
+        if solver_options is not None:
+            for (opt, value) in solver_options.items():
+                self.solver.options[opt] = value
         results = self.solver.solve(self.ef, tee=tee)
         return results
 

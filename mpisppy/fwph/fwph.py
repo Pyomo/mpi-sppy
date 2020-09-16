@@ -257,7 +257,10 @@ class FWPH(mpisppy.phbase.PHBase):
             # Algorithm 2 lines 6--8
             obj = find_active_objective(mip, True)
             if (itr == 0):
-                dual_bound = pyo.value(obj)
+                if (self.is_minimizing):
+                    dual_bound = mip_results.Problem[0].Lower_bound
+                else:
+                    dual_bound = mip_results.Problem[0].Upper_bound
 
             # Algorithm 2 line 9 (compute \Gamma^t)
             val0 = pyo.value(obj)
