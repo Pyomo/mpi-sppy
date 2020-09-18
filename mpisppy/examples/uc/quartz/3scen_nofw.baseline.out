@@ -1,35 +1,8 @@
 [    0.00] Initializing mpi-sppy
 [    3.65] Start SPBase.__init__
 [   10.97] Start PHBase.__init__
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
 [   11.05] Starting spcomm.main()
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
 [   11.57] Creating solvers
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
 [   22.31] Entering solve loop in PHBase.Iter0
 [   26.99] Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap
 [   26.99]     1  L X      64107.2553      64156.1922        0.0763         48.9368

@@ -2,52 +2,7 @@
 [    4.42] Start SPBase.__init__
 [   11.68] Start PHBase.__init__
 [   11.76] Starting spcomm.main()
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Set parameter TSPort to value 28522
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
 [   12.31] Creating solvers
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
-Using license file /usr/gapps/ppp/gurobi/gurobi.lic
-Set parameter TokenServer to value elsie3.llnl.gov
-Set parameter TSPort to value 28522
 [   22.74] Entering solve loop in PHBase.Iter0
 [   28.82] Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap
 [   28.82]     1  L X      62612.9438      62630.2286        0.0276         17.2849
