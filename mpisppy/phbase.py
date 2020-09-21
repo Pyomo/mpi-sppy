@@ -1128,18 +1128,47 @@ class PHBase(mpisppy.spbase.SPBase):
                 self.local_subproblems[sname].scen_list = [sname]
 
     def _create_solvers(self):
+
         for sname, s in self.local_subproblems.items(): # solver creation
             s._solver_plugin = SolverFactory(self.PHoptions["solvername"])
+
             if (sputils.is_persistent(s._solver_plugin)):
+
                 if (self.PHoptions["display_timing"]):
                     set_instance_start_time = time.time()
 
-                s._solver_plugin.set_instance(s) #### JPW: check ph.py for options such as symbolic_solver_labels and output_fixed_variable_bounds
+                # this loop is required to address the sitution where license
+                # token servers become temporarily over-subscribed / non-responsive
+                # when large numbers of ranks are in use.
+
+                # these parameters should eventually be promoted to a non-PH
+                # general class / location. even better, the entire retry
+                # logic can be encapsulated in a sputils.py function.
+                MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
+                LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
+        
+                while True:
+                    num_retry_attempts = 0
+                    try:
+                        s._solver_plugin.set_instance(s)
+                        break
+                    # pyomo presently has no general way to trap a license acquisition
+                    # error - so we're stuck with trapping on "any" exception. not idel.
+                    except:
+                        if num_retry_attempts == 0:
+                            print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
+                        else:
+                            print("Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                        if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
+                            raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
+                        else:
+                            print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
+                            time.sleep(LICENSE_RETRY_SLEEP_TIME)
 
                 if (self.PHoptions["display_timing"]):
                     set_instance_time = time.time() - set_instance_start_time
                     all_set_instance_times = self.mpicomm.gather(set_instance_time,
-                                                             root=0)
+                                                                 root=0)
                     if self.rank == self.rank0:
                         print("Set instance times:")
                         print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
