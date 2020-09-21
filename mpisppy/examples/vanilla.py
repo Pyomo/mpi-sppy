@@ -13,6 +13,7 @@ from mpisppy.fwph.fwph import FWPH
 from mpisppy.utils.xhat_tryer import XhatTryer
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
+from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
@@ -121,6 +122,7 @@ def fwph_spoke(args,
     }
     return fw_dict
 
+
 def lagrangian_spoke(args,
                   scenario_creator,
                   scenario_denouement,
@@ -148,6 +150,41 @@ def lagrangian_spoke(args,
         lagrangian_spoke["opt_kwargs"]["PHoptions"]["iterk_solver_options"]\
             ["mipgap"] = args.lagrangian_iterk_mipgap
     return lagrangian_spoke
+
+
+# special lagrangian that computes its own xhat and W
+def lagranger_spoke(args,
+                  scenario_creator,
+                  scenario_denouement,
+                  all_scenario_names,
+                  cb_data=None,
+                  rho_setter=None):
+    shoptions = shared_options(args)
+    lagranger_spoke = {
+        "spoke_class": LagrangerOuterBound,
+        "spoke_kwargs": dict(),
+        "opt_class": PHBase,
+        "opt_kwargs": {
+            "PHoptions": shoptions,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "cb_data": cb_data,
+            "rho_setter": rho_setter,
+            'scenario_denouement': scenario_denouement,
+        }
+    }
+    if args.lagranger_iter0_mipgap is not None:
+        lagranger_spoke["opt_kwargs"]["PHoptions"]["iter0_solver_options"]\
+            ["mipgap"] = args.lagranger_iter0_mipgap
+    if args.lagranger_iterk_mipgap is not None:
+        lagranger_spoke["opt_kwargs"]["PHoptions"]["iterk_solver_options"]\
+            ["mipgap"] = args.lagranger_iterk_mipgap
+    if args.lagranger_rho_rescale_factors_json is not None:
+        lagranger_spoke["opt_kwargs"]["PHoptions"]\
+            ["lagranger_rho_rescale_factors_json"]\
+            = args.lagranger_rho_rescale_factors_json
+        
+    return lagranger_spoke
 
         
 def xhatlooper_spoke(args,

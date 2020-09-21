@@ -248,11 +248,11 @@ def fwph_args(inparser):
 def lagrangian_args(inparser):
     parser = inparser
     parser.add_argument('--with-lagrangian',
-                        help="have an lagrangian spoke (default)",
+                        help="have a lagrangian spoke (default)",
                         dest='with_lagrangian',
                         action='store_true')
     parser.add_argument('--no-lagrangian',
-                        help="do not have an lagrangian spoke",
+                        help="do not have a lagrangian spoke",
                         dest='with_lagrangian',
                         action='store_false')
     parser.set_defaults(with_lagrangian=True)
@@ -266,6 +266,39 @@ def lagrangian_args(inparser):
     parser.add_argument("--lagrangian-iterk-mipgap",
                         help="lgr. iterk solver option mipgap (default None)",
                         dest="lagrangian_iterk_mipgap",
+                        type=float,
+                        default=None)
+
+    return parser
+
+
+def lagranger_args(inparser):
+    parser = inparser
+    parser.add_argument('--with-lagranger',
+                        help="have a special lagranger spoke (default)",
+                        dest='with_lagranger',
+                        action='store_true')
+    parser.add_argument('--no-lagranger',
+                        help="do not have a special lagranger spoke",
+                        dest='with_lagranger',
+                        action='store_false')
+    parser.set_defaults(with_lagranger=True)
+
+    parser.add_argument("--lagranger-iter0-mipgap",
+                        help="lagranger iter0 mipgap (default None)",
+                        dest="lagranger_iter0_mipgap",
+                        type=float,
+                        default=None)
+
+    parser.add_argument("--lagranger-iterk-mipgap",
+                        help="lagranger iterk mipgap (default None)",
+                        dest="lagranger_iterk_mipgap",
+                        type=float,
+                        default=None)
+
+    parser.add_argument("--lagranger-rho-rescale-factors-json",
+                        help="json file: rho rescale factors (default None)",
+                        dest="lagranger_rho_rescale_factors_json",
                         type=float,
                         default=None)
 

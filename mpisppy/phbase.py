@@ -391,7 +391,7 @@ class PHBase(mpisppy.spbase.SPBase):
         Args:
         NOTE:
             Assumes _PySP_nonant_cache is on the scenarios and can be used
-            as a list. 
+            as a list, or puts it there.
         WARNING: We are counting on Pyomo indexes not to change order before
         the restoration. We also need the Var type to remain stable.
         NOTE: the value cache is np because it might be transmitted
@@ -541,7 +541,11 @@ class PHBase(mpisppy.spbase.SPBase):
 
         """
         ci = 0 # Cache index
-        for model in self.local_scenarios.values():
+        for sname, model in self.local_scenarios.items():
+            if model._PySP_nonant_cache is None:
+                raise RuntimeError(f"Rank {self.rank_global} Scenario {sname}"
+                                   " nonant_cache is None"
+                                   " (call _save_nonants first?)")
             for i,_ in enumerate(model._nonant_indexes):
                 assert(ci < len(cache))
                 model._PySP_nonant_cache[i] = cache[ci]

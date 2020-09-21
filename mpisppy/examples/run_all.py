@@ -77,6 +77,10 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --no-fwph".format(solver_name))
+do_one("farmer", "farmer_lagranger.py", 3,
+       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--default-rho=1 "
+       "--solver-name={} --no-fwph".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
        "6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
@@ -153,8 +157,8 @@ if not nouc and egret_avail():
     do_one("uc", "uc_cylinders.py", 5,
            "--bundles-per-rank=5 --max-iterations=2 "
            "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 --with_cross_scenario_cuts "
-           "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4"
+           "--lagrangian-iter0-mipgap=1e-7 --with-cross-scenario-cuts "
+           "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
            "--solver-name={}".format(solver_name))
 
 
