@@ -64,7 +64,10 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname] = [runstring]
         else:
             badguys[dirname].append(runstring)
-    os.chdir("..")
+    if '/' not in dirname:
+        os.chdir("..")
+    else:
+        os.chdir("../..")   # hack for one level of subdirectories
 
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
@@ -97,7 +100,8 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=1 "
        "--default-rho=1 --with-tee-rank0-solves "
        "--solver-name={} --no-fwph".format(solver_name))
-do_one("farmer", "farmer_pysp.py", 1, solver_name)
+do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
+do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 do_one("sizes",
        "sizes_cylinders.py",
        3,
@@ -112,6 +116,7 @@ do_one("sizes",
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
+do_one("sizes", "test_sizes.py", 1, " {}".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
        4,

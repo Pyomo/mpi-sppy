@@ -1,3 +1,5 @@
+# from PySP where it was a concrete model with AMPL format scenario tree data
+import os
 import sys
 
 from pyomo.environ import SolverFactory
@@ -5,7 +7,7 @@ from mpisppy.utils.pysp_model import PySPModel
 from mpisppy.opt.ph import PH
 
 def _print_usage():
-    print('Usage: "farmer_pysp.py solver" where solver is a pyomo solver name')
+    print('Usage: "concrete_ampl.py solver" where solver is a pyomo solver name')
 if len(sys.argv) < 2:
     _print_usage()
     sys.exit()
@@ -19,8 +21,10 @@ except:
     _print_usage()
     sys.exit()
 
-farmer = PySPModel(scenario_creator='./PySP/concrete/ReferenceModel.py',
-                   tree_model='./PySP/ScenarioStructure.dat')
+pref = os.path.join("..","PySP")
+farmer = PySPModel(scenario_creator=os.path.join(pref,"concrete",
+                                                 "ReferenceModel.py"),
+                   tree_model=os.path.join(pref,"ScenarioStructure.dat"))
 
 phoptions = {'defaultPHrho': 1.0,
              'solvername':sys.argv[1],

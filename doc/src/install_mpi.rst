@@ -1,4 +1,4 @@
-.. _Install mpi4py::
+.. _Install mpi4py:
 
 Install mpi4py
 ==============

@@ -2,9 +2,9 @@
 # updated 23 April 2020
 # Serial (not cylinders)
 # BTW: the name test_sizes is misleading. This is not a unittest.
-# dlw January 2019: PySP 2.0 for the sizes example; unix path names
 
 import os
+import sys
 import pyomo.environ as pyo
 import mpisppy.phbase
 import mpisppy.opt.ph
@@ -22,9 +22,13 @@ from mpisppy.examples.sizes.sizes import scenario_creator, \
 ScenCount = 10  # 3 or 10
 
 if __name__ == "__main__":
+
+    if len(sys.argv) != 2:
+        print("usage: python test_sizes.py solvername")
+        quit()
     PHoptions = {}
+    PHoptions["solvername"] = sys.argv[1]
     PHoptions["asynchronousPH"] = False
-    PHoptions["solvername"] = "cplex"
     PHoptions["PHIterLimit"] = 2
     PHoptions["defaultPHrho"] = 1
     PHoptions["convthresh"] = 0.001
@@ -74,6 +78,8 @@ if __name__ == "__main__":
     ef = mpisppy.utils.sputils.create_EF(all_scenario_names,
                                    scenario_creator,
                                    creator_options={"cb_data": ScenCount})
+    if 'persistent' in solver_name:
+        solver.set_instance(ef, symbolic_solver_labels=True)    
     results = solver.solve(ef, tee=PHoptions["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
     #mpisppy.utils.sputils.ef_nonants_csv(ef, "vardump.csv")
@@ -169,36 +175,4 @@ if __name__ == "__main__":
                                 rho_setter=None)
 
     
-
-    print ("quit before W writer test")
-    quit()
-    ############################# test W writer and reader ###############
-    # DTM (Dec 2019) This module no longer exsts...
-    import mpisppy.Wwriter as Wwriter
-    
-    newph = mpisppy.opt.ph.PH(PHoptions,
-                                   all_scenario_names,
-                                   scenario_creator,
-                                   scenario_denouement,
-                                   cb_data=ScenCount)
-
-    PHoptions["Wwriter"] =  {"csvdir": "Wdir"}
-
-    conv = newph.ph_main(rho_setter=_rho_setter, 
-                         PH_extensions=Wwriter)
-
-    ###
-    # DTM (Dec 2019) This module no longer exsts...
-    import mpisppy.Wreader as Wreader
-    
-    newph = mpisppy.opt.ph.PH(PHoptions,
-                                   all_scenario_names,
-                                   scenario_creator,
-                                   scenario_denouement,
-                                   cb_data=ScenCount)
-
-    PHoptions["Wreader"] =  {"csvdir": "Wdir"}
-
-    conv = newph.ph_main(rho_setter=_rho_setter, 
-                         PH_extensions=Wreader)
 
