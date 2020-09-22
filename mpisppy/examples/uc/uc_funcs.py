@@ -43,6 +43,11 @@ def pysp_instance_creation_callback(scenario_name, node_names, cb_data):
     ##       handled with a custom callback -- also consider other base models
     scenario_instance = uc.create_tight_unit_commitment_model(scenario_md,
                                                     network_constraints='power_balance_constraints')
+
+    # hold over string attribute from Egret,
+    # causes warning wth LShaped/Benders
+    del scenario_instance.objective
+
     return scenario_instance
 
 def scenario_creator(scenario_name,
