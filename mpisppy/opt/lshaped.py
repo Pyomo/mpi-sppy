@@ -493,7 +493,7 @@ class LShapedMethod(spbase.SPBase):
 
             if sputils.is_persistent(opt):
                 opt.set_instance(instance)
-                res = opt.solve(tee=True)
+                res = opt.solve(tee=False)
             else:
                 res = opt.solve(instance, tee=False)
 
