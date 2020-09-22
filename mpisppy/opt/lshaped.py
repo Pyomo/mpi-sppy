@@ -72,6 +72,24 @@ def _first_stage_only(constr_data, nonant_ids):
             return False
     return True
 
+def _init_vars(varlist):
+    '''
+    for every pyomo var in varlist without a value,
+    sets it to the lower bound (if it exists), or
+    the upper bound (if it exists, and the lower bound
+    does note) or 0 (if neither bound exists).
+    '''
+    value = pyo.value
+    for var in varlist:
+        if var.value is not None:
+            continue
+        if var.lb is not None:
+            var.set_value(value(var.lb))
+        elif var.ub is not None:
+            var.set_value(value(var.ub))
+        else:
+            var.set_value(0)
+
 class LShapedMethod(spbase.SPBase):
     def __init__(
         self, 
@@ -402,6 +420,13 @@ class LShapedMethod(spbase.SPBase):
 
         nonant_list, nonant_ids = _get_nonant_ids(instance) 
 
+        # NOTE: since we use generate_standard_repn below, we need
+        #       to unfix any nonants so they'll properly appear
+        #       in the objective
+        fixed_nonants = [ var for var in nonant_list if var.fixed ]
+        for var in fixed_nonants:
+            var.fixed = False
+
         # pulls the scenario objective expression, removes the first stage variables, and sets the new objective
         obj = find_active_objective(instance)
 
@@ -459,6 +484,8 @@ class LShapedMethod(spbase.SPBase):
             RelaxIntegerVars().apply_to(instance)
 
         if self.compute_eta_bound:
+            for var in fixed_nonants:
+                var.fixed = True
             opt = pyo.SolverFactory(self.options["sp_solver"])
             if self.options["sp_solver_options"]:
                 for k,v in self.options["sp_solver_options"].items():
@@ -466,7 +493,7 @@ class LShapedMethod(spbase.SPBase):
 
             if sputils.is_persistent(opt):
                 opt.set_instance(instance)
-                res = opt.solve(tee=False)
+                res = opt.solve(tee=True)
             else:
                 res = opt.solve(instance, tee=False)
 
@@ -499,8 +526,11 @@ class LShapedMethod(spbase.SPBase):
             complicating_vars_map[mvar] = var
             subproblem_to_master_vars_map[var] = mvar 
 
+            # these are already enforced in the master
+            # don't need to be enfored in the subproblems
             var.setlb(None)
             var.setub(None)
+            var.fixed = False
 
         # this is for interefacing with PH code
         instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
@@ -534,9 +564,7 @@ class LShapedMethod(spbase.SPBase):
 
         # prevents problems from first stage variables becoming unconstrained
         # after processing
-        for var in self.master_vars:
-            if var.stale:
-                var.set_value(0)
+        _init_vars(self.master_vars)
 
         # sets up the BendersCutGenerator object
         m.bender = LShapedCutGenerator()
