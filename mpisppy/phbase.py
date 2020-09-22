@@ -1151,13 +1151,15 @@ class PHBase(mpisppy.spbase.SPBase):
                 MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
                 LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
         
+                num_retry_attempts = 0
                 while True:
-                    num_retry_attempts = 0
                     try:
                         s._solver_plugin.set_instance(s)
+                        if num_retry_attempts > 0:
+                            print("Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
                         break
                     # pyomo presently has no general way to trap a license acquisition
-                    # error - so we're stuck with trapping on "any" exception. not idel.
+                    # error - so we're stuck with trapping on "any" exception. not ideal.
                     except:
                         if num_retry_attempts == 0:
                             print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
@@ -1168,6 +1170,7 @@ class PHBase(mpisppy.spbase.SPBase):
                         else:
                             print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
                             time.sleep(LICENSE_RETRY_SLEEP_TIME)
+                            num_retry_attempts += 1
 
                 if (self.PHoptions["display_timing"]):
                     set_instance_time = time.time() - set_instance_start_time
