@@ -172,7 +172,7 @@ class XhatTryer(PHBase):
                         verbose=verbose)
 
         infeasP = self.infeas_prob()
-        if infeasP != 0.
+        if infeasP != 0.:
             return None
         else:
             if verbose and self.rank == self.rank0:
