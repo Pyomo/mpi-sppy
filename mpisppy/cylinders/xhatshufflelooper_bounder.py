@@ -82,11 +82,11 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
-        feasP = self.opt.feas_prob()
-        if feasP != self.opt.E1:
+        infeasP = self.opt.infeas_prob()
+        if infeasP != 0.:
             if self.rank_global == self.opt.rank0:
                 print("ERROR")
-                print("Infeasibility detected; E_feas, E1=", feasP, self.opt.E1)
+                print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()
         ### end iter0 stuff
 

@@ -624,6 +624,28 @@ class PHBase(mpisppy.spbase.SPBase):
 
         return float(globals[0])
 
+    def infeas_prob(self):
+        """ Check for infeasibility of all scenarios using a reduction.
+        Assumes the scenarios have a boolean _PySP_feas_indicator.
+
+        Returns:
+            Sum of Prob of the infeasible scenarios (is == 0 if all feasible)
+        WARNING: assumes that the _PySP_feas_indicator has been set.
+        """
+
+        locals = np.zeros(1, dtype='d')
+        globals = np.zeros(1, dtype='d')
+
+        for k,s in self.local_scenarios.items():
+            if not s._PySP_feas_indicator:
+                locals[0] += s.PySP_prob
+
+        self.mpicomm.Allreduce([locals, mpi.DOUBLE],
+                           [globals, mpi.DOUBLE],
+                           op=mpi.SUM)
+
+        return float(globals[0])
+
     def _use_rho_setter(self, verbose):
         """ set rho values using a function self.rho_setter
         that gives us a list of (id(vardata), rho)]
