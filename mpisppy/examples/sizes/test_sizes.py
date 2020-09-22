@@ -78,7 +78,7 @@ if __name__ == "__main__":
     ef = mpisppy.utils.sputils.create_EF(all_scenario_names,
                                    scenario_creator,
                                    creator_options={"cb_data": ScenCount})
-    if 'persistent' in solver_name:
+    if 'persistent' in PHoptions["solvername"]:
         solver.set_instance(ef, symbolic_solver_labels=True)    
     results = solver.solve(ef, tee=PHoptions["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
