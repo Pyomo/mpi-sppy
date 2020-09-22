@@ -134,7 +134,7 @@ if egret_avail():
 if not nouc and egret_avail():
     print("\nSlow runs ahead...\n")
     # 3-scenario UC
-    do_one("uc", "uc_ef.py", 1, solver_name)
+    do_one("uc", "uc_ef.py", 1, solver_name+" 3")
     do_one("uc", "uc_lshaped.py", 2,
            "--bundles-per-rank=0 --max-iterations=5 "
            "--default-rho=1 --num-scens=3 "
