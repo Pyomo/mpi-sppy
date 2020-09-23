@@ -37,6 +37,11 @@ class TestCPLEXTermination(_TestTermination):
     def _set_time_limit(self):
         self._solver.options['timelimit'] = 20
 
+class TestGurobiTermination(_TestTermination):
+    _solver_name = 'gurobi_persistent'
+    def _set_time_limit(self):
+        self._solver.options['timelimit'] = 20
+
 class TestXpressTermination(_TestTermination):
     _solver_name = 'xpress_persistent'
     def _set_time_limit(self):
@@ -47,6 +52,9 @@ try:
     cplextest.solve()
 except ValueError:
     pass
+
+gurobitest = TestGurobiTermination()
+gurobitest.solve()
 
 xpresstest = TestXpressTermination()
 xpresstest.solve()
