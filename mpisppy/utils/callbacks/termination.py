@@ -33,7 +33,9 @@ def _set_cplex_callback(ob, solver):
     cplex = solver._cplex
     cplex_model = solver._solver_model
 
-    class Termination(cplex.callbacks.MIPInfoCallback):
+    class Termination(cplex.callbacks.MIPInfoCallback,
+                      cplex.callbacks.ContinuousCallback,
+                      cplex.callbacks.CrossoverCallback):
         _ob = ob
         def __call__(self):
             if self._ob.solver_terminate():

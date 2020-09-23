@@ -22,7 +22,7 @@ class _TestTermination:
 
     def solver_terminate(self):
         t_now = time.time()
-        if t_now - self.time_start > 5:
+        if t_now - self.time_start > 2:
             return True
         else:
             return False
