@@ -1,7 +1,5 @@
 from termination import set_termination_callback
-
 from markshare2 import model 
-
 from pyomo.environ import SolverFactory
 
 import time
@@ -14,12 +12,11 @@ class _TestTermination:
 
         self.time_start = time.time()
 
-    def _get_solver_name(self):
-        pass
-
+    ## needed by set_termination_callback
     def solver(self):
         return self._solver
 
+    ## needed by set_termination_callback
     def solver_terminate(self):
         t_now = time.time()
         if t_now - self.time_start > 2:
