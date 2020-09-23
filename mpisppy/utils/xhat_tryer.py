@@ -171,8 +171,8 @@ class XhatTryer(PHBase):
         self.solve_loop(solver_options=self.current_solver_options, 
                         verbose=verbose)
 
-        feasP = self.feas_prob()
-        if feasP != self.E1:
+        infeasP = self.infeas_prob()
+        if infeasP != 0.:
             return None
         else:
             if verbose and self.rank == self.rank0:
