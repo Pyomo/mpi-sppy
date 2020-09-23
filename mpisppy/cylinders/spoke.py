@@ -288,7 +288,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
 class InnerBoundNonantSpoke(_BoundNonantSpoke):
     """ For Spokes that provide an inner (incumbent) 
         bound through self.bound to the Hub,
-        and receive the nonants (or xhats) from
+        and receive the nonants from
         the main PH OPT hub.
     """
     converger_spoke_types = (
@@ -296,3 +296,17 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         ConvergerSpokeType.NONANT_GETTER,
     )
     converger_spoke_char = 'I'
+
+
+class OuterBoundNonantSpoke(_BoundNonantSpoke):
+    """ For Spokes that provide an outer
+        bound through self.bound to the Hub,
+        and receive the nonants from
+        the main OPT hub.
+    """
+    converger_spoke_types = (
+        ConvergerSpokeType.OUTER_BOUND,
+        ConvergerSpokeType.NONANT_GETTER,
+    )
+    converger_spoke_char = 'A'  # probably Lagrangian
+    

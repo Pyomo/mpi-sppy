@@ -391,7 +391,7 @@ class PHBase(mpisppy.spbase.SPBase):
         Args:
         NOTE:
             Assumes _PySP_nonant_cache is on the scenarios and can be used
-            as a list. 
+            as a list, or puts it there.
         WARNING: We are counting on Pyomo indexes not to change order before
         the restoration. We also need the Var type to remain stable.
         NOTE: the value cache is np because it might be transmitted
@@ -541,7 +541,11 @@ class PHBase(mpisppy.spbase.SPBase):
 
         """
         ci = 0 # Cache index
-        for model in self.local_scenarios.values():
+        for sname, model in self.local_scenarios.items():
+            if model._PySP_nonant_cache is None:
+                raise RuntimeError(f"Rank {self.rank_global} Scenario {sname}"
+                                   " nonant_cache is None"
+                                   " (call _save_nonants first?)")
             for i,_ in enumerate(model._nonant_indexes):
                 assert(ci < len(cache))
                 model._PySP_nonant_cache[i] = cache[ci]
@@ -612,6 +616,28 @@ class PHBase(mpisppy.spbase.SPBase):
 
         for k,s in self.local_scenarios.items():
             if s._PySP_feas_indicator:
+                locals[0] += s.PySP_prob
+
+        self.mpicomm.Allreduce([locals, mpi.DOUBLE],
+                           [globals, mpi.DOUBLE],
+                           op=mpi.SUM)
+
+        return float(globals[0])
+
+    def infeas_prob(self):
+        """ Check for infeasibility of all scenarios using a reduction.
+        Assumes the scenarios have a boolean _PySP_feas_indicator.
+
+        Returns:
+            Sum of Prob of the infeasible scenarios (is == 0 if all feasible)
+        WARNING: assumes that the _PySP_feas_indicator has been set.
+        """
+
+        locals = np.zeros(1, dtype='d')
+        globals = np.zeros(1, dtype='d')
+
+        for k,s in self.local_scenarios.items():
+            if not s._PySP_feas_indicator:
                 locals[0] += s.PySP_prob
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
@@ -1128,18 +1154,50 @@ class PHBase(mpisppy.spbase.SPBase):
                 self.local_subproblems[sname].scen_list = [sname]
 
     def _create_solvers(self):
+
         for sname, s in self.local_subproblems.items(): # solver creation
             s._solver_plugin = SolverFactory(self.PHoptions["solvername"])
+
             if (sputils.is_persistent(s._solver_plugin)):
+
                 if (self.PHoptions["display_timing"]):
                     set_instance_start_time = time.time()
 
-                s._solver_plugin.set_instance(s) #### JPW: check ph.py for options such as symbolic_solver_labels and output_fixed_variable_bounds
+                # this loop is required to address the sitution where license
+                # token servers become temporarily over-subscribed / non-responsive
+                # when large numbers of ranks are in use.
+
+                # these parameters should eventually be promoted to a non-PH
+                # general class / location. even better, the entire retry
+                # logic can be encapsulated in a sputils.py function.
+                MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
+                LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
+        
+                num_retry_attempts = 0
+                while True:
+                    try:
+                        s._solver_plugin.set_instance(s)
+                        if num_retry_attempts > 0:
+                            print("Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                        break
+                    # pyomo presently has no general way to trap a license acquisition
+                    # error - so we're stuck with trapping on "any" exception. not ideal.
+                    except:
+                        if num_retry_attempts == 0:
+                            print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
+                        else:
+                            print("Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                        if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
+                            raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
+                        else:
+                            print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
+                            time.sleep(LICENSE_RETRY_SLEEP_TIME)
+                            num_retry_attempts += 1
 
                 if (self.PHoptions["display_timing"]):
                     set_instance_time = time.time() - set_instance_start_time
                     all_set_instance_times = self.mpicomm.gather(set_instance_time,
-                                                             root=0)
+                                                                 root=0)
                     if self.rank == self.rank0:
                         print("Set instance times:")
                         print("\tmin=%4.2f mean=%4.2f max=%4.2f" %

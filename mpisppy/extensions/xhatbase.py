@@ -147,8 +147,8 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                            verbose=verbose,
                            tee=Tee)
 
-        feasP = self.opt.feas_prob()
-        if feasP != self.opt.E1:
+        infeasP = self.opt.infeas_prob()
+        if infeasP != 0.:
             # restoring does no harm
             # if this solution is infeasible
             self.opt._restore_nonants()

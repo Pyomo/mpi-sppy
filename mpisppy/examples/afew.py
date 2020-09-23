@@ -23,25 +23,6 @@ if len(sys.argv) > 2:
 
 badguys = dict()
 
-def egret_avail():
-    try:
-        import egret
-    except:
-        return False
-
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
-
-    egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
-    if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):
-        return True
-    
-    from egret.thirdparty.get_pglib_opf import get_pglib_opf
-    get_pglib_opf(egret_thirdparty_path)
-    return True
-
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
     runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
