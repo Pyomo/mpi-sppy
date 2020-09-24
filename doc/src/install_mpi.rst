@@ -3,7 +3,8 @@
 Install mpi4py
 ==============
 
-A recent version of MPI and a compatible version of mpi4py are needed for parallel operation.
+A recent version of MPI and a compatible version of ``mpi4py`` are needed for parallel operation and ``mpi4py`` is assumed to be available for import by most of
+the code-base (an exception is :ref:`sputils.create_EF`).
 
 Here are two methods that seem to work well for installation, at least when considering non-HPC platforms.
 
