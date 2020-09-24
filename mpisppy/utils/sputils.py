@@ -7,7 +7,11 @@ import re
 import time
 from numpy import prod
 
-from mpi4py import MPI
+try:
+    from mpi4py import MPI
+    haveMPI = True
+except:
+    haveMPI = False
 from pyomo.pysp.phutils import find_active_objective
 from pyomo.core.expr.numeric_expr import LinearExpression
 
@@ -27,6 +31,8 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     NOTE: the return is after termination; the objects are provided for query.
 
     """
+    if not haveMPI:
+        raise RuntimeError("spin_the_wheel called, but cannot import mpi4py")
     # Confirm that the provided dictionaries specifying
     # the hubs and spokes contain the appropriate keys
     if "hub_class" not in hub_dict:
@@ -126,6 +132,8 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
 def make_comms(n_spokes, fullcomm=None):
     """ Create the intercomm and intracomm for hub/spoke style runs
     """
+    if not haveMPI:
+        raise RuntimeError("make_comms called, but cannot import mpi4py")
     # Ensure that the proper number of processes have been invoked
     nsp1 = n_spokes + 1 # Add 1 for the hub
     if fullcomm is None:
@@ -259,6 +267,8 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             desirable in the context of bundling. This allows for more
             fine-grained control.
     """
+    if not haveMPI:
+        raise RuntimeError("_create_ef_from_scen_dict without mpi4py")
     is_min, clear = _models_have_same_sense(scen_dict)
     if (not clear):
         raise RuntimeError('Cannot build the extensive form out of models '
@@ -504,6 +514,8 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
                 that are scenario names and values that are ranks
 
     """
+    if not haveMPI:
+        raise RuntimeError("scens_to_ranks called, but cannot import mpi4py")
     if scen_count < n_proc:
         raise RuntimeError(
             "More MPI ranks (%d) supplied than needed given the number of scenarios (%d) "
