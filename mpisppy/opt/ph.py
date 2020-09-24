@@ -16,29 +16,35 @@ rank_global = fullcomm.Get_rank()
 
 ############################################################################
 class PH(mpisppy.phbase.PHBase):
-    """
-    PH. See PHBase for list of args.
-    """
+    """ PH. See PHBase for list of args. """
 
     #======================================================================
     # uncomment the line below to get per-rank profile outputs, which can 
     # be examined with snakeviz (or your favorite profile output analyzer)
     #@profile(filename="profile_out")
     def ph_main(self, finalize=True):
-        """
-        Execute the PH algorithm.
+        """ Execute the PH algorithm.
 
         Args:
             finalize (bool, optional, default=True):
-                        If True, call self.post_loops(), if False, do not,
-                        and return None for Eobj
+                If True, call `PH.post_loops()`, if False, do not,
+                and return None for Eobj
 
         Returns:
-            conv, Eobj, trivial_bound: 
-                        The first two CANNOT BE EASILY INTERPRETED. 
-                        Eobj is the expected,  weighted objective with 
-                        proximal term. It is not directly useful.
-                        The trivial bound is computed after iter 0
+            tuple:
+                Tuple containing
+
+                conv (float):
+                    The convergence value (not easily interpretable).
+                Eobj (float or `None`):
+                    If `finalize=True`, this is the expected, weighted
+                    objective value with the proximal term included. This value
+                    is not directly useful. If `finalize=False`, this value is
+                    `None`.
+                trivial_bound (float):
+                    The "trivial bound", computed by solving the model with no
+                    nonanticipativity constraints (immediately after iter 0).
+
         NOTE:
             You need an xhat finder either in denoument or in an extension.
         """

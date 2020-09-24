@@ -1,17 +1,4 @@
 # This software is distributed under the 3-clause BSD License.
-''' PH Base and utility functions - March 2020 modifications to support spbase.py
-
-    Based on mpi4py (but should run with, or without, mpi)
-    EVERY INDEX IS ZERO-BASED! (Except stages, which are one based).
-
-    Node names other than ROOT, although strings, must be a number or end in a
-    number because mpi4py comms need a number.
-    PH using a smart referencemodel that knows how to make its own tree nodes
-    and just wants a trailing number in the scenario name.
-    Assume we have only non-leaf nodes.
-
-    To check for rank 0 use self.rank == self.rank0
-'''
 import inspect
 import numpy as np
 import collections
@@ -38,28 +25,65 @@ logger = logging.getLogger('PHBase')
 logger.setLevel(logging.WARN)
 
 class PHBase(mpisppy.spbase.SPBase):
-    """
-        Args:
-            PHoptions (dict): PH options
-            all_scenario_names (list): all scenario names
-            scenario_creator (fct): returns a concrete model with special things
-            scenario_denouement (fct): for post processing and reporting
-            all_nodenames (list): all node names; can be None for 2 Stage
-            mpicomm (MPI comm): if not given, use the global fullcomm
-            rank0 (int): The lowest global rank for this type of object
-            cb_data (any): passed directly to the scenario callback
-            PH_extensions (object) : optional
-            PH_extension_kwargs (keyword arguments): optional,
-            PH_converger (object) : optional
-            rho_setter (fct): optional
+    """ Base class for all PH-based algorithms.
 
+        Based on mpi4py (but should run with, or without, mpi)
+        EVERY INDEX IS ZERO-BASED! (Except stages, which are one based).
+
+        Node names other than ROOT, although strings, must be a number or end
+        in a number because mpi4py comms need a number. PH using a smart
+        referencemodel that knows how to make its own tree nodes and just wants
+        a trailing number in the scenario name. Assume we have only non-leaf
+        nodes.
+
+        To check for rank 0 use self.rank == self.rank0.
 
         Attributes:
-          local_scenarios (dict of scenario objects): concrete models with 
-                extra data, key is name
-          comms (dict): keys are node names values are comm objects.
-          local_scenario_names (list): names of locals 
-          current_solver_options (dict): from PHoptions, but callbacks might change
+            local_scenarios (dict): 
+                Dictionary mapping scenario names (strings) to scenarios (Pyomo
+                conrete model objects). These are only the scenarios managed by
+                the current rank (not all scenarios in the entire model).
+            comms (dict): 
+                Dictionary mapping node names (strings) to MPI communicator
+                objects.
+            local_scenario_names (list):
+                List of local scenario names (strings). Should match the keys
+                of the local_scenarios dict.
+            current_solver_options (dict): from PHoptions, but callbacks might
+                Dictionary of solver options provided in PHoptions. Note that
+                callbacks could change these options.
+
+        Args:
+            PHoptions (dict): 
+                Options for the PH algorithm.
+            all_scenario_names (list): 
+                List of all scenario names in the model (strings).
+            scenario_creator (callable): 
+                Function which take a scenario name (string) and returns a
+                Pyomo Concrete model with some things attached.
+            scenario_denouement (callable, optional):
+                Function which does post-processing and reporting.
+            all_nodenames (list, optional): 
+                List of all node name (strings). Can be `None` for two-stage
+                problems.
+            mpicomm (MPI comm, optional):
+                MPI communicator to use between all scenarios. Default is
+                `MPI.COMM_WORLD`.
+            rank0 (int, optional):
+                Which rank from mpicomm to count as rank 0 (i.e. the "main"
+                rank).
+            cb_data (any, optional): 
+                Data passed directly to scenario_creator.
+            PH_extensions (object, optional):
+                PH extension object.
+            PH_extension_kwargs (dict, optional):
+                Keyword arguments to pass to the PH_extensions.
+            PH_converger (object, optional):
+                PH converger object.
+            rho_setter (callable, optional):
+                Function to set rho values (quadratic penalty values)
+                throughout the PH algorithm.
+
 
     """
     def __init__(self, PHoptions, all_scenario_names, scenario_creator,
@@ -67,6 +91,7 @@ class PHBase(mpisppy.spbase.SPBase):
                  mpicomm=None, rank0=0, cb_data=None,
                  PH_extensions=None, PH_extension_kwargs=None,
                  PH_converger=None, rho_setter=None):
+        """ PHBase constructor. """
         super().__init__(PHoptions,
                          all_scenario_names,
                          scenario_creator,
@@ -97,22 +122,26 @@ class PHBase(mpisppy.spbase.SPBase):
         self.attach_xbars()
 
     def Compute_Xbar(self, verbose=False, synchronizer=None):
-        """Gather xbar and x squared bar for each node represented in the list
-           and also distribute the values back to the scenarios.
+        """ Gather xbar and x squared bar for each node in the list and
+        distribute the values back to the scenarios.
 
         Args:
-          verbose (boolean): verbose output
-          synchronizer (object): for asynchronous PH operation
+            verbose (boolean):
+                If True, prints verbose output.
+            synchronizer (object):
+                For asynchronous PH operation.
+        """
 
+        """
         Note: 
-          each scenario knows its own probability and its nodes.
+            Each scenario knows its own probability and its nodes.
         Note:
-          The scenario only "sends a reduce" to its own node's comms so even 
-          though the rank is a member of many comms, the scenario won't 
-          contribute to the wrong node.
+            The scenario only "sends a reduce" to its own node's comms so even
+            though the rank is a member of many comms, the scenario won't
+            contribute to the wrong node.
         Note:
-          As of March 2019, we concatenate xbar and xsqbar into one long
-          vector to make it easier to use the current asynch code.
+            As of March 2019, we concatenate xbar and xsqbar into one long
+            vector to make it easier to use the current asynch code.
         """
 
         nodenames = list() # to transmit to comms
@@ -207,6 +236,12 @@ class PHBase(mpisppy.spbase.SPBase):
 
 
     def Update_W(self, verbose):
+        """ Update the dual weights during the PH algorithm.
+
+        Args:
+            verbose (bool):
+                If True, displays verbose output during update.
+        """
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._nonant_indexes.items():
@@ -219,11 +254,14 @@ class PHBase(mpisppy.spbase.SPBase):
                            pyo.value(s._Ws[ndn_i]))
 
     def convergence_diff(self):
-        """ Assumes the scenarios are up to date
-            Returns the convergence metric ||x_s - \bar{x}||_1 / num_scenarios
-            Note: every scenario has its own node list, with a vardata list
-        """
+        """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
 
+            Returns:
+                float: 
+                    The convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
+        
+        """
+        # Every scenario has its own node list, with a vardata list
         global_diff = np.zeros(1)
         local_diff = np.zeros(1)
         varcount = 0
@@ -241,18 +279,21 @@ class PHBase(mpisppy.spbase.SPBase):
            
 
     def Eobjective(self, verbose=False):
-        """ Compute the expected objective function with whatever is there.
-        NOTE: 
+        """ Compute the expected objective function across all scenarios.
+
+        Note: 
             Assumes the optimization is done beforehand,
-            therefore DOES NOT CHECK FEASIBILITY or NON-ANTICIPATIVITY!!
-            Uses whatever objective function is there.
+            therefore DOES NOT CHECK FEASIBILITY or NON-ANTICIPATIVITY!
+            This method uses whatever the current value of the objective
+            function is.
 
         Args:
-            ignore_saved_objs (boolean): assume no saved_objs
-            verbose (boolean): controls debugging output
+            verbose (boolean, optional):
+                If True, displays verbose output. Default False.
 
         Returns:
-            Eobj (float): the expected objective function value
+            float:
+                The expected objective function value
         """
         local_Eobj = np.zeros(1)
         global_Eobj = np.zeros(1)
@@ -272,15 +313,19 @@ class PHBase(mpisppy.spbase.SPBase):
         return global_Eobj[0]
 
     def Ebound(self, verbose=False):
-        """ Compute the expected bound.
-        NOTE: 
+        """ Compute the expected outer bound across all scenarios.
+
+        Note: 
             Assumes the optimization is done beforehand.
-            Uses whatever bound is attached to the sub-problems.
+            Uses whatever bound is currently  attached to the subproblems.
+
         Args:
-            verbose (boolean): controls debugging output
+            verbose (boolean):
+                If True, displays verbose output. Default False.
 
         Returns:
-            Eobj (float): the expected objective function value
+            float:
+                The expected objective outer bound.
         """
         local_Ebound = np.zeros(1)
         global_Ebound = np.zeros(1)
@@ -299,12 +344,23 @@ class PHBase(mpisppy.spbase.SPBase):
 
     def avg_min_max(self, compstr):
         """ Can be used to track convergence progress.
+
         Args:
-            compstr (str): the name of the Pyomo component. Should not
-                           be indexed.
+            compstr (str): 
+                The name of the Pyomo component. Should not be indexed.
+
         Returns:
-            (avg, min, max) (float): taken across all scenarios
-        NOTE:
+            tuple: 
+                Tuple containing
+
+                avg (float): 
+                    Average across all scenarios.
+                min (float):
+                    Minimum across all scenarios.
+                max (float):
+                    Maximum across all scenarios.
+
+        Note:
             Not user-friendly. If you give a bad compstr, it will just crash.
         """
         firsttime = True
@@ -344,6 +400,11 @@ class PHBase(mpisppy.spbase.SPBase):
                 float(globalmax[0]))
 
     def _save_original_nonants(self):
+        """ Save the current value of the nonanticipative variables.
+            
+        Values are saved in the `_PySP_original_nonants` attribute. Whether
+        the variable was fixed is stored in `_PySP_original_fixedness`.
+        """
         for k,s in self.local_scenarios.items():
             if hasattr(s,"_PySP_original_fixedness"):
                 print ("ERROR: Attempt to replace original nonants")
@@ -359,13 +420,15 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._PySP_original_nonants[ci]  = xvar._value
 
     def _restore_original_nonants(self):
-        """ Restore the saved values and fix status 
-            of the Vars subject to non-anticipativity.
-            Loop over the scenarios to restore, but loop over subproblems
-            to alert persisten solvers.
+        """ Restore nonanticipative variables to their original values.
+            
+        This function works in conjunction with _save_original_nonants. 
+        
+        We loop over the scenarios to restore variables, but loop over
+        subproblems to alert persistent solvers.
 
-        WARNING: 
-            We are counting on Pyomo indexes not to change order between save
+        Warning: 
+            We are counting on Pyomo indices not to change order between save
             and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
             hopefully does not need to.
         """
@@ -387,14 +450,16 @@ class PHBase(mpisppy.spbase.SPBase):
 
     def _save_nonants(self):
         """ Save the values and fixedness status of the Vars that are
-            subject to non-anticipativity.
-        Args:
-        NOTE:
+        subject to non-anticipativity.
+
+        Note:
             Assumes _PySP_nonant_cache is on the scenarios and can be used
             as a list, or puts it there.
-        WARNING: We are counting on Pyomo indexes not to change order before
-        the restoration. We also need the Var type to remain stable.
-        NOTE: the value cache is np because it might be transmitted
+        Warning: 
+            We are counting on Pyomo indexes not to change order before the
+            restoration. We also need the Var type to remain stable.
+        Note:
+            The value cache is np because it might be transmitted
         """
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens
@@ -408,14 +473,17 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._PySP_fixedness_cache[ci]  = xvar.is_fixed()
 
     def _restore_nonants(self):
-        """ Restore the saved values and fix status 
-            of the Vars subject to non-anticipativity.
-            Loop over the scenarios to restore, but loop over subproblems
-            to alert persisten solvers.
+        """ Restore nonanticipative variables to their original values.
+            
+        This function works in conjunction with _save_nonants. 
+        
+        We loop over the scenarios to restore variables, but loop over
+        subproblems to alert persistent solvers.
 
-        WARNING: 
-            We are counting on Pyomo indexes not to change order between save
-            and restoration.
+        Warning: 
+            We are counting on Pyomo indices not to change order between save
+            and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
+            hopefully does not need to.
         """
         for k,s in self.local_scenarios.items():
 
@@ -552,11 +620,17 @@ class PHBase(mpisppy.spbase.SPBase):
                 ci += 1
 
     def W_from_flat_list(self, flat_list):
-        ''' Set the W values *for all local scenarios* from one list
+        """ Set the dual weight values (Ws) for all local scenarios from a
+        flat list.
 
-        WARNING: 
-            We are counting on Pyomo indexes not to change order between list creation and use.
-        '''
+        Args:
+            flat_list (list):
+                One-dimensional list of dual weights.
+
+        Warning:
+            We are counting on Pyomo indexes not to change order between list
+            creation and use.
+        """ 
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
             for ndn_i in model._nonant_indexes:
@@ -602,12 +676,19 @@ class PHBase(mpisppy.spbase.SPBase):
         self.E1 = float(globalP[0])
 
     def feas_prob(self):
-        """ Check for feas of all scenarios using a reduction.
-        Assumes the scenarios have a boolean _PySP_feas_indicator.
+        """ Compute the total probability of all feasible scenarios.
+
+        This function can be used to check whether all scenarios are feasible
+        by comparing the return value to one.
+        
+        Note:
+            This function assumes the scenarios have a boolean
+            `_PySP_feas_indicator` attribute.
 
         Returns:
-            Sum of Feas Prob (is == E1 if all feasible)
-        WARNING: assumes that the _PySP_feas_indicator has been set.
+            float:
+                Sum of the scenario probabilities over all feasible scenarios.
+                This value equals E1 if all scenarios are feasible.
         """
 
         # locals[0] is E_feas and locals[1] is E_1
@@ -625,12 +706,16 @@ class PHBase(mpisppy.spbase.SPBase):
         return float(globals[0])
 
     def infeas_prob(self):
-        """ Check for infeasibility of all scenarios using a reduction.
-        Assumes the scenarios have a boolean _PySP_feas_indicator.
+        """ Sum the total probability for all infeasible scenarios.
+
+        Note:
+            This function assumes the scenarios have a boolean
+            `_PySP_feas_indicator` attribute.
 
         Returns:
-            Sum of Prob of the infeasible scenarios (is == 0 if all feasible)
-        WARNING: assumes that the _PySP_feas_indicator has been set.
+            float:
+                Sum of the scenario probabilities over all infeasible scenarios.
+                This value equals 0 if all scenarios are feasible.
         """
 
         locals = np.zeros(1, dtype='d')
@@ -711,20 +796,23 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._PHW_on[(ndn,i)]._value = 1
 
     def post_solve_bound(self, solver_options=None, verbose=False):
-        '''Compute a bound Lagrangian bound using the existing weights.
+        ''' Compute a bound Lagrangian bound using the existing weights.
 
         Args:
-            verbose (boolean): controls debugging output
-            solver_options (dict): options for these solves
+            solver_options (dict, optional):
+                Options for these solves.
+            verbose (boolean, optional):
+                If True, displays verbose output. Default False.
 
         Returns:
-            bound (float): an objective function bound
+            float: 
+                An outer bound on the optimal objective function value.
 
-        Notes: This function overwrites current variable values. This
-            is only suitable for use at the end of the solves, or if
-            you really know what you are doing.  It is not suitable as
-            a general, per-iteration Lagrangian bound solver.
-
+        Note: 
+            This function overwrites current variable values. This is only
+            suitable for use at the end of the solves, or if you really know
+            what you are doing.  It is not suitable as a general, per-iteration
+            Lagrangian bound solver.
         '''
         if (self.rank == self.rank0):
             print('Warning: Lagrangian bounds might not be correct in certain '
@@ -758,25 +846,40 @@ class PHBase(mpisppy.spbase.SPBase):
         return bound
 
     def FormEF(self, scen_dict, EF_name=None):
-        """ Make the EF for a list of scenarios. Designed with the main use-case
-            being bundles.
+        """ Make the EF for a list of scenarios. 
+        
+        This function is mainly to build bundles. To build (and solve) the
+        EF of the entire problem, use the EF class instead.
 
         Args:
-            scen_dict (dict): subset of local_scenarios; the scenarios to put in the EF
-            EF_name (string): optional name for the EF
+            scen_dict (dict): 
+                Subset of local_scenarios; the scenarios to put in the EF. THe
+                dictionary maps sccneario names (strings) to scenarios (Pyomo
+                concrete model objects).
+            EF_name (string, optional):
+                Name for the resulting EF model.
 
         Returns:
-            EF (ConcreteModel): the EF with explicit non-anticipativity constraints
-        NOTE: We attach a list of the scenario names called _PySP_subsecen_names
-        NOTE:
+            :class:`pyomo.environ.ConcreteModel`: 
+                The EF with explicit non-anticipativity constraints.
+
+        Raises:
+            RuntimeError:
+                If the `scen_dict` is empty, or one of the scenarios in
+                `scen_dict` is not owned locally (i.e. is not in
+                `local_scenarios`).
+
+        Note: 
+            We attach a list of the scenario names called _PySP_subsecen_names
+        Note:
             We deactivate the objective on the scenarios.
-        NOTE:
+        Note:
             The scenarios are sub-blocks, so they naturally get the EF solution
             Also the EF objective references Vars and Parms on the scenarios
             and hence is automatically updated when the scenario
             objectives are. THIS IS ALL CRITICAL to bundles.
             xxxx TBD: ask JP about objective function transmittal to persistent solvers
-        NOTE:
+        Note:
             Objectives are scaled (normalized) by PySP_prob
         """
         if len(scen_dict) == 0:
@@ -812,16 +915,27 @@ class PHBase(mpisppy.spbase.SPBase):
         """ Solve one subproblem.
 
         Args:
-            solver_options (dict or None): the scenario solver options
-            k (str): subproblem name
-            s (ConcreteModel with appendages): the subproblem to solve
-            dtiming (boolean): indicates that timing should be reported
-            gripe (boolean): output a message if a solve fails
-            disable_pyomo_signal_handling (boolean): set to true for asynch, 
-                                                     ignored for persistent solvers.
-            tee (boolean): show solver output to screen if possible
-            verbose (boolean): indicates verbose output
-            disable_pyomo_signal_handling(boolean): for system call solvers
+            solver_options (dict or None): 
+                The scenario solver options.
+            k (str): 
+                Subproblem name.
+            s (ConcreteModel with appendages): 
+                The subproblem to solve.
+            dtiming (boolean, optional): 
+                If True, reports timing values. Default False.
+            gripe (boolean, optional):
+                If True, outputs a message when a solve fails. Default False.
+            tee (boolean, optional):
+                If True, displays solver output. Default False.
+            verbose (boolean, optional):
+                If True, displays verbose output. Default False.
+            disable_pyomo_signal_handling (boolean, optional):
+                True for asynchronous PH; ignored for persistent solvers.
+                Default False.
+
+        Returns:
+            float:
+                Pyomo solve time in seconds.
         """
 
 
@@ -925,29 +1039,47 @@ class PHBase(mpisppy.spbase.SPBase):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False):
-        """ Loop over self.local_subproblems and solve them in a manner 
-            dicated by the arguments. In addition to changing the Var
-            values in the scenarios, update _PySP_feas_indictor for each.
-
-        ASSUMES:
-            Every scenario already has a _solver_plugin attached.
+        """ Loop over `local_subproblems` and solve them in a manner 
+        dicated by the arguments. 
+        
+        In addition to changing the Var values in the scenarios, this function
+        also updates the `_PySP_feas_indictor` to indicate which scenarios were
+        feasible/infeasible.
 
         Args:
-            solver_options (dict or None): the scenario solver options
-            use_scenarios_not_subproblems (boolean): for use by bounds
-            dtiming (boolean): indicates that timing should be reported
-            dis_W (boolean): indicates that W should be disabled (and re-enabled)
-            dis_prox (boolean): disable (and re-enable) prox term
-            gripe (boolean): output a message if a solve fails
-            disable_pyomo_signal_handling (boolean): set to true for asynch, 
-                                                     ignored for persistent solvers.
-            tee (boolean): show solver output to screen if possible
-            verbose (boolean): indicates verbose output
+            solver_options (dict, optional):
+                The scenario solver options.
+            use_scenarios_not_subproblems (boolean, optional):
+                If True, solves individual scenario problems, not subproblems.
+                This distinction matters when using bundling. Default is False.
+            dtiming (boolean, optional):
+                If True, reports solve timing information. Default is False.
+            dis_W (boolean, optional): 
+                If True, duals weights (Ws) are disabled before solve, then
+                re-enabled after solve. Default is False.
+            dis_prox (boolean, optional):
+                If True, prox terms are disabled before solve, then
+                re-enabled after solve. Default is False.
+            gripe (boolean, optional):
+                If True, output a message when a solve fails. Default is False.
+            disable_pyomo_signal_handling (boolean, optional):
+                True for asynchronous PH; ignored for persistent solvers.
+                Default False.
+            tee (boolean, optional):
+                If True, displays solver output. Default False.
+            verbose (boolean, optional):
+                If True, displays verbose output. Default False.
+        """
 
-        NOTE: I am not sure what happens with solver_options None for
-              a persistent solver. Do options persist?
+        """ Developer notes:
 
-        NOTE: set_objective takes care of W and prox changes.
+        This function assumes that every scenario already has a
+        `_solver_plugin` attached.
+
+        I am not sure what happens with solver_options None for a persistent
+        solver. Do options persist?
+
+        set_objective takes care of W and prox changes.
         """
         def _vb(msg): 
             if verbose and self.rank == self.rank0:
@@ -996,6 +1128,8 @@ class PHBase(mpisppy.spbase.SPBase):
 
 
     def attach_Ws_and_prox(self):
+        """ Attach the dual and prox terms to the models in `local_scenarios`.
+        """
         for (sname, scenario) in self.local_scenarios.items():
             # these are bound by index to the vardata list at the node
             scenario._Ws = pyo.Param(scenario._nonant_indexes.keys(),
@@ -1017,16 +1151,26 @@ class PHBase(mpisppy.spbase.SPBase):
                                         default=self.PHoptions["defaultPHrho"])
 
     def attach_varid_to_nonant_index(self):
+        """ Create a map from the id of nonant variables to their Pyomo index.
+        """
         for (sname, scenario) in self.local_scenarios.items():
-            """ In order to support rho setting, create a map
-                from the id of vardata object back its _nonant_index.
-            """
+            # In order to support rho setting, create a map
+            # from the id of vardata object back its _nonant_index.
             scenario._varid_to_nonant_index = {
                 id(node.nonant_vardata_list[i]): (node.name, i)
                 for node in scenario._PySPnode_list
                 for i in range(scenario._PySP_nlens[node.name])}
 
     def attach_PH_to_objective(self, add_duals=True, add_prox=False):
+        """ Attach dual weight and prox terms to the objective function of the
+        models in `local_scenarios`.
+
+        Args:
+            add_duals (boolean, optional):
+                If True, adds dual weight (Ws) to the objective. Default True.
+            add_prox (boolean, optional):
+                If True, adds the prox term to the objective. Default True.
+        """
         for (sname, scenario) in self.local_scenarios.items():
             """Attach the dual and prox terms to the objective.
             """
@@ -1067,33 +1211,32 @@ class PHBase(mpisppy.spbase.SPBase):
 
                         
     def attach_Lens_async(self):
-            self.Lens = collections.OrderedDict({"OnlyReduce": {}})
-
-            for sname, scenario in self.local_scenarios.items():
-                for node in scenario._PySPnode_list:
-                    self.Lens["OnlyReduce"][node.name] \
-                        = 2 * len(node.nonant_vardata_list)
-            self.Lens["OnlyReduce"]["ROOT"] += self.n_proc  # for time of update
+        """ Attach the Lens attribute for asynchronous PH.
+        """
+        self.Lens = collections.OrderedDict({"OnlyReduce": {}})
+        for sname, scenario in self.local_scenarios.items():
+            for node in scenario._PySPnode_list:
+                self.Lens["OnlyReduce"][node.name] = 2 * len(node.nonant_vardata_list)
+        self.Lens["OnlyReduce"]["ROOT"] += self.n_proc  # for time of update
 
     def PH_Prep(
         self, 
         attach_duals=True,
         attach_prox=True,
     ):
-        """Create W Params bound by index to nonant-list.
-        Also create xsq-bar, which is not strictly needed, but so useful and
-        so easy to get along with x-bar, that we get it.
+        """ Set up PH objectives (duals and prox terms), and prepare
+        extensions, if available.
 
-        NOTE: prox_on and W_on are initialized to zero so iteration zero is OK.
+        Args:
+            add_duals (boolean, optional):
+                If True, adds dual weight (Ws) to the objective. Default True.
+            add_prox (boolean, optional):
+                If True, adds prox terms to the objective. Default True.
 
-        NOTE: xsq is a Pyomo Param even though it doesn't need to be.
-        Attach all on each scenario, even though the x-bar ans xsq-bar are
-         really per node.
-        Also attach _PySP_nlens which is dictionary of nonaticipativity 
-        counts indexed by node name.
-        NOTE: Called after iteration 0.
-        NOTE: returns Nothing, but adds to object:
-            comms (dict): key is node name; val is a comm object
+        Note:
+            This function constructs an Extension object if one was specified
+            at the time the PH object was created. It also calls the
+            `pre_iter0` method of the Extension object.
         """
 
         if (self.PH_extensions is not None):
@@ -1119,9 +1262,31 @@ class PHBase(mpisppy.spbase.SPBase):
             self.extobject.pre_iter0()
 
     def options_check(self):
-        """ Verify that the opions passed in are OK; raise an error if not.
-            NOTE: the user can add options of their own, so don't check for
-            extras.  
+        """ Check whether the options in the `PHoptions` attribute are
+        acceptable.
+
+        Required options are
+
+        - solvername (string): The name of the solver to use.
+        - PHIterLimit (int): The maximum number of PH iterations to execute.
+        - defaultPHrho (float): The default value of rho (penalty parameter) to
+          use for PH.
+        - convthresh (float): The convergence tolerance of the PH algorithm.
+        - verbose (boolean): Flag indicating whether to display verbose output.
+        - display_progress (boolean): Flag indicating whether to display
+          information about the progression of the algorithm.
+        - display_timing (boolean): Flag indicating whether to display
+          timing information.
+        - iter0_solver_options (dict): Dictionary of solver options to use on
+          the first solve loop.
+        - iterk_solver_options (dict): Dictionary of solver options to use on
+          subsequent solve loops (after iteration 0).
+
+        Additionally, if `asynchronousPH` is a key in the option dictionary,
+        then the following are also required:
+
+        - async_frac_needed (boolean)
+        - async_sleep_secs (float)
         """
         required = [
             "solvername", "PHIterLimit", "defaultPHrho", 
@@ -1133,6 +1298,16 @@ class PHBase(mpisppy.spbase.SPBase):
         self._options_check(required, self.PHoptions)
 
     def subproblem_creation(self, verbose):
+        """ Create local subproblems (not local scenarios).
+
+        If bundles are specified, this function creates the bundles.
+        Otherwise, this function simply copies pointers to the already-created
+        `local_scenarios`.
+
+        Args:
+            verbose (boolean):
+                If True, displays verbose output.
+        """
         self.local_subproblems = dict()
         if self.bundling:
             rank_local = self.rank
@@ -1206,12 +1381,19 @@ class PHBase(mpisppy.spbase.SPBase):
                                np.max(all_set_instance_times)))
 
     def Iter0(self):
-        """ local to main, really; however, some code needs to be called
-        directly by the Synchronizer, so main is in three parts (March 2019)
-        This is the first part.
+        """ Create solvers and perform the initial PH solve (with no dual
+        weights or prox terms).
 
+        This function quits() if the scenario probabilities do not sum to one,
+        or if any of the scenario subproblems are infeasible. It also calls the
+        `post_iter0` method of any extensions, and uses the rho setter (if
+        present) after the inital solve.
+        
         Returns:
-            trivial_bound (float): iter 0 trivial bound
+            float:
+                The so-called "trivial bound", i.e., the objective value of the
+                stochastic program with the nonanticipativity constraints
+                removed.
         """
         
         verbose = self.PHoptions["verbose"]
@@ -1304,14 +1486,26 @@ class PHBase(mpisppy.spbase.SPBase):
         return self.trivial_bound
 
     def iterk_loop(self, synchronizer=None):
-        """ local to main, really; however, it needs to be called
-        directly by the Synchronizer, so main is in three parts (March 2019)
+        """ Perform all PH iterations after iteration 0.
+        
+        This function terminates if any of the following occur:
+
+        1. The maximum number of iterations is reached.
+        2. The user specifies a converger, and the `is_converged()` method of
+           that converger returns True.
+        3. The hub tells it to terminate.
+        4. The user does not specify a converger, and the default convergence
+           criteria are met (i.e. the convergence value falls below the
+           user-specified threshold).
 
         Args:
-            synchronizer (object): deprecated; for asynchronous operation
+            synchronizer (object, optional):
+                Deprecated; for asynchronous operation.
 
-        Updates: 
-            self.conv (): whatever the converger has at termination
+        Raises:
+            RuntimeError:
+                If a synchronizer is provided (asynchronous PH is not
+                supported).
 
         """
         if synchronizer is not None:
@@ -1403,17 +1597,16 @@ class PHBase(mpisppy.spbase.SPBase):
             logger.debug('Setting synchronizer.quitting on rank %d' % self.rank)
             synchronizer.quitting = 1
 
-    def post_loops(self,
-                   PH_extensions = None):
-        """ local to main, really; however, some code needs to be called
-        directly by the Synchronizer, so main is in three parts (March 2019)
-        This is the last part.
-        Args:
-            conv (): whatever the converger gave
-            PH_extensions (object) : optional
-        Returns:
-            Eobj (float): pretty useless weighted, proxed obj value
+    def post_loops(self, PH_extensions=None):
+        """ Call scenario denouement methods, and report the expected objective
+        value.
 
+        Args:
+            PH_extensions (object, optional):
+                PH extension object.
+        Returns:
+            float:
+                Pretty useless weighted, proxed objective value.
         """
         verbose = self.PHoptions["verbose"]
         have_extensions = PH_extensions is not None
@@ -1459,6 +1652,9 @@ class PHBase(mpisppy.spbase.SPBase):
         return Eobj
 
     def attach_xbars(self):
+        """ Attach xbar and xbar^2 Pyomo parameters to each model in
+        `local_scenarios`.
+        """
         for scenario in self.local_scenarios.values():
             scenario._xbars = pyo.Param(
                 scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
@@ -1468,10 +1664,15 @@ class PHBase(mpisppy.spbase.SPBase):
             )
 
     def gather_var_values_to_root(self):
-        ''' Gather only the nonants to the root of mpicomm
-            Gathers only the scalar variable values, not the Pyomo
-            Var objects.
-        '''
+        """ Gather the values of the nonanticipative variables to the root of
+        `mpicomm`.
+
+        Returns:
+            dict or None:
+                On the root (rank0), returns a dictionary mapping
+                (scenario_name, variable_name) pairs to their values. On other
+                ranks, returns None.
+        """
         var_values = dict()
         for (sname, model) in self.local_scenarios.items():
             for node in model._PySPnode_list:
