@@ -15,7 +15,8 @@ to do this in ``mpi-sppy``.
 ---------------------
 
 The use of this function does not require the installation of ``mpi4py``. Its use
-is illustrated in ``mpisppy.examples.farmer.farmer_ef.py``.
+is illustrated in ``mpisppy.examples.farmer.farmer_ef.py``. Here are the
+arguments to the function:
 
 .. automodule:: mpisppy.utils.sputils.create_EF
    :members:
