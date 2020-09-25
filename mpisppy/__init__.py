@@ -1,6 +1,10 @@
 from pyutilib.misc.timing import TicTocTimer
-import mpi4py.MPI as mpi
+try:
+    import mpi4py.MPI as mpi
+    haveMPI=True
+except:
+    haveMPI=False
 
 tt_timer = TicTocTimer()
-if mpi.COMM_WORLD.Get_rank() == 0:
+if not haveMPI or mpi.COMM_WORLD.Get_rank() == 0:
     tt_timer.toc("Initializing mpi-sppy", delta=False)

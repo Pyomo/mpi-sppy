@@ -267,8 +267,6 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             desirable in the context of bundling. This allows for more
             fine-grained control.
     """
-    if not haveMPI:
-        raise RuntimeError("_create_ef_from_scen_dict without mpi4py")
     is_min, clear = _models_have_same_sense(scen_dict)
     if (not clear):
         raise RuntimeError('Cannot build the extensive form out of models '
