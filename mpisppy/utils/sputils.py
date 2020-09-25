@@ -6,6 +6,7 @@ import pyomo.environ as pyo
 import re
 import time
 from numpy import prod
+import mpisppy.scenario_tree as scenario_tree
 
 try:
     from mpi4py import MPI
@@ -639,6 +640,21 @@ class _ScenTree():
                 FirstRank[nd.name] = FirstRank[firstchild.name]
 
         return retval, masterslices, FirstRank
+
+    
+######## Utility to attach the one and only node to a two-stage scenario #######
+def attach_root_node(model, firstobj, varlist):
+    """ Create a root node as a list to attach to a scenario model
+    Args:
+        model (ConcreteModel): model to which this will be attached
+        firstobj (Pyomo Expression): First stage cost (e.g. model.FC)
+        varlist (list): Pyomo Vars in first stage (e.g. [model.A, model.B])
+    Note: 
+       attaches a list consisting of one scenario node to the model
+    """
+    model._PySPnode_list = [
+        scenario_tree.ScenarioNode("ROOT",1.0,1,firstobj, None, varlist, model)
+    ]
 
 """
 if __name__ == "__main__":
