@@ -26,6 +26,7 @@ Run `setup.py` from the mpi-sppy directory.
    spokes.rst
    extensions.rst
    pysp.rst
+   ef.rst
    aph.rst
    contributors.rst
    api.rst
