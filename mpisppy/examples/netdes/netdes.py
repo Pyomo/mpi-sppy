@@ -12,6 +12,7 @@ import numpy as np
 
 from mpisppy.examples.netdes.parse import parse
 
+
 def scenario_creator(scenario_name, node_names=None, cb_data=None):
     if (cb_data is None):
         raise RuntimeError('Must provide the name of the .dat file '
@@ -26,11 +27,8 @@ def scenario_creator(scenario_name, node_names=None, cb_data=None):
     
     return model
 
+
 def build_scenario_model(fname, scenario_ix):
-    ''' Multiple threads could be parsing the same file at the same
-        time but they're all read-only, should this should not present any
-        problems (famous last words)
-    '''
     data = parse(fname, scenario_ix=scenario_ix)
     num_nodes = data['N']
     adj = data['A']    # Adjacency matrix
@@ -70,6 +68,9 @@ def build_scenario_model(fname, scenario_ix):
         model.bals.add(lhs == b[i])
 
     return model
+
+
+
 
 def scenario_denouement(rank, scenario_name, scenario):
     pass
