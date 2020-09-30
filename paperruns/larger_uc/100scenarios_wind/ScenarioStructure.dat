@@ -1,0 +1,658 @@
+
+set StageVariables[FirstStage] :=
+UnitOn[*,*]
+;
+
+set StageVariables[SecondStage] :=
+PowerGeneratedAboveMinimum[*,*]
+MaximumPowerAvailableAboveMinimum[*,*]
+;
+
+set StageDerivedVariables[FirstStage] :=
+StartupCost[*,*]
+ShutdownCost[*,*]
+;
+
+set StageDerivedVariables[SecondStage] :=
+TotalProductionCost[*]
+TotalNoLoadCost[*]
+UnitStart[*,*]
+UnitStop[*,*]
+ProductionCost[*,*]
+NondispatchablePowerUsed[*,*]
+LoadGenerateMismatch[*,*]
+posLoadGenerateMismatch[*,*]
+negLoadGenerateMismatch[*,*]
+ReserveShortfall[*]
+;
+
+param StageCost :=
+FirstStage  StageCost[FirstStage]
+SecondStage StageCost[SecondStage]
+;
+
+param ScenarioBasedData := False ;
+
+set Stages := FirstStage SecondStage ;
+
+set Nodes := 
+RootNode
+Node1
+Node2
+Node3
+Node4
+Node5
+Node6
+Node7
+Node8
+Node9
+Node10
+Node11
+Node12
+Node13
+Node14
+Node15
+Node16
+Node17
+Node18
+Node19
+Node20
+Node21
+Node22
+Node23
+Node24
+Node25
+Node26
+Node27
+Node28
+Node29
+Node30
+Node31
+Node32
+Node33
+Node34
+Node35
+Node36
+Node37
+Node38
+Node39
+Node40
+Node41
+Node42
+Node43
+Node44
+Node45
+Node46
+Node47
+Node48
+Node49
+Node50
+Node51
+Node52
+Node53
+Node54
+Node55
+Node56
+Node57
+Node58
+Node59
+Node60
+Node61
+Node62
+Node63
+Node64
+Node65
+Node66
+Node67
+Node68
+Node69
+Node70
+Node71
+Node72
+Node73
+Node74
+Node75
+Node76
+Node77
+Node78
+Node79
+Node80
+Node81
+Node82
+Node83
+Node84
+Node85
+Node86
+Node87
+Node88
+Node89
+Node90
+Node91
+Node92
+Node93
+Node94
+Node95
+Node96
+Node97
+Node98
+Node99
+Node100
+;
+
+param NodeStage := 
+RootNode FirstStage
+Node1 SecondStage
+Node2 SecondStage
+Node3 SecondStage
+Node4 SecondStage
+Node5 SecondStage
+Node6 SecondStage
+Node7 SecondStage
+Node8 SecondStage
+Node9 SecondStage
+Node10 SecondStage
+Node11 SecondStage
+Node12 SecondStage
+Node13 SecondStage
+Node14 SecondStage
+Node15 SecondStage
+Node16 SecondStage
+Node17 SecondStage
+Node18 SecondStage
+Node19 SecondStage
+Node20 SecondStage
+Node21 SecondStage
+Node22 SecondStage
+Node23 SecondStage
+Node24 SecondStage
+Node25 SecondStage
+Node26 SecondStage
+Node27 SecondStage
+Node28 SecondStage
+Node29 SecondStage
+Node30 SecondStage
+Node31 SecondStage
+Node32 SecondStage
+Node33 SecondStage
+Node34 SecondStage
+Node35 SecondStage
+Node36 SecondStage
+Node37 SecondStage
+Node38 SecondStage
+Node39 SecondStage
+Node40 SecondStage
+Node41 SecondStage
+Node42 SecondStage
+Node43 SecondStage
+Node44 SecondStage
+Node45 SecondStage
+Node46 SecondStage
+Node47 SecondStage
+Node48 SecondStage
+Node49 SecondStage
+Node50 SecondStage
+Node51 SecondStage
+Node52 SecondStage
+Node53 SecondStage
+Node54 SecondStage
+Node55 SecondStage
+Node56 SecondStage
+Node57 SecondStage
+Node58 SecondStage
+Node59 SecondStage
+Node60 SecondStage
+Node61 SecondStage
+Node62 SecondStage
+Node63 SecondStage
+Node64 SecondStage
+Node65 SecondStage
+Node66 SecondStage
+Node67 SecondStage
+Node68 SecondStage
+Node69 SecondStage
+Node70 SecondStage
+Node71 SecondStage
+Node72 SecondStage
+Node73 SecondStage
+Node74 SecondStage
+Node75 SecondStage
+Node76 SecondStage
+Node77 SecondStage
+Node78 SecondStage
+Node79 SecondStage
+Node80 SecondStage
+Node81 SecondStage
+Node82 SecondStage
+Node83 SecondStage
+Node84 SecondStage
+Node85 SecondStage
+Node86 SecondStage
+Node87 SecondStage
+Node88 SecondStage
+Node89 SecondStage
+Node90 SecondStage
+Node91 SecondStage
+Node92 SecondStage
+Node93 SecondStage
+Node94 SecondStage
+Node95 SecondStage
+Node96 SecondStage
+Node97 SecondStage
+Node98 SecondStage
+Node99 SecondStage
+Node100 SecondStage
+;
+
+set Children[RootNode] := 
+Node1
+Node2
+Node3
+Node4
+Node5
+Node6
+Node7
+Node8
+Node9
+Node10
+Node11
+Node12
+Node13
+Node14
+Node15
+Node16
+Node17
+Node18
+Node19
+Node20
+Node21
+Node22
+Node23
+Node24
+Node25
+Node26
+Node27
+Node28
+Node29
+Node30
+Node31
+Node32
+Node33
+Node34
+Node35
+Node36
+Node37
+Node38
+Node39
+Node40
+Node41
+Node42
+Node43
+Node44
+Node45
+Node46
+Node47
+Node48
+Node49
+Node50
+Node51
+Node52
+Node53
+Node54
+Node55
+Node56
+Node57
+Node58
+Node59
+Node60
+Node61
+Node62
+Node63
+Node64
+Node65
+Node66
+Node67
+Node68
+Node69
+Node70
+Node71
+Node72
+Node73
+Node74
+Node75
+Node76
+Node77
+Node78
+Node79
+Node80
+Node81
+Node82
+Node83
+Node84
+Node85
+Node86
+Node87
+Node88
+Node89
+Node90
+Node91
+Node92
+Node93
+Node94
+Node95
+Node96
+Node97
+Node98
+Node99
+Node100
+;
+
+param ConditionalProbability :=
+RootNode 1.0
+Node1 0.01
+Node2 0.01
+Node3 0.01
+Node4 0.01
+Node5 0.01
+Node6 0.01
+Node7 0.01
+Node8 0.01
+Node9 0.01
+Node10 0.01
+Node11 0.01
+Node12 0.01
+Node13 0.01
+Node14 0.01
+Node15 0.01
+Node16 0.01
+Node17 0.01
+Node18 0.01
+Node19 0.01
+Node20 0.01
+Node21 0.01
+Node22 0.01
+Node23 0.01
+Node24 0.01
+Node25 0.01
+Node26 0.01
+Node27 0.01
+Node28 0.01
+Node29 0.01
+Node30 0.01
+Node31 0.01
+Node32 0.01
+Node33 0.01
+Node34 0.01
+Node35 0.01
+Node36 0.01
+Node37 0.01
+Node38 0.01
+Node39 0.01
+Node40 0.01
+Node41 0.01
+Node42 0.01
+Node43 0.01
+Node44 0.01
+Node45 0.01
+Node46 0.01
+Node47 0.01
+Node48 0.01
+Node49 0.01
+Node50 0.01
+Node51 0.01
+Node52 0.01
+Node53 0.01
+Node54 0.01
+Node55 0.01
+Node56 0.01
+Node57 0.01
+Node58 0.01
+Node59 0.01
+Node60 0.01
+Node61 0.01
+Node62 0.01
+Node63 0.01
+Node64 0.01
+Node65 0.01
+Node66 0.01
+Node67 0.01
+Node68 0.01
+Node69 0.01
+Node70 0.01
+Node71 0.01
+Node72 0.01
+Node73 0.01
+Node74 0.01
+Node75 0.01
+Node76 0.01
+Node77 0.01
+Node78 0.01
+Node79 0.01
+Node80 0.01
+Node81 0.01
+Node82 0.01
+Node83 0.01
+Node84 0.01
+Node85 0.01
+Node86 0.01
+Node87 0.01
+Node88 0.01
+Node89 0.01
+Node90 0.01
+Node91 0.01
+Node92 0.01
+Node93 0.01
+Node94 0.01
+Node95 0.01
+Node96 0.01
+Node97 0.01
+Node98 0.01
+Node99 0.01
+Node100 0.01
+;
+
+set Scenarios := 
+Scenario1
+Scenario2
+Scenario3
+Scenario4
+Scenario5
+Scenario6
+Scenario7
+Scenario8
+Scenario9
+Scenario10
+Scenario11
+Scenario12
+Scenario13
+Scenario14
+Scenario15
+Scenario16
+Scenario17
+Scenario18
+Scenario19
+Scenario20
+Scenario21
+Scenario22
+Scenario23
+Scenario24
+Scenario25
+Scenario26
+Scenario27
+Scenario28
+Scenario29
+Scenario30
+Scenario31
+Scenario32
+Scenario33
+Scenario34
+Scenario35
+Scenario36
+Scenario37
+Scenario38
+Scenario39
+Scenario40
+Scenario41
+Scenario42
+Scenario43
+Scenario44
+Scenario45
+Scenario46
+Scenario47
+Scenario48
+Scenario49
+Scenario50
+Scenario51
+Scenario52
+Scenario53
+Scenario54
+Scenario55
+Scenario56
+Scenario57
+Scenario58
+Scenario59
+Scenario60
+Scenario61
+Scenario62
+Scenario63
+Scenario64
+Scenario65
+Scenario66
+Scenario67
+Scenario68
+Scenario69
+Scenario70
+Scenario71
+Scenario72
+Scenario73
+Scenario74
+Scenario75
+Scenario76
+Scenario77
+Scenario78
+Scenario79
+Scenario80
+Scenario81
+Scenario82
+Scenario83
+Scenario84
+Scenario85
+Scenario86
+Scenario87
+Scenario88
+Scenario89
+Scenario90
+Scenario91
+Scenario92
+Scenario93
+Scenario94
+Scenario95
+Scenario96
+Scenario97
+Scenario98
+Scenario99
+Scenario100
+;
+
+param ScenarioLeafNode := 
+Scenario1 Node1
+Scenario2 Node2
+Scenario3 Node3
+Scenario4 Node4
+Scenario5 Node5
+Scenario6 Node6
+Scenario7 Node7
+Scenario8 Node8
+Scenario9 Node9
+Scenario10 Node10
+Scenario11 Node11
+Scenario12 Node12
+Scenario13 Node13
+Scenario14 Node14
+Scenario15 Node15
+Scenario16 Node16
+Scenario17 Node17
+Scenario18 Node18
+Scenario19 Node19
+Scenario20 Node20
+Scenario21 Node21
+Scenario22 Node22
+Scenario23 Node23
+Scenario24 Node24
+Scenario25 Node25
+Scenario26 Node26
+Scenario27 Node27
+Scenario28 Node28
+Scenario29 Node29
+Scenario30 Node30
+Scenario31 Node31
+Scenario32 Node32
+Scenario33 Node33
+Scenario34 Node34
+Scenario35 Node35
+Scenario36 Node36
+Scenario37 Node37
+Scenario38 Node38
+Scenario39 Node39
+Scenario40 Node40
+Scenario41 Node41
+Scenario42 Node42
+Scenario43 Node43
+Scenario44 Node44
+Scenario45 Node45
+Scenario46 Node46
+Scenario47 Node47
+Scenario48 Node48
+Scenario49 Node49
+Scenario50 Node50
+Scenario51 Node51
+Scenario52 Node52
+Scenario53 Node53
+Scenario54 Node54
+Scenario55 Node55
+Scenario56 Node56
+Scenario57 Node57
+Scenario58 Node58
+Scenario59 Node59
+Scenario60 Node60
+Scenario61 Node61
+Scenario62 Node62
+Scenario63 Node63
+Scenario64 Node64
+Scenario65 Node65
+Scenario66 Node66
+Scenario67 Node67
+Scenario68 Node68
+Scenario69 Node69
+Scenario70 Node70
+Scenario71 Node71
+Scenario72 Node72
+Scenario73 Node73
+Scenario74 Node74
+Scenario75 Node75
+Scenario76 Node76
+Scenario77 Node77
+Scenario78 Node78
+Scenario79 Node79
+Scenario80 Node80
+Scenario81 Node81
+Scenario82 Node82
+Scenario83 Node83
+Scenario84 Node84
+Scenario85 Node85
+Scenario86 Node86
+Scenario87 Node87
+Scenario88 Node88
+Scenario89 Node89
+Scenario90 Node90
+Scenario91 Node91
+Scenario92 Node92
+Scenario93 Node93
+Scenario94 Node94
+Scenario95 Node95
+Scenario96 Node96
+Scenario97 Node97
+Scenario98 Node98
+Scenario99 Node99
+Scenario100 Node100
+;
+
