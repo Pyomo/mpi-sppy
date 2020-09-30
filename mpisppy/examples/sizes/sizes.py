@@ -1,9 +1,8 @@
 # This software is distributed under the 3-clause BSD License.
 import os
-import mpisppy.scenario_tree as scenario_tree
 import mpisppy.examples.sizes.models.ReferenceModel as ref
 import mpisppy.examples.sizes.sizes
-
+import mpisppy.utils.sputils as sputils
 
 def scenario_creator(scenario_name, node_names=None, cb_data=None):
     """ The callback needs to create an instance and then attach
@@ -25,18 +24,10 @@ def scenario_creator(scenario_name, node_names=None, cb_data=None):
 
     model = ref.model.create_instance(fname)
 
-    # now attach the one and only tree node (ROOT is a reserved word)
-    model._PySPnode_list = [
-        scenario_tree.ScenarioNode(
-            "ROOT",
-            1.0,
-            1,
-            model.FirstStageCost,
-            None,
-            [model.NumProducedFirstStage, model.NumUnitsCutFirstStage],
-            model,
-        )
-    ]
+    # now attach the one and only tree node
+    varlist = [model.NumProducedFirstStage, model.NumUnitsCutFirstStage]
+    sputils.attach_root_node(model, model.FirstStageCost, varlist)
+
     return model
 
 

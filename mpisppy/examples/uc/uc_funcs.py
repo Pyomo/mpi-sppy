@@ -70,7 +70,8 @@ def pysp2_callback(scenario_name,
                                                node_names, cb_data)
 
     # now attach the one and only tree node (ROOT is a reserved word)
-    # UnitOn[*,*] is the only set of variables
+    # UnitOn[*,*] is the only set of nonant variables
+    """
     instance._PySPnode_list = [scenario_tree.ScenarioNode("ROOT",
                                                           1.0,
                                                           1,
@@ -80,6 +81,13 @@ def pysp2_callback(scenario_name,
                                                           instance,
                                                           [instance.UnitStart, instance.UnitStop, instance.StartupIndicator],
                                                           )]
+    """
+    sputils.attach_root_node(instance,
+                             instance.StageCost["Stage_1"],
+                             [instance.UnitOn],
+                             nonant_ef_suppl_list = [instance.UnitStart,
+                                                     instance.UnitStop,
+                                                     instance.StartupIndicator])
     return instance
 
 def scenario_denouement(rank, scenario_name, scenario):

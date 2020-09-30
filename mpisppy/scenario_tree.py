@@ -53,8 +53,11 @@ class ScenarioNode:
          just for debugging and reporting; not really used as of Dec 31
       nonant_list (list of pyo Var, Vardata or slices): the Vars that
               require nonanticipativity at the node (might not be a list)
-      parent_name (str): name of the parent node      
       scen_model (pyo concrete model): the (probably not 'a') concrete model
+      nonant_ef_suppl_list (list of pyo Var, Vardata or slices):
+              vars for which nonanticipativity constraints tighten the EF
+              (important for bundling)
+      parent_name (str): name of the parent node      
 
     Lists:
       nonant_vardata(list of vardata objects): vardatas to blend

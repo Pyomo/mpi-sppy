@@ -102,6 +102,10 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "--solver-name={} --no-fwph".format(solver_name))
 do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
 do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
+do_one("netdes", "netdes_cylinders.py", 5,
+       "--max-iterations=3 --instance-name=network-10-20-L-01 "
+       "--solver-name={} --rel-gap=0.0 --default-rho=1 "
+       "--no-fwph --max-solver-threads=2".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",
        3,

@@ -6,11 +6,12 @@
     Scenario indices are ZERO based
 '''
 
-import mpisppy.scenario_tree
+import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import numpy as np
 
 from mpisppy.examples.netdes.parse import parse
+
 
 def scenario_creator(scenario_name, node_names=None, cb_data=None):
     if (cb_data is None):
@@ -21,18 +22,13 @@ def scenario_creator(scenario_name, node_names=None, cb_data=None):
     scenario_ix = _get_scenario_ix(scenario_name)
     model = build_scenario_model(cb_data, scenario_ix)
 
-    # now attach the one and only tree node (ROOT is a reserved word)
-    root = mpisppy.scenario_tree.ScenarioNode('ROOT', 1.0, 1, 
-                                            model.FirstStageCost, None,
-                                            [model.x], model)
-    model._PySPnode_list = [root]
+    # now attach the one and only scenario tree node
+    sputils.attach_root_node(model, model.FirstStageCost, [model.x])
+    
     return model
 
+
 def build_scenario_model(fname, scenario_ix):
-    ''' Multiple threads could be parsing the same file at the same
-        time but they're all read-only, should this should not present any
-        problems (famous last words)
-    '''
     data = parse(fname, scenario_ix=scenario_ix)
     num_nodes = data['N']
     adj = data['A']    # Adjacency matrix
@@ -72,6 +68,9 @@ def build_scenario_model(fname, scenario_ix):
         model.bals.add(lhs == b[i])
 
     return model
+
+
+
 
 def scenario_denouement(rank, scenario_name, scenario):
     pass

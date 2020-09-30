@@ -34,11 +34,17 @@ arguments:
 This node list must be attached to the scenario model instance under
 the name `model._PySPnode_list`.
   
-In the `general_farmer.py` example, the `scenario_creator` function is
-called `pysp2_callback` and in this example, the scenario name is presumed
-to be of the form "scen" with a trailing number. The trailing number is
-used in a problem-specific way to create a "farmer" problem instance. The
-concrete model instance is created.
+In the `farmer.py` example, the `scenario_creator` function is called
+`pysp2_callback` and in this example, the scenario name is presumed to
+be of the form "scen" with a trailing number. The trailing number is
+used in a problem-specific way to create a "farmer" problem
+instance. The concrete model instance is created.
+
+The scenario creator
+function in ``mpisppy.examples.netdes.netdes.py`` is very simple and
+illustrates use of the utility function
+(``mpisppy.utils.sputils.attach_root_node``) that attaches the node
+list for you.
 
 The scenario probability should be attached by `scenario_creator` as
 ``PySP_prob``. However, if you don't attach it, the scenarios are

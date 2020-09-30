@@ -14,8 +14,8 @@ We now proceed to consider driver examples that do not use the shared
 services provided with the examples; however, many developers will prefer
 to mimic the examples.
 
-Extending Examples
-------------------
+Starting with Examples
+----------------------
 
 The ``examples`` directory has utilities that set up command line options
 and create dictionaries used to create hubs and spokes. The main shared utilities
@@ -26,7 +26,18 @@ are
   creation. These dictionaries are ultimately fed to
   ``spin_the_wheel``.
 
-
+The contructors for the vanilla spokes take arguments that vary slightly depending
+on the spoke, but all want the args passed in by the args parser,
+followed by ``scenario_creator`` function, a ``scenario_denoument`` function
+(that can be ``None``), a list of scenario names as ``all_scenario_names``,
+and ``cb_data``. Other arguments can be seen in the file ``mpisppy.examples.vanilla.py``
+or in the the ``*_examples.py`` files that use it.  Since all require
+the first four, in the examples, they are often collected into a tupe called
+``beans`` so they can be passed to the constructor for every vanilla spoke.
+  
+Extending Examples
+------------------
+  
 Many developers
 will need to add extensions. Here are few examples:
 
