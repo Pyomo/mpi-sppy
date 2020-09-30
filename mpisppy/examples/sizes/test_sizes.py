@@ -39,7 +39,7 @@ if __name__ == "__main__":
     # one way to set up sub-problem solver options
     PHoptions["iter0_solver_options"] = {"mipgap": 0.01}
     # another way
-    PHoptions["iterk_solver_options"] = {"mipgap": 0.001}
+    PHoptions["iterk_solver_options"] = {"mipgap": 0.005}
     PHoptions["xhat_looper_options"] =  {"xhat_solver_options":\
                                          PHoptions["iterk_solver_options"],
                                          "scen_limit": 3,
