@@ -115,7 +115,7 @@ class Hub(SPCommunicator):
             row = f'{"Iter.":>5s}  {"   "}  {"Best Bound":>14s}  {"Best Incumbent":>14s}  {"Rel. Gap":>12s}  {"Abs. Gap":>14s}'
             tt_timer.toc(row, delta=False)
             self.print_init = False
-        row = f"{current_iteration:5d}  {update_source}  {best_bound:14.4f}  {best_solution:14.4f}  {rel_gap*100:12.4f}  {abs_gap:14.4f}"
+        row = f"{current_iteration:5d}  {update_source}  {best_bound:14.4f}  {best_solution:14.4f}  {rel_gap*100:12.3f}%  {abs_gap:14.4f}"
         tt_timer.toc(row, delta=False)
         self.clear_latest_chars()
 
@@ -132,7 +132,7 @@ class Hub(SPCommunicator):
         if abs_gap_satisfied and self.rank_global == 0:
             tt_timer.toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}", delta=False)
         if rel_gap_satisfied and self.rank_global == 0:
-            tt_timer.toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.4f}", delta=False)
+            tt_timer.toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%", delta=False)
         return abs_gap_satisfied or rel_gap_satisfied
 
     def hub_finalize(self):
