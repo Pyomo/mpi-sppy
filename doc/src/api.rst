@@ -33,7 +33,7 @@ This is the class for PH hub.
 lshaped class
 ^^^^^^^^^^^^^
 
-This is the class for L-shapted hub.
+This is the class for L-shaped hub.
 
 .. automodule:: mpisppy.opt.lshaped
    :members:

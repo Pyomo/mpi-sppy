@@ -244,9 +244,11 @@ class Hub(SPCommunicator):
 
     def initialize_spoke_indices(self):
         """ Figure out what types of spokes we have, 
-            and sort them into the appropriate classes.
-            NOTE: Some spokes may be multiple types (e.g. outerbound and
-                nonant), though not all combinations are supported.
+        and sort them into the appropriate classes.
+
+        Note: 
+            Some spokes may be multiple types (e.g. outerbound and nonant),
+            though not all combinations are supported.
         """
         self.outerbound_spoke_indices = set()
         self.innerbound_spoke_indices = set()

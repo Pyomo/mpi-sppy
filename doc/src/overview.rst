@@ -1,6 +1,6 @@
 .. _Overview:
 
-Overiview
+Overview
 =========
 
 
@@ -10,10 +10,10 @@ Roles
 We take that view that there are the following roles (that might be
 filled by one person, or multiple people):
 
-# End-User: runs a program to get the results of optimization under uncertainty.
-# Modeler: creates the Pyomo model and establishes the nature of the scenario tree.
-# Developer: writes the program that the end-user runs and uses the model(s) created by the modeler.
-# Contributros to mpi-sppy: the creators of, and contributors to, the mpi-sppy library.
+- *End-User*: runs a program to get the results of optimization under uncertainty.
+- *Modeler*: creates the Pyomo model and establishes the nature of the scenario tree.
+- *Developer*: writes the program that the end-user runs and uses the model(s) created by the modeler.
+- *Contributors to mpi-sppy*: the creators of, and contributors to, the mpi-sppy library.
 
 If you are reading this document, we assume that you are doing so in your
 role as a developer, or perhaps in your role as a modeler. Neither this
@@ -31,11 +31,15 @@ Cylinders
 ---------
 
 To achieve results with the lowest possible wall-clock time,
-``mpi-sppy`` make use of a hub and spoke architecure Each hub or spoke
-is thought of as a `cylinder` of `ranks` (which is the name given by
+``mpi-sppy`` make use of a hub-and-spoke architecture. The hub controls the
+progression of the optimization and executes the "main" optimization algorithm.
+Each spoke performs one (broad) task, such as computing a bound, or
+producing heuristic solutions. We refer to the hub or a spoke generically as a
+`cylinder`. A cylinder is composed of multiple
+`ranks` (which is the name given by
 MPI to compute units).  The ranks communicate asynchronously between
 the cylinders and in whatever manner is appropriate within a
-cylinder. We often make use of MPI {\em reductions} within a cylinder
+cylinder. We often make use of MPI *reductions* within a cylinder
 that require at worst :math:`n \log(n)` effort, where `n` denotes the
 number of ranks in the cylinder.
 

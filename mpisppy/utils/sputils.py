@@ -167,24 +167,28 @@ def get_objs(scenario_instance):
 
 def create_EF(scenario_names, scenario_creator, creator_options=None,
               EF_name=None, suppress_warnings=False):
-    """ Create a ConcreteModel of the extensive form
+    """ Create a ConcreteModel of the extensive form.
 
         Args:
-            scenario_names (list of str): Names for each scenario, to be passed
-                to the scenario_creator function.
-            scenario_creator (callable): Function which takes a scenario name
-                as its first argument and returns a concrete model
-                corresponding to that scenario.
-            creator_options (dict--optional): options to be passed when
-                scenario_creator is called.
-            EF_name (str--optional): name of the ConcreteModel of the EF.
-            suppress_warnings (boolean): don't warn about things
+            scenario_names (list of str):
+                Names for each scenario to be passed to the scenario_creator
+                function.
+            scenario_creator (callable):
+                Function which takes a scenario name as its first argument and
+                returns a concrete model corresponding to that scenario.
+            creator_options (dict, optional):
+                Options to pass to `scenario_creator`.
+            EF_name (str, optional):
+                Name of the ConcreteModel of the EF.
+            suppress_warnings (boolean, optional):
+                If true, do not display warnings. Default False.
 
         Returns:
-            EF_instance (ConcreteModel): ConcreteModel of extensive form with
-                explicit non-anticipativity constraints.
+            EF_instance (ConcreteModel):
+                ConcreteModel of extensive form with explicit
+                non-anticipativity constraints.
 
-        Notes:
+        Note:
             If any of the scenarios produced by scenario_creator do not have a
             .PySP_prob attribute, this function displays a warning, and assumes
             that all scenarios are equally likely.

@@ -8,8 +8,8 @@ import sys
 import mpisppy.spbase as spbase
 
 from mpi4py import MPI
-from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
-##from pyomo.core.plugins.transform.relax_integrality import RelaxIntegrality
+# from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
+from pyomo.core.plugins.transform.relax_integrality import RelaxIntegrality
 from pyomo.pysp.phutils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from pyomo.core import (
@@ -19,78 +19,51 @@ from pyomo.core.expr.visitor import identify_variables
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
 
-
-def _del_con(c):
-    parent = c.parent_component()
-    if parent.is_indexed():
-        parent.__delitem__(c.index())
-    else:
-        assert parent is c
-        c.parent_block().del_component(c)
-
-def _del_var(v):
-    parent = v.parent_component()
-    if parent.is_indexed():
-        parent.__delitem__(v.index())
-    else:
-        assert parent is v
-        block = v.parent_block()
-        block.del_component(v)
-
-def _get_nonant_ids(instance):
-    assert len(instance._PySPnode_list) == 1
-    # set comprehension
-    nonant_list = instance._PySPnode_list[0].nonant_vardata_list
-    return nonant_list, { id(var) for var in nonant_list }
-
-def _get_nonant_ids_EF(instance):
-    assert len(instance._PySP_nlens) == 1
-
-    ndn, nlen = list(instance._PySP_nlens.items())[0]
-
-    ## this is for the cut variables, so we just need (and want)
-    ## exactly one set of them
-    nonant_list = list(instance.ref_vars[ndn,i] for i in range(nlen))
-
-    ## this is for adjusting the objective, so needs all the nonants
-    ## in the EF
-    snames = instance._PySP_subscen_names
-
-    nonant_ids = set()
-    for s in snames:
-        nonant_ids.update( (id(v) for v in \
-                getattr(instance, s)._PySPnode_list[0].nonant_vardata_list)
-                )
-    return nonant_list, nonant_ids 
-
-def _first_stage_only(constr_data, nonant_ids):
-    """ iterates through the constraint in a scenario and returns if it only
-        has first stage variables
-    """
-    for var in identify_variables(constr_data.body):
-        if id(var) not in nonant_ids: 
-            return False
-    return True
-
-def _init_vars(varlist):
-    '''
-    for every pyomo var in varlist without a value,
-    sets it to the lower bound (if it exists), or
-    the upper bound (if it exists, and the lower bound
-    does note) or 0 (if neither bound exists).
-    '''
-    value = pyo.value
-    for var in varlist:
-        if var.value is not None:
-            continue
-        if var.lb is not None:
-            var.set_value(value(var.lb))
-        elif var.ub is not None:
-            var.set_value(value(var.ub))
-        else:
-            var.set_value(0)
-
 class LShapedMethod(spbase.SPBase):
+    """ Base class for the L-shaped method for two-stage stochastic programs.
+
+    Warning:
+        This class explicitly assumes minimization.
+
+    Args:
+        options (dict):
+            Dictionary of options. Possible (optional) options include
+
+            - master_scenarios (list) - List of scenario names to include as
+              part of the master problem (default [])
+            - store_subproblems (boolean) - If True, the BendersDecomp object
+              will maintain a dictionary containing the subproblems created by
+              the BendersCutGenerator.
+            - relax_master (boolean) - If True, the LP relaxation of the master
+              problem is solved (i.e. integer variables in the master problem
+              are relaxed).
+            - cb_data (dict) - Data to pass directly to the scenario_creator.
+            - valid_eta_lb (dict) - Dictionary mapping scenario names to valid
+              lower bounds for the eta variables--i.e., a valid lower (outer)
+              bound on the optimal objective value for each scenario. If none
+              are provided, the lower bound is set to -sys.maxsize *
+              scenario_prob, which may cause numerical errors.
+            - indx_to_stage (dict) - Dictionary mapping the index of every
+              variable in the model to the stage they belong to.
+        all_scenario_names (list):
+            List of all scenarios names present in the model (strings).
+        scenario_creator (callable): 
+            Function which take a scenario name (string) and returns a
+            Pyomo Concrete model with some things attached.
+        scenario_denouement (callable, optional):
+            Function which does post-processing and reporting.
+        all_nodenames (list, optional): 
+            List of all node name (strings). Can be `None` for two-stage
+            problems.
+        mpicomm (MPI comm, optional):
+            MPI communicator to use between all scenarios. Default is
+            `MPI.COMM_WORLD`.
+        rank0 (int, optional):
+            Which rank from mpicomm to count as rank 0 (i.e. the "main"
+            rank).
+        cb_data (any, optional): 
+            Data passed directly to scenario_creator.
+    """
     def __init__(
         self, 
         options,
@@ -102,25 +75,6 @@ class LShapedMethod(spbase.SPBase):
         rank0=0,
         cb_data=None,
     ):
-        """
-        REQUIRED
-        --------
-        scenario_creator: a pysp callback that takes a scenario name and returns the deterministic model
-        all_scenario_names: a list of scenario names
-
-        OPTIONAL (can be passed in the options dict)
-        ---------
-        master_scenarios: a list of scenario names to include as part of the master problem
-                          (defaults to an empty list)
-        store_subproblems: True/False the BendersDecomp object will maintain a dict containing the subproblems created
-                           by the BendersCutGenerator
-        relax_master: True/False use the linear relaxation of the master problem
-        cb_data: Callback data for the scenario creator
-        valid_eta_lb: a dict mapping scenarios to valid lower bound for the eta variables (if none provided sets
-                      lower bound to -sys.maxsize * scenario_prob, in some cases this can cause numerical problems)
-        indx_to_stage: a dict mapping the index of every variables in the model (determined by the order they are
-                       pulled out using the identify components method) to the stage they belong to
-        """
         super().__init__(
             options,
             all_scenario_names,
@@ -170,6 +124,12 @@ class LShapedMethod(spbase.SPBase):
             self.subproblems = dict.fromkeys(scenario_names)
 
     def options_check(self):
+        """ Check to ensure that the user-specified options are valid. Requried
+        options are:
+
+        - master_solver (string) - Solver to use for the master problem.
+        - sp_solver (string) - Solver to use for the subproblems.
+        """
         required = ["master_solver", "sp_solver"]
         if "master_solver_options" not in self.options:
             self.options["master_solver_options"] = dict()
@@ -710,6 +670,77 @@ class LShapedMethod(spbase.SPBase):
                         )
                     break
         return res
+
+def _del_con(c):
+    parent = c.parent_component()
+    if parent.is_indexed():
+        parent.__delitem__(c.index())
+    else:
+        assert parent is c
+        c.parent_block().del_component(c)
+
+def _del_var(v):
+    parent = v.parent_component()
+    if parent.is_indexed():
+        parent.__delitem__(v.index())
+    else:
+        assert parent is v
+        block = v.parent_block()
+        block.del_component(v)
+
+def _get_nonant_ids(instance):
+    assert len(instance._PySPnode_list) == 1
+    # set comprehension
+    nonant_list = instance._PySPnode_list[0].nonant_vardata_list
+    return nonant_list, { id(var) for var in nonant_list }
+
+def _get_nonant_ids_EF(instance):
+    assert len(instance._PySP_nlens) == 1
+
+    ndn, nlen = list(instance._PySP_nlens.items())[0]
+
+    ## this is for the cut variables, so we just need (and want)
+    ## exactly one set of them
+    nonant_list = list(instance.ref_vars[ndn,i] for i in range(nlen))
+
+    ## this is for adjusting the objective, so needs all the nonants
+    ## in the EF
+    snames = instance._PySP_subscen_names
+
+    nonant_ids = set()
+    for s in snames:
+        nonant_ids.update( (id(v) for v in \
+                getattr(instance, s)._PySPnode_list[0].nonant_vardata_list)
+                )
+    return nonant_list, nonant_ids 
+
+def _first_stage_only(constr_data, nonant_ids):
+    """ iterates through the constraint in a scenario and returns if it only
+        has first stage variables
+    """
+    for var in identify_variables(constr_data.body):
+        if id(var) not in nonant_ids: 
+            return False
+    return True
+
+def _init_vars(varlist):
+    '''
+    for every pyomo var in varlist without a value,
+    sets it to the lower bound (if it exists), or
+    the upper bound (if it exists, and the lower bound
+    does note) or 0 (if neither bound exists).
+    '''
+    value = pyo.value
+    for var in varlist:
+        if var.value is not None:
+            continue
+        if var.lb is not None:
+            var.set_value(value(var.lb))
+        elif var.ub is not None:
+            var.set_value(value(var.ub))
+        else:
+            var.set_value(0)
+
 
 
 def main():

@@ -9,26 +9,12 @@ EF" to mean "passing the EF in its entirety directly to a
 general-purpose solver." There are two closely related ways
 to do this in ``mpi-sppy``.
 
-.. _sputils.create_EF:
 
-``sputils.create_EF``
----------------------
+Preferred method: ``mpisppy.opt.ef.EF``
+---------------------------------------
 
-The use of this function does not require the installation of ``mpi4py``. Its use
-is illustrated in ``mpisppy.examples.farmer.farmer_ef.py``. Here are the
-arguments to the function:
-
-.. automodule:: mpisppy.utils.sputils.create_EF
-   :members:
-   :undoc-members:
-   :show-inheritance:
-
-
-mpisppy.opt.ef
---------------
-
-There is a class for the EF that roughly matches the "look and feel" of a hub class, but
-does not function as a hub.
+There is a class for the EF that roughly matches the "look and feel" of a hub
+class, but does not function as a hub.
 
 .. automodule:: mpisppy.opt.ef
    :noindex:
@@ -37,3 +23,14 @@ does not function as a hub.
    :show-inheritance:
 
       
+
+.. _sputils.create_EF:
+
+Other method: ``sputils.create_EF``
+-----------------------------------
+
+The use of this function does not require the installation of ``mpi4py``. Its use
+is illustrated in ``mpisppy.examples.farmer.farmer_ef.py``. Here are the
+arguments to the function:
+
+.. autofunction:: mpisppy.utils.sputils.create_EF
