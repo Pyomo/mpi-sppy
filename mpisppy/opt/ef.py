@@ -1,5 +1,5 @@
 # This software is distributed under the 3-clause BSD License.
-from mpisppy.utils.sputils import create_EF
+from mpisppy.utils.sputils import _create_EF_from_scen_dict
 import mpisppy.spbase
 import pyomo.environ as pyo
 import logging
@@ -61,13 +61,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         required = ["solver"]
         self._options_check(required, self.options)
         self.solver = pyo.SolverFactory(self.options["solver"])
-        self.ef = create_EF(
-            all_scenario_names,
-            scenario_creator,
-            creator_options=scenario_creator_options,
-            EF_name=model_name,
-            suppress_warnings=suppress_warnings,
-        )
+        self.ef = _create_EF_from_scen_dict(self.local_scenarios, EF_name=model_name)
 
     def solve_extensive_form(self, solver_options=None, tee=False):
         """ Solve the extensive form.
