@@ -2,6 +2,8 @@ CCOPF
 =====
 Contingency Constrained OPF
 
+This example is not fully developed as of October 2020.
+
 To use this, egret must be installed (also run
 egret/thirdparty/get_pglib_opf.py and then you still
 might have to make sure the directories match.)
