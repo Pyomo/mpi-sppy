@@ -94,7 +94,8 @@ def pysp2_callback(scenario_name,
     acstream = cb_data["acstream"]
     convex_relaxation = cb_data["convex_relaxation"] if "convex_relaxation"\
                        in cb_data else False
-
+    verbose = cb_data["verbose"] if "verbose" in cb_data else False
+    ramp_coeff = cb_data["ramp_coeff"] if "ramp_coeff" in cb_data else 1000000
 
     def lines_up_and_down(stage_md_dict, enode):
         # local routine to configure the lines in stage_md_dict for the scenario
@@ -125,7 +126,6 @@ def pysp2_callback(scenario_name,
 
     # pull the number off the end of the scenario name
     scen_num = sputils.extract_num(scenario_name)
-    #print ("debug scen_num=",scen_num)
 
     numstages = etree.NumStages
     enodes = etree.Nodes_for_Scenario(scen_num)
@@ -174,7 +174,7 @@ def pysp2_callback(scenario_name,
     full_scenario_model.ramping = pyo.Expression(rule=aggregate_ramping_rule)
 
     full_scenario_model.objective = pyo.Objective(expr=\
-                            1000000.0 * full_scenario_model.ramping+\
+                           ramp_coeff * full_scenario_model.ramping+\
                             sum(full_scenario_model.stage_models[stage].obj.expr\
                                     for stage in range(1,numstages+1)))
     
@@ -197,8 +197,12 @@ def pysp2_callback(scenario_name,
                              inst.stage_models[stage].qg],
                 scen_model=inst, parent_name=parent_name))
             parent_name = enode.Name
-    
-    inst._PySPnode_list = node_list 
+
+    if verbose:
+        print(f"\nScenario creation for {scenario_name} on rank {rank}"
+              f"    FailedLines (line,minutes)={enode.FailedLines}")
+            
+    inst._PySPnode_list = node_list
     inst.PySP_prob = 1 / etree.numscens
     # solve it so subsequent code will have a good start
     if solver is not None:
