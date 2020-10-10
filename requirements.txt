@@ -1,5 +1,5 @@
-mpi4py
-numpy==1.16.2
-pyutilib
-pyomo
-scipy==1.2.1
+mpi4py>=3.0.3
+numpy>=1.19
+pyutilib>=6.0
+pyomo>=5.7.1
+scipy>=1.5

@@ -14,12 +14,16 @@ from distutils.core import setup
 
 packages = find_packages()
 
-setup(name='mpi-sppy',
-      version='2',
-      description="mpi-sppy",
-      url='https://github.com/dlwoodruff/mpi-sppy',
-      author='David Woodruff',
-      author_email='dlwoodruff@ucdavis.edu',
-      packages=packages,
-      install_requires=['numpy', 'pyomo']
+setup(
+    name='mpi-sppy',
+    version='0.1',
+    description="mpi-sppy",
+    url='https://github.com/mpi-sppy/mpi-sppy',
+    author='David Woodruff',
+    author_email='dlwoodruff@ucdavis.edu',
+    packages=packages,
+    install_requires=[
+        'numpy>=1.19',
+        'pyomo>=5.7.1'
+    ]
 )
