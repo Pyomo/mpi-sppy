@@ -120,6 +120,10 @@ class Spoke(SPCommunicator):
         pass
 
     @abc.abstractmethod
+    def get_serial_number(self):
+        pass
+
+    @abc.abstractmethod
     def _got_kill_signal(self):
         """ Every spoke needs a way to get the signal to terminate
             from the hub
@@ -167,6 +171,9 @@ class _BoundSpoke(Spoke):
         self._bound[0] = value
         self.spoke_to_hub(self._bound)
 
+    def get_serial_number(self):
+        return int(self._kill_sig[-1])
+
     def _got_kill_signal(self):
         """Looks for the kill signal and returns True if sent"""
         self.spoke_from_hub(self._kill_sig)
@@ -208,6 +215,8 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         self._bound = np.zeros(1 + 1)
         self._new_locals = False
 
+    def get_serial_number(self):
+        return int(self._locals[-1])
 
     def _got_kill_signal(self):
         """ returns True if a kill signal was received, 

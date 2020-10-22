@@ -79,7 +79,8 @@ if __name__ == "__main__":
                                    scenario_creator,
                                    creator_options={"cb_data": ScenCount})
     if 'persistent' in PHoptions["solvername"]:
-        solver.set_instance(ef, symbolic_solver_labels=True)    
+        solver.set_instance(ef, symbolic_solver_labels=True)
+    solver.options["mipgap"] = 0.01
     results = solver.solve(ef, tee=PHoptions["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
     #mpisppy.utils.sputils.ef_nonants_csv(ef, "vardump.csv")

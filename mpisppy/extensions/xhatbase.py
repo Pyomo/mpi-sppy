@@ -12,9 +12,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
         Any inherited class must implement the preiter0, postiter etc. methods
         
         Args:
-            opp (SPBase object): gives the problem that we bound
-            rank (int): mpi process rank in relevant comm
-            n_proc (int): number of processors in relevant comm
+            opt (SPBase object): gives the problem that we bound
 
         Attributes:
           scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
@@ -28,33 +26,9 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
         self.verbose = self.opt.options["verbose"]
 
         scen_count = len(opt.all_scenario_names)
+
+        self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
-        self.scenario_name_to_rank = dict()
-        if "branching_factors" not in self.opt.options:
-            avg = scen_count / self.n_proc
-            slices = [range(int(i*avg), int((i+1)*avg)) for i in range(self.n_proc)]
-            self.scenario_name_to_rank["ROOT"] = {
-                opt.all_scenario_names[i]: curr_rank
-                for (curr_rank, slc) in enumerate(slices) for i in slc
-            }
-        else:
-            # NOTE: integer-muliple restrictions on n_proc w/multi-stage
-            BFs = self.opt.options["branching_factors"]
-            # ... I want to make the map, but I don't know the node names...
-            # so I am going to asssume a naming convention <parent>_nodnum
-            # NOTE (May 2020): We don't really need to make the tree if we
-            #   assume that the scenarios are in depth-first order. TBD
-            tree = _ScenTree(BFs, opt.all_scenario_names)
-            self.scenario_name_to_rank, _, self.FirstRank\
-                = tree.scen_names_to_ranks(self.n_proc, self.rank)
-            """        # do a quick check
-            for s in local_scenarios:
-                if retval["ROOT"][s] != myrank:
-                    raise RuntimeError("Internal error: scenario={} is on"\
-                                   " rank={}, but xhat rank={}".format(\
-                                    s, myrank, retval["ROOT"][s]))
-            
-            """
         
      #**********
     def _try_one(self, snamedict, solver_options=None, verbose=False, restore_nonants=True):
@@ -107,18 +81,20 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                         nlens[ndn] = s._PySP_nlens[ndn]
                     if ndn not in xhats:
                         xhats[ndn] = None
+                    if ndn not in snamedict:
+                        raise RuntimeError(f"{ndn} not in snamedict={snamedict}")
                     if snamedict[ndn] == k:
                         # cache lists are just concated node lists
                         xhats[ndn] = [s._PySP_nonant_cache[i+cistart[ndn]]
                                       for i in range(nlens[ndn])]
             for ndn in cistart:  # local nodes
-                # the src_rank number needs to be w.r.t. this comm
-                if self.FirstRank is not None:
-                    # first rank on the comm (w.r.t. this cylinder)
-                    ndstart = self.FirstRank[ndn]
-                else:
-                    ndstart = 0
-                src_rank = self.scenario_name_to_rank[ndn][snamedict[ndn]] - ndstart
+                if snamedict[ndn] not in self.scenario_name_to_rank[ndn]:
+                    print (f"For ndn={ndn}, snamedict[ndn] not in "
+                           "self.scenario_name_to_rank[ndn]")
+                    print(f"snamedict[ndn]={snamedict[ndn]}")
+                    print(f"self.scenario_name_to_rank[ndn]={self.scenario_name_to_rank[ndn]}")
+                    raise RuntimeError("Bad scenario selection for xhat")
+                src_rank = self.scenario_name_to_rank[ndn][snamedict[ndn]]
                 try:
                     xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
                 except:

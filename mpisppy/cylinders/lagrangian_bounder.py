@@ -37,8 +37,19 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
             models, and hence would detect both of those things on its
             own--the Lagrangian spoke doesn't need to check again.  '''
 
-        # Compute the resulting bound
-        return self.opt.Ebound(verbose)
+        # Compute the resulting bound, checking to be sure
+        # the weights came from the same PH iteration
+        serial_number = self.get_serial_number()
+        bound, extra_sums  = self.opt.Ebound(verbose, extra_sum_terms=[serial_number])
+
+        serial_number_sum = int(round(extra_sums[0]))
+
+        total = int(self.intracomm.Get_size())*serial_number
+        if total == serial_number_sum:
+            return bound
+        elif self.rank_intra == 0:
+            print("WARNING: Lagrangian spokes out of snyc, consider changing mpisppy.cylinders.SPOKE_SLEEP_TIME")
+        return None
 
     def _set_weights_and_solve(self):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
@@ -59,7 +70,9 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         dk_iter = 1
         while not self.got_kill_signal():
             if self.new_Ws:
-                self.bound = self._set_weights_and_solve()
+                bound = self._set_weights_and_solve()
+                if bound is not None:
+                    self.bound = bound
             dk_iter += 1
 
     def finalize(self):

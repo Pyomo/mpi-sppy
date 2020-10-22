@@ -49,3 +49,12 @@ list for you.
 The scenario probability should be attached by `scenario_creator` as
 ``PySP_prob``. However, if you don't attach it, the scenarios are
 assumed to be equally likely.
+
+EF Supplement List
+------------------
+
+The function ``attach_root_node`` takes an optional argument ``nonant_ef_supple_list`` (that is passed through to the ``ScenarioNode`` constructor). This is a list similar to the nonanticipate Var list. These variables will not be given
+multipliers by algorithms such as PH, but will be given non-anticipativity
+constraints when an EF is formed, either to solve the EF or when bundles are
+formed. The idea is that for some problems, adding nonanticipativity constraints
+for auxilliary variables the EF for bundle has a tighter formulation.

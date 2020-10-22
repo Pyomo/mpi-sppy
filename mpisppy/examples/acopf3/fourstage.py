@@ -1,6 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
-# updated april 26
-# mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3
+# four stage test
+# mpiexec -np 8 python -m mpi4py forustage.py 2 2 2 1 0
 # (see the first lines of main() to change instances)
 import os
 import numpy as np
@@ -42,36 +42,42 @@ def main():
     # pglib_opf_case2000_tamu.m
     # do not use pglib_opf_case89_pegase
     egret_path_to_data = "/thirdparty/"+casename
-    number_of_stages = 3
-    stage_duration_minutes = [5, 15, 30]
+    number_of_stages = 4
+    stage_duration_minutes = [5, 15, 30, 30]
     if len(sys.argv) != number_of_stages + 3:
-        print ("Usage: python ccop_multistage bf1 bf2 iters scenperbun(!) solver")
+        print ("Usage: python fourstage.py bf1 bf2 bf3 iters scenperbun(!)")
         exit(1)
-    branching_factors = [int(sys.argv[1]), int(sys.argv[2])]
-    PHIterLimit = int(sys.argv[3])
-    scenperbun = int(sys.argv[4])
-    solvername = sys.argv[5]
+    branching_factors = [int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])]
+    PHIterLimit = int(sys.argv[4])
+    scenperbun = int(sys.argv[5])
+    solvername = sys.argv[6]
 
     seed = 1134
-    a_line_fails_prob = 0.1
+    a_line_fails_prob = 0.1   # try 0.2 for more excitement
     repair_fct = FixFast
     verbose = False
     # end options
     # create an arbitrary xhat for xhatspecific to use
     xhat_dict = {"ROOT": "Scenario_1"}
     for i in range(branching_factors[0]):
-        xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(1 + i*branching_factors[1])
+        st1scen = 1 + i*(branching_factors[1] + branching_factors[2])
+        xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(st1scen)
+        for j in range(branching_factors[2]):
+            st2scen = st1scen + j*branching_factors[2]
+            xhat_dict["ROOT_"+str(i)+'_'+str(j)] = "Scenario_"+str(st2scen)
 
     cb_data = dict()
     cb_data["convex_relaxation"] = True
     cb_data["epath"] = egret_path_to_data
     if cb_data["convex_relaxation"]:
         # for initialization solve
+        solvername = solvername
         solver = pyo.SolverFactory(solvername)
         cb_data["solver"] = None
         ##if "gurobi" in solvername:
             ##solver.options["BarHomogeneous"] = 1
     else:
+        solvername = "ipopt"
         solver = pyo.SolverFactory(solvername)
         if "gurobi" in solvername:
             solver.options["BarHomogeneous"] = 1
@@ -119,7 +125,7 @@ def main():
             PHoptions["iter0_solver_options"] = None
             PHoptions["iterk_solver_options"] = None
     else:
-        PHoptions["solvername"] = solvername  # needs to be ipopt
+        PHoptions["solvername"] = "ipopt"
         PHoptions["iter0_solver_options"] = None
         PHoptions["iterk_solver_options"] = None
     PHoptions["PHIterLimit"] = PHIterLimit

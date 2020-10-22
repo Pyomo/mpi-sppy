@@ -505,6 +505,7 @@ def option_string_to_dict(ostr):
 
 def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
     """ Determine the rank assignments that are made in spbase.
+    NOTE: Callers to this should call _scentree.scen_names_to_ranks
     Args:
         scen_count (int): number of scenarios
         n_proc (int): the number of intra ranks (within the cylinder)
@@ -528,15 +529,16 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
     # for now, we are treating two-stage as a special case
     if (BFs is None):
         avg = scen_count / n_proc
-        slices = [range(int(i * avg), int((i + 1) * avg)) for i in range(n_proc)]
+        slices = [list(range(int(i * avg), int((i + 1) * avg))) for i in range(n_proc)]
         return slices, None
     else:
+        # OCT 2020: this block is never triggered and would fail.
         # indecision as of May 2020 (delete this comment DLW)
         # just make sure things are consistent with what xhat will do...
         # TBD: streamline
         all_scenario_names = ["ID"+str(i) for i in range(scen_count)]
         tree = _ScenTree(BFs, all_scenario_names)
-        scenario_names_to_ranks, slices, _ = tree.scen_name_to_rank(n_proc, rank)
+        scenario_names_to_ranks, slices, = tree.scen_name_to_rank(n_proc, rank)
         return slices, scenario_names_to_ranks
 
 class _TreeNode():
@@ -556,13 +558,19 @@ class _TreeNode():
         bf = BFs[self.stage]        
         if self.stage < len(BFs)-1:
             numscens = scenlast - scenfirst + 1
+            assert numscens % bf == 0
+            scens_per_new_node = numscens // bf
+            first = scenfirst
+            ## FIX so scenfirst, scenlast is global
             for b in range(bf):
-                first  = b*numscens // bf
-                last = ((b+1)*numscens // bf) - 1
+                last = first+scens_per_new_node - 1 
                 self.kids.append(_TreeNode(self,
                                            first, last,
                                            BFs,
-                                           self.name+'_'+str(b)))
+                                           self.name+f'_{b}'))
+                first += scens_per_new_node
+            else: # no break
+                assert last == scenlast
 
                 
 class _ScenTree():
@@ -572,7 +580,6 @@ class _ScenTree():
         self.NumScens = len(ScenNames)
         assert(self.NumScens == prod(BFs))
         self.NumStages = len(BFs)
-        assert(self.NumStages > 1)
         self.BFs = BFs
         first = 0
         last = self.NumScens - 1
@@ -586,65 +593,74 @@ class _ScenTree():
         self.nonleaves = _nonleaves(self.rootnode)
         self.NonLeafTerminals = [nd for nd in self.nonleaves if nd.stage == len(BFs) - 1]
 
-    def scen_names_to_ranks(self, n_proc, myrank):
-        """ return scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
+    def scen_names_to_ranks(self, n_proc):
+        """ 
+        Args:
+            n_proc: number of ranks in the cylinder (i.e., intra)
+
+        Returns:
+            scenario_names_to_rank (dict of dict):
                 keys are comms (i.e., tree nodes); values are dicts with keys
-                that are scenario names and values that are ranks
+                that are scenario names and values that are ranks within that comm
+            slices (list of lists)
+                indices correspond to ranks in self.mpicomm and the values are a list
+                of scenario indices
+                rank -> list of scenario indices for that rank
+            list_of_ranks_per_scenario_idx (list)
+                indices are scenario indices and values are the rank of that scenario
+                within self.mpicomm
+                scenario index -> rank
+
+        NOTE:
+            comm names are the same as the corresponding scenario tree node name
 
         """
-        retval = dict()
+        scenario_names_to_rank = dict()  # scenario_name_to_rank dict of dicts
+        # one processor for the cylinder is a special case
         if n_proc == 1:
             for nd in self.nonleaves:
-                retval[nd.name] = {s: myrank for s in self.ScenNames}
-            return retval, None, None
+                scenario_names_to_rank[nd.name] = {s: 0 for s in self.ScenNames}
+            return scenario_names_to_rank, [list(range(self.NumScens))], [0]*self.NumScens
 
-        # First we assign ranks to terminal, non-leaf nodes.
-        TermNodes = self.NonLeafTerminals
-        FirstRank = dict()  # for each node, what is the first (intra) rank        
-        # non-trivial assignment
-        avg = n_proc / len(TermNodes)
-        if avg < 1:
-            raise RuntimeError("{} processors in a cylinder is not enough for {} terminal non-leaf nodes".\
-                               format(n_proc, len(TermNodes)))
-        TermRanks = [range(int(i*avg), int((i+1)*avg)) for i in range(len(TermNodes))]
-        ##print("debug TermRanks=",TermRanks)
-        FirstRank = {nd.name: int(i*avg) for i, nd in enumerate(TermNodes)}
-        ##print("debug ... so far FirstRank=",FirstRank)
-        # now assign scenarios to ranks
+        scen_count = len(self.ScenNames)
+        avg = scen_count / n_proc
 
-        # Also create a compatible list of slices (indexes correspond to ranks
-        # and the values are ranges first and last scen number
-        # The use of these slices is an artifact from two-stage
-        masterslices = list()
+        # rank -> list of scenario indices for that rank
+        slices = [list(range(int(i * avg), int((i + 1) * avg))) for i in range(n_proc)]
 
-        FirstRank["ROOT"] = 0
-        retval["ROOT"] = dict()
-        for i, nd in enumerate(TermNodes):
-            retval[nd.name] = dict()
-            ndnumscens = nd.scenlast - nd.scenfirst + 1
-            ndScenList = [self.ScenNames[s] for s in range(nd.scenfirst, nd.scenlast+1)]
-            avg = ndnumscens / len(TermRanks[i])  # scens per rank
-            # slice[k] gives list of relative scenario numbers for rank k
-            slices = [range(int(j*avg), int((j+1)*avg)) for j in range(len(TermRanks[i]))]
-            # master slices wants almost the same, but not relative
-            masterslices.append([range(nd.scenfirst+int(j*avg), nd.scenfirst+int((j+1)*avg)) for j in range(len(TermRanks[i]))])
-            for k, slist in enumerate(slices):
-                for s in slist:
-                    retval[nd.name][ndScenList[s]] = TermRanks[i][k]
-                    retval["ROOT"][ndScenList[s]] = TermRanks[i][k]
-        # now it is easy to assign the rest of the scenario tree
-        for nd in self.nonleaves:
-            if nd not in TermNodes and nd.name != "ROOT":
-                retval[nd.name] = dict()
-                ndScenList = [self.ScenNames[s] for s in range(nd.scenfirst, nd.scenlast+1)]
-                for s in ndScenList:
-                    retval[nd.name][s] = retval["ROOT"][s]
-                # TBD (May 2020): test this
-                firstchild = nd.kids[0]
-                FirstRank[nd.name] = FirstRank[firstchild.name]
+        # scenario index -> rank
+        list_of_ranks_per_scenario_idx = [ rank for rank, scen_idxs in enumerate(slices) for _ in scen_idxs ]
 
-        return retval, masterslices, FirstRank
+        scenario_names_to_rank["ROOT"] = { s: rank for s,rank in zip(self.ScenNames, list_of_ranks_per_scenario_idx) }
+         
+        def _recurse_do_node(node):
+            for child in node.kids:
 
+                first_scen_idx = child.scenfirst
+                last_scen_idx = child.scenlast
+
+                ranks_in_node = list_of_ranks_per_scenario_idx[first_scen_idx:last_scen_idx+1]
+                minimum_rank_in_node = ranks_in_node[0]
+
+                # IMPORTANT:
+                # this accords with the way SPBase.create_communicators assigns the "key" when
+                # creating its comm for this node. E.g., the key is the existing rank, which
+                # will then be offset by the minimum rank. As the ranks within each node are
+                # contiguous, this is enough to infer the rank each scenario will have in this
+                # node's comm
+                within_comm_ranks_in_node = [(rank-minimum_rank_in_node) for rank in ranks_in_node]
+
+                scenarios_in_nodes = self.ScenNames[first_scen_idx:last_scen_idx+1]
+
+                scenario_names_to_rank[child.name] = { s : rank for s,rank in zip(scenarios_in_nodes, within_comm_ranks_in_node) }
+
+                if child not in self.NonLeafTerminals:
+                    _recurse_do_node(child)
+
+        _recurse_do_node(self.rootnode)
+
+        return scenario_names_to_rank, slices, list_of_ranks_per_scenario_idx
+    
     
 ######## Utility to attach the one and only node to a two-stage scenario #######
 def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
@@ -665,10 +681,61 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
                                    nonant_ef_suppl_list = nonant_ef_suppl_list)
     ]
 
-"""
+### utilities to check the slices and the map ###
+def check4losses(numscens, BFs,
+                 scenario_names_to_rank,slices,list_of_ranks_per_scenario_idx):
+    """ Check the data structures; gag and die if it looks bad.
+    Args:
+        numscens (int): number of scenarios
+        BFs (list of int): branching factors
+        scenario_names_to_rank (dict of dict):
+            keys are comms (i.e., tree nodes); values are dicts with keys
+            that are scenario names and values that are ranks within that comm
+        slices (list of lists)
+            indices correspond to ranks in self.mpicomm and the values are a list
+            of scenario indices
+            rank -> list of scenario indices for that rank
+        list_of_ranks_per_scenario_idx (list)
+            indices are scenario indices and values are the rank of that scenario
+            within self.mpicomm
+            scenario index -> rank
+
+    """
+
+    present = [False for _ in range(numscens)]
+    for rank, scenlist in enumerate(slices):
+        for scen in scenlist:
+            present[scen] = True
+    missingsome = False
+    for scen, there in enumerate(present):
+        if not there:
+            print(f"Scenario {scen} is not in slices")
+            missingsome = True
+    if missingsome:
+        raise RuntimeError("Internal error: slices is not correct")
+
+    # not stage presence...
+    stagepresents = {stage: [False for _ in range(numscens)] for stage in range(len(BFs))}
+    # loop over the entire structure, marking those found as present
+    for nodename, scenlist in scenario_names_to_rank.items():
+        stagenum = nodename.count('_')
+        for s in scenlist:
+            snum = int(s[8:])
+            stagepresents[stagenum][snum] = True
+    missingone = False
+    for stage in stagepresents:
+        for scen, there in enumerate(stagepresents[stage]):
+            if not there:
+                print(f"Scenario number {scen} missing from stage {stage}.")
+                missingsome = True
+    if missingsome:
+        raise RuntimeError("Internal error: scenario_name_to_rank")
+    print("check4losses: OK")    
+    
 if __name__ == "__main__":
-    BFs = [2,3,3]
-    scennames = ["Scenario"+str(i) for i in range(prod(BFs))]
+    BFs = [2,2,2,3]
+    numscens = prod(BFs)
+    scennames = ["Scenario"+str(i) for i in range(numscens)]
     testtree = _ScenTree(BFs, scennames)
     print("nonleaves:")
     for nd in testtree.nonleaves:
@@ -677,8 +744,9 @@ if __name__ == "__main__":
     for nd in testtree.NonLeafTerminals:
         print("   ", nd.name)
     n_proc = 8
-    sntr = testtree.scen_name_to_rank(n_proc)
+    sntr, slices, ranks_per_scenario = testtree.scen_names_to_ranks(n_proc)
     print("map:")
     for ndn,v in sntr.items():
         print(ndn, v)
-"""
+    print(f"slices: {slices}")
+    check4losses(numscens, BFs, sntr, slices, ranks_per_scenario)

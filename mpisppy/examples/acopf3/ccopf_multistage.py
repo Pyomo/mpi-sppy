@@ -262,13 +262,13 @@ if __name__ == "__main__":
     import mpi4py.MPI as mpi
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
-    solvername = "gurobi"
+    solvername = "cplex"
     print(f"Solving with {solvername}")
     solver = pyo.SolverFactory(solvername)
     if "gurobi" in solvername:
         solver.options["BarHomogeneous"] = 1
 
-    casename = "pglib-opf-master/pglib_opf_case118_ieee.m"
+    casename = "pglib-opf-master/pglib_opf_case14_ieee.m"
     # pglib_opf_case3_lmbd.m
     # pglib_opf_case118_ieee.m
     # pglib_opf_case300_ieee.m
@@ -277,24 +277,31 @@ if __name__ == "__main__":
     # do not use pglib_opf_case89_pegase
     # this path starts at egret
     egret_path_to_data = "/thirdparty/"+casename
-    number_of_stages = 3
-    stage_duration_minutes = [5, 15, 30]
 
-    if len(sys.argv) != number_of_stages:
-        print ("Usage: python ccop_multistage bf1 bf")
-        print ("e.g. python ccop_multistage 2 3")
+    if len(sys.argv) != 4:
+        print ("Usage: python ccop_multistage bf1 bf2 bf3")
+        print ("e.g., for three-stage use python ccop_multistage 2 3 0")
         exit(1)
-    branching_factors = [int(sys.argv[1]), int(sys.argv[2])]
+    if int(sys.argv[3]) == 0:
+        number_of_stages = 3
+        stage_duration_minutes = [5, 15, 30]
+        branching_factors = [int(sys.argv[1]), int(sys.argv[2])]
+        allbutlast = branching_factors[0]
+    else:
+        number_of_stages = 4
+        stage_duration_minutes = [5, 15, 30, 30]
+        branching_factors = [int(sys.argv[1]), int(sys.argv[2]), int(sys.argv[3])]
+        allbutlast = branching_factors[0] * branching_factors[1]
 
+    nscen = allbutlast * branching_factors[number_of_stages-2]
     seed = 1134
     a_line_fails_prob = 0.2
     repair_fct = FixFast
     verbose = False
-    if branching_factors[0] % n_proc != 0 and n_proc % branching_factors[0] != 0:
-        raise RuntimeError("bf1={} must divide n_proc={}, or vice-versa".\
-                           format(branching_factors[0], n_proc))
-    nscen = branching_factors[0] * branching_factors[1]
-    # TBD: comment this out and try -np 4 with bfs of 2 3 (strange sense error)
+    if allbutlast % n_proc != 0 and n_proc % allbutlast != 0:
+        raise RuntimeError("allbutlast={} must divide n_proc={}, or vice-versa".\
+                           format(allbutlast, n_proc))
+    # TBD: comment this out and try -np 4 with bfs of 2 3 0 (strange sense error)
     if nscen % n_proc != 0:
         raise RuntimeError("nscen={} must be a multiple of n_proc={}".\
                            format(nscen, n_proc))

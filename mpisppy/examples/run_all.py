@@ -133,7 +133,9 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--solver-name={}".format(solver_name))
 
 if egret_avail():
-    do_one("acopf3", "ccopf2wood.py", 2, "2 3 2 0")
+    do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
+    do_one("acopf3", "fourstage.py", 4, f"2 2 2 1 0 {solver_name}")        
+
 
 if not nouc and egret_avail():
     print("\nSlow runs ahead...\n")

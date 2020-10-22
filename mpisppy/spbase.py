@@ -86,7 +86,16 @@ class SPBase(object):
         if self.rank_global == 0:
             tt_timer.toc("Start SPBase.__init__" ,delta=False)
 
+        # This doesn't seemed to be checked anywhere else
+        if self.n_proc > len(self.all_scenario_names):
+            raise RuntimeError("More ranks than scenarios")
+
         # Call various initialization methods
+        if "branching_factors" in self.options:
+            self.branching_factors = self.options["branching_factors"]
+        else:
+            self.branching_factors = [len(self.all_scenario_names)]
+        self.calculate_scenario_ranks()
         self.attach_scenario_rank_maps()
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
             self.assign_bundles()
@@ -132,6 +141,31 @@ class SPBase(object):
                 "model sense (minimize or maximize)"
             )
 
+    def calculate_scenario_ranks(self):
+        """ Populate the following attributes
+            1. self.scenario_names_to_rank (dict of dict):
+                keys are comms (i.e., tree nodes); values are dicts with keys
+                that are scenario names and values that are ranks within that comm
+
+            2. self._rank_slices (list of lists)
+                indices correspond to ranks in self.mpicomm and the values are a list
+                of scenario indices
+                rank -> list of scenario indices for that rank
+
+            3. self._scenario_slices (list)
+                indices are scenario indices and values are the rank of that scenario
+                within self.mpicomm
+                scenario index -> rank
+
+            4. self._scenario_tree (instance of sputils._ScenTree)
+
+        """
+        tree = sputils._ScenTree(self.branching_factors, self.all_scenario_names)
+
+        self.scenario_names_to_rank, self._rank_slices, self._scenario_slices =\
+                tree.scen_names_to_ranks(self.n_proc)
+        self._scenario_tree = tree
+
     def attach_scenario_rank_maps(self):
         """ Populate the following attribute
 
@@ -148,10 +182,9 @@ class SPBase(object):
         """
         scen_count = len(self.all_scenario_names)
 
-        slices,_ = sputils.scens_to_ranks(scen_count, self.n_proc, self.rank)
         # list of scenario names owned locally
         self.local_scenario_names = [
-            self.all_scenario_names[i] for i in slices[self.rank]
+            self.all_scenario_names[i] for i in self._rank_slices[self.rank]
         ]
 
     def assign_bundles(self):
@@ -169,7 +202,7 @@ class SPBase(object):
             raise RuntimeError(
                 "Not enough scenarios to satisfy the bundles_per_rank requirement"
             )
-        slices, _ = sputils.scens_to_ranks(scen_count, self.n_proc, self.rank)
+        slices = self._rank_slices
 
         # dict: rank number --> list of scenario names owned by rank
         names_at_rank = {
@@ -260,16 +293,32 @@ class SPBase(object):
                 nonleafnodes[node.name] = node  # might be assigned&reassigned
 
         # loop over all nodes and make the comms (split requires all ranks)
-        for nodename, node in nonleafnodes.items():
+        # make sure we loop in the same order, so every rank iterate over
+        # the nodelist
+        for nodename in self.all_nodenames:
             if nodename == "ROOT":
-                newcomm = self.mpicomm
-            else:
+                self.comms["ROOT"] = self.mpicomm
+            elif nodename in nonleafnodes:
                 nodenumber = sputils.extract_num(nodename)
-                parent_name = node.parent_name
-                logger.debug(f"  splitting {parent_name} to color {nodenumber} on rank {self.rank} for {nodename}")
-                newcomm = self.comms[parent_name].Split(color=nodenumber, key=self.rank)
+                # IMPORTANT: See note in sputils._ScenTree.scen_names_to_ranks. Need to keep
+                #            this split aligned with self.scenario_names_to_rank
+                self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.rank)
+            else: # this rank is not included in the communicator
+                self.mpicomm.Split(color=MPI.UNDEFINED, key=self.n_proc)
 
-            self.comms[nodename] = newcomm
+        ## ensure we've set things up correctly for all comms
+        for nodename, comm in self.comms.items():
+            scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
+            for sname, rank in scenario_names_to_comm_rank.items():
+                if sname in self.local_scenarios:
+                    assert rank == comm.Get_rank()
+
+        ## ensure we've set things up correctly for all local scenarios
+        for sname in self.local_scenarios:
+            for nodename, comm in self.comms.items():
+                scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
+                if sname in scenario_names_to_comm_rank:
+                    assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
 
         # check the node names given by the scenarios
         for nodename in nonleafnodes.keys():
@@ -277,11 +326,7 @@ class SPBase(object):
                 raise RuntimeError(f"Tree node '{nodename}' not in node list {self.all_nodenames}")
 
     def set_multistage(self):
-        for (_, scenario) in self.local_scenarios.items():
-            if (len(scenario._PySPnode_list) != 1):
-                self.multistage = True
-                return
-        self.multistage = False
+        self.multistage = (len(self.all_nodenames) > 1)
 
     def _look_before_leap(self, scen, addlist):
         """ utility to check before attaching something to the user's model

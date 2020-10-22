@@ -7,6 +7,15 @@ from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.examples import baseparsers
 from mpisppy.examples import vanilla
 
+import mpisppy.cylinders as cylinders
+
+# For this problem, the subproblems are
+# small and take no time to solve. The
+# default SPOKE_SLEEP_TIME of 0.1 *causes*
+# synchronization issues in this case, so
+# we reduce it so as not to dominate the
+# time spent for cylinder synchronization
+cylinders.SPOKE_SLEEP_TIME = 0.0001
 
 def _parse_args():
     parser = baseparsers.make_multistage_parser()
@@ -61,8 +70,8 @@ def main():
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               cb_data=cb_data,
                                               rho_setter = rho_setter)
-    lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
-    lagrangian_spoke["opt_kwargs"]["PHoptions"]["branching_factors"] = BFs
+        lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
+        lagrangian_spoke["opt_kwargs"]["PHoptions"]["branching_factors"] = BFs
 
     # xhat looper bound spoke
     xhat_scenario_dict = {"ROOT": "Scen1",
