@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 ''' An extension for warm-starting the farmer problem with FWPH weights.
     Right now there is a lot of extra crap floating around in here to be

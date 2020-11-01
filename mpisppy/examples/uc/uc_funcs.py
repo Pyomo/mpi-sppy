@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # April 2020: DLW asks: why are we using an environment variable and cb_data?
 # (maybe there is a super-computer reason)

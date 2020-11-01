@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # Indepedent Lagrangian that takes x values as input and
 # updates its own W.

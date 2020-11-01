@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 """ Conventional wisdom seems to be that we should use Put calls locally (i.e.
     a process should Put() into its own buffer), and Get calls for

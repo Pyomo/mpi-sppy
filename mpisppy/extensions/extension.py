@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 ''' A template for creating PH_extension.py files
     NOTE: we pass in the ph object, so extensions can wreck everything

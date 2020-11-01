@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # JPW and DLW; July 2019; ccopf create scenario instances for line outages
 # extended Fall 2019 by DLW

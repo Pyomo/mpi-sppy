@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # update April 2020: BUT this really needs upper and lower bound spokes
 # dlw February 2019: PySP 2 for the sslp example

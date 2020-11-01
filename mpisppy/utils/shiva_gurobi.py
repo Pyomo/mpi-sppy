@@ -1,3 +1,5 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
+# This software is distributed under the 3-clause BSD License.
 # For use by DLW on shiva; export the Gurobi license file location
 
 from mpi4py import MPI

@@ -1,3 +1,4 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 import mpisppy.examples.uc.uc_funcs as uc_funcs
 import mpisppy.fwph.fwph_warm_starts.uc.ucext import UCExtension

@@ -1,23 +1,21 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 import inspect
+import numpy as np
 import collections
+import mpi4py.MPI as mpi
 import time
 import datetime as dt
-import logging
-import math
-
-import numpy as np
 import pyomo.environ as pyo
-import mpi4py.MPI as mpi
-
-import mpisppy.utils.sputils as sputils
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spbase
+import logging
+import mpisppy.utils.sputils as sputils
 
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from pyomo.pysp.phutils import find_active_objective
 
+from mpi4py import MPI
 from mpisppy import tt_timer
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
@@ -185,7 +183,6 @@ class PHBase(mpisppy.spbase.SPBase):
                     [node_concats["OnlyReduce"][nodename], mpi.DOUBLE],
                     op=mpi.SUM)
         else: # async
-            # PROBABLY never used... (DLW 2020)
             secs_sofar = (dt.datetime.now() - self.startdt).total_seconds()
             # only this rank puts a time for this rank, so the sum is a report
             local_concats["OnlyReduce"]["ROOT"][2*nlens["ROOT"]+self.rank] \
@@ -299,25 +296,24 @@ class PHBase(mpisppy.spbase.SPBase):
             float:
                 The expected objective function value
         """
-        local_Eobjs = []
+        local_Eobj = np.zeros(1)
+        global_Eobj = np.zeros(1)
         for k,s in self.local_scenarios.items():
             if self.bundling:
                 objfct = self.saved_objs[k]
             else:
                 objfct = find_active_objective(s, True)
-            local_Eobjs.append(s.PySP_prob * pyo.value(objfct))
+            local_Eobj[0] += s.PySP_prob * pyo.value(objfct)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
                        .format(k, s.PySP_prob, pyo.value(objfct), objfct.expr))
 
-        local_Eobj = np.array([math.fsum(local_Eobjs)])
-        global_Eobj = np.zeros(1)
         self.mpicomm.Allreduce(local_Eobj, global_Eobj, op=mpi.SUM)
 
         return global_Eobj[0]
 
-    def Ebound(self, verbose=False, extra_sum_terms=None):
+    def Ebound(self, verbose=False):
         """ Compute the expected outer bound across all scenarios.
 
         Note: 
@@ -327,37 +323,25 @@ class PHBase(mpisppy.spbase.SPBase):
         Args:
             verbose (boolean):
                 If True, displays verbose output. Default False.
-            extra_sum_terms: (None or iterable)
-                If iterable, additional terms to put in the floating-point
-                sum reduction
 
         Returns:
             float:
                 The expected objective outer bound.
         """
-        local_Ebounds = []
+        local_Ebound = np.zeros(1)
+        global_Ebound = np.zeros(1)
+
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.rank))
-            local_Ebounds.append(s.PySP_prob * s._PySP_ob)
+            local_Ebound[0] += s.PySP_prob * s._PySP_ob
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\
                        .format(k, s.PySP_prob, s._PySP_ob))
-
-        if extra_sum_terms is not None:
-            local_Ebound_list = [math.fsum(local_Ebounds)] + list(extra_sum_terms)
-        else:
-            local_Ebound_list = [math.fsum(local_Ebounds)]
-
-        local_Ebound = np.array(local_Ebound_list)
-        global_Ebound = np.zeros(len(local_Ebound_list))
         
         self.mpicomm.Allreduce(local_Ebound, global_Ebound, op=mpi.SUM)
 
-        if extra_sum_terms is None:
-            return global_Ebound[0]
-        else:
-            return global_Ebound[0], global_Ebound[1:]
+        return global_Ebound[0]
 
     def avg_min_max(self, compstr):
         """ Can be used to track convergence progress.
