@@ -16,9 +16,9 @@ packages = find_packages()
 
 setup(
     name='mpi-sppy',
-    version='0.1',
+    version='0.5',
     description="mpi-sppy",
-    url='https://github.com/mpi-sppy/mpi-sppy',
+    url='https://github.com/Pyomo/mpi-sppy',
     author='David Woodruff',
     author_email='dlwoodruff@ucdavis.edu',
     packages=packages,
