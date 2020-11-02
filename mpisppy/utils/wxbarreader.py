@@ -27,9 +27,9 @@
 
 import mpisppy.utils.wxbarutils
 import os # For checking if files exist
-import mpisppy.extension
+import mpisppy.extensions.extension
 
-class WXBarReader(mpisppy.extension.Extension):
+class WXBarReader(mpisppy.extensions.extension.Extension):
     """ Extension class for reading W values
     """
     def __init__(self, ph, rank, n_proc):

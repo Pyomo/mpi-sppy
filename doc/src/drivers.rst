@@ -61,7 +61,7 @@ No Spokes
 
 There is a ``sizes`` example that does not use the hub and spoke
 system, it just calls PH (or the EF) without any spokes. The code can
-be found in ``mpisppy.examples.sizes.test_sizes.py`` and it also
+be found in ``mpisppy.examples.sizes.sizes_demo.py`` and it also
 demonstrates the use of extensions (see :ref:`Extensions`).
 
 Hub and Spokes

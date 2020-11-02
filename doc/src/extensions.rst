@@ -35,21 +35,25 @@ This is a good extension to look at as a first example. It takes a
 dictionary with iteration numbers and mipgaps as input and changes the
 mipgap at the corresponding iterations. The dictionary is provided in
 the options dictionary in ``["gapperoptions"]["mipgapdict"]``.  There
-is an example of its use in ``mpisppy.examples.sizes.test_sizes.py``
+is an example of its use in ``mpisppy.examples.sizes.sizes_demo.py``
 
 fixer.py
 ^^^^^^^^
 
 This extension provides methods for fixing variables (usually integers) for
 which all scenarios have agreed for some number of iterations. There
-is an example of its use in ``mpisppy.examples.sizes.test_sizes.py``
+is an example of its use in ``mpisppy.examples.sizes.sizes_demo.py``
 
 xhat
 ^^^^
 
 Most of the xhat methods can be used as an extension instead of being used
-as a spoke.
+as a spoke, when that is desired (e.g. for serial applications).
 
+WXBarWriter and WXBarReader
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
+There is an extension to write xbar and W values and another to read them.
+An example of their use is shown in ``mpisppy.examples.sizes.sizes_demo.py``
 
 

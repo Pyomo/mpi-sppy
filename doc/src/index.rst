@@ -15,7 +15,6 @@ Run `setup.py` from the mpi-sppy directory.
 .. toctree::
    :maxdepth: 2
 
-   DELETETHISSOMEDAY.rst
    quick_start.rst
    install_mpi.rst
    overview.rst
@@ -27,7 +26,6 @@ Run `setup.py` from the mpi-sppy directory.
    extensions.rst
    pysp.rst
    ef.rst
-   aph.rst
    contributors.rst
    api.rst
 

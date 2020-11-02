@@ -26,9 +26,9 @@
 import os
 import pyomo.environ as pyo
 import mpisppy.utils.wxbarutils
-import mpisppy.extension
+import mpisppy.extensions.extension
 
-class WXBarWriter(mpisppy.extension.Extension):
+class WXBarWriter(mpisppy.extensions.extension.Extension):
     """ Extension class for writing the W values
     """
     def __init__(self, ph, rank, n_proc):

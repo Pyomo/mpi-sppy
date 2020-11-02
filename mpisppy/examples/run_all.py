@@ -121,7 +121,7 @@ do_one("sizes",
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
-do_one("sizes", "test_sizes.py", 1, " {}".format(solver_name))
+do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
        4,
