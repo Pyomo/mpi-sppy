@@ -1,12 +1,21 @@
 Quick Start
 ===========
 
+If you installed from github, run `setup.py` from the mpi-sppy directory.
+
+::
+   
+   python setup.py develop
+
+This step is not needed if you installed using pip.
+
+
 Verify installation
 -------------------
 
 Getting started depends on how you intend to use ``mpi-sspy`` but
 verifying installation is a common task. If you installed ``mpi-sspy`` from
-github, you can verify that you installed it and a solver by starting a
+github,you can verify that you installed it and a solver by starting a
 terminal. Then cd to the `mpi-sspy` directory and issue the following
 terminal commands:
 

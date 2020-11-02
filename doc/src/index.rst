@@ -5,13 +5,6 @@ Support for solving multi-stage stochastic programs based on a
 scenario discretization of the uncertainty. For parallelization,
 MPI is used.
 
-Run `setup.py` from the mpi-sppy directory.
-
-::
-   
-   python setup.py develop
-
-
 .. toctree::
    :maxdepth: 2
 
