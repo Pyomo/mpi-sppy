@@ -3,6 +3,8 @@ mpi-sppy
 
 Optimization under uncertainty for Pyomo models.
 
+Documentation is available at `readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>'_
+
 MPI
 ^^^
 
