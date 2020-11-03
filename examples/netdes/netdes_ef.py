@@ -3,7 +3,7 @@
 ''' Solve the EF of the network problems
 '''
 from mpisppy.opt.ef import ExtensiveForm
-from mpisppy.examples.netdes.netdes import scenario_creator
+from netdes import scenario_creator
 import pyomo.environ as pyo
 
 def main():

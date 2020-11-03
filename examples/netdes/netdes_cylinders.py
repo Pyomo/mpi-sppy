@@ -3,11 +3,11 @@
 import sys
 import os
 import copy
-import mpisppy.examples.netdes.netdes as netdes
+import netdes
 
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 

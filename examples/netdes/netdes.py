@@ -11,7 +11,7 @@ import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import numpy as np
 
-from mpisppy.examples.netdes.parse import parse
+import parse
 
 
 def scenario_creator(scenario_name, node_names=None, cb_data=None):
