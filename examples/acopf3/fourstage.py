@@ -13,11 +13,12 @@ from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
+
 # the problem
-import mpisppy.examples.acopf3.ACtree as etree
-from mpisppy.examples.acopf3.ccopf_multistage import pysp2_callback,\
+import ACtree as etree
+from ccopf_multistage import pysp2_callback,\
     scenario_denouement, _md_dict, FixFast, FixNever, FixGaussian
-import  mpisppy.examples.acopf3.rho_setter as rho_setter
+import rho_setter
 
 import pyomo.environ as pyo
 import socket

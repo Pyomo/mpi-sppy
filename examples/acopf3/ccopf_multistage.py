@@ -9,8 +9,8 @@ from egret.data.model_data import ModelData
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.examples.acopf3.ACtree as ET
 
+import ACtree as ET
 
 import os
 import sys
