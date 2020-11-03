@@ -1,8 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 import os
-import mpisppy.examples.sizes.models.ReferenceModel as ref
-import mpisppy.examples.sizes.sizes
+import models.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
 def scenario_creator(scenario_name, node_names=None, cb_data=None):
@@ -16,7 +15,7 @@ def scenario_creator(scenario_name, node_names=None, cb_data=None):
             "cb_data passed to scenario counter " "must equal either 3 or 10"
         )
 
-    sizes_dir = os.path.dirname(mpisppy.examples.sizes.sizes.__file__)
+    sizes_dir = os.path.dirname(__file__)
     datadir = os.sep.join((sizes_dir, f"SIZES{cb_data}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"

@@ -14,10 +14,10 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatlooper import XhatLooper
 from mpisppy.extensions.xhatclosest import XhatClosest
-from mpisppy.examples.sizes.sizes import scenario_creator, \
-                                       scenario_denouement, \
-                                       _rho_setter, \
-                                       id_fix_list_fct
+from sizes import scenario_creator, \
+                  scenario_denouement, \
+                  _rho_setter, \
+                  id_fix_list_fct
 
 ScenCount = 10  # 3 or 10
 
