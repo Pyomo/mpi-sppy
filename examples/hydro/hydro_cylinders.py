@@ -2,11 +2,11 @@
 # This software is distributed under the 3-clause BSD License.
 # general example driver for the hydro example with cylinders
 
-import mpisppy.examples.hydro.hydro as hydro
+import hydro
 
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 
 import mpisppy.cylinders as cylinders
 

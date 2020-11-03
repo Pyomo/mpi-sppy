@@ -225,7 +225,7 @@ def scenario_creator(scenario_name,
     """
     if (data_path is None):
         hydro_dir = os.path.dirname(os.path.abspath(__file__))
-        data_path = os.sep.join([hydro_dir, 'PySP1', 'scenariodata'])
+        data_path = os.sep.join([hydro_dir, 'PySP', 'scenariodata'])
     assert(node_names is None)
     assert(cb_data is not None)
 
