@@ -6,8 +6,8 @@ import mpisppy.examples.uc.uc_funcs as uc
 
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 from mpisppy.cylinders.hub import LShapedHub
 from mpisppy.opt.lshaped import LShapedMethod
 

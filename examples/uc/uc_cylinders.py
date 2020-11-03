@@ -8,15 +8,15 @@
 # Notice also that this uses MutliPHExtensions
 import sys
 import json
-import mpisppy.examples.uc.uc_funcs as uc
+import uc_funcs as uc
 
 from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.extensions.extension import MultiPHExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 

@@ -3,12 +3,12 @@
 import sys
 import os
 import copy
-import mpisppy.examples.sslp.sslp as sslp
+import sslp
 
 from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.extensions.fixer import Fixer
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 
 
 def _parse_args():

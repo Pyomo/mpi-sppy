@@ -11,9 +11,9 @@ import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.examples.sslp.model.ReferenceModel as ref
 import mpisppy.extensions.fixer as fixer
 
+import model.ReferenceModel as ref
 
 def scenario_creator(scenario_name, node_names=None, cb_data=None):
     """ The callback needs to create an instance and then attach

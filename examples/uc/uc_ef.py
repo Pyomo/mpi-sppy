@@ -1,7 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 import sys
-import mpisppy.examples.uc.uc_funcs as uc
+import uc_funcs as uc
 import pyomo.environ as pyo
 
 from mpisppy.opt.ef import ExtensiveForm

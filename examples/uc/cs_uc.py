@@ -26,12 +26,13 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.log import setup_logger
+
 # the problem
-from mpisppy.examples.uc.uc_funcs import scenario_creator, \
+from uc_funcs import scenario_creator, \
     scenario_denouement, \
     _rho_setter, \
     id_fix_list_fct
-from mpisppy.log import setup_logger
 
 # mpi setup
 fullcomm = mpi.COMM_WORLD
