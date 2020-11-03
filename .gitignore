@@ -127,3 +127,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+# .svn
+.svn/
+
+# .DS_Store
+.DS_Store
