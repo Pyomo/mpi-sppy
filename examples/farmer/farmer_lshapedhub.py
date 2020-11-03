@@ -3,12 +3,12 @@
 # general example driver for farmer with cylinders and an l-shape hub
 # NOTE: as of June 2020, it does not use the vanilla cylinders
 
-import mpisppy.examples.farmer.farmer as farmer
+import farmer
 
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 from mpisppy.cylinders.hub import LShapedHub
 from mpisppy.opt.lshaped import LShapedMethod
 

@@ -29,9 +29,10 @@ from mpisppy.utils.xhat_tryer import XhatTryer
 
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-# the problem
 from mpisppy.log import setup_logger
-import mpisppy.examples.farmer.farmer as farmer
+
+# the problem
+import farmer
 
 import pyomo.environ as pyo
 

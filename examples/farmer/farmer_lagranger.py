@@ -2,13 +2,13 @@
 # This software is distributed under the 3-clause BSD License.
 # demonstrate the special lagranger spoke
 
-import mpisppy.examples.farmer.farmer as farmer
+import farmer
 import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.examples import baseparsers
-from mpisppy.examples import vanilla
+from mpisppy.utils import baseparsers
+from mpisppy.utils import vanilla
 
 
 def _parse_args():
