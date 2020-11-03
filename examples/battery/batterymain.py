@@ -2,7 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 # updated April 2020 so it executes, but this needs a three driver
 from mpisppy.opt.ph import PH
-from mpisppy.examples.battery.battery import scenario_creator, scenario_denouement
+from battery import scenario_creator, scenario_denouement
 
 ###from mpisppy.examples.battery.batteryext import BatteryExtension
 
