@@ -89,16 +89,16 @@ class Test_sizes(unittest.TestCase):
         
     def test_disable_tictoc(self):
         import mpisppy.utils.sputils as utils
+        print("disabling tictoc output")
         utils.disable_tictoc_output()
         # now just do anything that would make a little tictoc output
-        print("start with tictoc disabled")
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 0
 
         ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
                                     scenario_creator, scenario_denouement,
                                     cb_data=3)
-        print("end with tictoc disabled")
+        print("reeanabling tictoc ouput")
         utils.reenable_tictoc_output()
 
 
