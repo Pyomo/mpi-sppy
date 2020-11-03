@@ -4,7 +4,7 @@
 from mpisppy.opt.ph import PH
 from battery import scenario_creator, scenario_denouement
 
-###from mpisppy.examples.battery.batteryext import BatteryExtension
+###from batteryext import BatteryExtension
 
 def main():
     cb_data = {

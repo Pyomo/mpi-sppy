@@ -2,7 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 # general example driver for farmer with cylinders
 
-import mpisppy.examples.farmer.farmer as farmer
+import farmer
 import mpisppy.cylinders
 
 # Make it all go
