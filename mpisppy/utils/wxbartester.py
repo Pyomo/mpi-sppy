@@ -3,7 +3,9 @@
 ''' Driver script to test the w/xbar read/write extensions using UC 
 '''
 
-import mpisppy.examples.uc.uc_funcs as uc_funcs
+import mpisppy.tests.examples.uc.uc_funcs as uc_funcs
+# this version is locked to three scenarios
+
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.utils.wxbarreader import WXBarReader
 import os
@@ -18,7 +20,6 @@ def read_test():
     scenario_creator    = uc_funcs.pysp2_callback
     scenario_denouement = nonsense
     scenario_rhosetter  = uc_funcs.scenario_rhos
-    os.environ[uc_funcs.UC_NUMSCENS_ENV_VAR] = 'examples/uc/' + str(scen_count)
 
     PH_options = {
         'solvername': 'gurobi',
@@ -33,21 +34,21 @@ def read_test():
         'init_W_fname': 'david/weights.csv', # Path to the weight files
         'init_separate_W_files': False,
         'init_Xbar_fname': 'david/somexbars.csv',
+        'PH_extensions':WXBarReader,
+        'rho_setter':scenario_rhosetter,
     }
 
     names = ['Scenario' + str(i+1) for i in range(scen_count)]
 
     ph = PH(PH_options, names, scenario_creator, scenario_denouement)
 
-    conv, obj, bound = ph.ph_main(PH_extensions=WXBarReader,
-                                    rho_setter=scenario_rhosetter)
+    conv, obj, bound = ph.ph_main()
 
 def write_test():
     scen_count          = 3
     scenario_creator    = uc_funcs.pysp2_callback
     scenario_denouement = nonsense
     scenario_rhosetter  = uc_funcs.scenario_rhos
-    os.environ[uc_funcs.UC_NUMSCENS_ENV_VAR] = 'examples/uc/' + str(scen_count)
 
     PH_options = {
         'solvername': 'gurobi',
@@ -62,14 +63,15 @@ def write_test():
         'W_fname': 'david/weights.csv',
         'separate_W_files': False,
         'Xbar_fname': 'somexbars.csv',
+        'PH_extensions':WXBarReader,
+        'rho_setter':scenario_rhosetter,
     }
 
     names = ['Scenario' + str(i+1) for i in range(scen_count)]
 
     ph = PH(PH_options, names, scenario_creator, scenario_denouement)
 
-    conv, obj, bound = ph.ph_main(PH_extensions=WXBarWriter,
-                                    rho_setter=scenario_rhosetter)
+    conv, obj, bound = ph.ph_main()
 
 if __name__=='__main__':
     read_test()
