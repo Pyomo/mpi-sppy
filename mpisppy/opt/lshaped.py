@@ -744,7 +744,7 @@ def _init_vars(varlist):
 
 
 def main():
-    import mpisppy.examples.farmer.farmer as ref
+    import mpisppy.tests.examples.farmer as ref
     import os
     # Turn off output from all ranks except rank 1
     if MPI.COMM_WORLD.Get_rank() != 0:

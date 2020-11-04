@@ -89,9 +89,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         return results
 
 if __name__ == "__main__":
-    import mpisppy.examples.farmer.farmer as farmer
-    import mpisppy.examples.netdes.netdes as netdes
-    import mpisppy.examples.sslp.sslp as sslp
+    import mpisppy.tests.examples.farmer as farmer
 
     """ Farmer example """
     scenario_names = ["Scen" + str(i) for i in range(3)]
@@ -108,42 +106,3 @@ if __name__ == "__main__":
     )
     results = ef.solve_extensive_form()
     print("Farmer objective value:", pyo.value(ef.ef.EF_Obj))
-
-
-    """ Network design example """
-    inst = "network-10-20-L-01"
-    num_scen = int(inst.split("-")[-3])
-    scenario_names = [f"Scen{i}" for i in range(num_scen)]
-    scenario_creator_options = {
-        "cb_data": f"{netdes.__file__[:-10]}/data/{inst}.dat"
-    }
-    options = {"solver": "gurobi"}
-    ef = ExtensiveForm(
-        options,
-        scenario_names,
-        netdes.scenario_creator,
-        model_name="TestEF",
-        scenario_creator_options=scenario_creator_options
-    )
-    results = ef.solve_extensive_form()
-    print("Netdes objective value:", pyo.value(ef.ef.EF_Obj))
-
-
-    """ SSLP example """
-    inst = "sslp_15_45_10"
-    scenario_creator = sslp.scenario_creator
-    num_scen = int(inst.split("_")[-1])
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
-    scenario_creator_options = {
-        "cb_data": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata",
-    }
-    options = {"solver": "gurobi"}
-    ef = ExtensiveForm(
-        options,
-        scenario_names,
-        sslp.scenario_creator,
-        model_name="TestEF",
-        scenario_creator_options=scenario_creator_options,
-    )
-    results = ef.solve_extensive_form()
-    print("SSLP objective value:", pyo.value(ef.ef.EF_Obj))
