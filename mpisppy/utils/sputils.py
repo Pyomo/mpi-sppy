@@ -4,6 +4,8 @@
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
 import pyomo.environ as pyo
+import sys
+import os
 import re
 import time
 from numpy import prod
@@ -731,7 +733,17 @@ def check4losses(numscens, BFs,
                 missingsome = True
     if missingsome:
         raise RuntimeError("Internal error: scenario_name_to_rank")
-    print("check4losses: OK")    
+    print("check4losses: OK")
+
+    
+def disable_tictoc_output():
+    f = open(os.devnull,"w")
+    tt_timer._ostream = f
+
+def reenable_tictoc_output():
+    # Primarily to re-enable after a disable
+    tt_timer._ostream.close()
+    tt_timer._ostream = sys.stdout
     
 if __name__ == "__main__":
     BFs = [2,2,2,3]

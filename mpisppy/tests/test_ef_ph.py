@@ -23,7 +23,7 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
 
-__version__ = 0.51
+__version__ = 0.52
 
 solvers = ["gurobi","cplex"]
 
@@ -62,6 +62,7 @@ def _get_ph_base_options():
 def round_pos_sig(x, sig=1):
     return round(x, sig-int(floor(log10(abs(x))))-1)
 
+
 #*****************************************************************************
 class Test_sizes(unittest.TestCase):
     """ Test the mpisppy code using sizes."""
@@ -86,6 +87,21 @@ class Test_sizes(unittest.TestCase):
         model.NumProducedFirstStage[5].fix(1134) # 3scen -> 45k
         return model
         
+    def test_disable_tictoc(self):
+        import mpisppy.utils.sputils as utils
+        print("disabling tictoc output")
+        utils.disable_tictoc_output()
+        # now just do anything that would make a little tictoc output
+        PHoptions = self._copy_of_base_options()
+        PHoptions["PHIterLimit"] = 0
+
+        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
+                                    scenario_creator, scenario_denouement,
+                                    cb_data=3)
+        print("reeanabling tictoc ouput")
+        utils.reenable_tictoc_output()
+
+
     def test_ph_constructor(self):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 0
