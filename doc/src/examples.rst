@@ -3,6 +3,12 @@
 Examples
 ========
 
-The directory ``mpisppy`` contains an ``examples`` directory. This directory
-contains some example code that can be used to help create drivers and
-sub-directories with examples.
+If you installed directly from github, the top
+level directory  ``examples`` 
+contains some sub-directories with examples.
+
+If you did not get the code from github (e.g., if
+you installed with pip), you will need to
+get the examples from:
+https://github.com/Pyomo/mpi-sppy/tree/master/examples
+
