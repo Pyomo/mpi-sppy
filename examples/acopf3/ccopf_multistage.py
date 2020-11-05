@@ -96,7 +96,7 @@ def pysp2_callback(scenario_name,
     convex_relaxation = cb_data["convex_relaxation"] if "convex_relaxation"\
                        in cb_data else False
     verbose = cb_data["verbose"] if "verbose" in cb_data else False
-    ramp_coeff = cb_data["ramp_coeff"] if "ramp_coeff" in cb_data else 1000
+    ramp_coeff = cb_data["ramp_coeff"] if "ramp_coeff" in cb_data else 1000000
 
     load_mismatch_cost = cb_data["load_mismatch_cost"] if "load_mismatch_cost" in cb_data else 1000 # *not* in pu (egret multiplies by p.u.)
     q_load_mismatch_cost = cb_data["q_load_mismatch_cost"] if "q_load_mismatch_cost" in cb_data else load_mismatch_cost
