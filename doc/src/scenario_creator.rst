@@ -41,7 +41,7 @@ used in a problem-specific way to create a "farmer" problem
 instance. The concrete model instance is created.
 
 The scenario creator
-function in ``mpisppy.examples.netdes.netdes.py`` is very simple and
+function in ``examples.netdes.netdes.py`` is very simple and
 illustrates use of the utility function
 (``mpisppy.utils.sputils.attach_root_node``) that attaches the node
 list for you.

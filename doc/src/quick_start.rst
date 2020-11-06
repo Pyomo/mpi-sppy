@@ -13,15 +13,14 @@ This step is not needed if you installed using pip.
 Verify installation
 -------------------
 
-Getting started depends on how you intend to use ``mpi-sspy`` but
-verifying installation is a common task. If you installed ``mpi-sspy`` from
-github,you can verify that you installed it and a solver by starting a
-terminal. Then cd to the `mpi-sspy` directory and issue the following
+Getting started depends on how you intend to use ``mpi-sppy`` but
+verifying installation is a common task. If you installed ``mpi-sppy`` from
+github, you can verify that you installed it and a solver by starting a
+terminal. Then cd to the `mpi-sppy` directory and issue the following
 terminal commands:
 
 ::
 
-   cd mpisppy
    cd examples
    cd farmer
    python farmer_ef 1 3 solvername
@@ -85,6 +84,6 @@ Researchers who want to compare with mpi-sppy
 
 The quickest thing to do is to run one of the canned examples that
 comes with ``mpi-sppy``. They are in subdirectories of
-``mpisppy.examples`` and sample commands can be obtained by looking at
+``examples`` and sample commands can be obtained by looking at
 the code in ``examples.runall.py``. There is a table in the
 mpi-sppy paper that gives references for all of the examples.
