@@ -3,7 +3,7 @@
 SEED=1134
 SNAME="gurobi_persistent"
 
-LOC="../../../mpisppy/examples/farmer"
+LOC="../../../examples/farmer"
 
 CROPSMULT=100
 SCENCNT=2048
