@@ -27,6 +27,6 @@ jobs:
       - name: run tests
         timeout-minutes: 60
         run: |
-          cd mpisppy/examples
+          cd examples
           # envall does nothing
           python run_all.py xpress_persistent -envall nouc

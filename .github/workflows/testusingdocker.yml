@@ -31,5 +31,5 @@ jobs:
       - name: run tests
         run: |
           python mpisppy/tests/test_ef_ph.py
-          cd mpisppy/examples
+          cd examples
           python afew.py cplex
