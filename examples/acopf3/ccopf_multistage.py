@@ -98,6 +98,9 @@ def pysp2_callback(scenario_name,
     verbose = cb_data["verbose"] if "verbose" in cb_data else False
     ramp_coeff = cb_data["ramp_coeff"] if "ramp_coeff" in cb_data else 1000000
 
+    load_mismatch_cost = cb_data["load_mismatch_cost"] if "load_mismatch_cost" in cb_data else 1000 # *not* in pu (egret multiplies by p.u.)
+    q_load_mismatch_cost = cb_data["q_load_mismatch_cost"] if "q_load_mismatch_cost" in cb_data else load_mismatch_cost
+
     def lines_up_and_down(stage_md_dict, enode):
         # local routine to configure the lines in stage_md_dict for the scenario
         LinesDown = []
@@ -115,6 +118,8 @@ def pysp2_callback(scenario_name,
                                format(this_branch[0], scenario_name))
     def _egret_model(md_dict):
         # the exact acopf model is hard-wired here:
+        md_dict.data['system']['load_mismatch_cost'] = load_mismatch_cost
+        md_dict.data['system']['q_load_mismatch_cost'] = q_load_mismatch_cost
         if not convex_relaxation:
             pyomod, mdict = eac.create_riv_acopf_model(md_dict, 
                                             include_feasibility_slack=True)

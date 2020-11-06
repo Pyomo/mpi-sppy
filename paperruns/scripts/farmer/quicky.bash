@@ -4,7 +4,7 @@ SEED=1134
 #SNAME="gurobi_persistent"
 SNAME="cplex"
 
-LOC="../../../mpisppy/examples/farmer"
+LOC="../../../examples/farmer"
 
 CROPSMULT=500
 SCENCNT=6
