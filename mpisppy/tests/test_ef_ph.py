@@ -17,10 +17,10 @@ import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.phbase
 import mpisppy.utils.sputils as sputils
-from mpisppy.examples.sizes.sizes import scenario_creator, \
-                                       scenario_denouement, \
-                                       _rho_setter
-import mpisppy.examples.hydro.hydro as hydro
+from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
+                                               scenario_denouement, \
+                                               _rho_setter
+import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
 
 __version__ = 0.52
@@ -379,7 +379,6 @@ class Test_sizes(unittest.TestCase):
         for k,s in ph.local_scenarios.items():
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
             self.assertEqual(pyo.value(s.NumProducedFirstStage[5]), 1134)
-        
 
 #*****************************************************************************
 class Test_hydro(unittest.TestCase):

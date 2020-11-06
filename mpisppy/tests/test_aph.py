@@ -14,9 +14,9 @@ from math import log10, floor
 import pyomo.environ as pyo
 import mpisppy.opt.aph
 import mpisppy.phbase
-from mpisppy.examples.sizes.sizes import scenario_creator, \
-                                       scenario_denouement, \
-                                       _rho_setter
+from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
+                                               scenario_denouement, \
+                                               _rho_setter
 
 __version__ = 0.4
 solvers = ["xpress_persistent", "gurobi_persistent", "cplex"]

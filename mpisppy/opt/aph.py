@@ -870,7 +870,7 @@ class APH(ph_base.PHBase):  # ??????
 #************************************************************
 if __name__ == "__main__":
     # hardwired by dlw for debugging
-    import mpisppy.examples.farmer.farmer as refmodel
+    import mpisppy.tests.examples.farmer as refmodel
 
     PHopt = {}
     PHopt["asynchronousPH"] = False # APH is *projective* and always APH
