@@ -13,15 +13,14 @@ This step is not needed if you installed using pip.
 Verify installation
 -------------------
 
-Getting started depends on how you intend to use ``mpi-sspy`` but
-verifying installation is a common task. If you installed ``mpi-sspy`` from
-github,you can verify that you installed it and a solver by starting a
-terminal. Then cd to the `mpi-sspy` directory and issue the following
+Getting started depends on how you intend to use ``mpi-sppy`` but
+verifying installation is a common task. If you installed ``mpi-sppy`` from
+github, you can verify that you installed it and a solver by starting a
+terminal. Then cd to the `mpi-sppy` directory and issue the following
 terminal commands:
 
 ::
 
-   cd mpisppy
    cd examples
    cd farmer
    python farmer_ef 1 3 solvername
@@ -62,7 +61,7 @@ Here are the general steps:
 
 These steps alone will not result in use of the hub-spoke features of
 `mpi-sppy`, but they will get your PySP model running in
-``mpi-sppy``. See ``mpisspy.examples.farmer.from_pysp`` for some
+``mpi-sppy``. See ``examples.farmer.from_pysp`` for some
 examples and see :ref:`PySP conversion` for more details.
 
 
@@ -73,7 +72,7 @@ Users of ``mpi-sppy`` are viewed as developers, not as
 end-users. Consequently, some Python programming is required.  The
 first thing is to code a scenario creation function. See
 :ref:`scenario_creator` for more information. Once you have the function,
-you can mimic the code in ``mpisspy.examples.farmer.farmer_ef`` to
+you can mimic the code in ``examples.farmer.farmer_ef`` to
 solve the extensive form directly. If you want to use the hub
 and spoke system to solve your problem via decomposition, you
 should proceed to the second on writing :ref:`Drivers` or to
@@ -85,6 +84,6 @@ Researchers who want to compare with mpi-sppy
 
 The quickest thing to do is to run one of the canned examples that
 comes with ``mpi-sppy``. They are in subdirectories of
-``mpisppy.examples`` and sample commands can be obtained by looking at
-the code in ``mpisppy.examples.runall.py``. There is a table in the
+``examples`` and sample commands can be obtained by looking at
+the code in ``examples.runall.py``. There is a table in the
 mpi-sppy paper that gives references for all of the examples.
