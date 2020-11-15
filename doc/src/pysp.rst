@@ -21,7 +21,7 @@ the ``PySPModel`` object attributes.
 
 As reflected in the API for the ``PySPModel`` class there are many ways
 to specify the reference model and scenario tree information in PySP.
-A few examples are given in directory ``mpisspy.examples.farmer.from_pysp``.
+A few examples are given in directory ``examples.farmer.from_pysp``.
 Here are few notes about these examples:
 
 * They are written mainly to provide code examples.

@@ -5,10 +5,9 @@ Drivers
 
 To make use of the hub and spoke system, you must come up with a
 driver that instantiates the objects and calls them. Nearly the
-last step in most drivers is a call to ``mpisppy.utils.spin_the_wheel``
+last step in most drivers is a call to ``mpisppy.utils.sputils.spin_the_wheel``
 that calls the hub and spokes. Many of the example drivers take
-advanatage of shared code in the ``examples`` directory; see
-:ref:`Examples`.
+advanatage of shared code in the ``mpisppy.utils`` directory.
 
 We now proceed to consider driver examples that do not use the shared
 services provided with the examples; however, many developers will prefer
@@ -17,22 +16,22 @@ to mimic the examples.
 Starting with Examples
 ----------------------
 
-The ``examples`` directory has utilities that set up command line options
+The ``utils`` directory has utilities that set up command line options
 and create dictionaries used to create hubs and spokes. The main shared utilities
 are
 
 * ``baseparser.py`` that creates command line options.
 * ``vanilla.py`` that creates dictionaries used for hub and spoke
   creation. These dictionaries are ultimately fed to
-  ``spin_the_wheel``.
+  ``sputils.spin_the_wheel``.
 
 The contructors for the vanilla spokes take arguments that vary slightly depending
 on the spoke, but all want the args passed in by the args parser,
 followed by ``scenario_creator`` function, a ``scenario_denoument`` function
 (that can be ``None``), a list of scenario names as ``all_scenario_names``,
-and ``cb_data``. Other arguments can be seen in the file ``mpisppy.examples.vanilla.py``
-or in the the ``*_examples.py`` files that use it.  Since all require
-the first four, in the examples, they are often collected into a tupe called
+and ``cb_data``. Other arguments can be seen in the file ``mpisppy.utils.vanilla.py``
+or in the the ``*_cylinders.py`` files that use it.  Since all require
+the first four, in the examples, they are often collected into a tuple called
 ``beans`` so they can be passed to the constructor for every vanilla spoke.
   
 Extending Examples
@@ -61,7 +60,7 @@ No Spokes
 
 There is a ``sizes`` example that does not use the hub and spoke
 system, it just calls PH (or the EF) without any spokes. The code can
-be found in ``mpisppy.examples.sizes.sizes_demo.py`` and it also
+be found in ``examples.sizes.sizes_demo.py`` and it also
 demonstrates the use of extensions (see :ref:`Extensions`).
 
 Hub and Spokes
