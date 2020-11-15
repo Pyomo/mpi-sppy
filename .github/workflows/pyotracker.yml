@@ -1,13 +1,11 @@
 # Pyomo tracker --- dynamically imports pyomo master
 
-name: pyomo tracker mpi-sppy tests
+name: pyomo tracker
 
 on:
-  ###schedule:
-    #### min hr dayofmonth month dayofweek 
-    ###- cron: "14 3 * * *"
-  push:
-    branches: [ trackpyomo ]
+  schedule:
+    # min hr dayofmonth month dayofweek 
+    - cron: "14 3 * * *"
 
 jobs:
   build:
