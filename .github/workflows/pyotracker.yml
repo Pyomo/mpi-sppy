@@ -25,7 +25,7 @@ jobs:
           pip install --upgrade pip
           pip install pandas mpi4py setuptools
 
-      - name set up pyomo
+      - name: set up pyomo
         run: |
           apt update
           apt install -y git-all
