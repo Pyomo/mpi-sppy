@@ -3,9 +3,11 @@
 name: pyomo tracker mpi-sppy tests
 
 on:
-  schedule:
-    # min hr dayofmonth month dayofweek 
-    - cron: "14 3 * * *"
+  ###schedule:
+    #### min hr dayofmonth month dayofweek 
+    ###- cron: "14 3 * * *"
+  push:
+    branches: [ trackpyomo ]
 
 jobs:
   build:
