@@ -1,12 +1,11 @@
 # weekly tests, but we might run daily
-# NOTE: we should also have a weekly test that dynamically imports pyomo master
 
 name: weekly mpi-sppy tests
 
 on:
   schedule:
     # min hr dayofmonth month dayofweek 
-    - cron: "14 2 * * 1"
+    - cron: "14 2 * * 2"
 
 jobs:
   build:
@@ -25,7 +24,7 @@ jobs:
           python setup.py develop
 
       - name: run tests
-        timeout-minutes: 60
+        timeout-minutes: 180
         run: |
           cd examples
           # envall does nothing

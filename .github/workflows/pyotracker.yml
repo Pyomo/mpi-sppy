@@ -1,10 +1,11 @@
-name: mpi-sppy (Pyomo released)
+# Pyomo tracker --- dynamically imports pyomo master
+
+name: pyomo tracker mpi-sppy tests
 
 on:
-  push:
-    branches: [ master ]
-  pull_request:
-    branches: [ master ]
+  schedule:
+    # min hr dayofmonth month dayofweek 
+    - cron: "14 3 * * *"
 
 jobs:
   build:
@@ -22,7 +23,16 @@ jobs:
           apt-get update && apt-get install -y mpich
           pip install wheel
           pip install --upgrade pip
-          pip install pyomo pandas mpi4py setuptools
+          pip install pandas mpi4py setuptools
+
+      - name set up pyomo
+        run: |
+          apt update
+          apt install -y git-all
+          git clone https://github.com/PyUtilib/pyutilib.git
+          cd pyutilib && python ./setup.py develop && cd ..
+          git clone https://github.com/pyomo/pyomo
+          cd pyomo && python setup.py develop
 
       - name: setup the program
         run: |
@@ -33,3 +43,4 @@ jobs:
           python mpisppy/tests/test_ef_ph.py
           cd examples
           python afew.py cplex
+
