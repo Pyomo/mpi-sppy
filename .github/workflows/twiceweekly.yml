@@ -1,11 +1,12 @@
 # weekly tests, but we might run daily
+# NOTE: we should also have a weekly test that dynamically imports pyomo master
 
 name: weekly mpi-sppy tests
 
 on:
   schedule:
     # min hr dayofmonth month dayofweek 
-    - cron: "14 2 * * 2"
+    - cron: "14 2 * * 1,4"
 
 jobs:
   build:

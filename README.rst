@@ -6,6 +6,10 @@ Optimization under uncertainty for Pyomo models.
 Documentation is available at `readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>'_ and
 a technical report is on `OOL <http://www.optimization-online.org/DB_HTML/2020/11/8088.html/>`_
 
+Status for internal tests
+^^^^^^^^^^^^^^^^^^^^^^^^^
+
+![pyomo tracker](https://github.com/Pyomo/mpi-sppy/workflows/pyomo%20master%20tracker/badge.svg)
 
 
 MPI
