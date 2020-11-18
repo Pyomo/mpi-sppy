@@ -9,7 +9,7 @@ a technical report is on `OOL <http://www.optimization-online.org/DB_HTML/2020/1
 Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-![pyomo tracker](https://github.com/Pyomo/mpi-sppy/workflows/pyomo%20master%20tracker/badge.svg)
+.. image:: https://github.com/Pyomo/mpi-sppy/workflows/pyomo%20tracker/badge.svg
 
 
 MPI
