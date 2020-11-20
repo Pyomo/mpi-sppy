@@ -275,9 +275,10 @@ class SPBase(object):
                 for node in scenario._PySPnode_list
             }
             scenario._PySP_cistart = dict()
-            for ndn in scenario._PySP_nlens:
-                sofar = 0 if ndn == "ROOT" else sofar + scenario._PySP_nlens[ndn]
+            sofar = 0
+            for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
+                sofar += ndn_len
 
     def create_communicators(self):
         # If the scenarios have not been constructed yet, 
