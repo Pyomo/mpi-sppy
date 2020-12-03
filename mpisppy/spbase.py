@@ -105,6 +105,7 @@ class SPBase(object):
             self.bundling = False
         self.create_scenarios(cb_data)
         self.look_before_leap_all()
+        self.compute_unconditional_node_probabilities()
         self.attach_nlens()
         self.attach_nonant_indexes()
         self.create_communicators()
@@ -326,6 +327,15 @@ class SPBase(object):
         for nodename in nonleafnodes.keys():
             if nodename not in self.all_nodenames:
                 raise RuntimeError(f"Tree node '{nodename}' not in node list {self.all_nodenames}")
+
+    def compute_unconditional_node_probabilities(self):
+        """ calculates unconditional node probabilities """
+        for k,s in self.local_scenarios.items():
+            root = s._PySPnode_list[0]
+            root.uncond_prob = 1.0
+            for parent,child in zip(s._PySPnode_list[:-1],s._PySPnode_list[1:]):
+                child.uncond_prob = parent.uncond_prob * child.cond_prob
+
 
     def set_multistage(self):
         self.multistage = (len(self.all_nodenames) > 1)

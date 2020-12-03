@@ -173,9 +173,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 ndn = node.name
                 for i, v in enumerate(node.nonant_vardata_list):
                     local_concats["OnlyReduce"][ndn][i] += \
-                        (s.PySP_prob / node.cond_prob) * v._value
+                        (s.PySP_prob / node.uncond_prob) * v._value
                     local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
-                        (s.PySP_prob / node.cond_prob) * v._value * v._value
+                        (s.PySP_prob / node.uncond_prob) * v._value * v._value
 
         # compute node xbar values(reduction)
         if synchronizer is None:

@@ -386,13 +386,13 @@ class APH(ph_base.PHBase):  # ??????
                 for i in range(nlens[node.name]):
                     v_value = node.nonant_vardata_list[i]._value
                     self.local_concats["FirstReduce"][node.name][i] += \
-                        (s.PySP_prob / node.cond_prob) * v_value                 
+                        (s.PySP_prob / node.uncond_prob) * v_value
                     logging.debug("  rank= {} scen={}, i={}, v_value={}".\
                                   format(rank_global, k, i, v_value))
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
-                        += (s.PySP_prob / node.cond_prob) * v_value * v_value
+                        += (s.PySP_prob / node.uncond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
-                        += (s.PySP_prob / node.cond_prob) \
+                        += (s.PySP_prob / node.uncond_prob) \
                            * pyo.value(s._ys[(node.name,i)])
 
         # record the time
