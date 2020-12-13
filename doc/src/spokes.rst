@@ -12,19 +12,23 @@ Outer Bound
 
 For minimization problems, `outer bound` means `lower bound`.
 
-Frank-Wolf
+Frank-Wolfe
 ^^^^^^^^^^^
 
-This bound is based on the paper `Combining Progressive Hedging with a Frank--Wolfe Method to Compute Lagrangian Dual Bounds in Stochastic Mixed-Integer Programming` by Boland et al. It does not receive information from the hub, it
-simply sends bounds as they are available. Compared to the Lagrangian bounds,
-it takes longer to compute but is generally tighter once it reports a bound.
+This bound is based on the paper `Combining Progressive Hedging with a
+Frank--Wolfe Method to Compute Lagrangian Dual Bounds in Stochastic
+Mixed-Integer Programming` by Boland et al [boland2018]_. It does not receive
+information from the hub, it simply sends bounds as they are available.
+Compared to the Lagrangian bounds, it takes longer to compute but is generally
+tighter once it reports a bound.
 
 
 Lagrangian
 ^^^^^^^^^^
 
-This bound is based on the paper `Obtaining lower bounds from the progressive hedging algorithm for stochastic mixed-integer programs` by Gade et al. It takes
-W values from the hub and uses them to compute a bound.
+This bound is based on the paper `Obtaining lower bounds from the progressive
+hedging algorithm for stochastic mixed-integer programs` by Gade et al
+[gade2016]_. It takes W values from the hub and uses them to compute a bound.
 
 
 Lagranger
