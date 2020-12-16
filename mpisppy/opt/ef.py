@@ -121,6 +121,5 @@ if __name__ == "__main__":
         model_name="TestEF",
         scenario_creator_options=scenario_creator_options,
     )
-    quit()
     results = ef.solve_extensive_form()
     print("Farmer objective value:", pyo.value(ef.ef.EF_Obj))
