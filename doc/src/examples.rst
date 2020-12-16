@@ -113,7 +113,7 @@ The optimal objective value is:
     -118600.0
 
 In practice, the farmer does not know the number of tons that each crop will
-yieldper acre planted--the yield depends on the weather, the quality of the
+yield per acre planted--the yield depends on the weather, the quality of the
 seeds, and other stochastic factors. Consequently, we replace the deterministic
 model above with the stochastic LP:
 
@@ -141,7 +141,7 @@ We assume that there are three scenarios: "good", "bad", and "average". We
 assume that each scenario is equally likely to occur. The yield values
 (:math:`\xi^\omega_i`) are given here:
 
-.. list-table:: Crop yields under each scenario
+.. list-table:: Crop yields under each scenario (tons/acre)
     :widths: 25 25 25 25
     :header-rows: 1
 
