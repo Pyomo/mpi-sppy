@@ -215,7 +215,8 @@ MPI-SPPy makes this quite simple:
     ef = ExtensiveForm(options, all_scenario_names, scenario_creator)
     results = ef.solve_extensive_form()
 
-    print(f"{pyo.value(ef.ef.EF_Obj):.1f}")
+    objval = ef.get_objective_value()
+    print(f"{objval:.1f}")
 
 
 .. testoutput::

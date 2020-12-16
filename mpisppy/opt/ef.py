@@ -88,6 +88,23 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         results = self.solver.solve(self.ef, tee=tee)
         return results
 
+    def get_objective_value(self):
+        """ Retrieve the objective value.
+        
+        Returns:
+            float:
+                Objective value.
+
+        Raises:
+            ValueError:
+                If optimal objective value could not be retrieved.
+        """
+        try:
+            obj_val = pyo.value(self.ef.EF_Obj)
+        except Exception as e:
+            raise ValueError("Could not extract EF objective value with error: {str(e)}")
+        return obj_val
+
 if __name__ == "__main__":
     import mpisppy.tests.examples.farmer as farmer
 
@@ -104,5 +121,6 @@ if __name__ == "__main__":
         model_name="TestEF",
         scenario_creator_options=scenario_creator_options,
     )
+    quit()
     results = ef.solve_extensive_form()
     print("Farmer objective value:", pyo.value(ef.ef.EF_Obj))
