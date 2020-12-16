@@ -17,7 +17,8 @@ Tutorial: Farmer Example
 ------------------------
 
 In this section, we step through a simple example---the farmer example of
-[birge2011]_ (Section 1.1). The
+[birge2011]_ (Section 1.1). This model can be expressed as the following linear
+program (LP):
 
 .. math::
     :nowrap:
@@ -41,13 +42,18 @@ The decision variables are as follows:
 - :math:`w_i` = tons of beets sold at favorable (i=3) or unfavorable (i=4)
   price
 
+The coefficients of the :math:`x_i` variables in the second, third and fourth
+constraints are the number of tons per acre that each crop will yield (2.5 for
+wheat, 3 for corn, and 20 for sugar beets).
+
+
 The following code creates an instance of the farmer's model:
 
 .. testcode::
 
     import pyomo.environ as pyo
 
-    def build_model():
+    def build_model(yields):
         model = pyo.ConcreteModel()
 
         # Variables
@@ -59,36 +65,41 @@ The following code creates an instance of the farmer's model:
         )
 
         # Objective function
-        obj_expression = (
-            150 * model.X["WHEAT"] + 230 * model.X["CORN"] + 260 * model.X["BEETS"]
-            + 238 * model.Y["WHEAT"] + 210 * model.Y["CORN"]
-            - 170 * model.W["WHEAT"] - 150 * model.W["CORN"]
-            - 36 * model.W["BEETS_FAVORABLE"] - 10 * model.W["BEETS_UNFAVORABLE"]
+        model.PLANTING_COST = 150 * model.X["WHEAT"] + 230 * model.X["CORN"] + 260 * model.X["BEETS"]
+        model.PURCHASE_COST = 238 * model.Y["WHEAT"] + 210 * model.Y["CORN"]
+        model.SALES_REVENUE = (
+            170 * model.W["WHEAT"] + 150 * model.W["CORN"]
+            + 36 * model.W["BEETS_FAVORABLE"] + 10 * model.W["BEETS_UNFAVORABLE"]
         )
-        model.OBJ = pyo.Objective(expr=obj_expression, sense=pyo.minimize)
+        model.OBJ = pyo.Objective(
+            expr=model.PLANTING_COST + model.PURCHASE_COST - model.SALES_REVENUE,
+            sense=pyo.minimize
+        )
 
         # Constraints
         model.CONSTR= pyo.ConstraintList()
 
         model.CONSTR.add(pyo.summation(model.X) <= 500)
         model.CONSTR.add(
-            2.5 * model.X["WHEAT"] + model.Y["WHEAT"] - model.W["WHEAT"] >= 200
+            yields[0] * model.X["WHEAT"] + model.Y["WHEAT"] - model.W["WHEAT"] >= 200
         )
         model.CONSTR.add(
-            3. * model.X["CORN"] + model.Y["CORN"] - model.W["CORN"] >= 240
+            yields[1] * model.X["CORN"] + model.Y["CORN"] - model.W["CORN"] >= 240
         )
         model.CONSTR.add(
-            20. * model.X["BEETS"] - model.W["BEETS_FAVORABLE"] - model.W["BEETS_UNFAVORABLE"] >= 240
+            yields[2] * model.X["BEETS"] - model.W["BEETS_FAVORABLE"] - model.W["BEETS_UNFAVORABLE"] >= 0
         )
         model.W["BEETS_FAVORABLE"].setub(6000)
 
         return model
 
-We can easily solve this model:
+Note that the `build_model` function takes a list of values, containing the
+yields for each crop. We can solve the model:
 
 .. testcode::
 
-    model = build_model()
+    yields = [2.5, 3, 20]
+    model = build_model(yields)
     solver = pyo.SolverFactory("gurobi") 
     solver.solve(model)
 
@@ -99,4 +110,116 @@ The optimal objective value is:
 
 .. testoutput::
 
-    -112180.0
+    -118600.0
+
+In practice, the farmer does not know the number of tons that each crop will
+yieldper acre planted--the yield depends on the weather, the quality of the
+seeds, and other stochastic factors. Consequently, we replace the deterministic
+model above with the stochastic LP:
+
+.. math::
+    :nowrap:
+
+    \begin{array}{rl}
+    \min & (150x_1 + 230x_2 + 260x_3) \\
+    & \quad+\sum_{\omega\in\Omega}Pr[\omega]\big[(238y_1^\omega+210y_2^\omega) - (170w_1^\omega + 150w_2^\omega + 36w_3^\omega + 10 w_4^\omega)\big] \\
+    \mathrm{s.t.} & x_1 + x_2 + x_3 \leq 500 \\
+    & \xi^\omega_1 x_1 + y^\omega_1 - w^\omega_1 \geq 200\;\forall\;\omega\in\Omega\\
+    & \xi^\omega_2 x_2 + y^\omega_2 - w^\omega_2 \geq 240\;\forall\;\omega\in\Omega\\
+    & \xi^\omega_3 x_3 - w^\omega_3 - w^\omega_4 \geq 0\;\forall\;\omega\in\Omega\\
+    & w^\omega_3 \leq 6000 \\
+    & x,y^\omega,w^\omega\geq0\;\forall\;\omega\in\Omega
+    \end{array}
+
+The variables :math:`y_i` and :math:`w_i` have been replaced with copies
+:math:`y_i^\omega` and :math:`w_i^\omega`, corresponding to the values of each
+variable chosen under scenario :math:`\omega\in\Omega`, where :math:`\Omega` is
+a finite set of scenarios. The parameter :math:`\xi^\omega_i` is the number of
+tons of crop :math:`i` yielded per acre under scenario :math:`\omega`.
+
+We assume that there are three scenarios: "good", "bad", and "average". We
+assume that each scenario is equally likely to occur. The yield values
+(:math:`\xi^\omega_i`) are given here:
+
+.. list-table:: Crop yields under each scenario
+    :widths: 25 25 25 25
+    :header-rows: 1
+
+    * - 
+      - Wheat
+      - Corn
+      - Sugar Beets
+    * - Good
+      - 3
+      - 3.6
+      - 24
+    * - Average
+      - 2.5
+      - 3
+      - 20
+    * - Bad
+      - 2
+      - 2.4
+      - 16
+
+In order to transform the code for the deterministic model above into a
+stochastic model which can be manipulated by MPI-SPPy, we need only incorporate
+a few extra elements (see :ref:`scenario_creator` for full details). The
+`scenario_creator` function is told the name of the scenario to build, and
+builds a Pyomo model for that scenario appropriately:
+
+.. testcode::
+
+    import mpisppy.utils.sputils as sputils
+
+    def scenario_creator(scenario_name, node_names=None, cb_data=None):
+        if scenario_name == "good":
+            yields = [3, 3.6, 24]
+        elif scenario_name == "average":
+            yields = [2.5, 3, 20]
+        elif scenario_name == "bad":
+            yields = [2, 2.4, 16]
+        else:
+            raise ValueError("Unrecognized scenario name")
+
+        model = build_model(yields)
+        sputils.attach_root_node(model, model.PLANTING_COST, [model.X])
+        model.PySP_prob = 1.0 / 3
+        return model
+
+
+The `scenario_creator` accomplishes two important tasks
+
+1. It calls the `attach_root_node` function. We tell this function which part
+   of the objective function (`model.PLANTING_COST`) and which set of variables
+   (`model.X`) belong to the first stage. In this case, the problem is only two
+   stages, so we need only specify the root node and the first-stage
+   information--MPI-SPPy assumes the remainder of the model belongs to the
+   second stage.
+2. It attaches an attribute called `PySP_prob` to the model object. This is the
+   probability that the specified scenario occurs. If this probability is not
+   specified, MPI-SPPy will assume that all scenarios are equally likely.
+
+Now that we have specified a scenario creator, we can use MPI-SPPy to solve the
+farmer's stochastic program. 
+
+The simplest approach is to solve the extensive form of the model directly.
+MPI-SPPy makes this quite simple:
+
+.. testcode::
+
+    from mpisppy.opt.ef import ExtensiveForm
+
+    options = {"solver": "gurobi"}
+    all_scenario_names = ["good", "average", "bad"]
+    ef = ExtensiveForm(options, all_scenario_names, scenario_creator)
+    results = ef.solve_extensive_form()
+
+    print(f"{pyo.value(ef.ef.EF_Obj):.1f}")
+
+
+.. testoutput::
+
+    [    0.00] Start SPBase.__init__
+    -108390.0
+
