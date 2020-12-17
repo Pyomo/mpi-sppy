@@ -150,9 +150,9 @@ class PHBase(mpisppy.spbase.SPBase):
         nodenames = list() # to transmit to comms
         # This "onlyreduce" thing is done for the sake of asynchronous only
         local_concats = {"OnlyReduce": dict()} # keys are tree node names
-        node_concats =  {"OnlyReduce": dict()} # values are concat of xbar 
-                                               # and xsqbar
-        
+        global_concats =  {"OnlyReduce": dict()} # values are concat of xbar
+                                                 # and xsqbar
+
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
@@ -164,25 +164,29 @@ class PHBase(mpisppy.spbase.SPBase):
                     if synchronizer is not None and node.name == "ROOT":
                         mylen += self.n_proc
                     local_concats["OnlyReduce"][ndn] = np.zeros(mylen, dtype='d')
-                    node_concats["OnlyReduce"][ndn] = np.zeros(mylen, dtype='d')
+                    global_concats["OnlyReduce"][ndn] = np.zeros(mylen, dtype='d')
 
         # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
             for node in s._PySPnode_list:
                 ndn = node.name
-                for i, v in enumerate(node.nonant_vardata_list):
-                    local_concats["OnlyReduce"][ndn][i] += \
-                        (s.PySP_prob / node.uncond_prob) * v._value
-                    local_concats["OnlyReduce"][ndn][nlens[ndn]+i] += \
-                        (s.PySP_prob / node.uncond_prob) * v._value * v._value
+                nlen = nlens[ndn]
+
+                xbars = local_concats["OnlyReduce"][ndn][:nlen]
+                xsqbars = local_concats["OnlyReduce"][ndn][nlen:]
+
+                nonants_array = np.fromiter( (v._value for v in node.nonant_vardata_list),
+                                             dtype='d', count=nlen )
+                xbars += (s.PySP_prob / node.uncond_prob) * nonants_array
+                xsqbars += (s.PySP_prob / node.uncond_prob) * nonants_array**2
 
         # compute node xbar values(reduction)
         if synchronizer is None:
             for nodename in nodenames:
                 self.comms[nodename].Allreduce(
                     [local_concats["OnlyReduce"][nodename], mpi.DOUBLE],
-                    [node_concats["OnlyReduce"][nodename], mpi.DOUBLE],
+                    [global_concats["OnlyReduce"][nodename], mpi.DOUBLE],
                     op=mpi.SUM)
         else: # async
             # PROBABLY never used... (DLW 2020)
@@ -193,7 +197,7 @@ class PHBase(mpisppy.spbase.SPBase):
             
             logger.debug('xbar secs_sofar {} on rank {}'.format(secs_sofar, self.rank))
             ###logger.debug('   xbar on rank {}; local_concats {}'.format(self.rank, str(local_concats)))
-            synchronizer.compute_global_data(local_concats, node_concats)
+            synchronizer.compute_global_data(local_concats, global_concats)
 
             # See if we have enough xbars to proceed (need not be perfect)
             # NOTE: so, for now we start xbarin at one because we are in...
@@ -202,8 +206,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 for cr in range(self.n_proc):
                     logger.debug('cr {} on rank {} time {}'.\
                         format(cr, self.rank,
-                        node_concats["OnlyReduce"]["ROOT"][2*nlens["ROOT"]+cr]))
-                    if  node_concats["OnlyReduce"]["ROOT"][2*nlens["ROOT"]+cr] \
+                        global_concats["OnlyReduce"]["ROOT"][2*nlens["ROOT"]+cr]))
+                    if  global_concats["OnlyReduce"]["ROOT"][2*nlens["ROOT"]+cr] \
                         >= secs_sofar:
                         xbarin += 1
                         logger.debug('xbarin {} on rank {}'.\
@@ -218,21 +222,24 @@ class PHBase(mpisppy.spbase.SPBase):
                     if verbose and self.rank == self.rank0:
                         print ('s'),
                     time.sleep(self.PHoptions["async_sleep_secs"])
-                    synchronizer.get_global_data(node_concats)
+                    synchronizer.get_global_data(global_concats)
                     xbarin = 0 # global_data should have been upated
         
         # set the xbar and xsqbar in all the scenarios
         for k,s in self.local_scenarios.items():
             logger.debug('  top of assign xbar loop for {} on rank {}'.\
                          format(k, self.rank))
-            
-            nlens = s._PySP_nlens        
+            nlens = s._PySP_nlens
             for node in s._PySPnode_list:
                 ndn = node.name
-                for i in range(nlens[ndn]):
-                    s._xbars[(ndn,i)]._value = node_concats["OnlyReduce"][ndn][i]
-                    s._xsqbars[(ndn,i)]._value \
-                        = node_concats["OnlyReduce"][ndn][nlens[ndn]+i]
+                nlen = nlens[ndn]
+
+                xbars = global_concats["OnlyReduce"][ndn][:nlen]
+                xsqbars = global_concats["OnlyReduce"][ndn][nlen:]
+
+                for i in range(nlen):
+                    s._xbars[(ndn,i)]._value = xbars[i]
+                    s._xsqbars[(ndn,i)]._value = xsqbars[i]
                     if verbose and self.rank == self.rank0:
                         print ("rank, scen, node, var, xbar:",
                                self.rank, k, ndn, node.nonant_vardata_list[i].name,
