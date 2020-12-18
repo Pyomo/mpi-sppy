@@ -221,6 +221,98 @@ MPI-SPPy makes this quite simple:
 
 .. testoutput::
 
-    [    0.00] Start SPBase.__init__
+    ...
     -108390.0
 
+TODO: show how to extract the optimal solution itself.
+
+We can also solve the model using the progressive hedging (PH) algorithm.
+First, we must construct a PH object:
+
+.. testcode::
+
+    from mpisppy.opt.ph import PH
+
+    options = {
+        "solvername": "gurobi",
+        "PHIterLimit": 5,
+        "defaultPHrho": 10,
+        "convthresh": 1e-7,
+        "verbose": False,
+        "display_progress": False,
+        "display_timing": False,
+        "iter0_solver_options": dict(),
+        "iterk_solver_options": dict(),
+    }
+    all_scenario_names = ["good", "average", "bad"]
+    ph = PH(
+        options,
+        all_scenario_names,
+        scenario_creator,
+    )
+
+
+.. testoutput::
+    :hide:
+
+    ...
+
+Note that all of the options in the `options` dict must be specified in order
+to construct the PH object. Once the PH object is constructed, we can execute
+the algorithm with a call to the `ph_main` method:
+
+.. testcode::
+
+    ph.ph_main()
+
+.. testoutput::
+    :hide:
+
+    ...
+
+
+.. testoutput::
+    :options: +SKIP
+
+
+    [    0.00] Start SPBase.__init__
+    [    0.01] Start PHBase.__init__
+    [    0.01] Creating solvers
+    [    0.01] Entering solve loop in PHBase.Iter0
+    [    2.80] Reached user-specified limit=5 on number of PH iterations
+
+Note that precise timing results may differ.  In this toy example, we only
+execute 5 iterations of the algorithm. Although the algorithm does not converge
+completely, we can see that the first-stage variables already exhibit
+relatively good agreement:
+
+.. testcode::
+
+    variables = ph.gather_var_values_to_root()
+    for (scenario_name, variable_name) in variables:
+        variable_value = variables[scenario_name, variable_name]
+        print(scenario_name, variable_name, variable_value)
+
+.. testoutput::
+    :hide:
+
+    ...
+    average X[BEETS]
+    ...
+
+.. testoutput::
+    :options: +SKIP
+
+    good X[BEETS] 280.6489711937925
+    good X[CORN] 85.26131687116064
+    good X[WHEAT] 134.0897119350402
+    average X[BEETS] 283.2796296293019
+    average X[CORN] 80.00000000014425
+    average X[WHEAT] 136.72037037055298
+    bad X[BEETS] 280.64897119379475
+    bad X[CORN] 85.26131687116226
+    bad X[WHEAT] 134.08971193504266
+
+The function `gather_var_values_to_root` can be used in parallel to collect
+the values of all non-anticipative variables at the root. In this (serial)
+example, it simply returns the values of the first-stage variables.
