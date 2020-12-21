@@ -329,12 +329,16 @@ class SPBase(object):
                 raise RuntimeError(f"Tree node '{nodename}' not in node list {self.all_nodenames}")
 
     def compute_unconditional_node_probabilities(self):
-        """ calculates unconditional node probabilities """
+        """ calculates unconditional node probabilities and _PySP_prob_coeff """
         for k,s in self.local_scenarios.items():
             root = s._PySPnode_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._PySPnode_list[:-1],s._PySPnode_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
+            if not hasattr(s, '_PySP_prob_coeff'):
+                s._PySP_prob_coeff = {}
+                for node in s._PySPnode_list:
+                    s._PySP_prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
 
 
     def set_multistage(self):

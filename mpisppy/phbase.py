@@ -178,8 +178,8 @@ class PHBase(mpisppy.spbase.SPBase):
 
                 nonants_array = np.fromiter( (v._value for v in node.nonant_vardata_list),
                                              dtype='d', count=nlen )
-                xbars += (s.PySP_prob / node.uncond_prob) * nonants_array
-                xsqbars += (s.PySP_prob / node.uncond_prob) * nonants_array**2
+                xbars += s._PySP_prob_coeff[ndn] * nonants_array
+                xsqbars += s._PySP_prob_coeff[ndn] * nonants_array**2
 
         # compute node xbar values(reduction)
         for nodename in nodenames:
