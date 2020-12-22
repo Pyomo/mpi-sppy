@@ -1136,17 +1136,6 @@ class PHBase(mpisppy.spbase.SPBase):
                                         mutable=True,
                                         default=self.PHoptions["defaultPHrho"])
 
-    def attach_varid_to_nonant_index(self):
-        """ Create a map from the id of nonant variables to their Pyomo index.
-        """
-        for (sname, scenario) in self.local_scenarios.items():
-            # In order to support rho setting, create a map
-            # from the id of vardata object back its _nonant_index.
-            scenario._varid_to_nonant_index = {
-                id(node.nonant_vardata_list[i]): (node.name, i)
-                for node in scenario._PySPnode_list
-                for i in range(scenario._PySP_nlens[node.name])}
-
     def attach_PH_to_objective(self, add_duals=True, add_prox=False):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
@@ -1236,7 +1225,6 @@ class PHBase(mpisppy.spbase.SPBase):
         self.current_solver_options = self.PHoptions["iter0_solver_options"]
 
         self.attach_Ws_and_prox()
-        self.attach_varid_to_nonant_index()
         self.attach_PH_to_objective(add_duals=attach_duals,
                                     add_prox=attach_prox)
 
