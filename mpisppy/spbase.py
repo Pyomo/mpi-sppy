@@ -54,6 +54,7 @@ class SPBase(object):
         mpicomm=None,
         rank0=0,
         cb_data=None,
+        variable_probability=None
     ):
         self.startdt = dt.datetime.now()
         self.start_time = time.time()
@@ -73,6 +74,7 @@ class SPBase(object):
             self.all_nodenames = all_nodenames
         else:
             raise RuntimeError("'ROOT' must be in the list of node names")
+        self.variable_probability = variable_probability
 
         # Set up MPI communicator and rank
         if mpicomm is not None:
@@ -108,6 +110,7 @@ class SPBase(object):
         self.compute_unconditional_node_probabilities()
         self.attach_nlens()
         self.attach_nonant_indexes()
+        self.attach_varid_to_nonant_index()
         self.create_communicators()
         self.set_sense()
         self.set_multistage()
@@ -268,6 +271,7 @@ class SPBase(object):
                     _nonant_indexes[ndn,i] = node.nonant_vardata_list[i]
             scenario._nonant_indexes = _nonant_indexes
 
+            
     def attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
@@ -281,6 +285,19 @@ class SPBase(object):
             for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
                 sofar += ndn_len
+
+                
+    def attach_varid_to_nonant_index(self):
+        """ Create a map from the id of nonant variables to their Pyomo index.
+        """
+        for (sname, scenario) in self.local_scenarios.items():
+            # In order to support rho setting, create a map
+            # from the id of vardata object back its _nonant_index.
+            scenario._varid_to_nonant_index = {
+                id(node.nonant_vardata_list[i]): (node.name, i)
+                for node in scenario._PySPnode_list
+                for i in range(scenario._PySP_nlens[node.name])}
+
 
     def create_communicators(self):
         # If the scenarios have not been constructed yet, 

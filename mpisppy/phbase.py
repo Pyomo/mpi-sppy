@@ -84,16 +84,16 @@ class PHBase(mpisppy.spbase.SPBase):
             PH_converger (object, optional):
                 PH converger object.
             rho_setter (callable, optional):
-                Function to set rho values (quadratic penalty values)
-                throughout the PH algorithm.
-
+                Function to set rho values throughout the PH algorithm.
+            variable_probability (callable, optional):
+                Function to set variable specific probabilities.
 
     """
     def __init__(self, PHoptions, all_scenario_names, scenario_creator,
                  scenario_denouement=None, all_nodenames=None,
                  mpicomm=None, rank0=0, cb_data=None,
                  PH_extensions=None, PH_extension_kwargs=None,
-                 PH_converger=None, rho_setter=None):
+                 PH_converger=None, rho_setter=None, variable_probability=None):
         """ PHBase constructor. """
         super().__init__(PHoptions,
                          all_scenario_names,
@@ -102,7 +102,8 @@ class PHBase(mpisppy.spbase.SPBase):
                          all_nodenames=all_nodenames,
                          mpicomm=mpicomm,
                          rank0=rank0,
-                         cb_data=cb_data)
+                         cb_data=cb_data,
+                         variable_probability=variable_probability)
 
         if self.rank_global == 0:
             tt_timer.toc("Start PHBase.__init__", delta=False)
