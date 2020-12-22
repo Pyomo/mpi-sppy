@@ -1,6 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Run a few examples; dlw June 2020
+# For specific tests during development
 # See also runall.py
 # Assumes you run from the examples directory.
 # Optional command line arguments: solver_name mpiexec_arg
@@ -38,7 +38,15 @@ def do_one(dirname, progname, np, argstring):
     os.chdir("..")
 
 
-# for farmer, the first arg is num_scens and is required
+print("** Starting regular sizes **")
+do_one("sizes",
+       "sizes_cylinders.py",
+       4,
+       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+
+print("** Starting special sizes **")
 do_one("sizes",
        "special_cylinders.py",
        4,
