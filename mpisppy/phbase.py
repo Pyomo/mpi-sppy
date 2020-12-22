@@ -84,16 +84,16 @@ class PHBase(mpisppy.spbase.SPBase):
             PH_converger (object, optional):
                 PH converger object.
             rho_setter (callable, optional):
-                Function to set rho values (quadratic penalty values)
-                throughout the PH algorithm.
-
+                Function to set rho values throughout the PH algorithm.
+            variable_probability (callable, optional):
+                Function to set variable specific probabilities.
 
     """
     def __init__(self, PHoptions, all_scenario_names, scenario_creator,
                  scenario_denouement=None, all_nodenames=None,
                  mpicomm=None, rank0=0, cb_data=None,
                  PH_extensions=None, PH_extension_kwargs=None,
-                 PH_converger=None, rho_setter=None):
+                 PH_converger=None, rho_setter=None, variable_probability=None):
         """ PHBase constructor. """
         super().__init__(PHoptions,
                          all_scenario_names,
@@ -102,7 +102,8 @@ class PHBase(mpisppy.spbase.SPBase):
                          all_nodenames=all_nodenames,
                          mpicomm=mpicomm,
                          rank0=rank0,
-                         cb_data=cb_data)
+                         cb_data=cb_data,
+                         variable_probability=variable_probability)
 
         if self.rank_global == 0:
             tt_timer.toc("Start PHBase.__init__", delta=False)
@@ -1135,17 +1136,6 @@ class PHBase(mpisppy.spbase.SPBase):
                                         mutable=True,
                                         default=self.PHoptions["defaultPHrho"])
 
-    def attach_varid_to_nonant_index(self):
-        """ Create a map from the id of nonant variables to their Pyomo index.
-        """
-        for (sname, scenario) in self.local_scenarios.items():
-            # In order to support rho setting, create a map
-            # from the id of vardata object back its _nonant_index.
-            scenario._varid_to_nonant_index = {
-                id(node.nonant_vardata_list[i]): (node.name, i)
-                for node in scenario._PySPnode_list
-                for i in range(scenario._PySP_nlens[node.name])}
-
     def attach_PH_to_objective(self, add_duals=True, add_prox=False):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
@@ -1235,7 +1225,6 @@ class PHBase(mpisppy.spbase.SPBase):
         self.current_solver_options = self.PHoptions["iter0_solver_options"]
 
         self.attach_Ws_and_prox()
-        self.attach_varid_to_nonant_index()
         self.attach_PH_to_objective(add_duals=attach_duals,
                                     add_prox=attach_prox)
 
