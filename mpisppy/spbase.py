@@ -111,6 +111,7 @@ class SPBase(object):
         self.create_communicators()
         self.set_sense()
         self.set_multistage()
+        self.use_variable_probability_setter()
 
         ## SPCommunicator object
         self._spcomm = None
@@ -343,6 +344,74 @@ class SPBase(object):
 
     def set_multistage(self):
         self.multistage = (len(self.all_nodenames) > 1)
+
+    def use_variable_probability_setter(self, verbose=False):
+        """ set variable probability unconditional values using a function self.variable_probability
+        that gives us a list of (id(vardata), probability)]
+        """
+        if self.variable_probability is None:
+            return
+        didit = 0
+        skipped = 0
+        variable_probability_kwargs = self.options['variable_probability_kwargs'] \
+                            if 'variable_probability_kwargs' in self.options \
+                            else dict()
+        for sname, scenario in self.local_scenarios.items():
+            variable_probability = self.variable_probability(scenario, **variable_probability_kwargs)
+            for (vid, prob) in variable_probability:
+                ndn, i = scenario._varid_to_nonant_index[vid]
+                scenario._PySP_prob_coeff[ndn][i] = prob
+            didit += len(variable_probability)
+            skipped += len(scenario._varid_to_nonant_index) - didit
+        if verbose and self.rank == self.rank0:
+            print ("variable_probability set",didit,"and skipped",skipped)
+
+        self._check_variable_probabilities_sum(verbose)
+
+    def _check_variable_probabilities_sum(self, verbose):
+
+        nodenames = [] # to transmit to comms
+        local_concats = {}   # keys are tree node names
+        global_concats =  {} # values sums of node conditional probabilities
+
+        # we need to accumulate all local contributions before the reduce
+        for k,s in self.local_scenarios.items():
+            nlens = s._PySP_nlens
+            for node in s._PySPnode_list:
+                if node.name not in nodenames:
+                    ndn = node.name
+                    nodenames.append(ndn)
+                    local_concats[ndn] = np.zeros(nlen[ndn], dtype='d')
+                    global_concats[ndn] = np.zeros(nlen[ndn], dtype='d')
+
+        # sum local conditional probabilities
+        for k,s in self.local_scenarios.items():
+            for node in s._PySPnode_list:
+                ndn = node.name
+                local_concats[ndn] += s._PySP_prob_coeff[ndn]
+
+        # compute sum node conditional probabilities (reduction)
+        for ndn in nodenames:
+            self.comms[ndn].Allreduce(
+                [local_concats[ndn], mpi.DOUBLE],
+                [global_concats[ndn], mpi.DOUBLE],
+                op=mpi.SUM)
+
+        tol = self.E1_tolerance
+        checked_nodes = list()
+        # check sum node conditional probabilites are close to 1
+        for k,s in self.local_scenarios.items():
+            nlens = s._PySP_nlens
+            for node in s._PySPnode_list:
+                ndn = node.name
+                if ndn not in checked_nodes:
+                    if not np.allclose(global_concats[ndn], 1., atol=tol):
+                        close = ~np.isclose(global_concats[ndn], 1., atol=tol)
+                        indices = np.nonzero(close)[0]
+                        bad_vars = [ s._nonant_indexes[ndn,idx] for idx in indices ]
+                        raise RuntimeError(f"Node {ndn}, variables {bad_vars} have conditional"
+                                            "probabilities which do not sum to 1")
+                    checked_nodes.append(ndn)
 
     def _look_before_leap(self, scen, addlist):
         """ utility to check before attaching something to the user's model

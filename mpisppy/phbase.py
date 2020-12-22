@@ -732,12 +732,10 @@ class PHBase(mpisppy.spbase.SPBase):
         for sname, scenario in self.local_scenarios.items():
             rholist = self.rho_setter(scenario, **rho_setter_kwargs)
             for (vid, rho) in rholist:
-                try:
-                    (ndn, i) = scenario._varid_to_nonant_index[vid]
-                    scenario._PHrho[(ndn, i)] = rho
-                    didit += 1
-                except:
-                    skipped += 1
+                (ndn, i) = scenario._varid_to_nonant_index[vid]
+                scenario._PHrho[(ndn, i)] = rho
+            didit += len(rholist)
+            skipped += len(scenario._varid_to_nonant_index) - didit
         if verbose and self.rank == self.rank0:
             print ("rho_setter set",didit,"and skipped",skipped)
 
