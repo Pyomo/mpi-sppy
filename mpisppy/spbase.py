@@ -295,6 +295,11 @@ class SPBase(object):
             for node in scenario._PySPnode_list:
                 nonleafnodes[node.name] = node  # might be assigned&reassigned
 
+        # check the node names given by the scenarios
+        for nodename in nonleafnodes.keys():
+            if nodename not in self.all_nodenames:
+                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames}")
+
         # loop over all nodes and make the comms (split requires all ranks)
         # make sure we loop in the same order, so every rank iterate over
         # the nodelist
@@ -323,10 +328,6 @@ class SPBase(object):
                 if sname in scenario_names_to_comm_rank:
                     assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
 
-        # check the node names given by the scenarios
-        for nodename in nonleafnodes.keys():
-            if nodename not in self.all_nodenames:
-                raise RuntimeError(f"Tree node '{nodename}' not in node list {self.all_nodenames}")
 
     def compute_unconditional_node_probabilities(self):
         """ calculates unconditional node probabilities """

@@ -132,6 +132,8 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--BFs=3,3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
+do_one("hydro", "hydro_ef.py", 1, solver_name)
+
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
@@ -175,7 +177,7 @@ if not nouc and egret_avail():
            "--lagrangian-iter0-mipgap=1e-7 --with-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
            "--solver-name={}".format(solver_name))
-
+'''
 
 if len(badguys) > 0:
     print("\nBad Guys:")
