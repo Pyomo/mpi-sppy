@@ -10,16 +10,14 @@ def main():
     inst = "network-10-20-L-01"
     num_scen = int(inst.split("-")[-3])
     scenario_names = [f"Scen{i}" for i in range(num_scen)]
-    scenario_creator_options = {
-        "cb_data": f"./data/{inst}.dat"
-    }
+    cb_data = f"./data/{inst}.dat"
     options = {"solver": "gurobi"}
     ef = ExtensiveForm(
         options,
         scenario_names,
         scenario_creator,
         model_name=f"{inst}-EF",
-        scenario_creator_options=scenario_creator_options
+        cb_data=cb_data,
     )
     results = ef.solve_extensive_form()
     print("Netdes objective value:", pyo.value(ef.ef.EF_Obj))
