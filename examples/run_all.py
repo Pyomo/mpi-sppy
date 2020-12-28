@@ -177,7 +177,7 @@ if not nouc and egret_avail():
            "--lagrangian-iter0-mipgap=1e-7 --with-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
            "--solver-name={}".format(solver_name))
-'''
+
 
 if len(badguys) > 0:
     print("\nBad Guys:")
