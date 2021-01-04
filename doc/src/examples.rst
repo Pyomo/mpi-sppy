@@ -93,7 +93,7 @@ The following code creates an instance of the farmer's model:
 
         return model
 
-Note that the `build_model` function takes a list of values, containing the
+Note that the ``build_model`` function takes a list of values, containing the
 yields for each crop. We can solve the model:
 
 .. testcode::
@@ -165,7 +165,7 @@ assume that each scenario is equally likely to occur. The yield values
 In order to transform the code for the deterministic model above into a
 stochastic model which can be manipulated by MPI-SPPy, we need only incorporate
 a few extra elements (see :ref:`scenario_creator` for full details). The
-`scenario_creator` function is told the name of the scenario to build, and
+``scenario_creator`` function is told the name of the scenario to build, and
 builds a Pyomo model for that scenario appropriately:
 
 .. testcode::
@@ -188,20 +188,23 @@ builds a Pyomo model for that scenario appropriately:
         return model
 
 
-The `scenario_creator` accomplishes two important tasks
+The ``scenario_creator`` accomplishes two important tasks
 
-1. It calls the `attach_root_node` function. We tell this function which part
-   of the objective function (`model.PLANTING_COST`) and which set of variables
-   (`model.X`) belong to the first stage. In this case, the problem is only two
+1. It calls the ``attach_root_node`` function. We tell this function which part
+   of the objective function (``model.PLANTING_COST``) and which set of variables
+   (``model.X``) belong to the first stage. In this case, the problem is only two
    stages, so we need only specify the root node and the first-stage
    information--MPI-SPPy assumes the remainder of the model belongs to the
    second stage.
-2. It attaches an attribute called `PySP_prob` to the model object. This is the
+2. It attaches an attribute called ``PySP_prob`` to the model object. This is the
    probability that the specified scenario occurs. If this probability is not
    specified, MPI-SPPy will assume that all scenarios are equally likely.
 
 Now that we have specified a scenario creator, we can use MPI-SPPy to solve the
 farmer's stochastic program. 
+
+Solving the Extensive Form
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The simplest approach is to solve the extensive form of the model directly.
 MPI-SPPy makes this quite simple:
@@ -225,6 +228,9 @@ MPI-SPPy makes this quite simple:
     -108390.0
 
 TODO: show how to extract the optimal solution itself.
+
+Solving Using Progressive Hedging (PH)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 We can also solve the model using the progressive hedging (PH) algorithm.
 First, we must construct a PH object:
@@ -257,9 +263,9 @@ First, we must construct a PH object:
 
     ...
 
-Note that all of the options in the `options` dict must be specified in order
+Note that all of the options in the ``options`` dict must be specified in order
 to construct the PH object. Once the PH object is constructed, we can execute
-the algorithm with a call to the `ph_main` method:
+the algorithm with a call to the ``ph_main`` method:
 
 .. testcode::
 
@@ -313,6 +319,9 @@ relatively good agreement:
     bad X[CORN] 85.26131687116226
     bad X[WHEAT] 134.08971193504266
 
-The function `gather_var_values_to_root` can be used in parallel to collect
+The function ``gather_var_values_to_root`` can be used in parallel to collect
 the values of all non-anticipative variables at the root. In this (serial)
 example, it simply returns the values of the first-stage variables.
+
+Solving Using Benders' Decomposition
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
