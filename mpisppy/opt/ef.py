@@ -96,7 +96,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         try:
             obj_val = pyo.value(self.ef.EF_Obj)
         except Exception as e:
-            raise ValueError("Could not extract EF objective value with error: {str(e)}")
+            raise ValueError(f"Could not extract EF objective value with error: {str(e)}")
         return obj_val
 
     def get_root_solution(self):
