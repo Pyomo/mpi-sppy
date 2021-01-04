@@ -227,7 +227,21 @@ MPI-SPPy makes this quite simple:
     ...
     -108390.0
 
-TODO: show how to extract the optimal solution itself.
+We can extract the optimal solution itself using the ``get_root_solution``
+method of the ``ExtensiveForm`` object:
+
+.. testcode::
+
+    soln = ef.get_root_solution()
+    for (var_name, var_val) in soln.items():
+        print(var_name, var_val)
+
+.. testoutput::
+    
+    X[BEETS] 250.0
+    X[CORN] 80.0
+    X[WHEAT] 170.0
+
 
 Solving Using Progressive Hedging (PH)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -325,3 +339,56 @@ example, it simply returns the values of the first-stage variables.
 
 Solving Using Benders' Decomposition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Finally, we can solve our example using Benders' decomposition, known as the
+L-shaped method in stochastic programming. The setup code is similar to the
+previous methods:
+
+.. testcode::
+
+    from mpisppy.opt.lshaped import LShapedMethod
+
+    all_scenario_names = ["good", "average", "bad"]
+    bounds = {name: -432000 for name in all_scenario_names}
+    options = {
+        "master_solver": "gurobi_persistent",
+        "sp_solver": "gurobi_persistent",
+        "sp_solver_options" : {"threads" : 1},
+        "valid_eta_lb": bounds,
+        "max_iter": 10,
+    }
+
+    ls = LShapedMethod(options, all_scenario_names, scenario_creator)
+    result = ls.lshaped_algorithm()
+
+    variables = ls.gather_var_values_to_root()
+    for ((scen_name, var_name), var_value) in variables.items():
+        print(scen_name, var_name, var_value)
+
+.. testoutput::
+    :hide:
+
+    ...
+
+.. testoutput::
+    :options: +SKIP
+
+    [    0.00] Start SPBase.__init__
+    Current Iteration: 1 Time Elapsed:    0.00 Current Objective: -Inf
+    Current Iteration: 2 Time Elapsed:    0.01 Time Spent on Last Master: 0.00 Time Spent Generating Last Cut Set:    0.01 Current Objective: -1296000.00
+    Current Iteration: 3 Time Elapsed:    0.02 Time Spent on Last Master: 0.00 Time Spent Generating Last Cut Set:    0.01 Current Objective: -160000.00
+    Current Iteration: 4 Time Elapsed:    0.02 Time Spent on Last Master: 0.00 Time Spent Generating Last Cut Set:    0.00 Current Objective: -113750.00
+    Converged in 4 iterations.
+    Total Time Elapsed:    0.03 Time Spent on Last Master:    0.00 Time spent verifying second stage:    0.00 Final Objective: -108390.00
+    good X[BEETS] 250.0
+    good X[CORN] 80.0
+    good X[WHEAT] 170.0
+    average X[BEETS] 250.0
+    average X[CORN] 80.0
+    average X[WHEAT] 170.0
+    bad X[BEETS] 250.0
+    bad X[CORN] 80.0
+    bad X[WHEAT] 170.0
+
+We see that, for this toy example, the L-shaped method has converged to the
+optimal solution within just 10 iterations.
