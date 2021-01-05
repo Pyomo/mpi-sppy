@@ -39,5 +39,5 @@ jobs:
 
       - name: Test docs
         run: |
-          cd ../doc/src/
+          cd ./doc/src/
           make doctest
