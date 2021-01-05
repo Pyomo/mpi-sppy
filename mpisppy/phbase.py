@@ -623,28 +623,6 @@ class PHBase(mpisppy.spbase.SPBase):
             for ndn_i in model._nonant_indexes:
                 model._Ws[ndn_i].value = flat_list[ci]
                 ci += 1
-        
-        # That is it, unless we are using a persistent solver
-        using_persistent = all(
-            sputils.is_persistent(model._solver_plugin)
-            for model in self.local_subproblems.values()
-        )
-        if not using_persistent:
-            return
-
-        if self.bundling:
-            for (name, model) in self.local_subproblems.items():
-                bundle_num = sputils.extract_num(name)
-                solver = model._solver_plugin
-                for sname in self.names_in_bundles[self.rank][bundle_num]:
-                    smodel = self.local_scenarios[sname]
-                    for vardata in smodel._nonant_indexes.values():
-                        solver.update_var(vardata)
-        else:
-            for model in self.local_scenarios.values():
-                solver = model._solver_plugin
-                for vardata in model._nonant_indexes.values():
-                    solver.update_var(vardata)
 
     def _update_E1(self):
         """ Add up the probabilities of all scenarios using a reduce call.
