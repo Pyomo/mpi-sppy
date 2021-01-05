@@ -22,7 +22,7 @@ jobs:
           apt-get update && apt-get install -y mpich
           pip install wheel
           pip install --upgrade pip
-          pip install pyomo pandas mpi4py setuptools sphinx
+          pip install pyomo pandas mpi4py setuptools sphinx sphinx_rtd_theme
 
       - name: setup the program
         run: |
