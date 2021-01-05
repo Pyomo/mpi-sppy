@@ -29,6 +29,7 @@ jobs:
           python setup.py develop
 
       - name: Test EF/PH
+        run: |
           python mpisppy/tests/test_ef_ph.py
 
       - name: Test afew
