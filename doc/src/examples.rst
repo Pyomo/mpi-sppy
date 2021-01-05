@@ -100,7 +100,7 @@ yields for each crop. We can solve the model:
 
     yields = [2.5, 3, 20]
     model = build_model(yields)
-    solver = pyo.SolverFactory("gurobi") 
+    solver = pyo.SolverFactory("cplex")
     solver.solve(model)
 
     # Display the objective value to one decimal place
@@ -213,7 +213,7 @@ MPI-SPPy makes this quite simple:
 
     from mpisppy.opt.ef import ExtensiveForm
 
-    options = {"solver": "gurobi"}
+    options = {"solver": "cplex"}
     all_scenario_names = ["good", "average", "bad"]
     ef = ExtensiveForm(options, all_scenario_names, scenario_creator)
     results = ef.solve_extensive_form()
@@ -254,7 +254,7 @@ First, we must construct a PH object:
     from mpisppy.opt.ph import PH
 
     options = {
-        "solvername": "gurobi",
+        "solvername": "cplex_persistent",
         "PHIterLimit": 5,
         "defaultPHrho": 10,
         "convthresh": 1e-7,
@@ -351,8 +351,8 @@ previous methods:
     all_scenario_names = ["good", "average", "bad"]
     bounds = {name: -432000 for name in all_scenario_names}
     options = {
-        "master_solver": "gurobi_persistent",
-        "sp_solver": "gurobi_persistent",
+        "master_solver": "cplex_persistent",
+        "sp_solver": "cplex_persistent",
         "sp_solver_options" : {"threads" : 1},
         "valid_eta_lb": bounds,
         "max_iter": 10,

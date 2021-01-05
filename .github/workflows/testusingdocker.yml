@@ -28,8 +28,15 @@ jobs:
         run: |
           python setup.py develop
 
-      - name: run tests
+      - name: Test EF/PH
         run: |
           python mpisppy/tests/test_ef_ph.py
+
+      - name: Test afew
           cd examples
           python afew.py cplex
+
+      - name: Test docs
+        run: |
+          cd ../doc/src/
+          make doctest
