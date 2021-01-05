@@ -82,6 +82,41 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         results = self.solver.solve(self.ef, tee=tee)
         return results
 
+    def get_objective_value(self):
+        """ Retrieve the objective value.
+        
+        Returns:
+            float:
+                Objective value.
+
+        Raises:
+            ValueError:
+                If optimal objective value could not be retrieved.
+        """
+        try:
+            obj_val = pyo.value(self.ef.EF_Obj)
+        except Exception as e:
+            raise ValueError(f"Could not extract EF objective value with error: {str(e)}")
+        return obj_val
+
+    def get_root_solution(self):
+        """ Get the value of the variables at the root node.
+
+        Returns:
+            dict:
+                Dictionary mapping variable name (str) to variable value
+                (float) for all variables at the root node.
+        """
+        result = dict()
+        for var in self.ef.ref_vars.values():
+            var_name = var.name
+            dot_index = var_name.find(".")
+            if dot_index >= 0 and var_name[:dot_index] in self.all_scenario_names:
+                var_name = var_name[dot_index+1:]
+            result[var_name] = var.value
+        return result
+
+
 if __name__ == "__main__":
     import mpisppy.tests.examples.farmer as farmer
 

@@ -396,3 +396,65 @@ class SPBase(object):
             self._spcomm = weakref.ref(value)
         else:
             raise RuntimeError("SPBase.spcomm should only be set once")
+
+    def get_var_value(self, scenario_name, variable_name, stage_number):
+        """ Get the value of the specified variable.
+        Args:
+            scenario_name (str):
+                Name of the scenario for which to select the variable.
+            variable_name (str):
+                Name of the variable as constructed by scenario_creator.
+            stage_number (int):
+                Stage of the variable (one-based; ROOT is stage 1).
+
+        Returns:
+            float:
+                Value of the specified variable.
+
+        Raises:
+            ValueError:
+                If no variable with the specified name can be found, or if more
+                than one variable with the specified name is found
+        """
+        if stage_number != 1:
+            raise NotImplementedError("Can only get root node variables for now")
+        scenario_model = self.local_scenarios[scenario_name]
+        variables = [
+            var for node in scenario_model._PySPnode_list
+            for var in node.nonant_vardata_list
+            if var.name == f"{scenario_name}.{variable_name}"
+        ]
+        if len(variables) == 0:
+            raise ValueError(
+                f"Could not find a variable with name {variable_name} in scenario {scenario_name}"
+            )
+        elif len(variables) > 1:
+            raise ValueError(
+                f"Found {len(variables)} variables with name {variable_name} in scenario {scenario_name}"
+            )
+        return variables[0].value
+
+    def gather_var_values_to_root(self):
+        """ Gather the values of the nonanticipative variables to the root of
+        `mpicomm`.
+
+        Returns:
+            dict or None:
+                On the root (rank0), returns a dictionary mapping
+                (scenario_name, variable_name) pairs to their values. On other
+                ranks, returns None.
+        """
+        var_values = dict()
+        for (sname, model) in self.local_scenarios.items():
+            for node in model._PySPnode_list:
+                for var in node.nonant_vardata_list:
+                    var_values[sname, var.name] = pyo.value(var)
+
+        result = self.mpicomm.gather(var_values, root=self.rank0)
+
+        if (self.rank == self.rank0):
+            result = {key: value
+                for dic in result
+                for (key, value) in dic.items()
+            }
+            return result

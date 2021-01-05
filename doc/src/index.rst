@@ -21,6 +21,7 @@ MPI is used.
    ef.rst
    contributors.rst
    api.rst
+   refs.rst
 
 Indices and Tables
 ------------------

@@ -1628,30 +1628,6 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
             )
 
-    def gather_var_values_to_root(self):
-        """ Gather the values of the nonanticipative variables to the root of
-        `mpicomm`.
-
-        Returns:
-            dict or None:
-                On the root (rank0), returns a dictionary mapping
-                (scenario_name, variable_name) pairs to their values. On other
-                ranks, returns None.
-        """
-        var_values = dict()
-        for (sname, model) in self.local_scenarios.items():
-            for node in model._PySPnode_list:
-                for var in node.nonant_vardata_list:
-                    var_values[sname, var.name] = pyo.value(var)
-
-        result = self.mpicomm.gather(var_values, root=self.rank0)
-
-        if (self.rank == self.rank0):
-            result = {key: value
-                for dic in result
-                for (key, value) in dic.items()
-            }
-            return result
 
 if __name__ == "__main__":
     print ("No main for PHBase")

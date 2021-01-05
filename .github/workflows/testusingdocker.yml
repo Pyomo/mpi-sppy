@@ -22,14 +22,22 @@ jobs:
           apt-get update && apt-get install -y mpich
           pip install wheel
           pip install --upgrade pip
-          pip install pyomo pandas mpi4py setuptools
+          pip install pyomo pandas mpi4py setuptools sphinx sphinx_rtd_theme
 
       - name: setup the program
         run: |
           python setup.py develop
 
-      - name: run tests
+      - name: Test EF/PH
         run: |
           python mpisppy/tests/test_ef_ph.py
+
+      - name: Test afew
+        run: |
           cd examples
           python afew.py cplex
+
+      - name: Test docs
+        run: |
+          cd ./doc/src/
+          make doctest
