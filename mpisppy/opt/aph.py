@@ -24,7 +24,7 @@ import mpi4py
 import mpi4py.MPI as mpi
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base  # factor some day...
 import mpisppy.utils.sputils as sputils
@@ -808,7 +808,7 @@ class APH(ph_base.PHBase):  # ??????
                                          initialize = 0.0,
                                          mutable = True)
                 
-            objfct = find_active_objective(scenario, True)
+            objfct = find_active_objective(scenario)
                 
             if self.use_lag:
                 for (ndn,i), xvar in scenario._nonant_indexes.items():

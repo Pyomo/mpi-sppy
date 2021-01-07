@@ -16,7 +16,7 @@ import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spbase
 
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 
 from mpisppy import tt_timer
 
@@ -274,7 +274,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.bundling:
                 objfct = self.saved_objs[k]
             else:
-                objfct = find_active_objective(s, True)
+                objfct = find_active_objective(s)
             local_Eobjs.append(s.PySP_prob * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -865,7 +865,7 @@ class PHBase(mpisppy.spbase.SPBase):
         for sname, scenario_instance in scen_dict.items():
             if sname not in self.local_scenarios:
                 raise RuntimeError("EF scen not in local_scenarios="+sname)
-            self.saved_objs[sname] = find_active_objective(scenario_instance, True)
+            self.saved_objs[sname] = find_active_objective(scenario_instance)
 
         EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
                         nonant_for_fixed_vars=False)
@@ -1141,7 +1141,7 @@ class PHBase(mpisppy.spbase.SPBase):
             """
             if ((not add_duals) and (not add_prox)):
                 return
-            objfct = find_active_objective(scenario, True)
+            objfct = find_active_objective(scenario)
             is_min_problem = objfct.is_minimizing()
             nlens = scenario._PySP_nlens
             if (add_prox and 

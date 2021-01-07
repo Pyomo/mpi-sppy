@@ -10,7 +10,7 @@ import mpisppy.spbase as spbase
 
 from mpi4py import MPI
 from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from pyomo.core import (
     Objective, SOSConstraint, Constraint, Var
