@@ -1143,7 +1143,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 return
             objfct = find_active_objective(scenario)
             is_min_problem = objfct.is_minimizing()
-            nlens = scenario._PySP_nlens
+
+            xbars = scenario._xbars
+
             if (add_prox and 
                 'linearize_binary_proximal_terms' in self.PHoptions):
                 lin_prox = self.PHoptions['linearize_binary_proximal_terms']
@@ -1158,17 +1160,16 @@ class PHBase(mpisppy.spbase.SPBase):
                         scenario._PHW_on[ndn_i] * scenario._Ws[ndn_i] * xvar
                 # Prox term (quadratic)
                 if (add_prox):
-                    if (xvar.is_binary() and lin_prox):
-                        ph_term += scenario._PHprox_on[ndn_i] * \
-                            (scenario._PHrho[ndn_i] /2.0) * \
-                            (xvar - 2.0 * scenario._xbars[ndn_i] * xvar \
-                             - scenario._xbars[ndn_i] \
-                             * scenario._xbars[ndn_i])
+                    # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
+                    # x**2 is the only qradratic term, which might be
+                    # dealt with differently depending on user-set options
+                    if xvar.is_binary() and lin_prox:
+                        xvarsqrd = xvar
                     else:
-                        ph_term += scenario._PHprox_on[ndn_i] * \
-                            (scenario._PHrho[ndn_i] /2.0) * \
-                            (xvar - scenario._xbars[ndn_i]) * \
-                            (xvar - scenario._xbars[ndn_i])
+                        xvarsqrd = xvar**2
+                    ph_term += scenario._PHprox_on[ndn_i] * \
+                        (scenario._PHrho[ndn_i] / 2.0) * \
+                        (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
                 if (is_min_problem):
                     objfct.expr += ph_term
                 else:
