@@ -20,10 +20,10 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y mpich
+          conda install mpi4py
           pip install wheel
           pip install --upgrade pip
-          pip install pyomo pandas mpi4py setuptools sphinx sphinx_rtd_theme xpress
+          pip install pyomo pandas setuptools sphinx sphinx_rtd_theme xpress
 
       - name: setup the program
         run: |
