@@ -748,12 +748,13 @@ def reenable_tictoc_output():
     
 def find_active_objective(pyomomodel):
     # return the only active objective or raise and error
-    retval = None
+    cnt = 0
     for obj in pyomomodel.component_data_objects(Objective, active=True,
                                                  descend_into=True):
-        if retval is None:
+        if cnt == 0:
             retval = obj
-    if retval != obj:
+        cnt += 1
+    if cnt > 1:
         raise RuntimeError(f"Multiple Objectives found for {pyomomodel.name}")
     else:
         return retval
