@@ -45,7 +45,7 @@ import re # For manipulating scenario names
 
 from mpi4py import MPI
 from pyomo.repn.standard_repn import generate_standard_repn
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
 
@@ -250,13 +250,13 @@ class FWPH(mpisppy.phbase.PHBase):
 
             # Algorithm 2 line 5
             if (sputils.is_persistent(mip._solver_plugin)):
-                mip_obj = find_active_objective(mip, True)
+                mip_obj = find_active_objective(mip)
                 mip._solver_plugin.set_objective(mip_obj)
             mip_results = mip._solver_plugin.solve(mip)
             self._check_solve(mip_results, model_name + ' (MIP)')
 
             # Algorithm 2 lines 6--8
-            obj = find_active_objective(mip, True)
+            obj = find_active_objective(mip)
             if (itr == 0):
                 if (self.is_minimizing):
                     dual_bound = mip_results.Problem[0].Lower_bound
@@ -285,7 +285,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             self._add_QP_column(model_name)
             if (sputils.is_persistent(qp._QP_solver_plugin)):
-                qp_obj = find_active_objective(qp, True)
+                qp_obj = find_active_objective(qp)
                 qp._QP_solver_plugin.set_objective(qp_obj)
             qp_results = qp._QP_solver_plugin.solve(qp)
             self._check_solve(qp_results, model_name + ' (QP)')
@@ -585,7 +585,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 Acts on either a single-scenario model or a bundle
         '''
         mip_to_qp = mip.mip_to_qp
-        obj = find_active_objective(mip, True)
+        obj = find_active_objective(mip)
         repn = generate_standard_repn(obj.expr, quadratic=True)
         if len(repn.nonlinear_vars) > 0:
             raise ValueError("FWPH does not support models with nonlinear objective functions")

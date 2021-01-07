@@ -9,7 +9,7 @@ import datetime as dt
 import os
 import pyomo.environ as pyo
 import mpisppy.extensions.xhatbase
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 
 class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -41,7 +41,7 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
             with open(fname, "a") as f:
                 f.write(str(self.ph._PHIter)+",")
                 if not bundling:
-                    objfct = find_active_objective(s, True)
+                    objfct = find_active_objective(s)
                     f.write(str(pyo.value(objfct)))
                 else:
                     f.write("Bundling"+",")

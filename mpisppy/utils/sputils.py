@@ -10,13 +10,13 @@ import re
 import time
 from numpy import prod
 import mpisppy.scenario_tree as scenario_tree
+from pyomo.core import Objective
 
 try:
     from mpi4py import MPI
     haveMPI = True
 except:
     haveMPI = False
-from pyomo.pysp.phutils import find_active_objective
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy import tt_timer
@@ -403,7 +403,7 @@ def _models_have_same_sense(models):
     '''
     if (len(models) == 0):
         return True, True
-    senses = [find_active_objective(scenario, True).is_minimizing()
+    senses = [find_active_objective(scenario).is_minimizing()
                 for scenario in models.values()]
     sense = senses[0]
     check = all(val == sense for val in senses)
@@ -744,6 +744,19 @@ def reenable_tictoc_output():
     # Primarily to re-enable after a disable
     tt_timer._ostream.close()
     tt_timer._ostream = sys.stdout
+
+    
+def find_active_objective(pyomomodel):
+    # return the only active objective or raise and error
+    retval = None
+    for obj in pyomomodel.component_data_objects(Objective, active=True,
+                                                 descend_into=True):
+        if retval is None:
+            retval = obj
+    if retval != obj:
+        raise RuntimeError(f"Multiple Objectives found for {pyomomodel.name}")
+    else:
+        return retval
     
 if __name__ == "__main__":
     BFs = [2,2,2,3]
