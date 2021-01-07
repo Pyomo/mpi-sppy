@@ -25,7 +25,7 @@ from mpisppy.extensions.xhatspecific import XhatSpecific
 
 __version__ = 0.52
 
-solvers = [n+e for e in ('_persistent', '') for n in ("gurobi","cplex","xpress")]
+solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
 
 for solvername in solvers:
     solver_available = pyo.SolverFactory(solvername).available()
