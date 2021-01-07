@@ -10,19 +10,20 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
-    container:
-        image: davidwin87/cplex_trial_core_image:latest
-        env:
-          PATH: :/usr/local/bin:/usr/local/sbin:usr/sbin:/usr/bin:/sbin:/bin:/opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux
 
     steps:
       - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.7 
+          auto-activate-base: false
       - name: Install dependencies
         run: |
           apt-get update && apt-get install -y mpich
           pip install wheel
           pip install --upgrade pip
-          pip install pyomo pandas mpi4py setuptools sphinx sphinx_rtd_theme
+          pip install pyomo pandas mpi4py setuptools sphinx sphinx_rtd_theme xpress
 
       - name: setup the program
         run: |
@@ -35,7 +36,7 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py cplex
+          python afew.py xpress_persistent 
 
       - name: Test docs
         run: |

@@ -25,14 +25,17 @@ from mpisppy.extensions.xhatspecific import XhatSpecific
 
 __version__ = 0.52
 
-solvers = ["gurobi","cplex"]
+solvers = [n+e for e in ('_persistent', '') for n in ("xpress","gurobi","cplex")]
 
 for solvername in solvers:
     solver_available = pyo.SolverFactory(solvername).available()
     if solver_available:
         break
 
-persistentsolvername = solvername+"_persistent"
+if '_persistent' in solvername:
+    persistentsolvername = solvername
+else:
+    persistentsolvername = solvername+"_persistent"
 try:
     persistent_available = pyo.SolverFactory(persistentsolvername).available()
 except:
