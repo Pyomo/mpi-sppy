@@ -341,7 +341,7 @@ class Test_sizes(unittest.TestCase):
         xhatobj = ph.extobject._xhat_looper_obj_final
         dopts = sputils.option_string_to_dict("mipgap=0.0001")
         objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
-        self.assertGreaterEqual(xhatobj, objbound)
+        self.assertGreaterEqual(xhatobj+1.e-6, objbound)
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
