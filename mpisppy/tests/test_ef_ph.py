@@ -25,20 +25,20 @@ from mpisppy.extensions.xhatspecific import XhatSpecific
 
 __version__ = 0.52
 
-solvers = ["gurobi","cplex"]
+solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
 
 for solvername in solvers:
     solver_available = pyo.SolverFactory(solvername).available()
     if solver_available:
         break
 
-persistentsolvername = solvername+"_persistent"
+if '_persistent' in solvername:
+    persistentsolvername = solvername
+else:
+    persistentsolvername = solvername+"_persistent"
 try:
     persistent_available = pyo.SolverFactory(persistentsolvername).available()
 except:
-    persistent_available = False
-# TBD: cplex persistent does not work with some versions of Pyomo (June 2020)
-if solvername == "cplex":
     persistent_available = False
 
 def _get_ph_base_options():
@@ -52,8 +52,12 @@ def _get_ph_base_options():
     BasePHoptions["verbose"] = False
     BasePHoptions["display_timing"] = False
     BasePHoptions["display_progress"] = False
-    BasePHoptions["iter0_solver_options"] = {"mipgap": 0.001}
-    BasePHoptions["iterk_solver_options"] = {"mipgap": 0.00001}
+    if "cplex" in solvername:
+        BasePHoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001}
+        BasePHoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001}
+    else:
+        BasePHoptions["iter0_solver_options"] = {"mipgap": 0.001}
+        BasePHoptions["iterk_solver_options"] = {"mipgap": 0.00001}
 
     BasePHoptions["display_progress"] = False
 
@@ -127,6 +131,8 @@ class Test_sizes(unittest.TestCase):
                                     scenario_creator,
                                     creator_options={"cb_data": ScenCount},
                                     suppress_warnings=True)
+        if '_persistent' in PHoptions["solvername"]:
+            solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
         self.assertEqual(220000.0, sig2eobj)
@@ -140,6 +146,8 @@ class Test_sizes(unittest.TestCase):
         ef = mpisppy.utils.sputils.create_EF(self.all3_scenario_names,
                                        self._fix_creator,
                                        creator_options={"cb_data": ScenCount})
+        if '_persistent' in PHoptions["solvername"]:
+            solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
         # the fix creator fixed num prod first stage for size 5 to 1134
@@ -333,7 +341,7 @@ class Test_sizes(unittest.TestCase):
         xhatobj = ph.extobject._xhat_looper_obj_final
         dopts = sputils.option_string_to_dict("mipgap=0.0001")
         objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
-        self.assertGreaterEqual(xhatobj, objbound)
+        self.assertGreaterEqual(xhatobj+1.e-6, objbound)
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -424,6 +432,8 @@ class Test_hydro(unittest.TestCase):
         ef = mpisppy.utils.sputils.create_EF(self.all_scenario_names,
                                          hydro.scenario_creator,
                                          creator_options={"cb_data": self.BFs})
+        if '_persistent' in PHoptions["solvername"]:
+            solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         mpisppy.utils.sputils.ef_nonants_csv(ef, "delme.csv")
 
@@ -441,6 +451,8 @@ class Test_hydro(unittest.TestCase):
         ef = mpisppy.utils.sputils.create_EF(self.all_scenario_names,
                                          hydro.scenario_creator,
                                          creator_options={"cb_data": self.BFs})
+        if '_persistent' in PHoptions["solvername"]:
+            solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
     
 
