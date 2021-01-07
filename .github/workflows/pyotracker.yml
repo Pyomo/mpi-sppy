@@ -7,28 +7,29 @@ on:
     # min hr dayofmonth month dayofweek 
     - cron: "14 3 * * *"
 
+defaults:
+    run:
+        shell: bash -l {0}
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
-    container:
-        image: davidwin87/cplex_trial_core_image:latest
-        env:
-          PATH: :/usr/local/bin:/usr/local/sbin:usr/sbin:/usr/bin:/sbin:/bin:/opt/ibm/ILOG/CPLEX_Studio_Community129/cplex/bin/x86-64_linux
 
     steps:
       - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.7 
+          auto-activate-base: false
       - name: Install dependencies
         run: |
-          apt-get update && apt-get install -y mpich
-          pip install wheel
-          pip install --upgrade pip
-          pip install pandas mpi4py setuptools
+          conda install mpi4py pandas setuptools git
+          pip install sphinx sphinx_rtd_theme xpress
 
       - name: set up pyomo
         run: |
-          apt update
-          apt install -y git-all
           git clone https://github.com/PyUtilib/pyutilib.git
           cd pyutilib && python ./setup.py develop && cd ..
           git clone https://github.com/pyomo/pyomo
@@ -38,9 +39,16 @@ jobs:
         run: |
           python setup.py develop
 
-      - name: run tests
+      - name: Test EF/PH
         run: |
           python mpisppy/tests/test_ef_ph.py
-          cd examples
-          python afew.py cplex
 
+      - name: Test afew
+        run: |
+          cd examples
+          python afew.py xpress_persistent 
+
+      - name: Test docs
+        run: |
+          cd ./doc/src/
+          make doctest
