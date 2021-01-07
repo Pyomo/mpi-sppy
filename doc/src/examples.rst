@@ -100,7 +100,7 @@ yields for each crop. We can solve the model:
 
     yields = [2.5, 3, 20]
     model = build_model(yields)
-    solver = pyo.SolverFactory("cplex")
+    solver = pyo.SolverFactory("cplex_direct")
     solver.solve(model)
 
     # Display the objective value to one decimal place
@@ -213,7 +213,7 @@ MPI-SPPy makes this quite simple:
 
     from mpisppy.opt.ef import ExtensiveForm
 
-    options = {"solver": "cplex"}
+    options = {"solver": "cplex_direct"}
     all_scenario_names = ["good", "average", "bad"]
     ef = ExtensiveForm(options, all_scenario_names, scenario_creator)
     results = ef.solve_extensive_form()
