@@ -17,6 +17,7 @@ import mpisppy.spbase
 
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from mpisppy.utils.sputils import find_active_objective
+from mpisppy.utils.prox_approx import ProxApproxManager
 
 from mpisppy import tt_timer
 
@@ -475,34 +476,15 @@ class PHBase(mpisppy.spbase.SPBase):
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
-            if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
+            if (sputils.is_persistent(s._solver_plugin)):
+                persistent_solver = s._solver_plugin
 
             for ci, vardata in enumerate(s._nonant_indexes.values()):
                 vardata._value = s._PySP_nonant_cache[ci]
                 vardata.fixed = s._PySP_fixedness_cache[ci]
 
-                if not self.bundling and persistent_solver is not None:
+                if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
-
-
-        if self.bundling:  # we might need to update subproblem peristent solvers
-            rank_local = self.rank
-            for k,s in self.local_subproblems.items():
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-                else:
-                    break  # all solvers should be the same
-
-                # the bundle number is the last number in the name
-                bunnum = sputils.extract_num(k)
-                # for the scenarios in this bundle, update Vars
-                for sname, scen in self.local_scenarios.items():
-                    if sname not in self.names_in_bundles[rank_local][bunnum]:
-                        break
-                    for vardata in scen._nonant_indexes.values():
-                        persistent_solver.update_var(vardata)
 
     def _fix_nonants(self, cache):
         """ Fix the Vars subject to non-anticipativity at given values.
@@ -519,9 +501,8 @@ class PHBase(mpisppy.spbase.SPBase):
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
-            if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
+            if (sputils.is_persistent(s._solver_plugin)):
+                persistent_solver = s._solver_plugin
 
             nlens = s._PySP_nlens
             for node in s._PySPnode_list:
@@ -538,28 +519,8 @@ class PHBase(mpisppy.spbase.SPBase):
                     this_vardata = node.nonant_vardata_list[i]
                     this_vardata._value = cache[ndn][i]
                     this_vardata.fix()
-                    if not self.bundling and persistent_solver is not None:
+                    if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
-
-        if self.bundling:  # we might need to update persistent solvers
-            rank_local = self.rank
-            for k,s in self.local_subproblems.items():
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-                else:
-                    break  # all solvers should be the same
-
-                # the bundle number is the last number in the name
-                bunnum = sputils.extract_num(k)
-                # for the scenarios in this bundle, update Vars
-                for sname, scen in self.local_scenarios.items():
-                    if sname not in self.names_in_bundles[rank_local][bunnum]:
-                        break
-                    nlens = scen._PySP_nlens
-                    for node in scen._PySPnode_list:
-                        for i in range(nlens[node.name]):
-                            this_vardata = node.nonant_vardata_list[i]
-                            persistent_solver.update_var(this_vardata)
 
                             
     def _restore_original_fixedness(self):
@@ -1057,6 +1018,9 @@ class PHBase(mpisppy.spbase.SPBase):
         elif dis_prox:
             self._disable_prox()
         logger.debug("  early solve_loop for rank={}".format(self.rank))
+
+        if self._prox_approx and (not self.prox_disabled):
+            self._update_prox_approx()
         # note that when there is no bundling, scenarios are subproblems
         if use_scenarios_not_subproblems:
             s_source = self.local_scenarios
@@ -1090,7 +1054,14 @@ class PHBase(mpisppy.spbase.SPBase):
         elif dis_prox:
             self._reenable_prox()
 
+    def _update_prox_approx(self):
+        """
+        update proximal term approximation by potentially
+        adding a linear cut near each current xvar value
 
+        NOTE: This is badly inefficient for bundles, but works
+        """
+        pass
 
     def attach_Ws_and_prox(self):
         """ Attach the dual and prox terms to the models in `local_scenarios`.
@@ -1136,6 +1107,21 @@ class PHBase(mpisppy.spbase.SPBase):
             add_prox (boolean, optional):
                 If True, adds the prox term to the objective. Default True.
         """
+
+        if ('linearize_binary_proximal_terms' in self.PHoptions):
+            lin_bin_prox = self.PHoptions['linearize_binary_proximal_terms']
+        else:
+            lin_bin_prox = False
+
+        if ('linearize_nonbinary_proximal_terms' in self.PHoptions):
+            self._prox_approx = self.PHoptions['linearize_binary_proximal_terms']
+            if 'proximal_linearization_tolerance' in self.PHoptions:
+                self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
+            else:
+                self.prox_approx_tol = 1.e-2
+        else:
+            self._prox_approx = False
+
         for (sname, scenario) in self.local_scenarios.items():
             """Attach the dual and prox terms to the objective.
             """
@@ -1146,21 +1132,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             xbars = scenario._xbars
 
-            if ('linearize_binary_proximal_terms' in self.PHoptions):
-                lin_bin_prox = self.PHoptions['linearize_binary_proximal_terms']
-            else:
-                lin_bin_prox = False
-
-            if ('linearize_nonbinary_proximal_terms' in self.PHoptions):
-                lin_all_prox = self.PHoptions['linearize_binary_proximal_terms']
-                if 'proximal_linearization_tolerance' in self.PHoptions):
-                    self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
-                else:
-                    self.prox_approx_tol = 1.e-5
-            else:
-                lin_all_prox = False
-
-            if lin_all_prox:
+            if self._prox_approx:
                 # set-up pyomo IndexVar, but keep it sparse
                 # since some nonants might be binary
                 # Define the first cut to be _xsqvar >= 0
@@ -1170,6 +1142,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._xsqvar_prox_approx = {}
             else:
                 scenario._xsqvar = None
+                scenario._xsqvar_prox_approx = False
 
             for ndn_i, xvar in scenario._nonant_indexes.items():
                 ph_term = 0
@@ -1184,7 +1157,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     # dealt with differently depending on user-set options
                     if xvar.is_binary() and lin_bin_prox:
                         xvarsqrd = xvar
-                    elif lin_all_prox:
+                    elif self._prox_approx:
                         xvarsqrd = scenario._xsqvar[ndn_i]
                         scenario._xsqvar_prox_approx[ndn_i] = \
                                 ProxApproxManager(xvar, xvarsqrd, scenario._xsqvar_cuts, ndn_i)
@@ -1368,6 +1341,14 @@ class PHBase(mpisppy.spbase.SPBase):
                               (np.min(all_set_instance_times),
                                np.mean(all_set_instance_times),
                                np.max(all_set_instance_times)))
+
+            ## if we have bundling, attach
+            ## the solver plugin to the scenarios
+            ## as well to avoid some gymnastics
+            if self.bundling:
+                for scen_name in s.scen_list:
+                    scen = self.local_scenarios[scen_name]
+                    scen._solver_plugin = s._solver_plugin
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
