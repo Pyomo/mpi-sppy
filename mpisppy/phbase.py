@@ -530,7 +530,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     raise RuntimeError("Could not find {} in {}"\
                                        .format(ndn, cache))
                 if cache[ndn] is None:
-                    raise RuntimeError("Empty cache for scen={}, node={}"                                       .format(k, ndn))         
+                    raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
                 if len(cache[ndn]) != nlens[ndn]:
                     raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
                                        .format(nlens[ndn], ndn, len(cache[ndn])))
@@ -1146,11 +1146,30 @@ class PHBase(mpisppy.spbase.SPBase):
 
             xbars = scenario._xbars
 
-            if (add_prox and 
-                'linearize_binary_proximal_terms' in self.PHoptions):
-                lin_prox = self.PHoptions['linearize_binary_proximal_terms']
+            if ('linearize_binary_proximal_terms' in self.PHoptions):
+                lin_bin_prox = self.PHoptions['linearize_binary_proximal_terms']
             else:
-                lin_prox = False
+                lin_bin_prox = False
+
+            if ('linearize_nonbinary_proximal_terms' in self.PHoptions):
+                lin_all_prox = self.PHoptions['linearize_binary_proximal_terms']
+                if 'proximal_linearization_tolerance' in self.PHoptions):
+                    self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
+                else:
+                    self.prox_approx_tol = 1.e-5
+            else:
+                lin_all_prox = False
+
+            if lin_all_prox:
+                # set-up pyomo IndexVar, but keep it sparse
+                # since some nonants might be binary
+                # Define the first cut to be _xsqvar >= 0
+                scenario._xsqvar = pyo.Var(scenario._nonant_indexes, dense=False,
+                                            within=pyo.NonNegativeReals)
+                scenario._xsqvar_cuts = pyo.Constraint(scenario._nonant_indexes, pyo.Integers)
+                scenario._xsqvar_prox_approx = {}
+            else:
+                scenario._xsqvar = None
 
             for ndn_i, xvar in scenario._nonant_indexes.items():
                 ph_term = 0
@@ -1163,8 +1182,12 @@ class PHBase(mpisppy.spbase.SPBase):
                     # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
                     # x**2 is the only qradratic term, which might be
                     # dealt with differently depending on user-set options
-                    if xvar.is_binary() and lin_prox:
+                    if xvar.is_binary() and lin_bin_prox:
                         xvarsqrd = xvar
+                    elif lin_all_prox:
+                        xvarsqrd = scenario._xsqvar[ndn_i]
+                        scenario._xsqvar_prox_approx[ndn_i] = \
+                                ProxApproxManager(xvar, xvarsqrd, scenario._xsqvar_cuts, ndn_i)
                     else:
                         xvarsqrd = xvar**2
                     ph_term += scenario._PHprox_on[ndn_i] * \
