@@ -1122,7 +1122,11 @@ class PHBase(mpisppy.spbase.SPBase):
             if 'proximal_linearization_tolerance' in self.PHoptions:
                 self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
             else:
-                self.prox_approx_tol = 1.e-2
+                self.prox_approx_tol = 1.e-1
+            if 'initial_proximal_term_cuts' in self.PHoptions:
+                initial_prox_cuts = self.PHoptions['initial_proximal_term_cuts']
+            else:
+                initial_prox_cuts = 4
         else:
             self._prox_approx = False
 
@@ -1164,7 +1168,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     elif self._prox_approx:
                         xvarsqrd = scenario._xsqvar[ndn_i]
                         scenario._xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, scenario._xsqvar_cuts, ndn_i)
+                                ProxApproxManager(xvar, xvarsqrd, scenario._xsqvar_cuts, ndn_i, initial_prox_cuts)
                     else:
                         xvarsqrd = xvar**2
                     ph_term += scenario._PHprox_on[ndn_i] * \

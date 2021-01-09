@@ -4,11 +4,6 @@
 from enum import Enum
 from pyomo.core.expr.numeric_expr import LinearExpression
 
-class Side(Enum):
-    LEFT = 1
-    RIGHT = 2
-    BOTH = 3
-
 class ProxApproxManager:
     __slots__ = ()
 
@@ -48,7 +43,7 @@ class _ProxApproxManager:
         if initial_cut_quantity <= 2:
             return ()
 
-        lb, ub = self.ub, self.lb
+        lb, ub = self.lb, self.ub
         bound_range = ub - lb
         # n+1 points is n hyperplanes,
         # but we've already added the bounds
@@ -105,7 +100,7 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         '''
         create a cut at val using a taylor approximation
         '''
-        print(f"adding cut for {val}")
+        #print(f"adding cut for {val}")
         # f'(a) = 2*val
         # f(a) - f'(a)a = val*val - 2*val*val
         f_p_a = 2*val
@@ -143,21 +138,22 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         if lb == ub:
             # var is fixed
-            self.create_cut(lb, side=Side.BOTH)
+            self.create_cut(lb)
             return
 
         #print(f"adding cut for lb {lb}")
-        self.add_cut(lb, side=Side.RIGHT)
+        self.add_cut(lb)
         #print(f"adding cut for ub {ub}")
-        self.add_cut(ub, side=Side.LEFT)
+        self.add_cut(ub)
 
         # there's a left and right cut associated with each discrete point
-        # so one less cut total
-        additional_points = self._get_additional_points(initial_cut_quantity-1)
+        # so there's only half the points we cut on total
+        # This rounds down, e.g., 7 cuts specified becomes 6
+        additional_points = self._get_additional_points(initial_cut_quantity//2+1)
         for ptn in additional_points:
             self.add_cut(ptn)
 
-    def add_cut(self, val, persistent_solver=None, side=Side.BOTH):
+    def add_cut(self, val, persistent_solver=None):
         '''
         create up to two cuts at val, exploiting integrality
         '''
@@ -170,31 +166,29 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## So, a cut to the RIGHT of the point 3 is the cut for (3,4),
         ## which is indexed by 4
-        if side in (Side.BOTH, Side.RIGHT):
-            if (self.var_index, val+1) not in self.cuts and val < self.ub:
-                m,b = _compute_mb(val)
-                expr = LinearExpression( linear_coefs=[1, -m],
-                                         linear_vars=[self.xvarsqrd, self.xvar],
-                                         constant=-b )
-                print(f"adding cut for {(val, val+1)}")
-                self.cuts[self.var_index, val+1] = (0, expr, None)
-                if persistent_solver is not None:
-                    persistent_solver.add_constraint(self.cuts[self.var_index, val+1])
-                cuts_added += 1
+        if (self.var_index, val+1) not in self.cuts and val < self.ub:
+            m,b = _compute_mb(val)
+            expr = LinearExpression( linear_coefs=[1, -m],
+                                     linear_vars=[self.xvarsqrd, self.xvar],
+                                     constant=-b )
+            #print(f"adding cut for {(val, val+1)}")
+            self.cuts[self.var_index, val+1] = (0, expr, None)
+            if persistent_solver is not None:
+                persistent_solver.add_constraint(self.cuts[self.var_index, val+1])
+            cuts_added += 1
 
         ## Similarly, a cut to the LEFT of the point 3 is the cut for (2,3),
         ## which is indexed by 3
-        if side in (Side.BOTH, Side.LEFT):
-            if (self.var_index, val) not in self.cuts and val > self.lb:
-                m,b = _compute_mb(val-1)
-                expr = LinearExpression( linear_coefs=[1, -m],
-                                         linear_vars=[self.xvarsqrd, self.xvar],
-                                         constant=-b )
-                print(f"adding cut for {(val-1, val)}")
-                self.cuts[self.var_index, val] = (0, expr, None)
-                if persistent_solver is not None:
-                    persistent_solver.add_constraint(self.cuts[self.var_index, val])
-                cuts_added += 1
+        if (self.var_index, val) not in self.cuts and val > self.lb:
+            m,b = _compute_mb(val-1)
+            expr = LinearExpression( linear_coefs=[1, -m],
+                                     linear_vars=[self.xvarsqrd, self.xvar],
+                                     constant=-b )
+            #print(f"adding cut for {(val-1, val)}")
+            self.cuts[self.var_index, val] = (0, expr, None)
+            if persistent_solver is not None:
+                persistent_solver.add_constraint(self.cuts[self.var_index, val])
+            cuts_added += 1
 
         return cuts_added
 
@@ -203,11 +197,11 @@ if __name__ == '__main__':
 
     m = pyo.ConcreteModel()
     bounds = (-10, 10)
-    #m.x = pyo.Var(bounds = bounds)
-    m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
+    m.x = pyo.Var(bounds = bounds)
+    #m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
     m.xsqrd = pyo.Var(within=pyo.NonNegativeReals)
 
-    zero = 2.2
+    zero = 6.2
     ## ( x - zero )^2 = x^2 - 2 x zero + zero^2
     m.obj = pyo.Objective( expr = m.xsqrd - 2*zero*m.x + zero**2 )
 
@@ -223,7 +217,7 @@ if __name__ == '__main__':
         print("")
         s.solve(m,tee=False)
         print(f"x: {pyo.value(m.x)}")
-        new_cuts = prox_manager.check_tol_add_cut(1e-6, persistent_solver=s)
+        new_cuts = prox_manager.check_tol_add_cut(1e-2, persistent_solver=s)
         m.pprint()
         iter_cnt += 1
 
