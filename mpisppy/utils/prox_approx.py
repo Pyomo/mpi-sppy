@@ -2,6 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 
 from enum import Enum
+from pyomo.environ import value
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 class ProxApproxManager:
@@ -25,15 +26,15 @@ class _ProxApproxManager:
         self.var_index = ndn_i
         self.cuts = xsqvar_cuts
         self.cut_index = 0
-        self.lb = self.xvar.lb
-        self.ub = self.xvar.ub
-        self._verify_lb_ub()
+        self._verify_store_bounds(xvar)
         self._create_initial_cuts(initial_cut_quantity)
 
-    def _verify_lb_ub(self):
-        if self.lb is None or self.ub is None:
+    def _verify_store_bounds(self, xvar):
+        if not (xvar.has_lb() and xvar.has_ub()):
             raise RuntimeError(f"linearize_nonbinary_proximal_terms requires all "
                                 "nonanticipative variables to have bounds")
+        self.lb = value(xvar.lb)
+        self.ub = value(xvar.ub)
 
     def _get_additional_points(self, initial_cut_quantity):
         '''
@@ -197,11 +198,11 @@ if __name__ == '__main__':
 
     m = pyo.ConcreteModel()
     bounds = (-10, 10)
-    m.x = pyo.Var(bounds = bounds)
-    #m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
+    #m.x = pyo.Var(bounds = bounds)
+    m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
     m.xsqrd = pyo.Var(within=pyo.NonNegativeReals)
 
-    zero = 6.2
+    zero = -6.2
     ## ( x - zero )^2 = x^2 - 2 x zero + zero^2
     m.obj = pyo.Objective( expr = m.xsqrd - 2*zero*m.x + zero**2 )
 
