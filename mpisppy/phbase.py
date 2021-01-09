@@ -1061,7 +1061,11 @@ class PHBase(mpisppy.spbase.SPBase):
 
         NOTE: This is badly inefficient for bundles, but works
         """
-        pass
+        tol = self.prox_approx_tol
+        for sn, s in self.local_scenarios.items():
+            persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
+            for prox_approx_manager in s._xsqvar_prox_approx.values():
+                prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
 
     def attach_Ws_and_prox(self):
         """ Attach the dual and prox terms to the models in `local_scenarios`.
@@ -1114,7 +1118,7 @@ class PHBase(mpisppy.spbase.SPBase):
             lin_bin_prox = False
 
         if ('linearize_nonbinary_proximal_terms' in self.PHoptions):
-            self._prox_approx = self.PHoptions['linearize_binary_proximal_terms']
+            self._prox_approx = self.PHoptions['linearize_nonbinary_proximal_terms']
             if 'proximal_linearization_tolerance' in self.PHoptions:
                 self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
             else:
