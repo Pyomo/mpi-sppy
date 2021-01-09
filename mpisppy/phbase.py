@@ -1126,7 +1126,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if 'initial_proximal_term_cuts' in self.PHoptions:
                 initial_prox_cuts = self.PHoptions['initial_proximal_term_cuts']
             else:
-                initial_prox_cuts = 4
+                initial_prox_cuts = 2
         else:
             self._prox_approx = False
 

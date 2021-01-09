@@ -1,9 +1,21 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
-from enum import Enum
+from math import isclose
 from pyomo.environ import value
 from pyomo.core.expr.numeric_expr import LinearExpression
+
+# helpers for distance from y = x**2
+def _f(val, x_pnt, y_pnt):
+    return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
+def _df(val, x_pnt, y_pnt):
+    #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
+    return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
+def _d2f(val, x_pnt, y_pnt):
+    return 1 + 6*val*val - 2*y_pnt
+
+def _newton_step(val, x_pnt, y_pnt):
+    return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
 
 class ProxApproxManager:
     __slots__ = ()
@@ -68,11 +80,33 @@ class _ProxApproxManager:
         '''
         add a cut if the tolerance is not satified
         '''
-        measured_val = self.xvarsqrd.value
-        actual_val = self.xvar.value**2
+        x_pnt = self.xvar.value
+        y_pnt = self.xvarsqrd.value
+        f_val = x_pnt**2
 
-        if (actual_val - measured_val) > tolerance:
-            self.add_cut(self.xvar.value, persistent_solver)
+        #print(f"y-distance: {actual_val - measured_val})")
+
+        if (f_val - y_pnt) > tolerance:
+            '''
+            In this case, we project the point x_pnt, y_pnt onto
+            the curve y = x**2 by finding the minimum distance
+            between y = x**2 and x_pnt, y_pnt.
+
+            This involves solving a cubic equation, so instead
+            we start at x_pnt, y_pnt and run newtons algorithm
+            to get an approximate good-enough solution.
+            '''
+            this_val = x_pnt
+            #print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
+            #print(f"this_val: {this_val}")
+            next_val = _newton_step(this_val, x_pnt, y_pnt)
+            while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
+                #print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
+                #print(f"next_val: {next_val}")
+                this_val = next_val
+                next_val = _newton_step(this_val, x_pnt, y_pnt)
+            #self.add_cut(x_pnt, persistent_solver)
+            self.add_cut(next_val, persistent_solver)
             return True
         return False
 
@@ -197,19 +231,19 @@ if __name__ == '__main__':
     import pyomo.environ as pyo
 
     m = pyo.ConcreteModel()
-    bounds = (-10, 10)
-    #m.x = pyo.Var(bounds = bounds)
-    m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
+    bounds = (-100, 100)
+    m.x = pyo.Var(bounds = bounds)
+    #m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
     m.xsqrd = pyo.Var(within=pyo.NonNegativeReals)
 
-    zero = -6.2
+    zero = -73.2
     ## ( x - zero )^2 = x^2 - 2 x zero + zero^2
     m.obj = pyo.Objective( expr = m.xsqrd - 2*zero*m.x + zero**2 )
 
     m.xsqrdobj = pyo.Constraint([0], pyo.Integers)
 
     s = pyo.SolverFactory('gurobi_persistent')
-    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.xsqrdobj, 0, 4)
+    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.xsqrdobj, 0, 2)
     s.set_instance(m)
     m.pprint()
     new_cuts = True
@@ -218,8 +252,8 @@ if __name__ == '__main__':
         print("")
         s.solve(m,tee=False)
         print(f"x: {pyo.value(m.x)}")
-        new_cuts = prox_manager.check_tol_add_cut(1e-2, persistent_solver=s)
-        m.pprint()
+        new_cuts = prox_manager.check_tol_add_cut(1e-1, persistent_solver=s)
+        #m.pprint()
         iter_cnt += 1
 
     print(f"objval: {pyo.value(m.obj)}, x: {pyo.value(m.x)}, iters: {iter_cnt}")
