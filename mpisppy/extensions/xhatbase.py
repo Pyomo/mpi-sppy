@@ -215,6 +215,9 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
     def post_iter0(self):
         # the base class needs this
         self.comms = self.opt.comms
+        # This checks to see if the underlying opt object itself has an extension.
+        if self.opt.extobject is not None:
+            self.opt.extobject.post_iter0()
         
 """
 May 2020, DLW
