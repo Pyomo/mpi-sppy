@@ -16,7 +16,7 @@ import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spbase
 
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 
 from mpisppy import tt_timer
 
@@ -275,7 +275,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.bundling:
                 objfct = self.saved_objs[k]
             else:
-                objfct = find_active_objective(s, True)
+                objfct = find_active_objective(s)
             local_Eobjs.append(s.PySP_prob * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -624,28 +624,6 @@ class PHBase(mpisppy.spbase.SPBase):
             for ndn_i in model._nonant_indexes:
                 model._Ws[ndn_i].value = flat_list[ci]
                 ci += 1
-        
-        # That is it, unless we are using a persistent solver
-        using_persistent = all(
-            sputils.is_persistent(model._solver_plugin)
-            for model in self.local_subproblems.values()
-        )
-        if not using_persistent:
-            return
-
-        if self.bundling:
-            for (name, model) in self.local_subproblems.items():
-                bundle_num = sputils.extract_num(name)
-                solver = model._solver_plugin
-                for sname in self.names_in_bundles[self.rank][bundle_num]:
-                    smodel = self.local_scenarios[sname]
-                    for vardata in smodel._nonant_indexes.values():
-                        solver.update_var(vardata)
-        else:
-            for model in self.local_scenarios.values():
-                solver = model._solver_plugin
-                for vardata in model._nonant_indexes.values():
-                    solver.update_var(vardata)
 
     def _update_E1(self):
         """ Add up the probabilities of all scenarios using a reduce call.
@@ -886,7 +864,7 @@ class PHBase(mpisppy.spbase.SPBase):
         for sname, scenario_instance in scen_dict.items():
             if sname not in self.local_scenarios:
                 raise RuntimeError("EF scen not in local_scenarios="+sname)
-            self.saved_objs[sname] = find_active_objective(scenario_instance, True)
+            self.saved_objs[sname] = find_active_objective(scenario_instance)
 
         EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
                         nonant_for_fixed_vars=False)
@@ -1151,9 +1129,11 @@ class PHBase(mpisppy.spbase.SPBase):
             """
             if ((not add_duals) and (not add_prox)):
                 return
-            objfct = find_active_objective(scenario, True)
+            objfct = find_active_objective(scenario)
             is_min_problem = objfct.is_minimizing()
-            nlens = scenario._PySP_nlens
+
+            xbars = scenario._xbars
+
             if (add_prox and 
                 'linearize_binary_proximal_terms' in self.PHoptions):
                 lin_prox = self.PHoptions['linearize_binary_proximal_terms']
@@ -1168,17 +1148,16 @@ class PHBase(mpisppy.spbase.SPBase):
                         scenario._PHW_on[ndn_i] * scenario._Ws[ndn_i] * xvar
                 # Prox term (quadratic)
                 if (add_prox):
-                    if (xvar.is_binary() and lin_prox):
-                        ph_term += scenario._PHprox_on[ndn_i] * \
-                            (scenario._PHrho[ndn_i] /2.0) * \
-                            (xvar - 2.0 * scenario._xbars[ndn_i] * xvar \
-                             - scenario._xbars[ndn_i] \
-                             * scenario._xbars[ndn_i])
+                    # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
+                    # x**2 is the only qradratic term, which might be
+                    # dealt with differently depending on user-set options
+                    if xvar.is_binary() and lin_prox:
+                        xvarsqrd = xvar
                     else:
-                        ph_term += scenario._PHprox_on[ndn_i] * \
-                            (scenario._PHrho[ndn_i] /2.0) * \
-                            (xvar - scenario._xbars[ndn_i]) * \
-                            (xvar - scenario._xbars[ndn_i])
+                        xvarsqrd = xvar**2
+                    ph_term += scenario._PHprox_on[ndn_i] * \
+                        (scenario._PHrho[ndn_i] / 2.0) * \
+                        (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
                 if (is_min_problem):
                     objfct.expr += ph_term
                 else:
@@ -1637,30 +1616,6 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
             )
 
-    def gather_var_values_to_root(self):
-        """ Gather the values of the nonanticipative variables to the root of
-        `mpicomm`.
-
-        Returns:
-            dict or None:
-                On the root (rank0), returns a dictionary mapping
-                (scenario_name, variable_name) pairs to their values. On other
-                ranks, returns None.
-        """
-        var_values = dict()
-        for (sname, model) in self.local_scenarios.items():
-            for node in model._PySPnode_list:
-                for var in node.nonant_vardata_list:
-                    var_values[sname, var.name] = pyo.value(var)
-
-        result = self.mpicomm.gather(var_values, root=self.rank0)
-
-        if (self.rank == self.rank0):
-            result = {key: value
-                for dic in result
-                for (key, value) in dic.items()
-            }
-            return result
 
 if __name__ == "__main__":
     print ("No main for PHBase")

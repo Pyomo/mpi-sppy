@@ -1,7 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 from mpisppy.extensions.extension import PHExtension
-from pyomo.pysp.phutils import find_active_objective
+from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
 from mpisppy import tt_timer
@@ -74,7 +74,7 @@ class CrossScenarioExtension(PHExtension):
         chached_ph_obj = dict()
 
         for k,s in opt.local_subproblems.items():
-            phobj = find_active_objective(s,True)
+            phobj = find_active_objective(s)
             phobj.deactivate()
             chached_ph_obj[k] = phobj
             s._EF_Obj.activate()

@@ -1,11 +1,10 @@
-# Pyomo tracker --- dynamically imports pyomo master
-
-name: pyomo tracker
+name: mpi-sppy (Pyomo released)
 
 on:
-  schedule:
-    # min hr dayofmonth month dayofweek 
-    - cron: "14 3 * * *"
+  push:
+    branches: [ master ]
+  pull_request:
+    branches: [ master ]
 
 defaults:
     run:
@@ -25,15 +24,8 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py pandas setuptools git
-          pip install sphinx sphinx_rtd_theme xpress cplex
-
-      - name: set up pyomo
-        run: |
-          git clone https://github.com/PyUtilib/pyutilib.git
-          cd pyutilib && python ./setup.py develop && cd ..
-          git clone https://github.com/pyomo/pyomo
-          cd pyomo && python setup.py develop
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme xpress cplex
 
       - name: setup the program
         run: |
