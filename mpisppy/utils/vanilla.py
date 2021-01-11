@@ -57,7 +57,8 @@ def ph_hub(args,
            all_scenario_names,
            cb_data=None,
            ph_extensions=None,
-           rho_setter=None):
+           rho_setter=None,
+           variable_probability=None):
     shoptions = shared_options(args)
     PHoptions = copy.deepcopy(shoptions)
     PHoptions["convthresh"] = args.intra_hub_conv_thresh
@@ -79,6 +80,7 @@ def ph_hub(args,
             "scenario_creator": scenario_creator,
             "cb_data": cb_data,
             "rho_setter": rho_setter,
+            "variable_probability": variable_probability,
             "PH_extensions": ph_extensions,
         }
     }

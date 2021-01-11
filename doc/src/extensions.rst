@@ -56,4 +56,24 @@ WXBarWriter and WXBarReader
 There is an extension to write xbar and W values and another to read them.
 An example of their use is shown in ``examples.sizes.sizes_demo.py``
 
+rho_setter
+==========
 
+Per variable rho values (mainly for PH) can be set using a function
+that takes a scenario (a Pyomo ``ConcreteModel``) as its only
+argument. The function returns a list of (id(vardata), rho)
+tuples. The function name can be given the the ``vanilla.ph_hub``
+constructor or in the hub dictionary under ``opt_kwargs`` as the
+``rho_setter`` entry. (The function name is ultimately passed to the
+``phabase`` constructor.)
+
+There is an example of the function in the sizes example (``_rho_setter``).
+
+variable_probability
+====================
+
+A function similar to ``rho_setter`` can be passed to the ``SPBase`` constructor
+via the ``PHBase`` construtor
+as the ``variable_probability`` argument to allow for per variable probability
+specification. So it can be passed through by ``vanilla`` via
+``ph_hub``. The function should return (vid, probability) pairs.

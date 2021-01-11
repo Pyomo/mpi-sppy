@@ -54,6 +54,7 @@ class SPBase(object):
         mpicomm=None,
         rank0=0,
         cb_data=None,
+        variable_probability=None
     ):
         self.startdt = dt.datetime.now()
         self.start_time = time.time()
@@ -73,6 +74,7 @@ class SPBase(object):
             self.all_nodenames = all_nodenames
         else:
             raise RuntimeError("'ROOT' must be in the list of node names")
+        self.variable_probability = variable_probability
 
         # Set up MPI communicator and rank
         if mpicomm is not None:
@@ -108,9 +110,11 @@ class SPBase(object):
         self.compute_unconditional_node_probabilities()
         self.attach_nlens()
         self.attach_nonant_indexes()
+        self.attach_varid_to_nonant_index()
         self.create_communicators()
         self.set_sense()
         self.set_multistage()
+        self.use_variable_probability_setter()
 
         ## SPCommunicator object
         self._spcomm = None
@@ -267,6 +271,7 @@ class SPBase(object):
                     _nonant_indexes[ndn,i] = node.nonant_vardata_list[i]
             scenario._nonant_indexes = _nonant_indexes
 
+            
     def attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
@@ -280,6 +285,19 @@ class SPBase(object):
             for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
                 sofar += ndn_len
+
+                
+    def attach_varid_to_nonant_index(self):
+        """ Create a map from the id of nonant variables to their Pyomo index.
+        """
+        for (sname, scenario) in self.local_scenarios.items():
+            # In order to support rho setting, create a map
+            # from the id of vardata object back its _nonant_index.
+            scenario._varid_to_nonant_index = {
+                id(node.nonant_vardata_list[i]): (node.name, i)
+                for node in scenario._PySPnode_list
+                for i in range(scenario._PySP_nlens[node.name])}
+
 
     def create_communicators(self):
         # If the scenarios have not been constructed yet, 
@@ -330,16 +348,93 @@ class SPBase(object):
 
 
     def compute_unconditional_node_probabilities(self):
-        """ calculates unconditional node probabilities """
+        """ calculates unconditional node probabilities and _PySP_prob_coeff """
         for k,s in self.local_scenarios.items():
             root = s._PySPnode_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._PySPnode_list[:-1],s._PySPnode_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
+            if not hasattr(s, '_PySP_prob_coeff'):
+                s._PySP_prob_coeff = {}
+                for node in s._PySPnode_list:
+                    s._PySP_prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
 
 
     def set_multistage(self):
         self.multistage = (len(self.all_nodenames) > 1)
+
+    def use_variable_probability_setter(self, verbose=False):
+        """ set variable probability unconditional values using a function self.variable_probability
+        that gives us a list of (id(vardata), probability)]
+        Note: We estimate that less then 0.01 of mpi-sppy runs will call this.
+        """
+        if self.variable_probability is None:
+            return
+        didit = 0
+        skipped = 0
+        variable_probability_kwargs = self.options['variable_probability_kwargs'] \
+                            if 'variable_probability_kwargs' in self.options \
+                            else dict()
+        for sname, s in self.local_scenarios.items():
+            variable_probability = self.variable_probability(s, **variable_probability_kwargs)
+            for (vid, prob) in variable_probability:
+                ndn, i = s._varid_to_nonant_index[vid]
+                # If you are going to do any variables at a node, you have to do all.
+                if type(s._PySP_prob_coeff[ndn]) is float:  # not yet a vector
+                    defprob = s._PySP_prob_coeff[ndn]
+                    s._PySP_prob_coeff[ndn] = np.full(s._PySP_nlens[ndn], defprob, dtype='d')
+                s._PySP_prob_coeff[ndn][i] = prob
+            didit += len(variable_probability)
+            skipped += len(s._varid_to_nonant_index) - didit
+        if verbose and self.rank == self.rank0:
+            print ("variable_probability set",didit,"and skipped",skipped)
+
+        self._check_variable_probabilities_sum(verbose)
+
+    def _check_variable_probabilities_sum(self, verbose):
+
+        nodenames = [] # to transmit to comms
+        local_concats = {}   # keys are tree node names
+        global_concats =  {} # values sums of node conditional probabilities
+
+        # we need to accumulate all local contributions before the reduce
+        for k,s in self.local_scenarios.items():
+            nlens = s._PySP_nlens
+            for node in s._PySPnode_list:
+                if node.name not in nodenames:
+                    ndn = node.name
+                    nodenames.append(ndn)
+                    local_concats[ndn] = np.zeros(nlens[ndn], dtype='d')
+                    global_concats[ndn] = np.zeros(nlens[ndn], dtype='d')
+
+        # sum local conditional probabilities
+        for k,s in self.local_scenarios.items():
+            for node in s._PySPnode_list:
+                ndn = node.name
+                local_concats[ndn] += s._PySP_prob_coeff[ndn]
+
+        # compute sum node conditional probabilities (reduction)
+        for ndn in nodenames:
+            self.comms[ndn].Allreduce(
+                [local_concats[ndn], MPI.DOUBLE],
+                [global_concats[ndn], MPI.DOUBLE],
+                op=MPI.SUM)
+
+        tol = self.E1_tolerance
+        checked_nodes = list()
+        # check sum node conditional probabilites are close to 1
+        for k,s in self.local_scenarios.items():
+            nlens = s._PySP_nlens
+            for node in s._PySPnode_list:
+                ndn = node.name
+                if ndn not in checked_nodes:
+                    if not np.allclose(global_concats[ndn], 1., atol=tol):
+                        close = ~np.isclose(global_concats[ndn], 1., atol=tol)
+                        indices = np.nonzero(close)[0]
+                        bad_vars = [ s._nonant_indexes[ndn,idx] for idx in indices ]
+                        raise RuntimeError(f"Node {ndn}, variables {bad_vars} have conditional"
+                                            "probabilities which do not sum to 1")
+                    checked_nodes.append(ndn)
 
     def _look_before_leap(self, scen, addlist):
         """ utility to check before attaching something to the user's model
