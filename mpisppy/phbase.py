@@ -1123,8 +1123,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
-            if 'initial_proximal_term_cuts' in self.PHoptions:
-                initial_prox_cuts = self.PHoptions['initial_proximal_term_cuts']
+            if 'initial_proximal_cut_count' in self.PHoptions:
+                initial_prox_cuts = self.PHoptions['initial_proximal_cut_count']
             else:
                 initial_prox_cuts = 2
         else:
