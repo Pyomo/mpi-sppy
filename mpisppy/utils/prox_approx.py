@@ -201,7 +201,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## So, a cut to the RIGHT of the point 3 is the cut for (3,4),
         ## which is indexed by 4
-        if (self.var_index, val+1) not in self.cuts and val < self.ub:
+        if (*self.var_index, val+1) not in self.cuts and val < self.ub:
             m,b = _compute_mb(val)
             expr = LinearExpression( linear_coefs=[1, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
@@ -214,7 +214,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## Similarly, a cut to the LEFT of the point 3 is the cut for (2,3),
         ## which is indexed by 3
-        if (self.var_index, val) not in self.cuts and val > self.lb:
+        if (*self.var_index, val) not in self.cuts and val > self.lb:
             m,b = _compute_mb(val-1)
             expr = LinearExpression( linear_coefs=[1, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
