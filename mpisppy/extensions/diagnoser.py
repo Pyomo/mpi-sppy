@@ -36,7 +36,7 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
         from the ph object to be more efficient...
         """
         for sname, s in self.ph.local_scenarios.items():
-            bundling = not hasattr(s, "_solver_plugin")
+            bundling = self.ph.bundling
             fname = self.dirname+os.sep+sname+".dag"
             with open(fname, "a") as f:
                 f.write(str(self.ph._PHIter)+",")
