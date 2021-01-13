@@ -17,6 +17,20 @@ class Extension:
     def __init__(self, spbase_object):
         self.opt = spbase_object
 
+    def post_solve(self, subproblem, results):
+        '''
+        Method called after every subproblem solve
+
+        Inputs
+        ------
+        subproblem : Pyomo subproblem
+        results : Pyomo results object from initial solve
+
+        Returns
+        -------
+        results : Pyomo results objects from most recent solve
+        '''
+        return results
 
 class PHExtension(Extension):
     ''' Abstract base class for extensions to general SPBase objects.
