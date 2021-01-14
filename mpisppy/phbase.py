@@ -1127,9 +1127,6 @@ class PHBase(mpisppy.spbase.SPBase):
                 initial_prox_cuts = self.PHoptions['initial_proximal_cut_count']
             else:
                 initial_prox_cuts = 2
-            # If 'linearize_proximal_terms' is set, we'll
-            # linerize binary proximal terms
-            lin_bin_prox = True
         else:
             self._prox_approx = False
 
@@ -1166,7 +1163,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
                     # x**2 is the only qradratic term, which might be
                     # dealt with differently depending on user-set options
-                    if xvar.is_binary() and lin_bin_prox:
+                    if xvar.is_binary() and (lin_bin_prox or self._prox_approx):
                         xvarsqrd = xvar
                     elif self._prox_approx:
                         xvarsqrd = scenario._xsqvar[ndn_i]
