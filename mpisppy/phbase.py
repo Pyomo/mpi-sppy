@@ -125,6 +125,14 @@ class PHBase(mpisppy.spbase.SPBase):
         self.convobject = None  # PH converger
         self.attach_xbars()
 
+        if (self.PH_extensions is not None):
+            if self.PH_extension_kwargs is None:
+                self.extobject = self.PH_extensions(self)
+            else:
+                self.extobject = self.PH_extensions(
+                    self, **self.PH_extension_kwargs
+                )
+
     def Compute_Xbar(self, verbose=False, synchronizer=None):
         """ Gather xbar and x squared bar for each node in the list and
         distribute the values back to the scenarios.
@@ -956,12 +964,14 @@ class PHBase(mpisppy.spbase.SPBase):
             results = s._solver_plugin.solve(s,
                                              **solve_keyword_args,
                                              load_solutions=False)
-            solve_err = False
         except:
-            solve_err = True
+            results = None
+
+        if self.PH_extensions is not None:
+            results = self.extobject.post_solve(s, results)
 
         pyomo_solve_time = time.time() - solve_start_time
-        if solve_err or (results.solver.status != SolverStatus.ok) \
+        if results is None or (results.solver.status != SolverStatus.ok) \
               or (results.solver.termination_condition \
                     != TerminationCondition.optimal):
              s._PySP_feas_indicator = False
@@ -971,7 +981,7 @@ class PHBase(mpisppy.spbase.SPBase):
                  if self.spcomm:
                      name = self.spcomm.__class__.__name__
                  print (f"[{name}] Solve failed for scenario {s.name}")
-                 if not solve_err:
+                 if results is not None:
                      print ("status=", results.solver.status)
                      print ("TerminationCondition=",
                             results.solver.termination_condition)
@@ -1192,14 +1202,6 @@ class PHBase(mpisppy.spbase.SPBase):
             at the time the PH object was created. It also calls the
             `pre_iter0` method of the Extension object.
         """
-
-        if (self.PH_extensions is not None):
-            if self.PH_extension_kwargs is None:
-                self.extobject = self.PH_extensions(self)
-            else:
-                self.extobject = self.PH_extensions(
-                    self, **self.PH_extension_kwargs
-                )
 
         self.current_solver_options = self.PHoptions["iter0_solver_options"]
 
