@@ -964,15 +964,14 @@ class PHBase(mpisppy.spbase.SPBase):
             results = s._solver_plugin.solve(s,
                                              **solve_keyword_args,
                                              load_solutions=False)
-            solve_err = False
         except:
-            solve_err = True
+            results = None
 
         if self.PH_extensions is not None:
             results = self.extobject.post_solve(s, results)
 
         pyomo_solve_time = time.time() - solve_start_time
-        if solve_err or (results.solver.status != SolverStatus.ok) \
+        if results is None or (results.solver.status != SolverStatus.ok) \
               or (results.solver.termination_condition \
                     != TerminationCondition.optimal):
              s._PySP_feas_indicator = False
