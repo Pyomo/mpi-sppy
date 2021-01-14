@@ -109,6 +109,25 @@ def _common_args(inparser):
                         type=str,
                         default='')
 
+    parser.add_argument("--linearize-binary-proximal-terms",
+                        help="For PH, linearize the proximal terms for "
+                        "all binary nonanticipative variables",
+                        dest="linearize_binary_proximal_terms",
+                        action='store_true')
+
+    parser.add_argument("--linearize-proximal-terms",
+                        help="For PH, linearize the proximal terms for "
+                        "all nonanticipative variables",
+                        dest="linearize_proximal_terms",
+                        action='store_true')
+
+    parser.add_argument("--proximal-linearization-tolerance",
+                        help="For PH, when linearizing proximal terms, "
+                        "a cut will be added if the proximal term approximation "
+                        "is looser than this value (default 1e-1)",
+                        dest="proximal_linearization_tolerance",
+                        type=float,
+                        default=1.e-1)
 
     return parser
     

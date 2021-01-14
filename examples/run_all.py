@@ -101,6 +101,11 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=1 "
        "--default-rho=1 --with-tee-rank0-solves "
        "--solver-name={} --no-fwph".format(solver_name))
+do_one("farmer", "farmer_cylinders.py", 3,
+       "3 --default-rho=1.0 --max-iterations=50 "
+       "--with-display-progress --rel-gap=0.0 --abs-gap=0.0 "
+       "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
+       "--solver-name={} --no-fwph".format(solver_name))
 do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
 do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 do_one("netdes", "netdes_cylinders.py", 5,

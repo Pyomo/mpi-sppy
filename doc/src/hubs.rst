@@ -23,6 +23,10 @@ The PH implementation can be used with most spokes because it can
 supply x and/or W values at every iteration and numerous extensions
 are in the release.  It supports a full set of extension callout points.
 
+The proximal term can be approximated linearly using the PHoption 
+`linearize_proximal_terms`. If only the binary terms should be 
+approximated, the option `linearize_binary_proximal_terms` can be used. 
+
 lshaped
 -------
 
