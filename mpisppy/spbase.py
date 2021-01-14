@@ -434,8 +434,8 @@ class SPBase(object):
                         bad_vars = [ s._nonant_indexes[ndn,idx].name for idx in indices ]
                         badprobs = [ global_concats[ndn][idx] for idx in indices]
                         raise RuntimeError(f"Node {ndn}, variables {bad_vars} have respective"
-                                           f" conditional probabilities {badprobs}"
-                                           " which do not sum to 1")
+                                           f" conditional probability sum {badprobs}"
+                                           " which are not 1")
                     checked_nodes.append(ndn)
 
     def _look_before_leap(self, scen, addlist):
