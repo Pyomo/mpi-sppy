@@ -981,7 +981,7 @@ class PHBase(mpisppy.spbase.SPBase):
                  if self.spcomm:
                      name = self.spcomm.__class__.__name__
                  print (f"[{name}] Solve failed for scenario {s.name}")
-                 if not solve_err:
+                 if results is not None:
                      print ("status=", results.solver.status)
                      print ("TerminationCondition=",
                             results.solver.termination_condition)
