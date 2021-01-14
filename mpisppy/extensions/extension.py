@@ -23,7 +23,7 @@ class Extension:
 
         Inputs
         ------
-        subproblem : Pyomo subproblem
+        subproblem : Pyomo subproblem (could be a scenario or bundle)
         results : Pyomo results object from initial solve or None if solve failed
 
         Returns
