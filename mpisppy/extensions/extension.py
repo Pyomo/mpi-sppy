@@ -24,7 +24,7 @@ class Extension:
         Inputs
         ------
         subproblem : Pyomo subproblem
-        results : Pyomo results object from initial solve
+        results : Pyomo results object from initial solve or None if solve failed
 
         Returns
         -------
