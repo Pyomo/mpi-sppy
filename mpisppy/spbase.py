@@ -431,9 +431,11 @@ class SPBase(object):
                     if not np.allclose(global_concats[ndn], 1., atol=tol):
                         close = ~np.isclose(global_concats[ndn], 1., atol=tol)
                         indices = np.nonzero(close)[0]
-                        bad_vars = [ s._nonant_indexes[ndn,idx] for idx in indices ]
-                        raise RuntimeError(f"Node {ndn}, variables {bad_vars} have conditional"
-                                            "probabilities which do not sum to 1")
+                        bad_vars = [ s._nonant_indexes[ndn,idx].name for idx in indices ]
+                        badprobs = [ global_concats[ndn][idx] for idx in indices]
+                        raise RuntimeError(f"Node {ndn}, variables {bad_vars} have respective"
+                                           f" conditional probability sum {badprobs}"
+                                           " which are not 1")
                     checked_nodes.append(ndn)
 
     def _look_before_leap(self, scen, addlist):
