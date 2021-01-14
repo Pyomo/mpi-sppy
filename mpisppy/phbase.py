@@ -1117,8 +1117,8 @@ class PHBase(mpisppy.spbase.SPBase):
         else:
             lin_bin_prox = False
 
-        if ('linearize_nonbinary_proximal_terms' in self.PHoptions):
-            self._prox_approx = self.PHoptions['linearize_nonbinary_proximal_terms']
+        if ('linearize_proximal_terms' in self.PHoptions):
+            self._prox_approx = self.PHoptions['linearize_proximal_terms']
             if 'proximal_linearization_tolerance' in self.PHoptions:
                 self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
             else:
@@ -1127,6 +1127,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 initial_prox_cuts = self.PHoptions['initial_proximal_cut_count']
             else:
                 initial_prox_cuts = 2
+            # If 'linearize_proximal_terms' is set, we'll
+            # linerize binary proximal terms
+            lin_bin_prox = True
         else:
             self._prox_approx = False
 
