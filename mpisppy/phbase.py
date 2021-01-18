@@ -134,15 +134,13 @@ class PHBase(mpisppy.spbase.SPBase):
                     self, **self.PH_extension_kwargs
                 )
 
-    def Compute_Xbar(self, verbose=False, synchronizer=None):
+    def Compute_Xbar(self, verbose=False):
         """ Gather xbar and x squared bar for each node in the list and
         distribute the values back to the scenarios.
 
         Args:
             verbose (boolean):
                 If True, prints verbose output.
-            synchronizer (object):
-                For asynchronous PH operation.
         """
 
         """
@@ -156,8 +154,6 @@ class PHBase(mpisppy.spbase.SPBase):
             As of March 2019, we concatenate xbar and xsqbar into one long
             vector to make it easier to use the current asynch code.
         """
-        if synchronizer is not None:
-            raise RuntimeError("Synchronizer is no longer supported; use APH")
 
         nodenames = [] # to transmit to comms
         local_concats = {}   # keys are tree node names
@@ -171,8 +167,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     ndn = node.name
                     nodenames.append(ndn)
                     mylen = 2*nlens[ndn]
-                    if synchronizer is not None and node.name == "ROOT":
-                        mylen += self.n_proc
+
                     local_concats[ndn] = np.zeros(mylen, dtype='d')
                     global_concats[ndn] = np.zeros(mylen, dtype='d')
 
@@ -1496,7 +1491,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             # Compute xbar
             #timer.toc('Rank: {} - Before Compute_Xbar'.format(self.rank))
-            self.Compute_Xbar(verbose, synchronizer)
+            self.Compute_Xbar(verbose)
             #timer.toc('Rank: {} - After Compute_Xbar'.format(self.rank))
 
             # update the weights        

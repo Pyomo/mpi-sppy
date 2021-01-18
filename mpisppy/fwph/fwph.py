@@ -119,7 +119,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self._set_MIP_solver_options()
 
         # Lines 2 and 3 of Algorithm 3 in Boland
-        self.Compute_Xbar(self.PHoptions['verbose'], None)
+        self.Compute_Xbar(self.PHoptions['verbose'])
         self.Update_W(self.PHoptions['verbose'])
 
         # Necessary pre-processing steps
@@ -175,7 +175,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     break
                 self.spcomm.sync()
             if (self.PH_converger):
-                self.Compute_Xbar(self.PHoptions['verbose'], None)
+                self.Compute_Xbar(self.PHoptions['verbose'])
                 diff = self.convobject.convergence_value()
                 if (self.convobject.is_converged()):
                     secs = time.time() - self.t0
@@ -186,7 +186,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     break
             else: # Convergence check from Boland
                 diff = self._conv_diff()
-                self.Compute_Xbar(self.PHoptions['verbose'], None)
+                self.Compute_Xbar(self.PHoptions['verbose'])
                 if (diff < self.PHoptions['convthresh']):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
