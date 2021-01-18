@@ -63,6 +63,9 @@ def ph_hub(args,
     PHoptions = copy.deepcopy(shoptions)
     PHoptions["convthresh"] = args.intra_hub_conv_thresh
     PHoptions["bundles_per_rank"] = args.bundles_per_rank
+    PHoptions["linearize_binary_proximal_terms"] = args.linearize_binary_proximal_terms
+    PHoptions["linearize_proximal_terms"] = args.linearize_proximal_terms
+    PHoptions["proximal_linearization_tolerance"] = args.proximal_linearization_tolerance
 
     if _hasit(args, "with_cross_scenario_cuts") and args.with_cross_scenario_cuts:
         hub_class = CrossScenarioHub
