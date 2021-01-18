@@ -14,7 +14,7 @@ import mpisppy.utils.sputils as sputils
 from collections import OrderedDict
 from mpi4py import MPI
 
-from mpisppy import tt_timer
+from mpisppy import global_toc
 
 logger = logging.getLogger("PHBase")
 logger.setLevel(logging.WARN)
@@ -86,8 +86,7 @@ class SPBase(object):
         self.rank0 = rank0
         self.rank_global = MPI.COMM_WORLD.Get_rank()
 
-        if self.rank_global == 0:
-            tt_timer.toc("Start SPBase.__init__" ,delta=False)
+        global_toc("Initializing SPBase")
 
         # This doesn't seemed to be checked anywhere else
         if self.n_proc > len(self.all_scenario_names):

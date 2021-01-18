@@ -11,7 +11,7 @@ from mpisppy.cylinders.spcommunicator import SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
-from mpisppy import tt_timer
+from mpisppy import global_toc 
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
@@ -114,10 +114,10 @@ class Hub(SPCommunicator):
         update_source = self.get_update_string()
         if self.print_init:
             row = f'{"Iter.":>5s}  {"   "}  {"Best Bound":>14s}  {"Best Incumbent":>14s}  {"Rel. Gap":>12s}  {"Abs. Gap":>14s}'
-            tt_timer.toc(row, delta=False)
+            global_toc(row, True)
             self.print_init = False
         row = f"{current_iteration:5d}  {update_source}  {best_bound:14.4f}  {best_solution:14.4f}  {rel_gap*100:12.3f}%  {abs_gap:14.4f}"
-        tt_timer.toc(row, delta=False)
+        global_toc(row, True)
         self.clear_latest_chars()
 
     def determine_termination(self):
@@ -130,10 +130,10 @@ class Hub(SPCommunicator):
             if "abs_gap" in self.options:
                 abs_gap = self.compute_gap(compute_relative=False)
                 abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
-        if abs_gap_satisfied and self.rank_global == 0:
-            tt_timer.toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}", delta=False)
-        if rel_gap_satisfied and self.rank_global == 0:
-            tt_timer.toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%", delta=False)
+        if abs_gap_satisfied:
+            global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
+        if rel_gap_satisfied:
+            global_toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%")
         return abs_gap_satisfied or rel_gap_satisfied
 
     def hub_finalize(self):
@@ -144,8 +144,7 @@ class Hub(SPCommunicator):
 
         if self.rank_global == 0:
             self.print_init = True
-            tt_timer.toc(f" ", delta=False)
-            tt_timer.toc(f"Statistics at termination", delta=False)
+            global_toc(f"Statistics at termination", True)
             self.screen_trace()
 
     def receive_innerbounds(self):
@@ -450,10 +449,10 @@ class PHHub(Hub):
             return False
 
         if not self.has_outerbound_spokes:
-            if self.opt._PHIter == 1 and self.rank_global == 0:
-                tt_timer.toc(
+            if self.opt._PHIter == 1:
+                global_toc(
                     "Without outer bound spokes, no progress "
-                    "will be made on the Best Bound", delta=False)
+                    "will be made on the Best Bound")
 
         ## log some output
         if self.rank_global == 0:

@@ -19,7 +19,7 @@ except:
     haveMPI = False
 from pyomo.core.expr.numeric_expr import LinearExpression
 
-from mpisppy import tt_timer
+from mpisppy import tt_timer, global_toc
 
 def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     """ top level for the hub and spoke system
@@ -111,8 +111,7 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     spcomm.make_windows()
     if rank_inter == 0:
         spcomm.setup_hub()
-    if rank_global == 0:
-        tt_timer.toc("Starting spcomm.main()", delta=False)
+    global_toc("Starting spcomm.main()")
     spcomm.main()
     if rank_inter == 0: # If this is the hub
         spcomm.send_terminate()
@@ -120,16 +119,14 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     # Anything that's left to do
     spcomm.finalize()
 
-    if rank_global == 0:
-        tt_timer.toc("Hub algorithm complete, waiting for termination barrier", delta=False)
+    global_toc("Hub algorithm complete, waiting for termination barrier")
     fullcomm.Barrier()
 
     ## give the hub the chance to catch new values
     spcomm.hub_finalize()
 
     spcomm.free_windows()
-    if rank_global == 0:
-        tt_timer.toc("Windows freed", delta=False)
+    global_toc("Windows freed")
 
     return spcomm, opt_dict
     
