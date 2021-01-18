@@ -9,6 +9,10 @@ except:
     haveMPI=False
 
 tt_timer = TicTocTimer()
-global_rank = mpi.COMM_WORLD.Get_rank()
+
+if haveMPI:
+    global_rank = mpi.COMM_WORLD.Get_rank()
+else:
+    global_rank = 0
 
 global_toc = lambda msg, cond=(global_rank==0) : tt_timer.toc(msg, delta=False) if cond else None
