@@ -1447,7 +1447,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         return self.trivial_bound
 
-    def iterk_loop(self, synchronizer=None):
+    def iterk_loop(self):
         """ Perform all PH iterations after iteration 0.
         
         This function terminates if any of the following occur:
@@ -1460,18 +1460,9 @@ class PHBase(mpisppy.spbase.SPBase):
            criteria are met (i.e. the convergence value falls below the
            user-specified threshold).
 
-        Args:
-            synchronizer (object, optional):
-                Deprecated; for asynchronous operation.
-
-        Raises:
-            RuntimeError:
-                If a synchronizer is provided (asynchronous PH is not
-                supported).
+        Args: None
 
         """
-        if synchronizer is not None:
-            raise RuntimeError("asynchronous PH is not supported (use APH).")
         verbose = self.PHoptions["verbose"]
         have_extensions = self.PH_extensions is not None
         have_converger = self.PH_converger is not None
@@ -1500,8 +1491,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             if have_converger:
                 self.conv = self.convobject.convergence_value()
-            elif synchronizer is None:
-                self.conv = self.convergence_diff()
+            self.conv = self.convergence_diff()
             #timer.toc('Rank: {} - After convergence_diff'.format(self.rank))
             if have_extensions:
                 self.extobject.miditer()
@@ -1522,7 +1512,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     if self.rank == self.rank0:
                         tt_timer.toc("User-supplied converger determined termination criterion reached", delta=False)
                     break
-            elif synchronizer is None and self.conv is not None:
+            elif self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
                     if self.rank == self.rank0:
@@ -1537,7 +1527,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 solver_options=self.current_solver_options,
                 dtiming=dtiming,
                 gripe=True,
-                disable_pyomo_signal_handling=synchronizer is not None,
+                disable_pyomo_signal_handling=False,
                 tee=teeme,
                 verbose=verbose
             )
@@ -1554,10 +1544,6 @@ class PHBase(mpisppy.spbase.SPBase):
 
             if (self._PHIter == max_iterations) and (self.rank == self.rank0):
                 tt_timer.toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, delta=False)
-                
-        if synchronizer is not None:
-            logger.debug('Setting synchronizer.quitting on rank %d' % self.rank)
-            synchronizer.quitting = 1
 
     def post_loops(self, PH_extensions=None):
         """ Call scenario denouement methods, and report the expected objective
