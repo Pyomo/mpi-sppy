@@ -112,9 +112,11 @@ do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
        "--solver-name={} --rel-gap=0.0 --default-rho=1 "
        "--no-fwph --max-solver-threads=2".format(solver_name))
+# sizes is slow for xpress so try linearizing the proximal term.
 do_one("sizes",
        "sizes_cylinders.py",
        3,
+       "--linearize-proximal-terms "
        "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
        "--default-rho=1 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
@@ -123,7 +125,7 @@ do_one("sizes",
        "sizes_cylinders.py",
        4,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
 
