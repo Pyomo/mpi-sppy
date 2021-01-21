@@ -28,3 +28,20 @@ hub defintion dictionary is called ``hub_dict`` you would add
    hub_dict["opt_kwargs"]["PHoptions"]["display_timing"] = True
 
 before passing it to ``spin_the_wheel``.
+
+
+initial_proximal_cut_count
+--------------------------
+
+If the `linearize_proximal_terms` option is specified (see :ref:`linearize_proximal`)
+then the option 'initial_proximal_cut_count' controls
+the initial number of cuts (default 2).
+
+E.g. if you wanted to specify four cuts
+in ``examples.farmer.farmer_cylinders`` where the
+hub defintion dictionary is called ``hub_dict`` you would add
+
+::
+   hub_dict["opt_kwargs"]["PHoptions"]["initial_proximal_cut_count"] = 4
+
+before passing ``hub_dict`` to ``spin_the_wheel``.
