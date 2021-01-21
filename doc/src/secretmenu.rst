@@ -14,7 +14,7 @@ and tuning of algorithms because for some problems, the variability in
 time to solve scenario sub-problems can be quite large.
 
 .. Note::
-   This option should be used only when there is exactly one scenario per rank.
+   This option should be used only when there is exactly one subproblem per rank.
 
 To set the option, use
 
@@ -23,7 +23,7 @@ To set the option, use
    PHoptions["display_timing"] = True
 
 E.g., if you were adding this to ``examples.farmer.farmer_cylinders`` where the
-hub defintion dictionary is called ``hub_dict`` you would add
+hub definition dictionary is called ``hub_dict`` you would add
 
 .. code-block:: python
 
@@ -41,7 +41,7 @@ the initial number of cuts (default 2).
 
 E.g. if you wanted to specify four cuts
 in ``examples.farmer.farmer_cylinders`` where the
-hub defintion dictionary is called ``hub_dict`` you would add
+hub definition dictionary is called ``hub_dict`` you would add
 
 .. code-block:: python
                 
