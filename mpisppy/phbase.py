@@ -15,7 +15,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spbase
 
-from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
+from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.prox_approx import ProxApproxManager
 
@@ -926,9 +926,10 @@ class PHBase(mpisppy.spbase.SPBase):
             results = self.extobject.post_solve(s, results)
 
         pyomo_solve_time = time.time() - solve_start_time
-        if results is None or (results.solver.status != SolverStatus.ok) \
-              or (results.solver.termination_condition \
-                    != TerminationCondition.optimal):
+        if (results is None) or (len(results.solution) == 0) or \
+                (results.solution(0).status == SolutionStatus.infeasible) or \
+                (results.solver.termination_condition == TerminationCondition.infeasible):
+
              s._PySP_feas_indicator = False
 
              if gripe:
