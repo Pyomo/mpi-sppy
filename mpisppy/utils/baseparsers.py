@@ -59,7 +59,7 @@ def _common_args(inparser):
                         action='store_true')
     parser.add_argument('--no-display-progress',
                         help="do not display progress at each iteration (default)",
-                        dest='with_display_timing',
+                        dest='with_display_progress',
                         action='store_false')
     parser.set_defaults(with_display_progress=False)
 
