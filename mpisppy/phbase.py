@@ -1229,8 +1229,6 @@ class PHBase(mpisppy.spbase.SPBase):
         - verbose (boolean): Flag indicating whether to display verbose output.
         - display_progress (boolean): Flag indicating whether to display
           information about the progression of the algorithm.
-        - display_timing (boolean): Flag indicating whether to display
-          timing information.
         - iter0_solver_options (dict): Dictionary of solver options to use on
           the first solve loop.
         - iterk_solver_options (dict): Dictionary of solver options to use on
@@ -1245,11 +1243,13 @@ class PHBase(mpisppy.spbase.SPBase):
         required = [
             "solvername", "PHIterLimit", "defaultPHrho", 
             "convthresh", "verbose", "display_progress", 
-            "display_timing", "iter0_solver_options", "iterk_solver_options"
+            "iter0_solver_options", "iterk_solver_options"
         ]
-        if "asynchronousPH" in self.PHoptions and self.PHoptions["asynchronousPH"]:
-            required += ["async_frac_needed", "async_sleep_secs"]
         self._options_check(required, self.PHoptions)
+        # Display timing is special for no good reason.
+        if "display_timing" not in self.PHoptions:
+            self.PHoptions["display_timing"] = False
+       
 
     def subproblem_creation(self, verbose):
         """ Create local subproblems (not local scenarios).

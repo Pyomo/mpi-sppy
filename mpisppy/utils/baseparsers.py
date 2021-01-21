@@ -61,7 +61,7 @@ def _common_args(inparser):
                         help="do not display progress at each iteration (default)",
                         dest='with_display_timing',
                         action='store_false')
-    parser.set_defaults(with_display_timing=False)
+    parser.set_defaults(with_display_progress=False)
 
     parser.add_argument("--max-solver-threads",
                         help="Limit on threads per solver (default None)",
