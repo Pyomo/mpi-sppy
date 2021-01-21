@@ -18,13 +18,15 @@ time to solve scenario sub-problems can be quite large.
 
 To set the option, use
 
-::
+.. code-block:: python
+                
    PHoptions["display_timing"] = True
 
 E.g., if you were adding this to ``examples.farmer.farmer_cylinders`` where the
 hub defintion dictionary is called ``hub_dict`` you would add
 
-::
+.. code-block:: python
+
    hub_dict["opt_kwargs"]["PHoptions"]["display_timing"] = True
 
 before passing it to ``spin_the_wheel``.
@@ -41,7 +43,8 @@ E.g. if you wanted to specify four cuts
 in ``examples.farmer.farmer_cylinders`` where the
 hub defintion dictionary is called ``hub_dict`` you would add
 
-::
+.. code-block:: python
+                
    hub_dict["opt_kwargs"]["PHoptions"]["initial_proximal_cut_count"] = 4
 
 before passing ``hub_dict`` to ``spin_the_wheel``.
