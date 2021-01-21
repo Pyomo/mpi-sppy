@@ -59,28 +59,10 @@ class PH(mpisppy.phbase.PHBase):
         trivial_bound = self.Iter0()
         if (verbose):
             print ('Completed PH Iter0 on global rank {}'.format(rank_global))
-        asynch = False
-        if ('asynchronousPH' in self.PHoptions):
-            asynch = self.PHoptions["asynchronousPH"]
-        if asynch:
-            if rank_global == 0:
-                print ("  !?!?! trying asynchronous PH!!! xxx no extensions or converger?????")
-            sleep_secs = self.PHoptions["async_sleep_secs"]
+        if ('asynchronousPH' in self.PHoptions) and (self.PHoptions['asynchronousPH']):
+            raise RuntimeError("asynchronousPH is deprecated; use APH")
 
-            synchronizer = listener_util.Synchronizer(comms = self.comms,
-                                                   Lens = self.Lens,
-                                                   #work_fct = global_iterk_loop,
-                                                   work_fct = self.iterk_loop,
-                                                   rank = rank_global,
-                                                   sleep_secs = sleep_secs,
-                                                   asynch = asynch)
-            args = [] ### [ph]
-            kwargs = {"synchronizer": synchronizer,
-                      "PH_extensions": None,
-                      "PH_converger": None}
-            synchronizer.run(args, kwargs)
-        else:
-            self.iterk_loop()
+        self.iterk_loop()
 
         if finalize:
             Eobj = self.post_loops(self.PH_extensions)

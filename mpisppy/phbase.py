@@ -133,15 +133,13 @@ class PHBase(mpisppy.spbase.SPBase):
                     self, **self.PH_extension_kwargs
                 )
 
-    def Compute_Xbar(self, verbose=False, synchronizer=None):
+    def Compute_Xbar(self, verbose=False):
         """ Gather xbar and x squared bar for each node in the list and
         distribute the values back to the scenarios.
 
         Args:
             verbose (boolean):
                 If True, prints verbose output.
-            synchronizer (object):
-                For asynchronous PH operation.
         """
 
         """
@@ -155,8 +153,6 @@ class PHBase(mpisppy.spbase.SPBase):
             As of March 2019, we concatenate xbar and xsqbar into one long
             vector to make it easier to use the current asynch code.
         """
-        if synchronizer is not None:
-            raise RuntimeError("Synchronizer is no longer supported; use APH")
 
         nodenames = [] # to transmit to comms
         local_concats = {}   # keys are tree node names
@@ -170,8 +166,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     ndn = node.name
                     nodenames.append(ndn)
                     mylen = 2*nlens[ndn]
-                    if synchronizer is not None and node.name == "ROOT":
-                        mylen += self.n_proc
+
                     local_concats[ndn] = np.zeros(mylen, dtype='d')
                     global_concats[ndn] = np.zeros(mylen, dtype='d')
 
@@ -1449,7 +1444,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         return self.trivial_bound
 
-    def iterk_loop(self, synchronizer=None):
+    def iterk_loop(self):
         """ Perform all PH iterations after iteration 0.
         
         This function terminates if any of the following occur:
@@ -1462,18 +1457,9 @@ class PHBase(mpisppy.spbase.SPBase):
            criteria are met (i.e. the convergence value falls below the
            user-specified threshold).
 
-        Args:
-            synchronizer (object, optional):
-                Deprecated; for asynchronous operation.
-
-        Raises:
-            RuntimeError:
-                If a synchronizer is provided (asynchronous PH is not
-                supported).
+        Args: None
 
         """
-        if synchronizer is not None:
-            raise RuntimeError("asynchronous PH is not supported (use APH).")
         verbose = self.PHoptions["verbose"]
         have_extensions = self.PH_extensions is not None
         have_converger = self.PH_converger is not None
@@ -1491,7 +1477,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             # Compute xbar
             #global_toc('Rank: {} - Before Compute_Xbar'.format(self.rank), True)
-            self.Compute_Xbar(verbose, synchronizer)
+            self.Compute_Xbar(verbose)
             #global_toc('Rank: {} - After Compute_Xbar'.format(self.rank), True)
 
             # update the weights        
@@ -1500,8 +1486,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             if have_converger:
                 self.conv = self.convobject.convergence_value()
-            elif synchronizer is None:
-                self.conv = self.convergence_diff()
+            self.conv = self.convergence_diff()
             #global_toc('Rank: {} - After convergence_diff'.format(self.rank), True)
             if have_extensions:
                 self.extobject.miditer()
@@ -1520,7 +1505,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     converged = True
                     global_toc("User-supplied converger determined termination criterion reached", self.rank == self.rank0)
                     break
-            elif synchronizer is None and self.conv is not None:
+            elif self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
                     global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.rank == self.rank0)
@@ -1534,7 +1519,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 solver_options=self.current_solver_options,
                 dtiming=dtiming,
                 gripe=True,
-                disable_pyomo_signal_handling=synchronizer is not None,
+                disable_pyomo_signal_handling=False,
                 tee=teeme,
                 verbose=verbose
             )
@@ -1551,10 +1536,6 @@ class PHBase(mpisppy.spbase.SPBase):
 
             if (self._PHIter == max_iterations):
                 global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.rank == self.rank0)
-                
-        if synchronizer is not None:
-            logger.debug('Setting synchronizer.quitting on rank %d' % self.rank)
-            synchronizer.quitting = 1
 
     def post_loops(self, PH_extensions=None):
         """ Call scenario denouement methods, and report the expected objective
