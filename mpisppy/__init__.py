@@ -9,6 +9,10 @@ except:
     haveMPI=False
 
 tt_timer = TicTocTimer()
-if not haveMPI or mpi.COMM_WORLD.Get_rank() == 0:
-    with open(os.devnull,"w") as f:
-        tt_timer.toc("Initializing mpi-sppy", delta=False, ostream=f)
+
+if haveMPI:
+    global_rank = mpi.COMM_WORLD.Get_rank()
+else:
+    global_rank = 0
+
+global_toc = lambda msg, cond=(global_rank==0) : tt_timer.toc(msg, delta=False) if cond else None

@@ -16,10 +16,11 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         self.opt.subproblem_creation(verbose)
         self.opt._create_solvers()
 
-    # This signature changed April 2020 (delete these two comments in Aug 2020)
-    #def lagrangian(self, PH_extensions=None, PH_converger=None, rho_setter=None):
     def lagrangian(self):
         verbose = self.opt.options['verbose']
+        # This is sort of a hack, but might help folks:
+        if "ipopt" in self.opt.options["solvername"]:
+            print("\n WARNING: An ipopt solver will not give outer bounds\n")
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
             teeme = self.opt.options['tee-rank0-solves']
@@ -42,7 +43,6 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         # the weights came from the same PH iteration
         serial_number = self.get_serial_number()
         bound, extra_sums  = self.opt.Ebound(verbose, extra_sum_terms=[serial_number])
-
         serial_number_sum = int(round(extra_sums[0]))
 
         total = int(self.intracomm.Get_size())*serial_number
