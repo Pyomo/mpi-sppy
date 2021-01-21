@@ -19,6 +19,7 @@ MPI is used.
    extensions.rst
    pysp.rst
    ef.rst
+   secretmenu.rst
    contributors.rst
    api.rst
    refs.rst

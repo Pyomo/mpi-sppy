@@ -53,16 +53,6 @@ def _common_args(inparser):
                         action='store_false')
     parser.set_defaults(with_verbose=False)
 
-    parser.add_argument('--with-display-timing',
-                        help="display timing at each iteration",
-                        dest='with_display_timing',
-                        action='store_true')
-    parser.add_argument('--no-display-timing',
-                        help="do not display timing at each iteration (default)",
-                        dest='with_display_timing',
-                        action='store_false')
-    parser.set_defaults(with_display_timing=False)
-
     parser.add_argument('--with-display-progress',
                         help="display progress at each iteration",
                         dest='with_display_progress',

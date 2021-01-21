@@ -35,7 +35,6 @@ def shared_options(args):
         "PHIterLimit": args.max_iterations,  # not needed by all
         "verbose": args.with_verbose,
         "display_progress": args.with_display_progress,
-        "display_timing": args.with_display_timing,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
         "tee-rank0-solves": args.tee_rank0_solves,
