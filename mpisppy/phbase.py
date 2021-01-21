@@ -19,7 +19,7 @@ from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.prox_approx import ProxApproxManager
 
-from mpisppy import tt_timer
+from mpisppy import global_toc
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
@@ -106,8 +106,7 @@ class PHBase(mpisppy.spbase.SPBase):
                          cb_data=cb_data,
                          variable_probability=variable_probability)
 
-        if self.rank_global == 0:
-            tt_timer.toc("Start PHBase.__init__", delta=False)
+        global_toc("Initializing PHBase")
 
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
@@ -1376,8 +1375,7 @@ class PHBase(mpisppy.spbase.SPBase):
         self._PHIter = 0
         self._save_original_nonants()
 
-        if self.rank_global == 0:
-            tt_timer.toc("Creating solvers", delta=False)
+        global_toc("Creating solvers")
         self._create_solvers()
         
         teeme = False
@@ -1386,8 +1384,7 @@ class PHBase(mpisppy.spbase.SPBase):
             
         if self.PHoptions["verbose"]:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.rank))
-        if self.rank_global == 0:
-            tt_timer.toc("Entering solve loop in PHBase.Iter0", delta=False)
+        global_toc("Entering solve loop in PHBase.Iter0")
 
         self.solve_loop(solver_options=self.current_solver_options,
                         dtiming=dtiming,
@@ -1417,9 +1414,9 @@ class PHBase(mpisppy.spbase.SPBase):
             for sname in self.local_scenario_names:
                 fd.write('*** {} ***\n'.format(sname))
         """
-        #timer.toc('Rank: {} - Building and solving models 0th iteration'.format(rank))
+        #global_toc('Rank: {} - Building and solving models 0th iteration'.format(rank), True)
 
-        #timer.toc('Rank: {} - assigning rho'.format(rank))
+        #global_toc('Rank: {} - assigning rho'.format(rank), True)
 
         if have_extensions:
             self.extobject.post_iter0()
@@ -1434,7 +1431,7 @@ class PHBase(mpisppy.spbase.SPBase):
         if have_converger:
             # Call the constructor of the converger object
             self.convobject = self.PH_converger(self, self.rank, self.n_proc)
-        #timer.toc('Rank: {} - Before iter loop'.format(self.rank))
+        #global_toc('Rank: {} - Before iter loop'.format(self.rank), True)
         self.conv = None
 
         self.trivial_bound = self.Ebound(verbose)
@@ -1489,25 +1486,23 @@ class PHBase(mpisppy.spbase.SPBase):
         for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
 
-            if dprogress and self.rank == self.rank0:
-                print("")
-                print ("Initiating PH Iteration",self._PHIter)
-                print("")
+            if dprogress:
+                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.rank == self.rank0)
 
             # Compute xbar
-            #timer.toc('Rank: {} - Before Compute_Xbar'.format(self.rank))
+            #global_toc('Rank: {} - Before Compute_Xbar'.format(self.rank), True)
             self.Compute_Xbar(verbose, synchronizer)
-            #timer.toc('Rank: {} - After Compute_Xbar'.format(self.rank))
+            #global_toc('Rank: {} - After Compute_Xbar'.format(self.rank), True)
 
             # update the weights        
             self.Update_W(verbose)
-            #timer.toc('Rank: {} - After Update_W'.format(self.rank))
+            #global_toc('Rank: {} - After Update_W'.format(self.rank), True)
 
             if have_converger:
                 self.conv = self.convobject.convergence_value()
             elif synchronizer is None:
                 self.conv = self.convergence_diff()
-            #timer.toc('Rank: {} - After convergence_diff'.format(self.rank))
+            #global_toc('Rank: {} - After convergence_diff'.format(self.rank), True)
             if have_extensions:
                 self.extobject.miditer()
 
@@ -1518,20 +1513,17 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():
-                    if self.rank == self.rank0:
-                        tt_timer.toc("Cylinder convergence", delta=False)
+                    global_toc("Cylinder convergence", self.rank == self.rank0)
                     break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
-                    if self.rank == self.rank0:
-                        tt_timer.toc("User-supplied converger determined termination criterion reached", delta=False)
+                    global_toc("User-supplied converger determined termination criterion reached", self.rank == self.rank0)
                     break
             elif synchronizer is None and self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
-                    if self.rank == self.rank0:
-                        tt_timer.toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), delta=False)
+                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.rank == self.rank0)
                     break
 
             teeme = (
@@ -1557,8 +1549,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" % (dt.datetime.now() - self.startdt).total_seconds())
 
-            if (self._PHIter == max_iterations) and (self.rank == self.rank0):
-                tt_timer.toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, delta=False)
+            if (self._PHIter == max_iterations):
+                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.rank == self.rank0)
                 
         if synchronizer is not None:
             logger.debug('Setting synchronizer.quitting on rank %d' % self.rank)

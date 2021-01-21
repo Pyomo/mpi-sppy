@@ -8,8 +8,6 @@ import numpy as np
 import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
-from mpisppy import tt_timer
-
 class CrossScenarioCutSpoke(spoke.Spoke):
     def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
         super().__init__(spbase_object, fullcomm, intercomm, intracomm)

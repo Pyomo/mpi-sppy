@@ -4,7 +4,7 @@ from mpisppy.extensions.extension import PHExtension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
-from mpisppy import tt_timer
+from mpisppy import global_toc
 
 import pyomo.environ as pyo
 import sys
@@ -271,8 +271,7 @@ class CrossScenarioExtension(PHExtension):
                 ((self.iter_since_last_check%self.check_bound_iterations == 0) and self.opt.spcomm.new_cuts))
                 # if there hasn't been OB movement, check every so often if we have new cuts
         if check:
-            if self.opt.spcomm.rank_global == 0:
-                tt_timer.toc(f"Attempting to update Best Bound with CrossScenarioExtension", delta=False)
+            global_toc(f"Attempting to update Best Bound with CrossScenarioExtension")
             self._check_bound()
             self.opt.spcomm.new_cuts = False
             self.iter_since_last_check = 0
