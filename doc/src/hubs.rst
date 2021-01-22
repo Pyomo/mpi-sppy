@@ -23,8 +23,21 @@ The PH implementation can be used with most spokes because it can
 supply x and/or W values at every iteration and numerous extensions
 are in the release.  It supports a full set of extension callout points.
 
-The proximal term can be approximated linearly using the PHoption 
-`linearize_proximal_terms`. If only the binary terms should be 
+.. _linearize_proximal:
+
+Linearize proximal terms
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The proximal term can be approximated linearly using the PHoption
+`linearize_proximal_terms` (which is included as
+``--linearize-proximal-terms`` in ``baseparsers.py``). If this option
+is specified, then the option `proximal_linearization_tolerance`
+(which is ``--proximal-linearization-tolerance`` in
+``baseparsers.py``) is a parameter.  A cut will be added if the
+proximal term approximation is looser than this value (default 1e-1).
+
+
+If only the binary terms should be 
 approximated, the option `linearize_binary_proximal_terms` can be used. 
 
 lshaped
