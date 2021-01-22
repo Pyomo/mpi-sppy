@@ -1172,16 +1172,6 @@ class PHBase(mpisppy.spbase.SPBase):
                 else:
                     objfct.expr -= ph_term
 
-                        
-    def attach_Lens_async(self):
-        """ Attach the Lens attribute for asynchronous PH.
-        """
-        self.Lens = collections.OrderedDict({"OnlyReduce": {}})
-        for sname, scenario in self.local_scenarios.items():
-            for node in scenario._PySPnode_list:
-                self.Lens["OnlyReduce"][node.name] = 2 * len(node.nonant_vardata_list)
-        self.Lens["OnlyReduce"]["ROOT"] += self.n_proc  # for time of update
-
     def PH_Prep(
         self, 
         attach_duals=True,
@@ -1208,10 +1198,6 @@ class PHBase(mpisppy.spbase.SPBase):
         self.attach_PH_to_objective(add_duals=attach_duals,
                                     add_prox=attach_prox)
 
-        if ("asynchronousPH" in self.PHoptions
-            and self.PHoptions["asynchronousPH"]):
-            self.attach_Lens_async()
-
         if (self.PH_extensions is not None):
             self.extobject.pre_iter0()
 
@@ -1234,11 +1220,6 @@ class PHBase(mpisppy.spbase.SPBase):
         - iterk_solver_options (dict): Dictionary of solver options to use on
           subsequent solve loops (after iteration 0).
 
-        Additionally, if `asynchronousPH` is a key in the option dictionary,
-        then the following are also required:
-
-        - async_frac_needed (boolean)
-        - async_sleep_secs (float)
         """
         required = [
             "solvername", "PHIterLimit", "defaultPHrho", 
@@ -1251,7 +1232,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self.PHoptions["display_timing"] = False
        
 
-    def subproblem_creation(self, verbose):
+    def subproblem_creation(self, verbose=False):
         """ Create local subproblems (not local scenarios).
 
         If bundles are specified, this function creates the bundles.
@@ -1259,8 +1240,8 @@ class PHBase(mpisppy.spbase.SPBase):
         `local_scenarios`.
 
         Args:
-            verbose (boolean):
-                If True, displays verbose output.
+            verbose (boolean, optional):
+                If True, displays verbose output. Default False.
         """
         self.local_subproblems = dict()
         if self.bundling:
