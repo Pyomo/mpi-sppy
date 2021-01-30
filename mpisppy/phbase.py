@@ -919,8 +919,10 @@ class PHBase(mpisppy.spbase.SPBase):
             results = s._solver_plugin.solve(s,
                                              **solve_keyword_args,
                                              load_solutions=False)
-        except:
+            solver_exception = None
+        except Exception as e:
             results = None
+            solver_exception = e
 
         if self.PH_extensions is not None:
             results = self.extobject.post_solve(s, results)
@@ -930,17 +932,21 @@ class PHBase(mpisppy.spbase.SPBase):
                 (results.solution(0).status == SolutionStatus.infeasible) or \
                 (results.solver.termination_condition == TerminationCondition.infeasible):
 
-             s._PySP_feas_indicator = False
+            s._PySP_feas_indicator = False
 
-             if gripe:
-                 name = self.__class__.__name__
-                 if self.spcomm:
-                     name = self.spcomm.__class__.__name__
-                 print (f"[{name}] Solve failed for scenario {s.name}")
-                 if results is not None:
-                     print ("status=", results.solver.status)
-                     print ("TerminationCondition=",
-                            results.solver.termination_condition)
+            if gripe:
+                name = self.__class__.__name__
+                if self.spcomm:
+                    name = self.spcomm.__class__.__name__
+                print (f"[{name}] Solve failed for scenario {s.name}")
+                if results is not None:
+                    print ("status=", results.solver.status)
+                    print ("TerminationCondition=",
+                           results.solver.termination_condition)
+
+            if solver_exception is not None:
+                raise solver_exception
+
         else:
             if sputils.is_persistent(s._solver_plugin):
                 s._solver_plugin.load_vars()
