@@ -24,7 +24,7 @@ passed to the PH constructor and it is assumed to have methods defined
 for all the callout points in PH (so all of the examples do).  If you
 want to use more than one extension, define a main extension that has
 a reference to the other extensions and can call their methods in the
-appropriate order. Extensions typicall access low level elements of
+appropriate order. Extensions typically access low level elements of
 ``mpi-sppy`` so writing your extensions is an advanced topic. We will
 now describe a few of the extensions in the release.
 
@@ -72,7 +72,7 @@ There is an example of the function in the sizes example (``_rho_setter``).
 variable_probability
 ====================
 
-This is experimental as of February 2021.  The main use-case is
+This is experimental as of February 2021; use with caution.  The main use-case is
 to allow zero-probability variables.
 
 A function similar to ``rho_setter`` can be passed to the ``SPBase``
@@ -81,7 +81,7 @@ constructor via the ``PHBase`` construtor as the
 probability specification. So it can be passed through by ``vanilla``
 via ``ph_hub``. The function should return (vid, probability) pairs.
 
-Of course the variable probabilities impact the computation of
+The variable probabilities impact the computation of
 ``xbars``.
 
 Objective function considerations
@@ -94,10 +94,11 @@ zero-probability variables.
 zero-probability variables
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-You probably want to fix zero probability variables and perhaps give
-them a zero coefficient if they appear in the objective when you
-create the scenario. Fixed variables will not get a nonanticipativity
-in bundles and if you create the EF directly, you probably want to set
+When you
+create the scenario, you probably want to fix zero probability variables and perhaps give
+them a zero coefficient if they appear in the objective. Fixed
+variables will not get a nonanticipativity constraint in bundles. If you
+create the EF directly, you probably want to set
 ``nonant_for_fixed_vars`` to `False` in the call to ``create_EF``. If
 you are not calling ``create_EF`` directly, but rather using the
 ``mpisppy.opt.ef.ExtensiveForm`` object, add ``nonant_for_fixed_vars``
@@ -106,7 +107,7 @@ to the dict passed as its ``options`` argument with the value
 
 Note that the ``W`` value for a zero-probability variable
 may be updated by PH so it could become extreme. This will harmless for
-optimizastion of subproblems if the variable is
+optimization of subproblems if the variable is
 fixed buy might cause problems for code that analyzes ``W`` values.
 
 A fixed variable may also cause trouble if you are relying on the internal
