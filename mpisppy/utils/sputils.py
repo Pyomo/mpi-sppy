@@ -166,7 +166,8 @@ def get_objs(scenario_instance):
     return scenario_objs
 
 def create_EF(scenario_names, scenario_creator, creator_options=None,
-              EF_name=None, suppress_warnings=False):
+              EF_name=None, suppress_warnings=False,
+              nonant_for_fixed_vars=True):
     """ Create a ConcreteModel of the extensive form.
 
         Args:
@@ -182,6 +183,9 @@ def create_EF(scenario_names, scenario_creator, creator_options=None,
                 Name of the ConcreteModel of the EF.
             suppress_warnings (boolean, optional):
                 If true, do not display warnings. Default False.
+            nonant_for_fixed_vars (bool--optional): If True, enforces
+                non-anticipativity constraints for all variables, including
+                those which have been fixed. Default is True.
 
         Returns:
             EF_instance (ConcreteModel):
@@ -234,7 +238,9 @@ def create_EF(scenario_names, scenario_creator, creator_options=None,
             print('WARNING: At least one scenario is missing PySP_prob attribute.',
                   'Assuming equally-likely scenarios...')
 
-    EF_instance = _create_EF_from_scen_dict(scen_dict, EF_name=EF_name)
+    EF_instance = _create_EF_from_scen_dict(scen_dict,
+                                            EF_name=EF_name,
+                                            nonant_for_fixed_vars=True)
     return EF_instance
 
 def _create_EF_from_scen_dict(scen_dict, EF_name=None,
@@ -249,7 +255,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             EF_name (str--optional): Name of the resulting EF model.
             nonant_for_fixed_vars (bool--optional): If True, enforces
                 non-anticipativity constraints for all variables, including
-                those which have been fixed. Deafult is True.
+                those which have been fixed. Default is True.
 
         Returns:
             EF_instance (ConcreteModel): ConcreteModel of extensive form with
