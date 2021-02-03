@@ -232,9 +232,10 @@ class PHBase(mpisppy.spbase.SPBase):
                            self.rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
             # Special code for variable probabilities to mask W; rarely used.
-            if hasattr(s,"_PySP_W_coeff") and type(s._PySP_W_coeff) is not float:
+            if hasattr(s,"_PySP_W_coeff"):
                 for ndn_i in s._nonant_indexes:
                     (lndn, li) = ndn_i
+                    if type(s._PySP_W_coeff[lndn]) is not float:
                     s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
 
     def convergence_diff(self):
