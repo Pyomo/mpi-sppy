@@ -236,7 +236,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 for ndn_i in s._nonant_indexes:
                     (lndn, li) = ndn_i
                     if type(s._PySP_W_coeff[lndn]) is not float:
-                    s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
+                        s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
