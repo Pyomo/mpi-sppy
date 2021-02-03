@@ -223,6 +223,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._nonant_indexes.items():
+                (lndn, li) = ndn_i
                 xdiff = nonant._value \
                         - s._xbars[ndn_i]._value
                 s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
@@ -230,6 +231,11 @@ class PHBase(mpisppy.spbase.SPBase):
                     print ("rank, node, scen, var, W", ndn_i[0], k,
                            self.rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
+            # Special code for variable probabilities to mask W; rarely used.
+            if hasattr(s,"_PySP_W_coeff") and type(s._PySP_W_coeff) is not float:
+                for ndn_i in s._nonant_indexes:
+                    (lndn, li) = ndn_i
+                    s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.

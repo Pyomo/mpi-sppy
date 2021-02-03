@@ -105,10 +105,9 @@ you are not calling ``create_EF`` directly, but rather using the
 to the dict passed as its ``options`` argument with the value
 ``False``.
 
-Note that the ``W`` value for a zero-probability variable
-may be updated by PH so it could become extreme. This will harmless for
-optimization of subproblems if the variable is
-fixed buy might cause problems for code that analyzes ``W`` values.
+.. Note::
+   The ``W`` value for a zero-probability variable will be stay at zero.
+
 
 A fixed variable may also cause trouble if you are relying on the internal
 PH convergence metric.
