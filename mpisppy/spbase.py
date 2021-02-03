@@ -1,7 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
-# (DLW delete this comment): some of prep moved to init
 
 import time
 import logging
