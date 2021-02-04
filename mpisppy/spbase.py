@@ -248,6 +248,7 @@ class SPBase(object):
             s = self.scenario_creator(sname, node_names=None, cb_data=cb_data)
             if not hasattr(s, "PySP_prob"):
                 s.PySP_prob = 1.0 / len(self.all_scenario_names)
+            s._PySP_has_varprob = False  # Might be later set to True (but rarely)
             self.local_scenarios[sname] = s
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
@@ -380,6 +381,7 @@ class SPBase(object):
                             else dict()
         for sname, s in self.local_scenarios.items():
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
+            s._PySP_has_varprob = True
             for (vid, prob) in variable_probability:
                 ndn, i = s._varid_to_nonant_index[vid]
                 # If you are going to do any variables at a node, you have to do all.

@@ -232,11 +232,12 @@ class PHBase(mpisppy.spbase.SPBase):
                            self.rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
             # Special code for variable probabilities to mask W; rarely used.
-            if hasattr(s,"_PySP_W_coeff"):
+            if s._PySP_has_varprob:
                 for ndn_i in s._nonant_indexes:
                     (lndn, li) = ndn_i
-                    if type(s._PySP_W_coeff[lndn]) is not float:
-                        s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
+                    # Requiring a vector for every tree node? (should we?)
+                    # if type(s._PySP_W_coeff[lndn]) is not float:
+                    s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
