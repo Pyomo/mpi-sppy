@@ -1369,9 +1369,10 @@ class PHBase(mpisppy.spbase.SPBase):
         global_toc("Creating solvers")
         self._create_solvers()
         
-        teeme = False
-        if ("tee-rank0-solves" in self.PHoptions):
-            teeme = self.PHoptions['tee-rank0-solves']
+        teeme = ("tee-rank0-solves" in self.PHoptions
+                 and teeme = self.PHoptions['tee-rank0-solves']
+                 and self.rank = self.rank0
+                 )
             
         if self.PHoptions["verbose"]:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.rank))
