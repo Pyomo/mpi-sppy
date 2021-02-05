@@ -1510,6 +1510,7 @@ class PHBase(mpisppy.spbase.SPBase):
             teeme = (
                 "tee-rank0-solves" in self.PHoptions
                  and self.PHoptions["tee-rank0-solves"]
+                and self.rank == self.rank0
             )
             self.solve_loop(
                 solver_options=self.current_solver_options,
