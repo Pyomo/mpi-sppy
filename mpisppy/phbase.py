@@ -223,6 +223,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._nonant_indexes.items():
+                (lndn, li) = ndn_i
                 xdiff = nonant._value \
                         - s._xbars[ndn_i]._value
                 s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
@@ -230,6 +231,13 @@ class PHBase(mpisppy.spbase.SPBase):
                     print ("rank, node, scen, var, W", ndn_i[0], k,
                            self.rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
+            # Special code for variable probabilities to mask W; rarely used.
+            if s._PySP_has_varprob:
+                for ndn_i in s._nonant_indexes:
+                    (lndn, li) = ndn_i
+                    # Requiring a vector for every tree node? (should we?)
+                    # if type(s._PySP_W_coeff[lndn]) is not float:
+                    s._Ws[ndn_i] *= s._PySP_W_coeff[lndn][li]
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
@@ -1361,9 +1369,10 @@ class PHBase(mpisppy.spbase.SPBase):
         global_toc("Creating solvers")
         self._create_solvers()
         
-        teeme = False
-        if ("tee-rank0-solves" in self.PHoptions):
-            teeme = self.PHoptions['tee-rank0-solves']
+        teeme = ("tee-rank0-solves" in self.PHoptions
+                 and self.PHoptions['tee-rank0-solves']
+                 and self.rank == self.rank0
+                 )
             
         if self.PHoptions["verbose"]:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.rank))
@@ -1502,6 +1511,7 @@ class PHBase(mpisppy.spbase.SPBase):
             teeme = (
                 "tee-rank0-solves" in self.PHoptions
                  and self.PHoptions["tee-rank0-solves"]
+                and self.rank == self.rank0
             )
             self.solve_loop(
                 solver_options=self.current_solver_options,

@@ -248,6 +248,7 @@ class SPBase(object):
             s = self.scenario_creator(sname, node_names=None, cb_data=cb_data)
             if not hasattr(s, "PySP_prob"):
                 s.PySP_prob = 1.0 / len(self.all_scenario_names)
+            s._PySP_has_varprob = False  # Might be later set to True (but rarely)
             self.local_scenarios[sname] = s
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
@@ -347,16 +348,19 @@ class SPBase(object):
 
 
     def compute_unconditional_node_probabilities(self):
-        """ calculates unconditional node probabilities and _PySP_prob_coeff """
+        """ calculates unconditional node probabilities and _PySP_prob_coeff
+            and _PySP_W_coeff is set to a scalar 1 (used by variable_probability)"""
         for k,s in self.local_scenarios.items():
             root = s._PySPnode_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._PySPnode_list[:-1],s._PySPnode_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
             if not hasattr(s, '_PySP_prob_coeff'):
-                s._PySP_prob_coeff = {}
+                s._PySP_prob_coeff = dict()
+                s._PySP_W_coeff = dict()
                 for node in s._PySPnode_list:
                     s._PySP_prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
+                    s._PySP_W_coeff[node.name] = 1.0  # needs to be a float
 
 
     def set_multistage(self):
@@ -365,7 +369,8 @@ class SPBase(object):
     def use_variable_probability_setter(self, verbose=False):
         """ set variable probability unconditional values using a function self.variable_probability
         that gives us a list of (id(vardata), probability)]
-        Note: We estimate that less then 0.01 of mpi-sppy runs will call this.
+        ALSO set _PySP_W_coeff, which is a mask for W calculations (mask out zero probs)
+        Note: We estimate that less than 0.01 of mpi-sppy runs will call this.
         """
         if self.variable_probability is None:
             return
@@ -376,13 +381,17 @@ class SPBase(object):
                             else dict()
         for sname, s in self.local_scenarios.items():
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
+            s._PySP_has_varprob = True
             for (vid, prob) in variable_probability:
                 ndn, i = s._varid_to_nonant_index[vid]
                 # If you are going to do any variables at a node, you have to do all.
                 if type(s._PySP_prob_coeff[ndn]) is float:  # not yet a vector
                     defprob = s._PySP_prob_coeff[ndn]
                     s._PySP_prob_coeff[ndn] = np.full(s._PySP_nlens[ndn], defprob, dtype='d')
+                    s._PySP_W_coeff[ndn] = np.ones(s._PySP_nlens[ndn], dtype='d')
                 s._PySP_prob_coeff[ndn][i] = prob
+                if prob == 0:  # there's probably a way to do this in numpy...
+                    s._PySP_W_coeff[ndn][i] = 0
             didit += len(variable_probability)
             skipped += len(s._varid_to_nonant_index) - didit
         if verbose and self.rank == self.rank0:
