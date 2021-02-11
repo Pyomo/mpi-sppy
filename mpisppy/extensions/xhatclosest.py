@@ -33,7 +33,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         localwinnername = None
         for k, s in self.opt.local_scenarios.items():
             dist = 0
-            for ndn_i, xvar in s._nonant_indexes.items():
+            for ndn_i, xvar in s._nonant_indices.items():
                 diff = pyo.value(xvar) - pyo.value(s._xbars[ndn_i])
                 variance = pyo.value(s._xsqbars[ndn_i]) \
                   - pyo.value(s._xbars[ndn_i])*pyo.value(s._xbars[ndn_i])

@@ -20,7 +20,7 @@ class CrossScenarioHub(PHHub):
         arb_scen = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
         # get an arbitrary scenario for the 
         # number of nonant variables
-        self.nonant_len = len(arb_scen._nonant_indexes)
+        self.nonant_len = len(arb_scen._nonant_indices)
 
         # save the best bounds so far
         self.best_inner_bound = inf
@@ -57,7 +57,7 @@ class CrossScenarioHub(PHHub):
         # get all the nonants
         all_nonants_and_etas = self.all_nonants_and_etas
         for k, s in self.opt.local_scenarios.items():
-            for xvar in s._nonant_indexes.values():
+            for xvar in s._nonant_indices.values():
                 all_nonants_and_etas[ci] = xvar._value
                 ci += 1
 
@@ -98,7 +98,7 @@ class CrossScenarioHub(PHHub):
                     linear_coefs = list(row[1:])
                     linear_vars = [b.eta[k]]
 
-                    for ndn_i in s._nonant_indexes:
+                    for ndn_i in s._nonant_indices:
                         ## for bundles, we add the constrains only
                         ## to the reference first stage variables
                         linear_vars.append(b.ref_vars[ndn_i])
@@ -123,7 +123,7 @@ class CrossScenarioHub(PHHub):
                     linear_const = row[0]
                     linear_coefs = list(row[1:])
                     linear_vars = [s.eta[k]]
-                    linear_vars.extend(s._nonant_indexes.values())
+                    linear_vars.extend(s._nonant_indices.values())
 
                     cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
                                                 linear_vars=linear_vars)

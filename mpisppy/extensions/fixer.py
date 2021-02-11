@@ -64,7 +64,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         self.boundtol = self.fixeroptions["boundtol"]
 
     def populate(self, local_scenarios):
-        # [(ndn, i)] = iter count (i indexes into nonantlist)
+        # [(ndn, i)] = iter count (i indices into nonantlist)
         self.local_scenarios = local_scenarios
 
         self.iter0_fixer_tuples = {} # caller data
@@ -114,7 +114,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def _update_fix_counts(self):
         nodesdone = []  # avoid multiple updates of a node's Vars
         for k,s in self.local_scenarios.items():
-            for ndn_i, xvar in s._nonant_indexes.items():
+            for ndn_i, xvar in s._nonant_indices.items():
                 if xvar.is_fixed():
                     continue
                 xb = pyo.value(s._xbars[ndn_i])
@@ -157,7 +157,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 except:
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
-                xvar = s._nonant_indexes[ndn,i]
+                xvar = s._nonant_indices[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
                     diff = xb * xb - pyo.value(s._xsqbars[(ndn,i)])
@@ -240,7 +240,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
                 tolval = self.threshold[(ndn, i)]
-                xvar = s._nonant_indexes[ndn,i]
+                xvar = s._nonant_indices[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
                     fx = s._PySP_conv_iter_count[(ndn,i)]

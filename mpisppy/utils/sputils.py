@@ -310,7 +310,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     # For each node in the scenario tree, we need to collect the
     # nonanticipative vars and create the constraints for them,
     # which we do using a reference variable.
-    ref_vars = dict() # keys are _nonant_indexes (i.e. a node name and a
+    ref_vars = dict() # keys are _nonant_indices (i.e. a node name and a
                       # variable number)
 
     ref_suppl_vars = dict()
@@ -517,7 +517,7 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
         n_proc (int): the number of intra ranks (within the cylinder)
         rank (int): my rank (i.e., intra; i.e., within the cylinder)
     Returns:
-        slices (list of ranges): the indexes into all all_scenario_names to assign to rank
+        slices (list of ranges): the indices into all all_scenario_names to assign to rank
                                  (the list entries are ranges that correspond to ranks)
         scenario_name_to_rank (dict of dict): only for multi-stage
                 keys are comms (i.e., tree nodes); values are dicts with keys
@@ -549,7 +549,7 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
 
 class _TreeNode():
     # everything is zero based, even stage numbers (perhaps not used)
-    # scenario lists are stored as (first, last) indexes in all_scenarios
+    # scenario lists are stored as (first, last) indices in all_scenarios
     def __init__(self, Parent, scenfirst, scenlast, BFs, name):
         self.scenfirst = scenfirst
         self.scenlast = scenlast

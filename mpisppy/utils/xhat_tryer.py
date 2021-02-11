@@ -132,7 +132,7 @@ class XhatTryer(PHBase):
                 if (sputils.is_persistent(s._solver_plugin)):
                     persistent_solver = s._solver_plugin
 
-            for var in s._nonant_indexes.values():
+            for var in s._nonant_indices.values():
                 var.fix()
                 if not self.bundling and persistent_solver is not None:
                     persistent_solver.update_var(var)
@@ -151,7 +151,7 @@ class XhatTryer(PHBase):
                 for sname, scen in self.local_scenarios.items():
                     if sname not in self.names_in_bundles[rank_local][bunnum]:
                         break
-                    for var in scen._nonant_indexes.values():
+                    for var in scen._nonant_indices.values():
                         persistent_solver.update_var(var)
 
     def calculate_incumbent(self, fix_nonants=True, verbose=False):

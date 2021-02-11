@@ -222,7 +222,7 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
-            for ndn_i, nonant in s._nonant_indexes.items():
+            for ndn_i, nonant in s._nonant_indices.items():
                 (lndn, li) = ndn_i
                 xdiff = nonant._value \
                         - s._xbars[ndn_i]._value
@@ -233,7 +233,7 @@ class PHBase(mpisppy.spbase.SPBase):
                            pyo.value(s._Ws[ndn_i]))
             # Special code for variable probabilities to mask W; rarely used.
             if s._PySP_has_varprob:
-                for ndn_i in s._nonant_indexes:
+                for ndn_i in s._nonant_indices:
                     (lndn, li) = ndn_i
                     # Requiring a vector for every tree node? (should we?)
                     # if type(s._PySP_W_coeff[lndn]) is not float:
@@ -252,7 +252,7 @@ class PHBase(mpisppy.spbase.SPBase):
         local_diff = np.zeros(1)
         varcount = 0
         for k,s in self.local_scenarios.items():
-            for ndn_i, nonant in s._nonant_indexes.items():
+            for ndn_i, nonant in s._nonant_indices.items():
                 xval = nonant._value
                 xdiff = xval - s._xbars[ndn_i]._value
                 local_diff[0] += abs(xdiff)
@@ -414,7 +414,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._PySP_original_fixedness = [None] * clen
                 s._PySP_original_nonants = np.zeros(clen, dtype='d')
 
-            for ci, xvar in enumerate(s._nonant_indexes.values()):
+            for ci, xvar in enumerate(s._nonant_indices.values()):
                 s._PySP_original_fixedness[ci]  = xvar.is_fixed()
                 s._PySP_original_nonants[ci]  = xvar._value
 
@@ -441,7 +441,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("restore_original_nonants called for a bundle")
                 raise
 
-            for ci, vardata in enumerate(s._nonant_indexes.values()):
+            for ci, vardata in enumerate(s._nonant_indices.values()):
                 vardata._value = s._PySP_original_nonants[ci]
                 vardata.fixed = s._PySP_original_fixedness[ci]
                 if persistent_solver != None:
@@ -455,7 +455,7 @@ class PHBase(mpisppy.spbase.SPBase):
             Assumes _PySP_nonant_cache is on the scenarios and can be used
             as a list, or puts it there.
         Warning: 
-            We are counting on Pyomo indexes not to change order before the
+            We are counting on Pyomo indices not to change order before the
             restoration. We also need the Var type to remain stable.
         Note:
             The value cache is np because it might be transmitted
@@ -467,7 +467,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._PySP_nonant_cache = np.zeros(clen, dtype='d')
                 s._PySP_fixedness_cache = [None for _ in range(clen)]
 
-            for ci, xvar in enumerate(s._nonant_indexes.values()):
+            for ci, xvar in enumerate(s._nonant_indices.values()):
                 s._PySP_nonant_cache[ci]  = xvar._value
                 s._PySP_fixedness_cache[ci]  = xvar.is_fixed()
 
@@ -490,7 +490,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if (sputils.is_persistent(s._solver_plugin)):
                 persistent_solver = s._solver_plugin
 
-            for ci, vardata in enumerate(s._nonant_indexes.values()):
+            for ci, vardata in enumerate(s._nonant_indices.values()):
                 vardata._value = s._PySP_nonant_cache[ci]
                 vardata.fixed = s._PySP_fixedness_cache[ci]
 
@@ -504,7 +504,7 @@ class PHBase(mpisppy.spbase.SPBase):
         Args:
             cache (ndn dict of list or numpy vector): values at which to fix
         WARNING: 
-            We are counting on Pyomo indexes not to change order between
+            We are counting on Pyomo indices not to change order between
             when the cache_list is created and used.
         NOTE:
             You probably want to call _save_nonants right before calling this
@@ -540,7 +540,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # do, they had better put their fixedness back to its correct state.)
         self._save_nonants()
         for k,s in self.local_scenarios.items():        
-            for ci, _ in enumerate(s._nonant_indexes):
+            for ci, _ in enumerate(s._nonant_indices):
                 s._PySP_fixedness_cache[ci] = s._PySP_original_fixedness[ci]
         self._restore_nonants()
 
@@ -556,7 +556,7 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
-            for ix in model._nonant_indexes:
+            for ix in model._nonant_indices:
                 assert(ci < len(cache))
                 cache[ci] = pyo.value(model._Ws[ix])
                 ci += 1
@@ -573,7 +573,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 raise RuntimeError(f"Rank {self.rank_global} Scenario {sname}"
                                    " nonant_cache is None"
                                    " (call _save_nonants first?)")
-            for i,_ in enumerate(model._nonant_indexes):
+            for i,_ in enumerate(model._nonant_indices):
                 assert(ci < len(cache))
                 model._PySP_nonant_cache[i] = cache[ci]
                 ci += 1
@@ -587,12 +587,12 @@ class PHBase(mpisppy.spbase.SPBase):
                 One-dimensional list of dual weights.
 
         Warning:
-            We are counting on Pyomo indexes not to change order between list
+            We are counting on Pyomo indices not to change order between list
             creation and use.
         """ 
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
-            for ndn_i in model._nonant_indexes:
+            for ndn_i in model._nonant_indices:
                 model._Ws[ndn_i].value = flat_list[ci]
                 ci += 1
 
@@ -692,14 +692,14 @@ class PHBase(mpisppy.spbase.SPBase):
     def _disable_prox(self):
         self.prox_disabled = True
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 0
 
     def _disable_W_and_prox(self):
         self.prox_disabled = True
         self.W_disabled = True
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 0
                 scenario._PHW_on[(ndn,i)]._value = 0
 
@@ -707,27 +707,27 @@ class PHBase(mpisppy.spbase.SPBase):
         # It would be odd to disable W and not prox.
         self.W_disabled = True
         for scenario in self.local_scenarios.values():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHW_on[ndn,i]._value = 0
 
     def _reenable_prox(self):
         self.prox_disabled = False        
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 1
 
     def _reenable_W_and_prox(self):
         self.prox_disabled = False
         self.W_disabled = False
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 1
                 scenario._PHW_on[(ndn,i)]._value = 1
 
     def _reenable_W(self):
         self.W_disabled = False
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHW_on[(ndn,i)]._value = 1
 
     def post_solve_bound(self, solver_options=None, verbose=False):
@@ -1090,21 +1090,21 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         for (sname, scenario) in self.local_scenarios.items():
             # these are bound by index to the vardata list at the node
-            scenario._Ws = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._Ws = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
             
             # create ph objective terms, but disabled
-            scenario._PHW_on = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._PHW_on = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
             self.W_disabled = True
-            scenario._PHprox_on = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._PHprox_on = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
             self.prox_disabled = True
             # note that rho is per var and scenario here
-            scenario._PHrho = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._PHrho = pyo.Param(scenario._nonant_indices.keys(),
                                         mutable=True,
                                         default=self.PHoptions["defaultPHrho"])
 
@@ -1151,15 +1151,15 @@ class PHBase(mpisppy.spbase.SPBase):
                 # set-up pyomo IndexVar, but keep it sparse
                 # since some nonants might be binary
                 # Define the first cut to be _xsqvar >= 0
-                scenario._xsqvar = pyo.Var(scenario._nonant_indexes, dense=False,
+                scenario._xsqvar = pyo.Var(scenario._nonant_indices, dense=False,
                                             within=pyo.NonNegativeReals)
-                scenario._xsqvar_cuts = pyo.Constraint(scenario._nonant_indexes, pyo.Integers)
+                scenario._xsqvar_cuts = pyo.Constraint(scenario._nonant_indices, pyo.Integers)
                 scenario._xsqvar_prox_approx = {}
             else:
                 scenario._xsqvar = None
                 scenario._xsqvar_prox_approx = False
 
-            for ndn_i, xvar in scenario._nonant_indexes.items():
+            for ndn_i, xvar in scenario._nonant_indices.items():
                 ph_term = 0
                 # Dual term (weights W)
                 if (add_duals):
@@ -1595,10 +1595,10 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         for scenario in self.local_scenarios.values():
             scenario._xbars = pyo.Param(
-                scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
+                scenario._nonant_indices.keys(), initialize=0.0, mutable=True
             )
             scenario._xsqbars = pyo.Param(
-                scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
+                scenario._nonant_indices.keys(), initialize=0.0, mutable=True
             )
 
 

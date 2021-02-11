@@ -108,7 +108,7 @@ class SPBase(object):
         self.look_before_leap_all()
         self.compute_unconditional_node_probabilities()
         self.attach_nlens()
-        self.attach_nonant_indexes()
+        self.attach_nonant_indices()
         self.attach_varid_to_nonant_index()
         self.create_communicators()
         ### TODO: add a function to check for len(nonant) the same for all scenario tree nodes
@@ -252,27 +252,26 @@ class SPBase(object):
                     print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
         self.scenarios_constructed = True
 
-    # TODO: sed to replace indexes with indices
-    def attach_nonant_indexes(self):
+    def attach_nonant_indices(self):
         for (sname, scenario) in self.local_scenarios.items():
-            _nonant_indexes = dict()
+            _nonant_indices = dict()
             nlens = scenario._PySP_nlens        
             for node in scenario._PySPnode_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
-                    _nonant_indexes[ndn,i] = node.nonant_vardata_list[i]
-            scenario._nonant_indexes = _nonant_indexes
+                    _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
+            scenario._nonant_indices = _nonant_indices
 
             
     def attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
-            # indexes of the vardata lists for the nodes.
+            # indices of the vardata lists for the nodes.
             scenario._PySP_nlens = {
                 node.name: len(node.nonant_vardata_list)
                 for node in scenario._PySPnode_list
             }
-            scenario._PySP_cistart = dict()  # TODO: we don't really need cistart; could use scenario._nonant_indexes / scenario._varid_to_nonant_index
+            scenario._PySP_cistart = dict()  # TODO: we don't really need cistart; could use scenario._nonant_indices / scenario._varid_to_nonant_index
             sofar = 0
             for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
@@ -286,7 +285,7 @@ class SPBase(object):
             # In order to support rho setting, create a map
             # from the id of vardata object back its _nonant_index.
             scenario._varid_to_nonant_index =\
-                {id(var): ndn_i for ndn_i, var in scenario._nonant_indexes.items()}
+                {id(var): ndn_i for ndn_i, var in scenario._nonant_indices.items()}
             
 
     def create_communicators(self):
@@ -420,7 +419,7 @@ class SPBase(object):
                     if not np.allclose(global_concats[ndn], 1., atol=tol):
                         notclose = ~np.isclose(global_concats[ndn], 1., atol=tol)
                         indices = np.nonzero(notclose)[0]
-                        bad_vars = [ s._nonant_indexes[ndn,idx].name for idx in indices ]
+                        bad_vars = [ s._nonant_indices[ndn,idx].name for idx in indices ]
                         badprobs = [ global_concats[ndn][idx] for idx in indices]
                         raise RuntimeError(f"Node {ndn}, variables {bad_vars} have respective"
                                            f" conditional probability sum {badprobs}"
@@ -441,7 +440,7 @@ class SPBase(object):
             self._look_before_leap(
                 scenario,
                 [
-                    "_nonant_indexes",
+                    "_nonant_indices",
                     "_xbars",
                     "_xsqbars",
                     "_xsqvar",

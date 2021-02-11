@@ -154,7 +154,7 @@ class APH(ph_base.PHBase):  # ??????
                        
         if self._PHIter != 1:
             for k,s in self.local_scenarios.items():
-                for (ndn,i), xvar in s._nonant_indexes.items():
+                for (ndn,i), xvar in s._nonant_indices.items():
                     if not self.use_lag:
                         z_touse = s._zs[(ndn,i)]._value
                         W_touse = pyo.value(s._Ws[(ndn,i)])
@@ -171,7 +171,7 @@ class APH(ph_base.PHBase):  # ??????
                                pyo.value(s._ys[(ndn,i)]))
         else:
             for k,s in self.local_scenarios.items():
-                for (ndn,i), xvar in s._nonant_indexes.items():
+                for (ndn,i), xvar in s._nonant_indices.items():
                     s._ys[(ndn,i)]._value = 0
             if verbose and self.rank == self.rank0:
                 print ("All y=0 for iter1")
@@ -183,7 +183,7 @@ class APH(ph_base.PHBase):  # ??????
         summand = 0.0
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
-            for (ndn,i), xvar in s._nonant_indexes.items():
+            for (ndn,i), xvar in s._nonant_indices.items():
                 self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
                     *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
             self.phis[k] *= pyo.value(s.PySP_prob)
@@ -239,7 +239,7 @@ class APH(ph_base.PHBase):  # ??????
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens        
-            for (ndn,i) in s._nonant_indexes:
+            for (ndn,i) in s._nonant_indices:
                 s._xbars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][i]
                 s._xsqbars[(ndn,i)]._value \
@@ -249,7 +249,7 @@ class APH(ph_base.PHBase):  # ??????
 
                 if verbose and self.rank == self.rank0:
                     print ("rank, scen, node, var, xbar:",
-                           self.rank,k,ndn,s._nonant_indexes[ndn,i].name,
+                           self.rank,k,ndn,s._nonant_indices[ndn,i].name,
                            pyo.value(s._xbars[(ndn,i)]))
 
         # There is one tau_summand for the rank; global_tau is out of date when
@@ -266,7 +266,7 @@ class APH(ph_base.PHBase):  # ??????
             if sname not in self.uk:
                 self.uk[sname] = {}
             nlens = s._PySP_nlens        
-            for (ndn,i), xvar in s._nonant_indexes.items():
+            for (ndn,i), xvar in s._nonant_indices.items():
                 self.uk[sname][(ndn,i)] = xvar._value \
                                           - pyo.value(s._xbars[(ndn,i)])
                 # compute the unorm and vnorm
@@ -461,7 +461,7 @@ class APH(ph_base.PHBase):  # ??????
         # v is just ybar
         for k,s in self.local_scenarios.items():
             probs = pyo.value(s.PySP_prob)
-            for (ndn, i) in s._nonant_indexes:
+            for (ndn, i) in s._nonant_indices:
                 Wupdate = self.theta * self.uk[k][(ndn,i)]
                 Ws = pyo.value(s._Ws[(ndn,i)]) + Wupdate
                 s._Ws[(ndn,i)] = Ws 
@@ -522,14 +522,14 @@ class APH(ph_base.PHBase):  # ??????
         if not self.bundling:
             for dl in dlist:
                 scenario = self.local_scenarios[dl[0]]
-                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                for (ndn,i), xvar in scenario._nonant_indices.items():
                     scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
                     scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
         else:
             for dl in dlist:
                 for sname in self.local_subproblems[dl[0]].scen_list:
                     scenario = self.local_scenarios[sname]
-                    for (ndn,i), xvar in scenario._nonant_indexes.items():
+                    for (ndn,i), xvar in scenario._nonant_indices.items():
                         scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
                         scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
 
@@ -788,13 +788,13 @@ class APH(ph_base.PHBase):  # ??????
         # Begin APH-specific Prep
         for sname, scenario in self.local_scenarios.items():    
             # ys is plural of y
-            scenario._ys = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._ys = pyo.Param(scenario._nonant_indices.keys(),
                                      initialize = 0.0,
                                      mutable = True)
-            scenario._ybars = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._ybars = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize = 0.0,
                                         mutable = True)
-            scenario._zs = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._zs = pyo.Param(scenario._nonant_indices.keys(),
                                      initialize = 0.0,
                                      mutable = True)
             # lag: we will support lagging back only to the last solve
@@ -802,17 +802,17 @@ class APH(ph_base.PHBase):  # ??????
             # scenario._zs_foropt = scenario._zs
             
             if self.use_lag:
-                scenario._zs_foropt = pyo.Param(scenario._nonant_indexes.keys(),
+                scenario._zs_foropt = pyo.Param(scenario._nonant_indices.keys(),
                                          initialize = 0.0,
                                          mutable = True)
-                scenario._Ws_foropt = pyo.Param(scenario._nonant_indexes.keys(),
+                scenario._Ws_foropt = pyo.Param(scenario._nonant_indices.keys(),
                                          initialize = 0.0,
                                          mutable = True)
                 
             objfct = find_active_objective(scenario)
                 
             if self.use_lag:
-                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                for (ndn,i), xvar in scenario._nonant_indices.items():
                     # proximal term
                     objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
                         (scenario._PHrho[(ndn,i)] /2.0) * \
@@ -821,7 +821,7 @@ class APH(ph_base.PHBase):  # ??????
                     # W term
                     scenario._PHW_on[ndn,i] * scenario._Ws_foropt[ndn,i] * xvar
             else:
-                for (ndn,i), xvar in scenario._nonant_indexes.items():
+                for (ndn,i), xvar in scenario._nonant_indices.items():
                     # proximal term
                     objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
                         (scenario._PHrho[(ndn,i)] /2.0) * \
