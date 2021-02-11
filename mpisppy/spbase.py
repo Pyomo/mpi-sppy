@@ -1,22 +1,21 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
-# (DLW delete this comment): some of prep moved to init
+
+# TODO: most functions in the class should be underscore functions
 
 import time
 import logging
 import weakref
 import numpy as np
-import datetime as dt
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
-from collections import OrderedDict
 from mpi4py import MPI
 
 from mpisppy import global_toc
 
-logger = logging.getLogger("PHBase")
+logger = logging.getLogger("SPBase")
 logger.setLevel(logging.WARN)
 
 
@@ -24,40 +23,41 @@ class SPBase(object):
     """ Defines an interface to all strata (hubs and spokes)
 
         Args:
-            options (dict): PH options
+            options (dict): options
             all_scenario_names (list): all scenario names
             scenario_creator (fct): returns a concrete model with special things
             scenario_denouement (fct): for post processing and reporting
-            all_nodenames (list): all node names; can be None for 2 Stage
+            all_nodenames (list): all non-leaf node names; can be None for 2 Stage
             mpicomm (MPI comm): if not given, use the global fullcomm
-            rank0 (int): The lowest global rank for this type of object
+            rank0 (int): The lowest global rank for this type of object   # TODO drop this as an argument to the constructor and get the value from the cylinder comm
             cb_data (any): passed directly to instance callback                
+            variable_probability (xxxxx): TODO
 
         Attributes:
           local_scenarios (dict of scenario objects): concrete models with 
                 extra data, key is name
           comms (dict): keys are node names values are comm objects.
           local_scenario_names (list): names of locals 
-
-          NOTEs:
-          = dropping current_solver_options to children if needed
-
     """
 
     def __init__(
-        self,
-        options,
-        all_scenario_names,
-        scenario_creator,
-        scenario_denouement=None,
-        all_nodenames=None,
-        mpicomm=None,
-        rank0=0,
-        cb_data=None,
-        variable_probability=None
+            self,
+            options,
+            all_scenario_names,
+            scenario_creator,
+            scenario_denouement=None,
+            all_nodenames=None,
+            mpicomm=None,
+            rank0=0,
+            cb_data=None,
+            variable_probability=None,
+            E1_tolerance=1e-5
     ):
-        self.startdt = dt.datetime.now()
-        self.start_time = time.time()
+        # TODO add missing and private attributes (JP)
+        # TODO add a class attribute called ROOTNODENAME = "ROOT"
+        # TO REMEMBER TO DO: use local_ versus global_ for ranks
+        # TODO? add decorators to the class attributes
+        self.start_time = time.time()   # TODO? switch to perf_counter
         self.options = options
         self.all_scenario_names = all_scenario_names
         self.scenario_creator = scenario_creator
@@ -65,7 +65,7 @@ class SPBase(object):
         self.comms = dict()
         self.local_scenarios = dict()
         self.local_scenario_names = list()
-        self.E1_tolerance = 1e-5  # probs must sum to almost 1
+        self.E1_tolerance = E1_tolerance  # probs must sum to almost 1
         self.names_in_bundles = None
         self.scenarios_constructed = False
         if all_nodenames is None:
@@ -75,6 +75,7 @@ class SPBase(object):
         else:
             raise RuntimeError("'ROOT' must be in the list of node names")
         self.variable_probability = variable_probability
+        self.multistage = (len(self.all_nodenames) > 1)
 
         # Set up MPI communicator and rank
         if mpicomm is not None:
@@ -88,7 +89,6 @@ class SPBase(object):
 
         global_toc("Initializing SPBase")
 
-        # This doesn't seemed to be checked anywhere else
         if self.n_proc > len(self.all_scenario_names):
             raise RuntimeError("More ranks than scenarios")
 
@@ -97,7 +97,7 @@ class SPBase(object):
             self.branching_factors = self.options["branching_factors"]
         else:
             self.branching_factors = [len(self.all_scenario_names)]
-        self.calculate_scenario_ranks()
+        self.calculate_scenario_ranks()  # TODO: combine these?
         self.attach_scenario_rank_maps()
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
             self.assign_bundles()
@@ -111,8 +111,8 @@ class SPBase(object):
         self.attach_nonant_indexes()
         self.attach_varid_to_nonant_index()
         self.create_communicators()
+        ### TODO: add a function to check for len(nonant) the same for all scenario tree nodes
         self.set_sense()
-        self.set_multistage()
         self.use_variable_probability_setter()
 
         ## SPCommunicator object
@@ -135,7 +135,7 @@ class SPBase(object):
             return
 
         # Check that all the ranks agree
-        global_senses = self.comms["ROOT"].gather(is_min, root=self.rank0)
+        global_senses = self.mpicomm.gather(is_min, root=self.rank0)
         if self.rank != self.rank0:
             return
         sense = global_senses[0]
@@ -179,14 +179,7 @@ class SPBase(object):
 
             Notes:
                 Called within __init__
-
-                Modified by dlw for companiondriver use: opt, lb, and ub each get
-                a full set of scenarios. So name_to_rank gives the rank within
-                the comm for the type (e.g., the rank within the comm for lb, 
-                if called by an lb.)
         """
-        scen_count = len(self.all_scenario_names)
-
         # list of scenario names owned locally
         self.local_scenario_names = [
             self.all_scenario_names[i] for i in self._rank_slices[self.rank]
@@ -207,12 +200,11 @@ class SPBase(object):
             raise RuntimeError(
                 "Not enough scenarios to satisfy the bundles_per_rank requirement"
             )
-        slices = self._rank_slices
 
         # dict: rank number --> list of scenario names owned by rank
         names_at_rank = {
             curr_rank: [self.all_scenario_names[i] for i in slc]
-            for (curr_rank, slc) in enumerate(slices)
+            for (curr_rank, slc) in enumerate(self._rank_slices)
         }
 
         self.names_in_bundles = dict()
@@ -239,12 +231,11 @@ class SPBase(object):
                 this function automatically assumes uniform probabilities.
         """
         if self.scenarios_constructed:
-            if self.rank == self.rank0:
-                print("Warning: scenarios already constructed")
-            return
+            raise RuntimeError("Scenarios already constructed.")
 
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
+            ### s = self.scenario_creator(sname, **scenario_creator_kwargs)
             s = self.scenario_creator(sname, node_names=None, cb_data=cb_data)
             if not hasattr(s, "PySP_prob"):
                 s.PySP_prob = 1.0 / len(self.all_scenario_names)
@@ -261,9 +252,10 @@ class SPBase(object):
                     print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
         self.scenarios_constructed = True
 
+    # TODO: sed to replace indexes with indices
     def attach_nonant_indexes(self):
         for (sname, scenario) in self.local_scenarios.items():
-            _nonant_indexes = OrderedDict() #paranoia
+            _nonant_indexes = dict()
             nlens = scenario._PySP_nlens        
             for node in scenario._PySPnode_list:
                 ndn = node.name
@@ -280,7 +272,7 @@ class SPBase(object):
                 node.name: len(node.nonant_vardata_list)
                 for node in scenario._PySPnode_list
             }
-            scenario._PySP_cistart = dict()
+            scenario._PySP_cistart = dict()  # TODO: we don't really need cistart
             sofar = 0
             for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
@@ -293,19 +285,11 @@ class SPBase(object):
         for (sname, scenario) in self.local_scenarios.items():
             # In order to support rho setting, create a map
             # from the id of vardata object back its _nonant_index.
-            scenario._varid_to_nonant_index = {
-                id(node.nonant_vardata_list[i]): (node.name, i)
-                for node in scenario._PySPnode_list
-                for i in range(scenario._PySP_nlens[node.name])}
-
+            scenario._varid_to_nonant_index =\
+                {id(var): ndn_i for ndn_i, var in self._nonant_indexes.items()}
+            
 
     def create_communicators(self):
-        # If the scenarios have not been constructed yet, 
-        # set up the one communicator we know this rank will have 
-        # and return
-        if not self.local_scenario_names:
-            self.comms["ROOT"] = self.mpicomm
-            return
 
         # Create communicator objects, one for each node
         nonleafnodes = dict()
@@ -314,7 +298,7 @@ class SPBase(object):
                 nonleafnodes[node.name] = node  # might be assigned&reassigned
 
         # check the node names given by the scenarios
-        for nodename in nonleafnodes.keys():
+        for nodename in nonleafnodes:
             if nodename not in self.all_nodenames:
                 raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames}")
 
@@ -362,9 +346,6 @@ class SPBase(object):
                     s._PySP_prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
                     s._PySP_W_coeff[node.name] = 1.0  # needs to be a float
 
-
-    def set_multistage(self):
-        self.multistage = (len(self.all_nodenames) > 1)
 
     def use_variable_probability_setter(self, verbose=False):
         """ set variable probability unconditional values using a function self.variable_probability
@@ -437,8 +418,8 @@ class SPBase(object):
                 ndn = node.name
                 if ndn not in checked_nodes:
                     if not np.allclose(global_concats[ndn], 1., atol=tol):
-                        close = ~np.isclose(global_concats[ndn], 1., atol=tol)
-                        indices = np.nonzero(close)[0]
+                        notclose = ~np.isclose(global_concats[ndn], 1., atol=tol)
+                        indices = np.nonzero(notclose)[0]
                         bad_vars = [ s._nonant_indexes[ndn,idx].name for idx in indices ]
                         badprobs = [ global_concats[ndn][idx] for idx in indices]
                         raise RuntimeError(f"Node {ndn}, variables {bad_vars} have respective"
@@ -446,6 +427,8 @@ class SPBase(object):
                                            " which are not 1")
                     checked_nodes.append(ndn)
 
+    # There is an issue to put these things on a block, but really we should
+    # have two blocks: one for Pyomo objects and the other for lists and caches.
     def _look_before_leap(self, scen, addlist):
         """ utility to check before attaching something to the user's model
         """
@@ -455,7 +438,6 @@ class SPBase(object):
 
     def look_before_leap_all(self):
         for (sname, scenario) in self.local_scenarios.items():
-            # TBD (Feb 2019) Take the caches and lists off the scenario
             self._look_before_leap(
                 scenario,
                 [
@@ -480,6 +462,7 @@ class SPBase(object):
                     "_ys",
                 ],
             )
+            # TODO drop these and have code that inspects them, do a hasattr instead (DLW)
             scenario._PySP_nonant_cache = None
             scenario._PySP_fixedness_cache = None
 
@@ -505,43 +488,8 @@ class SPBase(object):
         else:
             raise RuntimeError("SPBase.spcomm should only be set once")
 
-    def get_var_value(self, scenario_name, variable_name, stage_number):
-        """ Get the value of the specified variable.
-        Args:
-            scenario_name (str):
-                Name of the scenario for which to select the variable.
-            variable_name (str):
-                Name of the variable as constructed by scenario_creator.
-            stage_number (int):
-                Stage of the variable (one-based; ROOT is stage 1).
 
-        Returns:
-            float:
-                Value of the specified variable.
-
-        Raises:
-            ValueError:
-                If no variable with the specified name can be found, or if more
-                than one variable with the specified name is found
-        """
-        if stage_number != 1:
-            raise NotImplementedError("Can only get root node variables for now")
-        scenario_model = self.local_scenarios[scenario_name]
-        variables = [
-            var for node in scenario_model._PySPnode_list
-            for var in node.nonant_vardata_list
-            if var.name == f"{scenario_name}.{variable_name}"
-        ]
-        if len(variables) == 0:
-            raise ValueError(
-                f"Could not find a variable with name {variable_name} in scenario {scenario_name}"
-            )
-        elif len(variables) > 1:
-            raise ValueError(
-                f"Found {len(variables)} variables with name {variable_name} in scenario {scenario_name}"
-            )
-        return variables[0].value
-
+    # TODO: move to utils (e.g., reporting.py) and give an spbase object as an arg
     def gather_var_values_to_root(self):
         """ Gather the values of the nonanticipative variables to the root of
         `mpicomm`.
