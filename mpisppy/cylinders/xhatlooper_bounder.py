@@ -48,14 +48,14 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.global_rank == self.opt.local_rank0:
+            if self.global_rank == self.opt.cylinder_rank0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            if self.global_rank == self.opt.local_rank0:
+            if self.global_rank == self.opt.cylinder_rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()

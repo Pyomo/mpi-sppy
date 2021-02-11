@@ -22,7 +22,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
     """
     def __init__(self, opt):
         super().__init__(opt)
-        self.local_rank = self.opt.local_rank
+        self.cylinder_rank = self.opt.cylinder_rank
         self.n_proc = self.opt.n_proc
         self.verbose = self.opt.options["verbose"]
 
@@ -63,7 +63,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.local_rank, "xhats bcast failed on src_rank={}"\
+                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
                       .format(src_rank))
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
@@ -99,7 +99,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 try:
                     xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
                 except:
-                    print("rank=",self.local_rank, "xhats bcast failed on ndn={}, src_rank={}"\
+                    print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
                     raise
     
@@ -131,7 +131,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             self.opt._restore_nonants()
             return None
         else:
-            if verbose and src_rank == self.local_rank:
+            if verbose and src_rank == self.cylinder_rank:
                 print("   Feasible xhat found:")
                 self.opt.local_scenarios[sname].pprint()
             self.opt._disable_W_and_prox()
@@ -199,7 +199,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             obj (float): the xhat objective function
             snamedict (dict): the (scenario) names upon which xhat is based
         """
-        if self.local_rank == 0 and self.verbose:
+        if self.cylinder_rank == 0 and self.verbose:
             print ("****", extname ,"Used scenarios",
                    str(snamedict),"to get xhat Eobj=",obj)
 

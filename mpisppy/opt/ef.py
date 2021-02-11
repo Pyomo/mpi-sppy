@@ -51,7 +51,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             cb_data=cb_data,
             all_nodenames=all_nodenames
         )
-        if self.n_proc > 1 and self.local_rank == self.local_rank0:
+        if self.n_proc > 1 and self.cylinder_rank == self.cylinder_rank0:
             logger.warning("Creating an ExtensiveForm object in parallel. Why?")
         required = ["solver"]
         self._options_check(required, self.options)

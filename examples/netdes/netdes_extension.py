@@ -9,7 +9,7 @@ class NetworkDesignTracker(PHExtension):
 
     def __init__(self, ph):
         self.ph = ph
-        self.local_rank = ph.local_rank
+        self.cylinder_rank = ph.cylinder_rank
 
     def pre_iter0(self):
         pass
@@ -67,7 +67,7 @@ class NetworkDesignTracker(PHExtension):
         ''' Move this to PHBase if it is successful 
             Need to add some checks for bundling first 
         '''
-        rank = self.local_rank
+        rank = self.cylinder_rank
         names = self.ph.names_in_bundles[rank]
         bunnum = None
         for (num, scens) in names.items():

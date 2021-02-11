@@ -82,9 +82,9 @@ class SPBase(object):
             self.mpicomm = mpicomm
         else:
             self.mpicomm = MPI.COMM_WORLD
-        self.local_rank = self.mpicomm.Get_rank()
+        self.cylinder_rank = self.mpicomm.Get_rank()
         self.n_proc = self.mpicomm.Get_size()
-        self.local_rank0 = rank0
+        self.cylinder_rank0 = rank0
         self.global_rank = MPI.COMM_WORLD.Get_rank()
 
         global_toc("Initializing SPBase")
@@ -135,8 +135,8 @@ class SPBase(object):
             return
 
         # Check that all the ranks agree
-        global_senses = self.mpicomm.gather(is_min, root=self.local_rank0)
-        if self.local_rank != self.local_rank0:
+        global_senses = self.mpicomm.gather(is_min, root=self.cylinder_rank0)
+        if self.cylinder_rank != self.cylinder_rank0:
             return
         sense = global_senses[0]
         clear = all(val == sense for val in global_senses)
@@ -182,7 +182,7 @@ class SPBase(object):
         """
         # list of scenario names owned locally
         self.local_scenario_names = [
-            self.all_scenario_names[i] for i in self._rank_slices[self.local_rank]
+            self.all_scenario_names[i] for i in self._rank_slices[self.cylinder_rank]
         ]
 
     def assign_bundles(self):
@@ -194,7 +194,7 @@ class SPBase(object):
         """
         scen_count = len(self.all_scenario_names)
 
-        if self.options["verbose"] and self.local_rank == self.local_rank0:
+        if self.options["verbose"] and self.cylinder_rank == self.cylinder_rank0:
             print("(rank0)", self.options["bundles_per_rank"], "bundles per rank")
         if self.n_proc * self.options["bundles_per_rank"] > scen_count:
             raise RuntimeError(
@@ -244,9 +244,9 @@ class SPBase(object):
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
                 all_instance_creation_times = self.mpicomm.gather(
-                    instance_creation_time, root=self.local_rank0
+                    instance_creation_time, root=self.cylinder_rank0
                 )
-                if self.local_rank == self.local_rank0:
+                if self.cylinder_rank == self.cylinder_rank0:
                     aict = all_instance_creation_times
                     print("Scenario instance creation times:")
                     print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
@@ -311,7 +311,7 @@ class SPBase(object):
                 nodenumber = sputils.extract_num(nodename)
                 # IMPORTANT: See note in sputils._ScenTree.scen_names_to_ranks. Need to keep
                 #            this split aligned with self.scenario_names_to_rank
-                self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.local_rank)
+                self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.cylinder_rank)
             else: # this rank is not included in the communicator
                 self.mpicomm.Split(color=MPI.UNDEFINED, key=self.n_proc)
 
@@ -374,7 +374,7 @@ class SPBase(object):
                     s._PySP_W_coeff[ndn][i] = 0
             didit += len(variable_probability)
             skipped += len(s._varid_to_nonant_index) - didit
-        if verbose and self.local_rank == self.local_rank0:
+        if verbose and self.cylinder_rank == self.cylinder_rank0:
             print ("variable_probability set",didit,"and skipped",skipped)
 
         self._check_variable_probabilities_sum(verbose)
@@ -505,9 +505,9 @@ class SPBase(object):
                 for var in node.nonant_vardata_list:
                     var_values[sname, var.name] = pyo.value(var)
 
-        result = self.mpicomm.gather(var_values, root=self.local_rank0)
+        result = self.mpicomm.gather(var_values, root=self.cylinder_rank0)
 
-        if (self.local_rank == self.local_rank0):
+        if (self.cylinder_rank == self.cylinder_rank0):
             result = {key: value
                 for dic in result
                 for (key, value) in dic.items()

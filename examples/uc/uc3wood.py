@@ -188,7 +188,7 @@ if __name__ == "__main__":
     spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
     # there are ways to get the answer sooner
     if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.local_rank == spcomm.opt.local_rank0:  # we are the reporting hub rank
+        if spcomm.opt.cylinder_rank == spcomm.opt.cylinder_rank0:  # we are the reporting hub rank
             print("BestInnerBound={} and BestOuterBound={}".\
                   format(spcomm.BestInnerBound, spcomm.BestOuterBound))
     print("End time={} for global rank={}".\

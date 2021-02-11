@@ -12,15 +12,15 @@ class Gapper(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
         self.ph = ph
-        self.local_rank = self.ph.local_rank
-        self.local_rank0 = self.ph.local_rank0
+        self.cylinder_rank = self.ph.cylinder_rank
+        self.cylinder_rank0 = self.ph.cylinder_rank0
         self.gapperoptions = self.ph.PHoptions["gapperoptions"] # required
         self.mipgapdict = self.gapperoptions["mipgapdict"]
         self.verbose = self.ph.PHoptions["verbose"] \
                        or self.gapperoptions["verbose"]
                        
     def _vb(self, str):
-        if self.verbose and self.local_rank == 0:
+        if self.verbose and self.cylinder_rank == 0:
             print ("(rank0) mipgapper:" + str)
 
     def set_mipgap(self, mipgap):

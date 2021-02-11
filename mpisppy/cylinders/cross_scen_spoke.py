@@ -15,7 +15,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
     def make_windows(self):
         nscen = len(self.opt.all_scenario_names)
         if nscen == 0:
-            raise RuntimeError(f"(rank: {self.local_rank}), no local_scenarios")
+            raise RuntimeError(f"(rank: {self.cylinder_rank}), no local_scenarios")
 
         self.nscen = nscen
         vbuflen = 0

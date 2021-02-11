@@ -70,7 +70,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
                     for (ix, var) in enumerate(node.nonant_vardata_list)}
         comm = PHB.comms['ROOT']
         Ws = comm.gather(local_Ws, root=0)
-        if (PHB.local_rank == 0):
+        if (PHB.cylinder_rank == 0):
             with open(fname, 'a') as f:
                 for W in Ws:
                     for (key, val) in W.items():
@@ -271,7 +271,7 @@ def write_xbar_to_file(PHB, fname):
         Each scenario maintains its own copy of xbars. We only need to write
         one of them to the file (i.e. no parallelism required).
     '''
-    if (PHB.local_rank != 0):
+    if (PHB.cylinder_rank != 0):
         return
     sname = list(PHB.local_scenarios.keys())[0]
     scenario = PHB.local_scenarios[sname]
@@ -297,7 +297,7 @@ def set_xbar_from_file(fname, PHB):
     '''
     xbar_val_dict = _parse_xbar_csv(fname)
 
-    if (PHB.local_rank == 0):
+    if (PHB.cylinder_rank == 0):
         _check_xbar(xbar_val_dict, PHB)
 
     for (sname, scenario) in PHB.local_scenarios.items():
