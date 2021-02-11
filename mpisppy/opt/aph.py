@@ -303,7 +303,7 @@ class APH(ph_base.PHBase):  # ??????
         self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwnorm
         self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pznorm
         # we have updated our summands and the listener will do a reduction
-        secs_so_far = (dt.datetime.now() - self.startdt).total_seconds()
+        secs_so_far = time.perf_counter() - self.start_time
         # Put in a time only for this rank, so the "sum" is really a report
         self.local_concats["SecondReduce"]["ROOT"][6+self.rank] = secs_so_far
         # This is run by the listener, so don't tell the worker you have done
@@ -396,7 +396,7 @@ class APH(ph_base.PHBase):  # ??????
                            * pyo.value(s._ys[(node.name,i)])
 
         # record the time
-        secs_sofar = (dt.datetime.now() - self.startdt).total_seconds()
+        secs_sofar = time.perf_counter() - self.start_time
         # only this rank puts a time for this rank, so the sum is a report
         self.local_concats["FirstReduce"]["ROOT"][3*nlens["ROOT"]+self.rank] \
             = secs_sofar
@@ -755,7 +755,7 @@ class APH(ph_base.PHBase):  # ??????
                 print("Iteration time: %6.2f" \
                       % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" \
-                      % (dt.datetime.now() - self.startdt).total_seconds())
+                      % (time.perf_counter() - self.start_time))
             if self.use_lag:
                 self._update_foropt(dlist)
 

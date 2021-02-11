@@ -185,7 +185,7 @@ class _BoundSpoke(Spoke):
         if self.rank_intra != 0 or self.trace_filen is None:
             return
         with open(self.trace_filen, 'a') as f:
-            f.write(f"{time.time()-self.start_time},{value}\n")
+            f.write(f"{time.perf_counter()-self.start_time},{value}\n")
 
 
 class _BoundNonantLenSpoke(_BoundSpoke):

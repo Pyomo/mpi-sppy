@@ -57,7 +57,7 @@ class SPBase(object):
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
         # TO REMEMBER TO DO: use local_ versus global_ for ranks
         # TODO? add decorators to the class attributes
-        self.start_time = time.time()   # TODO? switch to perf_counter
+        self.start_time = time.perf_counter()
         self.options = options
         self.all_scenario_names = all_scenario_names
         self.scenario_creator = scenario_creator

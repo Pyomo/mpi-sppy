@@ -1433,7 +1433,7 @@ class PHBase(mpisppy.spbase.SPBase):
             print("After PH Iteration",self._PHIter)
             print("Trivial bound =", self.trivial_bound)
             print("PHBase Convergence Metric =",self.conv)
-            print("Elapsed time: %6.2f" % (dt.datetime.now() - self.startdt).total_seconds())
+            print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
         self._reenable_W_and_prox()
 
@@ -1530,7 +1530,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("After PH Iteration",self._PHIter)
                 print("Scaled PHBase Convergence Metric=",self.conv)
                 print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
-                print("Elapsed time:   %6.2f" % (dt.datetime.now() - self.startdt).total_seconds())
+                print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if (self._PHIter == max_iterations):
                 global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.rank == self.rank0)
@@ -1584,7 +1584,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         if dtiming and self.rank == self.rank0:
             print("")
-            print("Cumulative execution time=%5.2f" % (time.time()-self.start_time))
+            print("Cumulative execution time=%5.2f" % (time.perf_counter()-self.start_time))
             print("")
 
         return Eobj
