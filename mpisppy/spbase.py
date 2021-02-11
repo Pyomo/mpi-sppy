@@ -272,7 +272,7 @@ class SPBase(object):
                 node.name: len(node.nonant_vardata_list)
                 for node in scenario._PySPnode_list
             }
-            scenario._PySP_cistart = dict()  # TODO: we don't really need cistart
+            scenario._PySP_cistart = dict()  # TODO: we don't really need cistart; could use scenario._nonant_indexes / scenario._varid_to_nonant_index
             sofar = 0
             for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
@@ -286,7 +286,7 @@ class SPBase(object):
             # In order to support rho setting, create a map
             # from the id of vardata object back its _nonant_index.
             scenario._varid_to_nonant_index =\
-                {id(var): ndn_i for ndn_i, var in self._nonant_indexes.items()}
+                {id(var): ndn_i for ndn_i, var in scenario._nonant_indexes.items()}
             
 
     def create_communicators(self):
