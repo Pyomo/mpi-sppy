@@ -85,7 +85,7 @@ class SPBase(object):
         self.rank = self.mpicomm.Get_rank()
         self.n_proc = self.mpicomm.Get_size()
         self.rank0 = rank0
-        self.rank_global = MPI.COMM_WORLD.Get_rank()
+        self.global_rank = MPI.COMM_WORLD.Get_rank()
 
         global_toc("Initializing SPBase")
 

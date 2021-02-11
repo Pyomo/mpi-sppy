@@ -27,7 +27,7 @@ import datetime as dt
 
 import mpi4py.MPI as mpi
 comm_global = mpi.COMM_WORLD
-rank_global = comm_global.Get_rank()
+global_rank = comm_global.Get_rank()
 n_proc = comm_global.Get_size()
 
 # =========================
@@ -145,7 +145,7 @@ def main():
     if scenperbun > 0:
         nscen = branching_factors[0] * branching_factors[1]
         PHoptions["bundles_per_rank"] = int((nscen / n_proc) / scenperbun)
-    if rank_global == 0:
+    if global_rank == 0:
         appfile = "acopf.app"
         if not os.path.isfile(appfile):
             with open(appfile, "w") as f:

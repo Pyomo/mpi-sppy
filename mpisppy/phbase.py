@@ -570,7 +570,7 @@ class PHBase(mpisppy.spbase.SPBase):
         ci = 0 # Cache index
         for sname, model in self.local_scenarios.items():
             if model._PySP_nonant_cache is None:
-                raise RuntimeError(f"Rank {self.rank_global} Scenario {sname}"
+                raise RuntimeError(f"Rank {self.global_rank} Scenario {sname}"
                                    " nonant_cache is None"
                                    " (call _save_nonants first?)")
             for i,_ in enumerate(model._nonant_indices):
@@ -1047,7 +1047,7 @@ class PHBase(mpisppy.spbase.SPBase):
         for k,s in s_source.items():
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.rank))
             if tee:
-                print(f"Tee solve for {k} on global rank {self.rank_global}")
+                print(f"Tee solve for {k} on global rank {self.global_rank}")
             pyomo_solve_time = self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
                                               verbose=verbose,

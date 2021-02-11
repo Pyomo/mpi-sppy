@@ -78,7 +78,7 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     intercomm, intracomm = make_comms(n_spokes, fullcomm=fullcomm)
     rank_inter = intercomm.Get_rank()
     rank_intra = intracomm.Get_rank()
-    rank_global = fullcomm.Get_rank()
+    global_rank = fullcomm.Get_rank()
 
     # Assign hub/spokes to individual ranks
     if rank_inter == 0: # This rank is a hub
@@ -145,9 +145,9 @@ def make_comms(n_spokes, fullcomm=None):
 
     # Create the intercomm and intracomm
     # Cryptic comment: intra is vertical, inter is around the hub
-    rank_global = fullcomm.Get_rank()
-    intercomm = fullcomm.Split(key=rank_global, color=rank_global // nsp1)
-    intracomm = fullcomm.Split(key=rank_global, color=rank_global % nsp1)
+    global_rank = fullcomm.Get_rank()
+    intercomm = fullcomm.Split(key=global_rank, color=global_rank // nsp1)
+    intracomm = fullcomm.Split(key=global_rank, color=global_rank % nsp1)
     return intercomm, intracomm
 
 

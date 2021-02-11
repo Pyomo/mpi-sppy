@@ -12,7 +12,7 @@ def profile(filename=None, comm=mpi.COMM_WORLD):
     pass
 
 fullcomm = mpi.COMM_WORLD
-rank_global = fullcomm.Get_rank()
+global_rank = fullcomm.Get_rank()
 
 
 ############################################################################
@@ -55,10 +55,10 @@ class PH(mpisppy.phbase.PHBase):
         self.subproblem_creation(verbose)
 
         if (verbose):
-            print('Calling PH Iter0 on global rank {}'.format(rank_global))
+            print('Calling PH Iter0 on global rank {}'.format(global_rank))
         trivial_bound = self.Iter0()
         if (verbose):
-            print ('Completed PH Iter0 on global rank {}'.format(rank_global))
+            print ('Completed PH Iter0 on global rank {}'.format(global_rank))
         if ('asynchronousPH' in self.PHoptions) and (self.PHoptions['asynchronousPH']):
             raise RuntimeError("asynchronousPH is deprecated; use APH")
 
@@ -128,7 +128,7 @@ if __name__ == "__main__":
             rho_setter=None)
     ph.PHoptions["PHIterLimit"] = 3
 
-    if rank_global == 0:
+    if global_rank == 0:
         try:
             shutil.rmtree("delme_diagdir")
             print ("...deleted delme_diagdir")
@@ -158,13 +158,13 @@ if __name__ == "__main__":
 
     conv, obj, bnd = ph.ph_main()
 
-    if rank_global == 0:
+    if global_rank == 0:
         print ("E[obj] for converged solution (probably NOT non-anticipative)",
                obj)
 
     dopts = sputils.option_string_to_dict("mipgap=0.001")
     objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
-    if rank_global == 0:
+    if global_rank == 0:
         print ("**** Lagrangian objective function bound=",objbound)
         print ("(probably converged way too early, BTW)")
    

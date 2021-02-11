@@ -211,7 +211,7 @@ def write_solution(spcomm, opt_dict, solution_dir):
     from mpisppy.extensions.xhatclosest import XhatClosest
     from mpisppy.opt.ph import PH
 
-    if spcomm.rank_global == 0:
+    if spcomm.global_rank == 0:
         if spcomm.last_ib_idx is None:
             best_rank_inter = -1
             print("No incumbent solution to print")

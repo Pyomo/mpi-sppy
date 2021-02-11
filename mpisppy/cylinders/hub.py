@@ -142,7 +142,7 @@ class Hub(SPCommunicator):
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
 
-        if self.rank_global == 0:
+        if self.global_rank == 0:
             self.print_init = True
             global_toc(f"Statistics at termination", True)
             self.screen_trace()
@@ -443,7 +443,7 @@ class PHHub(Hub):
                 )
 
             ## you still want to output status, even without inner bounders configured
-            if self.rank_global == 0:                
+            if self.global_rank == 0:                
                 self.screen_trace()
                 
             return False
@@ -455,7 +455,7 @@ class PHHub(Hub):
                     "will be made on the Best Bound")
 
         ## log some output
-        if self.rank_global == 0:
+        if self.global_rank == 0:
             self.screen_trace()
 
         return self.determine_termination()
@@ -573,7 +573,7 @@ class LShapedHub(Hub):
         self.BestOuterBound = self.OuterBoundUpdate(bound)
 
         ## log some output
-        if self.rank_global == 0:                
+        if self.global_rank == 0:                
             self.screen_trace()
 
         return self.determine_termination()

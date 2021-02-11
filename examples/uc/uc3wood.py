@@ -34,7 +34,7 @@ from uc_funcs import scenario_creator, \
 
 # mpi setup
 fullcomm = mpi.COMM_WORLD
-rank_global = fullcomm.Get_rank()
+global_rank = fullcomm.Get_rank()
 
 def _usage():
     print("usage: mpiexec -np {N} python -m mpi4py uc3wood.py {ScenCount} {bundles_per_rank} {PHIterLimit} {fixer|nofixer")
@@ -45,14 +45,14 @@ def _usage():
 if __name__ == "__main__":
     logging.basicConfig(level=logging.DEBUG, filename='dlw.log',
                         filemode='w', format='(%(threadName)-10s) %(message)s')
-    setup_logger(f'dtm{rank_global}', f'dtm{rank_global}.log')
-    dtm = logging.getLogger(f'dtm{rank_global}')
+    setup_logger(f'dtm{global_rank}', f'dtm{global_rank}.log')
+    dtm = logging.getLogger(f'dtm{global_rank}')
 
     if len(sys.argv) != 5:
         _usage()
 
     print("Start time={} for global rank={}".\
-          format(datetime.datetime.now(), rank_global))
+          format(datetime.datetime.now(), global_rank))
 
     try:
         ScenCount = int(sys.argv[1])
@@ -192,4 +192,4 @@ if __name__ == "__main__":
             print("BestInnerBound={} and BestOuterBound={}".\
                   format(spcomm.BestInnerBound, spcomm.BestOuterBound))
     print("End time={} for global rank={}".\
-          format(datetime.datetime.now(), rank_global))
+          format(datetime.datetime.now(), global_rank))

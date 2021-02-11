@@ -42,7 +42,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         verbose = self.opt.options['verbose']
 
         self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
-        logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.rank_global}")
+        logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}")
 
         self.opt.subproblem_creation(verbose)
 
@@ -86,8 +86,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         slam_iter = 1
         while not self.got_kill_signal():
             if (slam_iter-1) % 10000 == 0:
-                logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.rank_global}')
-                logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.rank_global}')
+                logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}')
+                logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
 
             if self.new_nonants:
                 

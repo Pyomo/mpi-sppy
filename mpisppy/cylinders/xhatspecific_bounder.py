@@ -10,7 +10,7 @@ import mpi4py.MPI as mpi
 import logging
 
 fullcomm = mpi.COMM_WORLD
-rank_global = fullcomm.Get_rank()
+global_rank = fullcomm.Get_rank()
 fullcom_n_proc = fullcomm.Get_size()
 
 
@@ -33,7 +33,7 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         xhatter = XhatSpecific(self.opt)
         # somehow deal with the prox option .... TBD .... important for aph APH
         self.opt.PH_Prep()  
-        logging.debug("  ib back from Prep global rank {}".format(rank_global))
+        logging.debug("  ib back from Prep global rank {}".format(global_rank))
 
         self.opt.subproblem_creation(verbose)
 
@@ -77,9 +77,9 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         Entry point. Communicates with the optimization companion.
 
         """
-        dtm = logging.getLogger(f'dtm{rank_global}')
+        dtm = logging.getLogger(f'dtm{global_rank}')
         verbose = self.opt.options["verbose"] # typing aid  
-        logging.debug("Enter xhatspecific main on rank {}".format(rank_global))
+        logging.debug("Enter xhatspecific main on rank {}".format(global_rank))
 
         # What to try does not change, but the data in the scenarios should
         xhat_scenario_dict = self.opt.options["xhat_specific_options"]\
@@ -91,14 +91,14 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         got_kill_signal = False
         while (not self.got_kill_signal()):
             logging.debug('   IB loop iter={} on global rank {}'.\
-                          format(ib_iter, rank_global))
+                          format(ib_iter, global_rank))
             # _log_values(ib_iter, self._locals, dtm)
 
             logging.debug('   IB got from opt on global rank {}'.\
-                          format(rank_global))
+                          format(global_rank))
             if (self.new_nonants):
                 logging.debug('  and its new! on global rank {}'.\
-                              format(rank_global))
+                              format(global_rank))
                 logging.debug('  localnonants={}'.format(str(self.localnonants)))
 
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
@@ -109,10 +109,10 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
                 if innerbound is not None:
                     self.bound = innerbound
                     logging.debug('send ib={}; global rank={} (specified dict)'\
-                                  .format(innerbound, rank_global))
-                    dtm.debug(f'Computed inner bound on rank {rank_global}: {self.bound:.4f}')
+                                  .format(innerbound, global_rank))
+                    dtm.debug(f'Computed inner bound on rank {global_rank}: {self.bound:.4f}')
                     logging.debug('   bottom of ib loop on global rank {}'\
-                                  .format(rank_global))
+                                  .format(global_rank))
 
             ib_iter += 1
 

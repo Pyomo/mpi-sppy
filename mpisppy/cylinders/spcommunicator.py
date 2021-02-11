@@ -30,7 +30,7 @@ class SPCommunicator:
         self.fullcomm = fullcomm
         self.intercomm = intercomm
         self.intracomm = intracomm
-        self.rank_global = fullcomm.Get_rank()
+        self.global_rank = fullcomm.Get_rank()
         self.rank_inter = intercomm.Get_rank()
         self.rank_intra = intracomm.Get_rank()
         self.n_spokes = intercomm.Get_size() - 1

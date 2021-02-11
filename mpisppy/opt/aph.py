@@ -31,7 +31,7 @@ import mpisppy.utils.sputils as sputils
 
 
 fullcomm = mpi.COMM_WORLD
-rank_global = fullcomm.Get_rank()
+global_rank = fullcomm.Get_rank()
 
 
 logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
@@ -388,7 +388,7 @@ class APH(ph_base.PHBase):  # ??????
                     self.local_concats["FirstReduce"][node.name][i] += \
                         (s.PySP_prob / node.uncond_prob) * v_value
                     logging.debug("  rank= {} scen={}, i={}, v_value={}".\
-                                  format(rank_global, k, i, v_value))
+                                  format(global_rank, k, i, v_value))
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
                         += (s.PySP_prob / node.uncond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
@@ -475,7 +475,7 @@ class APH(ph_base.PHBase):  # ??????
                 s._zs[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
-                              format(rank_global, k, i, Ws, zs))
+                              format(global_rank, k, i, Ws, zs))
         # ? so they will be there next time? (we really need a third reduction)
         self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwnorm
         self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pznorm
@@ -860,7 +860,7 @@ class APH(ph_base.PHBase):  # ??????
         else:
             Eobj = None
 
-        print(f"Debug: here's the dispatch record for rank={self.rank_global}")
+        print(f"Debug: here's the dispatch record for rank={self.global_rank}")
         for k,v in self.dispatchrecord.items():
             print(k, v)
             print()

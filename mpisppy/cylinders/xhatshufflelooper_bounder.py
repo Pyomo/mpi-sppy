@@ -56,7 +56,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         xhatter = XhatBase(self.opt)
 
         self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
-        logger.debug(f"  xhatshuffle spoke back from PH_Prep rank {self.rank_global}")
+        logger.debug(f"  xhatshuffle spoke back from PH_Prep rank {self.global_rank}")
 
         self.opt.subproblem_creation(verbose)
 
@@ -78,14 +78,14 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.rank_global == self.opt.rank0:
+            if self.global_rank == self.opt.rank0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            if self.rank_global == self.opt.rank0:
+            if self.global_rank == self.opt.rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()
@@ -133,13 +133,13 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         if update:
             self.bound = obj 
             self.ib = obj
-            logger.debug(f'   send inner bound={obj} on rank {self.rank_global} (based on scenario {scenario})')
-        logger.debug(f'   bottom of try_scenario on rank {self.rank_global}')
+            logger.debug(f'   send inner bound={obj} on rank {self.global_rank} (based on scenario {scenario})')
+        logger.debug(f'   bottom of try_scenario on rank {self.global_rank}')
         return update
 
     def main(self):
         verbose = self.opt.options["verbose"] # typing aid  
-        logger.debug(f"Entering main on xhatshuffle spoke rank {self.rank_global}")
+        logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhatbase_prep()
         self.ib = inf if self.is_minimizing else -inf
@@ -160,14 +160,14 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         while not self.got_kill_signal():
 
             if (xh_iter-1) % 100 == 0:
-                logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.rank_global}')
-                logger.debug(f'   Xhatshuffle got from opt on rank {self.rank_global}')
+                logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.global_rank}')
+                logger.debug(f'   Xhatshuffle got from opt on rank {self.global_rank}')
 
             if self.new_nonants:
                 # similar to above, not all ranks will agree on
                 # when there are new_nonants (in the same loop)
                 logger.debug(f'   *Xhatshuffle loop iter={xh_iter}')
-                logger.debug(f'   *got a new one! on rank {self.rank_global}')
+                logger.debug(f'   *got a new one! on rank {self.global_rank}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
                 # update the caches
