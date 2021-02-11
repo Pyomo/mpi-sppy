@@ -167,7 +167,7 @@ if __name__ == "__main__":
 
     # there are ways to get the answer sooner
     if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.rank == spcomm.opt.rank0:  # we are the reporting hub rank
+        if spcomm.opt.local_rank == spcomm.opt.local_rank0:  # we are the reporting hub rank
             print("BestInnerBound={} and BestOuterBound={}". \
                   format(spcomm.BestInnerBound, spcomm.BestOuterBound))
     print("End time={} for global rank={}". \

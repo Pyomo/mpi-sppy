@@ -78,14 +78,14 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.global_rank == self.opt.rank0:
+            if self.global_rank == self.opt.local_rank0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            if self.global_rank == self.opt.rank0:
+            if self.global_rank == self.opt.local_rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()
@@ -114,7 +114,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                             solver_options = self.solver_options,
                             verbose=False)
         def _vb(msg): 
-            if self.verbose and self.opt.rank == self.opt.rank0:
+            if self.verbose and self.opt.local_rank == self.opt.local_rank0:
                 print ("(rank0) " + msg)
 
         if self.running_trace_filen is not None:
@@ -153,7 +153,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         scenario_cycler = ScenarioCycler(shuffled_scenarios)
 
         def _vb(msg): 
-            if self.verbose and self.opt.rank == self.opt.rank0:
+            if self.verbose and self.opt.local_rank == self.opt.local_rank0:
                 print("(rank0) " + msg)
 
         xh_iter = 1

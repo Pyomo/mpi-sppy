@@ -146,7 +146,7 @@ if __name__ == "__main__":
         cb_data=datadir,
     )
 
-    if ph.rank == 0:
+    if ph.local_rank == 0:
         appfile = PHoptions["append_file_name"]
         if not os.path.isfile(appfile):
             with open(appfile, "w") as f:
@@ -179,12 +179,12 @@ if __name__ == "__main__":
     dopts = {"mipgap": 0.001}
     ph.PHoptions["asynchronous"] = False
     objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
-    if ph.rank == 0:
+    if ph.local_rank == 0:
         print("**** Lagrangian objective function bound=", objbound)
 
     end_time = dt.datetime.now()
 
-    if ph.rank == 0:
+    if ph.local_rank == 0:
         with open(appfile, "a") as f:
             f.write(", " + str(objbound) + ", " + str(tbound) + ", " + str(ph._PHIter))
             f.write(", " + str((end_time - start_time).total_seconds()))

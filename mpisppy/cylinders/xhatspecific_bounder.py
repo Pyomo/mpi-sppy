@@ -53,14 +53,14 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
                             verbose=verbose)
         self.opt._update_E1()  # Apologies for doing this after the iter0 solves...
         if (abs(1 - self.opt.E1) > self.opt.E1_tolerance):
-            if opt.rank == opt.rank0:
+            if opt.local_rank == opt.local_rank0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            if self.opt.rank == self.opt.rank0:
+            if self.opt.local_rank == self.opt.local_rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()

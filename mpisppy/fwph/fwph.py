@@ -106,7 +106,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (check):
                 self._check_initial_points()
             self._create_solvers()
-            self._use_rho_setter(verbose and self.rank==self.rank0)
+            self._use_rho_setter(verbose and self.local_rank==self.local_rank0)
             self._initialize_MIP_var_values()
             best_bound = -np.inf if self.is_minimizing else np.inf
         else:
@@ -137,7 +137,7 @@ class FWPH(mpisppy.phbase.PHBase):
         self._reenable_W()
 
         if (self.PH_converger):
-            self.convobject = self.PH_converger(self, self.rank, self.n_proc)
+            self.convobject = self.PH_converger(self, self.local_rank, self.n_proc)
 
         return best_bound
 
@@ -170,7 +170,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, np.nan, secs)
-                    if (self.rank == self.rank0 and self.vb):
+                    if (self.local_rank == self.local_rank0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
                 self.spcomm.sync()
@@ -181,7 +181,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, diff, secs)
-                    if (self.rank == self.rank0 and self.vb):
+                    if (self.local_rank == self.local_rank0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
             else: # Convergence check from Boland
@@ -191,7 +191,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, diff, secs)
-                    if (self.rank == self.rank0 and self.vb):
+                    if (self.local_rank == self.local_rank0 and self.vb):
                         print('PH converged based on standard criteria')
                     break
 
@@ -200,7 +200,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self.Update_W(self.PHoptions['verbose'])
             timed_out = self._is_timed_out()
             if (self._is_timed_out()):
-                if (self.rank == self.rank0 and self.vb):
+                if (self.local_rank == self.local_rank0 and self.vb):
                     print('Timeout.')
                 break
 
@@ -461,7 +461,7 @@ class FWPH(mpisppy.phbase.PHBase):
         stage_one_var_names = [var.name for var in root.nonant_vardata_list]
 
         init_pts = self.comms['ROOT'].gather(self.local_initial_points, root=0)
-        if (self.rank != self.rank0):
+        if (self.local_rank != self.local_rank0):
             return
 
         print('Checking initial points...', end='', flush=True)
@@ -658,7 +658,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 Must be called after variables are swapped back (I think).
         '''
-        if (self.rank != self.rank0):
+        if (self.local_rank != self.local_rank0):
             return None
         else:
             random_scenario_name = list(self.local_scenarios.keys())[0]
@@ -809,7 +809,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         mip.nonant_vars[arb_scenario, node_name, ix].value)
 
     def _is_timed_out(self):
-        if (self.rank == self.rank0):
+        if (self.local_rank == self.local_rank0):
             time_elapsed = time.time() - self.t0
             status = 1 if (time_elapsed > self.FW_options['time_limit']) \
                        else 0
@@ -848,7 +848,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 raise RuntimeError('Cannot use bundles and specify initial '
                     'points with t_max=1 at the same time.')
             else:
-                if (self.rank == self.rank0):
+                if (self.local_rank == self.local_rank0):
                     print('WARNING: Cannot specify initial points and use '
                         'bundles at the same time. Ignoring specified initial '
                         'points')
@@ -873,11 +873,11 @@ class FWPH(mpisppy.phbase.PHBase):
             self.FW_options['time_limit'] = np.inf
 
     def _output(self, itr, bound, best_bound, diff, secs):
-        if (self.rank == self.rank0 and self.vb):
+        if (self.local_rank == self.local_rank0 and self.vb):
             print('{itr:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s'.format(
                     itr=itr, bound=bound, best_bound=best_bound, 
                     diff=diff, secs=secs))
-        if (self.rank == self.rank0 and 'save_file' in self.FW_options.keys()):
+        if (self.local_rank == self.local_rank0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
                 f.write('{itr:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n'.format(
@@ -885,10 +885,10 @@ class FWPH(mpisppy.phbase.PHBase):
                     diff=diff, secs=secs))
 
     def _output_header(self):
-        if (self.rank == self.rank0 and self.vb):
+        if (self.local_rank == self.local_rank0 and self.vb):
             print('itr {bound:>12s} {bb:>12s} {cd:>12s} {tm:>12s}'.format(
                     bound="bound", bb="best bound", cd="conv diff", tm="time"))
-        if (self.rank == self.rank0 and 'save_file' in self.FW_options.keys()):
+        if (self.local_rank == self.local_rank0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
                 f.write('{itr:s},{bound:s},{bb:s},{diff:s},{secs:s}\n'.format(
@@ -905,7 +905,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 function can be called.
         '''
         weights = self._gather_weight_dict(strip_bundle_names=self.bundling) # None if rank != 0
-        if (self.rank != self.rank0):
+        if (self.local_rank != self.local_rank0):
             return
         with open(fname, 'w') as f:
             for block in weights:
@@ -924,7 +924,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 Rather "fast-and-loose", in that it doesn't enforce _when_ this
                 function can be called.
         '''
-        if (self.rank != self.rank0):
+        if (self.local_rank != self.local_rank0):
             return
         xbars = self._get_xbars(strip_bundle_names=self.bundling) # None if rank != 0
         with open(fname, 'w') as f:

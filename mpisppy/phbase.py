@@ -40,7 +40,7 @@ class PHBase(mpisppy.spbase.SPBase):
         a trailing number in the scenario name. Assume we have only non-leaf
         nodes.
 
-        To check for rank 0 use self.rank == self.rank0.
+        To check for rank 0 use self.local_rank == self.local_rank0.
 
         Attributes:
             local_scenarios (dict): 
@@ -195,7 +195,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # set the xbar and xsqbar in all the scenarios
         for k,s in self.local_scenarios.items():
             logger.debug('  top of assign xbar loop for {} on rank {}'.\
-                         format(k, self.rank))
+                         format(k, self.local_rank))
             nlens = s._PySP_nlens
             for node in s._PySPnode_list:
                 ndn = node.name
@@ -207,9 +207,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 for i in range(nlen):
                     s._xbars[(ndn,i)]._value = xbars[i]
                     s._xsqbars[(ndn,i)]._value = xsqbars[i]
-                    if verbose and self.rank == self.rank0:
+                    if verbose and self.local_rank == self.local_rank0:
                         print ("rank, scen, node, var, xbar:",
-                               self.rank, k, ndn, node.nonant_vardata_list[i].name,
+                               self.local_rank, k, ndn, node.nonant_vardata_list[i].name,
                                pyo.value(s._xbars[(ndn,i)]))
 
 
@@ -227,9 +227,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 xdiff = nonant._value \
                         - s._xbars[ndn_i]._value
                 s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
-                if verbose and self.rank == self.rank0:
+                if verbose and self.local_rank == self.local_rank0:
                     print ("rank, node, scen, var, W", ndn_i[0], k,
-                           self.rank, nonant.name,
+                           self.local_rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
             # Special code for variable probabilities to mask W; rarely used.
             if s._PySP_has_varprob:
@@ -319,7 +319,7 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
-            logger.debug("  in loop Ebound k={}, rank={}".format(k, self.rank))
+            logger.debug("  in loop Ebound k={}, rank={}".format(k, self.local_rank))
             local_Ebounds.append(s.PySP_prob * s._PySP_ob)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -686,7 +686,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._PHrho[(ndn, i)] = rho
             didit += len(rholist)
             skipped += len(scenario._varid_to_nonant_index) - didit
-        if verbose and self.rank == self.rank0:
+        if verbose and self.local_rank == self.local_rank0:
             print ("rho_setter set",didit,"and skipped",skipped)
 
     def _disable_prox(self):
@@ -749,11 +749,11 @@ class PHBase(mpisppy.spbase.SPBase):
             what you are doing.  It is not suitable as a general, per-iteration
             Lagrangian bound solver.
         '''
-        if (self.rank == self.rank0):
+        if (self.local_rank == self.local_rank0):
             print('Warning: Lagrangian bounds might not be correct in certain '
                   'cases where there are integers not subject to '
                   'non-anticipativity and those integers do not reach integrality.')
-        if (verbose and self.rank == self.rank0):
+        if (verbose and self.local_rank == self.local_rank0):
             print('Beginning post-solve Lagrangian bound computation')
 
         if (self.W_disabled):
@@ -776,7 +776,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # A half-hearted attempt to restore the state
         self._reenable_prox()
 
-        if (verbose and self.rank == self.rank0):
+        if (verbose and self.local_rank == self.local_rank0):
             print(f'Post-solve Lagrangian bound: {bound:.4f}')
         return bound
 
@@ -875,7 +875,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
 
         def _vb(msg): 
-            if verbose and self.rank == self.rank0:
+            if verbose and self.local_rank == self.local_rank0:
                 print ("(rank0) " + msg)
         
         # if using a persistent solver plugin,
@@ -900,7 +900,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
                 all_set_objective_times = self.mpicomm.gather(set_objective_time,
                                                           root=0)
-                if self.rank == self.rank0:
+                if self.local_rank == self.local_rank0:
                     print("Set objective times (seconds):")
                     print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                           (np.mean(all_set_objective_times),
@@ -915,7 +915,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()
-        if self.rank == self.rank0:
+        if self.local_rank == self.local_rank0:
             if tee is not None and tee is True:
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
@@ -1026,7 +1026,7 @@ class PHBase(mpisppy.spbase.SPBase):
         set_objective takes care of W and prox changes.
         """
         def _vb(msg): 
-            if verbose and self.rank == self.rank0:
+            if verbose and self.local_rank == self.local_rank0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
         if dis_W and dis_prox:
@@ -1035,7 +1035,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self._disable_W()
         elif dis_prox:
             self._disable_prox()
-        logger.debug("  early solve_loop for rank={}".format(self.rank))
+        logger.debug("  early solve_loop for rank={}".format(self.local_rank))
 
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
@@ -1045,7 +1045,7 @@ class PHBase(mpisppy.spbase.SPBase):
         else:
             s_source = self.local_subproblems
         for k,s in s_source.items():
-            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.rank))
+            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.local_rank))
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
             pyomo_solve_time = self.solve_one(solver_options, k, s,
@@ -1058,7 +1058,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.rank == self.rank0:
+            if self.local_rank == self.local_rank0:
                 print("Pyomo solve times (seconds):")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(all_pyomo_solve_times),
@@ -1259,12 +1259,12 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         self.local_subproblems = dict()
         if self.bundling:
-            rank_local = self.rank
+            rank_local = self.local_rank
             for bun in self.names_in_bundles[rank_local]:
                 sdict = dict()
-                bname = "rank" + str(self.rank) + "bundle" + str(bun)
+                bname = "rank" + str(self.local_rank) + "bundle" + str(bun)
                 for sname in self.names_in_bundles[rank_local][bun]:
-                    if (verbose and self.rank==self.rank0):
+                    if (verbose and self.local_rank==self.local_rank0):
                         print ("bundling "+sname+" into "+bname)
                     sdict[sname] = self.local_scenarios[sname]
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
@@ -1322,7 +1322,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     set_instance_time = time.time() - set_instance_start_time
                     all_set_instance_times = self.mpicomm.gather(set_instance_time,
                                                                  root=0)
-                    if self.rank == self.rank0:
+                    if self.local_rank == self.local_rank0:
                         print("Set instance times:")
                         print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                               (np.min(all_set_instance_times),
@@ -1360,7 +1360,7 @@ class PHBase(mpisppy.spbase.SPBase):
         have_converger = self.PH_converger is not None
 
         def _vb(msg):
-            if verbose and self.rank == self.rank0:
+            if verbose and self.local_rank == self.local_rank0:
                 print("(rank0)", msg)
 
         self._PHIter = 0
@@ -1371,11 +1371,11 @@ class PHBase(mpisppy.spbase.SPBase):
         
         teeme = ("tee-rank0-solves" in self.PHoptions
                  and self.PHoptions['tee-rank0-solves']
-                 and self.rank == self.rank0
+                 and self.local_rank == self.local_rank0
                  )
             
         if self.PHoptions["verbose"]:
-            print ("About to call PH Iter0 solve loop on rank={}".format(self.rank))
+            print ("About to call PH Iter0 solve loop on rank={}".format(self.local_rank))
         global_toc("Entering solve loop in PHBase.Iter0")
 
         self.solve_loop(solver_options=self.current_solver_options,
@@ -1385,18 +1385,18 @@ class PHBase(mpisppy.spbase.SPBase):
                         verbose=verbose)
         
         if self.PHoptions["verbose"]:
-            print ("PH Iter0 solve loop complete on rank={}".format(self.rank))
+            print ("PH Iter0 solve loop complete on rank={}".format(self.local_rank))
         
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
-            if self.rank == self.rank0:
+            if self.local_rank == self.local_rank0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.E1)
                 print("E1_tolerance = ", self.E1_tolerance)
             quit()
         feasP = self.feas_prob()
         if feasP != self.E1:
-            if self.rank == self.rank0:
+            if self.local_rank == self.local_rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_feas, E1=", feasP, self.E1)
             quit()
@@ -1414,7 +1414,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self.extobject.post_iter0()
 
         if self.rho_setter is not None:
-            if self.rank == self.rank0:
+            if self.local_rank == self.local_rank0:
                 self._use_rho_setter(verbose)
             else:
                 self._use_rho_setter(False)
@@ -1422,13 +1422,13 @@ class PHBase(mpisppy.spbase.SPBase):
         converged = False
         if have_converger:
             # Call the constructor of the converger object
-            self.convobject = self.PH_converger(self, self.rank, self.n_proc)
-        #global_toc('Rank: {} - Before iter loop'.format(self.rank), True)
+            self.convobject = self.PH_converger(self, self.local_rank, self.n_proc)
+        #global_toc('Rank: {} - Before iter loop'.format(self.local_rank), True)
         self.conv = None
 
         self.trivial_bound = self.Ebound(verbose)
 
-        if dprogress and self.rank == self.rank0:
+        if dprogress and self.local_rank == self.local_rank0:
             print("")
             print("After PH Iteration",self._PHIter)
             print("Trivial bound =", self.trivial_bound)
@@ -1470,21 +1470,21 @@ class PHBase(mpisppy.spbase.SPBase):
             iteration_start_time = time.time()
 
             if dprogress:
-                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.rank == self.rank0)
+                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.local_rank == self.local_rank0)
 
             # Compute xbar
-            #global_toc('Rank: {} - Before Compute_Xbar'.format(self.rank), True)
+            #global_toc('Rank: {} - Before Compute_Xbar'.format(self.local_rank), True)
             self.Compute_Xbar(verbose)
-            #global_toc('Rank: {} - After Compute_Xbar'.format(self.rank), True)
+            #global_toc('Rank: {} - After Compute_Xbar'.format(self.local_rank), True)
 
             # update the weights        
             self.Update_W(verbose)
-            #global_toc('Rank: {} - After Update_W'.format(self.rank), True)
+            #global_toc('Rank: {} - After Update_W'.format(self.local_rank), True)
 
             if have_converger:
                 self.conv = self.convobject.convergence_value()
             self.conv = self.convergence_diff()
-            #global_toc('Rank: {} - After convergence_diff'.format(self.rank), True)
+            #global_toc('Rank: {} - After convergence_diff'.format(self.local_rank), True)
             if have_extensions:
                 self.extobject.miditer()
 
@@ -1495,23 +1495,23 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():
-                    global_toc("Cylinder convergence", self.rank == self.rank0)
+                    global_toc("Cylinder convergence", self.local_rank == self.local_rank0)
                     break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
-                    global_toc("User-supplied converger determined termination criterion reached", self.rank == self.rank0)
+                    global_toc("User-supplied converger determined termination criterion reached", self.local_rank == self.local_rank0)
                     break
             elif self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.rank == self.rank0)
+                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.local_rank == self.local_rank0)
                     break
 
             teeme = (
                 "tee-rank0-solves" in self.PHoptions
                  and self.PHoptions["tee-rank0-solves"]
-                and self.rank == self.rank0
+                and self.local_rank == self.local_rank0
             )
             self.solve_loop(
                 solver_options=self.current_solver_options,
@@ -1525,7 +1525,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if have_extensions:
                 self.extobject.enditer()
 
-            if dprogress and self.rank == self.rank0:
+            if dprogress and self.local_rank == self.local_rank0:
                 print("")
                 print("After PH Iteration",self._PHIter)
                 print("Scaled PHBase Convergence Metric=",self.conv)
@@ -1533,7 +1533,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if (self._PHIter == max_iterations):
-                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.rank == self.rank0)
+                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.local_rank == self.local_rank0)
 
     def post_loops(self, PH_extensions=None):
         """ Call scenario denouement methods, and report the expected objective
@@ -1554,18 +1554,18 @@ class PHBase(mpisppy.spbase.SPBase):
         # for reporting sanity
         self.mpicomm.Barrier()
 
-        if self.rank == self.rank0 and dprogress:
+        if self.local_rank == self.local_rank0 and dprogress:
             print("")
             print("Invoking scenario reporting functions, if applicable")
             print("")
 
         if self.scenario_denouement is not None:
             for sname,s in self.local_scenarios.items():
-                self.scenario_denouement(self.rank, sname, s)
+                self.scenario_denouement(self.local_rank, sname, s)
 
         self.mpicomm.Barrier()
 
-        if self.rank == self.rank0 and dprogress:
+        if self.local_rank == self.local_rank0 and dprogress:
             print("")
             print("Invoking PH extension finalization, if applicable")    
             print("")
@@ -1577,12 +1577,12 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self.mpicomm.Barrier()
 
-        if dprogress and self.rank == self.rank0:
+        if dprogress and self.local_rank == self.local_rank0:
             print("")
             print("Current ***weighted*** E[objective] =", Eobj)
             print("")
 
-        if dtiming and self.rank == self.rank0:
+        if dtiming and self.local_rank == self.local_rank0:
             print("")
             print("Cumulative execution time=%5.2f" % (time.perf_counter()-self.start_time))
             print("")
