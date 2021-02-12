@@ -404,9 +404,8 @@ class PHBase(mpisppy.spbase.SPBase):
             if hasattr(s,"_PySP_original_fixedness"):
                 print ("ERROR: Attempt to replace original nonants")
                 raise
-            nlens = s._PySP_nlens
             if s._PySP_nonant_cache is None:
-                clen = sum(nlens[ndn] for ndn in nlens)
+                clen = len(s._nonant_indices)
                 s._PySP_original_fixedness = [None] * clen
                 s._PySP_original_nonants = np.zeros(clen, dtype='d')
 
