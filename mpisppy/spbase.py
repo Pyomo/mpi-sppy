@@ -29,7 +29,6 @@ class SPBase(object):
             scenario_denouement (fct): for post processing and reporting
             all_nodenames (list): all non-leaf node names; can be None for 2 Stage
             mpicomm (MPI comm): if not given, use the global fullcomm
-            rank0 (int): The lowest global rank for this type of object   # TODO drop this as an argument to the constructor and get the value from the cylinder comm
             cb_data (any): passed directly to instance callback                
             variable_probability (xxxxx): TODO
 
@@ -48,7 +47,6 @@ class SPBase(object):
             scenario_denouement=None,
             all_nodenames=None,
             mpicomm=None,
-            rank0=0,
             cb_data=None,
             variable_probability=None,
             E1_tolerance=1e-5

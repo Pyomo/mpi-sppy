@@ -913,12 +913,12 @@ if __name__ == "__main__":
     """
     conv, obj, bnd = aph.APH_main()
 
-    if aph.cylinder_rank == aph.cylinder_rank0:
+    if aph.cylinder_rank == 0:
         print ("E[obj] for converged solution (probably NOT non-anticipative)",
                obj)
 
     dopts = sputils.option_string_to_dict("mipgap=0.001")
     objbound = aph.post_solve_bound(solver_options=dopts, verbose=False)
-    if (aph.cylinder_rank == aph.cylinder_rank0):
+    if (aph.cylinder_rank == 0):
         print ("**** Lagrangian objective function bound=",objbound)
         print ("(probably converged way too early, BTW)")

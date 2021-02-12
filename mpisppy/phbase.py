@@ -73,9 +73,6 @@ class PHBase(mpisppy.spbase.SPBase):
             mpicomm (MPI comm, optional):
                 MPI communicator to use between all scenarios. Default is
                 `MPI.COMM_WORLD`.
-            rank0 (int, optional):
-                Which rank from mpicomm to count as rank 0 (i.e. the "main"
-                rank).
             cb_data (any, optional): 
                 Data passed directly to scenario_creator.
             PH_extensions (object, optional):
@@ -92,7 +89,7 @@ class PHBase(mpisppy.spbase.SPBase):
     """
     def __init__(self, PHoptions, all_scenario_names, scenario_creator,
                  scenario_denouement=None, all_nodenames=None,
-                 mpicomm=None, rank0=0, cb_data=None,
+                 mpicomm=None, cb_data=None,
                  PH_extensions=None, PH_extension_kwargs=None,
                  PH_converger=None, rho_setter=None, variable_probability=None):
         """ PHBase constructor. """
@@ -102,7 +99,6 @@ class PHBase(mpisppy.spbase.SPBase):
                          scenario_denouement=scenario_denouement,
                          all_nodenames=all_nodenames,
                          mpicomm=mpicomm,
-                         rank0=rank0,
                          cb_data=cb_data,
                          variable_probability=variable_probability)
 
