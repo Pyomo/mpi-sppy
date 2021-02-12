@@ -53,7 +53,6 @@ class SPBase(object):
     ):
         # TODO add missing and private attributes (JP)
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
-        # TO REMEMBER TO DO: use local_ versus global_ for ranks
         # TODO? add decorators to the class attributes
         self.start_time = time.perf_counter()
         self.options = options
@@ -268,7 +267,10 @@ class SPBase(object):
                 node.name: len(node.nonant_vardata_list)
                 for node in scenario._PySPnode_list
             }
-            scenario._PySP_cistart = dict()  # TODO: we don't really need cistart; could use scenario._nonant_indices / scenario._varid_to_nonant_index
+
+            # NOTE: This only is used by extensions.xhatbase.XhatBase._try_one.
+            #       If that is re-factored, we can remove it here.
+            scenario._PySP_cistart = dict()
             sofar = 0
             for ndn, ndn_len in scenario._PySP_nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
