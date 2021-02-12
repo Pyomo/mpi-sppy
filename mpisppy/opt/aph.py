@@ -165,7 +165,7 @@ class APH(ph_base.PHBase):  # ??????
                     s._ys[(ndn,i)]._value = W_touse \
                                           + pyo.value(s._PHrho[(ndn,i)]) \
                                           * (xvar._value - z_touse)
-                    if verbose and self.cylinder_rank == self.cylinder_rank0:
+                    if verbose and self.cylinder_rank == 0:
                         print ("node, scen, var, y", ndn, k,
                                self.cylinder_rank, xvar.name,
                                pyo.value(s._ys[(ndn,i)]))
@@ -173,7 +173,7 @@ class APH(ph_base.PHBase):  # ??????
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._nonant_indices.items():
                     s._ys[(ndn,i)]._value = 0
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("All y=0 for iter1")
 
 
@@ -233,7 +233,7 @@ class APH(ph_base.PHBase):  # ??????
 
         # If we are still here, we have enough to do the calculations
         logging.debug('   good to go on rank {}'.format(self.cylinder_rank))
-        if verbose and self.cylinder_rank == self.cylinder_rank0:
+        if verbose and self.cylinder_rank == 0:
             print ("(%d)" % xbarin)
             
         # set the xbar, xsqbar, and ybar in all the scenarios
@@ -247,7 +247,7 @@ class APH(ph_base.PHBase):  # ??????
                 s._ybars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][2*nlens[ndn]+i]
 
-                if verbose and self.cylinder_rank == self.cylinder_rank0:
+                if verbose and self.cylinder_rank == 0:
                     print ("rank, scen, node, var, xbar:",
                            self.cylinder_rank,k,ndn,s._nonant_indices[ndn,i].name,
                            pyo.value(s._xbars[(ndn,i)]))
@@ -419,7 +419,7 @@ class APH(ph_base.PHBase):  # ??????
                 break
             else:
                 logging.debug('   gig wait sleep on rank {}'.format(self.cylinder_rank))
-                if verbose and self.cylinder_rank == self.cylinder_rank0:
+                if verbose and self.cylinder_rank == 0:
                     print ('s'),
                 time.sleep(self.PHoptions["async_sleep_secs"])
 
@@ -564,7 +564,7 @@ class APH(ph_base.PHBase):  # ??????
         """
         #==========
         def _vb(msg): 
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
 
@@ -645,7 +645,7 @@ class APH(ph_base.PHBase):  # ??????
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.cylinder_rank == self.cylinder_rank0:
+            if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(all_pyomo_solve_times),
@@ -683,7 +683,7 @@ class APH(ph_base.PHBase):  # ??????
                 break
             iteration_start_time = time.time()
 
-            if dprogress and self.cylinder_rank == self.cylinder_rank0:
+            if dprogress and self.cylinder_rank == 0:
                 print("")
                 print ("Initiating APH Iteration",self._PHIter)
                 print("")
@@ -712,7 +712,7 @@ class APH(ph_base.PHBase):  # ??????
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
-                    if self.cylinder_rank == self.cylinder_rank0:
+                    if self.cylinder_rank == 0:
                         print("User-supplied converger determined termination criterion reached")
                     break
             
@@ -722,7 +722,7 @@ class APH(ph_base.PHBase):  # ??????
             
             teeme = ("tee-rank0-solves" in self.PHoptions) \
                  and (self.PHoptions["tee-rank0-solves"] == True
-                      and self.cylinder_rank == self.cylinder_rank0)
+                      and self.cylinder_rank == 0)
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
             # Aug2020 ... at least you would get dispatch
@@ -745,7 +745,7 @@ class APH(ph_base.PHBase):  # ??????
             if have_extensions:
                 self.extobject.enditer()
 
-            if dprogress and self.cylinder_rank == self.cylinder_rank0:
+            if dprogress and self.cylinder_rank == 0:
                 print("")
                 print("After APH Iteration",self._PHIter)
                 print("Convergence Metric=",self.conv)

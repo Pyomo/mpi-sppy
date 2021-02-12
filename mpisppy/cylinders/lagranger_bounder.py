@@ -34,7 +34,7 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
            and iternum in self.rho_rescale_factors:
             _rescale_rho(self.rho_rescale_factors[iternum])
         teeme = False
-        if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == self.opt.cylinder_rank0:
+        if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == 0:
             teeme = self.opt.options['tee-rank0-solves']
 
         self.opt.solve_loop(

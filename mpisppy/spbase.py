@@ -84,7 +84,6 @@ class SPBase(object):
             self.mpicomm = MPI.COMM_WORLD
         self.cylinder_rank = self.mpicomm.Get_rank()
         self.n_proc = self.mpicomm.Get_size()
-        self.cylinder_rank0 = rank0
         self.global_rank = MPI.COMM_WORLD.Get_rank()
 
         global_toc("Initializing SPBase")
@@ -135,8 +134,8 @@ class SPBase(object):
             return
 
         # Check that all the ranks agree
-        global_senses = self.mpicomm.gather(is_min, root=self.cylinder_rank0)
-        if self.cylinder_rank != self.cylinder_rank0:
+        global_senses = self.mpicomm.gather(is_min, root=0)
+        if self.cylinder_rank != 0:
             return
         sense = global_senses[0]
         clear = all(val == sense for val in global_senses)
@@ -194,7 +193,7 @@ class SPBase(object):
         """
         scen_count = len(self.all_scenario_names)
 
-        if self.options["verbose"] and self.cylinder_rank == self.cylinder_rank0:
+        if self.options["verbose"] and self.cylinder_rank == 0:
             print("(rank0)", self.options["bundles_per_rank"], "bundles per rank")
         if self.n_proc * self.options["bundles_per_rank"] > scen_count:
             raise RuntimeError(
@@ -244,9 +243,9 @@ class SPBase(object):
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
                 all_instance_creation_times = self.mpicomm.gather(
-                    instance_creation_time, root=self.cylinder_rank0
+                    instance_creation_time, root=0
                 )
-                if self.cylinder_rank == self.cylinder_rank0:
+                if self.cylinder_rank == 0:
                     aict = all_instance_creation_times
                     print("Scenario instance creation times:")
                     print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
@@ -374,7 +373,7 @@ class SPBase(object):
                     s._PySP_W_coeff[ndn][i] = 0
             didit += len(variable_probability)
             skipped += len(s._varid_to_nonant_index) - didit
-        if verbose and self.cylinder_rank == self.cylinder_rank0:
+        if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
 
         self._check_variable_probabilities_sum(verbose)
@@ -505,9 +504,9 @@ class SPBase(object):
                 for var in node.nonant_vardata_list:
                     var_values[sname, var.name] = pyo.value(var)
 
-        result = self.mpicomm.gather(var_values, root=self.cylinder_rank0)
+        result = self.mpicomm.gather(var_values, root=0)
 
-        if (self.cylinder_rank == self.cylinder_rank0):
+        if (self.cylinder_rank == 0):
             result = {key: value
                 for dic in result
                 for (key, value) in dic.items()

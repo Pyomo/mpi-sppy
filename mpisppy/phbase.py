@@ -40,7 +40,7 @@ class PHBase(mpisppy.spbase.SPBase):
         a trailing number in the scenario name. Assume we have only non-leaf
         nodes.
 
-        To check for rank 0 use self.cylinder_rank == self.cylinder_rank0.
+        To check for rank 0 use self.cylinder_rank == 0.
 
         Attributes:
             local_scenarios (dict): 
@@ -207,7 +207,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 for i in range(nlen):
                     s._xbars[(ndn,i)]._value = xbars[i]
                     s._xsqbars[(ndn,i)]._value = xsqbars[i]
-                    if verbose and self.cylinder_rank == self.cylinder_rank0:
+                    if verbose and self.cylinder_rank == 0:
                         print ("rank, scen, node, var, xbar:",
                                self.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                                pyo.value(s._xbars[(ndn,i)]))
@@ -227,7 +227,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 xdiff = nonant._value \
                         - s._xbars[ndn_i]._value
                 s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
-                if verbose and self.cylinder_rank == self.cylinder_rank0:
+                if verbose and self.cylinder_rank == 0:
                     print ("rank, node, scen, var, W", ndn_i[0], k,
                            self.cylinder_rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
@@ -686,7 +686,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._PHrho[(ndn, i)] = rho
             didit += len(rholist)
             skipped += len(scenario._varid_to_nonant_index) - didit
-        if verbose and self.cylinder_rank == self.cylinder_rank0:
+        if verbose and self.cylinder_rank == 0:
             print ("rho_setter set",didit,"and skipped",skipped)
 
     def _disable_prox(self):
@@ -749,11 +749,11 @@ class PHBase(mpisppy.spbase.SPBase):
             what you are doing.  It is not suitable as a general, per-iteration
             Lagrangian bound solver.
         '''
-        if (self.cylinder_rank == self.cylinder_rank0):
+        if (self.cylinder_rank == 0):
             print('Warning: Lagrangian bounds might not be correct in certain '
                   'cases where there are integers not subject to '
                   'non-anticipativity and those integers do not reach integrality.')
-        if (verbose and self.cylinder_rank == self.cylinder_rank0):
+        if (verbose and self.cylinder_rank == 0):
             print('Beginning post-solve Lagrangian bound computation')
 
         if (self.W_disabled):
@@ -776,7 +776,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # A half-hearted attempt to restore the state
         self._reenable_prox()
 
-        if (verbose and self.cylinder_rank == self.cylinder_rank0):
+        if (verbose and self.cylinder_rank == 0):
             print(f'Post-solve Lagrangian bound: {bound:.4f}')
         return bound
 
@@ -875,7 +875,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
 
         def _vb(msg): 
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         
         # if using a persistent solver plugin,
@@ -900,7 +900,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
                 all_set_objective_times = self.mpicomm.gather(set_objective_time,
                                                           root=0)
-                if self.cylinder_rank == self.cylinder_rank0:
+                if self.cylinder_rank == 0:
                     print("Set objective times (seconds):")
                     print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                           (np.mean(all_set_objective_times),
@@ -915,7 +915,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()
-        if self.cylinder_rank == self.cylinder_rank0:
+        if self.cylinder_rank == 0:
             if tee is not None and tee is True:
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
@@ -1026,7 +1026,7 @@ class PHBase(mpisppy.spbase.SPBase):
         set_objective takes care of W and prox changes.
         """
         def _vb(msg): 
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
         if dis_W and dis_prox:
@@ -1058,7 +1058,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.cylinder_rank == self.cylinder_rank0:
+            if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(all_pyomo_solve_times),
@@ -1264,7 +1264,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 sdict = dict()
                 bname = "rank" + str(self.cylinder_rank) + "bundle" + str(bun)
                 for sname in self.names_in_bundles[rank_local][bun]:
-                    if (verbose and self.cylinder_rank==self.cylinder_rank0):
+                    if (verbose and self.cylinder_rank==0):
                         print ("bundling "+sname+" into "+bname)
                     sdict[sname] = self.local_scenarios[sname]
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
@@ -1322,7 +1322,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     set_instance_time = time.time() - set_instance_start_time
                     all_set_instance_times = self.mpicomm.gather(set_instance_time,
                                                                  root=0)
-                    if self.cylinder_rank == self.cylinder_rank0:
+                    if self.cylinder_rank == 0:
                         print("Set instance times:")
                         print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                               (np.min(all_set_instance_times),
@@ -1360,7 +1360,7 @@ class PHBase(mpisppy.spbase.SPBase):
         have_converger = self.PH_converger is not None
 
         def _vb(msg):
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print("(rank0)", msg)
 
         self._PHIter = 0
@@ -1371,7 +1371,7 @@ class PHBase(mpisppy.spbase.SPBase):
         
         teeme = ("tee-rank0-solves" in self.PHoptions
                  and self.PHoptions['tee-rank0-solves']
-                 and self.cylinder_rank == self.cylinder_rank0
+                 and self.cylinder_rank == 0
                  )
             
         if self.PHoptions["verbose"]:
@@ -1389,14 +1389,14 @@ class PHBase(mpisppy.spbase.SPBase):
         
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
-            if self.cylinder_rank == self.cylinder_rank0:
+            if self.cylinder_rank == 0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.E1)
                 print("E1_tolerance = ", self.E1_tolerance)
             quit()
         feasP = self.feas_prob()
         if feasP != self.E1:
-            if self.cylinder_rank == self.cylinder_rank0:
+            if self.cylinder_rank == 0:
                 print("ERROR")
                 print("Infeasibility detected; E_feas, E1=", feasP, self.E1)
             quit()
@@ -1414,7 +1414,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self.extobject.post_iter0()
 
         if self.rho_setter is not None:
-            if self.cylinder_rank == self.cylinder_rank0:
+            if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
             else:
                 self._use_rho_setter(False)
@@ -1428,7 +1428,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self.trivial_bound = self.Ebound(verbose)
 
-        if dprogress and self.cylinder_rank == self.cylinder_rank0:
+        if dprogress and self.cylinder_rank == 0:
             print("")
             print("After PH Iteration",self._PHIter)
             print("Trivial bound =", self.trivial_bound)
@@ -1470,7 +1470,7 @@ class PHBase(mpisppy.spbase.SPBase):
             iteration_start_time = time.time()
 
             if dprogress:
-                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.cylinder_rank == self.cylinder_rank0)
+                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # Compute xbar
             #global_toc('Rank: {} - Before Compute_Xbar'.format(self.cylinder_rank), True)
@@ -1495,23 +1495,23 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():
-                    global_toc("Cylinder convergence", self.cylinder_rank == self.cylinder_rank0)
+                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
-                    global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == self.cylinder_rank0)
+                    global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
             elif self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.cylinder_rank == self.cylinder_rank0)
+                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.cylinder_rank == 0)
                     break
 
             teeme = (
                 "tee-rank0-solves" in self.PHoptions
                  and self.PHoptions["tee-rank0-solves"]
-                and self.cylinder_rank == self.cylinder_rank0
+                and self.cylinder_rank == 0
             )
             self.solve_loop(
                 solver_options=self.current_solver_options,
@@ -1525,7 +1525,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if have_extensions:
                 self.extobject.enditer()
 
-            if dprogress and self.cylinder_rank == self.cylinder_rank0:
+            if dprogress and self.cylinder_rank == 0:
                 print("")
                 print("After PH Iteration",self._PHIter)
                 print("Scaled PHBase Convergence Metric=",self.conv)
@@ -1533,7 +1533,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if (self._PHIter == max_iterations):
-                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == self.cylinder_rank0)
+                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
     def post_loops(self, PH_extensions=None):
         """ Call scenario denouement methods, and report the expected objective
@@ -1554,7 +1554,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # for reporting sanity
         self.mpicomm.Barrier()
 
-        if self.cylinder_rank == self.cylinder_rank0 and dprogress:
+        if self.cylinder_rank == 0 and dprogress:
             print("")
             print("Invoking scenario reporting functions, if applicable")
             print("")
@@ -1565,7 +1565,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self.mpicomm.Barrier()
 
-        if self.cylinder_rank == self.cylinder_rank0 and dprogress:
+        if self.cylinder_rank == 0 and dprogress:
             print("")
             print("Invoking PH extension finalization, if applicable")    
             print("")
@@ -1577,12 +1577,12 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self.mpicomm.Barrier()
 
-        if dprogress and self.cylinder_rank == self.cylinder_rank0:
+        if dprogress and self.cylinder_rank == 0:
             print("")
             print("Current ***weighted*** E[objective] =", Eobj)
             print("")
 
-        if dtiming and self.cylinder_rank == self.cylinder_rank0:
+        if dtiming and self.cylinder_rank == 0:
             print("")
             print("Cumulative execution time=%5.2f" % (time.perf_counter()-self.start_time))
             print("")

@@ -52,7 +52,6 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def __init__(self, ph):
         self.ph = ph
         self.cylinder_rank = self.ph.cylinder_rank
-        self.cylinder_rank0 = self.ph.cylinder_rank0
         self.PHoptions = ph.PHoptions
         self.fixeroptions = self.PHoptions["fixeroptions"] # required
         self.verbose = self.PHoptions["verbose"] \

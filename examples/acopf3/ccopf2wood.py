@@ -207,7 +207,7 @@ def main():
     list_of_spoke_dict = [ub2]
     spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
     if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.cylinder_rank == spcomm.opt.cylinder_rank0:  # we are the reporting hub rank
+        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
             ph_end_time = dt.datetime.now()
             IB = spcomm.BestInnerBound
             OB = spcomm.BestOuterBound

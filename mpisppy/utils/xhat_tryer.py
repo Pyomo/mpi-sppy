@@ -70,7 +70,7 @@ class XhatTryer(PHBase):
         if not dis_prox:
             raise RuntimeError("XhatTryer has no notion of prox")
         def _vb(msg): 
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
@@ -92,7 +92,7 @@ class XhatTryer(PHBase):
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.cylinder_rank == self.cylinder_rank0:
+            if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(all_pyomo_solve_times),
@@ -176,7 +176,7 @@ class XhatTryer(PHBase):
         if infeasP != 0.:
             return None
         else:
-            if verbose and self.cylinder_rank == self.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print("  Feasible xhat found")
             return self.Eobjective(verbose=verbose)
 

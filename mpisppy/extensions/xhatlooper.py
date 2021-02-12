@@ -40,7 +40,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             Also attach the resulting bound to the object
         """
         def _vb(msg):
-            if verbose and self.cylinder_rank == self.opt.cylinder_rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("    rank {} xhat_looper: {}".\
                        format(self.cylinder_rank,msg))
         obj = None
