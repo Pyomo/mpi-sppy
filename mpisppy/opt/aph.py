@@ -860,11 +860,11 @@ class APH(ph_base.PHBase):  # ??????
         else:
             Eobj = None
 
-        print(f"Debug: here's the dispatch record for rank={self.rank_global}")
-        for k,v in self.dispatchrecord.items():
-            print(k, v)
-            print()
-        print("End dispatch record")
+        #print(f"Debug: here's the dispatch record for rank={self.rank_global}")
+        #for k,v in self.dispatchrecord.items():
+        #    print(k, v)
+        #    print()
+        #print("End dispatch record")
 
         return self.conv, Eobj, trivial_bound
 
