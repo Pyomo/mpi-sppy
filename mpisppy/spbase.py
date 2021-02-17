@@ -425,7 +425,7 @@ class SPBase(object):
                                            " which are not 1")
                     checked_nodes.append(ndn)
 
-    # There is an issue to put these things on a block, but really we should
+    # TODO: There is an issue (#60) to put these things on a block, but really we should
     # have two blocks: one for Pyomo objects and the other for lists and caches.
     def _look_before_leap(self, scen, addlist):
         """ utility to check before attaching something to the user's model
@@ -460,9 +460,6 @@ class SPBase(object):
                     "_ys",
                 ],
             )
-            # TODO drop these and have code that inspects them, do a hasattr instead (DLW)
-            scenario._PySP_nonant_cache = None
-            scenario._PySP_fixedness_cache = None
 
     def _options_check(self, required_options, given_options):
         """ Confirm that the specified list of options contains the specified

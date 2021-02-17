@@ -404,7 +404,10 @@ class PHBase(mpisppy.spbase.SPBase):
             if hasattr(s,"_PySP_original_fixedness"):
                 print ("ERROR: Attempt to replace original nonants")
                 raise
-            if s._PySP_nonant_cache is None:
+            if not hasattr(s,"_PySP_nonant_cache"):
+                # uses nonant cache to signal other things have not
+                # been created 
+                # TODO: combine cache creation (or something else)
                 clen = len(s._nonant_indices)
                 s._PySP_original_fixedness = [None] * clen
                 s._PySP_original_nonants = np.zeros(clen, dtype='d')
@@ -457,7 +460,7 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens
-            if s._PySP_nonant_cache is None:
+            if not hasattr(s,"_PySP_nonant_cache"):
                 clen = sum(nlens[ndn] for ndn in nlens)
                 s._PySP_nonant_cache = np.zeros(clen, dtype='d')
                 s._PySP_fixedness_cache = [None for _ in range(clen)]
