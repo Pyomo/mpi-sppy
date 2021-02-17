@@ -484,10 +484,9 @@ class SPBase(object):
             raise RuntimeError("SPBase.spcomm should only be set once")
 
 
-    # TODO: move to utils (e.g., reporting.py) and give an spbase object as an arg
-    def gather_var_values_to_root(self):
+    def gather_var_values_to_rank0(self):
         """ Gather the values of the nonanticipative variables to the root of
-        `mpicomm`.
+        the `mpicomm` for the cylinder
 
         Returns:
             dict or None:
