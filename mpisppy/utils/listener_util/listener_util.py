@@ -84,7 +84,6 @@ class Synchronizer(object):
 
     def run(self, args, kwargs):
         if self.asynch:
-            print("ASYNC MODE - START")
             # THE WORKER
             wthread = threading.Thread(name=self.work_fct.__name__,
                                        target=self.work_fct,
@@ -103,11 +102,8 @@ class Synchronizer(object):
             wthread.start()
 
             l.join()
-            print("ASYNC MODE - END")
         else:
-            print("SYNC MODE - START")
             self.work_fct(*args, **kwargs)
-            print("SYNC MODE - END")
 
     ###=====================###
     def _check_Lens(self, local_data_in, global_data_out, redname, cname):

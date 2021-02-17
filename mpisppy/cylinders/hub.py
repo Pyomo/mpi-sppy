@@ -617,12 +617,12 @@ class APHHub(PHHub):
         self.initialize_bound_values()
 
         if self.has_outerbound_spokes:
-            raise RuntimeError("APH not ready for outer bound spokes yet")
+            ###raise RuntimeError("APH not ready for outer bound spokes yet")
             self.initialize_outer_bound_buffers()
         if self.has_innerbound_spokes:
             self.initialize_inner_bound_buffers()
         if self.has_w_spokes:
-            raise RuntimeError("APH not ready for W spokes")
+            ###raise RuntimeError("APH not ready for W spokes")
             self.initialize_ws()
         if self.has_nonant_spokes:
             self.initialize_nonants()
