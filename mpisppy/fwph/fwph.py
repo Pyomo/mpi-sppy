@@ -995,7 +995,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 algorithm, xBar should be computed using the QP values, not the
                 MIP values (like in normal PH).
 
-                Reruns SPBase.attach_nonant_indices so that the scenario 
+                Reruns SPBase._attach_nonant_indices so that the scenario 
                 _nonant_indices dictionary has the correct variable pointers
                 
                 Updates nonant_vardata_list but NOT nonant_list.
@@ -1012,7 +1012,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         if self.bundling else
                         self.local_QP_subproblems[name].x[node.name,i]
                         for i in range(num_nonant_vars[node.name])]
-        self.attach_nonant_indices()
+        self._attach_nonant_indices()
 
     def _swap_nonant_vars_back(self):
         ''' Swap variables back, in case they're needed somewhere else.
@@ -1034,7 +1034,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     node.nonant_vardata_list = [
                         scenario.nonant_vars[node.name,ix]
                         for ix in range(num_nonant_vars[node.name])]
-        self.attach_nonant_indices()
+        self._attach_nonant_indices()
 
 if __name__=='__main__':
     print('fwph.py has no main()')

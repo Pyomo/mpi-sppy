@@ -30,7 +30,8 @@ class SPBase(object):
             all_nodenames (list): all non-leaf node names; can be None for 2 Stage
             mpicomm (MPI comm): if not given, use the global fullcomm
             cb_data (any): passed directly to instance callback                
-            variable_probability (xxxxx): TODO
+            variable_probability (fct): returns a list of tuples of (id(var), prob)
+                to set variable-specific probability (similar to PHBase.rho_setter).
 
         Attributes:
           local_scenarios (dict of scenario objects): concrete models with 
@@ -93,27 +94,27 @@ class SPBase(object):
             self.branching_factors = self.options["branching_factors"]
         else:
             self.branching_factors = [len(self.all_scenario_names)]
-        self.calculate_scenario_ranks()
+        self._calculate_scenario_ranks()
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
-            self.assign_bundles()
+            self._assign_bundles()
             self.bundling = True
         else:
             self.bundling = False
-        self.create_scenarios(cb_data)
-        self.look_before_leap_all()
-        self.compute_unconditional_node_probabilities()
-        self.attach_nlens()
-        self.attach_nonant_indices()
-        self.attach_varid_to_nonant_index()
-        self.create_communicators()
+        self._create_scenarios(cb_data)
+        self._look_before_leap_all()
+        self._compute_unconditional_node_probabilities()
+        self._attach_nlens()
+        self._attach_nonant_indices()
+        self._attach_varid_to_nonant_index()
+        self._create_communicators()
         ### TODO: add a function to check for len(nonant) the same for all scenario tree nodes
-        self.set_sense()
-        self.use_variable_probability_setter()
+        self._set_sense()
+        self._use_variable_probability_setter()
 
         ## SPCommunicator object
         self._spcomm = None
 
-    def set_sense(self, comm=None):
+    def _set_sense(self, comm=None):
         """ Check to confirm that all the models constructed by scenario_crator
             have the same sense (min v. max), and set self.is_minimizing
             accordingly.
@@ -141,7 +142,7 @@ class SPBase(object):
                 "model sense (minimize or maximize)"
             )
 
-    def calculate_scenario_ranks(self):
+    def _calculate_scenario_ranks(self):
         """ Populate the following attributes
             1. self.scenario_names_to_rank (dict of dict):
                 keys are comms (i.e., tree nodes); values are dicts with keys
@@ -175,7 +176,7 @@ class SPBase(object):
         ]
 
 
-    def assign_bundles(self):
+    def _assign_bundles(self):
         """ Create self.names_in_bundles, a dict of dicts
             
             self.names_in_bundles[rank number][bundle number] = 
@@ -211,7 +212,7 @@ class SPBase(object):
                 for (curr_bundle, slc) in enumerate(slices)
             }
 
-    def create_scenarios(self, cb_data):
+    def _create_scenarios(self, cb_data):
         """ Call the scenario_creator for every local scenario, and store the
             results in self.local_scenarios (dict indexed by scenario names).
 
@@ -242,7 +243,7 @@ class SPBase(object):
                     print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
         self.scenarios_constructed = True
 
-    def attach_nonant_indices(self):
+    def _attach_nonant_indices(self):
         for (sname, scenario) in self.local_scenarios.items():
             _nonant_indices = dict()
             nlens = scenario._PySP_nlens        
@@ -253,7 +254,7 @@ class SPBase(object):
             scenario._nonant_indices = _nonant_indices
 
             
-    def attach_nlens(self):
+    def _attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
             # indices of the vardata lists for the nodes.
@@ -271,7 +272,7 @@ class SPBase(object):
                 sofar += ndn_len
 
                 
-    def attach_varid_to_nonant_index(self):
+    def _attach_varid_to_nonant_index(self):
         """ Create a map from the id of nonant variables to their Pyomo index.
         """
         for (sname, scenario) in self.local_scenarios.items():
@@ -281,7 +282,7 @@ class SPBase(object):
                 {id(var): ndn_i for ndn_i, var in scenario._nonant_indices.items()}
             
 
-    def create_communicators(self):
+    def _create_communicators(self):
 
         # Create communicator objects, one for each node
         nonleafnodes = dict()
@@ -323,7 +324,7 @@ class SPBase(object):
                     assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
 
 
-    def compute_unconditional_node_probabilities(self):
+    def _compute_unconditional_node_probabilities(self):
         """ calculates unconditional node probabilities and _PySP_prob_coeff
             and _PySP_W_coeff is set to a scalar 1 (used by variable_probability)"""
         for k,s in self.local_scenarios.items():
@@ -339,7 +340,7 @@ class SPBase(object):
                     s._PySP_W_coeff[node.name] = 1.0  # needs to be a float
 
 
-    def use_variable_probability_setter(self, verbose=False):
+    def _use_variable_probability_setter(self, verbose=False):
         """ set variable probability unconditional values using a function self.variable_probability
         that gives us a list of (id(vardata), probability)]
         ALSO set _PySP_W_coeff, which is a mask for W calculations (mask out zero probs)
@@ -428,7 +429,7 @@ class SPBase(object):
             if hasattr(scen, attr):
                 raise RuntimeError("Model already has `internal' attribute" + attr)
 
-    def look_before_leap_all(self):
+    def _look_before_leap_all(self):
         for (sname, scenario) in self.local_scenarios.items():
             self._look_before_leap(
                 scenario,
