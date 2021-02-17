@@ -93,8 +93,7 @@ class SPBase(object):
             self.branching_factors = self.options["branching_factors"]
         else:
             self.branching_factors = [len(self.all_scenario_names)]
-        self.calculate_scenario_ranks()  # TODO: combine these?
-        self.attach_scenario_rank_maps()
+        self.calculate_scenario_ranks()
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
             self.assign_bundles()
             self.bundling = True
@@ -160,6 +159,9 @@ class SPBase(object):
 
             4. self._scenario_tree (instance of sputils._ScenTree)
 
+            5. self.local_scenario_names (list)
+               List of index names owned by the local rank
+
         """
         tree = sputils._ScenTree(self.branching_factors, self.all_scenario_names)
 
@@ -167,19 +169,11 @@ class SPBase(object):
                 tree.scen_names_to_ranks(self.n_proc)
         self._scenario_tree = tree
 
-    def attach_scenario_rank_maps(self):
-        """ Populate the following attribute
-
-             1. self.local_scenario_names (list)
-                List of index names owned by the local rank
-
-            Notes:
-                Called within __init__
-        """
         # list of scenario names owned locally
         self.local_scenario_names = [
             self.all_scenario_names[i] for i in self._rank_slices[self.cylinder_rank]
         ]
+
 
     def assign_bundles(self):
         """ Create self.names_in_bundles, a dict of dicts
