@@ -73,9 +73,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         # This count dict drives the loops later
         # NOTE: every scenario has a list.
         for k,s in self.local_scenarios.items():
-            if hasattr(s, "_PySP_conv_iter_count"):
-                raise RuntimeError("Scenario has _PySP_conv_iter_count")
-            s._PySP_conv_iter_count = {} # key is (ndn, i)
+            s._mpisppy_data.conv_iter_count = {} # key is (ndn, i)
 
             self.iter0_fixer_tuples[s], self.fixer_tuples[s] = \
                     self.id_fix_list_fct(s)
@@ -93,7 +91,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
             if self.fixer_tuples[s] is not None:
                 for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
                     (ndn, i) = s._varid_to_nonant_index[varid]
-                    s._PySP_conv_iter_count[(ndn, i)] = 0
+                    s._mpisppy_data.conv_iter_count[(ndn, i)] = 0
                     if (ndn, i) not in self.threshold:
                         self.threshold[(ndn, i)] = th
                     else:
@@ -122,9 +120,9 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 tolval *= tolval  # the tol is on sqrt
                 if -diff < tolval and diff < tolval:
                     ##print ("debug += diff, tolval", diff, tolval)
-                    s._PySP_conv_iter_count[ndn_i] += 1
+                    s._mpisppy_data.conv_iter_count[ndn_i] += 1
                 else:
-                    s._PySP_conv_iter_count[ndn_i] = 0
+                    s._mpisppy_data.conv_iter_count[ndn_i] = 0
                     ##print ("debug reset fix diff, tolval", diff, tolval)
                     
     def iter0(self, local_scenarios):
@@ -242,7 +240,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 xvar = s._mpisppy_data.nonant_indices[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
-                    fx = s._PySP_conv_iter_count[(ndn,i)]
+                    fx = s._mpisppy_data.conv_iter_count[(ndn,i)]
                     if fx > 0:
                         xbar = pyo.value(s._xbars[(ndn,i)])
                         was_fixed = False

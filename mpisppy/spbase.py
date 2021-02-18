@@ -463,8 +463,7 @@ class SPBase(object):
             scenario._mpisppy_model = pyo.Block()
 
             '''
-                [
-                    "_PySP_conv_iter_count", #hasattr
+                [  # _mpisppy_data
                     "_PySP_W_coeff",
                     "_varid_to_nonant_index",
                     "_xsqvar_prox_approx",
@@ -472,6 +471,7 @@ class SPBase(object):
                     "_PySP_original_fixedness",
                     "_PySP_original_nonants",
 
+                   # _mpisppy_model
                     "_xbars",
                     "_xsqbars",
                     "_xsqvar",
