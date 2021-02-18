@@ -77,9 +77,9 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 for nnode in s._PySPnode_list:
                     ndn = nnode.name
                     if ndn not in cistart:
-                        # NOTE: _PySP_cistart is defined in SPBase._attach_nlens()
+                        # NOTE: _mpisppy_data.cistart is defined in SPBase._attach_nlens()
                         #       and only used here
-                        cistart[ndn] = s._PySP_cistart[ndn]
+                        cistart[ndn] = s._mpisppy_data.cistart[ndn]
                     if ndn not in nlens:
                         nlens[ndn] = s._mpisppy_data.nlens[ndn]
                     if ndn not in xhats:

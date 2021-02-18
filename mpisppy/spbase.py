@@ -256,7 +256,6 @@ class SPBase(object):
             s = self.scenario_creator(sname, node_names=None, cb_data=cb_data)
             if not hasattr(s, "PySP_prob"):
                 s.PySP_prob = 1.0 / len(self.all_scenario_names)
-            s._PySP_has_varprob = False  # Might be later set to True (but rarely)
             self.local_scenarios[sname] = s
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
@@ -291,10 +290,10 @@ class SPBase(object):
 
             # NOTE: This only is used by extensions.xhatbase.XhatBase._try_one.
             #       If that is re-factored, we can remove it here.
-            scenario._PySP_cistart = dict()
+            scenario._mpisppy_data.cistart = dict()
             sofar = 0
             for ndn, ndn_len in scenario._mpisppy_data.nlens.items():
-                scenario._PySP_cistart[ndn] = sofar
+                scenario._mpisppy_data.cistart[ndn] = sofar
                 sofar += ndn_len
 
                 
@@ -373,6 +372,8 @@ class SPBase(object):
         Note: We estimate that less than 0.01 of mpi-sppy runs will call this.
         """
         if self.variable_probability is None:
+            for s in self.local_scenarios.values():
+                s._mpisppy_data.has_variable_probability = False
             return
         didit = 0
         skipped = 0
@@ -381,7 +382,7 @@ class SPBase(object):
                             else dict()
         for sname, s in self.local_scenarios.items():
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
-            s._PySP_has_varprob = True
+            s._mpisppy_data.has_variable_probability = True
             for (vid, prob) in variable_probability:
                 ndn, i = s._mpisppy_data.varid_to_nonant_index[vid]
                 # If you are going to do any variables at a node, you have to do all.

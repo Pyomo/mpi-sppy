@@ -285,7 +285,13 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     sense = pyo.minimize if is_min else pyo.maximize
     EF_instance = pyo.ConcreteModel(name=EF_name)
     EF_instance.EF_Obj = pyo.Objective(expr=0.0, sense=sense)
-    EF_instance._PySP_feas_indicator = None
+
+    # we don't strict need these here, but it allows for eliding
+    # eliding of single scenarios and bundles when convenient
+    EF_instance._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
+    EF_instance._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+    EF_instance._mpisppy_data.scenario_feasible = None
+
     EF_instance._ef_scenario_names = []
     EF_instance.PySP_prob = 0
     for (sname, scenario_instance) in scen_dict.items():

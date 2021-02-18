@@ -92,7 +92,7 @@ class CrossScenarioExtension(PHExtension):
                 verbose=opt.PHoptions["verbose"],
         )
 
-        local_obs = np.fromiter((s._PySP_ob for s in opt.local_subproblems.values()),
+        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_subproblems.values()),
                                 dtype="d", count=len(opt.local_subproblems))
 
         local_ob = np.empty(1)

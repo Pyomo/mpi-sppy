@@ -228,7 +228,7 @@ class PHBase(mpisppy.spbase.SPBase):
                            self.cylinder_rank, nonant.name,
                            pyo.value(s._mpisppy_model.W[ndn_i]))
             # Special code for variable probabilities to mask W; rarely used.
-            if s._PySP_has_varprob:
+            if s._mpisppy_data.has_variable_probability:
                 for ndn_i in s._mpisppy_data.nonant_indices:
                     (lndn, li) = ndn_i
                     # Requiring a vector for every tree node? (should we?)
@@ -316,11 +316,11 @@ class PHBase(mpisppy.spbase.SPBase):
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
-            local_Ebounds.append(s.PySP_prob * s._PySP_ob)
+            local_Ebounds.append(s.PySP_prob * s._mpisppy_data.outer_bound)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\
-                       .format(k, s.PySP_prob, s._PySP_ob))
+                       .format(k, s.PySP_prob, s._mpisppy_data.outer_bound))
 
         if extra_sum_terms is not None:
             local_Ebound_list = [math.fsum(local_Ebounds)] + list(extra_sum_terms)
@@ -618,7 +618,7 @@ class PHBase(mpisppy.spbase.SPBase):
         
         Note:
             This function assumes the scenarios have a boolean
-            `_PySP_feas_indicator` attribute.
+            `_mpisppy_data.scenario_feasible` attribute.
 
         Returns:
             float:
@@ -631,7 +631,7 @@ class PHBase(mpisppy.spbase.SPBase):
         globals = np.zeros(1, dtype='d')
 
         for k,s in self.local_scenarios.items():
-            if s._PySP_feas_indicator:
+            if s._mpisppy_data.scenario_feasible:
                 locals[0] += s.PySP_prob
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
@@ -645,7 +645,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         Note:
             This function assumes the scenarios have a boolean
-            `_PySP_feas_indicator` attribute.
+            `_mpisppy_data.scenario_feasible` attribute.
 
         Returns:
             float:
@@ -657,7 +657,7 @@ class PHBase(mpisppy.spbase.SPBase):
         globals = np.zeros(1, dtype='d')
 
         for k,s in self.local_scenarios.items():
-            if not s._PySP_feas_indicator:
+            if not s._mpisppy_data.scenario_feasible:
                 locals[0] += s.PySP_prob
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
@@ -940,7 +940,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
                 (results.solver.termination_condition == TerminationCondition.unbounded):
 
-            s._PySP_feas_indicator = False
+            s._mpisppy_data.scenario_feasible = False
 
             if gripe:
                 name = self.__class__.__name__
@@ -961,16 +961,16 @@ class PHBase(mpisppy.spbase.SPBase):
             else:
                 s.solutions.load_from(results)
             if self.is_minimizing:
-                s._PySP_ob = results.Problem[0].Lower_bound
+                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
             else:
-                s._PySP_ob = results.Problem[0].Upper_bound
-            s._PySP_feas_indicator = True
+                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+            s._mpisppy_data.scenario_feasible = True
         # TBD: get this ready for IPopt (e.g., check feas_prob every time)
         # propogate down
         if self.bundling: # must be a bundle
             for sname in s._ef_scenario_names:
-                 self.local_scenarios[sname]._PySP_feas_indicator\
-                     = s._PySP_feas_indicator
+                 self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
+                     = s._mpisppy_data.scenario_feasible
         return pyomo_solve_time
     
     
