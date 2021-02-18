@@ -397,7 +397,9 @@ class SPBase(object):
         if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
 
-        self._check_variable_probabilities_sum(verbose)
+        if 'do_not_check_variable_probabilities' in self.options\
+           and not self.options['do_not_check_variable_probabilities']:
+            self._check_variable_probabilities_sum(verbose)
 
     def _check_variable_probabilities_sum(self, verbose):
 
