@@ -351,18 +351,18 @@ class SPBase(object):
 
 
     def _compute_unconditional_node_probabilities(self):
-        """ calculates unconditional node probabilities and _PySP_prob_coeff
+        """ calculates unconditional node probabilities and prob_coeff
             and _PySP_W_coeff is set to a scalar 1 (used by variable_probability)"""
         for k,s in self.local_scenarios.items():
             root = s._PySPnode_list[0]
             root.uncond_prob = 1.0
             for parent,child in zip(s._PySPnode_list[:-1],s._PySPnode_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
-            if not hasattr(s, '_PySP_prob_coeff'):
-                s._PySP_prob_coeff = dict()
+            if not hasattr(s._mpisppy_data, 'prob_coeff'):
+                s._mpisppy_data.prob_coeff = dict()
                 s._PySP_W_coeff = dict()
                 for node in s._PySPnode_list:
-                    s._PySP_prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
+                    s._mpisppy_data.prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
                     s._PySP_W_coeff[node.name] = 1.0  # needs to be a float
 
 
@@ -385,11 +385,11 @@ class SPBase(object):
             for (vid, prob) in variable_probability:
                 ndn, i = s._varid_to_nonant_index[vid]
                 # If you are going to do any variables at a node, you have to do all.
-                if type(s._PySP_prob_coeff[ndn]) is float:  # not yet a vector
-                    defprob = s._PySP_prob_coeff[ndn]
-                    s._PySP_prob_coeff[ndn] = np.full(s._mpisppy_data.nlens[ndn], defprob, dtype='d')
+                if type(s._mpisppy_data.prob_coeff[ndn]) is float:  # not yet a vector
+                    defprob = s._mpisppy_data.prob_coeff[ndn]
+                    s._mpisppy_data.prob_coeff[ndn] = np.full(s._mpisppy_data.nlens[ndn], defprob, dtype='d')
                     s._PySP_W_coeff[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
-                s._PySP_prob_coeff[ndn][i] = prob
+                s._mpisppy_data.prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
                     s._PySP_W_coeff[ndn][i] = 0
             didit += len(variable_probability)
@@ -419,7 +419,7 @@ class SPBase(object):
         for k,s in self.local_scenarios.items():
             for node in s._PySPnode_list:
                 ndn = node.name
-                local_concats[ndn] += s._PySP_prob_coeff[ndn]
+                local_concats[ndn] += s._mpisppy_data.prob_coeff[ndn]
 
         # compute sum node conditional probabilities (reduction)
         for ndn in nodenames:
@@ -464,9 +464,8 @@ class SPBase(object):
 
             '''
                 [
-                    "_PySP_subscen_names",  #hasattr
-                    "_PySP_prob_coeff",     #hasattr
                     "_PySP_conv_iter_count", #hasattr
+                    "_PySP_W_coeff",
                     "_varid_to_nonant_index",
                     "_xsqvar_prox_approx",
                     "_PySP_fixedness_cache",
