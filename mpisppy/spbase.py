@@ -277,7 +277,7 @@ class SPBase(object):
                 ndn = node.name
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
-            scenario._nonant_indices = _nonant_indices
+            scenario._mpisppy_data.nonant_indices = _nonant_indices
 
             
     def _attach_nlens(self):
@@ -305,7 +305,7 @@ class SPBase(object):
             # In order to support rho setting, create a map
             # from the id of vardata object back its _nonant_index.
             scenario._varid_to_nonant_index =\
-                {id(var): ndn_i for ndn_i, var in scenario._nonant_indices.items()}
+                {id(var): ndn_i for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
             
 
     def _create_communicators(self):
@@ -439,7 +439,7 @@ class SPBase(object):
                     if not np.allclose(global_concats[ndn], 1., atol=tol):
                         notclose = ~np.isclose(global_concats[ndn], 1., atol=tol)
                         indices = np.nonzero(notclose)[0]
-                        bad_vars = [ s._nonant_indices[ndn,idx].name for idx in indices ]
+                        bad_vars = [ s._mpisppy_data.nonant_indices[ndn,idx].name for idx in indices ]
                         badprobs = [ global_concats[ndn][idx] for idx in indices]
                         raise RuntimeError(f"Node {ndn}, variables {bad_vars} have respective"
                                            f" conditional probability sum {badprobs}"
@@ -457,30 +457,34 @@ class SPBase(object):
 
     def _look_before_leap_all(self):
         for (sname, scenario) in self.local_scenarios.items():
-            self._look_before_leap(
-                scenario,
+            self._look_before_leap( scenario, ['_mpisppy_data', '_mpisppy_model' ] )
+
+            scenario._mpisppy_data = pyo.Block()
+            scenario._mpisppy_model = pyo.Block()
+
+            '''
                 [
                     "_nonant_indices",
+                    "_varid_to_nonant_index",
+                    "_PySP_nlens",
+                    "_xsqvar_prox_approx",
+                    "_PySP_nonant_cache",
+                    "_PySP_fixedness_cache",
+                    "_PySP_original_fixedness",
+                    "_PySP_original_nonants",
+
                     "_xbars",
                     "_xsqbars",
                     "_xsqvar",
                     "_xsqvar_cuts",
-                    "_xsqvar_prox_approx",
                     "_Ws",
-                    "_PySP_nlens",
                     "_PHrho",
-                    "_PHtermon",
-                    "_varid_to_nonant_index",
                     "_PHW_on",
-                    "_PySP_nonant_cache",
                     "_PHprox_on",
-                    "_PySP_fixedness_cache",
-                    "_PySP_original_fixedness",
-                    "_PySP_original_nonants",
                     "_zs",
                     "_ys",
                 ],
-            )
+            '''
 
     def _options_check(self, required_options, given_options):
         """ Confirm that the specified list of options contains the specified

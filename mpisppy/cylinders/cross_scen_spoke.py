@@ -21,7 +21,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         vbuflen = 0
         self.nonant_per_scen = 0
         for s in self.opt.local_scenarios.values():
-            vbuflen += len(s._nonant_indices)
+            vbuflen += len(s._mpisppy_data.nonant_indices)
         local_scen_count = len(self.opt.local_scenario_names)
         self.nonant_per_scen = int(vbuflen / local_scen_count)
 
@@ -71,7 +71,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # create an index of these non_ant_copies to be in the same
         # order as PH, used below
         nonants = dict()
-        for ndn_i, nonant in arb_scen._nonant_indices.items():
+        for ndn_i, nonant in arb_scen._mpisppy_data.nonant_indices.items():
             vid = id(nonant)
             nonants[ndn_i] = nonant_vid_to_copy_map[vid]
 
@@ -141,7 +141,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         etas = dict()
         ci = 0
         for k, s in opt.local_scenarios.items():
-            for ndn, i in s._nonant_indices:
+            for ndn, i in s._mpisppy_data.nonant_indices:
                 nonants[k, ndn, i] = all_nonants_and_etas[ci]
                 ci += 1
 

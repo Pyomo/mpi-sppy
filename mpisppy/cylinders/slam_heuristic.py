@@ -49,7 +49,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         '''
         ## do some checks
         for sname, s in self.opt.local_scenarios.values():
-            for var in s._nonant_indices.values():
+            for var in s._mpisppy_data.nonant_indices.values():
                 if not var.is_integer():
                     raise Exception(f"{self.__class__.__name__} can only be used for problems "
                                     "with pure-integer first-stage variables")
@@ -110,7 +110,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                     solver = s._solver_plugin if is_pers else None
 
                     nonant_source = s.ref_vars.values() if bundling else \
-                            s._nonant_indices.values()
+                            s._mpisppy_data.nonant_indices.values()
 
                     for ix, var in enumerate(nonant_source):
                         var.fix(global_candidate[ix])

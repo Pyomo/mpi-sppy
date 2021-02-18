@@ -359,7 +359,7 @@ class LShapedMethod(spbase.SPBase):
         instance = self.local_scenarios[scenario_name]
 
         subproblem_to_master_vars_map = pyo.ComponentMap()
-        for var, mvar in zip(instance._nonant_indices.values(), self.master_vars):
+        for var, mvar in zip(instance._mpisppy_data.nonant_indices.values(), self.master_vars):
             if var.name not in mvar.name:
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
             subproblem_to_master_vars_map[var] = mvar 
