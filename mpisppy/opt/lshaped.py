@@ -700,7 +700,7 @@ def _get_nonant_ids_EF(instance):
 
     ## this is for adjusting the objective, so needs all the nonants
     ## in the EF
-    snames = instance._PySP_subscen_names
+    snames = instance._ef_scenario_names
 
     nonant_ids = set()
     for s in snames:

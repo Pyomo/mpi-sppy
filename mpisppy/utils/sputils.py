@@ -286,11 +286,11 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     EF_instance = pyo.ConcreteModel(name=EF_name)
     EF_instance.EF_Obj = pyo.Objective(expr=0.0, sense=sense)
     EF_instance._PySP_feas_indicator = None
-    EF_instance._PySP_subscen_names = []
+    EF_instance._ef_scenario_names = []
     EF_instance.PySP_prob = 0
     for (sname, scenario_instance) in scen_dict.items():
         EF_instance.add_component(sname, scenario_instance)
-        EF_instance._PySP_subscen_names.append(sname)
+        EF_instance._ef_scenario_names.append(sname)
         # Now deactivate the scenario instance Objective
         scenario_objs = get_objs(scenario_instance)
         for obj_func in scenario_objs:
@@ -460,7 +460,7 @@ def ef_scenarios(ef):
         scenario name, scenario instance (str, ConcreteModel)
     """
     
-    for sname in ef._PySP_subscen_names:
+    for sname in ef._ef_scenario_names:
         yield (sname, getattr(ef, sname))
 
         

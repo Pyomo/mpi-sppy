@@ -965,8 +965,8 @@ class PHBase(mpisppy.spbase.SPBase):
             s._PySP_feas_indicator = True
         # TBD: get this ready for IPopt (e.g., check feas_prob every time)
         # propogate down
-        if hasattr(s,"_PySP_subscen_names"): # must be a bundle
-            for sname in s._PySP_subscen_names:
+        if self.bundling: # must be a bundle
+            for sname in s._ef_scenario_names:
                  self.local_scenarios[sname]._PySP_feas_indicator\
                      = s._PySP_feas_indicator
         return pyomo_solve_time
