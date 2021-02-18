@@ -938,7 +938,9 @@ class PHBase(mpisppy.spbase.SPBase):
         pyomo_solve_time = time.time() - solve_start_time
         if (results is None) or (len(results.solution) == 0) or \
                 (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible):
+                (results.solver.termination_condition == TerminationCondition.infeasible) or \
+                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+                (results.solver.termination_condition == TerminationCondition.unbounded):
 
             s._PySP_feas_indicator = False
 
