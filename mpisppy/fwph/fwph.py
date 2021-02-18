@@ -771,6 +771,9 @@ class FWPH(mpisppy.phbase.PHBase):
             QP.eqy = pyo.Constraint(leaf_indices, rule=y_rule)
             QP.sum_one = pyo.Constraint(expr=pyo.quicksum(QP.a.values())==1)
 
+            QP._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
+            QP._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+
             self.local_QP_subproblems[name] = QP
                 
     def _initialize_QP_var_values(self):
