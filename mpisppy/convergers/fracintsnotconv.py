@@ -51,9 +51,9 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
                     xvar = node.nonant_vardata_list[i]
                     if xvar.is_integer() or xvar.is_binary():
                         numints += 1
-                        xb = pyo.value(s._xbars[(ndn,i)])
-                        #print ("dlw debug",xb*xb, pyo.value(s._xsqbars[(ndn,i)]))
-                        if xb * xb == pyo.value(s._xsqbars[(ndn,i)]):
+                        xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                        #print ("dlw debug",xb*xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]))
+                        if xb * xb == pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]):
                             numconv += 1
         if self.verbose:
             print (self.name,": numints=",numints)

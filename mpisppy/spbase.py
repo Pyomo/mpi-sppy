@@ -304,7 +304,7 @@ class SPBase(object):
         for (sname, scenario) in self.local_scenarios.items():
             # In order to support rho setting, create a map
             # from the id of vardata object back its _nonant_index.
-            scenario._varid_to_nonant_index =\
+            scenario._mpisppy_data.varid_to_nonant_index =\
                 {id(var): ndn_i for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
             
 
@@ -360,10 +360,10 @@ class SPBase(object):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
             if not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
-                s._PySP_W_coeff = dict()
+                s._mpisppy_data.w_coeff = dict()
                 for node in s._PySPnode_list:
                     s._mpisppy_data.prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
-                    s._PySP_W_coeff[node.name] = 1.0  # needs to be a float
+                    s._mpisppy_data.w_coeff[node.name] = 1.0  # needs to be a float
 
 
     def _use_variable_probability_setter(self, verbose=False):
@@ -383,17 +383,17 @@ class SPBase(object):
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
             s._PySP_has_varprob = True
             for (vid, prob) in variable_probability:
-                ndn, i = s._varid_to_nonant_index[vid]
+                ndn, i = s._mpisppy_data.varid_to_nonant_index[vid]
                 # If you are going to do any variables at a node, you have to do all.
                 if type(s._mpisppy_data.prob_coeff[ndn]) is float:  # not yet a vector
                     defprob = s._mpisppy_data.prob_coeff[ndn]
                     s._mpisppy_data.prob_coeff[ndn] = np.full(s._mpisppy_data.nlens[ndn], defprob, dtype='d')
-                    s._PySP_W_coeff[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
+                    s._mpisppy_data.w_coeff[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
                 s._mpisppy_data.prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
-                    s._PySP_W_coeff[ndn][i] = 0
+                    s._mpisppy_data.w_coeff[ndn][i] = 0
             didit += len(variable_probability)
-            skipped += len(s._varid_to_nonant_index) - didit
+            skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit
         if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
 

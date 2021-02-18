@@ -55,7 +55,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
 
     if (sep_files):
         for (sname, scenario) in PHB.local_scenarios.items():
-            scenario_Ws = {var.name: pyo.value(scenario._Ws[node.name, ix])
+            scenario_Ws = {var.name: pyo.value(scenario._mpisppy_model.W[node.name, ix])
                 for node in scenario._PySPnode_list
                 for (ix, var) in enumerate(node.nonant_vardata_list)}
             scenario_fname = os.path.join(fname, sname + '_weights.csv')
@@ -64,7 +64,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
                     row = ','.join([vname, str(val)]) + '\n'
                     f.write(row)
     else:
-        local_Ws = {(sname, var.name): pyo.value(scenario._Ws[node.name, ix])
+        local_Ws = {(sname, var.name): pyo.value(scenario._mpisppy_model.W[node.name, ix])
                     for (sname, scenario) in PHB.local_scenarios.items()
                     for node in scenario._PySPnode_list
                     for (ix, var) in enumerate(node.nonant_vardata_list)}
@@ -119,7 +119,7 @@ def set_W_from_file(fname, PHB, rank, sep_files=False):
         for vname in d.keys():
             scenario = PHB.local_scenarios[sname]
             node_name, ix = mp[sname, vname]
-            scenario._Ws[node_name, ix] = w_val_dict[sname][vname]
+            scenario._mpisppy_model.W[node_name, ix] = w_val_dict[sname][vname]
 
 def _parse_W_csv_single(fname):
     ''' Read a file containing the weights for a single scenario. The file must
@@ -275,7 +275,7 @@ def write_xbar_to_file(PHB, fname):
         return
     sname = list(PHB.local_scenarios.keys())[0]
     scenario = PHB.local_scenarios[sname]
-    xbars = {var.name: pyo.value(scenario._xbars[node.name, ix])
+    xbars = {var.name: pyo.value(scenario._mpisppy_model.xbars[node.name, ix])
                 for node in scenario._PySPnode_list
                 for (ix, var) in enumerate(node.nonant_vardata_list)}
     with open(fname, 'a') as f:
@@ -304,8 +304,8 @@ def set_xbar_from_file(fname, PHB):
         for node in scenario._PySPnode_list:
             for (ix,var) in enumerate(node.nonant_vardata_list):
                 val = xbar_val_dict[var.name]
-                scenario._xbars[node.name, ix] = val
-                scenario._xsqbars[node.name, ix] = val * val
+                scenario._mpisppy_model.xbars[node.name, ix] = val
+                scenario._mpisppy_model.xsqbars[node.name, ix] = val * val
 
 def _parse_xbar_csv(fname):
     ''' Read a csv file containing weight information. 

@@ -156,23 +156,23 @@ class APH(ph_base.PHBase):  # ??????
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                     if not self.use_lag:
-                        z_touse = s._zs[(ndn,i)]._value
-                        W_touse = pyo.value(s._Ws[(ndn,i)])
+                        z_touse = s._mpisppy_model.z[(ndn,i)]._value
+                        W_touse = pyo.value(s._mpisppy_model.W[(ndn,i)])
                     else:
-                        z_touse = s._zs_foropt[(ndn,i)]._value
-                        W_touse = pyo.value(s._Ws_foropt[(ndn,i)])
+                        z_touse = s._mpisppy_model.z_foropt[(ndn,i)]._value
+                        W_touse = pyo.value(s._mpisppy_model.W_foropt[(ndn,i)])
                     # pyo.value vs. _value ??
-                    s._ys[(ndn,i)]._value = W_touse \
-                                          + pyo.value(s._PHrho[(ndn,i)]) \
+                    s._mpisppy_model.y[(ndn,i)]._value = W_touse \
+                                          + pyo.value(s._mpisppy_model.rho[(ndn,i)]) \
                                           * (xvar._value - z_touse)
                     if verbose and self.cylinder_rank == 0:
                         print ("node, scen, var, y", ndn, k,
                                self.cylinder_rank, xvar.name,
-                               pyo.value(s._ys[(ndn,i)]))
+                               pyo.value(s._mpisppy_model.y[(ndn,i)]))
         else:
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                    s._ys[(ndn,i)]._value = 0
+                    s._mpisppy_model.y[(ndn,i)]._value = 0
             if verbose and self.cylinder_rank == 0:
                 print ("All y=0 for iter1")
 
@@ -184,8 +184,8 @@ class APH(ph_base.PHBase):  # ??????
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                self.phis[k] += (pyo.value(s._zs[(ndn,i)]) - xvar._value) \
-                    *(pyo.value(s._Ws[(ndn,i)]) - pyo.value(s._ys[(ndn,i)]))
+                self.phis[k] += (pyo.value(s._mpisppy_model.z[(ndn,i)]) - xvar._value) \
+                    *(pyo.value(s._mpisppy_model.W[(ndn,i)]) - pyo.value(s._mpisppy_model.y[(ndn,i)]))
             self.phis[k] *= pyo.value(s.PySP_prob)
             summand += self.phis[k]
         return summand
@@ -240,9 +240,9 @@ class APH(ph_base.PHBase):  # ??????
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
             for (ndn,i) in s._mpisppy_data.nonant_indices:
-                s._xbars[(ndn,i)]._value \
+                s._mpisppy_model.xbars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][i]
-                s._xsqbars[(ndn,i)]._value \
+                s._mpisppy_model.xsqbars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][nlens[ndn]+i]
                 s._ybars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][2*nlens[ndn]+i]
@@ -250,7 +250,7 @@ class APH(ph_base.PHBase):  # ??????
                 if verbose and self.cylinder_rank == 0:
                     print ("rank, scen, node, var, xbar:",
                            self.cylinder_rank,k,ndn,s._mpisppy_data.nonant_indices[ndn,i].name,
-                           pyo.value(s._xbars[(ndn,i)]))
+                           pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 
         # There is one tau_summand for the rank; global_tau is out of date when
         # we get here because we could not compute it until the averages were.
@@ -268,7 +268,7 @@ class APH(ph_base.PHBase):  # ??????
             nlens = s._mpisppy_data.nlens        
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 self.uk[sname][(ndn,i)] = xvar._value \
-                                          - pyo.value(s._xbars[(ndn,i)])
+                                          - pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                 # compute the unorm and vnorm
                 scen_unorm += self.uk[sname][(ndn,i)] \
                               * self.uk[sname][(ndn,i)]
@@ -393,7 +393,7 @@ class APH(ph_base.PHBase):  # ??????
                         += (s.PySP_prob / node.uncond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
                         += (s.PySP_prob / node.uncond_prob) \
-                           * pyo.value(s._ys[(node.name,i)])
+                           * pyo.value(s._mpisppy_model.y[(node.name,i)])
 
         # record the time
         secs_sofar = time.perf_counter() - self.start_time
@@ -463,16 +463,16 @@ class APH(ph_base.PHBase):  # ??????
             probs = pyo.value(s.PySP_prob)
             for (ndn, i) in s._mpisppy_data.nonant_indices:
                 Wupdate = self.theta * self.uk[k][(ndn,i)]
-                Ws = pyo.value(s._Ws[(ndn,i)]) + Wupdate
-                s._Ws[(ndn,i)] = Ws 
+                Ws = pyo.value(s._mpisppy_model.W[(ndn,i)]) + Wupdate
+                s._mpisppy_model.W[(ndn,i)] = Ws 
                 self.local_pwnorm += probs * Ws * Ws
                 # iter 1 is iter 0 post-solves when seen from the paper
                 if self._PHIter != 1:
-                    zs = pyo.value(s._zs[(ndn,i)])\
+                    zs = pyo.value(s._mpisppy_model.z[(ndn,i)])\
                      + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
                 else:
-                     zs = pyo.value(s._xbars[(ndn,i)])
-                s._zs[(ndn,i)] = zs 
+                     zs = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                s._mpisppy_model.z[(ndn,i)] = zs 
                 self.local_pznorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
                               format(global_rank, k, i, Ws, zs))
@@ -523,15 +523,15 @@ class APH(ph_base.PHBase):  # ??????
             for dl in dlist:
                 scenario = self.local_scenarios[dl[0]]
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                    scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
-                    scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
+                    scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
+                    scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
         else:
             for dl in dlist:
                 for sname in self.local_subproblems[dl[0]].scen_list:
                     scenario = self.local_scenarios[sname]
                     for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                        scenario._zs_foropt[(ndn,i)] = scenario._zs[(ndn,i)]
-                        scenario._Ws_foropt[(ndn,i)] = scenario._Ws[(ndn,i)]
+                        scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
+                        scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
 
 
     #====================================================================
@@ -788,24 +788,24 @@ class APH(ph_base.PHBase):  # ??????
         # Begin APH-specific Prep
         for sname, scenario in self.local_scenarios.items():    
             # ys is plural of y
-            scenario._ys = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.y = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                      initialize = 0.0,
                                      mutable = True)
             scenario._ybars = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         initialize = 0.0,
                                         mutable = True)
-            scenario._zs = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                      initialize = 0.0,
                                      mutable = True)
             # lag: we will support lagging back only to the last solve
             # IMPORTANT: pyomo does not support a second reference so no:
-            # scenario._zs_foropt = scenario._zs
+            # scenario._mpisppy_model.z_foropt = scenario._mpisppy_model.z
             
             if self.use_lag:
-                scenario._zs_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+                scenario._mpisppy_model.z_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                          initialize = 0.0,
                                          mutable = True)
-                scenario._Ws_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+                scenario._mpisppy_model.W_foropt = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                          initialize = 0.0,
                                          mutable = True)
                 
@@ -814,21 +814,21 @@ class APH(ph_base.PHBase):  # ??????
             if self.use_lag:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
-                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
-                        (scenario._PHrho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._zs_foropt[(ndn,i)]) * \
-                        (xvar - scenario._zs_foropt[(ndn,i)])
+                    objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
+                        (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
+                        (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)]) * \
+                        (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)])
                     # W term
-                    scenario._PHW_on[ndn,i] * scenario._Ws_foropt[ndn,i] * xvar
+                    scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
-                    objfct.expr +=  scenario._PHprox_on[(ndn,i)] * \
-                        (scenario._PHrho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._zs[(ndn,i)]) * \
-                        (xvar - scenario._zs[(ndn,i)])
+                    objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
+                        (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
+                        (xvar - scenario._mpisppy_model.z[(ndn,i)]) * \
+                        (xvar - scenario._mpisppy_model.z[(ndn,i)])
                     # W term
-                    scenario._PHW_on[ndn,i] * scenario._Ws[ndn,i] * xvar
+                    scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
         

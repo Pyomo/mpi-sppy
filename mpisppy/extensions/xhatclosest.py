@@ -34,9 +34,9 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         for k, s in self.opt.local_scenarios.items():
             dist = 0
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
-                diff = pyo.value(xvar) - pyo.value(s._xbars[ndn_i])
-                variance = pyo.value(s._xsqbars[ndn_i]) \
-                  - pyo.value(s._xbars[ndn_i])*pyo.value(s._xbars[ndn_i])
+                diff = pyo.value(xvar) - pyo.value(s._mpisppy_model.xbars[ndn_i])
+                variance = pyo.value(s._mpisppy_model.xsqbars[ndn_i]) \
+                  - pyo.value(s._mpisppy_model.xbars[ndn_i])*pyo.value(s._mpisppy_model.xbars[ndn_i])
                 if variance > 0:
                     stdev = np.sqrt(variance)
                     dist += min(3, abs(diff)/stdev)
