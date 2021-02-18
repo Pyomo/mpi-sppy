@@ -365,7 +365,7 @@ class LShapedMethod(spbase.SPBase):
             subproblem_to_master_vars_map[var] = mvar 
 
         # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
     def create_subproblem(self, scenario_name):
         """ the subproblem creation function passed into the
@@ -488,7 +488,7 @@ class LShapedMethod(spbase.SPBase):
             var.fixed = False
 
         # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
         if self.store_subproblems:
             self.subproblems[scenario_name] = instance

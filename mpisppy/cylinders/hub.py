@@ -593,7 +593,7 @@ class LShapedHub(Hub):
         ci = 0  ## index to self.nonant_send_buffer
         nonant_send_buffer = self.nonant_send_buffer
         for k, s in self.opt.local_scenarios.items():
-            nonant_to_master_var_map = s._subproblem_to_master_vars_map
+            nonant_to_master_var_map = s._mpisppy_model.subproblem_to_master_vars_map
             for xvar in s._mpisppy_data.nonant_indices.values():
                 ## Grab the value from the associated master variable
                 nonant_send_buffer[ci] = nonant_to_master_var_map[xvar]._value

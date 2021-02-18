@@ -244,7 +244,7 @@ class APH(ph_base.PHBase):  # ??????
                     = self.node_concats["FirstReduce"][ndn][i]
                 s._mpisppy_model.xsqbars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][nlens[ndn]+i]
-                s._ybars[(ndn,i)]._value \
+                s._mpisppy_model.ybars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][2*nlens[ndn]+i]
 
                 if verbose and self.cylinder_rank == 0:
@@ -272,8 +272,8 @@ class APH(ph_base.PHBase):  # ??????
                 # compute the unorm and vnorm
                 scen_unorm += self.uk[sname][(ndn,i)] \
                               * self.uk[sname][(ndn,i)]
-                scen_vnorm += pyo.value(s._ybars[(ndn,i)]) \
-                              * pyo.value(s._ybars[(ndn,i)])
+                scen_vnorm += pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
+                              * pyo.value(s._mpisppy_model.ybars[(ndn,i)])
             self.local_punorm += pyo.value(s.PySP_prob) * scen_unorm
             self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
             new_tau_summand += pyo.value(s.PySP_prob) \
@@ -469,7 +469,7 @@ class APH(ph_base.PHBase):  # ??????
                 # iter 1 is iter 0 post-solves when seen from the paper
                 if self._PHIter != 1:
                     zs = pyo.value(s._mpisppy_model.z[(ndn,i)])\
-                     + self.theta * pyo.value(s._ybars[(ndn,i)])/self.APHgamma
+                     + self.theta * pyo.value(s._mpisppy_model.ybars[(ndn,i)])/self.APHgamma
                 else:
                      zs = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                 s._mpisppy_model.z[(ndn,i)] = zs 
@@ -791,7 +791,7 @@ class APH(ph_base.PHBase):  # ??????
             scenario._mpisppy_model.y = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                      initialize = 0.0,
                                      mutable = True)
-            scenario._ybars = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.ybars = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         initialize = 0.0,
                                         mutable = True)
             scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),

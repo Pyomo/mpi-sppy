@@ -64,7 +64,7 @@ class CrossScenarioHub(PHHub):
         # get all the etas
         for k, s in self.opt.local_scenarios.items():
             for sn in self.opt.all_scenario_names:
-                all_nonants_and_etas[ci] = s.eta[sn]._value
+                all_nonants_and_etas[ci] = s._mpisppy_model.eta[sn]._value
                 ci += 1
         self.hub_to_spoke(all_nonants_and_etas, idx)
 
@@ -96,7 +96,7 @@ class CrossScenarioHub(PHHub):
                     # [ const, eta_coeff, *nonant_coeffs ]
                     linear_const = row[0]
                     linear_coefs = list(row[1:])
-                    linear_vars = [b.eta[k]]
+                    linear_vars = [b._mpisppy_model.eta[k]]
 
                     for ndn_i in s._mpisppy_data.nonant_indices:
                         ## for bundles, we add the constrains only
@@ -105,9 +105,9 @@ class CrossScenarioHub(PHHub):
 
                     cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
                                                 linear_vars=linear_vars)
-                    b._benders_cuts[outer_iter, k] = (None, cut_expr, 0)
+                    b._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0)
                     if persistent_solver:
-                        b._solver_plugin.add_constraint(b._benders_cuts[outer_iter, k])
+                        b._solver_plugin.add_constraint(b._mpisppy_model.benders_cuts[outer_iter, k])
 
         else:
             for sn,s in opt.local_subproblems.items():
@@ -122,14 +122,14 @@ class CrossScenarioHub(PHHub):
                     # [ const, eta_coeff, *nonant_coeffs ]
                     linear_const = row[0]
                     linear_coefs = list(row[1:])
-                    linear_vars = [s.eta[k]]
+                    linear_vars = [s._mpisppy_model.eta[k]]
                     linear_vars.extend(s._mpisppy_data.nonant_indices.values())
 
                     cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
                                                 linear_vars=linear_vars)
-                    s._benders_cuts[outer_iter, k] = (None, cut_expr, 0.)
+                    s._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0.)
                     if persistent_solver:
-                        s._solver_plugin.add_constraint(s._benders_cuts[outer_iter, k])
+                        s._solver_plugin.add_constraint(s._mpisppy_model.benders_cuts[outer_iter, k])
 
         # NOTE: the LShaped code negates the objective, so
         #       we do the same here for consistency
@@ -145,15 +145,15 @@ class CrossScenarioHub(PHHub):
             self.best_outer_bound = ob
             for sn,s in opt.local_subproblems.items():
                 persistent_solver = sputils.is_persistent(s._solver_plugin)
-                prior_outer_iter = list(s._ib_constr.keys())
-                s._ib_constr[outer_iter] = (ob, s._EF_obj, ib)
+                prior_outer_iter = list(s._mpisppy_model.inner_bound_constr.keys())
+                s._mpisppy_model.inner_bound_constr[outer_iter] = (ob, s._mpisppy_model.EF_obj, ib)
                 if persistent_solver:
-                    s._solver_plugin.add_constraint(s._ib_constr[outer_iter])
+                    s._solver_plugin.add_constraint(s._mpisppy_model.inner_bound_constr[outer_iter])
                 # remove other ib constraints (we only need the tightest)
                 for it in prior_outer_iter:
                     if persistent_solver:
-                        s._solver_plugin.remove_constraint(s._ib_constr[it])
-                    del s._ib_constr[it]
+                        s._solver_plugin.remove_constraint(s._mpisppy_model.inner_bound_constr[it])
+                    del s._mpisppy_model.inner_bound_constr[it]
 
         ## helping the extention track cuts
         self.new_cuts = True
