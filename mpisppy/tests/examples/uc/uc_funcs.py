@@ -211,24 +211,24 @@ def write_solution(spcomm, opt_dict, solution_dir):
     from mpisppy.extensions.xhatclosest import XhatClosest
     from mpisppy.opt.ph import PH
 
-    if spcomm.global_rank == 0:
+    if spcomm.rank_global == 0:
         if spcomm.last_ib_idx is None:
-            best_strata_rank = -1
+            best_rank_inter = -1
             print("No incumbent solution to print")
         else:
-            best_strata_rank = spcomm.last_ib_idx
+            best_rank_inter = spcomm.last_ib_idx
     else:
-        best_strata_rank = None
+        best_rank_inter = None
 
-    best_strata_rank = spcomm.fullcomm.bcast(best_strata_rank, root=0)
+    best_rank_inter = spcomm.fullcomm.bcast(best_rank_inter, root=0)
 
-    if spcomm.strata_rank != best_strata_rank:
+    if spcomm.rank_inter != best_rank_inter:
         # Nothing to do
         return
     ## else this spoke/hub is the winner!
 
     # do some checks, to make sure the solution we print will be nonantipative
-    if best_strata_rank != 0:
+    if best_rank_inter != 0:
         assert opt_dict["spoke_class"] in (XhatShuffleInnerBound, )
     else: # this is the hub, TODO: also could check for XhatSpecific
         assert opt_dict["opt_class"] in (PH, )
@@ -240,11 +240,11 @@ def write_solution(spcomm, opt_dict, solution_dir):
 
     ## make solution dir if it doesn't exist,
     ## but only on rank 0
-    if spcomm.cylinder_rank == 0:
+    if spcomm.rank_intra == 0:
         if not os.path.exists(solution_dir):
             os.makedirs(solution_dir)
 
-    spcomm.cylinder_comm.Barrier()
+    spcomm.intracomm.Barrier()
 
     for sname, s in spcomm.opt.local_scenarios.items():
         file_name = os.path.join(solution_dir, sname+'.json')

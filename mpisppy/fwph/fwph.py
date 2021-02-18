@@ -60,6 +60,7 @@ class FWPH(mpisppy.phbase.PHBase):
         scenario_denouement=None,
         all_nodenames=None,
         mpicomm=None,
+        rank0=0,
         cb_data=None,
         PH_converger=None,
         rho_setter=None,
@@ -71,6 +72,7 @@ class FWPH(mpisppy.phbase.PHBase):
             scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
+            rank0=rank0,
             cb_data=cb_data,
             PH_extensions=None,
             PH_extension_kwargs=None,
@@ -104,7 +106,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (check):
                 self._check_initial_points()
             self._create_solvers()
-            self._use_rho_setter(verbose and self.cylinder_rank==0)
+            self._use_rho_setter(verbose and self.rank==self.rank0)
             self._initialize_MIP_var_values()
             best_bound = -np.inf if self.is_minimizing else np.inf
         else:
@@ -135,7 +137,7 @@ class FWPH(mpisppy.phbase.PHBase):
         self._reenable_W()
 
         if (self.PH_converger):
-            self.convobject = self.PH_converger(self, self.cylinder_rank, self.n_proc)
+            self.convobject = self.PH_converger(self, self.rank, self.n_proc)
 
         return best_bound
 
@@ -168,7 +170,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, np.nan, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
+                    if (self.rank == self.rank0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
                 self.spcomm.sync()
@@ -179,7 +181,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, diff, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
+                    if (self.rank == self.rank0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
             else: # Convergence check from Boland
@@ -189,7 +191,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, diff, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
+                    if (self.rank == self.rank0 and self.vb):
                         print('PH converged based on standard criteria')
                     break
 
@@ -198,7 +200,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self.Update_W(self.PHoptions['verbose'])
             timed_out = self._is_timed_out()
             if (self._is_timed_out()):
-                if (self.cylinder_rank == 0 and self.vb):
+                if (self.rank == self.rank0 and self.vb):
                     print('Timeout.')
                 break
 
@@ -220,7 +222,7 @@ class FWPH(mpisppy.phbase.PHBase):
         # a numerical problem).
         arb_scen_mip = self.local_scenarios[mip.scen_list[0]] \
                        if self.bundling else mip
-        for (node_name, ix) in arb_scen_mip._nonant_indices:
+        for (node_name, ix) in arb_scen_mip._nonant_indexes:
             qp._Ws[node_name, ix]._value = \
                 arb_scen_mip._Ws[node_name, ix].value
 
@@ -229,7 +231,7 @@ class FWPH(mpisppy.phbase.PHBase):
         xt = {ndn_i:
             (1 - alpha) * pyo.value(arb_scen_mip._xbars[ndn_i])
             + alpha * pyo.value(xvar)
-            for ndn_i, xvar in arb_scen_mip._nonant_indices.items()
+            for ndn_i, xvar in arb_scen_mip._nonant_indexes.items()
             }
 
         for itr in range(self.FW_options['FW_iter_limit']):
@@ -237,7 +239,7 @@ class FWPH(mpisppy.phbase.PHBase):
             mip_source = mip.scen_list if self.bundling else [model_name]
             for scenario_name in mip_source:
                 scen_mip = self.local_scenarios[scenario_name]
-                for ndn_i, nonant in scen_mip._nonant_indices.items():
+                for ndn_i, nonant in scen_mip._nonant_indexes.items():
                     x_source = xt[ndn_i] if itr==0 \
                                else nonant._value
                     scen_mip._Ws[ndn_i]._value = (
@@ -296,7 +298,7 @@ class FWPH(mpisppy.phbase.PHBase):
         mip_source = mip.scen_list if self.bundling else [model_name]
         for scenario_name in mip_source:
             scen_mip = self.local_scenarios[scenario_name]
-            for (node_name, ix) in scen_mip._nonant_indices:
+            for (node_name, ix) in scen_mip._nonant_indexes:
                 scen_mip._Ws[node_name, ix]._value = \
                     qp._Ws[node_name, ix]._value
 
@@ -372,12 +374,12 @@ class FWPH(mpisppy.phbase.PHBase):
                 x_indices = [(scenario_name, node_name, ix)
                     for scenario_name in mip.scen_list
                     for (node_name, ix) in 
-                        self.local_scenarios[scenario_name]._nonant_indices]
+                        self.local_scenarios[scenario_name]._nonant_indexes]
                 y_indices = [(scenario_name, 'LEAF', ix)
                     for scenario_name in mip.scen_list
                     for ix in range(mip.num_leaf_vars[scenario_name])]
             else:
-                x_indices = mip._nonant_indices.keys()
+                x_indices = mip._nonant_indexes.keys()
                 y_indices = [('LEAF', ix) for ix in range(len(qp.y))]
 
             y_indices = pyo.Set(initialize=y_indices)
@@ -418,7 +420,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     mip = self.local_scenarios[scenario_name]
                     # Non-anticipative variables
                     nonant_dict = {(scenario_name, ndn, ix): nonant
-                        for (ndn,ix), nonant in mip._nonant_indices.items()}
+                        for (ndn,ix), nonant in mip._nonant_indexes.items()}
                     EF.nonant_vars.update(nonant_dict)
                     # Leaf variables
                     leaf_vars = self._get_leaf_vars(mip)
@@ -430,7 +432,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     # indexed by (node_name, index)
         else:
             for (name, mip) in self.local_scenarios.items():
-                mip.nonant_vars = mip._nonant_indices
+                mip.nonant_vars = mip._nonant_indexes
                 leaf_vars = self._get_leaf_vars(mip)
                 mip.leaf_vars = { ('LEAF', ix): 
                     leaf_vars[ix] for ix in range(len(leaf_vars))
@@ -459,7 +461,7 @@ class FWPH(mpisppy.phbase.PHBase):
         stage_one_var_names = [var.name for var in root.nonant_vardata_list]
 
         init_pts = self.comms['ROOT'].gather(self.local_initial_points, root=0)
-        if (self.cylinder_rank != 0):
+        if (self.rank != self.rank0):
             return
 
         print('Checking initial points...', end='', flush=True)
@@ -541,7 +543,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         if self.bundling else mip
             qp  = self.local_QP_subproblems[name]
             diff_s = 0.
-            for (node_name, ix) in arb_mip._nonant_indices:
+            for (node_name, ix) in arb_mip._nonant_indexes:
                 qpx = qp.xr if self.bundling else qp.x
                 diff_s += np.power(pyo.value(qpx[node_name,ix]) - 
                         pyo.value(arb_mip._xbars[node_name,ix]), 2)
@@ -614,14 +616,14 @@ class FWPH(mpisppy.phbase.PHBase):
         for (name, scenario) in self.local_scenarios.items():
             if (self.bundling and strip_bundle_names):
                 scenario_weights = dict()
-                for ndn_ix, var in scenario._nonant_indices.items():
+                for ndn_ix, var in scenario._nonant_indexes.items():
                     rexp = '^' + scenario.name + '\.'
                     var_name = re.sub(rexp, '', var.name)
                     scenario_weights[var_name] = \
                                         scenario._Ws[ndn_ix].value
             else:
                 scenario_weights = {nonant.name: scenario._Ws[ndn_ix].value
-                        for ndn_ix, nonant in scenario._nonant_indices.items()}
+                        for ndn_ix, nonant in scenario._nonant_indexes.items()}
             local_weights[name] = scenario_weights
 
         weights = self.comms['ROOT'].gather(local_weights, root=0)
@@ -656,7 +658,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 Must be called after variables are swapped back (I think).
         '''
-        if (self.cylinder_rank != 0):
+        if (self.rank != self.rank0):
             return None
         else:
             random_scenario_name = list(self.local_scenarios.keys())[0]
@@ -712,7 +714,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     raise RuntimeError('Cannot currently specify '
                         'initial points while using bundles')
             else:
-                nonant_indices = model._nonant_indices.keys()
+                nonant_indices = model._nonant_indexes.keys()
                 leaf_indices = model.leaf_vars.keys()
 
             ''' Convex comb. coefficients '''
@@ -796,7 +798,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # Set the non-anticipative reference variables if we're bundling
             if (self.bundling):
                 arb_scenario = mip.scen_list[0]
-                naix = self.local_scenarios[arb_scenario]._nonant_indices
+                naix = self.local_scenarios[arb_scenario]._nonant_indexes
                 for (node_name, ix) in naix:
                     # Check that non-anticipativity is satisfied
                     # within the bundle (for debugging)
@@ -807,7 +809,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         mip.nonant_vars[arb_scenario, node_name, ix].value)
 
     def _is_timed_out(self):
-        if (self.cylinder_rank == 0):
+        if (self.rank == self.rank0):
             time_elapsed = time.time() - self.t0
             status = 1 if (time_elapsed > self.FW_options['time_limit']) \
                        else 0
@@ -846,7 +848,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 raise RuntimeError('Cannot use bundles and specify initial '
                     'points with t_max=1 at the same time.')
             else:
-                if (self.cylinder_rank == 0):
+                if (self.rank == self.rank0):
                     print('WARNING: Cannot specify initial points and use '
                         'bundles at the same time. Ignoring specified initial '
                         'points')
@@ -871,11 +873,11 @@ class FWPH(mpisppy.phbase.PHBase):
             self.FW_options['time_limit'] = np.inf
 
     def _output(self, itr, bound, best_bound, diff, secs):
-        if (self.cylinder_rank == 0 and self.vb):
+        if (self.rank == self.rank0 and self.vb):
             print('{itr:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s'.format(
                     itr=itr, bound=bound, best_bound=best_bound, 
                     diff=diff, secs=secs))
-        if (self.cylinder_rank == 0 and 'save_file' in self.FW_options.keys()):
+        if (self.rank == self.rank0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
                 f.write('{itr:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n'.format(
@@ -883,10 +885,10 @@ class FWPH(mpisppy.phbase.PHBase):
                     diff=diff, secs=secs))
 
     def _output_header(self):
-        if (self.cylinder_rank == 0 and self.vb):
+        if (self.rank == self.rank0 and self.vb):
             print('itr {bound:>12s} {bb:>12s} {cd:>12s} {tm:>12s}'.format(
                     bound="bound", bb="best bound", cd="conv diff", tm="time"))
-        if (self.cylinder_rank == 0 and 'save_file' in self.FW_options.keys()):
+        if (self.rank == self.rank0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
                 f.write('{itr:s},{bound:s},{bb:s},{diff:s},{secs:s}\n'.format(
@@ -903,7 +905,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 function can be called.
         '''
         weights = self._gather_weight_dict(strip_bundle_names=self.bundling) # None if rank != 0
-        if (self.cylinder_rank != 0):
+        if (self.rank != self.rank0):
             return
         with open(fname, 'w') as f:
             for block in weights:
@@ -922,7 +924,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 Rather "fast-and-loose", in that it doesn't enforce _when_ this
                 function can be called.
         '''
-        if (self.cylinder_rank != 0):
+        if (self.rank != self.rank0):
             return
         xbars = self._get_xbars(strip_bundle_names=self.bundling) # None if rank != 0
         with open(fname, 'w') as f:
@@ -957,13 +959,13 @@ class FWPH(mpisppy.phbase.PHBase):
                 x_source = QP.x
 
             QP._Ws = pyo.Param(
-                m_source._nonant_indices.keys(), mutable=True, initialize=m_source._Ws
+                m_source._nonant_indexes.keys(), mutable=True, initialize=m_source._Ws
             )
             # rhos are attached to each scenario, not each bundle (should they be?)
             ph_term = pyo.quicksum((
                 QP._Ws[nni] * x_source[nni] +
                 (m_source._PHrho[nni] / 2.) * (x_source[nni] - m_source._xbars[nni]) * (x_source[nni] - m_source._xbars[nni])
-                for nni in m_source._nonant_indices
+                for nni in m_source._nonant_indexes
             ))
 
             if obj.is_minimizing():
@@ -995,8 +997,8 @@ class FWPH(mpisppy.phbase.PHBase):
                 algorithm, xBar should be computed using the QP values, not the
                 MIP values (like in normal PH).
 
-                Reruns SPBase._attach_nonant_indices so that the scenario 
-                _nonant_indices dictionary has the correct variable pointers
+                Reruns SPBase.attach_nonant_indexes so that the scenario 
+                _nonant_indexes dictionary has the correct variable pointers
                 
                 Updates nonant_vardata_list but NOT nonant_list.
         '''
@@ -1012,7 +1014,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         if self.bundling else
                         self.local_QP_subproblems[name].x[node.name,i]
                         for i in range(num_nonant_vars[node.name])]
-        self._attach_nonant_indices()
+        self.attach_nonant_indexes()
 
     def _swap_nonant_vars_back(self):
         ''' Swap variables back, in case they're needed somewhere else.
@@ -1034,7 +1036,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     node.nonant_vardata_list = [
                         scenario.nonant_vars[node.name,ix]
                         for ix in range(num_nonant_vars[node.name])]
-        self._attach_nonant_indices()
+        self.attach_nonant_indexes()
 
 if __name__=='__main__':
     print('fwph.py has no main()')

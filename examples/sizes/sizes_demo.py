@@ -99,7 +99,7 @@ if __name__ == "__main__":
     )
     
     conv, obj, tbound = ph.ph_main()
-    if ph.cylinder_rank == 0:
+    if ph.rank == 0:
          print ("Trival bound =",tbound)
 
     print("Quitting early.")

@@ -96,7 +96,7 @@ def main():
     spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
 
     if "hub_class" in opt_dict:  # we are a hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
+        if spcomm.opt.rank == spcomm.opt.rank0:  # we are the reporting hub rank
             print("BestInnerBound={} and BestOuterBound={}".\
                   format(spcomm.BestInnerBound, spcomm.BestOuterBound))
     

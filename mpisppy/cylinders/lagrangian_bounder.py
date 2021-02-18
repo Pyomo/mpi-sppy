@@ -45,10 +45,10 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         bound, extra_sums  = self.opt.Ebound(verbose, extra_sum_terms=[serial_number])
         serial_number_sum = int(round(extra_sums[0]))
 
-        total = int(self.cylinder_comm.Get_size())*serial_number
+        total = int(self.intracomm.Get_size())*serial_number
         if total == serial_number_sum:
             return bound
-        elif self.cylinder_rank == 0:
+        elif self.rank_intra == 0:
             print("WARNING: Lagrangian spokes out of snyc, consider changing mpisppy.cylinders.SPOKE_SLEEP_TIME")
         return None
 

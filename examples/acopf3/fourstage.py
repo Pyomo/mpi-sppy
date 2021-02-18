@@ -27,7 +27,7 @@ import datetime as dt
 
 import mpi4py.MPI as mpi
 comm_global = mpi.COMM_WORLD
-global_rank = comm_global.Get_rank()
+rank_global = comm_global.Get_rank()
 n_proc = comm_global.Get_size()
 
 # =========================
@@ -145,7 +145,7 @@ def main():
     if scenperbun > 0:
         nscen = branching_factors[0] * branching_factors[1]
         PHoptions["bundles_per_rank"] = int((nscen / n_proc) / scenperbun)
-    if global_rank == 0:
+    if rank_global == 0:
         appfile = "acopf.app"
         if not os.path.isfile(appfile):
             with open(appfile, "w") as f:
@@ -213,7 +213,7 @@ def main():
     list_of_spoke_dict = [ub2]
     spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
     if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
+        if spcomm.opt.rank == spcomm.opt.rank0:  # we are the reporting hub rank
             ph_end_time = dt.datetime.now()
             IB = spcomm.BestInnerBound
             OB = spcomm.BestOuterBound

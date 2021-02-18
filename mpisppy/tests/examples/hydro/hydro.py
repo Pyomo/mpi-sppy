@@ -306,12 +306,12 @@ if __name__ == "__main__":
                                 all_nodenames = all_nodenames)
     
     conv, obj, tbound = ph.ph_main()
-    if ph.cylinder_rank == 0:
+    if ph.rank == 0:
          print ("Trival bound =",tbound)
 
     ph._disable_W_and_prox()
     e_obj = ph.Eobjective()
-    if ph.cylinder_rank == 0:
+    if ph.rank == 0:
          print ("unweighted e_obj={}".format(e_obj))
 
     """

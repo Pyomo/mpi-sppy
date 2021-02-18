@@ -59,7 +59,7 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
                   ' already exists. Results will be appended to this file.')
 
         self.PHB = ph
-        self.cylinder_rank = rank
+        self.rank = rank
         self.w_fname = w_fname
         self.x_fname = x_fname
         self.sep_files = sep_files # Write separate files for each 

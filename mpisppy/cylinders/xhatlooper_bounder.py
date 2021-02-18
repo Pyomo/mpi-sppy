@@ -26,7 +26,7 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         xhatter = XhatLooper(self.opt)
 
         self.opt.PH_Prep()  
-        logger.debug(f"  xhatlooper spoke back from PH_Prep rank {self.global_rank}")
+        logger.debug(f"  xhatlooper spoke back from PH_Prep rank {self.rank_global}")
 
         self.opt.subproblem_creation(verbose)
 
@@ -48,14 +48,14 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.opt.cylinder_rank == 0:
+            if self.rank_global == self.opt.rank0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            if self.opt.cylinder_rank == 0:
+            if self.rank_global == self.opt.rank0:
                 print("ERROR")
                 print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()
@@ -68,7 +68,7 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
 
     def main(self):
         verbose = self.opt.options["verbose"] # typing aid  
-        logger.debug(f"Entering main on xhatlooper spoke rank {self.global_rank}")
+        logger.debug(f"Entering main on xhatlooper spoke rank {self.rank_global}")
 
         xhatter = self.xhatlooper_prep()
 
@@ -77,12 +77,12 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         xh_iter = 1
         while not self.got_kill_signal():
             if (xh_iter-1) % 10000 == 0:
-                logger.debug(f'   Xhatlooper loop iter={xh_iter} on rank {self.global_rank}')
-                logger.debug(f'   Xhatlooper got from opt on rank {self.global_rank}')
+                logger.debug(f'   Xhatlooper loop iter={xh_iter} on rank {self.rank_global}')
+                logger.debug(f'   Xhatlooper got from opt on rank {self.rank_global}')
 
             if self.new_nonants:
                 logger.debug(f'   *Xhatlooper loop iter={xh_iter}')
-                logger.debug(f'   *got a new one! on rank {self.global_rank}')
+                logger.debug(f'   *got a new one! on rank {self.rank_global}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
                 self.opt._put_nonant_cache(self.localnonants)
@@ -92,6 +92,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
                 # send a bound to the opt companion
                 if upperbound is not None:
                     self.bound = upperbound
-                    logger.debug(f'   send inner bound={upperbound} on rank {self.global_rank} (based on scenario {srcsname})')
-                logger.debug(f'   bottom of xhatlooper loop on rank {self.global_rank}')
+                    logger.debug(f'   send inner bound={upperbound} on rank {self.rank_global} (based on scenario {srcsname})')
+                logger.debug(f'   bottom of xhatlooper loop on rank {self.rank_global}')
             xh_iter += 1

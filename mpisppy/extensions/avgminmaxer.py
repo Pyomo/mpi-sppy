@@ -22,7 +22,7 @@ class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_iter0(self):
         avgv, minv, maxv = self.ph.avg_min_max(self.compstr)
-        if (self.cylinder_rank == 0):
+        if (self.rank == 0):
             print ("  ### ", self.compstr,": avg, min, max, max-min", avgv, minv, maxv, maxv-minv)
         
     def miditer(self, PHIter, conv):
@@ -30,7 +30,7 @@ class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
 
     def enditer(self, PHIter):
         avgv, minv, maxv = self.ph.avg_min_max(self.compstr)
-        if (self.cylinder_rank == 0):
+        if (self.rank == 0):
             print ("  ### ", self.compstr,": avg, min, max, max-min", avgv, minv, maxv, maxv-minv)
 
     def post_everything(self, PHIter, conv):

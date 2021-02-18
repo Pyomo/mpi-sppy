@@ -28,7 +28,7 @@ for solvername in solvers:
 
 import mpi4py.MPI as mpi
 fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
+rank_global = fullcomm.Get_rank()
 
 #*****************************************************************************
 class Test_aph_sizes(unittest.TestCase):

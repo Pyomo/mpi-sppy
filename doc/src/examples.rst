@@ -308,7 +308,7 @@ relatively good agreement:
 
 .. testcode::
 
-    variables = ph.gather_var_values_to_rank0()
+    variables = ph.gather_var_values_to_root()
     for (scenario_name, variable_name) in variables:
         variable_value = variables[scenario_name, variable_name]
         print(scenario_name, variable_name, variable_value)
@@ -333,7 +333,7 @@ relatively good agreement:
     bad X[CORN] 85.26131687116226
     bad X[WHEAT] 134.08971193504266
 
-The function ``gather_var_values_to_rank0`` can be used in parallel to collect
+The function ``gather_var_values_to_root`` can be used in parallel to collect
 the values of all non-anticipative variables at the root. In this (serial)
 example, it simply returns the values of the first-stage variables.
 
@@ -361,7 +361,7 @@ previous methods:
     ls = LShapedMethod(options, all_scenario_names, scenario_creator)
     result = ls.lshaped_algorithm()
 
-    variables = ls.gather_var_values_to_rank0()
+    variables = ls.gather_var_values_to_root()
     for ((scen_name, var_name), var_value) in variables.items():
         print(scen_name, var_name, var_value)
 

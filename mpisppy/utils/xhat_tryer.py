@@ -70,9 +70,9 @@ class XhatTryer(PHBase):
         if not dis_prox:
             raise RuntimeError("XhatTryer has no notion of prox")
         def _vb(msg): 
-            if verbose and self.cylinder_rank == 0:
+            if verbose and self.rank == self.rank0:
                 print ("(rank0) " + msg)
-        logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
+        logger.debug("  early solve_loop for rank={}".format(self.rank))
 
         # note that when there is no bundling, scenarios are subproblems
         if use_scenarios_not_subproblems:
@@ -80,7 +80,7 @@ class XhatTryer(PHBase):
         else:
             s_source = self.local_subproblems
         for k,s in s_source.items():
-            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
+            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.rank))
 
             pyomo_solve_time = self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
@@ -92,7 +92,7 @@ class XhatTryer(PHBase):
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.cylinder_rank == 0:
+            if self.rank == self.rank0:
                 print("Pyomo solve times (seconds):")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(all_pyomo_solve_times),
@@ -132,13 +132,13 @@ class XhatTryer(PHBase):
                 if (sputils.is_persistent(s._solver_plugin)):
                     persistent_solver = s._solver_plugin
 
-            for var in s._nonant_indices.values():
+            for var in s._nonant_indexes.values():
                 var.fix()
                 if not self.bundling and persistent_solver is not None:
                     persistent_solver.update_var(var)
 
         if self.bundling:  # we might need to update persistent solvers
-            rank_local = self.cylinder_rank
+            rank_local = self.rank
             for k,s in self.local_subproblems.items():
                 if (sputils.is_persistent(s._solver_plugin)):
                     persistent_solver = s._solver_plugin
@@ -151,7 +151,7 @@ class XhatTryer(PHBase):
                 for sname, scen in self.local_scenarios.items():
                     if sname not in self.names_in_bundles[rank_local][bunnum]:
                         break
-                    for var in scen._nonant_indices.values():
+                    for var in scen._nonant_indexes.values():
                         persistent_solver.update_var(var)
 
     def calculate_incumbent(self, fix_nonants=True, verbose=False):
@@ -176,7 +176,7 @@ class XhatTryer(PHBase):
         if infeasP != 0.:
             return None
         else:
-            if verbose and self.cylinder_rank == 0:
+            if verbose and self.rank == self.rank0:
                 print("  Feasible xhat found")
             return self.Eobjective(verbose=verbose)
 

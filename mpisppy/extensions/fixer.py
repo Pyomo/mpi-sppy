@@ -51,7 +51,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
         self.ph = ph
-        self.cylinder_rank = self.ph.cylinder_rank
+        self.rank = self.ph.rank
+        self.rank0 = self.ph.rank0
         self.PHoptions = ph.PHoptions
         self.fixeroptions = self.PHoptions["fixeroptions"] # required
         self.verbose = self.PHoptions["verbose"] \
@@ -63,7 +64,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         self.boundtol = self.fixeroptions["boundtol"]
 
     def populate(self, local_scenarios):
-        # [(ndn, i)] = iter count (i indices into nonantlist)
+        # [(ndn, i)] = iter count (i indexes into nonantlist)
         self.local_scenarios = local_scenarios
 
         self.iter0_fixer_tuples = {} # caller data
@@ -103,17 +104,17 @@ class Fixer(mpisppy.extensions.extension.Extension):
                                                "threshold across scenarios")
 
     def _vb(self, str):
-        if self.verbose and self.cylinder_rank == 0:
+        if self.verbose and self.rank == 0:
             print ("(rank0) " + str)
 
     def _dp(self, str):
-        if (self.dprogress or self.verbose) and self.cylinder_rank == 0:
+        if (self.dprogress or self.verbose) and self.rank == 0:
             print ("(rank0) " + str)
 
     def _update_fix_counts(self):
         nodesdone = []  # avoid multiple updates of a node's Vars
         for k,s in self.local_scenarios.items():
-            for ndn_i, xvar in s._nonant_indices.items():
+            for ndn_i, xvar in s._nonant_indexes.items():
                 if xvar.is_fixed():
                     continue
                 xb = pyo.value(s._xbars[ndn_i])
@@ -156,7 +157,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 except:
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
-                xvar = s._nonant_indices[ndn,i]
+                xvar = s._nonant_indexes[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
                     diff = xb * xb - pyo.value(s._xsqbars[(ndn,i)])
@@ -196,7 +197,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         if have_bundles and solver_is_persistent:
             for k,subp in self.ph.local_subproblems.items():
                 subpnum = sputils.extract_num(k)
-                rank_local = self.ph.cylinder_rank
+                rank_local = self.ph.rank
                 for sname in self.ph.names_in_bundles[rank_local][subpnum]:
                     if sname in vars_to_update:
                         for xvar in vars_to_update[sname]:
@@ -239,7 +240,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
                 tolval = self.threshold[(ndn, i)]
-                xvar = s._nonant_indices[ndn,i]
+                xvar = s._nonant_indexes[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._xbars[(ndn,i)])
                     fx = s._PySP_conv_iter_count[(ndn,i)]
@@ -277,7 +278,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         if have_bundles and solver_is_persistent:
             for k,subp in self.ph.local_subproblems.items():
                 subpnum = sputils.extract_num(k)
-                rank_local = self.ph.cylinder_rank
+                rank_local = self.ph.rank
                 for sname in self.ph.names_in_bundles[rank_local][subpnum]:
                     if sname in vars_to_update:
                         for xvar in vars_to_update[sname]:
