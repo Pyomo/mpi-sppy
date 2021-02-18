@@ -107,7 +107,7 @@ class SPBase(object):
         self._attach_nonant_indices()
         self._attach_varid_to_nonant_index()
         self._create_communicators()
-        ### TODO: add a function to check for len(nonant) the same for all scenario tree nodes
+        self._verify_nonant_lengths()
         self._set_sense()
         self._use_variable_probability_setter()
 
@@ -141,6 +141,34 @@ class SPBase(object):
                 "All scenario models must have the same "
                 "model sense (minimize or maximize)"
             )
+
+    def _verify_nonant_lengths(self):
+        local_node_nonant_lengths = {}   # keys are tree node names
+
+        # we need to accumulate all local contributions before the reduce
+        for k,s in self.local_scenarios.items():
+            nlens = s._PySP_nlens
+            for node in s._PySPnode_list:
+                ndn = node.name
+                mylen = nlens[ndn]
+                if ndn not in local_node_nonant_lengths:
+                    local_node_nonant_lengths[ndn] = mylen
+                elif local_node_nonant_lengths[ndn] != mylen:
+                    raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
+                            f"variables between scenarios {mylen} vs. {local_node_nonant_lengths[ndn]}")
+
+        # compute node xbar values(reduction)
+        for ndn, val in local_node_nonant_lengths.items():
+            local_val = np.array([val], 'i')
+            max_val = np.zeros(1, 'i')
+            self.comms[ndn].Allreduce([local_val, MPI.INT],
+                                      [max_val, MPI.INT],
+                                      op=MPI.MAX)
+
+            if val != int(max_val[0]):
+                raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
+                        f"variables between scenarios {val} vs. max {max_val[0]}")
+
 
     def _calculate_scenario_ranks(self):
         """ Populate the following attributes
