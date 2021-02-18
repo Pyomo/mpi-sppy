@@ -63,7 +63,8 @@ class APH(ph_base.PHBase):  # ??????
         scenario_creator (fct): returns a concrete model with special things
         scenario_denouement (fct): for post processing and reporting
         all_node_names (list of str): non-leaf node names
-        cb_data (any): passed directly to the scenario callback
+        scenario_creator_kwargs (dict): keyword arguments passed to
+            `scenario_creator`.
 
     Attributes (partial list):
         local_scenarios (dict of scenario objects): concrete models with 
@@ -73,30 +74,37 @@ class APH(ph_base.PHBase):  # ??????
         local_scenario_names (list): names of locals 
         current_solver_options (dict): from PHoptions; callbacks might change
         synchronizer (object): asynch listener management
-        cb_data (any): passed directly to the scenario callback
+        scenario_creator_kwargs (dict): keyword arguments passed to
+            `scenario_creator`.
 
     """
-    def __init__(self,
-                 PHoptions,
-                 all_scenario_names,
-                 scenario_creator,
-                 scenario_denouement,
-                 mpicomm=None,
-                 all_nodenames=None,
-                 cb_data=None,
-                 PH_extensions=None, PH_extension_kwargs=None,
-                 PH_converger=None, rho_setter=None):
-        super().__init__(PHoptions,
-                         all_scenario_names,
-                         scenario_creator,
-                         scenario_denouement,
-                         mpicomm=mpicomm,
-                         all_nodenames=all_nodenames,
-                         cb_data=cb_data,
-                         PH_extensions=PH_extensions,
-                         PH_extension_kwargs=PH_extension_kwargs,
-                         PH_converger=PH_converger,
-                         rho_setter=rho_setter)
+    def __init__(
+        self,
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        mpicomm=None,
+        all_nodenames=None,
+        scenario_creator_kwargs=None,
+        PH_extensions=None,
+        PH_extension_kwargs=None,
+        PH_converger=None,
+        rho_setter=None,
+    ):
+        super().__init__(
+            PHoptions,
+            all_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            mpicomm=mpicomm,
+            all_nodenames=all_nodenames,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            PH_extensions=PH_extensions,
+            PH_extension_kwargs=PH_extension_kwargs,
+            PH_converger=PH_converger,
+            rho_setter=rho_setter,
+        )
 
         self.phis = {} # phi values, indexed by scenario names
         self.tau_summand = 0  # place holder for iteration 1 reduce
@@ -889,7 +897,7 @@ if __name__ == "__main__":
     PHopt["iterk_solver_options"] = {"mipgap": 0.001}
 
     ScenCount = 3
-    cb_data={'use_integer': False, "CropsMult": 1}
+    scenario_creator_kwargs = {'use_integer': False, "crops_multiplier": 1}
     all_scenario_names = list()
     for sn in range(ScenCount):
         all_scenario_names.append("scen"+str(sn))
@@ -900,8 +908,13 @@ if __name__ == "__main__":
 
     PHopt["async_frac_needed"] = 0.5
     PHopt["async_sleep_secs"] = 0.5
-    aph = APH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-              cb_data=cb_data)
+    aph = APH(
+        PHopt,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+    )
 
 
     """

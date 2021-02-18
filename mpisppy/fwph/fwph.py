@@ -60,7 +60,7 @@ class FWPH(mpisppy.phbase.PHBase):
         scenario_denouement=None,
         all_nodenames=None,
         mpicomm=None,
-        cb_data=None,
+        scenario_creator_kwargs=None,
         PH_converger=None,
         rho_setter=None,
     ):
@@ -71,7 +71,7 @@ class FWPH(mpisppy.phbase.PHBase):
             scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
-            cb_data=cb_data,
+            scenario_creator_kwargs=scenario_creator_kwargs,
             PH_extensions=None,
             PH_extension_kwargs=None,
             PH_converger=PH_converger,

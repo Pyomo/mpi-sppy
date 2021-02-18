@@ -73,8 +73,8 @@ class PHBase(mpisppy.spbase.SPBase):
             mpicomm (MPI comm, optional):
                 MPI communicator to use between all scenarios. Default is
                 `MPI.COMM_WORLD`.
-            cb_data (any, optional): 
-                Data passed directly to scenario_creator.
+            scenario_creator_kwargs (dict, optional): 
+                Keyword arguments passed to `scenario_creator`.
             PH_extensions (object, optional):
                 PH extension object.
             PH_extension_kwargs (dict, optional):
@@ -87,20 +87,32 @@ class PHBase(mpisppy.spbase.SPBase):
                 Function to set variable specific probabilities.
 
     """
-    def __init__(self, PHoptions, all_scenario_names, scenario_creator,
-                 scenario_denouement=None, all_nodenames=None,
-                 mpicomm=None, cb_data=None,
-                 PH_extensions=None, PH_extension_kwargs=None,
-                 PH_converger=None, rho_setter=None, variable_probability=None):
+    def __init__(
+        self,
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement=None,
+        all_nodenames=None,
+        mpicomm=None,
+        scenario_creator_kwargs=None,
+        PH_extensions=None,
+        PH_extension_kwargs=None,
+        PH_converger=None,
+        rho_setter=None,
+        variable_probability=None,
+    ):
         """ PHBase constructor. """
-        super().__init__(PHoptions,
-                         all_scenario_names,
-                         scenario_creator,
-                         scenario_denouement=scenario_denouement,
-                         all_nodenames=all_nodenames,
-                         mpicomm=mpicomm,
-                         cb_data=cb_data,
-                         variable_probability=variable_probability)
+        super().__init__(
+            PHoptions,
+            all_scenario_names,
+            scenario_creator,
+            scenario_denouement=scenario_denouement,
+            all_nodenames=all_nodenames,
+            mpicomm=mpicomm,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            variable_probability=variable_probability,
+        )
 
         global_toc("Initializing PHBase")
 

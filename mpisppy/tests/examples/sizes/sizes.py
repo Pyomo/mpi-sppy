@@ -4,19 +4,18 @@ import os
 import mpisppy.tests.examples.sizes.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
-def scenario_creator(scenario_name, node_names=None, cb_data=None):
+def scenario_creator(scenario_name, scenario_count=None):
     """ The callback needs to create an instance and then attach
         the PySP nodes to it in a list _PySPnode_list ordered by stages.
         Optionally attach _PHrho. 
-        Use cb_data for the scenario count (3 or 10)
     """
-    if cb_data not in [3, 10]:
-        raise RuntimeError(
-            "cb_data passed to scenario counter " "must equal either 3 or 10"
-        )
+    if scenario_count is None:
+        raise ValueError("Sizes scenario_creator requires a scenario_count kwarg")
+    if scenario_count not in [3, 10]:
+        raise ValueError("Sizes scenario count must equal either 3 or 10")
 
     sizes_dir = os.path.dirname(__file__)
-    datadir = os.sep.join((sizes_dir, f"SIZES{cb_data}"))
+    datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"
     except:

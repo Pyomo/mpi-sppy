@@ -211,30 +211,27 @@ def MakeNodesforScen(model, BFs, scennum):
     return retval
 
 #=============================================================================
-def scenario_creator(scenario_name,
-                    node_names=None,
-                    cb_data=None,
-                    data_path=None):
+def scenario_creator(scenario_name, branching_factors=None, data_path=None):
     """ The callback needs to create an instance and then attach
     the PySP nodes to it in a list _PySPnode_list ordered by stages. 
     Optionally attach _PHrho.
     Args:
         scenario_name (str): root name of the scenario data file
-        node_names (None): not used
-        cb_data (list of ints): the branching factors
+        branching_factors (list of ints): the branching factors
+        data_path (str, optional): Path to the Hydro data.
     """
-    if (data_path is None):
+    if data_path is None:
         hydro_dir = os.path.dirname(os.path.abspath(__file__))
         data_path = os.sep.join([hydro_dir, 'PySP', 'scenariodata'])
-    assert(node_names is None)
-    assert(cb_data is not None)
+    if branching_factors is None:
+        raise ValueError("Hydro scenario_creator requires branching_factors")
 
     snum = sputils.extract_num(scenario_name)
 
     fname = data_path + os.sep + scenario_name + '.dat'
     instance = model.create_instance(fname, name=scenario_name)
 
-    instance._PySPnode_list = MakeNodesforScen(instance, cb_data, snum)
+    instance._PySPnode_list = MakeNodesforScen(instance, branching_factors, snum)
     return instance
 
 #=============================================================================
@@ -280,9 +277,11 @@ if __name__ == "__main__":
     # **** ef ****
     solver = pyo.SolverFactory(PHoptions["solvername"])
 
-    ef = sputils.create_EF(all_scenario_names,
-                           scenario_creator,
-                           creator_options={"cb_data": BFs})
+    ef = sputils.create_EF(
+        all_scenario_names,
+        scenario_creator,
+        scenario_creator_kwargs={"branching_factors": BFs},
+    )
     results = solver.solve(ef, tee=PHoptions["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
     sputils.ef_nonants_csv(ef, "vardump.csv")
@@ -298,12 +297,14 @@ if __name__ == "__main__":
                                           "csvname": "specific.csv"}
 
     # as of april 2020, we are not supporting xhat as an extension
-    ph = mpisppy.opt.ph.PH(PHoptions,
-                                all_scenario_names,
-                                scenario_creator,
-                                scenario_denouement,
-                                cb_data = BFs,
-                                all_nodenames = all_nodenames)
+    ph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"branching_factors": BFs},
+        all_nodenames=all_nodenames,
+    )
     
     conv, obj, tbound = ph.ph_main()
     if ph.cylinder_rank == 0:
@@ -324,6 +325,8 @@ if __name__ == "__main__":
                               scenario_denouement,
                               all_nodenames = all_nodenames)
 
-    conv, obj, bnd = aph.APH_main(PH_extensions = XhatSpecific,
-                                  cb_data = BFs)
+    conv, obj, bnd = aph.APH_main(
+        PH_extensions=XhatSpecific,
+        scenario_creator_kwargs={"branching_factors": BFs},
+    )
     """

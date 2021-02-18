@@ -50,14 +50,16 @@ def shared_options(args):
     return shoptions
 
 
-def ph_hub(args,
-           scenario_creator,
-           scenario_denouement,
-           all_scenario_names,
-           cb_data=None,
-           ph_extensions=None,
-           rho_setter=None,
-           variable_probability=None):
+def ph_hub(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    ph_extensions=None,
+    rho_setter=None,
+    variable_probability=None,
+):
     shoptions = shared_options(args)
     PHoptions = copy.deepcopy(shoptions)
     PHoptions["convthresh"] = args.intra_hub_conv_thresh
@@ -80,7 +82,7 @@ def ph_hub(args,
             "PHoptions": PHoptions,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "PH_extensions": ph_extensions,
@@ -89,11 +91,13 @@ def ph_hub(args,
     return hub_dict
 
 
-def fwph_spoke(args,
-               scenario_creator,
-               scenario_denouement,
-               all_scenario_names,
-               cb_data=None):
+def fwph_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
     shoptions = shared_options(args)
 
     mip_solver_options, qp_solver_options = dict(), dict()
@@ -122,18 +126,20 @@ def fwph_spoke(args,
             "FW_options": fw_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
     return fw_dict
 
 
-def lagrangian_spoke(args,
-                  scenario_creator,
-                  scenario_denouement,
-                  all_scenario_names,
-                  cb_data=None,
-                  rho_setter=None):
+def lagrangian_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+):
     shoptions = shared_options(args)
     lagrangian_spoke = {
         "spoke_class": LagrangianOuterBound,
@@ -143,7 +149,7 @@ def lagrangian_spoke(args,
             "PHoptions": shoptions,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter,
             'scenario_denouement': scenario_denouement,
         }
@@ -158,12 +164,14 @@ def lagrangian_spoke(args,
 
 
 # special lagrangian that computes its own xhat and W
-def lagranger_spoke(args,
-                  scenario_creator,
-                  scenario_denouement,
-                  all_scenario_names,
-                  cb_data=None,
-                  rho_setter=None):
+def lagranger_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None
+):
     shoptions = shared_options(args)
     lagranger_spoke = {
         "spoke_class": LagrangerOuterBound,
@@ -173,7 +181,7 @@ def lagranger_spoke(args,
             "PHoptions": shoptions,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter,
             'scenario_denouement': scenario_denouement,
         }
@@ -192,11 +200,13 @@ def lagranger_spoke(args,
     return lagranger_spoke
 
         
-def xhatlooper_spoke(args,
-               scenario_creator,
-               scenario_denouement,
-               all_scenario_names,
-               cb_data=None):
+def xhatlooper_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
     
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
@@ -215,17 +225,19 @@ def xhatlooper_spoke(args,
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
     return xhatlooper_dict
 
 
-def xhatshuffle_spoke(args,
-               scenario_creator,
-               scenario_denouement,
-               all_scenario_names,
-               cb_data=None):
+def xhatshuffle_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
 
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
@@ -243,28 +255,30 @@ def xhatshuffle_spoke(args,
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
     return xhatlooper_dict
 
 
-def xhatspecific_spoke(args,
-                       scenario_creator,
-                       scenario_denouement,
-                       all_scenario_names,
-                       scenario_dict,
-                       all_nodenames=None,
-                       BFs=None,
-                       cb_data=None):
+def xhatspecific_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_dict,
+    all_nodenames=None,
+    BFs=None,
+    scenario_creator_kwargs=None,
+):
     
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
-    xhat_options\
-        ["xhat_specific_options"] = {"xhat_solver_options":
-                                     shoptions["iterk_solver_options"],
-                                     "xhat_scenario_dict": scenario_dict,
-                                     "csvname": "specific.csv"}
+    xhat_options["xhat_specific_options"] = {
+        "xhat_solver_options": shoptions["iterk_solver_options"],
+        "xhat_scenario_dict": scenario_dict,
+        "csvname": "specific.csv",
+    }
     if BFs:
         xhat_options["branching_factors"] = BFs
 
@@ -277,17 +291,19 @@ def xhatspecific_spoke(args,
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "all_nodenames": all_nodenames,
         },
     }
     return xhatspecific_dict
 
-def xhatlshaped_spoke(args,
-                      scenario_creator,
-                      scenario_denouement,
-                      all_scenario_names,
-                      cb_data=None):
+def xhatlshaped_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
     
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
@@ -301,16 +317,18 @@ def xhatlshaped_spoke(args,
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
     return xhatlshaped_dict
 
-def slamup_spoke(args,
-               scenario_creator,
-               scenario_denouement,
-               all_scenario_names,
-               cb_data=None):
+def slamup_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
 
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
@@ -323,16 +341,18 @@ def slamup_spoke(args,
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
     return xhatlooper_dict
 
-def slamdown_spoke(args,
-               scenario_creator,
-               scenario_denouement,
-               all_scenario_names,
-               cb_data=None):
+def slamdown_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
 
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
@@ -345,16 +365,18 @@ def slamdown_spoke(args,
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
     return xhatlooper_dict
 
-def cross_scenario_cut_spoke(args, 
-               scenario_creator,
-               scenario_denouement,
-               all_scenario_names,
-               cb_data=None):
+def cross_scenario_cut_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
 
     if _hasit(args, "max_solver_threads"):
         sp_solver_options = {"threads":args.max_solver_threads}
@@ -378,7 +400,7 @@ def cross_scenario_cut_spoke(args,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_denouement": scenario_denouement,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             },
         }
 
