@@ -2,8 +2,6 @@
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
 
-# TODO: most functions in the class should be underscore functions
-
 import time
 import logging
 import weakref
