@@ -34,7 +34,7 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
                 or None if one could not be obtained.
         """
         def _vb(msg):
-            if verbose and self.rank == 0: # self.rank0:
+            if verbose and self.cylinder_rank == 0:
                 print("  xhat_specific: " + msg)
 
         obj = None

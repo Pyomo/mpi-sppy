@@ -40,7 +40,7 @@ class PHBase(mpisppy.spbase.SPBase):
         a trailing number in the scenario name. Assume we have only non-leaf
         nodes.
 
-        To check for rank 0 use self.rank == self.rank0.
+        To check for rank 0 use self.cylinder_rank == 0.
 
         Attributes:
             local_scenarios (dict): 
@@ -73,9 +73,6 @@ class PHBase(mpisppy.spbase.SPBase):
             mpicomm (MPI comm, optional):
                 MPI communicator to use between all scenarios. Default is
                 `MPI.COMM_WORLD`.
-            rank0 (int, optional):
-                Which rank from mpicomm to count as rank 0 (i.e. the "main"
-                rank).
             cb_data (any, optional): 
                 Data passed directly to scenario_creator.
             PH_extensions (object, optional):
@@ -92,7 +89,7 @@ class PHBase(mpisppy.spbase.SPBase):
     """
     def __init__(self, PHoptions, all_scenario_names, scenario_creator,
                  scenario_denouement=None, all_nodenames=None,
-                 mpicomm=None, rank0=0, cb_data=None,
+                 mpicomm=None, cb_data=None,
                  PH_extensions=None, PH_extension_kwargs=None,
                  PH_converger=None, rho_setter=None, variable_probability=None):
         """ PHBase constructor. """
@@ -102,7 +99,6 @@ class PHBase(mpisppy.spbase.SPBase):
                          scenario_denouement=scenario_denouement,
                          all_nodenames=all_nodenames,
                          mpicomm=mpicomm,
-                         rank0=rank0,
                          cb_data=cb_data,
                          variable_probability=variable_probability)
 
@@ -195,7 +191,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # set the xbar and xsqbar in all the scenarios
         for k,s in self.local_scenarios.items():
             logger.debug('  top of assign xbar loop for {} on rank {}'.\
-                         format(k, self.rank))
+                         format(k, self.cylinder_rank))
             nlens = s._PySP_nlens
             for node in s._PySPnode_list:
                 ndn = node.name
@@ -207,9 +203,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 for i in range(nlen):
                     s._xbars[(ndn,i)]._value = xbars[i]
                     s._xsqbars[(ndn,i)]._value = xsqbars[i]
-                    if verbose and self.rank == self.rank0:
+                    if verbose and self.cylinder_rank == 0:
                         print ("rank, scen, node, var, xbar:",
-                               self.rank, k, ndn, node.nonant_vardata_list[i].name,
+                               self.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                                pyo.value(s._xbars[(ndn,i)]))
 
 
@@ -222,18 +218,18 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
-            for ndn_i, nonant in s._nonant_indexes.items():
+            for ndn_i, nonant in s._nonant_indices.items():
                 (lndn, li) = ndn_i
                 xdiff = nonant._value \
                         - s._xbars[ndn_i]._value
                 s._Ws[ndn_i]._value += pyo.value(s._PHrho[ndn_i]) * xdiff
-                if verbose and self.rank == self.rank0:
+                if verbose and self.cylinder_rank == 0:
                     print ("rank, node, scen, var, W", ndn_i[0], k,
-                           self.rank, nonant.name,
+                           self.cylinder_rank, nonant.name,
                            pyo.value(s._Ws[ndn_i]))
             # Special code for variable probabilities to mask W; rarely used.
             if s._PySP_has_varprob:
-                for ndn_i in s._nonant_indexes:
+                for ndn_i in s._nonant_indices:
                     (lndn, li) = ndn_i
                     # Requiring a vector for every tree node? (should we?)
                     # if type(s._PySP_W_coeff[lndn]) is not float:
@@ -252,7 +248,7 @@ class PHBase(mpisppy.spbase.SPBase):
         local_diff = np.zeros(1)
         varcount = 0
         for k,s in self.local_scenarios.items():
-            for ndn_i, nonant in s._nonant_indexes.items():
+            for ndn_i, nonant in s._nonant_indices.items():
                 xval = nonant._value
                 xdiff = xval - s._xbars[ndn_i]._value
                 local_diff[0] += abs(xdiff)
@@ -319,7 +315,7 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
-            logger.debug("  in loop Ebound k={}, rank={}".format(k, self.rank))
+            logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
             local_Ebounds.append(s.PySP_prob * s._PySP_ob)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -408,13 +404,15 @@ class PHBase(mpisppy.spbase.SPBase):
             if hasattr(s,"_PySP_original_fixedness"):
                 print ("ERROR: Attempt to replace original nonants")
                 raise
-            nlens = s._PySP_nlens
-            if s._PySP_nonant_cache is None:
-                clen = sum(nlens[ndn] for ndn in nlens)
+            if not hasattr(s,"_PySP_nonant_cache"):
+                # uses nonant cache to signal other things have not
+                # been created 
+                # TODO: combine cache creation (or something else)
+                clen = len(s._nonant_indices)
                 s._PySP_original_fixedness = [None] * clen
                 s._PySP_original_nonants = np.zeros(clen, dtype='d')
 
-            for ci, xvar in enumerate(s._nonant_indexes.values()):
+            for ci, xvar in enumerate(s._nonant_indices.values()):
                 s._PySP_original_fixedness[ci]  = xvar.is_fixed()
                 s._PySP_original_nonants[ci]  = xvar._value
 
@@ -441,7 +439,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("restore_original_nonants called for a bundle")
                 raise
 
-            for ci, vardata in enumerate(s._nonant_indexes.values()):
+            for ci, vardata in enumerate(s._nonant_indices.values()):
                 vardata._value = s._PySP_original_nonants[ci]
                 vardata.fixed = s._PySP_original_fixedness[ci]
                 if persistent_solver != None:
@@ -455,19 +453,19 @@ class PHBase(mpisppy.spbase.SPBase):
             Assumes _PySP_nonant_cache is on the scenarios and can be used
             as a list, or puts it there.
         Warning: 
-            We are counting on Pyomo indexes not to change order before the
+            We are counting on Pyomo indices not to change order before the
             restoration. We also need the Var type to remain stable.
         Note:
             The value cache is np because it might be transmitted
         """
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens
-            if s._PySP_nonant_cache is None:
+            if not hasattr(s,"_PySP_nonant_cache"):
                 clen = sum(nlens[ndn] for ndn in nlens)
                 s._PySP_nonant_cache = np.zeros(clen, dtype='d')
                 s._PySP_fixedness_cache = [None for _ in range(clen)]
 
-            for ci, xvar in enumerate(s._nonant_indexes.values()):
+            for ci, xvar in enumerate(s._nonant_indices.values()):
                 s._PySP_nonant_cache[ci]  = xvar._value
                 s._PySP_fixedness_cache[ci]  = xvar.is_fixed()
 
@@ -490,7 +488,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if (sputils.is_persistent(s._solver_plugin)):
                 persistent_solver = s._solver_plugin
 
-            for ci, vardata in enumerate(s._nonant_indexes.values()):
+            for ci, vardata in enumerate(s._nonant_indices.values()):
                 vardata._value = s._PySP_nonant_cache[ci]
                 vardata.fixed = s._PySP_fixedness_cache[ci]
 
@@ -504,7 +502,7 @@ class PHBase(mpisppy.spbase.SPBase):
         Args:
             cache (ndn dict of list or numpy vector): values at which to fix
         WARNING: 
-            We are counting on Pyomo indexes not to change order between
+            We are counting on Pyomo indices not to change order between
             when the cache_list is created and used.
         NOTE:
             You probably want to call _save_nonants right before calling this
@@ -540,7 +538,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # do, they had better put their fixedness back to its correct state.)
         self._save_nonants()
         for k,s in self.local_scenarios.items():        
-            for ci, _ in enumerate(s._nonant_indexes):
+            for ci, _ in enumerate(s._nonant_indices):
                 s._PySP_fixedness_cache[ci] = s._PySP_original_fixedness[ci]
         self._restore_nonants()
 
@@ -556,7 +554,7 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
-            for ix in model._nonant_indexes:
+            for ix in model._nonant_indices:
                 assert(ci < len(cache))
                 cache[ci] = pyo.value(model._Ws[ix])
                 ci += 1
@@ -570,10 +568,10 @@ class PHBase(mpisppy.spbase.SPBase):
         ci = 0 # Cache index
         for sname, model in self.local_scenarios.items():
             if model._PySP_nonant_cache is None:
-                raise RuntimeError(f"Rank {self.rank_global} Scenario {sname}"
+                raise RuntimeError(f"Rank {self.global_rank} Scenario {sname}"
                                    " nonant_cache is None"
                                    " (call _save_nonants first?)")
-            for i,_ in enumerate(model._nonant_indexes):
+            for i,_ in enumerate(model._nonant_indices):
                 assert(ci < len(cache))
                 model._PySP_nonant_cache[i] = cache[ci]
                 ci += 1
@@ -587,12 +585,12 @@ class PHBase(mpisppy.spbase.SPBase):
                 One-dimensional list of dual weights.
 
         Warning:
-            We are counting on Pyomo indexes not to change order between list
+            We are counting on Pyomo indices not to change order between list
             creation and use.
         """ 
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
-            for ndn_i in model._nonant_indexes:
+            for ndn_i in model._nonant_indices:
                 model._Ws[ndn_i].value = flat_list[ci]
                 ci += 1
 
@@ -686,20 +684,20 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._PHrho[(ndn, i)] = rho
             didit += len(rholist)
             skipped += len(scenario._varid_to_nonant_index) - didit
-        if verbose and self.rank == self.rank0:
+        if verbose and self.cylinder_rank == 0:
             print ("rho_setter set",didit,"and skipped",skipped)
 
     def _disable_prox(self):
         self.prox_disabled = True
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 0
 
     def _disable_W_and_prox(self):
         self.prox_disabled = True
         self.W_disabled = True
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 0
                 scenario._PHW_on[(ndn,i)]._value = 0
 
@@ -707,27 +705,27 @@ class PHBase(mpisppy.spbase.SPBase):
         # It would be odd to disable W and not prox.
         self.W_disabled = True
         for scenario in self.local_scenarios.values():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHW_on[ndn,i]._value = 0
 
     def _reenable_prox(self):
         self.prox_disabled = False        
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 1
 
     def _reenable_W_and_prox(self):
         self.prox_disabled = False
         self.W_disabled = False
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHprox_on[(ndn,i)]._value = 1
                 scenario._PHW_on[(ndn,i)]._value = 1
 
     def _reenable_W(self):
         self.W_disabled = False
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._nonant_indexes:
+            for (ndn, i) in scenario._nonant_indices:
                 scenario._PHW_on[(ndn,i)]._value = 1
 
     def post_solve_bound(self, solver_options=None, verbose=False):
@@ -749,11 +747,11 @@ class PHBase(mpisppy.spbase.SPBase):
             what you are doing.  It is not suitable as a general, per-iteration
             Lagrangian bound solver.
         '''
-        if (self.rank == self.rank0):
+        if (self.cylinder_rank == 0):
             print('Warning: Lagrangian bounds might not be correct in certain '
                   'cases where there are integers not subject to '
                   'non-anticipativity and those integers do not reach integrality.')
-        if (verbose and self.rank == self.rank0):
+        if (verbose and self.cylinder_rank == 0):
             print('Beginning post-solve Lagrangian bound computation')
 
         if (self.W_disabled):
@@ -776,7 +774,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # A half-hearted attempt to restore the state
         self._reenable_prox()
 
-        if (verbose and self.rank == self.rank0):
+        if (verbose and self.cylinder_rank == 0):
             print(f'Post-solve Lagrangian bound: {bound:.4f}')
         return bound
 
@@ -875,7 +873,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
 
         def _vb(msg): 
-            if verbose and self.rank == self.rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         
         # if using a persistent solver plugin,
@@ -900,7 +898,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
                 all_set_objective_times = self.mpicomm.gather(set_objective_time,
                                                           root=0)
-                if self.rank == self.rank0:
+                if self.cylinder_rank == 0:
                     print("Set objective times (seconds):")
                     print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                           (np.mean(all_set_objective_times),
@@ -915,7 +913,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()
-        if self.rank == self.rank0:
+        if self.cylinder_rank == 0:
             if tee is not None and tee is True:
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
@@ -1028,7 +1026,7 @@ class PHBase(mpisppy.spbase.SPBase):
         set_objective takes care of W and prox changes.
         """
         def _vb(msg): 
-            if verbose and self.rank == self.rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
         if dis_W and dis_prox:
@@ -1037,7 +1035,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self._disable_W()
         elif dis_prox:
             self._disable_prox()
-        logger.debug("  early solve_loop for rank={}".format(self.rank))
+        logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
@@ -1047,9 +1045,9 @@ class PHBase(mpisppy.spbase.SPBase):
         else:
             s_source = self.local_subproblems
         for k,s in s_source.items():
-            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.rank))
+            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
             if tee:
-                print(f"Tee solve for {k} on global rank {self.rank_global}")
+                print(f"Tee solve for {k} on global rank {self.global_rank}")
             pyomo_solve_time = self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
                                               verbose=verbose,
@@ -1060,7 +1058,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.rank == self.rank0:
+            if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(all_pyomo_solve_times),
@@ -1092,21 +1090,21 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         for (sname, scenario) in self.local_scenarios.items():
             # these are bound by index to the vardata list at the node
-            scenario._Ws = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._Ws = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
             
             # create ph objective terms, but disabled
-            scenario._PHW_on = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._PHW_on = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
             self.W_disabled = True
-            scenario._PHprox_on = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._PHprox_on = pyo.Param(scenario._nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
             self.prox_disabled = True
             # note that rho is per var and scenario here
-            scenario._PHrho = pyo.Param(scenario._nonant_indexes.keys(),
+            scenario._PHrho = pyo.Param(scenario._nonant_indices.keys(),
                                         mutable=True,
                                         default=self.PHoptions["defaultPHrho"])
 
@@ -1153,15 +1151,15 @@ class PHBase(mpisppy.spbase.SPBase):
                 # set-up pyomo IndexVar, but keep it sparse
                 # since some nonants might be binary
                 # Define the first cut to be _xsqvar >= 0
-                scenario._xsqvar = pyo.Var(scenario._nonant_indexes, dense=False,
+                scenario._xsqvar = pyo.Var(scenario._nonant_indices, dense=False,
                                             within=pyo.NonNegativeReals)
-                scenario._xsqvar_cuts = pyo.Constraint(scenario._nonant_indexes, pyo.Integers)
+                scenario._xsqvar_cuts = pyo.Constraint(scenario._nonant_indices, pyo.Integers)
                 scenario._xsqvar_prox_approx = {}
             else:
                 scenario._xsqvar = None
                 scenario._xsqvar_prox_approx = False
 
-            for ndn_i, xvar in scenario._nonant_indexes.items():
+            for ndn_i, xvar in scenario._nonant_indices.items():
                 ph_term = 0
                 # Dual term (weights W)
                 if (add_duals):
@@ -1261,12 +1259,12 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         self.local_subproblems = dict()
         if self.bundling:
-            rank_local = self.rank
+            rank_local = self.cylinder_rank
             for bun in self.names_in_bundles[rank_local]:
                 sdict = dict()
-                bname = "rank" + str(self.rank) + "bundle" + str(bun)
+                bname = "rank" + str(self.cylinder_rank) + "bundle" + str(bun)
                 for sname in self.names_in_bundles[rank_local][bun]:
-                    if (verbose and self.rank==self.rank0):
+                    if (verbose and self.cylinder_rank==0):
                         print ("bundling "+sname+" into "+bname)
                     sdict[sname] = self.local_scenarios[sname]
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
@@ -1324,7 +1322,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     set_instance_time = time.time() - set_instance_start_time
                     all_set_instance_times = self.mpicomm.gather(set_instance_time,
                                                                  root=0)
-                    if self.rank == self.rank0:
+                    if self.cylinder_rank == 0:
                         print("Set instance times:")
                         print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                               (np.min(all_set_instance_times),
@@ -1362,7 +1360,7 @@ class PHBase(mpisppy.spbase.SPBase):
         have_converger = self.PH_converger is not None
 
         def _vb(msg):
-            if verbose and self.rank == self.rank0:
+            if verbose and self.cylinder_rank == 0:
                 print("(rank0)", msg)
 
         self._PHIter = 0
@@ -1373,11 +1371,11 @@ class PHBase(mpisppy.spbase.SPBase):
         
         teeme = ("tee-rank0-solves" in self.PHoptions
                  and self.PHoptions['tee-rank0-solves']
-                 and self.rank == self.rank0
+                 and self.cylinder_rank == 0
                  )
             
         if self.PHoptions["verbose"]:
-            print ("About to call PH Iter0 solve loop on rank={}".format(self.rank))
+            print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
         global_toc("Entering solve loop in PHBase.Iter0")
 
         self.solve_loop(solver_options=self.current_solver_options,
@@ -1387,18 +1385,18 @@ class PHBase(mpisppy.spbase.SPBase):
                         verbose=verbose)
         
         if self.PHoptions["verbose"]:
-            print ("PH Iter0 solve loop complete on rank={}".format(self.rank))
+            print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
         
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
-            if self.rank == self.rank0:
+            if self.cylinder_rank == 0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.E1)
                 print("E1_tolerance = ", self.E1_tolerance)
             quit()
         feasP = self.feas_prob()
         if feasP != self.E1:
-            if self.rank == self.rank0:
+            if self.cylinder_rank == 0:
                 print("ERROR")
                 print("Infeasibility detected; E_feas, E1=", feasP, self.E1)
             quit()
@@ -1416,7 +1414,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self.extobject.post_iter0()
 
         if self.rho_setter is not None:
-            if self.rank == self.rank0:
+            if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
             else:
                 self._use_rho_setter(False)
@@ -1424,18 +1422,18 @@ class PHBase(mpisppy.spbase.SPBase):
         converged = False
         if have_converger:
             # Call the constructor of the converger object
-            self.convobject = self.PH_converger(self, self.rank, self.n_proc)
-        #global_toc('Rank: {} - Before iter loop'.format(self.rank), True)
+            self.convobject = self.PH_converger(self, self.cylinder_rank, self.n_proc)
+        #global_toc('Rank: {} - Before iter loop'.format(self.cylinder_rank), True)
         self.conv = None
 
         self.trivial_bound = self.Ebound(verbose)
 
-        if dprogress and self.rank == self.rank0:
+        if dprogress and self.cylinder_rank == 0:
             print("")
             print("After PH Iteration",self._PHIter)
             print("Trivial bound =", self.trivial_bound)
             print("PHBase Convergence Metric =",self.conv)
-            print("Elapsed time: %6.2f" % (dt.datetime.now() - self.startdt).total_seconds())
+            print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
         self._reenable_W_and_prox()
 
@@ -1472,21 +1470,21 @@ class PHBase(mpisppy.spbase.SPBase):
             iteration_start_time = time.time()
 
             if dprogress:
-                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.rank == self.rank0)
+                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # Compute xbar
-            #global_toc('Rank: {} - Before Compute_Xbar'.format(self.rank), True)
+            #global_toc('Rank: {} - Before Compute_Xbar'.format(self.cylinder_rank), True)
             self.Compute_Xbar(verbose)
-            #global_toc('Rank: {} - After Compute_Xbar'.format(self.rank), True)
+            #global_toc('Rank: {} - After Compute_Xbar'.format(self.cylinder_rank), True)
 
             # update the weights        
             self.Update_W(verbose)
-            #global_toc('Rank: {} - After Update_W'.format(self.rank), True)
+            #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
             if have_converger:
                 self.conv = self.convobject.convergence_value()
             self.conv = self.convergence_diff()
-            #global_toc('Rank: {} - After convergence_diff'.format(self.rank), True)
+            #global_toc('Rank: {} - After convergence_diff'.format(self.cylinder_rank), True)
             if have_extensions:
                 self.extobject.miditer()
 
@@ -1497,23 +1495,23 @@ class PHBase(mpisppy.spbase.SPBase):
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():
-                    global_toc("Cylinder convergence", self.rank == self.rank0)
+                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
-                    global_toc("User-supplied converger determined termination criterion reached", self.rank == self.rank0)
+                    global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
             elif self.conv is not None:
                 if self.conv < self.PHoptions["convthresh"]:
                     converged = True
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.rank == self.rank0)
+                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.cylinder_rank == 0)
                     break
 
             teeme = (
                 "tee-rank0-solves" in self.PHoptions
                  and self.PHoptions["tee-rank0-solves"]
-                and self.rank == self.rank0
+                and self.cylinder_rank == 0
             )
             self.solve_loop(
                 solver_options=self.current_solver_options,
@@ -1527,15 +1525,15 @@ class PHBase(mpisppy.spbase.SPBase):
             if have_extensions:
                 self.extobject.enditer()
 
-            if dprogress and self.rank == self.rank0:
+            if dprogress and self.cylinder_rank == 0:
                 print("")
                 print("After PH Iteration",self._PHIter)
                 print("Scaled PHBase Convergence Metric=",self.conv)
                 print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
-                print("Elapsed time:   %6.2f" % (dt.datetime.now() - self.startdt).total_seconds())
+                print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if (self._PHIter == max_iterations):
-                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.rank == self.rank0)
+                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
     def post_loops(self, PH_extensions=None):
         """ Call scenario denouement methods, and report the expected objective
@@ -1556,18 +1554,18 @@ class PHBase(mpisppy.spbase.SPBase):
         # for reporting sanity
         self.mpicomm.Barrier()
 
-        if self.rank == self.rank0 and dprogress:
+        if self.cylinder_rank == 0 and dprogress:
             print("")
             print("Invoking scenario reporting functions, if applicable")
             print("")
 
         if self.scenario_denouement is not None:
             for sname,s in self.local_scenarios.items():
-                self.scenario_denouement(self.rank, sname, s)
+                self.scenario_denouement(self.cylinder_rank, sname, s)
 
         self.mpicomm.Barrier()
 
-        if self.rank == self.rank0 and dprogress:
+        if self.cylinder_rank == 0 and dprogress:
             print("")
             print("Invoking PH extension finalization, if applicable")    
             print("")
@@ -1579,14 +1577,14 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self.mpicomm.Barrier()
 
-        if dprogress and self.rank == self.rank0:
+        if dprogress and self.cylinder_rank == 0:
             print("")
             print("Current ***weighted*** E[objective] =", Eobj)
             print("")
 
-        if dtiming and self.rank == self.rank0:
+        if dtiming and self.cylinder_rank == 0:
             print("")
-            print("Cumulative execution time=%5.2f" % (time.time()-self.start_time))
+            print("Cumulative execution time=%5.2f" % (time.perf_counter()-self.start_time))
             print("")
 
         return Eobj
@@ -1597,10 +1595,10 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         for scenario in self.local_scenarios.values():
             scenario._xbars = pyo.Param(
-                scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
+                scenario._nonant_indices.keys(), initialize=0.0, mutable=True
             )
             scenario._xsqbars = pyo.Param(
-                scenario._nonant_indexes.keys(), initialize=0.0, mutable=True
+                scenario._nonant_indices.keys(), initialize=0.0, mutable=True
             )
 
 

@@ -40,9 +40,9 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             Also attach the resulting bound to the object
         """
         def _vb(msg):
-            if verbose and self.rank == self.opt.rank0:
+            if verbose and self.cylinder_rank == 0:
                 print ("    rank {} xhat_looper: {}".\
-                       format(self.rank,msg))
+                       format(self.cylinder_rank,msg))
         obj = None
         sname = None
         snumlists = dict()
@@ -79,7 +79,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         else:
             raise RuntimeError("xhatlooper cannot do multi-stage")            
 
-        if "append_file_name" in self.options and self.opt.rank == 0:
+        if "append_file_name" in self.options and self.opt.cylinder_rank == 0:
             with open(self.options["append_file_name"], "a") as f:
                 f.write(", "+str(obj))
 

@@ -58,9 +58,6 @@ class LShapedMethod(spbase.SPBase):
         mpicomm (MPI comm, optional):
             MPI communicator to use between all scenarios. Default is
             `MPI.COMM_WORLD`.
-        rank0 (int, optional):
-            Which rank from mpicomm to count as rank 0 (i.e. the "main"
-            rank).
         cb_data (any, optional): 
             Data passed directly to scenario_creator.
     """
@@ -72,7 +69,6 @@ class LShapedMethod(spbase.SPBase):
         scenario_denouement=None,
         all_nodenames=None,
         mpicomm=None,
-        rank0=0,
         cb_data=None,
     ):
         super().__init__(
@@ -82,7 +78,6 @@ class LShapedMethod(spbase.SPBase):
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
-            rank0=rank0,
             cb_data=cb_data,
         )
         if self.multistage:
@@ -349,7 +344,7 @@ class LShapedMethod(spbase.SPBase):
         """ creates a ConcreteModel from one of the problem scenarios then
             modifies the model to serve as the master problem 
         """
-        if self.rank == self.rank0:
+        if self.cylinder_rank == 0:
             if self.has_master_scens:
                 self._create_master_with_scenarios()
             else:
@@ -364,7 +359,7 @@ class LShapedMethod(spbase.SPBase):
         instance = self.local_scenarios[scenario_name]
 
         subproblem_to_master_vars_map = pyo.ComponentMap()
-        for var, mvar in zip(instance._nonant_indexes.values(), self.master_vars):
+        for var, mvar in zip(instance._nonant_indices.values(), self.master_vars):
             if var.name not in mvar.name:
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
             subproblem_to_master_vars_map[var] = mvar 
@@ -504,7 +499,7 @@ class LShapedMethod(spbase.SPBase):
         """ function that runs the lshaped.py algorithm
         """
         if converger:
-            converger = converger(self, self.rank, self.n_proc)
+            converger = converger(self, self.cylinder_rank, self.n_proc)
         max_iter = 30
         if "max_iter" in self.options:
             max_iter = self.options["max_iter"]
@@ -563,7 +558,7 @@ class LShapedMethod(spbase.SPBase):
         # by self.create_subproblem
         self.set_eta_bounds()
 
-        if self.rank == self.rank0:
+        if self.cylinder_rank == 0:
             opt = pyo.SolverFactory(master_solver)
             if opt is None:
                 raise Exception("Error: Failed to Create Master Solver")
@@ -583,7 +578,7 @@ class LShapedMethod(spbase.SPBase):
         # loop until either a no more cuts can are generated
         # or the maximum iterations limit is reached
         for self.iter in range(max_iter):
-            if verbose and self.rank == self.rank0:
+            if verbose and self.cylinder_rank == 0:
                 if self.iter > 0:
                     print("Current Iteration:", self.iter + 1, "Time Elapsed:", "%7.2f" % (time.time() - t), "Time Spent on Last Master:", "%7.2f" % t1,
                           "Time Spent Generating Last Cut Set:", "%7.2f" % t2, "Current Objective:", "%7.2f" % m.obj.expr())
@@ -593,7 +588,7 @@ class LShapedMethod(spbase.SPBase):
             x_vals = np.zeros(len(self.master_vars))
             eta_vals = np.zeros(self.scenario_count)
             outer_bound = np.zeros(1)
-            if self.rank == self.rank0:
+            if self.cylinder_rank == 0:
                 if is_persistent:
                     res = opt.solve(tee=False)
                 else:
@@ -605,9 +600,9 @@ class LShapedMethod(spbase.SPBase):
                 for i, eta in enumerate(m.eta.values()):
                     eta_vals[i] = eta.value
 
-            self.mpicomm.Bcast(x_vals, root=self.rank0)
-            self.mpicomm.Bcast(eta_vals, root=self.rank0)
-            self.mpicomm.Bcast(outer_bound, root=self.rank0)
+            self.mpicomm.Bcast(x_vals, root=0)
+            self.mpicomm.Bcast(eta_vals, root=0)
+            self.mpicomm.Bcast(outer_bound, root=0)
 
             if self.is_minimizing:
                 self._LShaped_bound = outer_bound[0]
@@ -616,7 +611,7 @@ class LShapedMethod(spbase.SPBase):
                 # the outer bound for sharing broadly
                 self._LShaped_bound = -outer_bound[0]
 
-            if self.rank != self.rank0:
+            if self.cylinder_rank != 0:
                 for i, var in enumerate(self.master_vars):
                     var._value = x_vals[i]
                 for i, eta in enumerate(m.eta.values()):
@@ -634,7 +629,7 @@ class LShapedMethod(spbase.SPBase):
             t2 = time.time()
             cuts_added = m.bender.generate_cut()
             t2 = time.time() - t2
-            if self.rank == self.rank0:
+            if self.cylinder_rank == 0:
                 for c in cuts_added:
                     if is_persistent:
                         opt.add_constraint(c)
@@ -660,7 +655,7 @@ class LShapedMethod(spbase.SPBase):
             if converger:
                 converger.convergence_value()
                 if converger.is_converged():
-                    if verbose and self.rank == self.rank0:
+                    if verbose and self.cylinder_rank == 0:
                         print(
                             f"Converged to user criteria in {self.iter+1} iterations.\n"
                             f"Total Time Elapsed: {time.time()-t:7.2f} "
@@ -761,7 +756,7 @@ def main():
 
     ls = LShapedMethod(options, scenario_names, ref.scenario_creator)
     res = ls.lshaped_algorithm()
-    if ls.rank == 0:
+    if ls.cylinder_rank == 0:
         print(res)
 
 

@@ -42,14 +42,14 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         verbose = self.opt.options['verbose']
 
         self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
-        logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.rank_global}")
+        logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}")
 
         self.opt.subproblem_creation(verbose)
 
         '''
         ## do some checks
         for sname, s in self.opt.local_scenarios.values():
-            for var in s._nonant_indexes.values():
+            for var in s._nonant_indices.values():
                 if not var.is_integer():
                     raise Exception(f"{self.__class__.__name__} can only be used for problems "
                                     "with pure-integer first-stage variables")
@@ -86,8 +86,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         slam_iter = 1
         while not self.got_kill_signal():
             if (slam_iter-1) % 10000 == 0:
-                logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.rank_global}')
-                logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.rank_global}')
+                logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}')
+                logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
 
             if self.new_nonants:
                 
@@ -95,7 +95,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
                 global_candidate = np.empty_like(local_candidate)
 
-                self.intracomm.Allreduce(local_candidate, global_candidate, op=self.mpi_op)
+                self.cylinder_comm.Allreduce(local_candidate, global_candidate, op=self.mpi_op)
 
                 '''
                 ## round the candidate
@@ -110,7 +110,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                     solver = s._solver_plugin if is_pers else None
 
                     nonant_source = s.ref_vars.values() if bundling else \
-                            s._nonant_indexes.values()
+                            s._nonant_indices.values()
 
                     for ix, var in enumerate(nonant_source):
                         var.fix(global_candidate[ix])

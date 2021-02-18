@@ -24,16 +24,16 @@ class SPCommunicator:
     """ Notes: TODO
     """
 
-    def __init__(self, spbase_object, fullcomm, intercomm, intracomm, options=None):
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         # flag for if the windows have been constructed
         self._windows_constructed = False
         self.fullcomm = fullcomm
-        self.intercomm = intercomm
-        self.intracomm = intracomm
-        self.rank_global = fullcomm.Get_rank()
-        self.rank_inter = intercomm.Get_rank()
-        self.rank_intra = intracomm.Get_rank()
-        self.n_spokes = intercomm.Get_size() - 1
+        self.strata_comm = strata_comm
+        self.cylinder_comm = cylinder_comm
+        self.global_rank = fullcomm.Get_rank()
+        self.strata_rank = strata_comm.Get_rank()
+        self.cylinder_rank = cylinder_comm.Get_rank()
+        self.n_spokes = strata_comm.Get_size() - 1
         self.opt = spbase_object
         self.inst_time = time.time() # For diagnostics
         self.options = options
@@ -79,7 +79,7 @@ class SPCommunicator:
     def allreduce_or(self, val):
         local_val = np.array([val], dtype='int8')
         global_val = np.zeros(1, dtype='int8')
-        self.intracomm.Allreduce(local_val, global_val, op=MPI.LOR)
+        self.cylinder_comm.Allreduce(local_val, global_val, op=MPI.LOR)
         if global_val[0] > 0:
             return True
         else:
@@ -101,7 +101,7 @@ class SPCommunicator:
             Args: 
                 length (int): length of the buffer to create
                 comm (MPI Communicator, optional): MPI communicator object to
-                    create the window over. Default is self.intercomm.
+                    create the window over. Default is self.strata_comm.
 
             Returns:
                 window (MPI.Win object): The created window
@@ -116,7 +116,7 @@ class SPCommunicator:
                 is a hub or spoke, etc.
         """
         if comm is None:
-            comm = self.intercomm
+            comm = self.strata_comm
         size = MPI.DOUBLE.size * (length + 1)
         window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
         buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())

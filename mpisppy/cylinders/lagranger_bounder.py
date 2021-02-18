@@ -34,7 +34,7 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
            and iternum in self.rho_rescale_factors:
             _rescale_rho(self.rho_rescale_factors[iternum])
         teeme = False
-        if "tee-rank0-solves" in self.opt.options and self.opt.rank == self.opt.rank0:
+        if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == 0:
             teeme = self.opt.options['tee-rank0-solves']
 
         self.opt.solve_loop(
@@ -53,7 +53,7 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         # IMPORTANT: the scalings accumulate.
         # E.g., 0.5 then 2.0 gets you back where you started.
         for (sname, scenario) in self.local_scenarios.items():
-            for ndn_i, xvar in scenario._nonant_indexes.items():
+            for ndn_i, xvar in scenario._nonant_indices.items():
                 scenario._PHrho[ndn_i] *= rf
         
     

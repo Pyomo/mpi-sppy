@@ -61,7 +61,7 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
                   'W and Xbar will be initialized to their default values.')
 
         self.PHB = ph
-        self.rank = rank
+        self.cylinder_rank = rank
         self.w_fname = w_fname
         self.x_fname = x_fname
         self.sep_files = sep_files
@@ -69,7 +69,7 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
     def pre_iter0(self):
         if (self.w_fname):
             mpisppy.utils.wxbarutils.set_W_from_file(
-                    self.w_fname, self.PHB, self.rank,
+                    self.w_fname, self.PHB, self.cylinder_rank,
                     sep_files=self.sep_files)
             self.PHB._reenable_W() # This makes a big difference.
         if (self.x_fname):

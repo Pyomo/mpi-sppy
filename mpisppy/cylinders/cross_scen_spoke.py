@@ -9,19 +9,19 @@ import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
 class CrossScenarioCutSpoke(spoke.Spoke):
-    def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
-        super().__init__(spbase_object, fullcomm, intercomm, intracomm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
 
     def make_windows(self):
         nscen = len(self.opt.all_scenario_names)
         if nscen == 0:
-            raise RuntimeError(f"(rank: {self.rank}), no local_scenarios")
+            raise RuntimeError(f"(rank: {self.cylinder_rank}), no local_scenarios")
 
         self.nscen = nscen
         vbuflen = 0
         self.nonant_per_scen = 0
         for s in self.opt.local_scenarios.values():
-            vbuflen += len(s._nonant_indexes)
+            vbuflen += len(s._nonant_indices)
         local_scen_count = len(self.opt.local_scenario_names)
         self.nonant_per_scen = int(vbuflen / local_scen_count)
 
@@ -71,7 +71,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # create an index of these non_ant_copies to be in the same
         # order as PH, used below
         nonants = dict()
-        for ndn_i, nonant in arb_scen._nonant_indexes.items():
+        for ndn_i, nonant in arb_scen._nonant_indices.items():
             vid = id(nonant)
             nonants[ndn_i] = nonant_vid_to_copy_map[vid]
 
@@ -80,13 +80,13 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         self.opt.master.bender = LShapedCutGenerator()
         self.opt.master.bender.set_input(master_vars=self.opt.master_vars, 
-                                            tol=1e-4, comm=self.intracomm)
+                                            tol=1e-4, comm=self.cylinder_comm)
         self.opt.master.bender.set_ls(self.opt)
 
         ## the below for loop can take some time,
         ## so return early if we get a kill signal,
         ## but only after a barrier
-        self.intracomm.Barrier()
+        self.cylinder_comm.Barrier()
         if self.got_kill_signal():
             return
 
@@ -105,7 +105,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ## the above for loop can take some time,
         ## so return early if we get a kill signal,
         ## but only after a barrier
-        self.intracomm.Barrier()
+        self.cylinder_comm.Barrier()
         if self.got_kill_signal():
             return
 
@@ -141,7 +141,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         etas = dict()
         ci = 0
         for k, s in opt.local_scenarios.items():
-            for ndn, i in s._nonant_indexes:
+            for ndn, i in s._nonant_indices:
                 nonants[k, ndn, i] = all_nonants_and_etas[ci]
                 ci += 1
 
@@ -158,7 +158,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                                     dtype='d', count=self.nscen)
         # Allreduce the etas to take the minimum
         global_eta_vals = np.empty(self.nscen, dtype='d')
-        self.intracomm.Allreduce(min_eta_vals, global_eta_vals, op=MPI.MIN)
+        self.cylinder_comm.Allreduce(min_eta_vals, global_eta_vals, op=MPI.MIN)
 
         eta_lb_viol = (global_eta_vals + np.full_like(global_eta_vals, 1e-3) \
                         < self._eta_lb_array).any()
@@ -181,7 +181,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         # Allreduce the xhats to get averages
         global_nonant_sum = np.empty(len(local_nonant_sum), dtype='d')
-        self.intracomm.Allreduce(local_nonant_sum, global_nonant_sum, op = MPI.SUM)
+        self.cylinder_comm.Allreduce(local_nonant_sum, global_nonant_sum, op = MPI.SUM)
         # need to divide through by the number of different spoke processes
         global_xbar = global_nonant_sum / self.nscen
 
@@ -200,23 +200,23 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         # Allreduce to find the biggest distance
         global_dist = np.empty(1, dtype='d')
-        self.intracomm.Allreduce(local_dist, global_dist, op=MPI.MAX)
+        self.cylinder_comm.Allreduce(local_dist, global_dist, op=MPI.MAX)
         vote = np.array([-1], dtype='i')
         if local_dist[0] >= global_dist[0]:
-            vote[0] = self.intracomm.Get_rank()
+            vote[0] = self.cylinder_comm.Get_rank()
 
         global_rank = np.empty(1, dtype='i')
-        self.intracomm.Allreduce(vote, global_rank, op=MPI.MAX)
+        self.cylinder_comm.Allreduce(vote, global_rank, op=MPI.MAX)
 
         # if we are the winner, grab the xhat and bcast it to the other ranks
-        if self.intracomm.Get_rank() == global_rank[0]:
+        if self.cylinder_comm.Get_rank() == global_rank[0]:
             farthest_xhat = np.fromiter( (nonants[local_winner, nname, ix] 
                                             for nname, ix in master_nonants),
                                          dtype='d', count=len(master_nonants) )
         else:
             farthest_xhat = np.zeros(len(master_nonants), dtype='d')
 
-        self.intracomm.Bcast(farthest_xhat, root=global_rank)
+        self.cylinder_comm.Bcast(farthest_xhat, root=global_rank)
 
         # set the first stage in the lshape object to correspond to farthest_xhat
         for ci, k in enumerate(master_nonants):

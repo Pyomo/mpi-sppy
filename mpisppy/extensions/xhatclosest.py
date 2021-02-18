@@ -25,7 +25,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
             snamedict (str): closest scenarios
         """
         def _vb(msg):
-            if verbose and self.rank == 0:
+            if verbose and self.cylinder_rank == 0:
                 print ("(rank0) xhat_looper: " + msg)
 
         localmindist = np.zeros(1, dtype='d')
@@ -33,7 +33,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         localwinnername = None
         for k, s in self.opt.local_scenarios.items():
             dist = 0
-            for ndn_i, xvar in s._nonant_indexes.items():
+            for ndn_i, xvar in s._nonant_indices.items():
                 diff = pyo.value(xvar) - pyo.value(s._xbars[ndn_i])
                 variance = pyo.value(s._xsqbars[ndn_i]) \
                   - pyo.value(s._xbars[ndn_i])*pyo.value(s._xbars[ndn_i])
@@ -56,13 +56,13 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         if globalmindist[0] < localmindist[0]:
             localwinrank[0] = -1  # we lost
         else:
-            localwinrank[0] = self.rank
+            localwinrank[0] = self.cylinder_rank
         self.comms["ROOT"].Allreduce([localwinrank, mpi.DOUBLE],
                                      [globalwinrank, mpi.DOUBLE],
                                      op=mpi.MAX)
 
         # We only used the rank to break a possible tie.
-        if self.rank == int(globalwinrank[0]):
+        if self.cylinder_rank == int(globalwinrank[0]):
             globalwinnername = localwinnername
         else:
             globalwinnername = None

@@ -42,7 +42,7 @@ class Synchronizer(object):
                 as the first arg, then whatever is in this dictionary's
                 keyword args.
     Attributes:
-        global_data (dict of np doubles): indexes match comms (advanced)
+        global_data (dict of np doubles): indices match comms (advanced)
         sleep_secs (float): sleep seconds for the async listener
                             The listener takes the min from the reduce.
                             (not working as of March 2019)
