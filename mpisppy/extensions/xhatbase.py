@@ -56,7 +56,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
         if len(snamedict) == 1:
             sname = snamedict["ROOT"]  # also serves as an assert
             if sname in self.opt.local_scenarios:
-                xhat = self.opt.local_scenarios[sname]._PySP_nonant_cache
+                xhat = self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache
             else:
                 xhat = None
             src_rank = self.scenario_name_to_rank["ROOT"][sname]
@@ -77,18 +77,18 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 for nnode in s._PySPnode_list:
                     ndn = nnode.name
                     if ndn not in cistart:
-                        # NOTE: _PySP_cistart is defined in SPBase._attach_nlens()
+                        # NOTE: _mpisppy_data.cistart is defined in SPBase._attach_nlens()
                         #       and only used here
-                        cistart[ndn] = s._PySP_cistart[ndn]
+                        cistart[ndn] = s._mpisppy_data.cistart[ndn]
                     if ndn not in nlens:
-                        nlens[ndn] = s._PySP_nlens[ndn]
+                        nlens[ndn] = s._mpisppy_data.nlens[ndn]
                     if ndn not in xhats:
                         xhats[ndn] = None
                     if ndn not in snamedict:
                         raise RuntimeError(f"{ndn} not in snamedict={snamedict}")
                     if snamedict[ndn] == k:
                         # cache lists are just concated node lists
-                        xhats[ndn] = [s._PySP_nonant_cache[i+cistart[ndn]]
+                        xhats[ndn] = [s._mpisppy_data.nonant_cache[i+cistart[ndn]]
                                       for i in range(nlens[ndn])]
             for ndn in cistart:  # local nodes
                 if snamedict[ndn] not in self.scenario_name_to_rank[ndn]:
@@ -160,7 +160,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 for node in scen._PySPnode_list:
                     if node.name == ndn:
                         break
-                nlens = scen._PySP_nlens
+                nlens = scen._mpisppy_data.nlens
                 f.write(ndn)
                 for i in range(nlens[ndn]):
                     vardata = node.nonant_vardata_list[i]

@@ -359,13 +359,13 @@ class LShapedMethod(spbase.SPBase):
         instance = self.local_scenarios[scenario_name]
 
         subproblem_to_master_vars_map = pyo.ComponentMap()
-        for var, mvar in zip(instance._nonant_indices.values(), self.master_vars):
+        for var, mvar in zip(instance._mpisppy_data.nonant_indices.values(), self.master_vars):
             if var.name not in mvar.name:
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
             subproblem_to_master_vars_map[var] = mvar 
 
         # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
     def create_subproblem(self, scenario_name):
         """ the subproblem creation function passed into the
@@ -488,7 +488,7 @@ class LShapedMethod(spbase.SPBase):
             var.fixed = False
 
         # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
         if self.store_subproblems:
             self.subproblems[scenario_name] = instance
@@ -690,9 +690,9 @@ def _get_nonant_ids(instance):
     return nonant_list, { id(var) for var in nonant_list }
 
 def _get_nonant_ids_EF(instance):
-    assert len(instance._PySP_nlens) == 1
+    assert len(instance._mpisppy_data.nlens) == 1
 
-    ndn, nlen = list(instance._PySP_nlens.items())[0]
+    ndn, nlen = list(instance._mpisppy_data.nlens.items())[0]
 
     ## this is for the cut variables, so we just need (and want)
     ## exactly one set of them
@@ -700,7 +700,7 @@ def _get_nonant_ids_EF(instance):
 
     ## this is for adjusting the objective, so needs all the nonants
     ## in the EF
-    snames = instance._PySP_subscen_names
+    snames = instance._ef_scenario_names
 
     nonant_ids = set()
     for s in snames:

@@ -77,7 +77,7 @@ class CrossScenarioExtension(PHExtension):
             phobj = find_active_objective(s)
             phobj.deactivate()
             chached_ph_obj[k] = phobj
-            s._EF_Obj.activate()
+            s._mpisppy_model.EF_Obj.activate()
 
         teeme = (
             "tee-rank0-solves" in opt.PHoptions
@@ -92,7 +92,7 @@ class CrossScenarioExtension(PHExtension):
                 verbose=opt.PHoptions["verbose"],
         )
 
-        local_obs = np.fromiter((s._PySP_ob for s in opt.local_subproblems.values()),
+        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_subproblems.values()),
                                 dtype="d", count=len(opt.local_subproblems))
 
         local_ob = np.empty(1)
@@ -113,7 +113,7 @@ class CrossScenarioExtension(PHExtension):
         opt.spcomm.BestOuterBound = opt.spcomm.OuterBoundUpdate(global_ob[0], char='C')
 
         for k,s in opt.local_subproblems.items():
-            s._EF_Obj.deactivate()
+            s._mpisppy_model.EF_Obj.deactivate()
             chached_ph_obj[k].activate()
 
     def pre_iter0(self):
@@ -143,14 +143,14 @@ class CrossScenarioExtension(PHExtension):
         # eta is attached to each subproblem, regardless of bundles
         bundling = opt.bundling
         for k,s in opt.local_subproblems.items():
-            s.eta = pyo.Var(opt.all_scenario_names, initialize=_eta_init, bounds=_eta_bounds)
+            s._mpisppy_model.eta = pyo.Var(opt.all_scenario_names, initialize=_eta_init, bounds=_eta_bounds)
             if sputils.is_persistent(s._solver_plugin):
-                for var in s.eta.values():
+                for var in s._mpisppy_model.eta.values():
                     s._solver_plugin.add_var(var)
             if bundling: ## create a refence to eta on each subproblem
                 for sn in s.scen_list:
                     scenario = opt.local_scenarios[sn]
-                    scenario.eta = { k : s.eta[k] for k in opt.all_scenario_names }
+                    scenario._mpisppy_model.eta = { k : s._mpisppy_model.eta[k] for k in opt.all_scenario_names }
 
         ## hold the PH object harmless
         self._disable_W_and_prox()
@@ -213,7 +213,7 @@ class CrossScenarioExtension(PHExtension):
             for sn in opt.all_scenario_names:
                 if sn not in these_scenarios:
                     linear_coefs.append(1)
-                    linear_vars.append(s.eta[sn])
+                    linear_vars.append(s._mpisppy_model.eta[sn])
                     eta_scenarios.append(sn)
 
             expr = LinearExpression(constant=repn.constant, linear_coefs=linear_coefs,
@@ -224,17 +224,17 @@ class CrossScenarioExtension(PHExtension):
                     (coef*x*y for coef,(x,y) in zip(quadratic_coefs, repn.quadratic_vars))
                 )
 
-            s._EF_obj = pyo.Expression(expr=expr)
+            s._mpisppy_model.EF_obj = pyo.Expression(expr=expr)
 
             if opt.is_minimizing:
-                s._EF_Obj = pyo.Objective(expr=s._EF_obj, sense=pyo.minimize)
+                s._mpisppy_model.EF_Obj = pyo.Objective(expr=s._mpisppy_model.EF_obj, sense=pyo.minimize)
             else:
-                s._EF_Obj = pyo.Objective(expr=-s._EF_obj, sense=pyo.maximize)
-            s._EF_Obj.deactivate()
+                s._mpisppy_model.EF_Obj = pyo.Objective(expr=-s._mpisppy_model.EF_obj, sense=pyo.maximize)
+            s._mpisppy_model.EF_Obj.deactivate()
 
             # add cut constraint dicts
-            s._benders_cuts = pyo.Constraint(pyo.Any)
-            s._ib_constr = pyo.Constraint(pyo.Any)
+            s._mpisppy_model.benders_cuts = pyo.Constraint(pyo.Any)
+            s._mpisppy_model.inner_bound_constr = pyo.Constraint(pyo.Any)
 
         self._enable_W_and_prox()
 
