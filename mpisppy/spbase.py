@@ -99,7 +99,7 @@ class SPBase(object):
         else:
             self.bundling = False
         self._create_scenarios(cb_data)
-        self._look_before_leap_all()
+        self._look_and_leap()
         self._compute_unconditional_node_probabilities()
         self._attach_nlens()
         self._attach_nonant_indices()
@@ -455,12 +455,12 @@ class SPBase(object):
             if hasattr(scen, attr):
                 raise RuntimeError("Model already has `internal' attribute" + attr)
 
-    def _look_before_leap_all(self):
+    def _look_and_leap(self):
         for (sname, scenario) in self.local_scenarios.items():
             self._look_before_leap( scenario, ['_mpisppy_data', '_mpisppy_model' ] )
 
-            scenario._mpisppy_data = pyo.Block()
-            scenario._mpisppy_model = pyo.Block()
+            scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
+            scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
             '''
                 [  # _mpisppy_data
