@@ -81,7 +81,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                         #       and only used here
                         cistart[ndn] = s._PySP_cistart[ndn]
                     if ndn not in nlens:
-                        nlens[ndn] = s._PySP_nlens[ndn]
+                        nlens[ndn] = s._mpisppy_data.nlens[ndn]
                     if ndn not in xhats:
                         xhats[ndn] = None
                     if ndn not in snamedict:
@@ -160,7 +160,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 for node in scen._PySPnode_list:
                     if node.name == ndn:
                         break
-                nlens = scen._PySP_nlens
+                nlens = scen._mpisppy_data.nlens
                 f.write(ndn)
                 for i in range(nlens[ndn]):
                     vardata = node.nonant_vardata_list[i]

@@ -690,9 +690,9 @@ def _get_nonant_ids(instance):
     return nonant_list, { id(var) for var in nonant_list }
 
 def _get_nonant_ids_EF(instance):
-    assert len(instance._PySP_nlens) == 1
+    assert len(instance._mpisppy_data.nlens) == 1
 
-    ndn, nlen = list(instance._PySP_nlens.items())[0]
+    ndn, nlen = list(instance._mpisppy_data.nlens.items())[0]
 
     ## this is for the cut variables, so we just need (and want)
     ## exactly one set of them

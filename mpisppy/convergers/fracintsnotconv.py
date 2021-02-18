@@ -44,7 +44,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         numints = 0
         numconv = 0
         for k,s in self._local_scenarios.items():
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for node in s._PySPnode_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):

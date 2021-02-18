@@ -315,7 +315,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     ref_suppl_vars = dict()
 
-    EF_instance._PySP_nlens = dict() 
+    EF_instance._nlens = dict() 
 
     nonant_constr = pyo.Constraint(pyo.Any, name='_C_EF_')
     EF_instance.add_component('_C_EF_', nonant_constr)
@@ -325,19 +325,16 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     EF_instance.add_component('_C_EF_suppl', nonant_constr_suppl)
 
     for (sname, s) in scen_dict.items():
-        if (not hasattr(s, '_PySP_nlens')):
-            nlens = {node.name: len(node.nonant_vardata_list) 
-                                for node in s._PySPnode_list}
-        else:
-            nlens = s._PySP_nlens
+        nlens = {node.name: len(node.nonant_vardata_list) 
+                            for node in s._PySPnode_list}
         
         for (node_name, num_nonant_vars) in nlens.items(): # copy nlens to EF
-            if (node_name in EF_instance._PySP_nlens.keys() and
-                num_nonant_vars != EF_instance._PySP_nlens[node_name]):
+            if (node_name in EF_instance._nlens.keys() and
+                num_nonant_vars != EF_instance._nlens[node_name]):
                 raise RuntimeError("Number of non-anticipative variables is "
                     "not consistent at node " + node_name + " in scenario " +
                     sname)
-            EF_instance._PySP_nlens[node_name] = num_nonant_vars
+            EF_instance._nlens[node_name] = num_nonant_vars
 
         nlens_ef_suppl = {node.name: len(node.nonant_ef_suppl_vardata_list)
                                    for node in s._PySPnode_list}

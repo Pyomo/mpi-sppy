@@ -1004,7 +1004,7 @@ class FWPH(mpisppy.phbase.PHBase):
             scens = model.scen_list if self.bundling else [name]
             for scenario_name in scens:
                 scenario = self.local_scenarios[scenario_name]
-                num_nonant_vars = scenario._PySP_nlens
+                num_nonant_vars = scenario._mpisppy_data.nlens
                 node_list = scenario._PySPnode_list
                 for node in node_list:
                     node.nonant_vardata_list = [
@@ -1022,14 +1022,14 @@ class FWPH(mpisppy.phbase.PHBase):
                 EF = self.local_subproblems[name]
                 for scenario_name in EF.scen_list:
                     scenario = self.local_scenarios[scenario_name]
-                    num_nonant_vars = scenario._PySP_nlens
+                    num_nonant_vars = scenario._mpisppy_data.nlens
                     for node in scenario._PySPnode_list:
                         node.nonant_vardata_list = [
                             EF.nonant_vars[scenario_name,node.name,ix]
                             for ix in range(num_nonant_vars[node.name])]
             else:
                 scenario = self.local_scenarios[name]
-                num_nonant_vars = scenario._PySP_nlens
+                num_nonant_vars = scenario._mpisppy_data.nlens
                 for node in scenario._PySPnode_list:
                     node.nonant_vardata_list = [
                         scenario.nonant_vars[node.name,ix]

@@ -238,7 +238,7 @@ class APH(ph_base.PHBase):  # ??????
             
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for (ndn,i) in s._mpisppy_data.nonant_indices:
                 s._xbars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][i]
@@ -265,7 +265,7 @@ class APH(ph_base.PHBase):  # ??????
             scen_vnorm = 0.0
             if sname not in self.uk:
                 self.uk[sname] = {}
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 self.uk[sname][(ndn,i)] = xvar._value \
                                           - pyo.value(s._xbars[(ndn,i)])
@@ -342,7 +342,7 @@ class APH(ph_base.PHBase):  # ??????
 
             # create the c-style storage for the concats
             for k,s in self.local_scenarios.items():
-                nlens = s._PySP_nlens        
+                nlens = s._mpisppy_data.nlens        
                 for node in s._PySPnode_list:
                     if node.name not in nodenames:
                         ndn = node.name
@@ -366,7 +366,7 @@ class APH(ph_base.PHBase):  # ??????
             """
             nodenames = []
             for k,s in self.local_scenarios.items():
-                nlens = s._PySP_nlens        
+                nlens = s._mpisppy_data.nlens        
                 for node in s._PySPnode_list:
                     if node.name not in nodenames:
                         ndn = node.name
@@ -380,7 +380,7 @@ class APH(ph_base.PHBase):  # ??????
         # We don't need to lock here because the direct buffers are only accessed
         # by compute_global_data.
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for node in s._PySPnode_list:
                 ndn = node.name
                 for i in range(nlens[node.name]):

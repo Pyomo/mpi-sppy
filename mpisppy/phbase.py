@@ -156,7 +156,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for node in s._PySPnode_list:
                 if node.name not in nodenames:
                     ndn = node.name
@@ -168,7 +168,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for node in s._PySPnode_list:
                 ndn = node.name
                 nlen = nlens[ndn]
@@ -192,7 +192,7 @@ class PHBase(mpisppy.spbase.SPBase):
         for k,s in self.local_scenarios.items():
             logger.debug('  top of assign xbar loop for {} on rank {}'.\
                          format(k, self.cylinder_rank))
-            nlens = s._PySP_nlens
+            nlens = s._mpisppy_data.nlens
             for node in s._PySPnode_list:
                 ndn = node.name
                 nlen = nlens[ndn]
@@ -459,7 +459,7 @@ class PHBase(mpisppy.spbase.SPBase):
             The value cache is np because it might be transmitted
         """
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens
+            nlens = s._mpisppy_data.nlens
             if not hasattr(s._mpisppy_data,"nonant_cache"):
                 clen = sum(nlens[ndn] for ndn in nlens)
                 s._mpisppy_data.nonant_cache = np.zeros(clen, dtype='d')
@@ -513,7 +513,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if (sputils.is_persistent(s._solver_plugin)):
                 persistent_solver = s._solver_plugin
 
-            nlens = s._PySP_nlens
+            nlens = s._mpisppy_data.nlens
             for node in s._PySPnode_list:
                 ndn = node.name
                 if ndn not in cache:

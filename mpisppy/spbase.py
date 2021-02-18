@@ -145,7 +145,7 @@ class SPBase(object):
 
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens
+            nlens = s._mpisppy_data.nlens
             for node in s._PySPnode_list:
                 ndn = node.name
                 mylen = nlens[ndn]
@@ -272,7 +272,7 @@ class SPBase(object):
     def _attach_nonant_indices(self):
         for (sname, scenario) in self.local_scenarios.items():
             _nonant_indices = dict()
-            nlens = scenario._PySP_nlens        
+            nlens = scenario._mpisppy_data.nlens        
             for node in scenario._PySPnode_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
@@ -284,7 +284,7 @@ class SPBase(object):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
             # indices of the vardata lists for the nodes.
-            scenario._PySP_nlens = {
+            scenario._mpisppy_data.nlens = {
                 node.name: len(node.nonant_vardata_list)
                 for node in scenario._PySPnode_list
             }
@@ -293,7 +293,7 @@ class SPBase(object):
             #       If that is re-factored, we can remove it here.
             scenario._PySP_cistart = dict()
             sofar = 0
-            for ndn, ndn_len in scenario._PySP_nlens.items():
+            for ndn, ndn_len in scenario._mpisppy_data.nlens.items():
                 scenario._PySP_cistart[ndn] = sofar
                 sofar += ndn_len
 
@@ -387,8 +387,8 @@ class SPBase(object):
                 # If you are going to do any variables at a node, you have to do all.
                 if type(s._PySP_prob_coeff[ndn]) is float:  # not yet a vector
                     defprob = s._PySP_prob_coeff[ndn]
-                    s._PySP_prob_coeff[ndn] = np.full(s._PySP_nlens[ndn], defprob, dtype='d')
-                    s._PySP_W_coeff[ndn] = np.ones(s._PySP_nlens[ndn], dtype='d')
+                    s._PySP_prob_coeff[ndn] = np.full(s._mpisppy_data.nlens[ndn], defprob, dtype='d')
+                    s._PySP_W_coeff[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
                 s._PySP_prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
                     s._PySP_W_coeff[ndn][i] = 0
@@ -407,7 +407,7 @@ class SPBase(object):
 
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens
+            nlens = s._mpisppy_data.nlens
             for node in s._PySPnode_list:
                 if node.name not in nodenames:
                     ndn = node.name
@@ -432,7 +432,7 @@ class SPBase(object):
         checked_nodes = list()
         # check sum node conditional probabilites are close to 1
         for k,s in self.local_scenarios.items():
-            nlens = s._PySP_nlens
+            nlens = s._mpisppy_data.nlens
             for node in s._PySPnode_list:
                 ndn = node.name
                 if ndn not in checked_nodes:
@@ -464,8 +464,10 @@ class SPBase(object):
 
             '''
                 [
+                    "_PySP_subscen_names",  #hasattr
+                    "_PySP_prob_coeff",     #hasattr
+                    "_PySP_conv_iter_count", #hasattr
                     "_varid_to_nonant_index",
-                    "_PySP_nlens",
                     "_xsqvar_prox_approx",
                     "_PySP_fixedness_cache",
                     "_PySP_original_fixedness",
