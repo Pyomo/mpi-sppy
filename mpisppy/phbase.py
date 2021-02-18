@@ -404,7 +404,7 @@ class PHBase(mpisppy.spbase.SPBase):
             if hasattr(s,"_PySP_original_fixedness"):
                 print ("ERROR: Attempt to replace original nonants")
                 raise
-            if not hasattr(s,"_PySP_nonant_cache"):
+            if not hasattr(s._mpisppy_data,"nonant_cache"):
                 # uses nonant cache to signal other things have not
                 # been created 
                 # TODO: combine cache creation (or something else)
@@ -450,7 +450,7 @@ class PHBase(mpisppy.spbase.SPBase):
         subject to non-anticipativity.
 
         Note:
-            Assumes _PySP_nonant_cache is on the scenarios and can be used
+            Assumes nonant_cache is on the scenarios and can be used
             as a list, or puts it there.
         Warning: 
             We are counting on Pyomo indices not to change order before the
@@ -460,13 +460,13 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         for k,s in self.local_scenarios.items():
             nlens = s._PySP_nlens
-            if not hasattr(s,"_PySP_nonant_cache"):
+            if not hasattr(s._mpisppy_data,"nonant_cache"):
                 clen = sum(nlens[ndn] for ndn in nlens)
-                s._PySP_nonant_cache = np.zeros(clen, dtype='d')
+                s._mpisppy_data.nonant_cache = np.zeros(clen, dtype='d')
                 s._PySP_fixedness_cache = [None for _ in range(clen)]
 
             for ci, xvar in enumerate(s._mpisppy_data.nonant_indices.values()):
-                s._PySP_nonant_cache[ci]  = xvar._value
+                s._mpisppy_data.nonant_cache[ci]  = xvar._value
                 s._PySP_fixedness_cache[ci]  = xvar.is_fixed()
 
     def _restore_nonants(self):
@@ -489,7 +489,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 persistent_solver = s._solver_plugin
 
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
-                vardata._value = s._PySP_nonant_cache[ci]
+                vardata._value = s._mpisppy_data.nonant_cache[ci]
                 vardata.fixed = s._PySP_fixedness_cache[ci]
 
                 if persistent_solver is not None:
@@ -567,13 +567,13 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         ci = 0 # Cache index
         for sname, model in self.local_scenarios.items():
-            if model._PySP_nonant_cache is None:
+            if model._mpisppy_data.nonant_cache is None:
                 raise RuntimeError(f"Rank {self.global_rank} Scenario {sname}"
                                    " nonant_cache is None"
                                    " (call _save_nonants first?)")
             for i,_ in enumerate(model._mpisppy_data.nonant_indices):
                 assert(ci < len(cache))
-                model._PySP_nonant_cache[i] = cache[ci]
+                model._mpisppy_data.nonant_cache[i] = cache[ci]
                 ci += 1
 
     def W_from_flat_list(self, flat_list):

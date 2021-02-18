@@ -464,11 +464,9 @@ class SPBase(object):
 
             '''
                 [
-                    "_nonant_indices",
                     "_varid_to_nonant_index",
                     "_PySP_nlens",
                     "_xsqvar_prox_approx",
-                    "_PySP_nonant_cache",
                     "_PySP_fixedness_cache",
                     "_PySP_original_fixedness",
                     "_PySP_original_nonants",

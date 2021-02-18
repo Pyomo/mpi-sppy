@@ -56,7 +56,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
         if len(snamedict) == 1:
             sname = snamedict["ROOT"]  # also serves as an assert
             if sname in self.opt.local_scenarios:
-                xhat = self.opt.local_scenarios[sname]._PySP_nonant_cache
+                xhat = self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache
             else:
                 xhat = None
             src_rank = self.scenario_name_to_rank["ROOT"][sname]
@@ -88,7 +88,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                         raise RuntimeError(f"{ndn} not in snamedict={snamedict}")
                     if snamedict[ndn] == k:
                         # cache lists are just concated node lists
-                        xhats[ndn] = [s._PySP_nonant_cache[i+cistart[ndn]]
+                        xhats[ndn] = [s._mpisppy_data.nonant_cache[i+cistart[ndn]]
                                       for i in range(nlens[ndn])]
             for ndn in cistart:  # local nodes
                 if snamedict[ndn] not in self.scenario_name_to_rank[ndn]:

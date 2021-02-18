@@ -183,7 +183,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                     scenario_cycler.best = next_scenario
                     if next_scenario in self.opt.local_scenarios:
                         s = self.opt.local_scenarios[next_scenario]
-                        self.best_nonants = s._PySP_nonant_cache.copy()
+                        self.best_nonants = s._mpisppy_data.nonant_cache.copy()
                         self.best_scenario = next_scenario
                     else:
                         self.best_nonants = None
