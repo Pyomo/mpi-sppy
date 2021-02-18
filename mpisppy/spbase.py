@@ -462,29 +462,6 @@ class SPBase(object):
             scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
             scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
-            '''
-                [  # _mpisppy_data
-                    "_PySP_W_coeff",
-                    "_varid_to_nonant_index",
-                    "_xsqvar_prox_approx",
-                    "_PySP_fixedness_cache",
-                    "_PySP_original_fixedness",
-                    "_PySP_original_nonants",
-
-                   # _mpisppy_model
-                    "_xbars",
-                    "_xsqbars",
-                    "_xsqvar",
-                    "_xsqvar_cuts",
-                    "_Ws",
-                    "_PHrho",
-                    "_PHW_on",
-                    "_PHprox_on",
-                    "_zs",
-                    "_ys",
-                ],
-            '''
-
     def _options_check(self, required_options, given_options):
         """ Confirm that the specified list of options contains the specified
             list of required options. Raises a ValueError if anything is
