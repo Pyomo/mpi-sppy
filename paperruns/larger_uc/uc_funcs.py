@@ -1,7 +1,5 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# April 2020: DLW asks: why are we using an environment variable and cb_data?
-# (maybe there is a super-computer reason)
 
 import os
 
@@ -16,20 +14,21 @@ import egret.parsers.prescient_dat_parser as pdp
 import egret.data.model_data as md
 import egret.models.unit_commitment as uc
 
-# As of April 2020 we are using cb_data for this
-##UC_NUMSCENS_ENV_VAR = "UC_NUM_SCENS"
 
-def pysp_instance_creation_callback(scenario_name, node_names, cb_data):
+def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None):
+    """
+    Notes:
+    - The uc_cylinders.py code has a `scenario_count` kwarg that gets passed to
+      the spokes, but it seems to be unused here...
+    """
+    if path is None:
+        raise ValueError("UC scenario creator requires a path kwarg")
 
     #print("Building instance for scenario =", scenario_name)
     scennum = sputils.extract_num(scenario_name)
 
     uc_model_params = pdp.get_uc_model()
 
-    # Now using cb_data
-    ##path = os.environ[UC_NUMSCENS_ENV_VAR] + "scenarios_r1"
-    path = cb_data["path"]
-    
     scenario_data = DataPortal(model=uc_model_params)
     scenario_data.load(filename=path+os.sep+"RootNode.dat")
     scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
@@ -51,24 +50,16 @@ def pysp_instance_creation_callback(scenario_name, node_names, cb_data):
 
     return scenario_instance
 
-def scenario_creator(scenario_name,
-                     node_names=None,
-                     cb_data=None):
+def scenario_creator(scenario_name, path=None):
+    return pysp2_callback(scenario_name, path=path)
 
-    return pysp2_callback(scenario_name,
-                          node_names=node_names,
-                          cb_data=cb_data)
-
-def pysp2_callback(scenario_name,
-                   node_names=None,
-                   cb_data=None):
+def pysp2_callback(scenario_name, path=None):
     ''' The callback needs to create an instance and then attach
         the PySP nodes to it in a list _PySPnode_list ordered by stages.
         Optionally attach _PHrho. Standard (1.0) PySP signature for now...
     '''
 
-    instance = pysp_instance_creation_callback(scenario_name, 
-                                               node_names, cb_data)
+    instance = pysp_instance_creation_callback(scenario_name, path=path)
 
     # now attach the one and only tree node (ROOT is a reserved word)
     # UnitOn[*,*] is the only set of nonant variables
