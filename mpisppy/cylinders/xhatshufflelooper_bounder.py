@@ -34,7 +34,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
         # Start code to support running trace. TBD: factor this up?
-        if self.rank_intra == 0 and \
+        if self.cylinder_rank == 0 and \
                 'suffle_running_trace_prefix' in self.opt.options and \
                 self.opt.options['shuffle_running_trace_prefix'] is not None:
             running_trace_prefix =\
@@ -239,7 +239,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         obj = self.opt.Eobjective(verbose=False)
 
         if not isclose(obj,self.ib):
-            if self.rank_intra == 0:
+            if self.cylinder_rank == 0:
                 print(f"WARNING: {self.__class__.__name__} best inner bound is different "
                         f"from objective calculated in finalize")
                 print(f"Best inner bound: {self.ib}")

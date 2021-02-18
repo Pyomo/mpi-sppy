@@ -20,8 +20,8 @@ mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
 logger = logging.getLogger("mpisppy.cylinders.Hub")
 
 class Hub(SPCommunicator):
-    def __init__(self, spbase_object, fullcomm, intercomm, intracomm, spokes, options=None):
-        super().__init__(spbase_object, fullcomm, intercomm, intracomm, options=options)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, spokes, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
         assert len(spokes) == self.n_spokes
         self.local_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
         self.remote_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
@@ -291,7 +291,7 @@ class Hub(SPCommunicator):
         # Spokes notify the hub of the buffer sizes
         for i in range(self.n_spokes):
             pair_of_sizes = np.zeros(2, dtype="i")
-            self.intercomm.Recv((pair_of_sizes, MPI.INT), source=i + 1, tag=i + 1)
+            self.strata_comm.Recv((pair_of_sizes, MPI.INT), source=i + 1, tag=i + 1)
             self.remote_lengths[i] = pair_of_sizes[0]
             self.local_lengths[i] = pair_of_sizes[1]
 
@@ -307,7 +307,7 @@ class Hub(SPCommunicator):
         # flag this for multiple calls from the hub
         self._windows_constructed = True
 
-    def hub_to_spoke(self, values, spoke_rank_inter):
+    def hub_to_spoke(self, values, spoke_strata_rank):
         """ Put the specified values into the specified locally-owned buffer
             for the spoke to pick up.
 
@@ -317,21 +317,21 @@ class Hub(SPCommunicator):
                 This assumes that values contains a slot at the end for the
                 write_id
         """
-        expected_length = self.local_lengths[spoke_rank_inter - 1] + 1
+        expected_length = self.local_lengths[spoke_strata_rank - 1] + 1
         if len(values) != expected_length:
             raise RuntimeError(
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
-        self.local_write_ids[spoke_rank_inter - 1] += 1
-        values[-1] = self.local_write_ids[spoke_rank_inter - 1]
-        window = self.windows[spoke_rank_inter - 1]
-        window.Lock(self.rank_inter)
-        window.Put((values, len(values), MPI.DOUBLE), self.rank_inter)
-        window.Unlock(self.rank_inter)
+        self.local_write_ids[spoke_strata_rank - 1] += 1
+        values[-1] = self.local_write_ids[spoke_strata_rank - 1]
+        window = self.windows[spoke_strata_rank - 1]
+        window.Lock(self.strata_rank)
+        window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
+        window.Unlock(self.strata_rank)
 
     def hub_from_spoke(self, values, spoke_num):
-        """ spoke_num is the rank in the intercomm, so it is 1-based not 0-based
+        """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
             
             Returns:
                 is_new (bool): Indicates whether the "gotten" values are new,

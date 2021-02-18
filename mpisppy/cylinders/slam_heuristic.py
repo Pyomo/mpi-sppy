@@ -95,7 +95,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
                 global_candidate = np.empty_like(local_candidate)
 
-                self.intracomm.Allreduce(local_candidate, global_candidate, op=self.mpi_op)
+                self.cylinder_comm.Allreduce(local_candidate, global_candidate, op=self.mpi_op)
 
                 '''
                 ## round the candidate

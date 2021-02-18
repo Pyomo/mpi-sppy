@@ -21,8 +21,8 @@ class ConvergerSpokeType(enum.Enum):
     NONANT_GETTER = 4
 
 class Spoke(SPCommunicator):
-    def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
-        super().__init__(spbase_object, fullcomm, intercomm, intracomm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
         self.local_write_id = 0
         self.remote_write_id = 0
         self.local_length = 0  # Does NOT include the + 1
@@ -33,7 +33,7 @@ class Spoke(SPCommunicator):
     def _make_windows(self, local_length, remote_length):
         # Spokes notify the hub of the buffer sizes
         pair_of_lengths = np.array([local_length, remote_length], dtype="i")
-        self.intercomm.Send((pair_of_lengths, MPI.INT), dest=0, tag=self.rank_inter)
+        self.strata_comm.Send((pair_of_lengths, MPI.INT), dest=0, tag=self.strata_rank)
         self.local_length = local_length
         self.remote_length = remote_length
         
@@ -49,7 +49,7 @@ class Spoke(SPCommunicator):
         self.windows = [None for _ in range(self.n_spokes)]
         self.buffers = [None for _ in range(self.n_spokes)]
         for i in range(self.n_spokes):
-            length = self.local_length if self.rank_inter == i + 1 else 0
+            length = self.local_length if self.strata_rank == i + 1 else 0
             win, buff = self._make_window(length)
             self.windows[i] = win
             self.buffers[i] = buff
@@ -74,10 +74,10 @@ class Spoke(SPCommunicator):
             )
         self.local_write_id += 1
         values[-1] = self.local_write_id
-        window = self.windows[self.rank_inter - 1]
-        window.Lock(self.rank_inter)
-        window.Put((values, len(values), MPI.DOUBLE), self.rank_inter)
-        window.Unlock(self.rank_inter)
+        window = self.windows[self.strata_rank - 1]
+        window.Lock(self.strata_rank)
+        window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
+        window.Unlock(self.strata_rank)
 
     def spoke_from_hub(self, values):
         """
@@ -88,7 +88,7 @@ class Spoke(SPCommunicator):
                 f"Spoke trying to get buffer of length {expected_length} "
                 f"from hub, but provided buffer has length {len(values)}."
             )
-        window = self.windows[self.rank_inter - 1]
+        window = self.windows[self.strata_rank - 1]
         window.Lock(0)
         window.Get((values, len(values), MPI.DOUBLE), 0)
         window.Unlock(0)
@@ -135,9 +135,9 @@ class Spoke(SPCommunicator):
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
-    def __init__(self, spbase_object, fullcomm, intercomm, intracomm):
-        super().__init__(spbase_object, fullcomm, intercomm, intracomm)
-        if self.rank_intra == 0 and \
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+        if self.cylinder_rank == 0 and \
                 'trace_prefix' in spbase_object.options and \
                 spbase_object.options['trace_prefix'] is not None:
             trace_prefix = spbase_object.options['trace_prefix']
@@ -182,7 +182,7 @@ class _BoundSpoke(Spoke):
         return kill
 
     def _append_trace(self, value):
-        if self.rank_intra != 0 or self.trace_filen is None:
+        if self.cylinder_rank != 0 or self.trace_filen is None:
             return
         with open(self.trace_filen, 'a') as f:
             f.write(f"{time.perf_counter()-self.start_time},{value}\n")
