@@ -198,7 +198,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             that all scenarios are equally likely.
     """
     if scenario_creator_kwargs is None:
-        creator_options = dict()
+        scenario_creator_kwargs = dict()
     scen_dict = {
         name: scenario_creator(name, **scenario_creator_kwargs)
         for name in scenario_names
