@@ -50,7 +50,7 @@ def FixGaussian(minutes, acstream, mu, sigma):
 
 #======= end repair functions =====
     
-def _md_dict(e_path):
+def _md_dict(epath):
     p = str(egret.__path__)
     l = p.find("'")
     r = p.find("'", l+1)
@@ -91,6 +91,7 @@ def pysp2_callback(
         solver (str):
             Solver to use.
         epath (str):
+            Path to the egret data
         tee (bool):
             If True, displays solver output. Default is False.
         acstream ():
@@ -114,6 +115,7 @@ def pysp2_callback(
         _egret_md (egret tuple with dict as [1]) egret model data
 
     """
+    print("Debug: convex_relaxation=",convex_relaxation)
     # pull the number off the end of the scenario name
     scen_num = sputils.extract_num(scenario_name)
 
@@ -158,7 +160,7 @@ def pysp2_callback(
     full_scenario_model.stage_models = dict()
 
     # look at egret/data/model_data.py for the format specification of md_dict
-    first_stage_md_dict = _md_dict()
+    first_stage_md_dict = _md_dict(epath)
     generator_set = first_stage_md_dict.attributes("generator")
     generator_names = generator_set["names"]
 
