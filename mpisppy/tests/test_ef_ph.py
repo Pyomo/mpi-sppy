@@ -364,7 +364,7 @@ class Test_sizes(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_fix_xhat_extension(self):
-        """ Make sure that ph and xhat does not unfix a fixed Var
+        """ Make sure that ph and xhat do not unfix a fixed Var
         """
         from mpisppy.extensions.xhatlooper import XhatLooper
         PHoptions = self._copy_of_base_options()
@@ -376,7 +376,7 @@ class Test_sizes(unittest.TestCase):
         ph = mpisppy.opt.ph.PH(
             PHoptions,
             self.all3_scenario_names,
-            scenario_creator,
+            self._fix_creator,
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
             PH_extensions=XhatLooper,
