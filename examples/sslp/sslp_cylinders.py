@@ -47,7 +47,7 @@ def main():
     if args.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
 
-    data_dir = f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"
+    scenario_creator_kwargs = {"data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"}
     scenario_creator = sslp.scenario_creator
     scenario_denouement = sslp.scenario_denouement    
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
