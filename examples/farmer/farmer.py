@@ -1,6 +1,5 @@
 # special for ph debugging DLW Dec 2018
 # unlimited crops
-# Changed April 2020 to get CropsMult from cb_data (defaults to 1)
 # ALL INDEXES ARE ZERO-BASED
 #  ___________________________________________________________________________
 #
@@ -22,13 +21,22 @@ import mpisppy.utils.sputils as sputils
 # Use this random stream:
 farmerstream = np.random.RandomState()
 
-def scenario_creator(scenario_name,
-                    node_names=None,
-                    cb_data=None):
-    """ The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _PySPnode_list ordered by stages. 
-        Optionally attach _PHrho.
-        Standard (1.0) PySP signature for now...
+def scenario_creator(
+    scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
+):
+    """ Create a scenario for the (scalable) farmer example.
+    
+    Args:
+        scenario_name (str):
+            Name of the scenario to construct.
+        use_integer (bool, optional):
+            If True, restricts variables to be integer. Default is False.
+        sense (int, optional):
+            Model sense (minimization or maximization). Must be either
+            pyo.minimize or pyo.maximize. Default is pyo.minimize.
+        crops_multiplier (int, optional):
+            Factor to control scaling. There will be three times this many
+            crops. Default is 1.
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex then
@@ -42,57 +50,42 @@ def scenario_creator(scenario_name,
     # The RNG is seeded with the scenario number so that it is
     # reproducible when used with multiple threads.
     # NOTE: if you want to do replicates, you will need to pass a seed
-    # in cb_data then use seed+scennum as the seed argument.
+    # as a kwarg to scenario_creator then use seed+scennum as the seed argument.
     farmerstream.seed(scennum)
 
-    # Check for integer/continuous farmer (specified via cb_data)
-    if (cb_data and 'use_integer' in cb_data):
-        use_integer = cb_data['use_integer']
-    else:
-        use_integer = False # Default to normal farmer problem
-
-    # Check for minimization vs. maximization (specified via cb_data)
-    if (cb_data and 'sense' in cb_data):
-        if (cb_data['sense'] not in [pyo.minimize, pyo.maximize]):
-            print('Warning: sense must be either pyo.minimize or pyo.maximize '
-                  '(input sense ignored--assuming minimization)')
-            sense = pyo.minimize
-        else:
-            sense = cb_data['sense']
-    else:
-        sense = pyo.minimize
-
-    # there will be three times this many crops
-    if (cb_data and "CropsMult" in cb_data):
-        CropsMult = cb_data["CropsMult"]
-    else:
-        CropsMult = 1  
+    # Check for minimization vs. maximization
+    if sense not in [pyo.minimize, pyo.maximize]:
+        raise ValueError("Model sense Not recognized")
 
     # Create the concrete model object
-    model = pysp_instance_creation_callback(scenname, node_names, # 1.0 version
-                                            use_integer=use_integer,
-                                            sense=sense,
-                                            CropsMult=CropsMult)
+    model = pysp_instance_creation_callback(
+        scenname,
+        use_integer=use_integer,
+        sense=sense,
+        crops_multiplier=crops_multiplier,
+    )
 
     # Create the list of nodes associated with the scenario (for two stage,
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
-    model._PySPnode_list = [scenario_tree.ScenarioNode(
-                                                name="ROOT",
-                                                cond_prob=1.0,
-                                                stage=1,
-                                                cost_expression=model.FirstStageCost,
-                                                scen_name_list=None, # Deprecated?
-                                                nonant_list=[model.DevotedAcreage],
-                                                scen_model=model)]
+    model._PySPnode_list = [
+        scenario_tree.ScenarioNode(
+            name="ROOT",
+            cond_prob=1.0,
+            stage=1,
+            cost_expression=model.FirstStageCost,
+            scen_name_list=None, # Deprecated?
+            nonant_list=[model.DevotedAcreage],
+            scen_model=model,
+        )
+    ]
     return model
 
-def pysp_instance_creation_callback(scenario_name, node_names,
-                                    use_integer=False, sense=pyo.minimize,
-                                    CropsMult=1):
+def pysp_instance_creation_callback(
+    scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1
+):
     # long function to create the entire model
     # scenario_name is a string (e.g. AboveAverageScenario0)
-    # node_names is None every time the farmer example calls this
     #
     # Returns a concrete model for the specified scenario
 
@@ -104,7 +97,7 @@ def pysp_instance_creation_callback(scenario_name, node_names,
 
     def crops_init(m):
         retval = []
-        for i in range(CropsMult):
+        for i in range(crops_multiplier):
             retval.append("WHEAT"+str(i))
             retval.append("CORN"+str(i))
             retval.append("SUGAR_BEETS"+str(i))
@@ -116,11 +109,11 @@ def pysp_instance_creation_callback(scenario_name, node_names,
     # Parameters
     #
 
-    model.TOTAL_ACREAGE = 500.0 * CropsMult
+    model.TOTAL_ACREAGE = 500.0 * crops_multiplier
 
     def _scale_up_data(indict):
         outdict = {}
-        for i in range(CropsMult):
+        for i in range(crops_multiplier):
            for crop in ['WHEAT', 'CORN', 'SUGAR_BEETS']:
                outdict[crop+str(i)] = indict[crop]
         return outdict

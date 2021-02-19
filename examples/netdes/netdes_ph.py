@@ -11,6 +11,7 @@ def main():
     fname = 'data/network-10-20-L-01.dat'
     num_scen = int(fname.split('-')[2])
     scenario_names = ['Scen' + str(i) for i in range(num_scen)]
+    scenario_creator_kwargs = {"path": fname}
 
     ''' Now solve with PH to see what happens (very little, I imagine) '''
     PH_options = {
@@ -32,7 +33,7 @@ def main():
         scenario_creator,
         scenario_denouement,
         PH_extensions=NetworkDesignTracker,
-        cb_data=fname,
+        scenario_creator_kwargs=scenario_creator_kwargs,
     )
     conv, obj, triv = ph.ph_main()
     # Obj includes prox (only ok if we find a non-ant soln)

@@ -71,9 +71,10 @@ if __name__ == "__main__":
         
     assert(ScenCount in [3,5,10,25,50])
     all_scenario_names = ['Scenario{}'.format(sn+1) for sn in range(ScenCount)]
-    # sent to the scenario creator
-    cb_data = {"scenario-count": ScenCount,
-               "path": str(ScenCount)+"scenarios_r1"}
+    scenario_creator_kwargs = {
+        "scenario_count": ScenCount,
+        "path": str(ScenCount) + "scenarios_r1",
+    }
     
     hub_ph_options = {
         "solvername": "gurobi_persistent",
@@ -119,7 +120,7 @@ if __name__ == "__main__":
             "PHoptions": hub_ph_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": _rho_setter,
             "PH_extensions": MultiPHExtension,
             "PH_extension_kwargs": multi_ext,
@@ -143,7 +144,7 @@ if __name__ == "__main__":
             "FW_options": fw_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         }
     }
 
@@ -155,7 +156,7 @@ if __name__ == "__main__":
             'PHoptions': hub_ph_options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": _rho_setter,
             'scenario_denouement': scenario_denouement,
         },
@@ -201,7 +202,7 @@ if __name__ == "__main__":
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
             'scenario_denouement': scenario_denouement,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
 

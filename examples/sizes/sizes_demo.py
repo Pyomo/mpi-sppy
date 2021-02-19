@@ -75,9 +75,11 @@ if __name__ == "__main__":
     ######### EF ########
     solver = pyo.SolverFactory(PHoptions["solvername"])
 
-    ef = mpisppy.utils.sputils.create_EF(all_scenario_names,
-                                   scenario_creator,
-                                   creator_options={"cb_data": ScenCount})
+    ef = mpisppy.utils.sputils.create_EF(
+        all_scenario_names,
+        scenario_creator,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+    )
     if 'persistent' in PHoptions["solvername"]:
         solver.set_instance(ef, symbolic_solver_labels=True)
     solver.options["mipgap"] = 0.01
@@ -88,14 +90,15 @@ if __name__ == "__main__":
 
     #####multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
     multi_ext = {"ext_classes": [Fixer, Gapper]}
-    ph = mpisppy.opt.ph.PH(PHoptions,
-                                all_scenario_names,
-                                scenario_creator,
-                                scenario_denouement,
-                                cb_data=ScenCount,
-                                rho_setter=_rho_setter, 
-                                PH_extensions=MultiPHExtension,
-                                PH_extension_kwargs=multi_ext,
+    ph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+        rho_setter=_rho_setter, 
+        PH_extensions=MultiPHExtension,
+        PH_extension_kwargs=multi_ext,
     )
     
     conv, obj, tbound = ph.ph_main()
@@ -107,11 +110,13 @@ if __name__ == "__main__":
     ############ test W and xbar writers and special joint reader  ############
     from mpisppy.utils.wxbarwriter import WXBarWriter
     
-    newph = mpisppy.opt.ph.PH(PHoptions,
-                                   all_scenario_names,
-                                   scenario_creator,
-                                   scenario_denouement,
-                                   cb_data=ScenCount)
+    newph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+    )
 
     PHoptions["W_and_xbar_writer"] =  {"Wcsvdir": "Wdir",
                                        "xbarcsvdir": "xbardir"}
@@ -120,11 +125,13 @@ if __name__ == "__main__":
     #####
     from mpisppy.utils.wxbarreader import WXBarReader
     
-    newph = mpisppy.opt.ph.PH(PHoptions,
-                                   all_scenario_names,
-                                   scenario_creator,
-                                   scenario_denouement,
-                                   cb_data=ScenCount)
+    newph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+    )
 
     PHoptions["W_and_xbar_reader"] =  {"Wcsvdir": "Wdir",
                                        "xbarcsvdir": "xbardir"}
@@ -135,11 +142,13 @@ if __name__ == "__main__":
     ############################# test xhatspecific ###############
     from mpisppy.xhatspecific import XhatSpecific
     print ("... testing xhat specific....")
-    newph = mpisppy.opt.ph.PH(PHoptions,
-                                   all_scenario_names,
-                                   scenario_creator,
-                                   scenario_denouement,
-                                   cb_data=ScenCount)
+    newph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+    )
 
     PHoptions["xhat_specific_options"] =  {"xhat_solver_options":
                                            PHoptions["iterk_solver_options"],
@@ -154,18 +163,24 @@ if __name__ == "__main__":
     PHoptions["bundles_per_rank"] = 2
     PHoptions["verbose"] = False
 
-    ph = mpisppy.opt.ph.PH(PHoptions,
-                                all_scenario_names,
-                                scenario_creator,
-                                scenario_denouement,
-                                cb_data=ScenCount)
+    ph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+    )
     
     conv = ph.ph_main(rho_setter=_rho_setter)
 
     ### avg, min, max extension #####
-    ph = mpisppy.opt.ph.PH(PHoptions, all_scenario_names,
-                                scenario_creator, scenario_denouement,
-                                cb_data=ScenCount)
+    ph = mpisppy.opt.ph.PH(
+        PHoptions,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs={"scenario_count": ScenCount},
+    )
     ph.PHoptions["PHIterLimit"] = 3
 
     from mpisppy.extensions.avgminmaxer import MinMaxAvg

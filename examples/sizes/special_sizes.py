@@ -5,29 +5,24 @@ import os
 import models.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
-def scenario_creator(scenario_name, node_names=None, cb_data=None):
-    """ The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _PySPnode_list ordered by stages.
-        Optionally attach _PHrho. 
-        Use cb_data for the scenario count (3 or 10)
-    """
-    if cb_data not in [3, 10]:
-        raise RuntimeError(
-            "cb_data passed to scenario counter " "must equal either 3 or 10"
+def scenario_creator(scenario_name, scenario_count=None):
+    if scenario_count not in (3, 10):
+        raise ValueError(
+            "scenario_count passed to scenario counter must equal either 3 or 10"
         )
 
     sizes_dir = os.path.dirname(__file__)
-    datadir = os.sep.join((sizes_dir, f"SIZES{cb_data}"))
+    datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"
     except:
         print("FAIL: datadir=", datadir, " scenario_name=", scenario_name)
 
     model = ref.model.create_instance(fname)
-    assert(not hasattr(model, "_PySP_scenario_name"))
+    assert not hasattr(model, "_PySP_scenario_name")
     model._PySP_scenario_name = scenario_name  # in case it is needed
-    assert(not hasattr(model, "_PySP_cb_data"))
-    model._PySP_cb_data = cb_data  # in case it is needed
+    assert not hasattr(model, "_PySP_scenario_count")
+    model._PySP_scenario_count = scenario_count  # in case it is needed
 
     # now attach the one and only tree node
     varlist = [model.NumProducedFirstStage, model.NumUnitsCutFirstStage]
@@ -75,7 +70,7 @@ def _variable_probability(scen):
 
     # 10 has to be produced
     idv = id(scen.NumProducedFirstStage[10])
-    scencnt = scen._PySP_cb_data
+    scencnt = scen._PySP_scenario_count
     if scen._PySP_scenario_name == "Scenario1":
         retlist.append((idv, 0))
     else:

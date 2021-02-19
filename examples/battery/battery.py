@@ -16,31 +16,31 @@ import numpy as np
 import pyomo.environ as pyo
 import mpisppy.scenario_tree as stree
 
-def scenario_creator(scenario_name, node_names=None, cb_data=None):
-    if (cb_data is None):
-        raise RuntimeError('Must provide a cb_data dict to scenario creator. '
-                'At a minimum, this dictionary must contain a key "lam" '
-                'specifying the value of the dual multiplier lambda to use, '
-                'and a key "solar_filename" specifying where the solar data '
-                'is stored.')
-    if ('solar_filename' not in cb_data):
-        raise RuntimeError('Please provide a cb_data dict that contains '
-                           '"solar_filename", with a valid path')
-    if ('lam' not in cb_data):
-        raise RuntimeError('Please provide a cb_data dict that contains '
-                           '"lam", a value of the dual multiplier lambda.')
+def scenario_creator(
+    scenario_name, solar_filname=None, use_LP=False, lam=None,
+):
+    """
+    Args:
+        scenario_name (str):
+            Name of the scenario to create.
+        solar_filename (str):
+            File containing the solar data.
+        use_LP (bool, optional):
+            If True, uses LP. Default is False.
+        lam (float):
+            Value of the dual variable for the chance constraint.
+    """
+    if 'solar_filename' is None:
+        raise ValueError("kwarg `solar_filename` is required")
+    if 'lam' is None:
+        raise RuntimeError("kwarg `lam` is required")
 
-    data = getData(cb_data['solar_filename'])
+    data = getData(solar_filename)
     num_scenarios = data['solar'].shape[0]
     scenario_index = extract_scenario_index(scenario_name)
     if (scenario_index < 0) or (scenario_index >= num_scenarios):
         raise RuntimeError('Provided scenario index is invalid (must lie in '
                            '{0,1,...' + str(num_scenarios-1) + '} inclusive)')
-    if ('use_LP' in cb_data):
-        use_LP = cb_data['use_LP']
-    else:
-        use_LP = False
-
     model = pyo.ConcreteModel()
 
     T   = range(data['T'])
@@ -71,7 +71,7 @@ def scenario_creator(scenario_name, node_names=None, cb_data=None):
     ''' Objective function (must be minimization or PH crashes) '''
     model.obj = pyo.Objective(expr=-pyo.dot_product(data['rev'], model.y)
         + data['char'] * pyo.quicksum(model.p)
-        + data['disc'] * pyo.quicksum(model.q) + cb_data['lam'] * model.z[0],
+        + data['disc'] * pyo.quicksum(model.q) + lam * model.z[0],
         sense=pyo.minimize)
 
     fscr = lambda model: pyo.dot_product(data['rev'], model.y)

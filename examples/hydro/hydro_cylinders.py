@@ -49,7 +49,7 @@ def main():
         all_nodenames.append("ROOT_"+str(b))
 
     ScenCount = BFs[0] * BFs[1]
-    cb_data = BFs
+    scenario_creator_kwargs = {"branching_factors": BFs}
     all_scenario_names = [f"Scen{i+1}" for i in range(ScenCount)]
     scenario_creator = hydro.scenario_creator
     scenario_denouement = hydro.scenario_denouement
@@ -60,7 +60,7 @@ def main():
     
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
-                              cb_data=cb_data,
+                              scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=None,
                               rho_setter = rho_setter)
     hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
@@ -69,7 +69,7 @@ def main():
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              cb_data=cb_data,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
         lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
         lagrangian_spoke["opt_kwargs"]["PHoptions"]["branching_factors"] = BFs
@@ -85,7 +85,7 @@ def main():
                                                         xhat_scenario_dict,
                                                         all_nodenames,
                                                         BFs,
-                                                        cb_data=cb_data)
+                                                        scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
     if with_lagrangian:

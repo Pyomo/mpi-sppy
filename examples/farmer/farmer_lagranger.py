@@ -32,7 +32,7 @@ def main():
     args = _parse_args()
 
     num_scen = args.num_scens
-    CropsMult = args.crops_mult
+    crops_multiplier = args.crops_mult
     
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
     if args.default_rho is None and rho_setter is None:
@@ -41,7 +41,10 @@ def main():
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
-    cb_data={'use_integer': False, "CropsMult": CropsMult}
+    scenario_creator_kwargs = {
+        'use_integer': False,
+        "crops_multiplier": crops_multiplier,
+    }
     scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
@@ -49,27 +52,27 @@ def main():
     
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
-                              cb_data=cb_data,
+                              scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=None,
                               rho_setter = rho_setter)
 
     # FWPH spoke
     if args.with_fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, cb_data=cb_data)
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # Special Lagranger bound spoke
     if args.with_lagranger:
         lagranger_spoke = vanilla.lagranger_spoke(*beans,
-                                              cb_data=cb_data,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
 
     # xhat looper bound spoke
     if args.with_xhatlooper:
-        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, cb_data=cb_data)
+        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # xhat shuffle bound spoke
     if args.with_xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, cb_data=cb_data)
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
         
     list_of_spoke_dict = list()

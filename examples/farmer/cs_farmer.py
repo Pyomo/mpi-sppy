@@ -42,7 +42,7 @@ global_rank = fullcomm.Get_rank()
 
 
 def _usage():
-    print("usage mpiexec -np {N} python -m mpi4py cs_farmer.py {CropsMult} {scen_count} {bundles_per_rank} {PHIterLimit}")
+    print("usage mpiexec -np {N} python -m mpi4py cs_farmer.py {crops_multiplier} {scen_count} {bundles_per_rank} {PHIterLimit}")
     print("e.g., mpiexec -np 3 python -m mpi4py cs_farmer.py 1 3 0 50")
     sys.exit(1)
 
@@ -56,7 +56,7 @@ if __name__ == "__main__":
     if len(sys.argv) != 5:
         _usage()
 
-    CropsMult = int(sys.argv[1])
+    crops_multiplier = int(sys.argv[1])
     scen_count = int(sys.argv[2])
     bundles_per_rank = int(sys.argv[3])
     PHIterLimit = int(sys.argv[4])
@@ -66,7 +66,11 @@ if __name__ == "__main__":
 
     all_scenario_names = ['scen{}'.format(sn) for sn in range(scen_count)]
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
-    cb_data={'use_integer': True, "CropsMult": CropsMult, "sense":pyo.maximize}
+    scenario_creator_kwargs = {
+        'use_integer': True,
+        "crops_multiplier": crops_multiplier,
+        "sense": pyo.maximize,
+    }
 
     hub_ph_options = {
         "solvername": "xpress_persistent",
@@ -97,7 +101,7 @@ if __name__ == "__main__":
             "PHoptions": hub_ph_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter,
             "PH_extensions": MultiPHExtension,
             "PH_extension_kwargs": multi_ext,
@@ -125,7 +129,7 @@ if __name__ == "__main__":
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
             'scenario_denouement': scenario_denouement,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
 
@@ -143,7 +147,7 @@ if __name__ == "__main__":
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
             'scenario_denouement': scenario_denouement,
-            "cb_data": cb_data
+            "scenario_creator_kwargs": scenario_creator_kwargs
         },
     }
 
@@ -155,7 +159,7 @@ if __name__ == "__main__":
             'PHoptions': hub_ph_options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,
         },
     }

@@ -50,16 +50,18 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
     return scenario_instance
 
-def scenario_creator(scenario_name, path=None):
-    return pysp2_callback(scenario_name, path=path)
+def scenario_creator(scenario_name, path=None, scenario_count=None):
+    return pysp2_callback(scenario_name, path=path, scenario_count=scenario_count)
 
-def pysp2_callback(scenario_name, path=None):
+def pysp2_callback(scenario_name, path=None, scenario_count=None):
     ''' The callback needs to create an instance and then attach
         the PySP nodes to it in a list _PySPnode_list ordered by stages.
         Optionally attach _PHrho. Standard (1.0) PySP signature for now...
     '''
 
-    instance = pysp_instance_creation_callback(scenario_name, path=path)
+    instance = pysp_instance_creation_callback(
+        scenario_name, path=path, scenario_count=scenario_count,
+    )
 
     # now attach the one and only tree node (ROOT is a reserved word)
     # UnitOn[*,*] is the only set of nonant variables
