@@ -23,7 +23,7 @@ ef = ExtensiveForm(
     options,
     all_scenario_names,
     hydro.scenario_creator,
-    cb_data=BFs,
+    scenario_creator_kwargs={"branching_factors": BFs},
     all_nodenames=all_nodenames
 )
 ef.solve_extensive_form(tee=True)

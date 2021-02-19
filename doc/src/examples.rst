@@ -172,7 +172,7 @@ builds a Pyomo model for that scenario appropriately:
 
     import mpisppy.utils.sputils as sputils
 
-    def scenario_creator(scenario_name, node_names=None, cb_data=None):
+    def scenario_creator(scenario_name):
         if scenario_name == "good":
             yields = [3, 3.6, 24]
         elif scenario_name == "average":

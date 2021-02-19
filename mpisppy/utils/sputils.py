@@ -165,7 +165,7 @@ def get_objs(scenario_instance):
                   "inclusion in the extensive form.")
     return scenario_objs
 
-def create_EF(scenario_names, scenario_creator, creator_options=None,
+def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True):
     """ Create a ConcreteModel of the extensive form.
@@ -177,7 +177,7 @@ def create_EF(scenario_names, scenario_creator, creator_options=None,
             scenario_creator (callable):
                 Function which takes a scenario name as its first argument and
                 returns a concrete model corresponding to that scenario.
-            creator_options (dict, optional):
+            scenario_creator_kwargs (dict, optional):
                 Options to pass to `scenario_creator`.
             EF_name (str, optional):
                 Name of the ConcreteModel of the EF.
@@ -197,10 +197,12 @@ def create_EF(scenario_names, scenario_creator, creator_options=None,
             .PySP_prob attribute, this function displays a warning, and assumes
             that all scenarios are equally likely.
     """
-    if (creator_options is None):
-        creator_options = dict()
-    scen_dict = {name: scenario_creator(name, **creator_options)
-                    for name in scenario_names}
+    if scenario_creator_kwargs is None:
+        scenario_creator_kwargs = dict()
+    scen_dict = {
+        name: scenario_creator(name, **scenario_creator_kwargs)
+        for name in scenario_names
+    }
 
     if (len(scen_dict) == 0):
         raise RuntimeError("create_EF() received empty scenario list")

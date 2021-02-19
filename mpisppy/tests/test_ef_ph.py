@@ -83,11 +83,11 @@ class Test_sizes(unittest.TestCase):
     def _copy_of_base_options(self):
         return _get_ph_base_options()
 
-    def _fix_creator(self, scenario_name, node_names=None, cb_data=None):
+    def _fix_creator(self, scenario_name, scenario_count=None):
         """ For the test of fixed vars"""
-        model = scenario_creator(scenario_name,
-                                 node_names=node_names,
-                                 cb_data=cb_data)
+        model = scenario_creator(
+            scenario_name, scenario_count=scenario_count
+        )
         model.NumProducedFirstStage[5].fix(1134) # 3scen -> 45k
         return model
         
@@ -99,9 +99,13 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 0
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
         print("reeanabling tictoc ouput")
         utils.reenable_tictoc_output()
 
@@ -110,16 +114,22 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 0
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
 
     def test_ef_constructor(self):
         ScenCount = 3
-        ef = mpisppy.utils.sputils.create_EF(self.all3_scenario_names,
-                                    scenario_creator,
-                                    creator_options={"cb_data": ScenCount},
-                                    suppress_warnings=True)
+        ef = mpisppy.utils.sputils.create_EF(
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_creator_kwargs={"scenario_count": ScenCount},
+            suppress_warnings=True
+        )
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -127,10 +137,12 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         solver = pyo.SolverFactory(PHoptions["solvername"])
         ScenCount = 3
-        ef = mpisppy.utils.sputils.create_EF(self.all3_scenario_names,
-                                    scenario_creator,
-                                    creator_options={"cb_data": ScenCount},
-                                    suppress_warnings=True)
+        ef = mpisppy.utils.sputils.create_EF(
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_creator_kwargs={"scenario_count": ScenCount},
+            suppress_warnings=True
+        )
         if '_persistent' in PHoptions["solvername"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
@@ -143,9 +155,11 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         solver = pyo.SolverFactory(PHoptions["solvername"])
         ScenCount = 3
-        ef = mpisppy.utils.sputils.create_EF(self.all3_scenario_names,
-                                       self._fix_creator,
-                                       creator_options={"cb_data": ScenCount})
+        ef = mpisppy.utils.sputils.create_EF(
+            self.all3_scenario_names,
+            self._fix_creator,
+            scenario_creator_kwargs={"scenario_count": ScenCount},
+        )
         if '_persistent' in PHoptions["solvername"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
@@ -159,9 +173,13 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 0
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
     
         conv, obj, tbound = ph.ph_main()
 
@@ -174,9 +192,13 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 0
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    self._fix_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            self._fix_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
     
         conv, obj, tbound = ph.ph_main()
 
@@ -190,9 +212,13 @@ class Test_sizes(unittest.TestCase):
     def test_ph_basic(self):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 2
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
         conv, obj, tbound = ph.ph_main()
 
 
@@ -201,9 +227,13 @@ class Test_sizes(unittest.TestCase):
     def test_fix_ph_basic(self):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 2
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    self._fix_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            self._fix_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
         conv, obj, tbound = ph.ph_main()
         for k,s in ph.local_scenarios.items():
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
@@ -215,9 +245,14 @@ class Test_sizes(unittest.TestCase):
     def test_ph_rhosetter(self):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 2
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3, rho_setter=_rho_setter)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            rho_setter=_rho_setter,
+        )
         conv, obj, tbound = ph.ph_main()
         sig2obj = round_pos_sig(obj,2)
         #self.assertEqual(220000.0, sig2obj)
@@ -228,9 +263,13 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 2
         PHoptions["bundles_per_rank"] = 2
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all10_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=10)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all10_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 10},
+        )
         conv, obj, tbound = ph.ph_main()
 
     @unittest.skipIf(not persistent_available,
@@ -238,17 +277,25 @@ class Test_sizes(unittest.TestCase):
     def test_persistent_basic(self):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 10
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
         conv, basic_obj, tbound = ph.ph_main()
 
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 10
         PHoptions["solvername"] = persistentsolvername
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
         conv, pobj, tbound = ph.ph_main()
 
         sig2basic = round_pos_sig(basic_obj,2)
@@ -263,18 +310,26 @@ class Test_sizes(unittest.TestCase):
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 2
         PHoptions["bundles_per_rank"] = 2
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all10_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=10)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all10_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 10},
+        )
         conv, basic_obj, tbound = ph.ph_main()
 
         PHoptions = self._copy_of_base_options()
         PHoptions["PHIterLimit"] = 2
         PHoptions["bundles_per_rank"] = 2
         PHoptions["solvername"] = persistentsolvername
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all10_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=10)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all10_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 10},
+        )
         conv, pbobj, tbound = ph.ph_main()
 
         sig2basic = round_pos_sig(basic_obj,2)
@@ -293,9 +348,14 @@ class Test_sizes(unittest.TestCase):
                                              PHoptions["iterk_solver_options"],
                                              "scen_limit": 3}
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3, PH_extensions=XhatLooper)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            PH_extensions=XhatLooper,
+        )
         conv, basic_obj, tbound = ph.ph_main()
         # in this particular case, the extobject is an xhatter
         xhatobj1 = round_pos_sig(ph.extobject._xhat_looper_obj_final, 1)
@@ -304,7 +364,7 @@ class Test_sizes(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_fix_xhat_extension(self):
-        """ Make sure that ph and xhat does not unfix a fixed Var
+        """ Make sure that ph and xhat do not unfix a fixed Var
         """
         from mpisppy.extensions.xhatlooper import XhatLooper
         PHoptions = self._copy_of_base_options()
@@ -313,9 +373,14 @@ class Test_sizes(unittest.TestCase):
                                              PHoptions["iterk_solver_options"],
                                              "scen_limit": 3}
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    self._fix_creator, scenario_denouement,
-                                    cb_data=3, PH_extensions=XhatLooper)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            self._fix_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            PH_extensions=XhatLooper,
+        )
         conv, basic_obj, tbound = ph.ph_main()
 
         for k,s in ph.local_scenarios.items():
@@ -334,9 +399,14 @@ class Test_sizes(unittest.TestCase):
         PHoptions["xhat_looper_options"] =  {"xhat_solver_options":\
                                              PHoptions["iterk_solver_options"],
                                              "scen_limit": 3}
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
-                                    scenario_creator, scenario_denouement,
-                                    cb_data=3, PH_extensions=XhatLooper)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            PH_extensions=XhatLooper,
+        )
         conv, basic_obj, tbound = ph.ph_main()
         xhatobj = ph.extobject._xhat_looper_obj_final
         dopts = sputils.option_string_to_dict("mipgap=0.0001")
@@ -414,24 +484,32 @@ class Test_hydro(unittest.TestCase):
     def test_ph_constructor(self):
         PHoptions = self._copy_of_base_options()
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all_scenario_names,
-                                    hydro.scenario_creator,
-                                    hydro.scenario_denouement,
-                                    all_nodenames=self.all_nodenames,
-                                    cb_data=self.BFs)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            hydro.scenario_denouement,
+            all_nodenames=self.all_nodenames,
+            scenario_creator_kwargs={"branching_factors": self.BFs},
+        )
+
     def test_ef_constructor(self):
-        ef = mpisppy.utils.sputils.create_EF(self.all_scenario_names,
-                                       hydro.scenario_creator,
-                                       creator_options={"cb_data": self.BFs})
+        ef = mpisppy.utils.sputils.create_EF(
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            scenario_creator_kwargs={"branching_factors": self.BFs},
+        )
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ef_solve(self):
         PHoptions = self._copy_of_base_options()
         solver = pyo.SolverFactory(PHoptions["solvername"])
-        ef = mpisppy.utils.sputils.create_EF(self.all_scenario_names,
-                                         hydro.scenario_creator,
-                                         creator_options={"cb_data": self.BFs})
+        ef = mpisppy.utils.sputils.create_EF(
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            scenario_creator_kwargs={"branching_factors": self.BFs},
+        )
         if '_persistent' in PHoptions["solvername"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
@@ -448,9 +526,11 @@ class Test_hydro(unittest.TestCase):
     def test_ef_csv(self):
         PHoptions = self._copy_of_base_options()
         solver = pyo.SolverFactory(PHoptions["solvername"])
-        ef = mpisppy.utils.sputils.create_EF(self.all_scenario_names,
-                                         hydro.scenario_creator,
-                                         creator_options={"cb_data": self.BFs})
+        ef = mpisppy.utils.sputils.create_EF(
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            scenario_creator_kwargs={"branching_factors": self.BFs},
+        )
         if '_persistent' in PHoptions["solvername"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
@@ -461,11 +541,14 @@ class Test_hydro(unittest.TestCase):
     def test_ph_solve(self):
         PHoptions = self._copy_of_base_options()
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all_scenario_names,
-                                  hydro.scenario_creator,
-                                  hydro.scenario_denouement,
-                                    all_nodenames=self.all_nodenames,
-                                    cb_data=self.BFs)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            hydro.scenario_denouement,
+            all_nodenames=self.all_nodenames,
+            scenario_creator_kwargs={"branching_factors": self.BFs},
+        )
         conv, obj, tbound = ph.ph_main()
 
         sig2tbnd = round_pos_sig(tbound, 2)
@@ -490,11 +573,15 @@ class Test_hydro(unittest.TestCase):
                                                "ROOT_2": "Scen7"},
                                               "csvname": "specific.csv"}
 
-        ph = mpisppy.opt.ph.PH(PHoptions, self.all_scenario_names,
-                                  hydro.scenario_creator,
-                                  hydro.scenario_denouement,
-                                    all_nodenames=self.all_nodenames,
-                                    cb_data=self.BFs, PH_extensions = XhatSpecific)
+        ph = mpisppy.opt.ph.PH(
+            PHoptions,
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            hydro.scenario_denouement,
+            all_nodenames=self.all_nodenames,
+            scenario_creator_kwargs={"branching_factors": self.BFs},
+            PH_extensions = XhatSpecific
+        )
         conv, obj, tbound = ph.ph_main()
         sig2xhatobj = round_pos_sig(ph.extobject._xhat_specific_obj_final, 2)
         self.assertEqual(190, sig2xhatobj)

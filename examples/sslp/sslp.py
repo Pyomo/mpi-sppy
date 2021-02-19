@@ -15,13 +15,14 @@ import mpisppy.extensions.fixer as fixer
 
 import model.ReferenceModel as ref
 
-def scenario_creator(scenario_name, node_names=None, cb_data=None):
+def scenario_creator(scenario_name, data_dir=None):
     """ The callback needs to create an instance and then attach
         the PySP nodes to it in a list _PySPnode_list ordered by stages.
         Optionally attach _PHrho.
     """
-    datadir = cb_data
-    fname = datadir + os.sep + scenario_name + ".dat"
+    if data_dir is None:    
+        raise ValueError("kwarg `data_dir` is required for SSLP scenario_creator")
+    fname = data_dir + os.sep + scenario_name + ".dat"
     model = ref.model.create_instance(fname, name=scenario_name)
 
     # now attach the one and only tree node (ROOT is a reserved word)
@@ -74,8 +75,8 @@ if __name__ == "__main__":
         print(msg)
         quit()
     instname = sys.argv[1]
-    datadir = "data" + os.sep + instname + os.sep + "scenariodata"
-    if not os.path.isdir(datadir):
+    data_dir = "data" + os.sep + instname + os.sep + "scenariodata"
+    if not os.path.isdir(data_dir):
         print(msg, "\n   bad instance name=", instname)
         quit()
     try:
@@ -143,7 +144,7 @@ if __name__ == "__main__":
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
-        cb_data=datadir,
+        scenario_creator_kwargs={"data_dir": data_dir},
     )
 
     if ph.cylinder_rank == 0:

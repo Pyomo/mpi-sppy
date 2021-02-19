@@ -27,7 +27,8 @@ class SPBase(object):
             scenario_denouement (fct): for post processing and reporting
             all_nodenames (list): all non-leaf node names; can be None for 2 Stage
             mpicomm (MPI comm): if not given, use the global fullcomm
-            cb_data (any): passed directly to instance callback                
+            scenario_creator_kwargs (dict): kwargs passed directly to
+                scenario_creator.
             variable_probability (fct): returns a list of tuples of (id(var), prob)
                 to set variable-specific probability (similar to PHBase.rho_setter).
 
@@ -46,7 +47,7 @@ class SPBase(object):
             scenario_denouement=None,
             all_nodenames=None,
             mpicomm=None,
-            cb_data=None,
+            scenario_creator_kwargs=None,
             variable_probability=None,
             E1_tolerance=1e-5
     ):
@@ -98,7 +99,7 @@ class SPBase(object):
             self.bundling = True
         else:
             self.bundling = False
-        self._create_scenarios(cb_data)
+        self._create_scenarios(scenario_creator_kwargs)
         self._look_and_leap()
         self._compute_unconditional_node_probabilities()
         self._attach_nlens()
@@ -238,7 +239,7 @@ class SPBase(object):
                 for (curr_bundle, slc) in enumerate(slices)
             }
 
-    def _create_scenarios(self, cb_data):
+    def _create_scenarios(self, scenario_creator_kwargs):
         """ Call the scenario_creator for every local scenario, and store the
             results in self.local_scenarios (dict indexed by scenario names).
 
@@ -250,10 +251,12 @@ class SPBase(object):
         if self.scenarios_constructed:
             raise RuntimeError("Scenarios already constructed.")
 
+        if scenario_creator_kwargs is None:
+            scenario_creator_kwargs = dict()
+
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
-            ### s = self.scenario_creator(sname, **scenario_creator_kwargs)
-            s = self.scenario_creator(sname, node_names=None, cb_data=cb_data)
+            s = self.scenario_creator(sname, **scenario_creator_kwargs)
             if not hasattr(s, "PySP_prob"):
                 s.PySP_prob = 1.0 / len(self.all_scenario_names)
             self.local_scenarios[sname] = s

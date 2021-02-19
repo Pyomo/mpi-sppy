@@ -29,7 +29,7 @@ The contructors for the vanilla spokes take arguments that vary slightly dependi
 on the spoke, but all want the args passed in by the args parser,
 followed by ``scenario_creator`` function, a ``scenario_denoument`` function
 (that can be ``None``), a list of scenario names as ``all_scenario_names``,
-and ``cb_data``. Other arguments can be seen in the file ``mpisppy.utils.vanilla.py``
+and ``scenario_creator_kwargs``. Other arguments can be seen in the file ``mpisppy.utils.vanilla.py``
 or in the the ``*_cylinders.py`` files that use it.  Since all require
 the first four, in the examples, they are often collected into a tuple called
 ``beans`` so they can be passed to the constructor for every vanilla spoke.
@@ -40,9 +40,9 @@ Extending Examples
 Many developers
 will need to add extensions. Here are few examples:
 
-* In the ``farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario create in the ``cb_data`` dictionary.
+* In the ``farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario create in the ``scenario_creator_kwargs`` dictionary.
 
-* In the ``hydro_cylinders.py`` example (which has three stages), ``baseparser.py`` is not used. The branching factors are obtained from the command line and passed to the scenario constructor via ``cb_data`` and also passed to various spokes using ``["opt_kwargs"]["PHoptions"]["branching_factors"]``
+* In the ``hydro_cylinders.py`` example (which has three stages), ``baseparser.py`` is not used. The branching factors are obtained from the command line and passed to the scenario constructor via ``scenario_creator_kwargs`` and also passed to various spokes using ``["opt_kwargs"]["PHoptions"]["branching_factors"]``
 
 * The ``uc_cylinders.py`` example adds arguments that are used to provide data or trigger the inclusion of extensions. The  extension specifications and arguments are added to the dictionaries  (e.g., ``hub_dict``) create by ``vanilla.py``.
 

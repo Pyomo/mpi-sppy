@@ -43,7 +43,10 @@ def main():
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = [f"scen{sn}" for sn in range(num_scen)]
-    cb_data={"use_integer": False, "CropsMult": crops_mult}
+    scenario_creator_kwargs = {
+        "use_integer": False,
+        "crops_multiplier": crops_mult,
+    }
 
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
@@ -75,20 +78,20 @@ def main():
             "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
 
     # FWPH spoke
     if with_fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, cb_data=cb_data)
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # xhat looper bound spoke -- any scenario will do for
     # lshaped (they're all the same)
     xhat_scenario_dict = {"ROOT": all_scenario_names[0]}
     
     if with_xhatlshaped:
-        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, cb_data=cb_data)
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
 
     list_of_spoke_dict = list()
