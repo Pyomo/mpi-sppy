@@ -209,7 +209,7 @@ class _BoundNonantLenSpoke(_BoundSpoke):
 
         vbuflen = 0
         for s in self.opt.local_scenarios.values():
-            vbuflen += len(s._nonant_indices)
+            vbuflen += len(s._mpisppy_data.nonant_indices)
 
         self._make_windows(1, vbuflen)
         self._locals = np.zeros(vbuflen + 1) # Also has kill signal

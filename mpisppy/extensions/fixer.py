@@ -73,16 +73,14 @@ class Fixer(mpisppy.extensions.extension.Extension):
         # This count dict drives the loops later
         # NOTE: every scenario has a list.
         for k,s in self.local_scenarios.items():
-            if hasattr(s, "_PySP_conv_iter_count"):
-                raise RuntimeError("Scenario has _PySP_conv_iter_count")
-            s._PySP_conv_iter_count = {} # key is (ndn, i)
+            s._mpisppy_data.conv_iter_count = {} # key is (ndn, i)
 
             self.iter0_fixer_tuples[s], self.fixer_tuples[s] = \
                     self.id_fix_list_fct(s)
 
             if self.iter0_fixer_tuples[s] is not None:
                 for (varid, th, nb, lb, ub) in self.iter0_fixer_tuples[s]:
-                    (ndn, i) = s._varid_to_nonant_index[varid] #
+                    (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid] #
                     if (ndn, i) not in self.iter0_threshold:
                         self.iter0_threshold[(ndn, i)] = th
                     else:
@@ -92,8 +90,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
                                                "threshold across scenarios.")
             if self.fixer_tuples[s] is not None:
                 for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
-                    (ndn, i) = s._varid_to_nonant_index[varid]
-                    s._PySP_conv_iter_count[(ndn, i)] = 0
+                    (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
+                    s._mpisppy_data.conv_iter_count[(ndn, i)] = 0
                     if (ndn, i) not in self.threshold:
                         self.threshold[(ndn, i)] = th
                     else:
@@ -113,18 +111,18 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def _update_fix_counts(self):
         nodesdone = []  # avoid multiple updates of a node's Vars
         for k,s in self.local_scenarios.items():
-            for ndn_i, xvar in s._nonant_indices.items():
+            for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.is_fixed():
                     continue
-                xb = pyo.value(s._xbars[ndn_i])
-                diff = xb * xb - pyo.value(s._xsqbars[ndn_i])
+                xb = pyo.value(s._mpisppy_model.xbars[ndn_i])
+                diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[ndn_i])
                 tolval = self.threshold[ndn_i]
                 tolval *= tolval  # the tol is on sqrt
                 if -diff < tolval and diff < tolval:
                     ##print ("debug += diff, tolval", diff, tolval)
-                    s._PySP_conv_iter_count[ndn_i] += 1
+                    s._mpisppy_data.conv_iter_count[ndn_i] += 1
                 else:
-                    s._PySP_conv_iter_count[ndn_i] = 0
+                    s._mpisppy_data.conv_iter_count[ndn_i] = 0
                     ##print ("debug reset fix diff, tolval", diff, tolval)
                     
     def iter0(self, local_scenarios):
@@ -152,14 +150,14 @@ class Fixer(mpisppy.extensions.extension.Extension):
             for (varid, th, nb, lb, ub) in self.iter0_fixer_tuples[s]:
                 was_fixed = False
                 try:
-                    (ndn, i) = s._varid_to_nonant_index[varid]
+                    (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
                 except:
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
-                xvar = s._nonant_indices[ndn,i]
+                xvar = s._mpisppy_data.nonant_indices[ndn,i]
                 if not xvar.is_fixed():
-                    xb = pyo.value(s._xbars[(ndn,i)])
-                    diff = xb * xb - pyo.value(s._xsqbars[(ndn,i)])
+                    xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                    diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[(ndn,i)])
                     tolval = self.iter0_threshold[(ndn, i)]
                     sqtolval = tolval*tolval  # the tol is on sqrt
                     if -diff > sqtolval or diff > sqtolval:
@@ -234,17 +232,17 @@ class Fixer(mpisppy.extensions.extension.Extension):
             for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
                 was_fixed = False
                 try:
-                    (ndn, i) = s._varid_to_nonant_index[varid]
+                    (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
                 except:
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
                 tolval = self.threshold[(ndn, i)]
-                xvar = s._nonant_indices[ndn,i]
+                xvar = s._mpisppy_data.nonant_indices[ndn,i]
                 if not xvar.is_fixed():
-                    xb = pyo.value(s._xbars[(ndn,i)])
-                    fx = s._PySP_conv_iter_count[(ndn,i)]
+                    xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                    fx = s._mpisppy_data.conv_iter_count[(ndn,i)]
                     if fx > 0:
-                        xbar = pyo.value(s._xbars[(ndn,i)])
+                        xbar = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                         was_fixed = False
                         if  nb is not None and nb <= fx:
                             xvar.fix(xbar)
