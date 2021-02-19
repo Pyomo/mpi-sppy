@@ -91,6 +91,7 @@ class APH(ph_base.PHBase):  # ??????
         PH_extension_kwargs=None,
         PH_converger=None,
         rho_setter=None,
+        variable_probability=None,
     ):
         super().__init__(
             PHoptions,
@@ -104,6 +105,7 @@ class APH(ph_base.PHBase):  # ??????
             PH_extension_kwargs=PH_extension_kwargs,
             PH_converger=PH_converger,
             rho_setter=rho_setter,
+            variable_probability=variable_probability,
         )
 
         self.phis = {} # phi values, indexed by scenario names
