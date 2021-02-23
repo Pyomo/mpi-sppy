@@ -371,13 +371,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                     ref_suppl_vars[(ndn, i)] = v
                 # Add a non-anticipativity constraint, expect in the case when
                 # the variable is fixed and nonant_for_fixed_vars=False.
-                else:
-                    if (nonant_for_fixed_vars):
-                        expr = LinearExpression(linear_coefs=[1,-1],
-                                                linear_vars=[v,ref_suppl_vars[(ndn,i)]],
-                                                constant=0.)
-                        nonant_constr_suppl[(ndn,i,sname)] = (expr, 0.0)
-                    elif (not v.is_fixed()):
+                elif (nonant_for_fixed_vars) or (not v.is_fixed()):
                         expr = LinearExpression(linear_coefs=[1,-1],
                                                 linear_vars=[v,ref_suppl_vars[(ndn,i)]],
                                                 constant=0.)
