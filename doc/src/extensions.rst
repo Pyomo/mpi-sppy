@@ -109,7 +109,7 @@ to the dict passed as its ``options`` argument with the value
    The ``W`` value for a zero-probability variable will be stay at zero.
 
 
-A fixed variables may cause trouble if you are relying on the internal
+Fixed variables may cause trouble if you are relying on the internal
 PH convergence metric.
 
 .. Note::
