@@ -20,16 +20,14 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         comms (dict): key is node name; val is a comm object
         rank (int): mpi process rank
     """
-    def __init__(self, phb, rank, n_proc):
+    def __init__(self, phb):
         PHoptions = phb.PHoptions
-        local_scenarios = phb.local_scenarios
-        comms = phb.comms
         self.name = "fractintsnotconv"
         self.verbose = PHoptions["verbose"]
         self._PHoptions = PHoptions
-        self._local_scenarios = local_scenarios
-        self._comms = comms
-        self._rank = rank
+        self._local_scenarios = pbh.local_scenarios
+        self._comms = phb.comms
+        self._rank = phb.cylinder_rank
         if self.verbose:
             print ("Created converger=",self.name)
         
@@ -63,6 +61,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
             retval = 0
         if self.verbose:
             print (self.name,": convergence value=",retval)
+        self.convval = retval
         return retval
 
     def is_converged(self):

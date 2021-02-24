@@ -1,0 +1,158 @@
+# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
+# This software is distributed under the 3-clause BSD License.
+
+import math
+import mpisppy.extensions.extension
+
+import numpy as np
+import mpi4py.MPI as MPI
+
+_adaptive_rho_defaults = { 'convergence_tolerance' : 1e-5,
+                           'rho_decrease_multiplier' : 2.0,
+                           'rho_increase_multiplier' : 2.0,
+                           'iterations_converged_before_decrease' : 0,
+                           'rho_converged_decrease_multiplier' : 1.1,
+                           'rho_update_stop_iterations' : None,
+}
+
+_attr_to_option_name_map = {
+    '_tol': 'convergence_tolerance',
+    '_rho_decrease' : 'rho_decrease_multiplier',
+    '_rho_increase' : 'rho_increase_multiplier',
+    '_required_converged_before_decrease' : 'iterations_converged_before_decrease',
+    '_rho_converged_residual_decrease' : 'rho_converged_decrease_multiplier',
+    '_stop_iter_rho_update' : 'rho_update_stop_iterations'
+}
+
+class AdaptiveRhoSetter(mpisppy.extensions.extension.Extension):
+
+    def __init__(self, ph):
+
+        self.ph = ph
+        self.adaptive_rho_options = \
+            ph.PHoptions['adaptive_rho_options'] if 'adaptive_rho_options' in ph.PHoptions else dict()
+
+        self._set_options()
+        self._prev_avg = None
+
+    def _set_options(self):
+        options = self.adaptive_rho_options
+        for attr_name, opt_name in _attr_to_option_name_map.items():
+            setattr(self, attr_name, options[opt_name] if opt_name in options else _adaptive_rho_defaults[opt_name])
+
+    def _snapshot_avg(self, ph):
+        scenario = ph.local_scenarios[ph.local_scenario_names[0]]
+        self._prev_avg = { ndn_i : xbar.value for ndn_i, xbar in scenario._mpisppy_model.xbars.items() }
+
+    def _compute_primal_residual_norm(self, ph):
+
+        local_nodenames = []
+        local_primal_residuals = {}
+        global_primal_residuals = {}
+
+        for k,s in ph.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens        
+            for node in s._PySPnode_list:
+                if node.name not in local_nodenames:
+                    local_nodenames.append(ndn)
+
+                    ndn = node.name
+                    nlen = nlens[ndn]
+
+                    local_primal_residuals[ndn] = np.zeros(nlen, dtype='d')
+                    global_primal_residuals[ndn] = np.zeros(nlen, dtype='d')
+
+        for k,s in ph.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            xbars = s._mpisppy_model.xbars
+            for node in s._PySPnode_list:
+                ndn = node.name
+                primal_residuals = local_primal_residuals[ndn]
+
+                unweighted_primal_residuals = \
+                        np.fromiter((abs(v._value - xbars[ndn,i]._value) for i,v in enumerate(node.nonant_vardata_list)),
+                                    dtype='d', count=nlens[ndn] )
+                        ## TODO: the PySP version adjusts the probably taking the sqrt??
+                primal_residuals += s.PySP_prob * unweighted_primal_residuals
+
+        for nodename in local_nodenames:
+            ph.comms[nodename].Allreduce(
+                [local_primal_residuals[nodename], mpi.DOUBLE],
+                [global_primal_residuals[nodename], mpi.DOUBLE],
+                op=mpi.SUM)
+
+        primal_resid = {}
+        for ndn, global_primal_resid in global_primal_residuals.items():
+            for i, v in enumerate(global_primal_resid):
+                primal_resid[ndn,i] = v
+
+        return primal_resid
+
+    def _compute_dual_residual_norm(self, ph):
+        dual_resid = {}
+        s = ph.local_scenarios[ph.local_scenario_names[0]]
+        for ndn_i in s._mpisppy_data.nonant_indices:
+            dual_resid[ndn_i] = s._mpisppy_model.rho[ndn_i].value * \
+                                math.fabs( s._mpisppy_model.xbars[ndn_i].value - self._prev_avg[ndn_i] )
+        return dual_resid
+
+    def pre_iter0(self):
+        pass
+
+    def post_iter0(self):
+        pass
+
+    def miditer(self):
+
+        ph_iter = self.ph._PHIter
+        if self._stop_iter_rho_update is not None and \
+                (ph_iter > self._stop_iter_rho_update):
+            return
+        if self._prev_avg is None:
+            self._snapshot_avg(self.ph)
+        else:
+            primal_residuals = self._compute_primal_residual_norm(self.ph)
+            dual_residuals = self._compute_dual_residual_norm(self.ph)
+            self._snapshot_avg(self.ph)
+            first_line = ("Updating Rho Values:\n%21s %25s %16s %16s %16s"
+                          % ("Action",
+                             "Variable",
+                             "Primal Residual",
+                             "Dual Residual",
+                             "New Rho"))
+            first = True
+            first_scenario = True
+            for s in ph.scenarios.values():
+                for ndn_i, rho in s._mpisppy_model.rho.items():
+                    primal_resid = primal_residuals[ndn_i]
+                    dual_resid = dual_residuals[ndn_i]
+
+                    action = None
+                    ## TODO: why hardcode 10 here?
+                    if (primal_resid > 10.*dual_resid) and (primal_resid > self._tol):
+                        rho._value *= self._rho_increase
+                        action = "Increasing"
+                    elif (dual_resid > 10.*primal_resid) and (dual_resid > self._tol):
+                        if ph_iter >= self._required_converged_before_decrease:
+                            rho._value /= self._rho_decrease
+                            action = "Decreasing"
+                    ## TODO: check for overall PH convergence?
+                    elif (primal_resid < self._tol) and (dual_resid < self._tol):
+                        rho /= self._rho_converged_residual_decrease
+                        action = "Converged, Decreasing"
+                    if ph.cylinder_rank == 0 and action is not None:
+                        if first:
+                            first = False
+                            print(first_line)
+                        if first_scenario:
+                            print("%21s %25s %16g %16g %16g"
+                                  % (action, s._mpisppy_model.nonant_indices[ndi_i].name,
+                                     primal_resid, dual_resid, rho.value))
+                first_scenario = False
+
+
+    def enditer(self):
+        pass
+
+    def post_everything(self):
+        pass

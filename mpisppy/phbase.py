@@ -231,7 +231,6 @@ class PHBase(mpisppy.spbase.SPBase):
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
-                (lndn, li) = ndn_i
                 xdiff = nonant._value \
                         - s._mpisppy_model.xbars[ndn_i]._value
                 s._mpisppy_model.W[ndn_i]._value += pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
@@ -1434,7 +1433,7 @@ class PHBase(mpisppy.spbase.SPBase):
         converged = False
         if have_converger:
             # Call the constructor of the converger object
-            self.convobject = self.PH_converger(self, self.cylinder_rank, self.n_proc)
+            self.convobject = self.PH_converger(self)
         #global_toc('Rank: {} - Before iter loop'.format(self.cylinder_rank), True)
         self.conv = None
 
@@ -1493,6 +1492,7 @@ class PHBase(mpisppy.spbase.SPBase):
             self.Update_W(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
+            # TODO: BK: Not sure what the purpose of these lines is
             if have_converger:
                 self.conv = self.convobject.convergence_value()
             self.conv = self.convergence_diff()
