@@ -165,7 +165,7 @@ def get_objs(scenario_instance):
                   "inclusion in the extensive form.")
     return scenario_objs
 
-def create_EF(scenario_names, scenario_creator, creator_options=None,
+def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True):
     """ Create a ConcreteModel of the extensive form.
@@ -177,7 +177,7 @@ def create_EF(scenario_names, scenario_creator, creator_options=None,
             scenario_creator (callable):
                 Function which takes a scenario name as its first argument and
                 returns a concrete model corresponding to that scenario.
-            creator_options (dict, optional):
+            scenario_creator_kwargs (dict, optional):
                 Options to pass to `scenario_creator`.
             EF_name (str, optional):
                 Name of the ConcreteModel of the EF.
@@ -197,10 +197,12 @@ def create_EF(scenario_names, scenario_creator, creator_options=None,
             .PySP_prob attribute, this function displays a warning, and assumes
             that all scenarios are equally likely.
     """
-    if (creator_options is None):
-        creator_options = dict()
-    scen_dict = {name: scenario_creator(name, **creator_options)
-                    for name in scenario_names}
+    if scenario_creator_kwargs is None:
+        scenario_creator_kwargs = dict()
+    scen_dict = {
+        name: scenario_creator(name, **scenario_creator_kwargs)
+        for name in scenario_names
+    }
 
     if (len(scen_dict) == 0):
         raise RuntimeError("create_EF() received empty scenario list")
@@ -285,12 +287,18 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     sense = pyo.minimize if is_min else pyo.maximize
     EF_instance = pyo.ConcreteModel(name=EF_name)
     EF_instance.EF_Obj = pyo.Objective(expr=0.0, sense=sense)
-    EF_instance._PySP_feas_indicator = None
-    EF_instance._PySP_subscen_names = []
+
+    # we don't strict need these here, but it allows for eliding
+    # eliding of single scenarios and bundles when convenient
+    EF_instance._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
+    EF_instance._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+    EF_instance._mpisppy_data.scenario_feasible = None
+
+    EF_instance._ef_scenario_names = []
     EF_instance.PySP_prob = 0
     for (sname, scenario_instance) in scen_dict.items():
         EF_instance.add_component(sname, scenario_instance)
-        EF_instance._PySP_subscen_names.append(sname)
+        EF_instance._ef_scenario_names.append(sname)
         # Now deactivate the scenario instance Objective
         scenario_objs = get_objs(scenario_instance)
         for obj_func in scenario_objs:
@@ -315,7 +323,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     ref_suppl_vars = dict()
 
-    EF_instance._PySP_nlens = dict() 
+    EF_instance._nlens = dict() 
 
     nonant_constr = pyo.Constraint(pyo.Any, name='_C_EF_')
     EF_instance.add_component('_C_EF_', nonant_constr)
@@ -325,19 +333,16 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     EF_instance.add_component('_C_EF_suppl', nonant_constr_suppl)
 
     for (sname, s) in scen_dict.items():
-        if (not hasattr(s, '_PySP_nlens')):
-            nlens = {node.name: len(node.nonant_vardata_list) 
-                                for node in s._PySPnode_list}
-        else:
-            nlens = s._PySP_nlens
+        nlens = {node.name: len(node.nonant_vardata_list) 
+                            for node in s._PySPnode_list}
         
         for (node_name, num_nonant_vars) in nlens.items(): # copy nlens to EF
-            if (node_name in EF_instance._PySP_nlens.keys() and
-                num_nonant_vars != EF_instance._PySP_nlens[node_name]):
+            if (node_name in EF_instance._nlens.keys() and
+                num_nonant_vars != EF_instance._nlens[node_name]):
                 raise RuntimeError("Number of non-anticipative variables is "
                     "not consistent at node " + node_name + " in scenario " +
                     sname)
-            EF_instance._PySP_nlens[node_name] = num_nonant_vars
+            EF_instance._nlens[node_name] = num_nonant_vars
 
         nlens_ef_suppl = {node.name: len(node.nonant_ef_suppl_vardata_list)
                                    for node in s._PySPnode_list}
@@ -463,7 +468,7 @@ def ef_scenarios(ef):
         scenario name, scenario instance (str, ConcreteModel)
     """
     
-    for sname in ef._PySP_subscen_names:
+    for sname in ef._ef_scenario_names:
         yield (sname, getattr(ef, sname))
 
         

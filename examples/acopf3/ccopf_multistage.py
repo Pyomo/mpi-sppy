@@ -50,34 +50,62 @@ def FixGaussian(minutes, acstream, mu, sigma):
 
 #======= end repair functions =====
     
-def _md_dict(cb_data):
+def _md_dict(epath):
     p = str(egret.__path__)
     l = p.find("'")
     r = p.find("'", l+1)
     egretrootpath = p[l+1:r]
-    if cb_data["epath"][0] != os.sep:
-        test_case = os.path.join(egretrootpath, cb_data["epath"])
+    if epath[0] != os.sep:
+        test_case = os.path.join(egretrootpath, epath)
     else:
-        test_case = os.path.join(egretrootpath, cb_data["epath"][1:])
+        test_case = os.path.join(egretrootpath, epath[1:])
 
     # look at egret/data/model_data.py for the format specification of md_dict
     return create_ModelData(test_case)
     
 
 ####################################
-def pysp2_callback(scenario_name,
-                    node_names=None,
-                    cb_data=None):
+def pysp2_callback(
+    scenario_name,
+    etree=None,
+    solver=None,
+    epath=None,
+    tee=False,
+    acstream=None,
+    convex_relaxation=False,
+    verbose=False,
+    ramp_coeff=1000000,
+    load_mismatch_cost=1000,
+    q_load_mismatch_cost=None,
+):
     """
     mpisppy signature for scenario creation.
     Then find a starting solution for the scenario if solver option is not None.
     Note that stage numbers are one-based.
 
     Args:
-        scenario_name (str): put the scenario number on the end 
-        node_names (int): not used
-        cb_data: (dict) "etree", "solver", "epath", "tee", "acstream", 
-                        "convex_relaxation"
+        scenario_name (str):
+            Put the scenario number on the end 
+        etree ():
+            Default is None.
+        solver (str):
+            Solver to use.
+        epath (str):
+            Path to the egret data
+        tee (bool):
+            If True, displays solver output. Default is False.
+        acstream ():
+            Default is None.
+        convex_relaxation (bool):
+            If True, build the convex relaxation. Default is False.
+        verbose (bool, optional):
+            If True, display verbose output. Default is False.
+        ramp_coeff (int, optional):
+            Default is 1e6.
+        load_mismatch_cost (float, optional):
+            Default is 1000.
+        q_load_mismatch_cost (float, optional):
+            Deafult is load_mismatch_cost.
 
     Returns:
         scenario (pyo.ConcreteModel): the scenario instance
@@ -87,19 +115,12 @@ def pysp2_callback(scenario_name,
         _egret_md (egret tuple with dict as [1]) egret model data
 
     """
+    print("Debug: convex_relaxation=",convex_relaxation)
     # pull the number off the end of the scenario name
     scen_num = sputils.extract_num(scenario_name)
 
-    etree = cb_data["etree"]
-    solver = cb_data["solver"]
-    acstream = cb_data["acstream"]
-    convex_relaxation = cb_data["convex_relaxation"] if "convex_relaxation"\
-                       in cb_data else False
-    verbose = cb_data["verbose"] if "verbose" in cb_data else False
-    ramp_coeff = cb_data["ramp_coeff"] if "ramp_coeff" in cb_data else 1000000
-
-    load_mismatch_cost = cb_data["load_mismatch_cost"] if "load_mismatch_cost" in cb_data else 1000 # *not* in pu (egret multiplies by p.u.)
-    q_load_mismatch_cost = cb_data["q_load_mismatch_cost"] if "q_load_mismatch_cost" in cb_data else load_mismatch_cost
+    if q_load_mismatch_cost is None:
+        q_load_mismatch_cost = load_mismatch_cost
 
     def lines_up_and_down(stage_md_dict, enode):
         # local routine to configure the lines in stage_md_dict for the scenario
@@ -139,7 +160,7 @@ def pysp2_callback(scenario_name,
     full_scenario_model.stage_models = dict()
 
     # look at egret/data/model_data.py for the format specification of md_dict
-    first_stage_md_dict = _md_dict(cb_data)
+    first_stage_md_dict = _md_dict(epath)
     generator_set = first_stage_md_dict.attributes("generator")
     generator_names = generator_set["names"]
 
@@ -213,7 +234,6 @@ def pysp2_callback(scenario_name,
     # solve it so subsequent code will have a good start
     if solver is not None:
         print(f"scenario creation callback is solving {scenario_name} on rank {rank}")
-        tee = cb_data["tee"] if "tee" in cb_data else False
         solver.solve(inst, tee=tee)   #symbolic_solver_labels=True, keepfiles=True)
 
     # attachments
@@ -311,16 +331,16 @@ if __name__ == "__main__":
     if nscen % n_proc != 0:
         raise RuntimeError("nscen={} must be a multiple of n_proc={}".\
                            format(nscen, n_proc))
-    cb_data = dict()
-    cb_data["convex_relaxation"] = True
-    print(f"Convex relaxation={cb_data['convex_relaxation']}")
-    if cb_data["convex_relaxation"]:
-        cb_data["solver"] = None
-    else:
-        cb_data["solver"] = solver  # try to get a good starting point
-    cb_data["tee"] = False # for inialization solves
-    cb_data["epath"] = egret_path_to_data
-    md_dict = _md_dict(cb_data)
+
+    convex_relaxation = True
+    print(f"Convex relaxation = {convex_relaxation}")
+    scenario_creator_kwargs = {
+        "convex_relaxation": convex_relaxation,
+        "solver": None if convex_relaxation else solver,
+        "tee": False,  # For initialization solves
+        "epath": egret_path_to_data,
+    }
+    md_dict = _md_dict(egret_path_to_data)
 
     if verbose and rank==0:
         print("start data dump")
@@ -337,7 +357,7 @@ if __name__ == "__main__":
         lines.append(this_branch[0])
 
     acstream = np.random.RandomState()
-    cb_data["etree"] = ET.ACTree(number_of_stages,
+    scenario_creator_kwargs["etree"] = ET.ACTree(number_of_stages,
                                  branching_factors,
                                  seed,
                                  acstream,
@@ -345,17 +365,15 @@ if __name__ == "__main__":
                                  stage_duration_minutes,
                                  repair_fct,
                                  lines)
-    cb_data["epath"] = egret_path_to_data
-    cb_data["acstream"] = acstream
-    creator_options = {"cb_data": cb_data}
+    scenario_creator_kwargs["acstream"] = acstream
     scenario_names=["Scenario_"+str(i)\
-                    for i in range(1,len(cb_data["etree"].rootnode.ScenarioList)+1)]
+                    for i in range(1,len(scenario_creator_kwargs["etree"].rootnode.ScenarioList)+1)]
 
     
     # end options
     ef = sputils.create_EF(scenario_names,
                              pysp2_callback,
-                             creator_options)
+                             scenario_creator_kwargs=scenario_creator_kwargs)
     ###solver.options["BarHomogeneous"] = 1
     if "gurobi" in solvername:
         solver.options["BarHomogeneous"] = 1

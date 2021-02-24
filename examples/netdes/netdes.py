@@ -14,14 +14,14 @@ import numpy as np
 from parse import parse
 
 
-def scenario_creator(scenario_name, node_names=None, cb_data=None):
-    if (cb_data is None):
+def scenario_creator(scenario_name, path=None):
+    if path is None:
         raise RuntimeError('Must provide the name of the .dat file '
                            'containing the instance data via the '
-                           'cb_data argument to scenario_creator')
+                           'path argument to scenario_creator')
     
     scenario_ix = _get_scenario_ix(scenario_name)
-    model = build_scenario_model(cb_data, scenario_ix)
+    model = build_scenario_model(path, scenario_ix)
 
     # now attach the one and only scenario tree node
     sputils.attach_root_node(model, model.FirstStageCost, [model.x])

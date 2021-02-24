@@ -73,11 +73,13 @@ class Test_aph_sizes(unittest.TestCase):
         PHoptions["PHIterLimit"] = 2
         PHoptions["async_frac_needed"] = 0.5
         PHoptions["async_sleep_secs"] = 0.5
-        aph = mpisppy.opt.aph.APH(PHoptions,
-                              self.all3_scenario_names,
-                              scenario_creator,
-                              scenario_denouement,
-                              cb_data=3)
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
@@ -86,11 +88,13 @@ class Test_aph_sizes(unittest.TestCase):
         PHoptions["PHIterLimit"] = 2
         PHoptions["async_frac_needed"] = 0.5
         PHoptions["async_sleep_secs"] = 0.5
-        aph = mpisppy.opt.aph.APH(PHoptions,
-                              self.all3_scenario_names,
-                              scenario_creator,
-                              scenario_denouement,
-                              cb_data=3)
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print ("objthing={}, (was=-2435908)".format(obj))
@@ -102,9 +106,13 @@ class Test_aph_sizes(unittest.TestCase):
         PHoptions["bundles_per_rank"] = 2
         PHoptions["async_frac_needed"] = 0.5
         PHoptions["async_sleep_secs"] = 0.5
-        aph = mpisppy.opt.aph.APH(PHoptions, self.all10_scenario_names,
-                              scenario_creator, scenario_denouement,
-                              cb_data=10)
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all10_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 10},
+        )
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print ("bundle objthing={}, (was=224712.9)".format(obj))
         print ("bundle tbound ={} (was=223168.5)".format(tbound))
@@ -119,11 +127,13 @@ class Test_aph_sizes(unittest.TestCase):
         PHoptions["async_sleep_secs"] = 0.5
         a = 2
         PHoptions["APHgamma"] = a
-        aph = mpisppy.opt.aph.APH(PHoptions,
-                              self.all3_scenario_names,
-                              scenario_creator,
-                              scenario_denouement,
-                              cb_data=3)
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"APHgamma={a}; objthing={obj}")
@@ -139,11 +149,13 @@ class Test_aph_sizes(unittest.TestCase):
         PHoptions["async_sleep_secs"] = 0.5
         a = 2
         PHoptions["APHuse_lag"] = True
-        aph = mpisppy.opt.aph.APH(PHoptions,
-                              self.all3_scenario_names,
-                              scenario_creator,
-                              scenario_denouement,
-                              cb_data=3)
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"use lag objthing={obj}")
@@ -157,9 +169,13 @@ class Test_aph_sizes(unittest.TestCase):
         PHoptions["async_frac_needed"] = 0.5
         PHoptions["async_sleep_secs"] = 0.5
         PHoptions["APHuse_lag"] = True
-        aph = mpisppy.opt.aph.APH(PHoptions, self.all10_scenario_names,
-                              scenario_creator, scenario_denouement,
-                              cb_data=10)
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all10_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 10},
+        )
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print ("uselag bundle objthing={}, (pre-lag was=224712.9)".format(obj))
         print ("bundle tbound ={} (was=223168.5)".format(tbound))

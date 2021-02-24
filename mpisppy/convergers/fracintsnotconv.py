@@ -44,16 +44,16 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         numints = 0
         numconv = 0
         for k,s in self._local_scenarios.items():
-            nlens = s._PySP_nlens        
+            nlens = s._mpisppy_data.nlens        
             for node in s._PySPnode_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
                     xvar = node.nonant_vardata_list[i]
                     if xvar.is_integer() or xvar.is_binary():
                         numints += 1
-                        xb = pyo.value(s._xbars[(ndn,i)])
-                        #print ("dlw debug",xb*xb, pyo.value(s._xsqbars[(ndn,i)]))
-                        if xb * xb == pyo.value(s._xsqbars[(ndn,i)]):
+                        xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                        #print ("dlw debug",xb*xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]))
+                        if xb * xb == pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]):
                             numconv += 1
         if self.verbose:
             print (self.name,": numints=",numints)

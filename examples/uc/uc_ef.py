@@ -10,14 +10,14 @@ from mpisppy.opt.ef import ExtensiveForm
 solver_name = sys.argv[1]
 scen_count = 3
 scenario_names = [f"Scenario{i+1}" for i in range(scen_count)]
-cb_data = {"path": f"{scen_count}scenarios_r1/"}
+scenario_creator_kwargs = {"path": f"{scen_count}scenarios_r1/"}
 options = {"solver": solver_name}
 ef = ExtensiveForm(
     options,
     scenario_names,
     uc.scenario_creator,
     model_name="TestEF",
-    cb_data=cb_data,
+    scenario_creator_kwargs=scenario_creator_kwargs,
 )
 results = ef.solve_extensive_form(tee=True)
 print(f"{scen_count}-scenario UC objective value:", pyo.value(ef.ef.EF_Obj))

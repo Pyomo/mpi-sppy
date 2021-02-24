@@ -37,7 +37,7 @@ class LShapedMethod(spbase.SPBase):
             - relax_master (boolean) - If True, the LP relaxation of the master
               problem is solved (i.e. integer variables in the master problem
               are relaxed).
-            - cb_data (dict) - Data to pass directly to the scenario_creator.
+            - scenario_creator_kwargs (dict) - Keyword args to pass to the scenario_creator.
             - valid_eta_lb (dict) - Dictionary mapping scenario names to valid
               lower bounds for the eta variables--i.e., a valid lower (outer)
               bound on the optimal objective value for each scenario. If none
@@ -58,8 +58,8 @@ class LShapedMethod(spbase.SPBase):
         mpicomm (MPI comm, optional):
             MPI communicator to use between all scenarios. Default is
             `MPI.COMM_WORLD`.
-        cb_data (any, optional): 
-            Data passed directly to scenario_creator.
+        scenario_creator_kwargs (dict, optional): 
+            Keyword arguments to pass to `scenario_creator`.
     """
     def __init__(
         self, 
@@ -69,7 +69,7 @@ class LShapedMethod(spbase.SPBase):
         scenario_denouement=None,
         all_nodenames=None,
         mpicomm=None,
-        cb_data=None,
+        scenario_creator_kwargs=None,
     ):
         super().__init__(
             options,
@@ -78,7 +78,7 @@ class LShapedMethod(spbase.SPBase):
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
-            cb_data=cb_data,
+            scenario_creator_kwargs=scenario_creator_kwargs,
         )
         if self.multistage:
             raise Exception("LShaped does not currently support multiple stages")
@@ -110,7 +110,10 @@ class LShapedMethod(spbase.SPBase):
                                     for scen in self.all_scenario_names }
             self.compute_eta_bound = True
 
-        self.cb_data = cb_data
+        if scenario_creator_kwargs is None:
+            self.scenario_creator_kwargs = dict()
+        else:
+            self.scenario_creator_kwargs = scenario_creator_kwargs
         self.indx_to_stage = None
         self.has_valid_eta_lb = self.valid_eta_lb is not None
         self.has_master_scens = self.master_scenarios is not None
@@ -140,8 +143,9 @@ class LShapedMethod(spbase.SPBase):
     def _create_master_no_scenarios(self):
 
         # using the first scenario as a basis
-        master = self.scenario_creator(self.all_scenario_names[0], 
-                                    node_names=None, cb_data=self.cb_data)
+        master = self.scenario_creator(
+            self.all_scenario_names[0], **self.scenario_creator_kwargs
+        )
 
         if self.relax_master:
             RelaxIntegerVars().apply_to(master)
@@ -230,13 +234,18 @@ class LShapedMethod(spbase.SPBase):
                 if not hasattr(scenario, 'PySP_prob'):
                     scenario.PySP_prob = 1./len(self.all_scenario_names)
                 return scenario
-            master = sputils.create_EF(ef_scenarios, scenario_creator_wrapper,
-                    creator_options={'node_names':None, 'cb_data':self.cb_data})
+            master = sputils.create_EF(
+                ef_scenarios,
+                scenario_creator_wrapper,
+                scenario_creator_kwargs=self.scenario_creator_kwargs,
+            )
 
             nonant_list, nonant_ids = _get_nonant_ids_EF(master)
         else:
-            master = self.scenario_creator(ef_scenarios[0], node_names=None,
-                                            cb_data=self.cb_data)
+            master = self.scenario_creator(
+                ef_scenarios[0],
+                **self.scenario_creator_kwargs,
+            )
             if not hasattr(master, 'PySP_prob'):
                 master.PySP_prob = 1./len(self.all_scenario_names)
 
@@ -359,13 +368,13 @@ class LShapedMethod(spbase.SPBase):
         instance = self.local_scenarios[scenario_name]
 
         subproblem_to_master_vars_map = pyo.ComponentMap()
-        for var, mvar in zip(instance._nonant_indices.values(), self.master_vars):
+        for var, mvar in zip(instance._mpisppy_data.nonant_indices.values(), self.master_vars):
             if var.name not in mvar.name:
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
             subproblem_to_master_vars_map[var] = mvar 
 
         # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
     def create_subproblem(self, scenario_name):
         """ the subproblem creation function passed into the
@@ -488,7 +497,7 @@ class LShapedMethod(spbase.SPBase):
             var.fixed = False
 
         # this is for interefacing with PH code
-        instance._subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
 
         if self.store_subproblems:
             self.subproblems[scenario_name] = instance
@@ -690,9 +699,9 @@ def _get_nonant_ids(instance):
     return nonant_list, { id(var) for var in nonant_list }
 
 def _get_nonant_ids_EF(instance):
-    assert len(instance._PySP_nlens) == 1
+    assert len(instance._mpisppy_data.nlens) == 1
 
-    ndn, nlen = list(instance._PySP_nlens.items())[0]
+    ndn, nlen = list(instance._mpisppy_data.nlens.items())[0]
 
     ## this is for the cut variables, so we just need (and want)
     ## exactly one set of them
@@ -700,7 +709,7 @@ def _get_nonant_ids_EF(instance):
 
     ## this is for adjusting the objective, so needs all the nonants
     ## in the EF
-    snames = instance._PySP_subscen_names
+    snames = instance._ef_scenario_names
 
     nonant_ids = set()
     for s in snames:

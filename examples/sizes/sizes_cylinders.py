@@ -36,11 +36,10 @@ def main():
     with_fixer = args.with_fixer
     fixer_tol = args.fixer_tol
 
-    if num_scen != 3 and num_scen != 10:
-        raise RuntimeError("num-scen must the 3 or 10; was{}".\
-                           format(num_scen))
+    if num_scen not in (3, 10):
+        raise RuntimeError(f"num_scen must the 3 or 10; was {num_scen}")
     
-    cb_data = num_scen
+    scenario_creator_kwargs = {"scenario_count": num_scen}
     scenario_creator = sizes.scenario_creator
     scenario_denouement = sizes.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
@@ -55,7 +54,7 @@ def main():
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)        
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
-                              cb_data=cb_data,
+                              scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=ph_ext,
                               rho_setter = rho_setter)
 
@@ -71,21 +70,29 @@ def main():
     
     # FWPH spoke
     if with_fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, cb_data=cb_data)
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
-        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              cb_data=cb_data,
-                                              rho_setter = rho_setter)
+        lagrangian_spoke = vanilla.lagrangian_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            rho_setter=rho_setter,
+        )
 
     # xhat looper bound spoke
     if with_xhatlooper:
-        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, cb_data=cb_data)
+        xhatlooper_spoke = vanilla.xhatlooper_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
 
     # xhat shuffle bound spoke
     if with_xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, cb_data=cb_data)
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
        
     list_of_spoke_dict = list()
     if with_fwph:

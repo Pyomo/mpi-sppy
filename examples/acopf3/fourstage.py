@@ -68,14 +68,16 @@ def main():
             st2scen = st1scen + j*branching_factors[2]
             xhat_dict["ROOT_"+str(i)+'_'+str(j)] = "Scenario_"+str(st2scen)
 
-    cb_data = dict()
-    cb_data["convex_relaxation"] = True
-    cb_data["epath"] = egret_path_to_data
-    if cb_data["convex_relaxation"]:
+    convex_relaxation = True
+    scenario_creator_kwargs = {
+        "convex_relaxation": convex_relaxation,
+        "epath": egret_path_to_data,
+    }
+    if convex_relaxation:
         # for initialization solve
         solvername = solvername
         solver = pyo.SolverFactory(solvername)
-        cb_data["solver"] = None
+        scenario_creator_kwargs["solver"] = None
         ##if "gurobi" in solvername:
             ##solver.options["BarHomogeneous"] = 1
     else:
@@ -83,8 +85,8 @@ def main():
         solver = pyo.SolverFactory(solvername)
         if "gurobi" in solvername:
             solver.options["BarHomogeneous"] = 1
-        cb_data["solver"] = solver
-    md_dict = _md_dict(cb_data)
+        scenario_creator_kwargs["solver"] = solver
+    md_dict = _md_dict(egret_path_to_data)
 
     if verbose:
         print("start data dump")
@@ -102,7 +104,7 @@ def main():
 
     acstream = np.random.RandomState()
         
-    cb_data["etree"] = etree.ACTree(number_of_stages,
+    scenario_creator_kwargs["etree"] = etree.ACTree(number_of_stages,
                                     branching_factors,
                                     seed,
                                     acstream,
@@ -110,15 +112,15 @@ def main():
                                     stage_duration_minutes,
                                     repair_fct,
                                     lines)
-    cb_data["acstream"] = acstream
+    scenario_creator_kwargs["acstream"] = acstream
 
     all_scenario_names=["Scenario_"+str(i)\
-                        for i in range(1,len(cb_data["etree"].\
+                        for i in range(1,len(scenario_creator_kwargs["etree"].\
                                              rootnode.ScenarioList)+1)]
-    all_nodenames = cb_data["etree"].All_Nonleaf_Nodenames()
+    all_nodenames = scenario_creator_kwargs["etree"].All_Nonleaf_Nodenames()
 
     PHoptions = dict()
-    if cb_data["convex_relaxation"]:
+    if convex_relaxation:
         PHoptions["solvername"] = solvername
         if "gurobi" in PHoptions["solvername"]:
             PHoptions["iter0_solver_options"] = {"BarHomogeneous": 1}
@@ -182,7 +184,7 @@ def main():
             "all_scenario_names": all_scenario_names,
             "scenario_creator": pysp2_callback,
             'scenario_denouement': scenario_denouement,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter.ph_rhosetter_callback,
             "PH_extensions": None,
             "all_nodenames":all_nodenames,
@@ -205,7 +207,7 @@ def main():
             'all_scenario_names': all_scenario_names,
             'scenario_creator': pysp2_callback,
             'scenario_denouement': scenario_denouement,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
             'all_nodenames': all_nodenames
         },
     }

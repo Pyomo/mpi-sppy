@@ -7,7 +7,7 @@ from battery import scenario_creator, scenario_denouement
 ###from batteryext import BatteryExtension
 
 def main():
-    cb_data = {
+    scenario_creator_kwargs = {
         'solar_filename' : 'solar.csv',
         'use_LP'         : False,
         'lam'            : 467, # Dual weight for dualized chance constr
@@ -29,7 +29,7 @@ def main():
 
     names = ['s' + str(i) for i in range(50)] 
     ph = PH(PH_options, names, scenario_creator, scenario_denouement,
-            cb_data=cb_data)
+            scenario_creator_kwargs=scenario_creator_kwargs)
 
     ph.ph_main()
 

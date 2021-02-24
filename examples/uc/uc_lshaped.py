@@ -36,7 +36,9 @@ def main():
 
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
-    cb_data = {"path": f"./{num_scen}scenarios_r1/"}
+    scenario_creator_kwargs = {
+        "path": f"./{num_scen}scenarios_r1/"
+    }
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
@@ -70,19 +72,19 @@ def main():
             "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         },
     }
 
     # FWPH spoke
     if with_fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, cb_data=cb_data)
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
         fw_spoke["opt_kwargs"]["PH_options"]["abs_gap"] = 0.
         fw_spoke["opt_kwargs"]["PH_options"]["rel_gap"] = 1e-5
         fw_spoke["opt_kwargs"]["rho_setter"] = uc.scenario_rhos
 
     if with_xhatlshaped:
-        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, cb_data=cb_data)
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
     if with_fwph:

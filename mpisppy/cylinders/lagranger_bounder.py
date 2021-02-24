@@ -53,8 +53,8 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         # IMPORTANT: the scalings accumulate.
         # E.g., 0.5 then 2.0 gets you back where you started.
         for (sname, scenario) in self.local_scenarios.items():
-            for ndn_i, xvar in scenario._nonant_indices.items():
-                scenario._PHrho[ndn_i] *= rf
+            for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
+                scenario._mpisppy_model.rho[ndn_i] *= rf
         
     
     def _update_weights_and_solve(self, iternum):

@@ -27,8 +27,9 @@ if __name__=="__main__":
     inst = "network-10-20-L-01"
     num_scen = int(inst.split("-")[-3])
     scenario_names = [f"Scen{i}" for i in range(num_scen)]
-    cb_data = f"{netdes.__file__[:-10]}/data/{inst}.dat"
+    path = f"{netdes.__file__[:-10]}/data/{inst}.dat"
     scenario_creator = netdes.scenario_creator
+    scenario_creator_kwargs = {"path": path}
 
     hub_ph_options = {
         "solvername": "gurobi_persistent",
@@ -56,7 +57,7 @@ if __name__=="__main__":
             "PHoptions": hub_ph_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         }
     }
 
@@ -89,7 +90,7 @@ if __name__=="__main__":
             "FW_options": fw_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         }
     }
 
@@ -102,7 +103,7 @@ if __name__=="__main__":
             "PHoptions": ph_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         }
     }
 
@@ -122,7 +123,7 @@ if __name__=="__main__":
             "PHoptions": xhat_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
-            "cb_data": cb_data,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
         }
     }
     list_of_spoke_dict = (fw_spoke, lagrangian_spoke, xhatlooper_spoke)

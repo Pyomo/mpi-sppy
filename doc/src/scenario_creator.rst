@@ -6,9 +6,9 @@
 This function instantiates models for scenarios and usually attaches
 some information about the scenario tree. It is required, but can have
 any name, and its first argment must be the scenario name. The other
-two arguments are optional. The`cb_data` option specifies data that is
-passed through from the calling program (it is callded
-`cb_data`). This can be of any type, and might give, e.g., a data
+two arguments are optional. The `scenario_creator_kwargs` option specifies data that is
+passed through from the calling program.
+`scenario_creator_kwargs` must be a dictionary, and might give, e.g., a data
 directory name or probability distribution information.  The
 `scenario_creator` function returns an instantiated model for the
 instance. I.e., it either creates a `ConcreteModel` or else it creates

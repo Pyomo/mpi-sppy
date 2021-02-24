@@ -47,7 +47,7 @@ def main():
     if args.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
 
-    cb_data = f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"
+    scenario_creator_kwargs = {"data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"}
     scenario_creator = sslp.scenario_creator
     scenario_denouement = sslp.scenario_denouement    
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
@@ -62,7 +62,7 @@ def main():
 
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
-                              cb_data=cb_data,
+                              scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=ph_ext,
                               rho_setter = None)
 
@@ -75,21 +75,21 @@ def main():
         
     # FWPH spoke
     if with_fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, cb_data=cb_data)
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              cb_data=cb_data,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
         
     # xhat looper bound spoke
     if with_xhatlooper:
-        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, cb_data=cb_data)
+        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # xhat shuffle bound spoke
     if with_xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, cb_data=cb_data)
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
        
     list_of_spoke_dict = list()
     if with_fwph:

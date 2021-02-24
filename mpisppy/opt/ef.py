@@ -27,8 +27,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             name, and returns a Pyomo model of that scenario.
         model_name (str, optional):
             Name of the resulting EF model object.
-        cb_data (dict):
-            Data passed directly to scenario_creator.
+        scenario_creator_kwargs (dict):
+            Keyword args passed to `scenario_creator`.
         suppress_warnings (bool, optional):
             Boolean to suppress warnings when building the EF. Default
             is False.
@@ -38,7 +38,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         options,
         all_scenario_names,
         scenario_creator,
-        cb_data=None,
+        scenario_creator_kwargs=None,
         all_nodenames=None,
         model_name=None,
         suppress_warnings=False,
@@ -48,7 +48,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             options,
             all_scenario_names,
             scenario_creator,
-            cb_data=cb_data,
+            scenario_creator_kwargs=scenario_creator_kwargs,
             all_nodenames=all_nodenames
         )
         if self.n_proc > 1 and self.cylinder_rank == 0:
@@ -122,14 +122,14 @@ if __name__ == "__main__":
 
     """ Farmer example """
     scenario_names = ["Scen" + str(i) for i in range(3)]
-    cb_data = {"sense": pyo.minimize, "use_integer": False}
+    scenario_creator_kwargs = {"sense": pyo.minimize, "use_integer": False}
     options = {"solver": "gurobi"}
     ef = ExtensiveForm(
         options,
         scenario_names,
         farmer.scenario_creator,
         model_name="TestEF",
-        cb_data=cb_data,
+        scenario_creator_kwargs=scenario_creator_kwargs,
     )
     results = ef.solve_extensive_form()
     print("Farmer objective value:", pyo.value(ef.ef.EF_Obj))
