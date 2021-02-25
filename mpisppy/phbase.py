@@ -232,6 +232,8 @@ class PHBase(mpisppy.spbase.SPBase):
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
                 (lndn, li) = ndn_i
+                ##if nonant._value == None:
+                ##    print(f"***_value is None for nonant var {nonant.name}")
                 xdiff = nonant._value \
                         - s._mpisppy_model.xbars[ndn_i]._value
                 s._mpisppy_model.W[ndn_i]._value += pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
@@ -246,6 +248,7 @@ class PHBase(mpisppy.spbase.SPBase):
                     # Requiring a vector for every tree node? (should we?)
                     # if type(s._mpisppy_data.w_coeff[lndn]) is not float:
                     s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.w_coeff[lndn][li]
+
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
@@ -558,7 +561,7 @@ class PHBase(mpisppy.spbase.SPBase):
     def _populate_W_cache(self, cache):
         """ Copy the W values for noants *for all local scenarios*
         Args:
-            cache (np vector) to receive the W's for all local scenarios
+            cache (np vector) to receive the W's for all local scenarios (for sending)
 
         NOTE: This is not the same as the nonant Vars because it puts all local W
               values into the same cache and the cache is *not* attached to the scenario.
@@ -566,10 +569,16 @@ class PHBase(mpisppy.spbase.SPBase):
         """
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
+            if (ci + len(model._mpisppy_data.nonant_indices)) >= len(cache):
+                tlen = len(model._mpisppy_data.nonant_indices) * len(self.local_scenarios)
+                raise RuntimeError("W cache length mismatch detected by "
+                                   f"{self.__class__.__name__} that has "
+                                   f"total W len {tlen} but passed cache len-1={len(cache)-1}; "
+                                   f"len(nonants)={len(model._mpisppy_data.nonant_indices)}")
             for ix in model._mpisppy_data.nonant_indices:
-                assert(ci < len(cache))
                 cache[ci] = pyo.value(model._mpisppy_model.W[ix])
                 ci += 1
+        assert(ci == len(cache) - 1)  # the other cylinder will fail above
 
     def _put_nonant_cache(self, cache):
         """ Put the value in the cache for noants *for all local scenarios*
