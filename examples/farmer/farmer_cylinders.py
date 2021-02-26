@@ -10,8 +10,8 @@ from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
-from mpisppy.extensions.adaptive_rho_setter import AdaptiveRhoSetter
-from mpisppy.convergers.adaptive_rho_converger import AdaptiveRhoConverger
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 
 def _parse_args():
     parser = baseparsers.make_parser(num_scens_reqd=True)
@@ -25,9 +25,9 @@ def _parse_args():
                         dest="crops_mult",
                         type=int,
                         default=1)                
-    parser.add_argument("--use-adaptive-rho-setter",
-                        help="Use the adaptive rho setter extension",
-                        dest="use_adaptive_rho_setter",
+    parser.add_argument("--use-norm-rho-updater",
+                        help="Use the norm rho updater extension",
+                        dest="use_norm_rho_updater",
                         action="store_true")
     args = parser.parse_args()
     return args
@@ -63,9 +63,9 @@ def main():
                               rho_setter = rho_setter)
 
     ## hack in adaptive rho
-    if args.use_adaptive_rho_setter:
-        hub_dict['opt_kwargs']['PH_extensions'] = AdaptiveRhoSetter
-        hub_dict['opt_kwargs']['PHoptions']['adaptive_rho_options'] = {'verbose': True}
+    if args.use_norm_rho_updater:
+        hub_dict['opt_kwargs']['PH_extensions'] = NormRhoUpdater
+        hub_dict['opt_kwargs']['PHoptions']['norm_rho_options'] = {'verbose': True}
 
     # FWPH spoke
     if args.with_fwph:

@@ -1,13 +1,15 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
+# Adapted from the PySP extension adaptive_rho_converger, authored by Gabriel Hackebeil
+
 import math
 import mpisppy.extensions.extension
 
 import numpy as np
 import mpi4py.MPI as MPI
 
-_adaptive_rho_defaults = { 'convergence_tolerance' : 1e-4,
+_norm_rho_defaults = { 'convergence_tolerance' : 1e-4,
                            'rho_decrease_multiplier' : 2.0,
                            'rho_increase_multiplier' : 2.0,
                            'primal_dual_difference_factor' : 100.,
@@ -28,21 +30,21 @@ _attr_to_option_name_map = {
     '_verbose' : 'verbose',
 }
 
-class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
+class NormRhoUpdater(mpisppy.extensions.extension.PHExtension):
 
     def __init__(self, ph):
 
         self.ph = ph
-        self.adaptive_rho_options = \
-            ph.PHoptions['adaptive_rho_options'] if 'adaptive_rho_options' in ph.PHoptions else dict()
+        self.norm_rho_options = \
+            ph.PHoptions['norm_rho_options'] if 'norm_rho_options' in ph.PHoptions else dict()
 
         self._set_options()
         self._prev_avg = None
 
     def _set_options(self):
-        options = self.adaptive_rho_options
+        options = self.norm_rho_options
         for attr_name, opt_name in _attr_to_option_name_map.items():
-            setattr(self, attr_name, options[opt_name] if opt_name in options else _adaptive_rho_defaults[opt_name])
+            setattr(self, attr_name, options[opt_name] if opt_name in options else _norm_rho_defaults[opt_name])
 
     def _snapshot_avg(self, ph):
         scenario = ph.local_scenarios[ph.local_scenario_names[0]]
@@ -140,7 +142,7 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
                     if self._verbose and ph.cylinder_rank == 0 and action is not None:
                         if first:
                             first = False
-                            first_line = ("Updating Rho Values:\n%21s %40s %16s %16s %16s"
+                            first_line = ("Updating rho values:\n%21s %40s %16s %16s %16s"
                                           % ("Action",
                                              "Variable",
                                              "Primal Residual",

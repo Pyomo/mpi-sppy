@@ -1,21 +1,23 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
+# Adapted from the PySP extension adaptive_rho_converger, authored by Gabriel Hackebeil
+
 import math
 import mpisppy.convergers.converger
 
 import mpi4py.MPI as MPI
 import numpy as np
 
-class AdaptiveRhoConverger(mpisppy.convergers.converger.Converger):
+class NormRhoConverger(mpisppy.convergers.converger.Converger):
 
     def __init__(self, ph):
-        ## TODO: this will never do anything unless the adaptive rho setter is also used
-        ## TODO: the rho setter should leave a flag on the data block of the local subproblems to indicate
+        ## TODO: this will never do anything unless the norm rho updater is also used
+        ## TODO: the rho updater should leave a flag on the data block of the local subproblems to indicate
         ##       its use and this converger should check for it.
-        if 'adaptive_rho_converger_options' in ph.PHoptions and \
-                'verbose' in ph.PHoptions['adaptive_rho_converger_options'] and \
-                ph.PHoptions['adaptive_rho_converger_options']['verbose']:
+        if 'nrom_rho_converger_options' in ph.PHoptions and \
+                'verbose' in ph.PHoptions['norm_rho_converger_options'] and \
+                ph.PHoptions['norm_rho_converger_options']['verbose']:
             self._verbose = True
         else:
             self._verbose = False
@@ -43,9 +45,9 @@ class AdaptiveRhoConverger(mpisppy.convergers.converger.Converger):
         if self._verbose and self.ph.cylinder_rank == 0:
             print(f"log(|rho|) = {log_rho_norm}")
             if ret_val:
-                print("Adaptive Rho Convergence Check Passed")
+                print("Norm rho convergence check passed")
             else:
-                print("Adaptive Rho Convergence Check Failed "
+                print("Adaptive rho convergence check failed "
                       f"(requires log(|rho|) < {self.ph.PHoptions['convthresh']}")
-                print("Continuing PH with updated Rho")
+                print("Continuing PH with updated rho")
         return ret_val 

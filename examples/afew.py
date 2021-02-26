@@ -42,7 +42,7 @@ def do_one(dirname, progname, np, argstring):
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 "
-       "--solver-name={} --no-fwph --use-adaptive-rho-setter".format(solver_name))
+       "--solver-name={} --no-fwph --use-norm-rho-updater".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",
        4,
