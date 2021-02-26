@@ -10,6 +10,7 @@ import mpi4py.MPI as MPI
 _adaptive_rho_defaults = { 'convergence_tolerance' : 1e-4,
                            'rho_decrease_multiplier' : 2.0,
                            'rho_increase_multiplier' : 2.0,
+                           'primal_dual_difference_factor' : 100.,
                            'iterations_converged_before_decrease' : 0,
                            'rho_converged_decrease_multiplier' : 1.1,
                            'rho_update_stop_iterations' : None,
@@ -20,6 +21,7 @@ _attr_to_option_name_map = {
     '_tol': 'convergence_tolerance',
     '_rho_decrease' : 'rho_decrease_multiplier',
     '_rho_increase' : 'rho_increase_multiplier',
+    '_primal_dual_difference_factor' : 'primal_dual_difference_factor',
     '_required_converged_before_decrease' : 'iterations_converged_before_decrease',
     '_rho_converged_residual_decrease' : 'rho_converged_decrease_multiplier',
     '_stop_iter_rho_update' : 'rho_update_stop_iterations',
@@ -116,6 +118,7 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
             primal_residuals = self._compute_primal_residual_norm(ph)
             dual_residuals = self._compute_dual_residual_norm(ph)
             self._snapshot_avg(ph)
+            primal_dual_difference_factor = self._primal_dual_difference_factor
             first = True
             first_scenario = True
             for s in ph.local_scenarios.values():
@@ -124,15 +127,13 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
                     dual_resid = dual_residuals[ndn_i]
 
                     action = None
-                    ## TODO: why hardcode 10 here?
-                    if (primal_resid > 10.*dual_resid) and (primal_resid > self._tol):
+                    if (primal_resid > primal_dual_difference_factor*dual_resid) and (primal_resid > self._tol):
                         rho._value *= self._rho_increase
                         action = "Increasing"
-                    elif (dual_resid > 10.*primal_resid) and (dual_resid > self._tol):
+                    elif (dual_resid > primal_dual_difference_factor*primal_resid) and (dual_resid > self._tol):
                         if ph_iter >= self._required_converged_before_decrease:
                             rho._value /= self._rho_decrease
                             action = "Decreasing"
-                    ## TODO: check for overall PH convergence?
                     elif (primal_resid < self._tol) and (dual_resid < self._tol):
                         rho._value /= self._rho_converged_residual_decrease
                         action = "Converged, Decreasing"
