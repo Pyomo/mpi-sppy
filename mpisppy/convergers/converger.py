@@ -20,17 +20,6 @@ class Converger:
         pass
 
     @abc.abstractmethod
-    def convergence_value(self):
-        ''' Compute a convergence value at this iteration.
-
-            This method takes no arguments. The user can access the SPBase
-            object by attaching the SPBase object to self in the Extension
-            constructor. This method is not required to return any
-            arguments--however, whatever it returns (possibly NONE) is attached
-        '''
-        pass
-
-    @abc.abstractmethod
     def is_converged(self):
         ''' Indicated whether the algorithm has converged.
             

@@ -5,6 +5,7 @@
     DLW Jan 2019
 """
 
+import math
 import pyomo.environ as pyo
 import mpisppy.convergers.converger
 
@@ -31,7 +32,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         if self.verbose:
             print ("Created converger=",self.name)
         
-    def convergence_value(self):
+    def _convergence_value(self):
         """ compute the fraction of *not* converged ints
         Args:
             self (object): create by prep
@@ -51,7 +52,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
                         numints += 1
                         xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                         #print ("dlw debug",xb*xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]))
-                        if xb * xb == pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]):
+                        if math.isclose(xb * xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)])):
                             numconv += 1
         if self.verbose:
             print (self.name,": numints=",numints)
@@ -61,7 +62,6 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
             retval = 0
         if self.verbose:
             print (self.name,": convergence value=",retval)
-        self.convval = retval
         return retval
 
     def is_converged(self):
@@ -72,4 +72,4 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         Returns:
            converged?: True if converged, False otherwise
         """
-        return self.convval < self._PHoptions['convthresh']
+        return self._convergence_value() < self._PHoptions['convthresh']

@@ -3,6 +3,7 @@
 
 import math
 import mpisppy.extensions.extension
+import mpisppy.convergers.converger
 
 import numpy as np
 import mpi4py.MPI as MPI
@@ -24,7 +25,7 @@ _attr_to_option_name_map = {
     '_stop_iter_rho_update' : 'rho_update_stop_iterations'
 }
 
-class AdaptiveRhoSetter(mpisppy.extensions.extension.Extension):
+class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
 
     def __init__(self, ph):
 
@@ -72,14 +73,13 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.Extension):
                 unweighted_primal_residuals = \
                         np.fromiter((abs(v._value - xbars[ndn,i]._value) for i,v in enumerate(node.nonant_vardata_list)),
                                     dtype='d', count=nlens[ndn] )
-                        ## TODO: the PySP version adjusts the probably taking the sqrt??
                 primal_residuals += s.PySP_prob * unweighted_primal_residuals
 
         for nodename in local_nodenames:
             ph.comms[nodename].Allreduce(
-                [local_primal_residuals[nodename], mpi.DOUBLE],
-                [global_primal_residuals[nodename], mpi.DOUBLE],
-                op=mpi.SUM)
+                [local_primal_residuals[nodename], MPI.DOUBLE],
+                [global_primal_residuals[nodename], MPI.DOUBLE],
+                op=MPI.SUM)
 
         primal_resid = {}
         for ndn, global_primal_resid in global_primal_residuals.items():
@@ -149,7 +149,6 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.Extension):
                                   % (action, s._mpisppy_model.nonant_indices[ndi_i].name,
                                      primal_resid, dual_resid, rho.value))
                 first_scenario = False
-
 
     def enditer(self):
         pass

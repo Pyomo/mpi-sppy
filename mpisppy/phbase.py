@@ -1492,9 +1492,6 @@ class PHBase(mpisppy.spbase.SPBase):
             self.Update_W(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
-            # TODO: BK: Not sure what the purpose of these lines is
-            if have_converger:
-                self.conv = self.convobject.convergence_value()
             self.conv = self.convergence_diff()
             #global_toc('Rank: {} - After convergence_diff'.format(self.cylinder_rank), True)
             if have_extensions:
