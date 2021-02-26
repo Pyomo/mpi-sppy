@@ -3,17 +3,17 @@
 
 import math
 import mpisppy.extensions.extension
-import mpisppy.convergers.converger
 
 import numpy as np
 import mpi4py.MPI as MPI
 
-_adaptive_rho_defaults = { 'convergence_tolerance' : 1e-5,
+_adaptive_rho_defaults = { 'convergence_tolerance' : 1e-4,
                            'rho_decrease_multiplier' : 2.0,
                            'rho_increase_multiplier' : 2.0,
                            'iterations_converged_before_decrease' : 0,
                            'rho_converged_decrease_multiplier' : 1.1,
                            'rho_update_stop_iterations' : None,
+                           'verbose' : False,
 }
 
 _attr_to_option_name_map = {
@@ -22,7 +22,8 @@ _attr_to_option_name_map = {
     '_rho_increase' : 'rho_increase_multiplier',
     '_required_converged_before_decrease' : 'iterations_converged_before_decrease',
     '_rho_converged_residual_decrease' : 'rho_converged_decrease_multiplier',
-    '_stop_iter_rho_update' : 'rho_update_stop_iterations'
+    '_stop_iter_rho_update' : 'rho_update_stop_iterations',
+    '_verbose' : 'verbose',
 }
 
 class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
@@ -55,9 +56,9 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
             nlens = s._mpisppy_data.nlens        
             for node in s._PySPnode_list:
                 if node.name not in local_nodenames:
-                    local_nodenames.append(ndn)
 
                     ndn = node.name
+                    local_nodenames.append(ndn)
                     nlen = nlens[ndn]
 
                     local_primal_residuals[ndn] = np.zeros(nlen, dtype='d')
@@ -104,25 +105,20 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
 
     def miditer(self):
 
-        ph_iter = self.ph._PHIter
+        ph = self.ph
+        ph_iter = ph._PHIter
         if self._stop_iter_rho_update is not None and \
                 (ph_iter > self._stop_iter_rho_update):
             return
         if self._prev_avg is None:
-            self._snapshot_avg(self.ph)
+            self._snapshot_avg(ph)
         else:
-            primal_residuals = self._compute_primal_residual_norm(self.ph)
-            dual_residuals = self._compute_dual_residual_norm(self.ph)
-            self._snapshot_avg(self.ph)
-            first_line = ("Updating Rho Values:\n%21s %25s %16s %16s %16s"
-                          % ("Action",
-                             "Variable",
-                             "Primal Residual",
-                             "Dual Residual",
-                             "New Rho"))
+            primal_residuals = self._compute_primal_residual_norm(ph)
+            dual_residuals = self._compute_dual_residual_norm(ph)
+            self._snapshot_avg(ph)
             first = True
             first_scenario = True
-            for s in ph.scenarios.values():
+            for s in ph.local_scenarios.values():
                 for ndn_i, rho in s._mpisppy_model.rho.items():
                     primal_resid = primal_residuals[ndn_i]
                     dual_resid = dual_residuals[ndn_i]
@@ -138,15 +134,21 @@ class AdaptiveRhoSetter(mpisppy.extensions.extension.PHExtension):
                             action = "Decreasing"
                     ## TODO: check for overall PH convergence?
                     elif (primal_resid < self._tol) and (dual_resid < self._tol):
-                        rho /= self._rho_converged_residual_decrease
+                        rho._value /= self._rho_converged_residual_decrease
                         action = "Converged, Decreasing"
-                    if ph.cylinder_rank == 0 and action is not None:
+                    if self._verbose and ph.cylinder_rank == 0 and action is not None:
                         if first:
                             first = False
+                            first_line = ("Updating Rho Values:\n%21s %40s %16s %16s %16s"
+                                          % ("Action",
+                                             "Variable",
+                                             "Primal Residual",
+                                             "Dual Residual",
+                                             "New Rho"))
                             print(first_line)
                         if first_scenario:
-                            print("%21s %25s %16g %16g %16g"
-                                  % (action, s._mpisppy_model.nonant_indices[ndi_i].name,
+                            print("%21s %40s %16g %16g %16g"
+                                  % (action, s._mpisppy_data.nonant_indices[ndn_i].name,
                                      primal_resid, dual_resid, rho.value))
                 first_scenario = False
 
