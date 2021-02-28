@@ -5,6 +5,7 @@
     DLW Jan 2019
 """
 
+import math
 import pyomo.environ as pyo
 import mpisppy.convergers.converger
 
@@ -20,20 +21,18 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         comms (dict): key is node name; val is a comm object
         rank (int): mpi process rank
     """
-    def __init__(self, phb, rank, n_proc):
+    def __init__(self, phb):
         PHoptions = phb.PHoptions
-        local_scenarios = phb.local_scenarios
-        comms = phb.comms
         self.name = "fractintsnotconv"
         self.verbose = PHoptions["verbose"]
         self._PHoptions = PHoptions
-        self._local_scenarios = local_scenarios
-        self._comms = comms
-        self._rank = rank
+        self._local_scenarios = phb.local_scenarios
+        self._comms = phb.comms
+        self._rank = phb.cylinder_rank
         if self.verbose:
             print ("Created converger=",self.name)
         
-    def convergence_value(self):
+    def _convergence_value(self):
         """ compute the fraction of *not* converged ints
         Args:
             self (object): create by prep
@@ -53,7 +52,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
                         numints += 1
                         xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                         #print ("dlw debug",xb*xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]))
-                        if xb * xb == pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]):
+                        if math.isclose(xb * xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]), abs_tol=1e-09):
                             numconv += 1
         if self.verbose:
             print (self.name,": numints=",numints)
@@ -73,4 +72,4 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         Returns:
            converged?: True if converged, False otherwise
         """
-        return self.convval < self._PHoptions['convthresh']
+        return self._convergence_value() < self._PHoptions['convthresh']
