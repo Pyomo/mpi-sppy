@@ -26,7 +26,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         self.name = "fractintsnotconv"
         self.verbose = PHoptions["verbose"]
         self._PHoptions = PHoptions
-        self._local_scenarios = pbh.local_scenarios
+        self._local_scenarios = phb.local_scenarios
         self._comms = phb.comms
         self._rank = phb.cylinder_rank
         if self.verbose:
@@ -52,7 +52,7 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
                         numints += 1
                         xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                         #print ("dlw debug",xb*xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]))
-                        if math.isclose(xb * xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)])):
+                        if math.isclose(xb * xb, pyo.value(s._mpisppy_model.xsqbars[(ndn,i)]), abs_tol=1e-09):
                             numconv += 1
         if self.verbose:
             print (self.name,": numints=",numints)
