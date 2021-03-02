@@ -405,6 +405,21 @@ class SPBase(object):
            and not self.options['do_not_check_variable_probabilities']:
             self._check_variable_probabilities_sum(verbose)
 
+    def is_zero_prob( self, scenario_model, var ):
+        """
+        Args:
+            scenario_model : a value in SPBase.local_scenarios
+            var : a Pyomo Var on the scenario_model
+
+        Returns:
+            True if the variable has 0 probability, False otherwise
+        """
+        if self.variable_probability is None:
+            return False
+        _mpisppy_data = scenario_model._mpisppy_data
+        ndn, i = _mpisppy_data.varid_to_nonant_index[id(var)]
+        return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+
     def _check_variable_probabilities_sum(self, verbose):
 
         nodenames = [] # to transmit to comms
