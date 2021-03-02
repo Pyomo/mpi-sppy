@@ -15,23 +15,8 @@ class Converger:
 
         Args:
             opt (SPBase): The SPBase object for the current model
-            rank (int): MPI process rank in MPI_COMM_WORLD
-            n_proc (int): Total number of processes in MPI_COMM_WORLD
     '''
-    def __init__(self, opt, rank, n_proc):
-        pass
-
-    @abc.abstractmethod
-    def convergence_value(self):
-        ''' Compute a convergence value at this iteration.
-
-            This method takes no arguments. The user can access the SPBase
-            object by attaching the SPBase object to self in the Extension
-            constructor. This method is not required to return any
-            arguments--however, whatever it returns (possibly NONE) is attached
-            to the SPBase object, and is passed to the miditer() function of
-            any extensions, if they are present.
-        '''
+    def __init__(self, opt):
         pass
 
     @abc.abstractmethod

@@ -80,9 +80,11 @@ constructor via the ``PHBase`` construtor as the
 ``variable_probability`` argument to allow for per variable
 probability specification. So it can be passed through by ``vanilla``
 via ``ph_hub``. The function should return (vid, probability) pairs.
+If the function needs arguments, pass them via
+the ``SPBase`` option ``variable_probability_kwargs``
 
 The variable probabilities impact the computation of
-``xbars``.
+``xbars`` and ``W``.
 
 Objective function considerations
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -116,3 +118,8 @@ PH convergence metric.
    You must declare variables to be in the nonant list even for those scenarios where they have
    zero probability if they are in other scenarios that share a scenario tree node at the variable's stage.
 
+
+If some variables have zero probability in all scenarios, then you will need to set the option
+``do_not_check_variable_probabilities`` to True in the options for ``spbase``. This will result in skipping the checks for
+all variable probabilities! So you might want to set this to False to verify that the probabilities sum to one
+only for the Vars you expect before setting it to True.
