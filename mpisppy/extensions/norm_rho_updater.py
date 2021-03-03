@@ -78,7 +78,7 @@ class NormRhoUpdater(mpisppy.extensions.extension.PHExtension):
                 unweighted_primal_residuals = \
                         np.fromiter((abs(v._value - xbars[ndn,i]._value) for i,v in enumerate(node.nonant_vardata_list)),
                                     dtype='d', count=nlens[ndn] )
-                primal_residuals += s.PySP_prob * unweighted_primal_residuals
+                primal_residuals += s._mpisppy_probability * unweighted_primal_residuals
 
         for nodename in local_nodenames:
             ph.comms[nodename].Allreduce(

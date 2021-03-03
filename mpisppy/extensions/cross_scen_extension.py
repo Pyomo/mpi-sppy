@@ -183,7 +183,7 @@ class CrossScenarioExtension(PHExtension):
             quadratic_coefs = list(repn.quadratic_coefs)
 
             # adjust coefficients by scenario/bundle probability
-            scen_prob = s.PySP_prob
+            scen_prob = s._mpisppy_probability
             for i,var in enumerate(repn.linear_vars):
                 if id(var) not in nonant_ids:
                     linear_coefs[i] *= scen_prob

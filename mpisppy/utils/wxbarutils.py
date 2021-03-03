@@ -242,7 +242,7 @@ def _check_W(w_val_dict, PHB, rank):
         
     # At this point, we are sure that every local 
     # scenario has the same set of variables
-    probs = {name: model.PySP_prob for (name, model) in
+    probs = {name: model._mpisppy_probability for (name, model) in
                     PHB.local_scenarios.items()}
 
     checks = dict()

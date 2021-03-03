@@ -196,7 +196,7 @@ class APH(ph_base.PHBase):  # ??????
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 self.phis[k] += (pyo.value(s._mpisppy_model.z[(ndn,i)]) - xvar._value) \
                     *(pyo.value(s._mpisppy_model.W[(ndn,i)]) - pyo.value(s._mpisppy_model.y[(ndn,i)]))
-            self.phis[k] *= pyo.value(s.PySP_prob)
+            self.phis[k] *= pyo.value(s._mpisppy_probability)
             summand += self.phis[k]
         return summand
 
@@ -284,9 +284,9 @@ class APH(ph_base.PHBase):  # ??????
                               * self.uk[sname][(ndn,i)]
                 scen_vnorm += pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
                               * pyo.value(s._mpisppy_model.ybars[(ndn,i)])
-            self.local_punorm += pyo.value(s.PySP_prob) * scen_unorm
-            self.local_pvnorm += pyo.value(s.PySP_prob) * scen_vnorm
-            new_tau_summand += pyo.value(s.PySP_prob) \
+            self.local_punorm += pyo.value(s._mpisppy_probability) * scen_unorm
+            self.local_pvnorm += pyo.value(s._mpisppy_probability) * scen_vnorm
+            new_tau_summand += pyo.value(s._mpisppy_probability) \
                                * (scen_unorm + scen_vnorm/self.APHgamma)
                 
 
@@ -396,13 +396,13 @@ class APH(ph_base.PHBase):  # ??????
                 for i in range(nlens[node.name]):
                     v_value = node.nonant_vardata_list[i]._value
                     self.local_concats["FirstReduce"][node.name][i] += \
-                        (s.PySP_prob / node.uncond_prob) * v_value
+                        (s._mpisppy_probability / node.uncond_prob) * v_value
                     logging.debug("  rank= {} scen={}, i={}, v_value={}".\
                                   format(global_rank, k, i, v_value))
                     self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
-                        += (s.PySP_prob / node.uncond_prob) * v_value * v_value
+                        += (s._mpisppy_probability / node.uncond_prob) * v_value * v_value
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
-                        += (s.PySP_prob / node.uncond_prob) \
+                        += (s._mpisppy_probability / node.uncond_prob) \
                            * pyo.value(s._mpisppy_model.y[(node.name,i)])
 
         # record the time
@@ -470,7 +470,7 @@ class APH(ph_base.PHBase):  # ??????
         self.local_pznorm = 0
         # v is just ybar
         for k,s in self.local_scenarios.items():
-            probs = pyo.value(s.PySP_prob)
+            probs = pyo.value(s._mpisppy_probability)
             for (ndn, i) in s._mpisppy_data.nonant_indices:
                 Wupdate = self.theta * self.uk[k][(ndn,i)]
                 Ws = pyo.value(s._mpisppy_model.W[(ndn,i)]) + Wupdate

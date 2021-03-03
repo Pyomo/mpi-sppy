@@ -45,7 +45,7 @@ def build_scenario_model(fname, scenario_ix):
     model.y = pyo.Var(edges, domain=pyo.NonNegativeReals) # Second stage vars
 
     model.edges = edges
-    model.PySP_prob = p
+    model._mpisppy_probability = p
 
     ''' Objective '''
     model.FirstStageCost  = pyo.quicksum(c[e] * model.x[e] for e in edges)

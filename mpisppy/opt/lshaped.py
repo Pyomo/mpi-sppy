@@ -231,8 +231,8 @@ class LShapedMethod(spbase.SPBase):
         if len(ef_scenarios) > 1:
             def scenario_creator_wrapper(name, **creator_options):
                 scenario = self.scenario_creator(name, **creator_options)
-                if not hasattr(scenario, 'PySP_prob'):
-                    scenario.PySP_prob = 1./len(self.all_scenario_names)
+                if not hasattr(scenario, '_mpisppy_probability'):
+                    scenario._mpisppy_probability = 1./len(self.all_scenario_names)
                 return scenario
             master = sputils.create_EF(
                 ef_scenarios,
@@ -246,8 +246,8 @@ class LShapedMethod(spbase.SPBase):
                 ef_scenarios[0],
                 **self.scenario_creator_kwargs,
             )
-            if not hasattr(master, 'PySP_prob'):
-                master.PySP_prob = 1./len(self.all_scenario_names)
+            if not hasattr(master, '_mpisppy_probability'):
+                master._mpisppy_probability = 1./len(self.all_scenario_names)
 
             nonant_list, nonant_ids = _get_nonant_ids(master)
 
@@ -269,7 +269,7 @@ class LShapedMethod(spbase.SPBase):
         quadratic_coefs = list(repn.quadratic_coefs)
 
         # adjust coefficients by scenario/bundle probability
-        scen_prob = master.PySP_prob
+        scen_prob = master._mpisppy_probability
         for i,var in enumerate(repn.linear_vars):
             if id(var) not in nonant_ids:
                 linear_coefs[i] *= scen_prob
@@ -394,9 +394,9 @@ class LShapedMethod(spbase.SPBase):
         # pulls the scenario objective expression, removes the first stage variables, and sets the new objective
         obj = find_active_objective(instance)
 
-        if not hasattr(instance, "PySP_prob"):
-            instance.PySP_prob = 1. / self.scenario_count
-        PySP_prob = instance.PySP_prob
+        if not hasattr(instance, "_mpisppy_probability"):
+            instance._mpisppy_probability = 1. / self.scenario_count
+        _mpisppy_probability = instance._mpisppy_probability
 
         repn = generate_standard_repn(obj.expr, quadratic=True)
         if len(repn.nonlinear_vars) > 0:
@@ -415,12 +415,12 @@ class LShapedMethod(spbase.SPBase):
             id_var = id(var)
             if id_var not in nonant_ids:
                 linear_vars.append(var)
-                linear_coefs.append(PySP_prob*coef)
+                linear_coefs.append(_mpisppy_probability*coef)
         for coef, (x,y) in zip(repn.quadratic_coefs, repn.quadratic_vars):
             id_x = id(x)
             id_y = id(y)
             if id_x not in nonant_ids or id_y not in nonant_ids:
-                quadratic_coefs.append(PySP_prob*coef)
+                quadratic_coefs.append(_mpisppy_probability*coef)
                 quadratic_vars.append((x,y))
 
         # checks if model sense is max, if so negates the objective

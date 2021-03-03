@@ -154,7 +154,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self._local_bound = 0
             for name in self.local_subproblems:
                 dual_bound = self.SDM(name)
-                self._local_bound += self.local_subproblems[name].PySP_prob * \
+                self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
             self._compute_dual_bound()
             if (self.is_minimizing):
@@ -545,7 +545,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 qpx = qp.xr if self.bundling else qp.x
                 diff_s += np.power(pyo.value(qpx[node_name,ix]) - 
                         pyo.value(arb_mip._mpisppy_model.xbars[node_name,ix]), 2)
-            diff_s *= mip.PySP_prob
+            diff_s *= mip._mpisppy_probability
             diff += diff_s
         diff = np.array(diff)
         recv = np.array(0.)

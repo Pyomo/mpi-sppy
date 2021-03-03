@@ -47,7 +47,7 @@ illustrates use of the utility function
 list for you.
 
 The scenario probability should be attached by `scenario_creator` as
-``PySP_prob``. However, if you don't attach it, the scenarios are
+``_mpisppy_probability``. However, if you don't attach it, the scenarios are
 assumed to be equally likely.
 
 EF Supplement List

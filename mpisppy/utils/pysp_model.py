@@ -210,7 +210,7 @@ class PySPModel:
                             ].value
 
             ## add the things mpisppy expects to the model
-            model.PySP_prob = scen_prob
+            model._mpisppy_probability = scen_prob
 
             model._PySPnode_list = [mpisppyScenarioNode(
                                         name="ROOT",

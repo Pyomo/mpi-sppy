@@ -299,11 +299,11 @@ class PHBase(mpisppy.spbase.SPBase):
                 objfct = self.saved_objs[k]
             else:
                 objfct = find_active_objective(s)
-            local_Eobjs.append(s.PySP_prob * pyo.value(objfct))
+            local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                       .format(k, s.PySP_prob, pyo.value(objfct), objfct.expr))
+                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
 
         local_Eobj = np.array([math.fsum(local_Eobjs)])
         global_Eobj = np.zeros(1)
@@ -332,11 +332,11 @@ class PHBase(mpisppy.spbase.SPBase):
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
-            local_Ebounds.append(s.PySP_prob * s._mpisppy_data.outer_bound)
+            local_Ebounds.append(s._mpisppy_probability * s._mpisppy_data.outer_bound)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\
-                       .format(k, s.PySP_prob, s._mpisppy_data.outer_bound))
+                       .format(k, s._mpisppy_probability, s._mpisppy_data.outer_bound))
 
         if extra_sum_terms is not None:
             local_Ebound_list = [math.fsum(local_Ebounds)] + list(extra_sum_terms)
@@ -390,7 +390,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             
             ###compv = pyo.value(getattr(s, compstr))
-            localavg[0] += s.PySP_prob * compv  
+            localavg[0] += s._mpisppy_probability * compv  
             if compv < localmin[0] or firsttime:
                 localmin[0] = compv
             if compv > localmax[0] or firsttime:
@@ -624,7 +624,7 @@ class PHBase(mpisppy.spbase.SPBase):
         globalP = np.zeros(1, dtype='d')
 
         for k,s in self.local_scenarios.items():
-            localP[0] +=  s.PySP_prob
+            localP[0] +=  s._mpisppy_probability
 
         self.mpicomm.Allreduce([localP, mpi.DOUBLE],
                            [globalP, mpi.DOUBLE],
@@ -654,7 +654,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         for k,s in self.local_scenarios.items():
             if s._mpisppy_data.scenario_feasible:
-                locals[0] += s.PySP_prob
+                locals[0] += s._mpisppy_probability
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
                            [globals, mpi.DOUBLE],
@@ -680,7 +680,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         for k,s in self.local_scenarios.items():
             if not s._mpisppy_data.scenario_feasible:
-                locals[0] += s.PySP_prob
+                locals[0] += s._mpisppy_probability
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
                            [globals, mpi.DOUBLE],
@@ -835,7 +835,7 @@ class PHBase(mpisppy.spbase.SPBase):
             objectives are. THIS IS ALL CRITICAL to bundles.
             xxxx TBD: ask JP about objective function transmittal to persistent solvers
         Note:
-            Objectives are scaled (normalized) by PySP_prob
+            Objectives are scaled (normalized) by _mpisppy_probability
         """
         if len(scen_dict) == 0:
             raise RuntimeError("Empty scenario list for EF")
@@ -1294,8 +1294,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
                 self.local_subproblems[bname].scen_list = \
                     self.names_in_bundles[rank_local][bun]
-                self.local_subproblems[bname].PySP_prob = \
-                                    sum(s.PySP_prob for s in sdict.values())
+                self.local_subproblems[bname]._mpisppy_probability = \
+                                    sum(s._mpisppy_probability for s in sdict.values())
         else:
             for sname, s in self.local_scenarios.items():
                 self.local_subproblems[sname] = s

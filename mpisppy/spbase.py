@@ -245,7 +245,7 @@ class SPBase(object):
 
             Notes:
                 If a scenario probability is not specified as an attribute
-                PySP_prob of the ConcreteModel returned by ScenarioCreator,
+                _mpisppy_probability of the ConcreteModel returned by ScenarioCreator,
                 this function automatically assumes uniform probabilities.
         """
         if self.scenarios_constructed:
@@ -257,8 +257,8 @@ class SPBase(object):
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
-            if not hasattr(s, "PySP_prob"):
-                s.PySP_prob = 1.0 / len(self.all_scenario_names)
+            if not hasattr(s, "_mpisppy_probability"):
+                s._mpisppy_probability = 1.0 / len(self.all_scenario_names)
             self.local_scenarios[sname] = s
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
@@ -364,7 +364,7 @@ class SPBase(object):
                 s._mpisppy_data.prob_coeff = dict()
                 s._mpisppy_data.w_coeff = dict()
                 for node in s._PySPnode_list:
-                    s._mpisppy_data.prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
+                    s._mpisppy_data.prob_coeff[node.name] = (s._mpisppy_probability / node.uncond_prob)
                     s._mpisppy_data.w_coeff[node.name] = 1.0  # needs to be a float
 
 
