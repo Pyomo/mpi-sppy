@@ -41,7 +41,7 @@ def do_one(dirname, progname, np, argstring):
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 "
+       "--default-rho=1 --with-display-convergence-detail "
        "--solver-name={} --no-fwph --use-norm-rho-updater".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",

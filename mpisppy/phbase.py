@@ -1263,9 +1263,11 @@ class PHBase(mpisppy.spbase.SPBase):
             "iter0_solver_options", "iterk_solver_options"
         ]
         self._options_check(required, self.PHoptions)
-        # Display timing is special for no good reason.
+        # Display timing and display convergence detail are special for no good reason.
         if "display_timing" not in self.PHoptions:
             self.PHoptions["display_timing"] = False
+        if "display_convergence_detail" not in self.PHoptions:
+            self.PHoptions["display_convergence_detail"] = False
        
 
     def subproblem_creation(self, verbose=False):
@@ -1378,6 +1380,7 @@ class PHBase(mpisppy.spbase.SPBase):
         verbose = self.PHoptions["verbose"]
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
+        dconvergence_detail = self.PHoptions["display_convergence_detail"]        
         have_extensions = self.PH_extensions is not None
         have_converger = self.PH_converger is not None
 
@@ -1457,6 +1460,9 @@ class PHBase(mpisppy.spbase.SPBase):
             print("PHBase Convergence Metric =",self.conv)
             print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
+        if dconvergence_detail:
+            self.report_var_values_at_rank0(header="Convergence detail:")            
+
         self._reenable_W_and_prox()
 
         self.current_solver_options = self.PHoptions["iterk_solver_options"]
@@ -1484,6 +1490,7 @@ class PHBase(mpisppy.spbase.SPBase):
         have_converger = self.PH_converger is not None
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
+        dconvergence_detail = self.PHoptions["display_convergence_detail"]
         self.conv = None
 
         max_iterations = int(self.PHoptions["PHIterLimit"])
@@ -1551,6 +1558,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("Scaled PHBase Convergence Metric=",self.conv)
                 print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
+
+            if dconvergence_detail:
+                self.report_var_values_at_rank0(header="Convergence detail:")                
 
             if (self._PHIter == max_iterations):
                 global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
