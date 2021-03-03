@@ -32,7 +32,7 @@ arguments:
 * the concrete model instance.
 
 This node list must be attached to the scenario model instance under
-the name `model._PySPnode_list`.
+the name `model._mpisppy_node_list`.
   
 In the `farmer.py` example, the `scenario_creator` function is called
 `pysp2_callback` and in this example, the scenario name is presumed to

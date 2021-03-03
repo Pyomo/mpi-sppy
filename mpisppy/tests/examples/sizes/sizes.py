@@ -6,7 +6,7 @@ import mpisppy.utils.sputils as sputils
 
 def scenario_creator(scenario_name, scenario_count=None):
     """ The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _PySPnode_list ordered by stages.
+        the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho. 
     """
     if scenario_count is None:

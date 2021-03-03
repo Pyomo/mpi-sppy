@@ -56,7 +56,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
     if (sep_files):
         for (sname, scenario) in PHB.local_scenarios.items():
             scenario_Ws = {var.name: pyo.value(scenario._mpisppy_model.W[node.name, ix])
-                for node in scenario._PySPnode_list
+                for node in scenario._mpisppy_node_list
                 for (ix, var) in enumerate(node.nonant_vardata_list)}
             scenario_fname = os.path.join(fname, sname + '_weights.csv')
             with open(scenario_fname, 'w') as f:
@@ -66,7 +66,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
     else:
         local_Ws = {(sname, var.name): pyo.value(scenario._mpisppy_model.W[node.name, ix])
                     for (sname, scenario) in PHB.local_scenarios.items()
-                    for node in scenario._PySPnode_list
+                    for node in scenario._mpisppy_node_list
                     for (ix, var) in enumerate(node.nonant_vardata_list)}
         comm = PHB.comms['ROOT']
         Ws = comm.gather(local_Ws, root=0)
@@ -112,7 +112,7 @@ def set_W_from_file(fname, PHB, rank, sep_files=False):
 
     mp = {(sname, var.name): (node.name, ix)
             for (sname, scenario) in PHB.local_scenarios.items()
-            for node in scenario._PySPnode_list
+            for node in scenario._mpisppy_node_list
             for (ix,var) in enumerate(node.nonant_vardata_list)}
 
     for (sname, d) in w_val_dict.items():
@@ -227,7 +227,7 @@ def _check_W(w_val_dict, PHB, rank):
     # By this point, we are certain that
     # w_val_dict.keys() == PHB.local_scenarios.keys()
     for (sname, scenario) in PHB.local_scenarios.items():
-        vn_model = set([var.name for node in scenario._PySPnode_list
+        vn_model = set([var.name for node in scenario._mpisppy_node_list
                                  for var  in node.nonant_vardata_list])
         vn_provided = set(w_val_dict[sname].keys())
         diff = vn_model.difference(vn_provided)
@@ -276,7 +276,7 @@ def write_xbar_to_file(PHB, fname):
     sname = list(PHB.local_scenarios.keys())[0]
     scenario = PHB.local_scenarios[sname]
     xbars = {var.name: pyo.value(scenario._mpisppy_model.xbars[node.name, ix])
-                for node in scenario._PySPnode_list
+                for node in scenario._mpisppy_node_list
                 for (ix, var) in enumerate(node.nonant_vardata_list)}
     with open(fname, 'a') as f:
         for (var_name, val) in xbars.items():
@@ -301,7 +301,7 @@ def set_xbar_from_file(fname, PHB):
         _check_xbar(xbar_val_dict, PHB)
 
     for (sname, scenario) in PHB.local_scenarios.items():
-        for node in scenario._PySPnode_list:
+        for node in scenario._mpisppy_node_list:
             for (ix,var) in enumerate(node.nonant_vardata_list):
                 val = xbar_val_dict[var.name]
                 scenario._mpisppy_model.xbars[node.name, ix] = val
@@ -350,7 +350,7 @@ def _check_xbar(xbar_val_dict, PHB):
     '''
     sname = list(PHB.local_scenarios.keys())[0]
     scenario = PHB.local_scenarios[sname]
-    var_names = set([var.name for node in scenario._PySPnode_list
+    var_names = set([var.name for node in scenario._mpisppy_node_list
                           for var  in node.nonant_vardata_list])
     provided_vars = set(xbar_val_dict.keys())
     set1 = var_names.difference(provided_vars)

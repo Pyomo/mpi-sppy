@@ -24,7 +24,7 @@ def ph_rhosetter_callback(scen):
     # we assume all generators are subject to non-anticipativity
     MyRhoFactor = 1.0
     retlist = list()
-    numstages = len(scen._PySPnode_list)
+    numstages = len(scen._mpisppy_node_list)
     generator_set = scen._egret_md.attributes("generator")
     generator_names = generator_set["names"]
     

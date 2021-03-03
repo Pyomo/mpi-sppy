@@ -17,7 +17,7 @@ import model.ReferenceModel as ref
 
 def scenario_creator(scenario_name, data_dir=None):
     """ The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _PySPnode_list ordered by stages.
+        the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho.
     """
     if data_dir is None:    
@@ -26,7 +26,7 @@ def scenario_creator(scenario_name, data_dir=None):
     model = ref.model.create_instance(fname, name=scenario_name)
 
     # now attach the one and only tree node (ROOT is a reserved word)
-    model._PySPnode_list = [
+    model._mpisppy_node_list = [
         scenario_tree.ScenarioNode(
             "ROOT", 1.0, 1, model.FirstStageCost, None, [model.FacilityOpen], model
         )

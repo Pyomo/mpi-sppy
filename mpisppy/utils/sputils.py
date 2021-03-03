@@ -212,10 +212,10 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             print("WARNING: passed single scenario to create_EF()")
         # special code to patch in ref_vars
         scenario_instance.ref_vars = dict()
-        for node in scenario_instance._PySPnode_list:
+        for node in scenario_instance._mpisppy_node_list:
             ndn = node.name
             nlens = {node.name: len(node.nonant_vardata_list) 
-                                for node in scenario_instance._PySPnode_list}
+                                for node in scenario_instance._mpisppy_node_list}
             for i in range(nlens[ndn]):
                 v = node.nonant_vardata_list[i]
                 if (ndn, i) not in scenario_instance.ref_vars:
@@ -334,7 +334,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     for (sname, s) in scen_dict.items():
         nlens = {node.name: len(node.nonant_vardata_list) 
-                            for node in s._PySPnode_list}
+                            for node in s._mpisppy_node_list}
         
         for (node_name, num_nonant_vars) in nlens.items(): # copy nlens to EF
             if (node_name in EF_instance._nlens.keys() and
@@ -345,9 +345,9 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             EF_instance._nlens[node_name] = num_nonant_vars
 
         nlens_ef_suppl = {node.name: len(node.nonant_ef_suppl_vardata_list)
-                                   for node in s._PySPnode_list}
+                                   for node in s._mpisppy_node_list}
 
-        for node in s._PySPnode_list:
+        for node in s._mpisppy_node_list:
             ndn = node.name
             for i in range(nlens[ndn]):
                 v = node.nonant_vardata_list[i]
@@ -687,7 +687,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
     Note: 
        attaches a list consisting of one scenario node to the model
     """
-    model._PySPnode_list = [
+    model._mpisppy_node_list = [
         scenario_tree.ScenarioNode("ROOT",1.0,1,firstobj, None, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list)
     ]

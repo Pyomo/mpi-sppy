@@ -169,7 +169,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 if node.name not in nodenames:
                     ndn = node.name
                     nodenames.append(ndn)
@@ -181,7 +181,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 nlen = nlens[ndn]
 
@@ -205,7 +205,7 @@ class PHBase(mpisppy.spbase.SPBase):
             logger.debug('  top of assign xbar loop for {} on rank {}'.\
                          format(k, self.cylinder_rank))
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 nlen = nlens[ndn]
 
@@ -530,7 +530,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 persistent_solver = s._solver_plugin
 
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 if ndn not in cache:
                     raise RuntimeError("Could not find {} in {}"\

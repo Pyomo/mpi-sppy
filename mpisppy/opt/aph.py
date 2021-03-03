@@ -140,7 +140,7 @@ class APH(ph_base.PHBase):  # ??????
                                             "SecondReduce": {}})
 
         for sname, scenario in self.local_scenarios.items():
-            for node in scenario._PySPnode_list:
+            for node in scenario._mpisppy_node_list:
                 self.Lens["FirstReduce"][node.name] \
                     = 3 * len(node.nonant_vardata_list)
                 self.Lens["SecondReduce"][node.name] = 0 # only use root?
@@ -353,7 +353,7 @@ class APH(ph_base.PHBase):  # ??????
             # create the c-style storage for the concats
             for k,s in self.local_scenarios.items():
                 nlens = s._mpisppy_data.nlens        
-                for node in s._PySPnode_list:
+                for node in s._mpisppy_node_list:
                     if node.name not in nodenames:
                         ndn = node.name
                         nodenames.append(ndn)
@@ -377,7 +377,7 @@ class APH(ph_base.PHBase):  # ??????
             nodenames = []
             for k,s in self.local_scenarios.items():
                 nlens = s._mpisppy_data.nlens        
-                for node in s._PySPnode_list:
+                for node in s._mpisppy_node_list:
                     if node.name not in nodenames:
                         ndn = node.name
                         nodenames.append(ndn)
@@ -391,7 +391,7 @@ class APH(ph_base.PHBase):  # ??????
         # by compute_global_data.
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 for i in range(nlens[node.name]):
                     v_value = node.nonant_vardata_list[i]._value

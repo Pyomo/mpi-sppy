@@ -58,7 +58,7 @@ class NormRhoUpdater(mpisppy.extensions.extension.PHExtension):
 
         for k,s in ph.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 if node.name not in local_nodenames:
 
                     ndn = node.name
@@ -71,7 +71,7 @@ class NormRhoUpdater(mpisppy.extensions.extension.PHExtension):
         for k,s in ph.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
             xbars = s._mpisppy_model.xbars
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 primal_residuals = local_primal_residuals[ndn]
 

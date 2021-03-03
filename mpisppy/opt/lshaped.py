@@ -313,7 +313,7 @@ class LShapedMethod(spbase.SPBase):
         master = pyo.ConcreteModel()
 
         arb_scen = self.local_scenarios[self.local_scenario_names[0]]
-        nonants = arb_scen._PySPnode_list[0].nonant_vardata_list
+        nonants = arb_scen._mpisppy_node_list[0].nonant_vardata_list
 
         master_vars = list()
         for v in nonants:
@@ -693,9 +693,9 @@ def _del_var(v):
         block.del_component(v)
 
 def _get_nonant_ids(instance):
-    assert len(instance._PySPnode_list) == 1
+    assert len(instance._mpisppy_node_list) == 1
     # set comprehension
-    nonant_list = instance._PySPnode_list[0].nonant_vardata_list
+    nonant_list = instance._mpisppy_node_list[0].nonant_vardata_list
     return nonant_list, { id(var) for var in nonant_list }
 
 def _get_nonant_ids_EF(instance):
@@ -714,7 +714,7 @@ def _get_nonant_ids_EF(instance):
     nonant_ids = set()
     for s in snames:
         nonant_ids.update( (id(v) for v in \
-                getattr(instance, s)._PySPnode_list[0].nonant_vardata_list)
+                getattr(instance, s)._mpisppy_node_list[0].nonant_vardata_list)
                 )
     return nonant_list, nonant_ids 
 

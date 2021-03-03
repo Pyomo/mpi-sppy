@@ -171,9 +171,9 @@ class CrossScenarioExtension(PHExtension):
                 nonant_vardata_list = list()
                 for sn in s.scen_list:
                     nonant_vardata_list.extend( \
-                            opt.local_scenarios[sn]._PySPnode_list[0].nonant_vardata_list)
+                            opt.local_scenarios[sn]._mpisppy_node_list[0].nonant_vardata_list)
             else:
-                nonant_vardata_list = s._PySPnode_list[0].nonant_vardata_list
+                nonant_vardata_list = s._mpisppy_node_list[0].nonant_vardata_list
 
             nonant_ids = set((id(var) for var in nonant_vardata_list))
 

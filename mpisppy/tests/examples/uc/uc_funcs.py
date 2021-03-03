@@ -54,7 +54,7 @@ def scenario_creator(scenario_name):
 
 def pysp2_callback(scenario_name):
     ''' The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _PySPnode_list ordered by stages.
+        the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho. Standard (1.0) PySP signature for now...
     '''
 
@@ -63,7 +63,7 @@ def pysp2_callback(scenario_name):
     # now attach the one and only tree node (ROOT is a reserved word)
     # UnitOn[*,*] is the only set of nonant variables
     """
-    instance._PySPnode_list = [scenario_tree.ScenarioNode("ROOT",
+    instance._mpisppy_node_list = [scenario_tree.ScenarioNode("ROOT",
                                                           1.0,
                                                           1,
                                                           instance.StageCost["Stage_1"], #"Stage_1" hardcodes the commitments in all time periods

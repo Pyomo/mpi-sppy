@@ -213,7 +213,7 @@ def MakeNodesforScen(model, BFs, scennum):
 #=============================================================================
 def scenario_creator(scenario_name, branching_factors=None, data_path=None):
     """ The callback needs to create an instance and then attach
-    the PySP nodes to it in a list _PySPnode_list ordered by stages. 
+    the PySP nodes to it in a list _mpisppy_node_list ordered by stages. 
     Optionally attach _PHrho.
     Args:
         scenario_name (str): root name of the scenario data file
@@ -231,7 +231,7 @@ def scenario_creator(scenario_name, branching_factors=None, data_path=None):
     fname = data_path + os.sep + scenario_name + '.dat'
     instance = model.create_instance(fname, name=scenario_name)
 
-    instance._PySPnode_list = MakeNodesforScen(instance, branching_factors, snum)
+    instance._mpisppy_node_list = MakeNodesforScen(instance, branching_factors, snum)
     return instance
 
 #=============================================================================

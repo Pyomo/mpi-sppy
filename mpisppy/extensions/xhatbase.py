@@ -74,7 +74,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             nlens = dict()
             cistart = dict()  # ci start for each local node
             for k, s in self.opt.local_scenarios.items():
-                for nnode in s._PySPnode_list:
+                for nnode in s._mpisppy_node_list:
                     ndn = nnode.name
                     if ndn not in cistart:
                         # NOTE: _mpisppy_data.cistart is defined in SPBase._attach_nlens()
@@ -157,7 +157,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
                 continue
             scen = self.opt.local_scenarios[sname]
             with open(fname+"_"+ndn+"_"+sname+".csv", "w") as f:
-                for node in scen._PySPnode_list:
+                for node in scen._mpisppy_node_list:
                     if node.name == ndn:
                         break
                 nlens = scen._mpisppy_data.nlens
@@ -180,7 +180,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             if sname not in self.opt.local_scenarios:
                 continue
             scen = self.opt.local_scenarios[sname]
-            for node in scen._PySPnode_list:
+            for node in scen._mpisppy_node_list:
                 if node.name == ndn:
                     break
                 with open(fname+"_"+ndn+"_"+sname,"w") as f:

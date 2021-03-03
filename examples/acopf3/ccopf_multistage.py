@@ -229,7 +229,7 @@ def pysp2_callback(
         print(f"\nScenario creation for {scenario_name} on rank {rank}"
               f"    FailedLines (line,minutes)={enode.FailedLines}")
             
-    inst._PySPnode_list = node_list
+    inst._mpisppy_node_list = node_list
     inst._mpisppy_probability = 1 / etree.numscens
     # solve it so subsequent code will have a good start
     if solver is not None:

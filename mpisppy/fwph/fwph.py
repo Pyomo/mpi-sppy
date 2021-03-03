@@ -455,7 +455,7 @@ class FWPH(mpisppy.phbase.PHBase):
         # by picking them off of any random scenario that's laying around.
         arb_scenario = list(self.local_scenarios.keys())[0]
         arb_mip = self.local_scenarios[arb_scenario]
-        root = arb_mip._PySPnode_list[0]
+        root = arb_mip._mpisppy_node_list[0]
         stage_one_var_names = [var.name for var in root.nonant_vardata_list]
 
         init_pts = self.comms['ROOT'].gather(self.local_initial_points, root=0)
@@ -635,7 +635,7 @@ class FWPH(mpisppy.phbase.PHBase):
             Functions by returning the complement of the set of
             non-anticipative variables.
         '''
-        nonant_var_ids = [id(var) for node in scenario._PySPnode_list
+        nonant_var_ids = [id(var) for node in scenario._mpisppy_node_list
                                   for var  in node.nonant_vardata_list]
         return [var for var in scenario.component_data_objects(pyo.Var)
                          if id(var) not in nonant_var_ids]
@@ -662,7 +662,7 @@ class FWPH(mpisppy.phbase.PHBase):
             random_scenario_name = list(self.local_scenarios.keys())[0]
             scenario = self.local_scenarios[random_scenario_name]
             xbar_dict = {}
-            for node in scenario._PySPnode_list:
+            for node in scenario._mpisppy_node_list:
                 for (ix, var) in enumerate(node.nonant_vardata_list):
                     var_name = var.name
                     if (self.bundling and strip_bundle_names):
@@ -988,13 +988,13 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _swap_nonant_vars(self):
         ''' Change the pointers in
-            scenario._PySPnode_list[i].nonant_vardata_list
+            scenario._mpisppy_node_list[i].nonant_vardata_list
             to point to the QP variables, rather than the MIP variables.
 
             Notes:
                 When computing xBar and updating the weights in the outer
                 iteration, the values of the x variables are pulled from
-                scenario._PySPnode_list[i].nonant_vardata_list. In the FWPH
+                scenario._mpisppy_node_list[i].nonant_vardata_list. In the FWPH
                 algorithm, xBar should be computed using the QP values, not the
                 MIP values (like in normal PH).
 
@@ -1008,7 +1008,7 @@ class FWPH(mpisppy.phbase.PHBase):
             for scenario_name in scens:
                 scenario = self.local_scenarios[scenario_name]
                 num_nonant_vars = scenario._mpisppy_data.nlens
-                node_list = scenario._PySPnode_list
+                node_list = scenario._mpisppy_node_list
                 for node in node_list:
                     node.nonant_vardata_list = [
                         self.local_QP_subproblems[name].xr[node.name,i]
@@ -1026,14 +1026,14 @@ class FWPH(mpisppy.phbase.PHBase):
                 for scenario_name in EF.scen_list:
                     scenario = self.local_scenarios[scenario_name]
                     num_nonant_vars = scenario._mpisppy_data.nlens
-                    for node in scenario._PySPnode_list:
+                    for node in scenario._mpisppy_node_list:
                         node.nonant_vardata_list = [
                             EF.nonant_vars[scenario_name,node.name,ix]
                             for ix in range(num_nonant_vars[node.name])]
             else:
                 scenario = self.local_scenarios[name]
                 num_nonant_vars = scenario._mpisppy_data.nlens
-                for node in scenario._PySPnode_list:
+                for node in scenario._mpisppy_node_list:
                     node.nonant_vardata_list = [
                         scenario.nonant_vars[node.name,ix]
                         for ix in range(num_nonant_vars[node.name])]
