@@ -257,8 +257,6 @@ class SPBase(object):
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
-            if not hasattr(s, "_mpisppy_probability"):
-                s._mpisppy_probability = 1.0 / len(self.all_scenario_names)
             self.local_scenarios[sname] = s
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
@@ -482,6 +480,11 @@ class SPBase(object):
 
             scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
             scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+
+            if not hasattr(scenario, "_mpisppy_probability"):
+                raise RuntimeError(f"_mpisppy_probability not found on scenario {sname}")
+            if not hasattr(scenario, "_mpisppy_node_list"):
+                raise RuntimeError(f"_mpisppy_node_list not found on scenario {sname}")
 
     def _options_check(self, required_options, given_options):
         """ Confirm that the specified list of options contains the specified
