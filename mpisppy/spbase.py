@@ -481,8 +481,13 @@ class SPBase(object):
             scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
             scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
+            if hasattr(scenario, "PySP_prob"):
+                raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
             if not hasattr(scenario, "_mpisppy_probability"):
-                raise RuntimeError(f"_mpisppy_probability not found on scenario {sname}")
+                prob = 1./len(self.all_scenario_names)
+                if self.cylinder_rank == 0:
+                    print(f"Did not find _mpisppy_probability, assuming uniform probability {prob}")
+                scenario._mpisppy_probability = prob
             if not hasattr(scenario, "_mpisppy_node_list"):
                 raise RuntimeError(f"_mpisppy_node_list not found on scenario {sname}")
 
