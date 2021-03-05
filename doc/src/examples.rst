@@ -184,7 +184,7 @@ builds a Pyomo model for that scenario appropriately:
 
         model = build_model(yields)
         sputils.attach_root_node(model, model.PLANTING_COST, [model.X])
-        model.PySP_prob = 1.0 / 3
+        model._mpisppy_probability = 1.0 / 3
         return model
 
 
@@ -196,7 +196,7 @@ The ``scenario_creator`` accomplishes two important tasks
    stages, so we need only specify the root node and the first-stage
    information--MPI-SPPy assumes the remainder of the model belongs to the
    second stage.
-2. It attaches an attribute called ``PySP_prob`` to the model object. This is the
+2. It attaches an attribute called ``_mpisppy_probability`` to the model object. This is the
    probability that the specified scenario occurs. If this probability is not
    specified, MPI-SPPy will assume that all scenarios are equally likely.
 

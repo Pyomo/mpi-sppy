@@ -42,7 +42,7 @@ def get_solutions(ph):
     result = dict()
     for (sname, scenario) in ph.local_scenarios.items():
         result[sname] = dict()
-        for node in scenario._PySPnode_list:
+        for node in scenario._mpisppy_node_list:
             for var in node.nonant_vardata_list:
                 result[sname][var.name] = var.value
         result[sname]['z'] = scenario.z[0].value

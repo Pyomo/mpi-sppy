@@ -26,7 +26,7 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
     def _compute_rho_norm(self, ph):
         local_rho_norm = np.zeros(1)
         global_rho_norm = np.zeros(1)
-        local_rho_norm[0] = sum(s.PySP_prob*sum( rho._value for rho in s._mpisppy_model.rho.values())\
+        local_rho_norm[0] = sum(s._mpisppy_probability*sum( rho._value for rho in s._mpisppy_model.rho.values())\
                                 for s in ph.local_scenarios.values() )
         ph.mpicomm.Allreduce(local_rho_norm, global_rho_norm, op=MPI.SUM)
         return float(global_rho_norm[0])

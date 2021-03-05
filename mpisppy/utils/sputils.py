@@ -194,7 +194,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
         Note:
             If any of the scenarios produced by scenario_creator do not have a
-            .PySP_prob attribute, this function displays a warning, and assumes
+            ._mpisppy_probability attribute, this function displays a warning, and assumes
             that all scenarios are equally likely.
     """
     if scenario_creator_kwargs is None:
@@ -212,10 +212,10 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             print("WARNING: passed single scenario to create_EF()")
         # special code to patch in ref_vars
         scenario_instance.ref_vars = dict()
-        for node in scenario_instance._PySPnode_list:
+        for node in scenario_instance._mpisppy_node_list:
             ndn = node.name
             nlens = {node.name: len(node.nonant_vardata_list) 
-                                for node in scenario_instance._PySPnode_list}
+                                for node in scenario_instance._mpisppy_node_list}
             for i in range(nlens[ndn]):
                 v = node.nonant_vardata_list[i]
                 if (ndn, i) not in scenario_instance.ref_vars:
@@ -232,12 +232,12 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
     # Check if every scenario has a specified probability
     probs_specified = \
-        all([hasattr(scen, 'PySP_prob') for scen in scen_dict.values()])
+        all([hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values()])
     if not probs_specified:
         for scen in scen_dict.values():
-            scen.PySP_prob = 1 / len(scen_dict)
+            scen._mpisppy_probability = 1 / len(scen_dict)
         if not suppress_warnings:
-            print('WARNING: At least one scenario is missing PySP_prob attribute.',
+            print('WARNING: At least one scenario is missing _mpisppy_probability attribute.',
                   'Assuming equally-likely scenarios...')
 
     EF_instance = _create_EF_from_scen_dict(scen_dict,
@@ -273,7 +273,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
  
             Does NOT assume that each scenario is equally likely. Raises an
             AttributeError if a scenario object is encountered which does not
-            have a .PySP_prob attribute.
+            have a ._mpisppy_probability attribute.
 
             Added the flag nonant_for_fixed_vars because original code only
             enforced non-anticipativity for non-fixed vars, which is not always
@@ -295,7 +295,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     EF_instance._mpisppy_data.scenario_feasible = None
 
     EF_instance._ef_scenario_names = []
-    EF_instance.PySP_prob = 0
+    EF_instance._mpisppy_probability = 0
     for (sname, scenario_instance) in scen_dict.items():
         EF_instance.add_component(sname, scenario_instance)
         EF_instance._ef_scenario_names.append(sname)
@@ -305,15 +305,15 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             obj_func.deactivate()
         obj_func = scenario_objs[0] # Select the first objective
         try:
-            EF_instance.EF_Obj.expr += scenario_instance.PySP_prob * obj_func.expr
-            EF_instance.PySP_prob   += scenario_instance.PySP_prob
+            EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
+            EF_instance._mpisppy_probability   += scenario_instance._mpisppy_probability
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
-                        " PySP_prob and try again.") from e
+                        " _mpisppy_probability and try again.") from e
     # Normalization does nothing when solving the full EF, but is required for
     # appropraite scaling of EFs used as bundles.
-    EF_instance.EF_Obj.expr /= EF_instance.PySP_prob
+    EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the
     # nonanticipative vars and create the constraints for them,
@@ -334,7 +334,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     for (sname, s) in scen_dict.items():
         nlens = {node.name: len(node.nonant_vardata_list) 
-                            for node in s._PySPnode_list}
+                            for node in s._mpisppy_node_list}
         
         for (node_name, num_nonant_vars) in nlens.items(): # copy nlens to EF
             if (node_name in EF_instance._nlens.keys() and
@@ -345,9 +345,9 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
             EF_instance._nlens[node_name] = num_nonant_vars
 
         nlens_ef_suppl = {node.name: len(node.nonant_ef_suppl_vardata_list)
-                                   for node in s._PySPnode_list}
+                                   for node in s._mpisppy_node_list}
 
-        for node in s._PySPnode_list:
+        for node in s._mpisppy_node_list:
             ndn = node.name
             for i in range(nlens[ndn]):
                 v = node.nonant_vardata_list[i]
@@ -687,7 +687,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
     Note: 
        attaches a list consisting of one scenario node to the model
     """
-    model._PySPnode_list = [
+    model._mpisppy_node_list = [
         scenario_tree.ScenarioNode("ROOT",1.0,1,firstobj, None, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list)
     ]

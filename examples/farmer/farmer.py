@@ -68,7 +68,7 @@ def scenario_creator(
     # Create the list of nodes associated with the scenario (for two stage,
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
-    model._PySPnode_list = [
+    model._mpisppy_node_list = [
         scenario_tree.ScenarioNode(
             name="ROOT",
             cond_prob=1.0,

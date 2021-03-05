@@ -32,7 +32,7 @@ arguments:
 * the concrete model instance.
 
 This node list must be attached to the scenario model instance under
-the name `model._PySPnode_list`.
+the name `model._mpisppy_node_list`.
   
 In the `farmer.py` example, the `scenario_creator` function is called
 `pysp2_callback` and in this example, the scenario name is presumed to
@@ -47,7 +47,7 @@ illustrates use of the utility function
 list for you.
 
 The scenario probability should be attached by `scenario_creator` as
-``PySP_prob``. However, if you don't attach it, the scenarios are
+``_mpisppy_probability``. However, if you don't attach it, the scenarios are
 assumed to be equally likely.
 
 EF Supplement List

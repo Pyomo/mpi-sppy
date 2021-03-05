@@ -147,7 +147,7 @@ class SPBase(object):
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 mylen = nlens[ndn]
                 if ndn not in local_node_nonant_lengths:
@@ -245,7 +245,7 @@ class SPBase(object):
 
             Notes:
                 If a scenario probability is not specified as an attribute
-                PySP_prob of the ConcreteModel returned by ScenarioCreator,
+                _mpisppy_probability of the ConcreteModel returned by ScenarioCreator,
                 this function automatically assumes uniform probabilities.
         """
         if self.scenarios_constructed:
@@ -257,8 +257,6 @@ class SPBase(object):
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
-            if not hasattr(s, "PySP_prob"):
-                s.PySP_prob = 1.0 / len(self.all_scenario_names)
             self.local_scenarios[sname] = s
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
@@ -275,7 +273,7 @@ class SPBase(object):
         for (sname, scenario) in self.local_scenarios.items():
             _nonant_indices = dict()
             nlens = scenario._mpisppy_data.nlens        
-            for node in scenario._PySPnode_list:
+            for node in scenario._mpisppy_node_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
@@ -288,7 +286,7 @@ class SPBase(object):
             # indices of the vardata lists for the nodes.
             scenario._mpisppy_data.nlens = {
                 node.name: len(node.nonant_vardata_list)
-                for node in scenario._PySPnode_list
+                for node in scenario._mpisppy_node_list
             }
 
             # NOTE: This only is used by extensions.xhatbase.XhatBase._try_one.
@@ -315,7 +313,7 @@ class SPBase(object):
         # Create communicator objects, one for each node
         nonleafnodes = dict()
         for (sname, scenario) in self.local_scenarios.items():
-            for node in scenario._PySPnode_list:
+            for node in scenario._mpisppy_node_list:
                 nonleafnodes[node.name] = node  # might be assigned&reassigned
 
         # check the node names given by the scenarios
@@ -356,15 +354,15 @@ class SPBase(object):
         """ calculates unconditional node probabilities and prob_coeff
             and _PySP_W_coeff is set to a scalar 1 (used by variable_probability)"""
         for k,s in self.local_scenarios.items():
-            root = s._PySPnode_list[0]
+            root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0
-            for parent,child in zip(s._PySPnode_list[:-1],s._PySPnode_list[1:]):
+            for parent,child in zip(s._mpisppy_node_list[:-1],s._mpisppy_node_list[1:]):
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
             if not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
                 s._mpisppy_data.w_coeff = dict()
-                for node in s._PySPnode_list:
-                    s._mpisppy_data.prob_coeff[node.name] = (s.PySP_prob / node.uncond_prob)
+                for node in s._mpisppy_node_list:
+                    s._mpisppy_data.prob_coeff[node.name] = (s._mpisppy_probability / node.uncond_prob)
                     s._mpisppy_data.w_coeff[node.name] = 1.0  # needs to be a float
 
 
@@ -429,7 +427,7 @@ class SPBase(object):
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 if node.name not in nodenames:
                     ndn = node.name
                     nodenames.append(ndn)
@@ -438,7 +436,7 @@ class SPBase(object):
 
         # sum local conditional probabilities
         for k,s in self.local_scenarios.items():
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 local_concats[ndn] += s._mpisppy_data.prob_coeff[ndn]
 
@@ -454,7 +452,7 @@ class SPBase(object):
         # check sum node conditional probabilites are close to 1
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 if ndn not in checked_nodes:
                     if not np.allclose(global_concats[ndn], 1., atol=tol):
@@ -482,6 +480,16 @@ class SPBase(object):
 
             scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
             scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+
+            if hasattr(scenario, "PySP_prob"):
+                raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
+            if not hasattr(scenario, "_mpisppy_probability"):
+                prob = 1./len(self.all_scenario_names)
+                if self.cylinder_rank == 0:
+                    print(f"Did not find _mpisppy_probability, assuming uniform probability {prob}")
+                scenario._mpisppy_probability = prob
+            if not hasattr(scenario, "_mpisppy_node_list"):
+                raise RuntimeError(f"_mpisppy_node_list not found on scenario {sname}")
 
     def _options_check(self, required_options, given_options):
         """ Confirm that the specified list of options contains the specified
@@ -517,7 +525,7 @@ class SPBase(object):
         """
         var_values = dict()
         for (sname, model) in self.local_scenarios.items():
-            for node in model._PySPnode_list:
+            for node in model._mpisppy_node_list:
                 for var in node.nonant_vardata_list:
                     if (self.is_zero_prob(model, var)) and (not get_zero_prob_values):
                         var_values[sname, var.name] = None
