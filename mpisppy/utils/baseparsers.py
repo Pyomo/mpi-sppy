@@ -63,6 +63,16 @@ def _common_args(inparser):
                         action='store_false')
     parser.set_defaults(with_display_progress=False)
 
+    parser.add_argument('--with-display-convergence-detail',
+                        help="display non-anticipative variable convergence statistics at each iteration",
+                        dest='with_display_convergence_detail',
+                        action='store_true')
+    parser.add_argument('--no-display-convergence-detail',
+                        help="do not display non-anticipative variable convergence statistics at each iteration (default)",
+                        dest='with_display_convergence_detail',
+                        action='store_false')
+    parser.set_defaults(with_display_convergence_detail=False)    
+
     parser.add_argument("--max-solver-threads",
                         help="Limit on threads per solver (default None)",
                         dest="max_solver_threads",

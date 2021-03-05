@@ -169,7 +169,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # we need to accumulate all local contributions before the reduce
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 if node.name not in nodenames:
                     ndn = node.name
                     nodenames.append(ndn)
@@ -181,7 +181,7 @@ class PHBase(mpisppy.spbase.SPBase):
         # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
         for k,s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens        
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 nlen = nlens[ndn]
 
@@ -205,7 +205,7 @@ class PHBase(mpisppy.spbase.SPBase):
             logger.debug('  top of assign xbar loop for {} on rank {}'.\
                          format(k, self.cylinder_rank))
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 nlen = nlens[ndn]
 
@@ -299,11 +299,11 @@ class PHBase(mpisppy.spbase.SPBase):
                 objfct = self.saved_objs[k]
             else:
                 objfct = find_active_objective(s)
-            local_Eobjs.append(s.PySP_prob * pyo.value(objfct))
+            local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                       .format(k, s.PySP_prob, pyo.value(objfct), objfct.expr))
+                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
 
         local_Eobj = np.array([math.fsum(local_Eobjs)])
         global_Eobj = np.zeros(1)
@@ -332,11 +332,11 @@ class PHBase(mpisppy.spbase.SPBase):
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
-            local_Ebounds.append(s.PySP_prob * s._mpisppy_data.outer_bound)
+            local_Ebounds.append(s._mpisppy_probability * s._mpisppy_data.outer_bound)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\
-                       .format(k, s.PySP_prob, s._mpisppy_data.outer_bound))
+                       .format(k, s._mpisppy_probability, s._mpisppy_data.outer_bound))
 
         if extra_sum_terms is not None:
             local_Ebound_list = [math.fsum(local_Ebounds)] + list(extra_sum_terms)
@@ -390,7 +390,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
             
             ###compv = pyo.value(getattr(s, compstr))
-            localavg[0] += s.PySP_prob * compv  
+            localavg[0] += s._mpisppy_probability * compv  
             if compv < localmin[0] or firsttime:
                 localmin[0] = compv
             if compv > localmax[0] or firsttime:
@@ -530,7 +530,7 @@ class PHBase(mpisppy.spbase.SPBase):
                 persistent_solver = s._solver_plugin
 
             nlens = s._mpisppy_data.nlens
-            for node in s._PySPnode_list:
+            for node in s._mpisppy_node_list:
                 ndn = node.name
                 if ndn not in cache:
                     raise RuntimeError("Could not find {} in {}"\
@@ -624,7 +624,7 @@ class PHBase(mpisppy.spbase.SPBase):
         globalP = np.zeros(1, dtype='d')
 
         for k,s in self.local_scenarios.items():
-            localP[0] +=  s.PySP_prob
+            localP[0] +=  s._mpisppy_probability
 
         self.mpicomm.Allreduce([localP, mpi.DOUBLE],
                            [globalP, mpi.DOUBLE],
@@ -654,7 +654,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         for k,s in self.local_scenarios.items():
             if s._mpisppy_data.scenario_feasible:
-                locals[0] += s.PySP_prob
+                locals[0] += s._mpisppy_probability
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
                            [globals, mpi.DOUBLE],
@@ -680,7 +680,7 @@ class PHBase(mpisppy.spbase.SPBase):
 
         for k,s in self.local_scenarios.items():
             if not s._mpisppy_data.scenario_feasible:
-                locals[0] += s.PySP_prob
+                locals[0] += s._mpisppy_probability
 
         self.mpicomm.Allreduce([locals, mpi.DOUBLE],
                            [globals, mpi.DOUBLE],
@@ -835,7 +835,7 @@ class PHBase(mpisppy.spbase.SPBase):
             objectives are. THIS IS ALL CRITICAL to bundles.
             xxxx TBD: ask JP about objective function transmittal to persistent solvers
         Note:
-            Objectives are scaled (normalized) by PySP_prob
+            Objectives are scaled (normalized) by _mpisppy_probability
         """
         if len(scen_dict) == 0:
             raise RuntimeError("Empty scenario list for EF")
@@ -1263,9 +1263,11 @@ class PHBase(mpisppy.spbase.SPBase):
             "iter0_solver_options", "iterk_solver_options"
         ]
         self._options_check(required, self.PHoptions)
-        # Display timing is special for no good reason.
+        # Display timing and display convergence detail are special for no good reason.
         if "display_timing" not in self.PHoptions:
             self.PHoptions["display_timing"] = False
+        if "display_convergence_detail" not in self.PHoptions:
+            self.PHoptions["display_convergence_detail"] = False
        
 
     def subproblem_creation(self, verbose=False):
@@ -1292,8 +1294,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
                 self.local_subproblems[bname].scen_list = \
                     self.names_in_bundles[rank_local][bun]
-                self.local_subproblems[bname].PySP_prob = \
-                                    sum(s.PySP_prob for s in sdict.values())
+                self.local_subproblems[bname]._mpisppy_probability = \
+                                    sum(s._mpisppy_probability for s in sdict.values())
         else:
             for sname, s in self.local_scenarios.items():
                 self.local_subproblems[sname] = s
@@ -1378,6 +1380,7 @@ class PHBase(mpisppy.spbase.SPBase):
         verbose = self.PHoptions["verbose"]
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
+        dconvergence_detail = self.PHoptions["display_convergence_detail"]        
         have_extensions = self.PH_extensions is not None
         have_converger = self.PH_converger is not None
 
@@ -1457,6 +1460,9 @@ class PHBase(mpisppy.spbase.SPBase):
             print("PHBase Convergence Metric =",self.conv)
             print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
+        if dconvergence_detail:
+            self.report_var_values_at_rank0(header="Convergence detail:")            
+
         self._reenable_W_and_prox()
 
         self.current_solver_options = self.PHoptions["iterk_solver_options"]
@@ -1484,6 +1490,7 @@ class PHBase(mpisppy.spbase.SPBase):
         have_converger = self.PH_converger is not None
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
+        dconvergence_detail = self.PHoptions["display_convergence_detail"]
         self.conv = None
 
         max_iterations = int(self.PHoptions["PHIterLimit"])
@@ -1551,6 +1558,9 @@ class PHBase(mpisppy.spbase.SPBase):
                 print("Scaled PHBase Convergence Metric=",self.conv)
                 print("Iteration time: %6.2f" % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
+
+            if dconvergence_detail:
+                self.report_var_values_at_rank0(header="Convergence detail:")                
 
             if (self._PHIter == max_iterations):
                 global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)

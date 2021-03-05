@@ -51,7 +51,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         # The tedious task of collecting the tree information for
         # local scenario tree nodes (maybe move to the constructor)
         for k, s in self.opt.local_scenarios.items():
-            for nnode in s._PySPnode_list:
+            for nnode in s._mpisppy_node_list:
                 ndn = nnode.name
                 nsize = self.comms[ndn].size
                 if seed is None:

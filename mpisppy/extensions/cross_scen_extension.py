@@ -171,9 +171,9 @@ class CrossScenarioExtension(PHExtension):
                 nonant_vardata_list = list()
                 for sn in s.scen_list:
                     nonant_vardata_list.extend( \
-                            opt.local_scenarios[sn]._PySPnode_list[0].nonant_vardata_list)
+                            opt.local_scenarios[sn]._mpisppy_node_list[0].nonant_vardata_list)
             else:
-                nonant_vardata_list = s._PySPnode_list[0].nonant_vardata_list
+                nonant_vardata_list = s._mpisppy_node_list[0].nonant_vardata_list
 
             nonant_ids = set((id(var) for var in nonant_vardata_list))
 
@@ -183,7 +183,7 @@ class CrossScenarioExtension(PHExtension):
             quadratic_coefs = list(repn.quadratic_coefs)
 
             # adjust coefficients by scenario/bundle probability
-            scen_prob = s.PySP_prob
+            scen_prob = s._mpisppy_probability
             for i,var in enumerate(repn.linear_vars):
                 if id(var) not in nonant_ids:
                     linear_coefs[i] *= scen_prob

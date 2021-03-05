@@ -77,7 +77,7 @@ def scenario_creator(
     fscr = lambda model: pyo.dot_product(data['rev'], model.y)
     model.first_stage_cost = pyo.Expression(rule=fscr)
 
-    model._PySPnode_list = [
+    model._mpisppy_node_list = [
         stree.ScenarioNode(name='ROOT', cond_prob=1., stage=1,
             cost_expression=model.first_stage_cost, scen_name_list=None, 
             nonant_list=[model.y], scen_model=model)
