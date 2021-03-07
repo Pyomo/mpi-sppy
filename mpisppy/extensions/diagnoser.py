@@ -4,6 +4,8 @@
 # to a file for each scenario.
 # DLW, March 2019
 # This extension uses PHoptions["diagnostics_outdir"]
+# This could be used as a starting point for writing your own diangostics;
+#   for "canned" diagnostics, use the baseparser PH option with-display-convergence-detail
 
 import datetime as dt
 import os
@@ -17,17 +19,17 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
         ph (PH object): the calling object
         rank (int): mpi process rank of currently running process
     """
-    def __init__(self, ph, rank):
+    def __init__(self, ph):
         dirname = ph.PHoptions["diagnoser_options"]["diagnoser_outdir"]
         if os.path.exists(dirname):
-            if rank == 0:
+            if ph.cylinder_rank == 0:
                 print ("Shutting down because Diagnostic directory exists:",
                        dirname)
             quit()
-        if rank == 0:
+        if ph.cylinder_rank == 0:
             os.mkdir(dirname) # just let it crash
 
-        super().__init__(ph, rank)
+        super().__init__(ph)
         self.options = self.ph.PHoptions["diagnoser_options"]
         self.dirname = self.options["diagnoser_outdir"]
 
