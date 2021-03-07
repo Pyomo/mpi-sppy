@@ -69,6 +69,15 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 
 There is an example of the function in the sizes example (``_rho_setter``).
 
+norm_rho_updater
+================
+
+This extension adjust rho dynamically. The code is in ``mpisppy.extensions.norm_rho_updater.py``
+and there is an accompanying converger in ``mpisppy.convergers.norm_rho_converger``. An
+example of use is shown in ``examples.farmer.farmer_cylinders.py``.
+
+
+
 variable_probability
 ====================
 
