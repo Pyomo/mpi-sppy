@@ -37,6 +37,8 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname].append(runstring)
     os.chdir("..")
 
+print("** Starting sizes_demo **")
+do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 print("** Starting regular sizes **")
 do_one("sizes",

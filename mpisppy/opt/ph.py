@@ -135,10 +135,7 @@ if __name__ == "__main__":
         except:
             pass
     ph.PHoptions["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
-    import mpisppy.extensions.diagnoser as diagnoser
     conv, obj, bnd = ph.ph_main()
-
-    
 
     import mpisppy.extensions.avgminmaxer as minmax_extension
     from mpisppy.extensions.avgminmaxer import MinMaxAvg

@@ -16,6 +16,15 @@ There are a number of extensions, particularly for PH, that are provided
 with ``mpi-sspy`` and they provide examples that can be used for the
 creation of more. Extensions can be found in ``mpisppy.extensions``.
 
+Multiple Extensions
+-------------------
+
+To employ multiple PH extensions, use ``mpisppy.extensions.extension import MultiPHExtension``
+that allows you to give a list of extensions that will fire in order
+at each callout point. See, e.g. ``examples.sizes.sizes_demo.py`` for an
+example of use.
+
+
 PH extensions
 -------------
 
@@ -56,6 +65,14 @@ WXBarWriter and WXBarReader
 There is an extension to write xbar and W values and another to read them.
 An example of their use is shown in ``examples.sizes.sizes_demo.py``
 
+norm_rho_updater
+^^^^^^^^^^^^^^^^
+
+This extension adjust rho dynamically. The code is in ``mpisppy.extensions.norm_rho_updater.py``
+and there is an accompanying converger in ``mpisppy.convergers.norm_rho_converger``. An
+example of use is shown in ``examples.farmer.farmer_cylinders.py``.
+
+
 rho_setter
 ==========
 
@@ -68,6 +85,8 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 ``phabase`` constructor.)
 
 There is an example of the function in the sizes example (``_rho_setter``).
+
+
 
 variable_probability
 ====================
@@ -111,7 +130,7 @@ to the dict passed as its ``options`` argument with the value
    The ``W`` value for a zero-probability variable will be stay at zero.
 
 
-A fixed variables may cause trouble if you are relying on the internal
+Fixed variables may cause trouble if you are relying on the internal
 PH convergence metric.
 
 .. Note::
