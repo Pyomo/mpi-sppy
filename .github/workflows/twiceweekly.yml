@@ -1,5 +1,5 @@
 # weekly tests, but we might run daily
-# NOTE: we should also have a weekly test that dynamically imports pyomo master
+# NOTE: we should also have a weekly test that dynamically imports pyomo main
 
 name: longer mpi-sppy tests
 

@@ -1,0 +1,9 @@
+# Pyomo released --- tests against the current release of Pyomo
+
+name: weekly mpi-sppy tests
+
+on:
+  schedule:
+    # min hr dayofmonth month dayofweek 
+    - cron: "14 2 * * 2"
+
