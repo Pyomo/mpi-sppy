@@ -1,18 +1,26 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-import os
-from pyutilib.misc.timing import TicTocTimer
+
+import pyomo as _pyo
+
+pyomo6 = (int(_pyo.__version__[0]) >= 6)
+
+if pyomo6:
+    from pyomo.common.timing import TicTocTimer as _TTT
+else:
+    from pyutilib.misc.timing import TicTocTimer as _TTT
+
 try:
-    import mpi4py.MPI as mpi
+    import mpi4py.MPI as _mpi
     haveMPI=True
 except:
     haveMPI=False
 
-tt_timer = TicTocTimer()
+_tt_timer = _TTT()
 
 if haveMPI:
-    global_rank = mpi.COMM_WORLD.Get_rank()
+    _global_rank = _mpi.COMM_WORLD.Get_rank()
 else:
-    global_rank = 0
+    _global_rank = 0
 
-global_toc = lambda msg, cond=(global_rank==0) : tt_timer.toc(msg, delta=False) if cond else None
+global_toc = lambda msg, cond=(_global_rank==0) : _tt_timer.toc(msg, delta=False) if cond else None
