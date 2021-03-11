@@ -9,7 +9,7 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import sys
-import pyutilib.th as unittest
+import unittest
 from math import log10, floor
 import pyomo.environ as pyo
 import mpisppy.opt.aph

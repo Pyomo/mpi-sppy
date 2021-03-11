@@ -13,14 +13,11 @@ To avoid errors from Pyomo use,
 import numpy as np
 import collections
 import mpi4py.MPI as mpi
-from pyutilib.misc.timing import TicTocTimer
 import time
 import cProfile
 import threading
 import logging
 
-# yeah, globals are bad - being lazy in experimental code...
-##timer = TicTocTimer()
 
 class Synchronizer(object):
     """

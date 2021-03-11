@@ -10,7 +10,6 @@ import sys
 import collections
 import numpy as np
 import mpi4py.MPI as mpi
-from pyutilib.misc.timing import TicTocTimer
 import time
 import datetime as dt
 import threading
