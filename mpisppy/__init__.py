@@ -16,11 +16,11 @@ try:
 except:
     haveMPI=False
 
-_tt_timer = _TTT()
+tt_timer = _TTT()
 
 if haveMPI:
     _global_rank = _mpi.COMM_WORLD.Get_rank()
 else:
     _global_rank = 0
 
-global_toc = lambda msg, cond=(_global_rank==0) : _tt_timer.toc(msg, delta=False) if cond else None
+global_toc = lambda msg, cond=(_global_rank==0) : tt_timer.toc(msg, delta=False) if cond else None
