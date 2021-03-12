@@ -665,10 +665,10 @@ class APH(ph_base.PHBase):  # ??????
 
     
     #========
-    def running_dump(self, msg):
+    def display_details(self, msg):
         """Ouput as much as you can about the current state"""
         print(f"hello {msg}")
-        print(f"*** global rank {global_rank} dump: {msg}")
+        print(f"*** global rank {global_rank} display details: {msg}")
         print(f"zero-based iteration number {self._PHIter}")
         print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
         print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} ")
@@ -745,7 +745,7 @@ class APH(ph_base.PHBase):  # ??????
                         print("User-supplied converger determined termination criterion reached")
                     break
             if ddetail:
-                self.running_dump("pre-solve loop (everything is updated from prev iter)")
+                self.display_details("pre-solve loop (everything is updated from prev iter)")
             # slight divergence from PH, where mid-iter is before conv
             if have_extensions:
                 self.extobject.miditer()
