@@ -670,12 +670,15 @@ class APH(ph_base.PHBase):  # ??????
         print(f"hello {msg}")
         print(f"*** global rank {global_rank} dump: {msg}")
         print(f"zero-based iteration number {self._PHIter}")
-        print(f"{'Nonants for':19} {'x':8} {'W':8} ")
+        print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
+        print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} ")
         for k,s in self.local_scenarios.items():
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                print(f"   {(ndn,i)} {xvar._value:8.3} "
-                      f"{s._mpisppy_model.W[(ndn,i)]._value:8.3}")
+                print(f"   {(ndn,i)} {xvar._value:9.3} "
+                      f"{s._mpisppy_model.z[(ndn,i)]._value:9.3}"
+                      f"{s._mpisppy_model.W[(ndn,i)]._value:9.3}"
+                      f"{self.uk[k][(ndn,i)]:9.3}")
       
 
     #====================================================================
