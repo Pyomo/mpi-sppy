@@ -18,7 +18,7 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement, \
                                                _rho_setter
 
-__version__ = 0.4
+__version__ = 0.41
 solvers = ["xpress_persistent", "gurobi_persistent", "cplex"]
 
 for solvername in solvers:
@@ -160,6 +160,25 @@ class Test_aph_sizes(unittest.TestCase):
         conv, obj, tbound = aph.APH_main(spcomm=None)
         print (f"use lag objthing={obj}")
         print ("tbound ={}".format(tbound))
+
+
+    @unittest.skipIf(not solver_available,
+                     "%s solver is not available" % (solvername,))
+    def test_running_dump(self):
+        # just see if "display_convergence_detail" causes a crash
+        PHoptions = self._copy_of_base_options()
+        PHoptions["PHIterLimit"] = 2
+        PHoptions["display_convergence_detail"] = True
+        PHoptions["async_frac_needed"] = 1
+        PHoptions["async_sleep_secs"] = 0.5
+        aph = mpisppy.opt.aph.APH(
+            PHoptions,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
+        conv, obj, tbound = aph.APH_main(spcomm=None)
 
 
     def test_lags_bundles(self):

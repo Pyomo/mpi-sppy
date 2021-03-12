@@ -662,7 +662,24 @@ class APH(ph_base.PHBase):  # ??????
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
         return dlist
+
     
+    #========
+    def display_details(self, msg):
+        """Ouput as much as you can about the current state"""
+        print(f"hello {msg}")
+        print(f"*** global rank {global_rank} display details: {msg}")
+        print(f"zero-based iteration number {self._PHIter}")
+        print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
+        print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} ")
+        for k,s in self.local_scenarios.items():
+            print(f"   Scenario {k}")
+            for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                print(f"   {(ndn,i)} {xvar._value:9.3} "
+                      f"{s._mpisppy_model.z[(ndn,i)]._value:9.3}"
+                      f"{s._mpisppy_model.W[(ndn,i)]._value:9.3}"
+                      f"{self.uk[k][(ndn,i)]:9.3}")
+      
 
     #====================================================================
     def APH_iterk(self, spcomm):
@@ -684,7 +701,9 @@ class APH(ph_base.PHBase):  # ??????
 
         have_converger = self.PH_converger is not None
         dprogress = self.PHoptions["display_progress"]
-        dtiming = self.PHoptions["display_timing"] 
+        dtiming = self.PHoptions["display_timing"]
+        ddetail = "display_convergence_detail" in self.PHoptions and\
+            self.PHoptions["display_convergence_detail"]
         self.conv = None
         # The notion of an iteration is unclear
         # we enter after the iteration 0 solves, so do updates first
@@ -725,7 +744,8 @@ class APH(ph_base.PHBase):  # ??????
                     if self.cylinder_rank == 0:
                         print("User-supplied converger determined termination criterion reached")
                     break
-            
+            if ddetail:
+                self.display_details("pre-solve loop (everything is updated from prev iter)")
             # slight divergence from PH, where mid-iter is before conv
             if have_extensions:
                 self.extobject.miditer()
