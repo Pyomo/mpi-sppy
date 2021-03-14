@@ -189,9 +189,18 @@ class Amalgomator(object):
 if __name__ == "__main__":
     # for debugging
     import mpisppy.tests.examples.farmer as farmer
-    print("hello")
     ama_options = {"EF-2stage": True}   # 2stage vs. mstage
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
     print(f"inner bound=", ama.best_inner_bound)
     print(f"outer bound=", ama.best_outer_bound)
+
+    """ Issues:
+    0. What do we want to put in ama_options and what do we want to discover
+       by looking at data? I am inclined to put things in the data and maybe
+       check against data. Here are the things:
+       - 2-stage versus multi-stage
+       - MIP versus continuous only
+       - linear/quadratic versus non-linear
+    1. I think a local py file is a module and can be imported, right?
+    """
