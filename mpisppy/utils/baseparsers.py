@@ -31,18 +31,6 @@ def _common_args(inparser):
                         type=int,
                         default=1134)
 
-    parser.add_argument("--default-rho",
-                        help="Global rho for PH (default None)",
-                        dest="default_rho",
-                        type=float,
-                        default=None)
-
-    parser.add_argument("--bundles-per-rank",
-                        help="bundles per rank (default 0 (no bundles))",
-                        dest="bundles_per_rank",
-                        type=int,
-                        default=0)                
-
     parser.add_argument('--with-verbose',
                         help="verbose output",
                         dest='with_verbose',
@@ -109,26 +97,6 @@ def _common_args(inparser):
                         type=str,
                         default='')
 
-    parser.add_argument("--linearize-binary-proximal-terms",
-                        help="For PH, linearize the proximal terms for "
-                        "all binary nonanticipative variables",
-                        dest="linearize_binary_proximal_terms",
-                        action='store_true')
-
-    parser.add_argument("--linearize-proximal-terms",
-                        help="For PH, linearize the proximal terms for "
-                        "all nonanticipative variables",
-                        dest="linearize_proximal_terms",
-                        action='store_true')
-
-    parser.add_argument("--proximal-linearization-tolerance",
-                        help="For PH, when linearizing proximal terms, "
-                        "a cut will be added if the proximal term approximation "
-                        "is looser than this value (default 1e-1)",
-                        dest="proximal_linearization_tolerance",
-                        type=float,
-                        default=1.e-1)
-
     return parser
     
 def make_parser(progname=None, num_scens_reqd=False):
@@ -152,10 +120,8 @@ def make_parser(progname=None, num_scens_reqd=False):
     parser = _common_args(parser)
     return parser
 
-def make_multistage_parser(progname=None):
-    # make a parser for the program named progname
-    # NOTE: if you want abbreviations, override the arguments in your example
-    # do not add abbreviations here.
+
+def _basic_multistage(progname=None):
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
     # the default is intended more as an example than as a default
@@ -164,7 +130,105 @@ def make_multistage_parser(progname=None):
                         dest="BFs",
                         type=str,
                         default="2,2")
+    return parser
+
+
+def make_multistage_parser(progname=None):
+    # make a parser for the program named progname
+    # NOTE: if you want abbreviations, override the arguments in your example
+    # do not add abbreviations here.
+    parser = _basic_multistage(progname=None)
     parser = _common_args(parser)
+    return parser
+
+
+#### EF ####
+def make_EF2_parser(progrname=None, num_scens_reqd=False):
+    # create a parser just for EF two-stage (does not call _common_args)
+    # NOTE: if you want abbreviations, override the arguments in your example
+    # do not add abbreviations here.
+    parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
+
+    if num_scens_reqd:
+        parser.add_argument(
+            "num_scens", help="Number of scenarios", type=int
+        )
+    else:
+        parser.add_argument(
+            "--num-scens",
+            help="Number of scenarios (default None)",
+            dest="num_scens",
+            type=int,
+            default=None,
+        )
+        
+    parser.add_argument("--EF-solver-name",
+                        help = "solver name (default gurobi)",
+                        dest="EF_solver_name",
+                        type = str,
+                        default="gurobi")
+
+
+    parser.add_argument("--EF-mipgap",
+                        help="mip gap option for the solver if needed (default None)",
+                        dest="EF_mipgap",
+                        type=float,
+                        default=None)
+
+def make_EF_multistage_parser(progrname=None, num_scens_reqd=False):
+    # create a parser just for EF two-stage (does not call _common_args)
+    # NOTE: if you want abbreviations, override the arguments in your example
+    # do not add abbreviations here.
+    parser = _basic_multistage(progname=None)
+    parser.add_argument("--EF-solver-name",
+                        help = "solver name (default gurobi)",
+                        dest="EF_solver_name",
+                        type = str,
+                        default="gurobi")
+
+
+    parser.add_argument("--EF-mipgap",
+                        help="mip gap option for the solver if needed (default None)",
+                        dest="EF_mipgap",
+                        type=float,
+                        default=None)
+
+    
+
+#### PH ####
+def PH_args(inparser):
+    parser = inparser
+    parser.add_argument("--default-rho",
+                        help="Global rho for PH (default None)",
+                        dest="default_rho",
+                        type=float,
+                        default=None)
+
+    parser.add_argument("--bundles-per-rank",
+                        help="bundles per rank (default 0 (no bundles))",
+                        dest="bundles_per_rank",
+                        type=int,
+                        default=0)                
+
+    parser.add_argument("--linearize-binary-proximal-terms",
+                        help="For PH, linearize the proximal terms for "
+                        "all binary nonanticipative variables",
+                        dest="linearize_binary_proximal_terms",
+                        action='store_true')
+
+    parser.add_argument("--linearize-proximal-terms",
+                        help="For PH, linearize the proximal terms for "
+                        "all nonanticipative variables",
+                        dest="linearize_proximal_terms",
+                        action='store_true')
+
+    parser.add_argument("--proximal-linearization-tolerance",
+                        help="For PH, when linearizing proximal terms, "
+                        "a cut will be added if the proximal term approximation "
+                        "is looser than this value (default 1e-1)",
+                        dest="proximal_linearization_tolerance",
+                        type=float,
+                        default=1.e-1)
     return parser
 
 ##### common additions to the command line #####
