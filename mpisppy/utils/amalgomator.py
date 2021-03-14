@@ -48,11 +48,13 @@ map that is global to baseparsers (i.e. importable)?
 """
 
 import importlib
+import pyomo.environ as pyo
 
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.utils.sputils import spin_the_wheel, get_objs
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
-
+from mpisppy.opt.ef import ExtensiveForm
+from mpisppy import global_toc
 
 #==========
 def from_module(mname, options, alist=None):
@@ -82,13 +84,14 @@ def from_module(mname, options, alist=None):
 
     args = Amalgomator_parser(options, m.inparser_adder, alist)
 
+    sn = m.scenario_names_creator(args.num_scens)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
     ama = Amalgomator(options,
-                     m.scenario_names,
-                     m.scenario_creator,
-                     dn,
-                     m.inparser_adder,
-                     m.kw_creator)
+                      args,
+                      sn,
+                      m.scenario_creator,
+                      m.kw_creator,
+                      scenario_denouement=dn)
     return ama
 
 
@@ -146,21 +149,49 @@ class Amalgomator(object):
     """
 
     def __init__(self, options, args,
-                 scenario_names, scenario_creator, scenario_denoument=None):
+                 scenario_names, scenario_creator, kw_creator, scenario_denouement=None):
         self.options = options
+        self.args = args
         self.scenario_names = scenario_names
         self.scenario_creator = scenario_creator
-        self.scenario_denouement = scenario_denoeument
+        self.scenario_denouement = scenario_denouement
         self.kw_creator = kw_creator
+        self.is_EF = _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")
 
     def run(self):
         """ Top-level execution."""
-        pass
+        if self.is_EF:
+            ef_options = {"solver": self.args.EF_solver_name}
+            kwargs = self.kw_creator(self.args)
+            ef = ExtensiveForm(ef_options,
+                               self.scenario_names,
+                               self.scenario_creator,
+                               scenario_creator_kwargs=kwargs)
+            solver_options = {"mipgap": self.args.EF_mipgap}
+            global_toc("Starting EF solve")
+            results = ef.solve_extensive_form()
+            global_toc("Completed EF solve")
+            if not pyo.check_optimal_termination(results):
+                print(f"WARNING: EF was not solved to optimality; results={results}")
+            self.EF_Obj = pyo.value(ef.ef.EF_Obj)
+            objs = get_objs(ef.ef)
+            self.is_minimizing = objs[0].is_minimizing
+            if self.is_minimizing:
+                self.best_outer_bound = results.Problem[0]['Lower bound']
+                self.best_inner_bound = results.Problem[0]['Upper bound']
+            else:
+                self.best_inner_bound = results.Problem[0]['Upper bound']
+                self.best_outer_bound = results.Problem[0]['Lower bound']
+        else:
+            raise RuntimeError("We can only do EF right now")
 
 
 if __name__ == "__main__":
     # for debugging
     import mpisppy.tests.examples.farmer as farmer
     print("hello")
-    ama_options = {"EF-2stage": True}
+    ama_options = {"EF-2stage": True}   # 2stage vs. mstage
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
+    ama.run()
+    print(f"inner bound=", ama.best_inner_bound)
+    print(f"outer bound=", ama.best_outer_bound)

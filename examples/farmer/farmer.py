@@ -248,7 +248,7 @@ def inparser_adder(inparser):
 #=========
 def kw_creator(args):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
-    kwargs = {"use_integer": args.farmer_with_integer,
+    kwargs = {"use_integer": args.farmer_with_integers,
               "crops_multiplier": args.crops_multiplier}
     return kwargs
 
