@@ -1,4 +1,6 @@
 # Amalgomator.py starting point; DLW March 2021
+# Copyright 2021 by D.L. Woodruff
+# This software is distributed under the 3-clause BSD License.
 
 """Takes a scenario list and a scenario creator (and options)
 as input and produces an outer bound on the objective function (solving the EF directly
@@ -69,14 +71,17 @@ def from_module(mname, options, alist=None):
 
     assert(options is not None)
     m = importlib.import_module(mname)
+
     you_can_have_it_all = True
     for ething in everything:
         if not hasattr(m, ething):
             print(f"Module {mname} is missing {ething}")
             you_can_have_it_all = False
-    args = Amalgomator_parser(options, m.inparser_adder, alist)
     if not you_can_have_it_all:
         raise RuntimeError(f"Module {mname} not complete for from_module")
+
+    args = Amalgomator_parser(options, m.inparser_adder, alist)
+
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
     ama = Amalgomator(options,
                      m.scenario_names,
@@ -106,9 +111,10 @@ def Amalgomator_parser(options, inparser_adder, alist=None):
     if alist is not None:
         raise RuntimeError("alist not supported yet")
 
-    parser = baseparsers.make_parser(num_scens_reqd=_bool_option(options, "num_scens_reqd"))
-    if not _bool_option(options, "EF"):
-        raise RuntimeError("only doing EF so far")
+    if _bool_option(options, "EF-2stage"):
+        parser = baseparsers.make_EF2_parser(num_scens_reqd=_bool_option(options, "num_scens_reqd"))
+    else:
+        raise RuntimeError("only EF-2Stage is supported right now")
 
     # TBD add args for everything else that is not EF, which is a lot
 
@@ -156,5 +162,5 @@ if __name__ == "__main__":
     # for debugging
     import mpisppy.tests.examples.farmer as farmer
     print("hello")
-    ama_options = {"EF": True}
+    ama_options = {"EF-2stage": True}
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)

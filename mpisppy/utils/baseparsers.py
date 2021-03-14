@@ -143,7 +143,7 @@ def make_multistage_parser(progname=None):
 
 
 #### EF ####
-def make_EF2_parser(progrname=None, num_scens_reqd=False):
+def make_EF2_parser(progname=None, num_scens_reqd=False):
     # create a parser just for EF two-stage (does not call _common_args)
     # NOTE: if you want abbreviations, override the arguments in your example
     # do not add abbreviations here.
@@ -174,8 +174,9 @@ def make_EF2_parser(progrname=None, num_scens_reqd=False):
                         dest="EF_mipgap",
                         type=float,
                         default=None)
+    return parser
 
-def make_EF_multistage_parser(progrname=None, num_scens_reqd=False):
+def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
     # create a parser just for EF two-stage (does not call _common_args)
     # NOTE: if you want abbreviations, override the arguments in your example
     # do not add abbreviations here.
@@ -192,7 +193,7 @@ def make_EF_multistage_parser(progrname=None, num_scens_reqd=False):
                         dest="EF_mipgap",
                         type=float,
                         default=None)
-
+    return parser
     
 
 #### PH ####
