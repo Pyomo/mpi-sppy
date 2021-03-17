@@ -189,12 +189,13 @@ class Amalgomator(object):
 if __name__ == "__main__":
     # for debugging
     import mpisppy.tests.examples.farmer as farmer
+    # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"EF-2stage": True}   # 2stage vs. mstage
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
     print(f"inner bound=", ama.best_inner_bound)
     print(f"outer bound=", ama.best_outer_bound)
-
+    # wish list: allow for integer relaxation using the Pyomo inplace transformation
     """ Issues:
     0. What do we want to put in ama_options and what do we want to discover
        by looking at data? I am inclined to put things in the data and maybe
