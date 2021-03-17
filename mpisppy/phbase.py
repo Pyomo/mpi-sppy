@@ -127,9 +127,9 @@ class PHBase(mpisppy.spbase.SPBase):
 
         self.iter0_solver_options = PHoptions["iter0_solver_options"]
         self.iterk_solver_options = PHoptions["iterk_solver_options"]
+        self.current_solver_options = self.iter0_solver_options
+
         # flags to complete the invariant
-        self.W_disabled = None   # will be set by Prep
-        self.prox_disabled = None
         self.convobject = None  # PH converger
         self.attach_xbars()
 
@@ -712,43 +712,32 @@ class PHBase(mpisppy.spbase.SPBase):
     def _disable_prox(self):
         self.prox_disabled = True
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._mpisppy_data.nonant_indices:
-                scenario._mpisppy_model.prox_on[(ndn,i)]._value = 0
-
-    def _disable_W_and_prox(self):
-        self.prox_disabled = True
-        self.W_disabled = True
-        for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._mpisppy_data.nonant_indices:
-                scenario._mpisppy_model.prox_on[(ndn,i)]._value = 0
-                scenario._mpisppy_model.w_on[(ndn,i)]._value = 0
+            scenario._mpisppy_model.prox_on = 0
 
     def _disable_W(self):
         # It would be odd to disable W and not prox.
-        self.W_disabled = True
+        # TODO: we should eliminate this method 
+        #       probably not mathematically useful
         for scenario in self.local_scenarios.values():
-            for (ndn, i) in scenario._mpisppy_data.nonant_indices:
-                scenario._mpisppy_model.w_on[ndn,i]._value = 0
+            scenario._mpisppy_model.W_on = 0
+
+    def _disable_W_and_prox(self):
+        self._disable_W()
+        self._disable_prox()
 
     def _reenable_prox(self):
         self.prox_disabled = False        
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._mpisppy_data.nonant_indices:
-                scenario._mpisppy_model.prox_on[(ndn,i)]._value = 1
-
-    def _reenable_W_and_prox(self):
-        self.prox_disabled = False
-        self.W_disabled = False
-        for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._mpisppy_data.nonant_indices:
-                scenario._mpisppy_model.prox_on[(ndn,i)]._value = 1
-                scenario._mpisppy_model.w_on[(ndn,i)]._value = 1
+            scenario._mpisppy_model.prox_on = 1
 
     def _reenable_W(self):
-        self.W_disabled = False
+        # TODO: we should eliminate this method
         for k, scenario in self.local_scenarios.items():
-            for (ndn, i) in scenario._mpisppy_data.nonant_indices:
-                scenario._mpisppy_model.w_on[(ndn,i)]._value = 1
+            scenario._mpisppy_model.W_on = 1
+
+    def _reenable_W_and_prox(self):
+        self._reenable_W()
+        self._reenable_prox()
 
     def post_solve_bound(self, solver_options=None, verbose=False):
         ''' Compute a bound Lagrangian bound using the existing weights.
@@ -1117,28 +1106,34 @@ class PHBase(mpisppy.spbase.SPBase):
                                         mutable=True)
             
             # create ph objective terms, but disabled
-            scenario._mpisppy_model.w_on = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
-                                        initialize=0.0,
-                                        mutable=True)
-            self.W_disabled = True
-            scenario._mpisppy_model.prox_on = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
-                                        initialize=0.0,
-                                        mutable=True)
-            self.prox_disabled = True
+            scenario._mpisppy_model.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
+
+            scenario._mpisppy_model.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
+
             # note that rho is per var and scenario here
             scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.PHoptions["defaultPHrho"])
 
-    def attach_PH_to_objective(self, add_duals=True, add_prox=False):
+    @property
+    def W_disabled(self):
+        assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'W_on')
+        return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.W_on.value)
+
+    @property
+    def prox_disabled(self):
+        assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'prox_on')
+        return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
+
+    def attach_PH_to_objective(self, add_duals, add_prox):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
 
         Args:
-            add_duals (boolean, optional):
-                If True, adds dual weight (Ws) to the objective. Default True.
-            add_prox (boolean, optional):
-                If True, adds the prox term to the objective. Default True.
+            add_duals (boolean):
+                If True, adds dual weight (Ws) to the objective.
+            add_prox (boolean):
+                If True, adds the prox term to the objective.
         """
 
         if ('linearize_binary_proximal_terms' in self.PHoptions):
@@ -1181,14 +1176,18 @@ class PHBase(mpisppy.spbase.SPBase):
                 scenario._mpisppy_model.xsqvar = None
                 scenario._mpisppy_data.xsqvar_prox_approx = False
 
-            for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                ph_term = 0
-                # Dual term (weights W)
-                if (add_duals):
-                    ph_term += \
-                        scenario._mpisppy_model.w_on[ndn_i] * scenario._mpisppy_model.W[ndn_i] * xvar
-                # Prox term (quadratic)
-                if (add_prox):
+            ph_term = 0
+            # Dual term (weights W)
+            if (add_duals):
+                scenario._mpisppy_model.WExpr = pyo.Expression(expr=\
+                        sum(scenario._mpisppy_model.W[ndn_i] * xvar \
+                            for ndn_i, var in scenario._mpisppy_model.nonant_indices.items()) )
+                ph_term += scenario._mpisppy_model.W_on * scenario._mpisppy_model.WExpr
+
+            # Prox term (quadratic)
+            if (add_prox):
+                for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
+                    prox_expr = 0.
                     # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
                     # x**2 is the only qradratic term, which might be
                     # dealt with differently depending on user-set options
@@ -1200,13 +1199,15 @@ class PHBase(mpisppy.spbase.SPBase):
                                 ProxApproxManager(xvar, xvarsqrd, scenario._mpisppy_model.xsqvar_cuts, ndn_i, initial_prox_cuts)
                     else:
                         xvarsqrd = xvar**2
-                    ph_term += scenario._mpisppy_model.prox_on[ndn_i] * \
-                        (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
-                        (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
-                if (is_min_problem):
-                    objfct.expr += ph_term
-                else:
-                    objfct.expr -= ph_term
+                    prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
+                                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+                scenario._mpisppy_model.ProxExpr = pyo.Expression(expr=prox_expr)
+                ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.ProxExpr
+
+            if (is_min_problem):
+                objfct.expr += ph_term
+            else:
+                objfct.expr -= ph_term
 
     def PH_Prep(
         self, 
@@ -1228,14 +1229,8 @@ class PHBase(mpisppy.spbase.SPBase):
             `pre_iter0` method of the Extension object.
         """
 
-        self.current_solver_options = self.PHoptions["iter0_solver_options"]
-
         self.attach_Ws_and_prox()
-        self.attach_PH_to_objective(add_duals=attach_duals,
-                                    add_prox=attach_prox)
-
-        if (self.PH_extensions is not None):
-            self.extobject.pre_iter0()
+        self.attach_PH_to_objective(attach_duals, attach_prox)
 
     def options_check(self):
         """ Check whether the options in the `PHoptions` attribute are
@@ -1376,6 +1371,8 @@ class PHBase(mpisppy.spbase.SPBase):
                 stochastic program with the nonanticipativity constraints
                 removed.
         """
+        if (self.PH_extensions is not None):
+            self.extobject.pre_iter0()
         
         verbose = self.PHoptions["verbose"]
         dprogress = self.PHoptions["display_progress"]
