@@ -670,6 +670,10 @@ class APH(ph_base.PHBase):  # ??????
         print(f"hello {msg}")
         print(f"*** global rank {global_rank} display details: {msg}")
         print(f"zero-based iteration number {self._PHIter}")
+        print("Convergence Metric=",self.conv)
+        print('   punorm={} pwnorm={} pvnorm={} pznorm={})'\
+              .format(math.sqrt(self.global_punorm), math.sqrt(self.global_pwnorm),
+                      math.sqrt(self.global_pvnorm), math.sqrt(self.global_pznorm)))
         print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
         print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} ")
         for k,s in self.local_scenarios.items():
@@ -778,10 +782,11 @@ class APH(ph_base.PHBase):  # ??????
             if dprogress and self.cylinder_rank == 0:
                 print("")
                 print("After APH Iteration",self._PHIter)
-                print("Convergence Metric=",self.conv)
-                print('   punorm={} pwnorm={} pvnorm={} pznorm={})'\
-                      .format(self.global_punorm, self.global_pwnorm,
-                              self.global_pvnorm, self.global_pznorm))
+                if not ddetail:
+                    print("Convergence Metric=",self.conv)
+                    print('   punorm={} pwnorm={} pvnorm={} pznorm={})'\
+                          .format(math.sqrt(self.global_punorm), math.sqrt(self.global_pwnorm),
+                                  math.sqrt(self.global_pvnorm), math.sqrt(self.global_pznorm)))
                 print("Iteration time: %6.2f" \
                       % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" \
