@@ -849,7 +849,7 @@ class APH(ph_base.PHBase):  # ??????
                         (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)]) * \
                         (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)])
                     # W term
-                    objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
+                    scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
@@ -858,7 +858,7 @@ class APH(ph_base.PHBase):  # ??????
                         (xvar - scenario._mpisppy_model.z[(ndn,i)]) * \
                         (xvar - scenario._mpisppy_model.z[(ndn,i)])
                     # W term
-                    objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W[ndn,i] * xvar
+                    scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
         

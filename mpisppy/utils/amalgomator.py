@@ -46,7 +46,7 @@ map that is global to baseparsers (i.e. importable)?
 
 
 """
-
+import numpy as np
 import importlib
 import pyomo.environ as pyo
 
@@ -182,7 +182,9 @@ class Amalgomator(object):
             else:
                 self.best_inner_bound = results.Problem[0]['Upper bound']
                 self.best_outer_bound = results.Problem[0]['Lower bound']
+            self.ef = ef
         else:
+            self.ef = None   # ???? do we want to retain these objects?
             raise RuntimeError("We can only do EF right now")
 
 
