@@ -16,7 +16,6 @@ import math
 import re
 import shutil
 import collections
-from pyutilib.misc.timing import TicTocTimer
 import time
 import logging
 import datetime as dt
