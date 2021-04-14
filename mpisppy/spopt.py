@@ -1,11 +1,19 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
+import logging
+import time
+import math
+
+import numpy as np
+import pyomo.environ as pyo
+from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 
 from mpi4py import MPI
 
 from mpisppy import global_toc
 from mpisppy.spbase import SPBase
+import mpisppy.utils.sputils as sputils
 
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
@@ -43,7 +51,8 @@ class SPOpt(SPBase):
                   gripe=False,
                   tee=False,
                   verbose=False,
-                  disable_pyomo_signal_handling=False):
+                  disable_pyomo_signal_handling=False,
+                  update_objective=True):
         """ Solve one subproblem.
 
         Args:
@@ -64,6 +73,9 @@ class SPOpt(SPBase):
             disable_pyomo_signal_handling (boolean, optional):
                 True for asynchronous PH; ignored for persistent solvers.
                 Default False.
+            update_objective (boolean, optional):
+                If True, and a persistent solver is used, update
+                the persistent solver's objective
 
         Returns:
             float:
@@ -77,7 +89,7 @@ class SPOpt(SPBase):
         
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
-        if (sputils.is_persistent(s._solver_plugin)):
+        if update_objective and (sputils.is_persistent(s._solver_plugin)):
             set_objective_start_time = time.time()
 
             active_objective_datas = list(s.component_data_objects(
@@ -271,7 +283,7 @@ class SPOpt(SPBase):
             if self.bundling:
                 objfct = self.saved_objs[k]
             else:
-                objfct = find_active_objective(s)
+                objfct = sputils.find_active_objective(s)
             local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -280,7 +292,7 @@ class SPOpt(SPBase):
 
         local_Eobj = np.array([math.fsum(local_Eobjs)])
         global_Eobj = np.zeros(1)
-        self.mpicomm.Allreduce(local_Eobj, global_Eobj, op=mpi.SUM)
+        self.mpicomm.Allreduce(local_Eobj, global_Eobj, op=MPI.SUM)
 
         return global_Eobj[0]
 
@@ -320,7 +332,7 @@ class SPOpt(SPBase):
         local_Ebound = np.array(local_Ebound_list)
         global_Ebound = np.zeros(len(local_Ebound_list))
         
-        self.mpicomm.Allreduce(local_Ebound, global_Ebound, op=mpi.SUM)
+        self.mpicomm.Allreduce(local_Ebound, global_Ebound, op=MPI.SUM)
 
         if extra_sum_terms is None:
             return global_Ebound[0]
@@ -338,9 +350,9 @@ class SPOpt(SPBase):
         for k,s in self.local_scenarios.items():
             localP[0] +=  s._mpisppy_probability
 
-        self.mpicomm.Allreduce([localP, mpi.DOUBLE],
-                           [globalP, mpi.DOUBLE],
-                           op=mpi.SUM)
+        self.mpicomm.Allreduce([localP, MPI.DOUBLE],
+                           [globalP, MPI.DOUBLE],
+                           op=MPI.SUM)
 
         self.E1 = float(globalP[0])
 
@@ -369,9 +381,9 @@ class SPOpt(SPBase):
             if s._mpisppy_data.scenario_feasible:
                 locals[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([locals, mpi.DOUBLE],
-                           [globals, mpi.DOUBLE],
-                           op=mpi.SUM)
+        self.mpicomm.Allreduce([locals, MPI.DOUBLE],
+                           [globals, MPI.DOUBLE],
+                           op=MPI.SUM)
 
         return float(globals[0])
 
@@ -396,9 +408,9 @@ class SPOpt(SPBase):
             if not s._mpisppy_data.scenario_feasible:
                 locals[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([locals, mpi.DOUBLE],
-                           [globals, mpi.DOUBLE],
-                           op=mpi.SUM)
+        self.mpicomm.Allreduce([locals, MPI.DOUBLE],
+                           [globals, MPI.DOUBLE],
+                           op=MPI.SUM)
 
         return float(globals[0])
 
@@ -448,15 +460,15 @@ class SPOpt(SPBase):
                 localmax[0] = compv
             firsttime = False
 
-        self.comms["ROOT"].Allreduce([localavg, mpi.DOUBLE],
-                                     [globalavg, mpi.DOUBLE],
-                                     op=mpi.SUM)
-        self.comms["ROOT"].Allreduce([localmin, mpi.DOUBLE],
-                                     [globalmin, mpi.DOUBLE],
-                                     op=mpi.MIN)
-        self.comms["ROOT"].Allreduce([localmax, mpi.DOUBLE],
-                                     [globalmax, mpi.DOUBLE],
-                                     op=mpi.MAX)
+        self.comms["ROOT"].Allreduce([localavg, MPI.DOUBLE],
+                                     [globalavg, MPI.DOUBLE],
+                                     op=MPI.SUM)
+        self.comms["ROOT"].Allreduce([localmin, MPI.DOUBLE],
+                                     [globalmin, MPI.DOUBLE],
+                                     op=MPI.MIN)
+        self.comms["ROOT"].Allreduce([localmax, MPI.DOUBLE],
+                                     [globalmax, MPI.DOUBLE],
+                                     op=MPI.MAX)
         return (float(globalavg[0]),
                 float(globalmin[0]),
                 float(globalmax[0]))
@@ -688,7 +700,7 @@ class SPOpt(SPBase):
         for sname, scenario_instance in scen_dict.items():
             if sname not in self.local_scenarios:
                 raise RuntimeError("EF scen not in local_scenarios="+sname)
-            self.saved_objs[sname] = find_active_objective(scenario_instance)
+            self.saved_objs[sname] = sputils.find_active_objective(scenario_instance)
 
         EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
                         nonant_for_fixed_vars=False)

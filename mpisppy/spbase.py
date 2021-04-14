@@ -54,6 +54,7 @@ class SPBase:
         # TODO add missing and private attributes (JP)
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
         # TODO? add decorators to the class attributes
+
         self.start_time = time.perf_counter()
         self.options = options
         self.all_scenario_names = all_scenario_names

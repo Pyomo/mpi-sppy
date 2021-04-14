@@ -13,7 +13,7 @@ import mpi4py.MPI as mpi
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.listener_util.listener_util as listener_util
-import mpisppy.spbase
+import mpisppy.spopt
 
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 from mpisppy.utils.sputils import find_active_objective
@@ -341,7 +341,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def _disable_prox(self):
-        self.prox_disabled = True
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 0
 
@@ -360,7 +359,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def _reenable_prox(self):
-        self.prox_disabled = False        
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 1
 
@@ -606,7 +604,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             if (add_duals):
                 scenario._mpisppy_model.WExpr = pyo.Expression(expr=\
                         sum(scenario._mpisppy_model.W[ndn_i] * xvar \
-                            for ndn_i, var in scenario._mpisppy_model.nonant_indices.items()) )
+                            for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items()) )
                 ph_term += scenario._mpisppy_model.W_on * scenario._mpisppy_model.WExpr
 
             # Prox term (quadratic)
