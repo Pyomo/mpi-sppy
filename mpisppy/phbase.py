@@ -1,28 +1,22 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-import inspect
-import collections
 import time
-import datetime as dt
 import logging
-import math
 
 import numpy as np
+import mpi4py.MPI as MPI
+
 import pyomo.environ as pyo
-import mpi4py.MPI as mpi
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spopt
 
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
-from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.prox_approx import ProxApproxManager
-
 from mpisppy import global_toc
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
-def profile(filename=None, comm=mpi.COMM_WORLD):
+def profile(filename=None, comm=MPI.COMM_WORLD):
     pass
 
 logger = logging.getLogger('PHBase')
@@ -197,9 +191,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         # compute node xbar values(reduction)
         for nodename in nodenames:
             self.comms[nodename].Allreduce(
-                [local_concats[nodename], mpi.DOUBLE],
-                [global_concats[nodename], mpi.DOUBLE],
-                op=mpi.SUM)
+                [local_concats[nodename], MPI.DOUBLE],
+                [global_concats[nodename], MPI.DOUBLE],
+                op=MPI.SUM)
 
         # set the xbar and xsqbar in all the scenarios
         for k,s in self.local_scenarios.items():
@@ -272,7 +266,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 varcount += 1
         local_diff[0] /= varcount
 
-        self.comms["ROOT"].Allreduce(local_diff, global_diff, op=mpi.SUM)
+        self.comms["ROOT"].Allreduce(local_diff, global_diff, op=MPI.SUM)
 
         return global_diff[0] / self.n_proc
 
@@ -582,7 +576,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             """
             if ((not add_duals) and (not add_prox)):
                 return
-            objfct = find_active_objective(scenario)
+            objfct = sputils.find_active_objective(scenario)
             is_min_problem = objfct.is_minimizing()
 
             xbars = scenario._mpisppy_model.xbars
