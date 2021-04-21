@@ -16,7 +16,6 @@ import math
 import re
 import shutil
 import collections
-from pyutilib.misc.timing import TicTocTimer
 import time
 import logging
 import datetime as dt
@@ -113,12 +112,12 @@ class APH(ph_base.PHBase):  # ??????
         self.phi_summand = 0
         self.global_tau = 0
         self.global_phi = 0
-        self.global_punorm = 0 # ... may be out of date...
-        self.global_pvnorm = 0
-        self.global_pwnorm = 0
-        self.global_pznorm = 0
-        self.local_pwnorm = 0
-        self.local_pznorm = 0
+        self.global_pusqnorm = 0 # ... may be out of date...
+        self.global_pvsqnorm = 0
+        self.global_pwsqnorm = 0
+        self.global_pzsqnorm = 0
+        self.local_pwsqnorm = 0
+        self.local_pzsqnorm = 0
         self.conv = None
         self.use_lag = False if "APHuse_lag" not in PHoptions\
                         else PHoptions["APHuse_lag"]
@@ -145,7 +144,7 @@ class APH(ph_base.PHBase):  # ??????
                     = 3 * len(node.nonant_vardata_list)
                 self.Lens["SecondReduce"][node.name] = 0 # only use root?
         self.Lens["FirstReduce"]["ROOT"] += self.n_proc  # for time of update
-        # tau, phi, punorm, pvnorm, pwnorm, pznorm, secs
+        # tau, phi, pusqnorm, pvsqnorm, pwsqnorm, pzsqnorm, secs
         self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc 
 
 
@@ -267,27 +266,27 @@ class APH(ph_base.PHBase):  # ??????
         # vk is just going to be ybar directly
         if not hasattr(self, "uk"):
             self.uk = {} # indexed by sname and nonant index [sname][(ndn,i)]
-        self.local_punorm = 0  # local summand for probability weighted norm
-        self.local_pvnorm = 0
+        self.local_pusqnorm = 0  # local summand for probability weighted sqnorm
+        self.local_pvsqnorm = 0
         new_tau_summand = 0  # for this rank
         for sname,s in self.local_scenarios.items():
-            scen_unorm = 0.0
-            scen_vnorm = 0.0
+            scen_usqnorm = 0.0
+            scen_vsqnorm = 0.0
             if sname not in self.uk:
                 self.uk[sname] = {}
             nlens = s._mpisppy_data.nlens        
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 self.uk[sname][(ndn,i)] = xvar._value \
                                           - pyo.value(s._mpisppy_model.xbars[(ndn,i)])
-                # compute the unorm and vnorm
-                scen_unorm += self.uk[sname][(ndn,i)] \
+                # compute the usqnorm and vsqnorm (squared L2 norms)
+                scen_usqnorm += self.uk[sname][(ndn,i)] \
                               * self.uk[sname][(ndn,i)]
-                scen_vnorm += pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
+                scen_vsqnorm += pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
                               * pyo.value(s._mpisppy_model.ybars[(ndn,i)])
-            self.local_punorm += pyo.value(s._mpisppy_probability) * scen_unorm
-            self.local_pvnorm += pyo.value(s._mpisppy_probability) * scen_vnorm
+            self.local_pusqnorm += pyo.value(s._mpisppy_probability) * scen_usqnorm
+            self.local_pvsqnorm += pyo.value(s._mpisppy_probability) * scen_vsqnorm
             new_tau_summand += pyo.value(s._mpisppy_probability) \
-                               * (scen_unorm + scen_vnorm/self.APHgamma)
+                               * (scen_usqnorm + scen_vsqnorm/self.APHgamma)
                 
 
             
@@ -308,10 +307,10 @@ class APH(ph_base.PHBase):  # ??????
         # prepare for the reduction that will take place after this side-gig
         self.local_concats["SecondReduce"]["ROOT"][0] = self.tau_summand
         self.local_concats["SecondReduce"]["ROOT"][1] = self.phi_summand
-        self.local_concats["SecondReduce"]["ROOT"][2] = self.local_punorm
-        self.local_concats["SecondReduce"]["ROOT"][3] = self.local_pvnorm
-        self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwnorm
-        self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pznorm
+        self.local_concats["SecondReduce"]["ROOT"][2] = self.local_pusqnorm
+        self.local_concats["SecondReduce"]["ROOT"][3] = self.local_pvsqnorm
+        self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwsqnorm
+        self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pzsqnorm
         # we have updated our summands and the listener will do a reduction
         secs_so_far = time.perf_counter() - self.start_time
         # Put in a time only for this rank, so the "sum" is really a report
@@ -439,10 +438,10 @@ class APH(ph_base.PHBase):  # ??????
         # We  assign the global xbar, etc. as side-effect in the side gig, btw
         self.global_tau = self.node_concats["SecondReduce"]["ROOT"][0]
         self.global_phi = self.node_concats["SecondReduce"]["ROOT"][1]
-        self.global_punorm = self.node_concats["SecondReduce"]["ROOT"][2]
-        self.global_pvnorm = self.node_concats["SecondReduce"]["ROOT"][3]
-        self.global_pwnorm = self.node_concats["SecondReduce"]["ROOT"][4]
-        self.global_pznorm = self.node_concats["SecondReduce"]["ROOT"][5]
+        self.global_pusqnorm = self.node_concats["SecondReduce"]["ROOT"][2]
+        self.global_pvsqnorm = self.node_concats["SecondReduce"]["ROOT"][3]
+        self.global_pwsqnorm = self.node_concats["SecondReduce"]["ROOT"][4]
+        self.global_pzsqnorm = self.node_concats["SecondReduce"]["ROOT"][5]
 
         logging.debug('Assigned global tau {} and phi {} on rank {}'\
                       .format(self.global_tau, self.global_phi, self.cylinder_rank))
@@ -464,10 +463,10 @@ class APH(ph_base.PHBase):  # ??????
         logging.debug('Iter {} assigned theta {} on rank {}'\
                       .format(self._PHIter, self.theta, self.cylinder_rank))
 
-        oldpw = self.local_pwnorm
-        oldpz = self.local_pznorm
-        self.local_pwnorm = 0
-        self.local_pznorm = 0
+        oldpw = self.local_pwsqnorm
+        oldpz = self.local_pzsqnorm
+        self.local_pwsqnorm = 0
+        self.local_pzsqnorm = 0
         # v is just ybar
         for k,s in self.local_scenarios.items():
             probs = pyo.value(s._mpisppy_probability)
@@ -475,7 +474,7 @@ class APH(ph_base.PHBase):  # ??????
                 Wupdate = self.theta * self.uk[k][(ndn,i)]
                 Ws = pyo.value(s._mpisppy_model.W[(ndn,i)]) + Wupdate
                 s._mpisppy_model.W[(ndn,i)] = Ws 
-                self.local_pwnorm += probs * Ws * Ws
+                self.local_pwsqnorm += probs * Ws * Ws
                 # iter 1 is iter 0 post-solves when seen from the paper
                 if self._PHIter != 1:
                     zs = pyo.value(s._mpisppy_model.z[(ndn,i)])\
@@ -483,15 +482,15 @@ class APH(ph_base.PHBase):  # ??????
                 else:
                      zs = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                 s._mpisppy_model.z[(ndn,i)] = zs 
-                self.local_pznorm += probs * zs * zs
+                self.local_pzsqnorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
                               format(global_rank, k, i, Ws, zs))
         # ? so they will be there next time? (we really need a third reduction)
-        self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwnorm
-        self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pznorm
+        self.local_concats["SecondReduce"]["ROOT"][4] = self.local_pwsqnorm
+        self.local_concats["SecondReduce"]["ROOT"][5] = self.local_pzsqnorm
         # The values we just computed can't be in the global yet, so update here
-        self.global_pwnorm += (self.local_pwnorm - oldpw)
-        self.global_pznorm += (self.local_pznorm - oldpz)
+        self.global_pwsqnorm += (self.local_pwsqnorm - oldpw)
+        self.global_pzsqnorm += (self.local_pzsqnorm - oldpz)
                 
     #============================
     def Compute_Convergence(self, verbose=False):
@@ -507,13 +506,17 @@ class APH(ph_base.PHBase):  # ??????
         # the u and v should be in the side gig.
         # you need a reduction on all the norms!!
 
-        if self.global_pwnorm > 0 and self.global_pznorm > 0:
-            self.conv = math.sqrt(self.global_punorm / self.global_pwnorm \
-                                  + self.global_pvnorm / self.global_pznorm)
-        logging.debug('self.conv={} self.global_punorm={} self.global_pwnorm={} self.global_pvnorm={} self.global_pznorm={})'\
-                      .format(self.conv, self.global_punorm, self.global_pwnorm, self.global_pvnorm, self.global_pznorm))
+        punorm = math.sqrt(self.global_pusqnorm)
+        pwnorm = math.sqrt(self.global_pwsqnorm)
+        pvnorm = math.sqrt(self.global_pvsqnorm)
+        pznorm = math.sqrt(self.global_pzsqnorm)
+
+        if pwnorm > 0 and pznorm > 0:
+            self.conv = punorm / pwnorm + pvnorm / pznorm
+
+        logging.debug('self.conv={} self.global_pusqnorm={} self.global_pwsqnorm={} self.global_pvsqnorm={} self.global_pzsqnorm={})'\
+                      .format(self.conv, self.global_pusqnorm, self.global_pwsqnorm, self.global_pvsqnorm, self.global_pzsqnorm))
         # allow a PH converger, mainly for mpisspy to get xhat from a wheel conv
-        # It probably cannot get a lower bound or even try to
         if hasattr(self, "PH_conobject") and self.PH_convobject is not None:
             phc = self.PH_convobject(self, self.cylinder_rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
@@ -663,13 +666,27 @@ class APH(ph_base.PHBase):  # ??????
                       np.max(all_pyomo_solve_times)))
         return dlist
 
-    
+    #========
+    def _print_conv_detail(self):
+        print("Convergence Metric=",self.conv)
+        punorm = math.sqrt(self.global_pusqnorm)
+        pwnorm = math.sqrt(self.global_pwsqnorm)
+        pvnorm = math.sqrt(self.global_pvsqnorm)
+        pznorm = math.sqrt(self.global_pzsqnorm)
+        print(f'   punorm={punorm} pwnorm={pwnorm} pvnorm={pvnorm} pznorm={pznorm}')
+        if pwnorm > 0 and pznorm > 0:
+            print(f"    scaled U term={punorm / pwnorm}; scaled V term={pvnorm / pznorm}")
+        else:
+            print(f"    ! convergence metric cannot be computed due to zero-divide")
+
+
     #========
     def display_details(self, msg):
         """Ouput as much as you can about the current state"""
         print(f"hello {msg}")
         print(f"*** global rank {global_rank} display details: {msg}")
         print(f"zero-based iteration number {self._PHIter}")
+        self._print_conv_detail()
         print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
         print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} ")
         for k,s in self.local_scenarios.items():
@@ -778,10 +795,8 @@ class APH(ph_base.PHBase):  # ??????
             if dprogress and self.cylinder_rank == 0:
                 print("")
                 print("After APH Iteration",self._PHIter)
-                print("Convergence Metric=",self.conv)
-                print('   punorm={} pwnorm={} pvnorm={} pznorm={})'\
-                      .format(self.global_punorm, self.global_pwnorm,
-                              self.global_pvnorm, self.global_pznorm))
+                if not ddetail:
+                    self._print_conv_detail()
                 print("Iteration time: %6.2f" \
                       % (time.time() - iteration_start_time))
                 print("Elapsed time:   %6.2f" \
@@ -849,7 +864,7 @@ class APH(ph_base.PHBase):  # ??????
                         (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)]) * \
                         (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)])
                     # W term
-                    scenario._mpisppy_model.W_on * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
+                    objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
@@ -858,7 +873,7 @@ class APH(ph_base.PHBase):  # ??????
                         (xvar - scenario._mpisppy_model.z[(ndn,i)]) * \
                         (xvar - scenario._mpisppy_model.z[(ndn,i)])
                     # W term
-                    scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
+                    objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
         
