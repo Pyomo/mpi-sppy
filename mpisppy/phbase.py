@@ -603,8 +603,8 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             # Prox term (quadratic)
             if (add_prox):
+                prox_expr = 0.
                 for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                    prox_expr = 0.
                     # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
                     # x**2 is the only qradratic term, which might be
                     # dealt with differently depending on user-set options
