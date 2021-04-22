@@ -98,6 +98,34 @@ def main():
 
     mpisppy.cylinders.SPOKE_SLEEP_TIME = 0.1
 
+    if True:
+        print("ASYNC")
+        from mpisppy.cylinders.hub import APHHub
+        from mpisppy.opt.aph import APH        
+        hub_dict['opt_kwargs']['PHoptions']["async_frac_needed"] = 1.0
+        hub_dict['opt_kwargs']['PHoptions']["dispatch_frac"] = 0.33333333333
+        hub_dict['opt_kwargs']['PHoptions']["APHnu"] = 1.0
+        hub_dict['opt_kwargs']['PHoptions']["APHgamma"] = 1.0
+        hub_dict['opt_kwargs']['PHoptions']["async_sleep_secs"] = 0.01
+        hub_dict['opt_kwargs']['PHoptions']["PHIterLimit"] = 100
+        hub_dict['opt_kwargs']['PHoptions']["bundles_per_rank"] = 0
+
+        hub_dict['hub_kwargs']["options"]["abs_gap"] = 1
+        hub_dict['hub_kwargs']["options"]["rel_gap"] = 0.0001        
+
+        hub_dict['hub_class'] = APHHub
+        hub_dict['opt_class'] = APH
+
+        hub_dict["opt_kwargs"] = {
+            "PHoptions": hub_dict['opt_kwargs']['PHoptions'],
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            'scenario_denouement': scenario_denouement,
+            "scenario_creator_kwargs": scenario_creator_kwargs
+            }
+
+        print("HUB DICT:",hub_dict)
+
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 
 
