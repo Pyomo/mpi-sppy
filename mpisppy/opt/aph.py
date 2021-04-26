@@ -13,16 +13,13 @@ TBD: dlw june 2020 look at this code in phbase:
 
 import numpy as np
 import math
-import re
-import shutil
 import collections
 import time
 import logging
-import datetime as dt
 import mpi4py
 import mpi4py.MPI as mpi
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
+from pyomo.opt import SolverFactory, SolverStatus
 from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base  # factor some day...
@@ -157,12 +154,16 @@ class APH(ph_base.PHBase):  # ??????
 
 
     #============================
-    def Update_y(self, verbose):
+    def Update_y(self, dlist, verbose):
         # compute the new y (or set to zero if it is iter 1)
         # iter 1 is iter 0 post-solves when seen from the paper
-                       
+        # dlist is used only after iter0 (it has the dispatched scen names)
+
+        slist = [d[0] for d in dlist]  # just the names
         if self._PHIter != 1:
             for k,s in self.local_scenarios.items():
+                if k not in slist:
+                    continue
                 for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                     if not self.use_lag:
                         z_touse = s._mpisppy_model.z[(ndn,i)]._value
@@ -573,7 +574,7 @@ class APH(ph_base.PHBase):  # ??????
             dispatch_frac (float): fraction to send out for solution based on phi
 
         Returns:
-            dlist (list of str): the subproblems that were dispatched
+            dlist (list of (str, float): (dispatched name, phi )
         """
         #==========
         def _vb(msg): 
@@ -620,7 +621,8 @@ class APH(ph_base.PHBase):  # ??????
 
             # If we are still here, there were not enough w/negative phi values.
             if i == 0 and self.nu == 1.0 and self._PHIter > 1:
-                print(f"WARNING: no negative phi on rank {self.cylinder_rank}")
+                print(f"WARNING: no negative phi on rank {self.cylinder_rank}"
+                      f" at iteration {self._PHIter}")
             # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
             sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                  key=lambda item: item[1][-1])}
@@ -712,6 +714,11 @@ class APH(ph_base.PHBase):  # ??????
         logging.debug('==== enter iterk on rank {}'.format(self.cylinder_rank))
         verbose = self.PHoptions["verbose"]
         have_extensions = self.PH_extensions is not None
+
+        # We have the "bottom of the loop at the top"
+        # so we need a dlist to get the ball rolling (it might not be used)
+        dlist = [(sn, 0.0) for sn in self.local_scenario_names]
+        
         # put dispatch_frac on the object so extensions can modify it
         self.dispatch_frac = self.PHoptions["dispatch_frac"]\
                              if "dispatch_frac" in self.PHoptions else 1
@@ -734,7 +741,7 @@ class APH(ph_base.PHBase):  # ??????
                 print ("Initiating APH Iteration",self._PHIter)
                 print("")
 
-            self.Update_y(verbose)
+            self.Update_y(dlist, verbose)
             # Compute xbar, etc
             logging.debug('pre Compute_Averages on rank {}'.format(self.cylinder_rank))
             self.Compute_Averages(verbose)
