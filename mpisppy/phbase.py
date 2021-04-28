@@ -1290,7 +1290,11 @@ class PHBase(mpisppy.spbase.SPBase):
                 for sname in self.names_in_bundles[rank_local][bun]:
                     if (verbose and self.cylinder_rank==0):
                         print ("bundling "+sname+" into "+bname)
-                    sdict[sname] = self.local_scenarios[sname]
+                    # DLW April 2021 (delete this comment in June 2021)
+                    # This will cause merge conflicts with the phbase refactor.
+                    scen = self.local_scenarios[sname]
+                    sdict[sname] = scen
+                    scen._mpisppy_data.bundlename = bname
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
                 self.local_subproblems[bname].scen_list = \
                     self.names_in_bundles[rank_local][bun]
