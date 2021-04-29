@@ -29,13 +29,6 @@ jobs:
           conda install mpi4py pandas setuptools
           pip install pyomo cplex
 
-
-    steps:
-      - uses: actions/checkout@v2
-      - name: setup the program
-        run: |
-          python setup.py develop
-
       - name: run tests
         timeout-minutes: 100
         run: |
