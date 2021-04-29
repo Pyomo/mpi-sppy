@@ -1,4 +1,4 @@
-# periodic tests of aph
+# aph (pyomo released)
 
 name: aph tests
 
@@ -8,14 +8,26 @@ on:
   pull_request:
     branches: [ main ]
 
+defaults:
+    run:
+        shell: bash -l {0}
+
 jobs:
   build:
 
     runs-on: ubuntu-latest
-    container:
-        image: dlwoodruff/mpisppyweekly:latest
-        env:
-          PATH: /opt/conda/bin:/opt/conda/condabin:/opt/conda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+    steps:
+      - uses: actions/checkout@v2
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.8
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo cplex
 
 
     steps:
