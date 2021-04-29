@@ -128,7 +128,6 @@ do_one("farmer",
        "farmer_cylinders.py",
        2,
        f"30 --max-iterations=10 --default-rho=1.0 --with-display-progress  --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
-quit()
 
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
