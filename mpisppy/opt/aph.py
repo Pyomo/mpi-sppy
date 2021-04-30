@@ -868,8 +868,7 @@ class APH(ph_base.PHBase):  # ??????
                     # proximal term
                     objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
                         (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)]) * \
-                        (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)])
+                        (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z_foropt[(ndn,i)] + scenario._mpisppy_model.z_foropt[(ndn,i)]**2)                                            
                     # W term
                     objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
@@ -877,8 +876,7 @@ class APH(ph_base.PHBase):  # ??????
                     # proximal term
                     objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
                         (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._mpisppy_model.z[(ndn,i)]) * \
-                        (xvar - scenario._mpisppy_model.z[(ndn,i)])
+                        (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z[(ndn,i)] + scenario._mpisppy_model.z[(ndn,i)]**2)                        
                     # W term
                     objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W[ndn,i] * xvar
 
