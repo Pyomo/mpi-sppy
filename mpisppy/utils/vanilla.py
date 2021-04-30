@@ -51,6 +51,8 @@ def shared_options(args):
         shoptions["iter0_solver_options"]["mipgap"] = args.iter0_mipgap
     if _hasit(args, "iterk_mipgap"):
         shoptions["iterk_solver_options"]["mipgap"] = args.iterk_mipgap
+    if _hasit(args, "bundles_per_rank"):
+        shoptions["bundles_per_rank"] = args.bundles_per_rank
     return shoptions
 
 

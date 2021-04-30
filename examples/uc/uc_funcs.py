@@ -15,7 +15,8 @@ import egret.data.model_data as md
 import egret.models.unit_commitment as uc
 
 
-def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None):
+def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None,
+                                    add_contingency_constraints=False):
     """
     Notes:
     - The uc_cylinders.py code has a `scenario_count` kwarg that gets passed to
@@ -24,22 +25,53 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
     #print("Building instance for scenario =", scenario_name)
     scennum = sputils.extract_num(scenario_name)
 
-    uc_model_params = pdp.get_uc_model()
+    root_node_dat = os.path.isfile(os.path.join(path,"RootNode.dat"))
+    scenario_1_dat = os.path.isfile(os.path.join(path,"Scenario_1.dat"))
+    scenario_1_json = os.path.isfile(os.path.join(path,"Scenario_1.json")) or\
+                        os.path.isfile(os.path.join(path,"Scenario_1.json.gz"))
 
-    scenario_data = DataPortal(model=uc_model_params)
-    scenario_data.load(filename=path+os.sep+"RootNode.dat")
-    scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
 
-    scenario_params = uc_model_params.create_instance(scenario_data,
-                                                      report_timing=False,
-                                                      name=scenario_name)
+    assert not (root_node_dat and scenario_1_dat)
+    assert not (root_node_dat and scenario_1_json)
+    assert not (scenario_1_dat and scenario_1_json)
 
-    scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+    if root_node_dat:
+        uc_model_params = pdp.get_uc_model()
+
+        scenario_data = DataPortal(model=uc_model_params)
+        scenario_data.load(filename=path+os.sep+"RootNode.dat")
+        scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
+
+        scenario_params = uc_model_params.create_instance(scenario_data,
+                                                          report_timing=False,
+                                                          name=scenario_name)
+
+        scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+
+    elif scenario_1_dat:
+        uc_model_params = pdp.get_uc_model()
+
+        scenario_data = DataPortal(model=uc_model_params)
+        scenario_data.load(filename=path+os.sep+"Scenario_"+str(scennum)+".dat")
+
+        scenario_params = uc_model_params.create_instance(scenario_data,
+                                                          report_timing=False,
+                                                          name=scenario_name)
+
+        scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+
+    elif scenario_1_json:
+        scenario_md = md.ModelData(os.path.join(path, f"Scenario_{scennum}.json"))
+
+    else:
+        raise RuntimeError(f"Can't determine stochastic UC data type in directory {path}")
+
+    if add_contingency_constraints:
+        _add_all_contingency_constraints(scenario_md)
 
     ## TODO: use the "power_balance_constraints" for now. In the future, networks should be
     ##       handled with a custom callback -- also consider other base models
-    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md,
-                                                    network_constraints='power_balance_constraints')
+    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md)
 
     # hold over string attribute from Egret,
     # causes warning wth LShaped/Benders
@@ -47,17 +79,17 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
     return scenario_instance
 
-def scenario_creator(scenario_name, scenario_count=None, path=None):
-    return pysp2_callback(scenario_name, scenario_count=scenario_count, path=path)
+def scenario_creator(scenario_name, **kwargs):
+    return pysp2_callback(scenario_name, **kwargs)
 
-def pysp2_callback(scenario_name, scenario_count=None, path=None):
+def pysp2_callback(scenario_name, **kwargs):
     ''' The callback needs to create an instance and then attach
         the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho. Standard (1.0) PySP signature for now...
     '''
 
     instance = pysp_instance_creation_callback(
-        scenario_name, scenario_count=scenario_count, path=path,
+        scenario_name, **kwargs,
     )
 
     # now attach the one and only tree node (ROOT is a reserved word)
@@ -248,3 +280,16 @@ def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
     file_name = os.path.join(solution_dir, sname+'.json')
     mds = uc._save_uc_results(scenario, relaxed=False)
     mds.write(file_name)
+
+def _add_all_contingency_constraints(md):
+    from egret.model_library.transmission.tx_calc import (construct_connection_graph,
+                                                          get_N_minus_1_branches,
+                                                         )
+
+    branches = dict(md.elements(element_type='branch'))
+    mapping_bus_to_idx = { bus_n: i for i, bus_n in enumerate(md.data['elements']['bus'].keys()) }
+    graph = construct_connection_graph(branches, mapping_bus_to_idx)
+    all_connected_contigencies = get_N_minus_1_branches(graph, branches, mapping_bus_to_idx)
+
+    md.data['elements']['contingency'] = \
+            { bn : {'branch_contingency': bn} for bn in all_connected_contigencies }
