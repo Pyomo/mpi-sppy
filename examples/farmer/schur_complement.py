@@ -18,8 +18,7 @@ mpirun -np N python -m mpi4py schur_complement.py N
 """
 
 
-def solve_with_extensive_form():
-    scen_count = int(sys.argv[1])    
+def solve_with_extensive_form(scen_count):
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     options = dict()
     options['solver'] = 'gurobi_direct'
@@ -35,8 +34,7 @@ def solve_with_extensive_form():
     return opt
 
 
-def solve_with_sc():
-    scen_count = int(sys.argv[1])    
+def solve_with_sc(scen_count):
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     options = dict()
     scenario_kwargs = dict()
@@ -51,5 +49,6 @@ def solve_with_sc():
 
 
 if __name__ == '__main__':
-    # solve_with_extensive_form()
-    solve_with_sc()
+    scen_count = int(sys.argv[1])
+    # solve_with_extensive_form(scen_count)
+    solve_with_sc(scen_count)
