@@ -21,7 +21,7 @@ mpirun -np N python -m mpi4py schur_complement.py N
 def solve_with_extensive_form(scen_count):
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     options = dict()
-    options['solver'] = 'gurobi_direct'
+    options['solver'] = 'cplex_direct'
     scenario_kwargs = dict()
     scenario_kwargs['use_integer'] = False
     
@@ -34,9 +34,12 @@ def solve_with_extensive_form(scen_count):
     return opt
 
 
-def solve_with_sc(scen_count):
+def solve_with_sc(scen_count, linear_solver=None):
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     options = dict()
+    if linear_solver is not None:
+        options['linalg'] = dict()
+        options['linalg']['solver'] = linear_solver
     scenario_kwargs = dict()
     scenario_kwargs['use_integer'] = False
     opt = sc.SchurComplement(options=options,

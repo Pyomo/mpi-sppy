@@ -1,6 +1,12 @@
 import unittest
 import sys
 import os
+import parapint
+from mpi4py import MPI
+
+
+comm = MPI.COMM_WORLD
+rank = comm.Get_rank()
 
 
 class TestSC(unittest.TestCase):
@@ -14,11 +20,19 @@ class TestSC(unittest.TestCase):
     
     def test_farmer_example(self):
         import schur_complement as sc_example
-        ef_opt = sc_example.solve_with_extensive_form(scen_count=3)
-        sc_opt = sc_example.solve_with_sc(scen_count=3)
 
-        ef_sol = ef_opt.gather_var_values_to_rank0()
+        linear_solver = parapint.linalg.MPISchurComplementLinearSolver(subproblem_solvers={ndx: parapint.linalg.ScipyInterface(compute_inertia=True) for ndx in range(3)},
+                                                                       schur_complement_solver=parapint.linalg.ScipyInterface(compute_inertia=True))
+        sc_opt = sc_example.solve_with_sc(scen_count=3, linear_solver=linear_solver)
         sc_sol = sc_opt.gather_var_values_to_rank0()
 
-        for k, v in ef_sol.items():
-            self.assertAlmostEqual(v, sc_sol[k])
+        if rank == 0:
+            self.assertAlmostEqual(sc_sol[('Scenario0', 'DevotedAcreage[CORN0]')], 80)
+            self.assertAlmostEqual(sc_sol[('Scenario0', 'DevotedAcreage[SUGAR_BEETS0]')], 250)
+            self.assertAlmostEqual(sc_sol[('Scenario0', 'DevotedAcreage[WHEAT0]')], 170)
+            self.assertAlmostEqual(sc_sol[('Scenario1', 'DevotedAcreage[CORN0]')], 80)
+            self.assertAlmostEqual(sc_sol[('Scenario1', 'DevotedAcreage[SUGAR_BEETS0]')], 250)
+            self.assertAlmostEqual(sc_sol[('Scenario1', 'DevotedAcreage[WHEAT0]')], 170)
+            self.assertAlmostEqual(sc_sol[('Scenario2', 'DevotedAcreage[CORN0]')], 80)
+            self.assertAlmostEqual(sc_sol[('Scenario2', 'DevotedAcreage[SUGAR_BEETS0]')], 250)
+            self.assertAlmostEqual(sc_sol[('Scenario2', 'DevotedAcreage[WHEAT0]')], 170)
