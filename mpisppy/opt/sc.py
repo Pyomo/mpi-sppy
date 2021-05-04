@@ -6,6 +6,7 @@ from typing import List, Callable, Dict, Optional, Tuple, Any, Union
 from pyomo.core.base.block import _BlockData
 from pyomo.core.base.var import _GeneralVarData
 from mpi4py import MPI
+from mpisppy.utils.sputils import find_active_objective
 
 
 logger = logging.getLogger('mpisppy.sc')
@@ -20,15 +21,6 @@ def _assert_continuous(m: _BlockData):
             raise RuntimeError(f'Variable {v} in block {m} is not continuous; The Schur-Complement method only supports continuous problems.')
 
 
-def _get_active_objective(m: _BlockData):
-    res = None
-    for obj in m.component_data_objects(pyo.Objective, descend_into=True, active=True):
-        if res is not None:
-            raise RuntimeError(f'Found multiple active objectives on {m}')
-        res = obj
-    return res
-
-
 class _SCInterface(parapint.interfaces.MPIStochasticSchurComplementInteriorPointInterface):
     def __init__(self,
                  local_scenario_models: Dict[str, _BlockData],
@@ -40,12 +32,7 @@ class _SCInterface(parapint.interfaces.MPIStochasticSchurComplementInteriorPoint
         models = list(local_scenario_models.values())
         ref_model = models[0]
         models = models[1:]
-        self.nonant_vars = list()
-
-        for node in ref_model._mpisppy_node_list:
-            ndn = node.name
-            for ndx, v in enumerate(node.nonant_vardata_list):
-                self.nonant_vars.append((ndn, ndx))
+        self.nonant_vars = list(ref_model._mpisppy_data.nonant_indices.keys())
 
         super(_SCInterface, self).__init__(scenarios=all_scenario_names,
                                            nonanticipative_var_identifiers=self.nonant_vars,
@@ -58,16 +45,12 @@ class _SCInterface(parapint.interfaces.MPIStochasticSchurComplementInteriorPoint
 
         _assert_continuous(m)
 
-        active_obj = _get_active_objective(m)
+        active_obj = find_active_objective(m)
         active_obj.deactivate()
-        m._mpispypy_weighted_obj = pyo.Objective(expr=m._mpisppy_probability * active_obj.expr, sense=active_obj.sense)
+        m._mpisppy_model = pyo.Block()
+        m._mpisppy_model.weighted_obj = pyo.Objective(expr=m._mpisppy_probability * active_obj.expr, sense=active_obj.sense)
 
-        nonant_vars = dict()
-        for node in m._mpisppy_node_list:
-            ndn = node.name
-            for ndx, v in enumerate(node.nonant_vardata_list):
-                nonant_vars[ndn, ndx] = v
-
+        nonant_vars = m._mpisppy_data.nonant_indices
         if len(nonant_vars) != len(self.nonant_vars):
             raise ValueError(f'Number of non-anticipative variables is not consistent in scenario {scenario_identifier}.')
 
@@ -90,6 +73,9 @@ class SchurComplement(SPBase):
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               all_nodenames=all_nodenames,
                                               mpicomm=mpicomm)
+
+        if self.bundling:
+            raise ValueError('The Schur-Complement method does not support bundling')
 
         ownership_map = dict()
         for _rank, scenario_index_list in enumerate(self._rank_slices):
