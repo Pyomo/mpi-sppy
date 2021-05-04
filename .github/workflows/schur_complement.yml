@@ -33,9 +33,9 @@ jobs:
         pyomo download-extensions
         pyomo build-extensions
         cd ../
-	pip install git+https://github.com/parapint/parapint.git
+        pip install git+https://github.com/parapint/parapint.git
         python setup.py develop
     - name: Test with nose
       run: |
         nosetests -v mpisppy/tests/test_sc.py
-	mpirun -np 3 -oversubscribe nosetests mpisppy/tests/test_sc.py
+        mpirun -np 3 -oversubscribe nosetests mpisppy/tests/test_sc.py
