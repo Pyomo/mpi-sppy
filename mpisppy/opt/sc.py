@@ -47,7 +47,6 @@ class _SCInterface(parapint.interfaces.MPIStochasticSchurComplementInteriorPoint
 
         active_obj = find_active_objective(m)
         active_obj.deactivate()
-        m._mpisppy_model = pyo.Block()
         m._mpisppy_model.weighted_obj = pyo.Objective(expr=m._mpisppy_probability * active_obj.expr, sense=active_obj.sense)
 
         nonant_vars = m._mpisppy_data.nonant_indices
