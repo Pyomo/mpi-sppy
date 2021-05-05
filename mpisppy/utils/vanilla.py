@@ -87,6 +87,7 @@ def ph_hub(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "PH_extensions": ph_extensions,
@@ -162,6 +163,7 @@ def fwph_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
         },
     }
     return fw_dict
@@ -185,8 +187,9 @@ def lagrangian_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "rho_setter": rho_setter,
-            'scenario_denouement': scenario_denouement,
+            'scenario_denouement': scenario_denouement,            
+            "rho_setter": rho_setter
+
         }
     }
     if args.lagrangian_iter0_mipgap is not None:
@@ -217,8 +220,8 @@ def lagranger_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "rho_setter": rho_setter,
-            'scenario_denouement': scenario_denouement,
+            'scenario_denouement': scenario_denouement,            
+            "rho_setter": rho_setter
         }
     }
     if args.lagranger_iter0_mipgap is not None:
@@ -261,6 +264,7 @@ def xhatlooper_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
         },
     }
     return xhatlooper_dict
@@ -291,6 +295,7 @@ def xhatshuffle_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement                        
         },
     }
     return xhatlooper_dict
@@ -327,6 +332,7 @@ def xhatspecific_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
             "all_nodenames": all_nodenames,
         },
     }
@@ -353,6 +359,7 @@ def xhatlshaped_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
         },
     }
     return xhatlshaped_dict
@@ -377,6 +384,7 @@ def slamup_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement
         },
     }
     return xhatlooper_dict
@@ -401,6 +409,7 @@ def slamdown_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
         },
     }
     return xhatlooper_dict
@@ -434,8 +443,8 @@ def cross_scenario_cut_spoke(
             "options": ls_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
-            "scenario_denouement": scenario_denouement,
             "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
             },
         }
 
