@@ -866,21 +866,21 @@ class APH(ph_base.PHBase):  # ??????
             if self.use_lag:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
-                    objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
+                    objfct.expr +=  scenario._mpisppy_model.prox_on * \
                         (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
                         (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)]) * \
                         (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)])
                     # W term
-                    objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
+                    objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
-                    objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
+                    objfct.expr +=  scenario._mpisppy_model.prox_on * \
                         (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
                         (xvar - scenario._mpisppy_model.z[(ndn,i)]) * \
                         (xvar - scenario._mpisppy_model.z[(ndn,i)])
                     # W term
-                    objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W[ndn,i] * xvar
+                    objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
         
