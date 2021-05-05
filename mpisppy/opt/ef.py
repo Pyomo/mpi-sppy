@@ -1,9 +1,9 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-from mpisppy.utils.sputils import _create_EF_from_scen_dict
 import mpisppy.spbase
 import pyomo.environ as pyo
 import logging
+import mpisppy.utils.sputils as sputils
 
 logger = logging.getLogger("mpisppy.ef")
 
@@ -56,7 +56,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         required = ["solver"]
         self._options_check(required, self.options)
         self.solver = pyo.SolverFactory(self.options["solver"])
-        self.ef = _create_EF_from_scen_dict(self.local_scenarios, EF_name=model_name)
+        self.ef = sputils._create_EF_from_scen_dict(self.local_scenarios,
+                EF_name=model_name)
 
     def solve_extensive_form(self, solver_options=None, tee=False):
         """ Solve the extensive form.
@@ -115,6 +116,34 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 var_name = var_name[dot_index+1:]
             result[var_name] = var.value
         return result
+
+
+    def nonants(self):
+        """ An iterator to give representative Vars subject to non-anticipitivity
+        Args: None
+
+        Yields:
+            tree node name, full EF Var name, Var value
+        """
+        yield from sputils.ef_nonants(self.ef)
+
+
+    def nonants_to_csv(self, filename):
+        """ Dump the nonant vars from an ef to a csv file; truly a dump...
+        Args:
+            filename (str): the full name of the csv output file
+        """
+        sputils.ef_nonants_csv(self.ef, filename)
+
+
+    def scenarios(self):
+        """ An iterator to give the scenario sub-models in an ef
+        Args: None
+
+        Yields:
+            scenario name, scenario instance (str, ConcreteModel)
+        """
+        yield from self.local_scenarios.items()
 
 
 if __name__ == "__main__":
