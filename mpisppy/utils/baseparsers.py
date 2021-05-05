@@ -201,6 +201,35 @@ def mip_options(inparser):
                         default=None)
     return parser
 
+def aph_args(inparser):
+    parser = inparser
+    parser.add_argument('--aph-gamma',
+                        help='Gamma parameter associated with asychronous projective hedging (default 1.0)',
+                        dest='aph_gamma',
+                        type=float,
+                        default=1.0)
+    parser.add_argument('--aph-nu',
+                        help='Nu parameter associated with asychronous projective hedging (default 1.0)',
+                        dest="aph_nu",
+                        type=float,
+                        default=1.0)
+    parser.add_argument('--aph-frac-needed',
+                        help='Fraction of sub-problems required before computing projective step (default 1.0)',
+                        dest='aph_frac_needed',
+                        type=float,
+                        default=1.0)
+    parser.add_argument('--aph-dispatch-frac',
+                        help='Fraction of sub-problems to dispatch at each step of asychronous projective hedging (default 1.0)',
+                        dest='aph_dispatch_frac',
+                        type=float,
+                        default=1.0)
+    parser.add_argument('--aph-sleep-seconds',
+                        help='Spin-lock sleep time for APH (default 0.01)',
+                        dest='aph_sleep_seconds',
+                        type=float,
+                        default=0.01)    
+    return parser    
+
 def fixer_args(inparser):
     parser = inparser
     parser.add_argument('--with-fixer',

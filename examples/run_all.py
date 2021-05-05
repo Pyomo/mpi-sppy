@@ -108,6 +108,27 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "--solver-name={} --no-fwph".format(solver_name))
 do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
 do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
+
+do_one("farmer",
+       "farmer_cylinders.py",
+       2,
+       f"3 --max-iterations=10 --default-rho=1.0 --with-display-progress  --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+
+do_one("farmer",
+       "farmer_cylinders.py",
+       2,
+       f"3 --max-iterations=10 --default-rho=1.0 --with-display-progress  --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+
+do_one("farmer",
+       "farmer_cylinders.py",
+       2,
+       f"30 --max-iterations=10 --default-rho=1.0 --with-display-progress  --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
+
+do_one("farmer",
+       "farmer_cylinders.py",
+       2,
+       f"30 --max-iterations=10 --default-rho=1.0 --with-display-progress  --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
+
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
        "--solver-name={} --rel-gap=0.0 --default-rho=1 "
