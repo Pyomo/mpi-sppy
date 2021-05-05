@@ -382,7 +382,7 @@ if __name__ == "__main__":
     pyo.assert_optimal_termination(results)
 
     print('EF objective value:', pyo.value(ef.EF_Obj))
-    sputils.ef_nonants_csv(ef, "vardump.csv")
+    ef.nonants_to_csv("vardump.csv")
     for (sname, smodel) in sputils.ef_scenarios(ef):
         print (sname)
         for stage in smodel.stage_models:

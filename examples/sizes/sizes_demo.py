@@ -85,7 +85,7 @@ if __name__ == "__main__":
     solver.options["mipgap"] = 0.01
     results = solver.solve(ef, tee=PHoptions["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
-    #mpisppy.utils.sputils.ef_nonants_csv(ef, "vardump.csv")
+    #ef.nonants_to_csv("vardump.csv")
     #### first PH ####
 
     #####multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}

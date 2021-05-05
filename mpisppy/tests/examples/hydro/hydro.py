@@ -284,7 +284,7 @@ if __name__ == "__main__":
     )
     results = solver.solve(ef, tee=PHoptions["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
-    sputils.ef_nonants_csv(ef, "vardump.csv")
+    ef.nonants_to_csv("vardump.csv")
 
     # **** ph ****
     PHoptions["xhat_specific_options"] = {"xhat_solver_options":

@@ -513,7 +513,7 @@ class Test_hydro(unittest.TestCase):
         if '_persistent' in PHoptions["solvername"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
-        mpisppy.utils.sputils.ef_nonants_csv(ef, "delme.csv")
+        ef.nonants_to_csv("delme.csv")
 
         df = pd.read_csv("delme.csv", index_col=1)
         val2 = round_pos_sig(df.loc[" Scen7.Pgt[2]"].at[" Value"])

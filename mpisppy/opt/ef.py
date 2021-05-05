@@ -129,7 +129,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             yield (ndn, var, pyo.value(var))
 
 
-    def nonants_csv(self, filename):
+    def nonants_to_csv(self, filename):
         """ Dump the nonant vars from an ef to a csv file; truly a dump...
         Args:
             ef (ConcreteModel): the full extensive form model
