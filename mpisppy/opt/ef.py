@@ -117,6 +117,41 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         return result
 
 
+    def nonants(self):
+        """ An iterator to give representative Vars subject to non-anticipitivity
+        Args:
+            ef (ConcreteModel): the full extensive form model
+    
+        Yields:
+            tree node name, full EF Var name, Var value
+        """
+        for (ndn,i), var in self.ref_vars.items():
+            yield (ndn, var, pyo.value(var))
+
+
+    def nonants_csv(self, filename):
+        """ Dump the nonant vars from an ef to a csv file; truly a dump...
+        Args:
+            ef (ConcreteModel): the full extensive form model
+            filename (str): the full name of the csv output file
+        """
+        with open(filename, "w") as outfile:
+            outfile.write("Node, EF_VarName, Value\n")
+            for (ndname, varname, varval) in self.ef_nonants():
+                outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
+
+
+    def scenarios(self):
+        """ An iterator to give the scenario sub-models in an ef
+        Args:
+            ef (ConcreteModel): the full extensive form model
+    
+        Yields:
+            scenario name, scenario instance (str, ConcreteModel)
+        """
+        yield from self.local_scenarios.items()
+
+
 if __name__ == "__main__":
     import mpisppy.tests.examples.farmer as farmer
 

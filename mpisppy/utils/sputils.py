@@ -423,43 +423,6 @@ def extract_num(string):
     return int(re.compile(r'(\d+)$').search(string).group(1))
 
 
-def ef_nonants(ef):
-    """ An iterator to give representative Vars subject to non-anticipitivity
-    Args:
-        ef (ConcreteModel): the full extensive form model
-
-    Yields:
-        tree node name, full EF Var name, Var value
-    """
-    for key, val in ef.ref_vars.items():
-        yield (key[0], val, pyo.value(val))
-
-        
-def ef_nonants_csv(ef, filename):
-    """ Dump the nonant vars from an ef to a csv file; truly a dump...
-    Args:
-        ef (ConcreteModel): the full extensive form model
-        filename (str): the full name of the csv output file
-    """
-    with open(filename, "w") as outfile:
-        outfile.write("Node, EF_VarName, Value\n")
-        for (ndname, varname, varval) in ef_nonants(ef):
-            outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
-
-            
-def ef_scenarios(ef):
-    """ An iterator to give the scenario sub-models in an ef
-    Args:
-        ef (ConcreteModel): the full extensive form model
-
-    Yields:
-        scenario name, scenario instance (str, ConcreteModel)
-    """
-    
-    for sname in ef._ef_scenario_names:
-        yield (sname, getattr(ef, sname))
-
-        
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
