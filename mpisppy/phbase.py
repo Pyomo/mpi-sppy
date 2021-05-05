@@ -682,7 +682,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.PHoptions["display_timing"] = False
         if "display_convergence_detail" not in self.PHoptions:
             self.PHoptions["display_convergence_detail"] = False
-       
 
 
     def Iter0(self):
