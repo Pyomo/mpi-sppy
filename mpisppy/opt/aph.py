@@ -79,9 +79,9 @@ class APH(ph_base.PHBase):  # ??????
         PHoptions,
         all_scenario_names,
         scenario_creator,
-        scenario_denouement,
+        scenario_denouement=None,
+        all_nodenames=None,            
         mpicomm=None,
-        all_nodenames=None,
         scenario_creator_kwargs=None,
         PH_extensions=None,
         PH_extension_kwargs=None,
@@ -912,11 +912,11 @@ class APH(ph_base.PHBase):  # ??????
         else:
             Eobj = None
 
-        #print(f"Debug: here's the dispatch record for rank={self.global_rank}")
-        #for k,v in self.dispatchrecord.items():
-        #    print(k, v)
-        #    print()
-        #print("End dispatch record")
+#        print(f"Debug: here's the dispatch record for rank={self.global_rank}")
+#        for k,v in self.dispatchrecord.items():
+#            print(k, v)
+#            print()
+#        print("End dispatch record")
 
         return self.conv, Eobj, trivial_bound
 
