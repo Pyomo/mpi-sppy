@@ -55,7 +55,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             
         xhatter = XhatBase(self.opt)
 
-        self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
         logger.debug(f"  xhatshuffle spoke back from PH_Prep rank {self.global_rank}")
 
         self.opt.subproblem_creation(verbose)
@@ -97,11 +96,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         ## for later
         self.verbose = self.opt.options["verbose"] # typing aid  
         self.solver_options = self.opt.options["xhat_looper_options"]["xhat_solver_options"]
-        self.is_minimizing = self.opt.is_minimizing
         self.xhatter = xhatter
-
-        self.best_nonants = None
-        self.best_scenario = None
 
         ## option drive this? (could be dangerous)
         self.random_seed = 42
@@ -112,7 +107,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
     def try_scenario(self, scenario):
         obj = self.xhatter._try_one({"ROOT":scenario},
                             solver_options = self.solver_options,
-                            verbose=False)
+                            verbose=False,
+                            restore_nonants=False)
         def _vb(msg): 
             if self.verbose and self.opt.cylinder_rank == 0:
                 print ("(rank0) " + msg)
@@ -125,15 +121,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             return False
         _vb(f"    Feasible {scenario}, obj: {obj}")
 
-        ib = self.ib
-
-        ## update if we improve the current bound from this spoke
-        update = (obj < ib) if self.is_minimizing else (ib < obj)
-        # send a bound to the opt companion
-        if update:
-            self.bound = obj 
-            self.ib = obj
-            logger.debug(f'   send inner bound={obj} on rank {self.global_rank} (based on scenario {scenario})')
+        update = self.update_if_improving(obj)
         logger.debug(f'   bottom of try_scenario on rank {self.global_rank}')
         return update
 
@@ -142,7 +130,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhatbase_prep()
-        self.ib = inf if self.is_minimizing else -inf
 
         # give all ranks the same seed
         self.random_stream.seed(self.random_seed)
@@ -181,13 +168,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 if update:
                     _vb(f"   Updating best to {next_scenario}")
                     scenario_cycler.best = next_scenario
-                    if next_scenario in self.opt.local_scenarios:
-                        s = self.opt.local_scenarios[next_scenario]
-                        self.best_nonants = s._mpisppy_data.nonant_cache.copy()
-                        self.best_scenario = next_scenario
-                    else:
-                        self.best_nonants = None
-                        self.best_scenario = next_scenario
             else:
                 scenario_cycler.begin_epoch()
 
@@ -195,58 +175,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
             xh_iter += 1
 
-    def finalize(self):
-        ''' This function restores the best nonants found,
-            and re-solves every subproblem to find the best
-            so far scenario tree solution
-        '''
-        # if we haven't found a best at all, then this
-        # will be false for every rank. If we have found
-        # a best, this should be true in exactly one rank
-        best_available_local = (self.best_nonants is not None)
-        best_available_global = self.allreduce_or(best_available_local)
-
-        if not best_available_global:
-            self.solution_found = False
-            return None
-
-        ## code largely borrowed from xhatbase
-        xhats = dict()
-        scenario_rank = self.xhatter.scenario_name_to_rank["ROOT"][self.best_scenario]
-        xhats["ROOT"] = self.opt.comms["ROOT"].bcast(self.best_nonants, root=scenario_rank)
-
-        self.opt._fix_nonants(xhats)
-
-        # Special Tee option for xhat
-        sopt = self.solver_options
-        tee=False
-        if self.solver_options is not None and "Tee" in self.solver_options:
-            sopt = dict(self.solver_options)
-            tee = sopt["Tee"]
-            del sopt["Tee"]
-
-        self.opt.solve_loop(solver_options=sopt,
-                           dis_W=True, dis_prox=True,
-                           verbose=False,
-                           tee=tee)
-
-        ## NOTE: this should be feasible here,
-        ##       if not we've done something wrong
-        feasP = self.opt.feas_prob()
-        if abs(feasP - self.opt.E1) > self.opt.E1_tolerance:
-            raise RuntimeError(f"Found infeasible solution which was feasible before - feasP={feasP}, E1={self.opt.E1}, E1_tolerance={self.opt.E1_tolerance}")
-
-        obj = self.opt.Eobjective(verbose=False)
-
-        if not isclose(obj,self.ib):
-            if self.cylinder_rank == 0:
-                print(f"WARNING: {self.__class__.__name__} best inner bound is different "
-                        f"from objective calculated in finalize")
-                print(f"Best inner bound: {self.ib}")
-                print(f"Current objective: {obj}")
-        self.solution_found = True
-        self.final_bound = obj
-        return obj
 
 class ScenarioCycler:
 

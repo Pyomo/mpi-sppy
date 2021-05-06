@@ -22,7 +22,8 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
     def xhat_looper(self,
                     scen_limit=1,
                     seed=None,
-                    verbose=False):
+                    verbose=False,
+                    restore_nonants=True):
         """Loop over some number of the global scenarios; if your rank has
         the chosen guy, bcast, if not, recieve the bcast. In any event, fix the vars
         at the bcast values and see if it is feasible. If so, stop and 
@@ -32,6 +33,9 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             scen_limit (int): number of scenarios to try
             seed (int): if none, loop starting at first scen; o.w. randomize
             verbose (boolean): controls debugging output
+            restore_nonants (bool): if True, restores the nonants to their original
+                                    values in all scenarios. If False, leaves the
+                                    nonants as they are in the tried scenario
         Returns:
             xhojbective (float or None), sname (string): the objective function
                 or None if one could not be obtained.
@@ -70,7 +74,8 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                 snamedict = {"ROOT": sname}
                 obj = self._try_one(snamedict,
                                     solver_options=self.solver_options,
-                                    verbose=False)
+                                    verbose=False,
+                                    restore_nonants=restore_nonants)
                 if obj is None:
                     _vb("    Infeasible")
                 else:

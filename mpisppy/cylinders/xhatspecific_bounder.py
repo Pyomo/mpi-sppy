@@ -103,16 +103,9 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
 
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 self.opt._restore_nonants()
-                innerbound = xhatter.xhat_tryit(xhat_scenario_dict)
+                innerbound = xhatter.xhat_tryit(xhat_scenario_dict, restore_nonants=False)
 
-                # send a bound to the opt companion
-                if innerbound is not None:
-                    self.bound = innerbound
-                    logging.debug('send ib={}; global rank={} (specified dict)'\
-                                  .format(innerbound, global_rank))
-                    dtm.debug(f'Computed inner bound on rank {global_rank}: {self.bound:.4f}')
-                    logging.debug('   bottom of ib loop on global rank {}'\
-                                  .format(global_rank))
+                self.update_if_improving(innerbound)
 
             ib_iter += 1
 

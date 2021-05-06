@@ -25,9 +25,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
             
         xhatter = XhatLooper(self.opt)
 
-        self.opt.PH_Prep()  
-        logger.debug(f"  xhatlooper spoke back from PH_Prep rank {self.global_rank}")
-
         self.opt.subproblem_creation(verbose)
 
         ### begin iter0 stuff
@@ -87,11 +84,8 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
 
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
-                upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit)
+                upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=False)
 
                 # send a bound to the opt companion
-                if upperbound is not None:
-                    self.bound = upperbound
-                    logger.debug(f'   send inner bound={upperbound} on rank {self.global_rank} (based on scenario {srcsname})')
-                logger.debug(f'   bottom of xhatlooper loop on rank {self.global_rank}')
+                self.update_if_improving(upperbound)
             xh_iter += 1

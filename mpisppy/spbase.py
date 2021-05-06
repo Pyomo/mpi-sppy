@@ -114,6 +114,11 @@ class SPBase:
         ## SPCommunicator object
         self._spcomm = None
 
+        # for writers, if the appropriate
+        # solution is loaded into the subproblems
+        self.tree_solution_available = False
+        self.first_stage_solution_available = False
+
     def _set_sense(self, comm=None):
         """ Check to confirm that all the models constructed by scenario_crator
             have the same sense (min v. max), and set self.is_minimizing
