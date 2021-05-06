@@ -511,3 +511,75 @@ class SPBase:
             self._spcomm = weakref.ref(value)
         else:
             raise RuntimeError("SPBase.spcomm should only be set once")
+
+
+    def gather_var_values_to_rank0(self, get_zero_prob_values=False):
+        """ Gather the values of the nonanticipative variables to the root of
+        the `mpicomm` for the cylinder
+
+        Returns:
+            dict or None:
+                On the root (rank0), returns a dictionary mapping
+                (scenario_name, variable_name) pairs to their values. On other
+                ranks, returns None.
+        """
+        var_values = dict()
+        for (sname, model) in self.local_scenarios.items():
+            for node in model._mpisppy_node_list:
+                for var in node.nonant_vardata_list:
+                    var_name = var.name
+                    if self.bundling:
+                        dot_index = var_name.find('.')
+                        assert dot_index >= 0
+                        var_name = var_name[(dot_index+1):]
+                    if (self.is_zero_prob(model, var)) and (not get_zero_prob_values):
+                        var_values[sname, var_name] = None
+                    else:
+                        var_values[sname, var_name] = pyo.value(var)
+
+        if self.n_proc == 1:
+            return var_values
+
+        result = self.mpicomm.gather(var_values, root=0)
+
+        if (self.cylinder_rank == 0):
+            result = {key: value
+                for dic in result
+                for (key, value) in dic.items()
+            }
+            return result
+
+
+    def report_var_values_at_rank0(self, header="", print_zero_prob_values=False):
+        """ Pretty-print the values and associated statistics for
+        non-anticipative variables across all scenarios. """
+
+        var_values = self.gather_var_values_to_rank0(get_zero_prob_values=print_zero_prob_values)
+
+        if self.cylinder_rank == 0:
+
+            if len(header) != 0:
+                print(header)
+
+            scenario_names = sorted(set(x for (x,y) in var_values))
+            max_scenario_name_len = max(len(s) for s in scenario_names)
+            variable_names = sorted(set(y for (x,y) in var_values))
+            max_variable_name_len = max(len(v) for v in variable_names)
+            # the "10" below is a reasonable minimum for floating-point output
+            value_field_len = max(10, max_scenario_name_len)
+
+            print("{0: <{width}s} | ".format("", width=max_variable_name_len), end='')
+            for this_scenario in scenario_names:
+                print("{0: ^{width}s} ".format(this_scenario, width=value_field_len), end='')
+            print("")
+
+            for this_var in variable_names:
+                print("{0: <{width}} | ".format(this_var, width=max_variable_name_len), end='')
+                for this_scenario in scenario_names:
+                    this_var_value = var_values[this_scenario, this_var]
+                    if (this_var_value == None) and (not print_zero_prob_values):
+                        print("{0: ^{width}s}".format("-", width=value_field_len), end='')
+                    else:
+                        print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
+                    print(" ", end='')
+                print("")

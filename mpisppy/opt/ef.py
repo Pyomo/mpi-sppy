@@ -51,6 +51,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             all_nodenames=all_nodenames
         )
+        self.bundling = True
         if self.n_proc > 1 and self.cylinder_rank == 0:
             logger.warning("Creating an ExtensiveForm object in parallel. Why?")
         required = ["solver"]
