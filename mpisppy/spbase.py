@@ -17,7 +17,7 @@ logger = logging.getLogger("SPBase")
 logger.setLevel(logging.WARN)
 
 
-class SPBase(object):
+class SPBase:
     """ Defines an interface to all strata (hubs and spokes)
 
         Args:
@@ -54,6 +54,7 @@ class SPBase(object):
         # TODO add missing and private attributes (JP)
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
         # TODO? add decorators to the class attributes
+
         self.start_time = time.perf_counter()
         self.options = options
         self.all_scenario_names = all_scenario_names
@@ -465,8 +466,6 @@ class SPBase(object):
                                            " which are not 1")
                     checked_nodes.append(ndn)
 
-    # TODO: There is an issue (#60) to put these things on a block, but really we should
-    # have two blocks: one for Pyomo objects and the other for lists and caches.
     def _look_before_leap(self, scen, addlist):
         """ utility to check before attaching something to the user's model
         """
@@ -513,6 +512,7 @@ class SPBase(object):
         else:
             raise RuntimeError("SPBase.spcomm should only be set once")
 
+
     def gather_var_values_to_rank0(self, get_zero_prob_values=False):
         """ Gather the values of the nonanticipative variables to the root of
         the `mpicomm` for the cylinder
@@ -527,10 +527,18 @@ class SPBase(object):
         for (sname, model) in self.local_scenarios.items():
             for node in model._mpisppy_node_list:
                 for var in node.nonant_vardata_list:
+                    var_name = var.name
+                    if self.bundling:
+                        dot_index = var_name.find('.')
+                        assert dot_index >= 0
+                        var_name = var_name[(dot_index+1):]
                     if (self.is_zero_prob(model, var)) and (not get_zero_prob_values):
-                        var_values[sname, var.name] = None
+                        var_values[sname, var_name] = None
                     else:
-                        var_values[sname, var.name] = pyo.value(var)
+                        var_values[sname, var_name] = pyo.value(var)
+
+        if self.n_proc == 1:
+            return var_values
 
         result = self.mpicomm.gather(var_values, root=0)
 
@@ -541,8 +549,9 @@ class SPBase(object):
             }
             return result
 
+
     def report_var_values_at_rank0(self, header="", print_zero_prob_values=False):
-        """ Pretty-print the values and associated statistics for 
+        """ Pretty-print the values and associated statistics for
         non-anticipative variables across all scenarios. """
 
         var_values = self.gather_var_values_to_rank0(get_zero_prob_values=print_zero_prob_values)
@@ -563,7 +572,7 @@ class SPBase(object):
             for this_scenario in scenario_names:
                 print("{0: ^{width}s} ".format(this_scenario, width=value_field_len), end='')
             print("")
-            
+
             for this_var in variable_names:
                 print("{0: <{width}} | ".format(this_var, width=max_variable_name_len), end='')
                 for this_scenario in scenario_names:
@@ -574,5 +583,3 @@ class SPBase(object):
                         print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
                     print(" ", end='')
                 print("")
-
-        

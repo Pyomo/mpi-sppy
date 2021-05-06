@@ -22,13 +22,11 @@ import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus
 from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
-import mpisppy.phbase as ph_base  # factor some day...
+import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
-
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
-
 
 logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
@@ -79,9 +77,9 @@ class APH(ph_base.PHBase):  # ??????
         PHoptions,
         all_scenario_names,
         scenario_creator,
-        scenario_denouement,
+        scenario_denouement=None,
+        all_nodenames=None,            
         mpicomm=None,
-        all_nodenames=None,
         scenario_creator_kwargs=None,
         PH_extensions=None,
         PH_extension_kwargs=None,
@@ -149,7 +147,7 @@ class APH(ph_base.PHBase):  # ??????
     def setup_dispatchrecord(self):
         # Start with a small number for iteration to randomize fist dispatch.
         for sname in self.local_subproblems:
-            r = np.random.rand()                                                
+            r = np.random.rand()
             self.dispatchrecord[sname] = [(r,0)]
 
 
@@ -162,23 +160,23 @@ class APH(ph_base.PHBase):  # ??????
         slist = [d[0] for d in dlist]  # just the names
         if self._PHIter != 1:
             for k,s in self.local_scenarios.items():
-                if k not in slist:
-                    continue
-                for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                    if not self.use_lag:
-                        z_touse = s._mpisppy_model.z[(ndn,i)]._value
-                        W_touse = pyo.value(s._mpisppy_model.W[(ndn,i)])
-                    else:
-                        z_touse = s._mpisppy_model.z_foropt[(ndn,i)]._value
-                        W_touse = pyo.value(s._mpisppy_model.W_foropt[(ndn,i)])
-                    # pyo.value vs. _value ??
-                    s._mpisppy_model.y[(ndn,i)]._value = W_touse \
-                                          + pyo.value(s._mpisppy_model.rho[(ndn,i)]) \
-                                          * (xvar._value - z_touse)
-                    if verbose and self.cylinder_rank == 0:
-                        print ("node, scen, var, y", ndn, k,
-                               self.cylinder_rank, xvar.name,
-                               pyo.value(s._mpisppy_model.y[(ndn,i)]))
+                if (not self.bundling and k in slist) \
+                   or (self.bundling and s._mpisppy_data.bundlename in slist):
+                    for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                        if not self.use_lag:
+                            z_touse = s._mpisppy_model.z[(ndn,i)]._value
+                            W_touse = pyo.value(s._mpisppy_model.W[(ndn,i)])
+                        else:
+                            z_touse = s._mpisppy_model.z_foropt[(ndn,i)]._value
+                            W_touse = pyo.value(s._mpisppy_model.W_foropt[(ndn,i)])
+                        # pyo.value vs. _value ??
+                        s._mpisppy_model.y[(ndn,i)]._value = W_touse \
+                                              + pyo.value(s._mpisppy_model.rho[(ndn,i)]) \
+                                              * (xvar._value - z_touse)
+                        if verbose and self.cylinder_rank == 0:
+                            print ("node, scen, var, y", ndn, k,
+                                   self.cylinder_rank, xvar.name,
+                                   pyo.value(s._mpisppy_model.y[(ndn,i)]))
         else:
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
@@ -866,21 +864,19 @@ class APH(ph_base.PHBase):  # ??????
             if self.use_lag:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
-                    objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
+                    objfct.expr +=  scenario._mpisppy_model.prox_on * \
                         (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)]) * \
-                        (xvar - scenario._mpisppy_model.z_foropt[(ndn,i)])
+                        (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z_foropt[(ndn,i)] + scenario._mpisppy_model.z_foropt[(ndn,i)]**2)                                            
                     # W term
-                    objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
+                    objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
-                    objfct.expr +=  scenario._mpisppy_model.prox_on[(ndn,i)] * \
+                    objfct.expr +=  scenario._mpisppy_model.prox_on * \
                         (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
-                        (xvar - scenario._mpisppy_model.z[(ndn,i)]) * \
-                        (xvar - scenario._mpisppy_model.z[(ndn,i)])
+                        (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z[(ndn,i)] + scenario._mpisppy_model.z[(ndn,i)]**2)                        
                     # W term
-                    objfct.expr +=  scenario._mpisppy_model.w_on[ndn,i] * scenario._mpisppy_model.W[ndn,i] * xvar
+                    objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
         
@@ -912,11 +908,11 @@ class APH(ph_base.PHBase):  # ??????
         else:
             Eobj = None
 
-        #print(f"Debug: here's the dispatch record for rank={self.global_rank}")
-        #for k,v in self.dispatchrecord.items():
-        #    print(k, v)
-        #    print()
-        #print("End dispatch record")
+#        print(f"Debug: here's the dispatch record for rank={self.global_rank}")
+#        for k,v in self.dispatchrecord.items():
+#            print(k, v)
+#            print()
+#        print("End dispatch record")
 
         return self.conv, Eobj, trivial_bound
 
