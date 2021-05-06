@@ -527,10 +527,18 @@ class SPBase:
         for (sname, model) in self.local_scenarios.items():
             for node in model._mpisppy_node_list:
                 for var in node.nonant_vardata_list:
+                    var_name = var.name
+                    if self.bundling:
+                        dot_index = var_name.find('.')
+                        assert dot_index >= 0
+                        var_name = var_name[(dot_index+1):]
                     if (self.is_zero_prob(model, var)) and (not get_zero_prob_values):
-                        var_values[sname, var.name] = None
+                        var_values[sname, var_name] = None
                     else:
-                        var_values[sname, var.name] = pyo.value(var)
+                        var_values[sname, var_name] = pyo.value(var)
+
+        if self.n_proc == 1:
+            return var_values
 
         result = self.mpicomm.gather(var_values, root=0)
 
