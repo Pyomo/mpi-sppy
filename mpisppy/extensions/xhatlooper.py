@@ -106,11 +106,12 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         pass
 
     def post_everything(self):
+        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
         obj, snamedict = self.xhat_looper(
             scen_limit=self.options["scen_limit"],
-            verbose=self.verbose
+            verbose=self.verbose,
+            restore_nonants=restore_nonants,
         )
         # "secret menu" way to see the value in a script
         self._xhat_looper_obj_final = obj
-        self.xhat_common_post_everything("xhatlooper", obj, snamedict)
-        
+        self.xhat_common_post_everything("xhatlooper", obj, snamedict, restore_nonants)

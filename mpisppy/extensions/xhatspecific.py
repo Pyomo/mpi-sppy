@@ -77,6 +77,4 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
                               restore_nonants=restore_nonants)
         # to make available to tester
         self._xhat_specific_obj_final = obj
-        self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict)
-        if self.opt.spcomm is not None:
-            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')
+        self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict, restore_nonants)

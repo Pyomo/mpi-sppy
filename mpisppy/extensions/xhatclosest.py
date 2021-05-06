@@ -103,7 +103,5 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         # if we're keeping the solution, we *do not* restore the nonants
         restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
         obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose, restore_nonants=restore_nonants)
-        self.xhat_common_post_everything("closest to xbar", obj, srcsname)
+        self.xhat_common_post_everything("closest to xbar", obj, srcsname, restore_nonants)
         self._final_xhat_closest_obj = obj
-        if self.opt.spcomm is not None:
-            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')
