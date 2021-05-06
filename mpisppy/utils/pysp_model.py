@@ -3,11 +3,21 @@
 import os.path
 from inspect import signature
 import pyomo.environ as pyo
-from pyomo.pysp.scenariotree.tree_structure_model import \
-        CreateAbstractScenarioTreeModel, ScenarioTreeModelFromNetworkX
-from pyomo.pysp.phutils import isVariableNameIndexed,\
-                                extractVariableNameAndIndex
-from pyutilib.misc.import_file import import_file
+
+import mpisppy
+
+if mpisppy.pyomo6:
+    from pysp.scenariotree.tree_structure_model import \
+            CreateAbstractScenarioTreeModel, ScenarioTreeModelFromNetworkX
+    from pysp.phutils import isVariableNameIndexed,\
+                                    extractVariableNameAndIndex
+    from pyomo.common.fileutils import import_file
+else:
+    from pyomo.pysp.scenariotree.tree_structure_model import \
+            CreateAbstractScenarioTreeModel, ScenarioTreeModelFromNetworkX
+    from pyomo.pysp.phutils import isVariableNameIndexed,\
+                                    extractVariableNameAndIndex
+    from pyutilib.misc.import_file import import_file
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
 from mpisppy.utils.sputils import create_EF as create_mpisppy_EF

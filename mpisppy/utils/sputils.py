@@ -430,8 +430,8 @@ def ef_nonants(ef):
     Yields:
         tree node name, full EF Var name, Var value
     """
-    for key, val in ef.ref_vars.items():
-        yield (key[0], val, pyo.value(val))
+    for (ndn,i), var in ef.ref_vars.items():
+        yield (ndn, var, pyo.value(var))
 
         
 def ef_nonants_csv(ef, filename):

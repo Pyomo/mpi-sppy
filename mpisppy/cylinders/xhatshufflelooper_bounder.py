@@ -233,8 +233,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         ## NOTE: this should be feasible here,
         ##       if not we've done something wrong
         feasP = self.opt.feas_prob()
-        if feasP != self.opt.E1:
-            raise RuntimeError("Found infeasible solution which was feasible before")
+        if abs(feasP - self.opt.E1) > self.opt.E1_tolerance:
+            raise RuntimeError(f"Found infeasible solution which was feasible before - feasP={feasP}, E1={self.opt.E1}, E1_tolerance={self.opt.E1_tolerance}")
 
         obj = self.opt.Eobjective(verbose=False)
 
