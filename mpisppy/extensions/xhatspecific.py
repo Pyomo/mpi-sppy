@@ -42,7 +42,6 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
 
         _vb("Enter XhatSpecific.xhat_tryit to try: "+str(xhat_scenario_dict))
 
-        self.opt._save_nonants()  # to cache for use in fixing
         _vb("   Solver options="+str(self.solver_options))
         obj = self._try_one(xhat_scenario_dict,
                             solver_options=self.solver_options,

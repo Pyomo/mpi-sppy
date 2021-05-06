@@ -325,7 +325,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         if candidate_inner_bound is None:
             return False
         update = (candidate_inner_bound < self.best_inner_bound) \
-                if self.is_minimizing else
+                if self.is_minimizing else \
                 (self.best_inner_bound < candidate_inner_bound)
         if not update:
             return False
@@ -343,7 +343,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
 
         self.opt.solve_loop(solver_options=self.solver_options,
                            verbose=False,
-                           tee=tee)
+                           tee=False)
 
         ## NOTE: this should be feasible here,
         ##       if not we've done something wrong
@@ -353,11 +353,11 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
 
         obj = self.opt.Eobjective(verbose=False)
 
-        if not isclose(obj,self.best_inner_bound):
+        if not math.isclose(obj,self.best_inner_bound):
             if self.cylinder_rank == 0:
                 print(f"WARNING: {self.__class__.__name__} best inner bound is different "
                         f"from objective calculated in finalize")
-                print(f"Best inner bound: {self.ib}")
+                print(f"Best inner bound: {self.best_inner_bound}")
                 print(f"Current objective: {obj}")
 
         self.opt.tree_solution_available = True
@@ -375,7 +375,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         for k,s in self.opt.local_scenarios.items():
             scenario_cache = s._mpisppy_data.best_nonant_cache
             if scenario_cache is None:
-                break
+                return
             for ndn_i, var in s._mpisppy_data.nonant_indices.items():
                 var.fix(scenario_cache[ndn_i])
         self.opt.first_stage_solution_available = True
