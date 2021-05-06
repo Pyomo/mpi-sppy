@@ -5,6 +5,7 @@
 
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatspecific import XhatSpecific
+from mpisppy.utils.xhat_tryer import XhatTryer
 
 import mpi4py.MPI as mpi
 import logging
@@ -29,11 +30,13 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
+
+        if not isinstance(self.opt, XhatTryer):
+            raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
+
         verbose = self.opt.options['verbose']
         xhatter = XhatSpecific(self.opt)
         # somehow deal with the prox option .... TBD .... important for aph APH
-        self.opt.PH_Prep()  
-        logging.debug("  ib back from Prep global rank {}".format(global_rank))
 
         self.opt.subproblem_creation(verbose)
 

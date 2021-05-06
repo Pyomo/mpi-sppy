@@ -55,8 +55,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             
         xhatter = XhatBase(self.opt)
 
-        logger.debug(f"  xhatshuffle spoke back from PH_Prep rank {self.global_rank}")
-
         self.opt.subproblem_creation(verbose)
 
         ### begin iter0 stuff

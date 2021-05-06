@@ -3,6 +3,7 @@
 # updated April 2020
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatlooper import XhatLooper
+from mpisppy.utils.xhat_tryer import XhatTryer
 import logging
 import mpisppy.log
 
@@ -22,7 +23,10 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
-            
+
+        if not isinstance(self.opt, XhatTryer):
+            raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
+
         xhatter = XhatLooper(self.opt)
 
         self.opt.subproblem_creation(verbose)

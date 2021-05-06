@@ -10,6 +10,7 @@ import math
 
 # for SLEEP_TIME
 import mpisppy.cylinders as cylinders
+import mpisppy.utils.sputils as sputils
 
 from mpi4py import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
@@ -376,8 +377,12 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
             scenario_cache = s._mpisppy_data.best_nonant_cache
             if scenario_cache is None:
                 return
+            is_persistent = sputils.is_persistent(s._solver_plugin)
+            solver = s._solver_plugin
             for ndn_i, var in s._mpisppy_data.nonant_indices.items():
                 var.fix(scenario_cache[ndn_i])
+                if is_persistent:
+                    solver.update_var(var)
         self.opt.first_stage_solution_available = True
 
 
