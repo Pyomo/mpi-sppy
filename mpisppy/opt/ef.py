@@ -118,31 +118,6 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             result[var_name] = var.value
         return result
 
-    def gather_var_values_to_rank0(self, get_zero_prob_values=False):
-        """ Gather the values of the nonanticipative variables to the root of
-        the `mpicomm` for the cylinder
-
-        Returns:
-            dict or None:
-                On the root (rank0), returns a dictionary mapping
-                (scenario_name, variable_name) pairs to their values. On other
-                ranks, returns None.
-        """
-        var_values = dict()
-        for (sname, model) in self.local_scenarios.items():
-            for node in model._mpisppy_node_list:
-                for var in node.nonant_vardata_list:
-                    var_name = var.name
-                    dot_index = var_name.find(".")
-                    if dot_index >= 0 and var_name[:dot_index] in self.all_scenario_names:
-                        var_name = var_name[dot_index + 1:]
-                    if (self.is_zero_prob(model, var)) and (not get_zero_prob_values):
-                        var_values[sname, var_name] = None
-                    else:
-                        var_values[sname, var_name] = pyo.value(var)
-        return var_values
-
-
     def nonants(self):
         """ An iterator to give representative Vars subject to non-anticipitivity
         Args: None
