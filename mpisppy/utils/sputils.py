@@ -129,7 +129,73 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     global_toc("Windows freed")
 
     return spcomm, opt_dict
-    
+
+def first_stage_solution_writer( file_name, scenario, bundling ):
+    with open(file_name, 'w') as f:
+        root = scenario._mpisppy_node_list[0]
+        assert root.name == "ROOT"
+        for var in root.nonant_vardata_list:
+            var_name = var.name
+            if bundling:
+                dot_index = var_name.find('.')
+                assert dot_index >= 0
+                var_name = var_name[(dot_index+1):]
+            f.write(f"{var_name}, {pyo.value(var)}")
+
+def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bundling ):
+    with open(os.path.join(directory_name, scenario_name+'.csv'), 'w') as f:
+        for var in scenario.component_data_objects(
+                ctype=pyo.Var,
+                descend_into=True,
+                active=True,
+                sort=True):
+            if not var.stale:
+                var_name = var.name
+                if bundling:
+                    dot_index = var_name.find('.')
+                    assert dot_index >= 0
+                    var_name = var_name[(dot_index+1):]
+                f.write(f"{var_name}, {pyo.value(var)}")
+
+def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
+        first_stage_solution_writer=first_stage_solution_writer):
+    """ Write a solution file, if a solution is available, to the solution_file_name provided
+    Args:
+        spcomm : spcomm returned from spin_the_wheel
+        opt_dict : opt_dict returned from spin_the_wheel
+        solution_file_name : filename to write the solution to
+        first_stage_solution_writer (optional) : custom first stage solution writer function
+    """
+    winner = _determine_innerbound_winner(spcomm, opt_dict)
+    if winner:
+        spcomm.opt.write_first_stage_solution(solution_file_name,first_stage_solution_writer)
+
+def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name,
+        scenario_tree_solution_writer=scenario_tree_solution_writer):
+    """ Write a tree solution directory, if available, to the solution_directory_name provided
+    Args:
+        spcomm : spcomm returned from spin_the_wheel
+        opt_dict : opt_dict returned from spin_the_wheel
+        solution_file_name : filename to write the solution to
+        scenario_tree_solution_writer (optional) : custom scenario solution writer function
+    """
+    winner = _determine_innerbound_winner(spcomm, opt_dict)
+    if winner:
+        spcomm.opt.write_tree_solution(solution_directory_name,scenario_tree_solution_writer)
+
+def _determine_innerbound_winner(spcomm, opt_dict):
+    if spcomm.global_rank == 0:
+        if spcomm.last_ib_idx is None:
+            best_strata_rank = -1
+            global_toc("No incumbent solution available!")
+        else:
+            best_strata_rank = spcomm.last_ib_idx
+    else:
+        best_strata_rank = None
+
+    best_strata_rank = spcomm.fullcomm.bcast(best_strata_rank, root=0)
+    return (spcomm.strata_rank == best_strata_rank)
+
 def make_comms(n_spokes, fullcomm=None):
     """ Create the strata_comm and cylinder_comm for hub/spoke style runs
     """
@@ -751,33 +817,6 @@ def find_active_objective(pyomomodel):
                            "Objective for model '%s' (found %d objectives)"
                            % (pyomomodel.name, len(obj)))
     return obj[0]
-
-def first_stage_solution_writer( file_name, scenario, bundling ):
-    with open(file_name, 'w') as f:
-        root = scenario._mpisppy_node_list[0]
-        assert root.name == "ROOT"
-        for var in root.nonant_vardata_list:
-            var_name = var.name
-            if bundling:
-                dot_index = var_name.find('.')
-                assert dot_index >= 0
-                var_name = var_name[(dot_index+1):]
-            f.write(f"{var_name}, {pyo.value(var)}")
-
-def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bundling ):
-    with open(os.path.join(directory_name, scenario_name+'.csv'), 'w') as f:
-        for var in scenario.component_data_objects(
-                ctype=pyo.Var,
-                descend_into=True,
-                active=True,
-                sort=True):
-            if not var.stale:
-                var_name = var.name
-                if bundling:
-                    dot_index = var_name.find('.')
-                    assert dot_index >= 0
-                    var_name = var_name[(dot_index+1):]
-                f.write(f"{var_name}, {pyo.value(var)}")
 
 if __name__ == "__main__":
     BFs = [2,2,2,3]

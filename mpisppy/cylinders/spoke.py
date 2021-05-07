@@ -319,9 +319,9 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         self.solver_options = None # can be overwritten by derived classes
 
         # NOTE: defaults to True
-        self.save_tree_solution = False (
-                ('save_tree_solution' in options) and (not options['save_tree_solution'])
-                ) else True
+        self.save_tree_solution = True
+        if ('save_tree_solution' in self.options) and (not self.options['save_tree_solution']):
+            self.save_tree_solution = False
 
         # set up best nonant cache
         # NOTE: should we also cache the tree solution??
