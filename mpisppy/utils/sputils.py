@@ -752,6 +752,32 @@ def find_active_objective(pyomomodel):
                            % (pyomomodel.name, len(obj)))
     return obj[0]
 
+def first_stage_solution_writer( file_name, scenario, bundling ):
+    with open(file_name, 'w') as f:
+        root = scenario._mpisppy_node_list[0]
+        assert root.name == "ROOT"
+        for var in root.nonant_vardata_list:
+            var_name = var.name
+            if bundling:
+                dot_index = var_name.find('.')
+                assert dot_index >= 0
+                var_name = var_name[(dot_index+1):]
+            f.write(f"{var_name}, {pyo.value(var)}")
+
+def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bundling ):
+    with open(os.path.join(directory_name, scenario_name+'.csv'), 'w') as f:
+        for var in scenario.component_data_objects(
+                ctype=pyo.Var,
+                descend_into=True,
+                active=True,
+                sort=True):
+            if not var.stale:
+                var_name = var.name
+                if bundling:
+                    dot_index = var_name.find('.')
+                    assert dot_index >= 0
+                    var_name = var_name[(dot_index+1):]
+                f.write(f"{var_name}, {pyo.value(var)}")
 
 if __name__ == "__main__":
     BFs = [2,2,2,3]

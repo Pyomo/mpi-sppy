@@ -23,8 +23,8 @@ class ConvergerSpokeType(enum.Enum):
     NONANT_GETTER = 4
 
 class Spoke(SPCommunicator):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
         self.local_write_id = 0
         self.remote_write_id = 0
         self.local_length = 0  # Does NOT include the + 1
@@ -137,8 +137,8 @@ class Spoke(SPCommunicator):
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
         if self.cylinder_rank == 0 and \
                 'trace_prefix' in spbase_object.options and \
                 spbase_object.options['trace_prefix'] is not None:
@@ -312,13 +312,19 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
     )
     converger_spoke_char = 'I'
 
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
         self.is_minimizing = self.opt.is_minimizing
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
+
+        # NOTE: defaults to True
+        self.save_tree_solution = False (
+                ('save_tree_solution' in options) and (not options['save_tree_solution'])
+                ) else True
+
         # set up best nonant cache
-        # NOTE: we could also cache the tree solution??
+        # NOTE: should we also cache the tree solution??
         for k,s in self.opt.local_scenarios.items():
             s._mpisppy_data.best_nonant_cache = None
 
@@ -340,6 +346,8 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
     def finalize(self):
         self._restore_and_fix_best_nonants()
         if not self.opt.first_stage_solution_available:
+            return None
+        if not self.save_tree_solution:
             return None
 
         self.opt.solve_loop(solver_options=self.solver_options,
