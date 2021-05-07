@@ -106,7 +106,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         pass
 
     def post_everything(self):
-        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
+        restore_nonants = not self.keep_solution
         obj, snamedict = self.xhat_looper(
             scen_limit=self.options["scen_limit"],
             verbose=self.verbose,

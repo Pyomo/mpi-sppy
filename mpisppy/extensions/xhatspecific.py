@@ -69,7 +69,7 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_everything(self):
         # if we're keeping the solution, we *do not* restore the nonants
-        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
+        restore_nonants = not self.keep_solution
         xhat_scenario_dict = self.options["xhat_scenario_dict"]
         obj = self.xhat_tryit(xhat_scenario_dict,
                               verbose=self.verbose,

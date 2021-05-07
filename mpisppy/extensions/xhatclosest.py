@@ -101,7 +101,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_everything(self):
         # if we're keeping the solution, we *do not* restore the nonants
-        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
+        restore_nonants = not self.keep_solution
         obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose, restore_nonants=restore_nonants)
         self.xhat_common_post_everything("closest to xbar", obj, srcsname, restore_nonants)
         self._final_xhat_closest_obj = obj
