@@ -509,6 +509,7 @@ class PHHub(Hub):
 
 
 class LShapedHub(Hub):
+
     def setup_hub(self):
         """ Must be called after make_windows(), so that 
             the hub knows the sizes of all the spokes windows
@@ -539,12 +540,6 @@ class LShapedHub(Hub):
             )
 
         ## Generate some warnings if nothing is giving bounds
-        if not self.has_outerbound_spokes:
-            logger.warn(
-                "No OuterBound Spokes defined, this converger "
-                "will not cause the hub to terminate"
-            )
-
         if not self.has_innerbound_spokes:
             logger.warn(
                 "No InnerBound Spokes defined, this converger "

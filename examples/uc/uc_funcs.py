@@ -243,3 +243,8 @@ def write_solution(spcomm, opt_dict, solution_dir):
         mds.write(file_name)
 
     return
+
+def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
+    file_name = os.path.join(solution_dir, sname+'.json')
+    mds = uc._save_uc_results(scenario, relaxed=False)
+    mds.write(file_name)

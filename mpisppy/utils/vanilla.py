@@ -258,7 +258,7 @@ def xhatlooper_spoke(
     xhatlooper_dict = {
         "spoke_class": XhatLooperInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,
+        "opt_class": XhatTryer,
         "opt_kwargs": {
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,
@@ -326,7 +326,7 @@ def xhatspecific_spoke(
     xhatspecific_dict = {
         "spoke_class": XhatSpecificInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,
+        "opt_class": XhatTryer,
         "opt_kwargs": {
             "PHoptions": xhat_options,
             "all_scenario_names": all_scenario_names,

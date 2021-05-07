@@ -17,12 +17,16 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         self.options = ph.options["xhat_looper_options"]
         self.solver_options = self.options["xhat_solver_options"]
         self._xhat_looper_obj_final = None
+        self.keep_solution = True
+        if ('keep_solution' in self.options) and (not self.options['keep_solution']):
+            self.keep_solution = False
 
     #==========
     def xhat_looper(self,
                     scen_limit=1,
                     seed=None,
-                    verbose=False):
+                    verbose=False,
+                    restore_nonants=True):
         """Loop over some number of the global scenarios; if your rank has
         the chosen guy, bcast, if not, recieve the bcast. In any event, fix the vars
         at the bcast values and see if it is feasible. If so, stop and 
@@ -32,6 +36,9 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             scen_limit (int): number of scenarios to try
             seed (int): if none, loop starting at first scen; o.w. randomize
             verbose (boolean): controls debugging output
+            restore_nonants (bool): if True, restores the nonants to their original
+                                    values in all scenarios. If False, leaves the
+                                    nonants as they are in the tried scenario
         Returns:
             xhojbective (float or None), sname (string): the objective function
                 or None if one could not be obtained.
@@ -70,7 +77,8 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                 snamedict = {"ROOT": sname}
                 obj = self._try_one(snamedict,
                                     solver_options=self.solver_options,
-                                    verbose=False)
+                                    verbose=False,
+                                    restore_nonants=restore_nonants)
                 if obj is None:
                     _vb("    Infeasible")
                 else:
@@ -101,11 +109,12 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         pass
 
     def post_everything(self):
+        restore_nonants = not self.keep_solution
         obj, snamedict = self.xhat_looper(
             scen_limit=self.options["scen_limit"],
-            verbose=self.verbose
+            verbose=self.verbose,
+            restore_nonants=restore_nonants,
         )
         # "secret menu" way to see the value in a script
         self._xhat_looper_obj_final = obj
-        self.xhat_common_post_everything("xhatlooper", obj, snamedict)
-        
+        self.xhat_common_post_everything("xhatlooper", obj, snamedict, restore_nonants)

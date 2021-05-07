@@ -36,7 +36,10 @@ class SPCommunicator:
         self.n_spokes = strata_comm.Get_size() - 1
         self.opt = spbase_object
         self.inst_time = time.time() # For diagnostics
-        self.options = options
+        if options is None:
+            self.options = dict()
+        else:
+            self.options = options
 
         # attach the SPCommunicator to
         # the SPBase object

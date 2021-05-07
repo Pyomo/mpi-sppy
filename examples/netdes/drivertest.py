@@ -14,6 +14,7 @@ from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.utils.xhat_tryer import XhatTryer
 
 
 if __name__=="__main__":
@@ -118,7 +119,7 @@ if __name__=="__main__":
     xhatlooper_spoke = {
         "spoke_class": XhatLooperInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,
+        "opt_class": XhatTryer,
         "opt_kwargs": {
             "PHoptions": xhat_options,
             "all_scenario_names": scenario_names,

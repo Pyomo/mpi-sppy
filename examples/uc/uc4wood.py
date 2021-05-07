@@ -14,6 +14,7 @@ import mpi4py.MPI as mpi
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
 from mpisppy.fwph.fwph import FWPH
+from mpisppy.utils.xhat_tryer import XhatTryer
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
@@ -196,7 +197,7 @@ if __name__ == "__main__":
     ub_spoke = {
         'spoke_class': XhatLooperInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,   
+        "opt_class": XhatTryer,
         'opt_kwargs': {
             'PHoptions': xhat_options,
             'all_scenario_names': all_scenario_names,

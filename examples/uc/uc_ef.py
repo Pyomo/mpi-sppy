@@ -21,3 +21,6 @@ ef = ExtensiveForm(
 )
 results = ef.solve_extensive_form(tee=True)
 print(f"{scen_count}-scenario UC objective value:", pyo.value(ef.ef.EF_Obj))
+if ef.tree_solution_available:
+    print(f"Writing tree solution")
+    ef.write_tree_solution(f"{scen_count}scenario_EF_solution", uc.scenario_tree_solution_writer)
