@@ -12,10 +12,24 @@
 import abc
 
 class Extension:
-    """ Abstract base class for extensions to general SPBase objects.
+    """ Abstract base class for extensions to general SPOpt objects.
     """
-    def __init__(self, spbase_object):
-        self.opt = spbase_object
+    def __init__(self, spopt_object):
+        self.opt = spopt_object
+
+    def pre_solve(self, subproblem):
+        '''
+        Method called before every subproblem solve
+
+        Inputs
+        ------
+        subproblem : Pyomo subproblem (could be a scenario or bundle)
+
+        Returns
+        -------
+        None
+        '''
+        pass
 
     def post_solve(self, subproblem, results):
         '''
@@ -33,7 +47,7 @@ class Extension:
         return results
 
 class PHExtension(Extension):
-    ''' Abstract base class for extensions to general SPBase objects.
+    ''' Abstract base class for extensions to general PHBase objects.
 
         Args:
             ph (PHBase): The PHBase object for the current model

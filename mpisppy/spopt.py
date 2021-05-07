@@ -117,6 +117,9 @@ class SPOpt(SPBase):
                            np.mean(all_set_objective_times),
                            np.max(all_set_objective_times)))
 
+        if self.PH_extensions is not None:
+            results = self.extobject.pre_solve(s)
+
         solve_start_time = time.time()
         if (solver_options):
             _vb("Using sub-problem solver options="
