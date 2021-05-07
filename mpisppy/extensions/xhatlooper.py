@@ -17,6 +17,9 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         self.options = ph.options["xhat_looper_options"]
         self.solver_options = self.options["xhat_solver_options"]
         self._xhat_looper_obj_final = None
+        self.keep_solution = True
+        if ('keep_solution' in self.options) and (not self.options['keep_solution']):
+            self.keep_solution = False
 
     #==========
     def xhat_looper(self,

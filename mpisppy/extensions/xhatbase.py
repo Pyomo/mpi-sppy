@@ -25,9 +25,6 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
         self.cylinder_rank = self.opt.cylinder_rank
         self.n_proc = self.opt.n_proc
         self.verbose = self.opt.options["verbose"]
-        self.keep_solution = True
-        if ('keep_solution' in self.options) and (not self.options['keep_solution']):
-            self.keep_solution = False
 
         scen_count = len(opt.all_scenario_names)
 

@@ -6,12 +6,15 @@ import farmer
 import mpisppy.cylinders
 
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+import mpisppy.utils.sputils as sputils
+
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+
+write_solution = True
 
 def _parse_args():
     parser = baseparsers.make_parser(num_scens_reqd=True)
@@ -110,7 +113,11 @@ def main():
 
     mpisppy.cylinders.SPOKE_SLEEP_TIME = 0.1
 
-    spin_the_wheel(hub_dict, list_of_spoke_dict)
+    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+
+    if write_solution:
+        sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'farmer_plant.csv')
+        sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'farmer_full_solution')
 
 if __name__ == "__main__":
     main()

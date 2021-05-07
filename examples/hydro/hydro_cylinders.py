@@ -4,7 +4,8 @@
 
 import hydro
 
-from mpisppy.utils.sputils import spin_the_wheel
+import mpisppy.utils.sputils as sputils
+
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
@@ -17,6 +18,8 @@ import mpisppy.cylinders as cylinders
 # we reduce it so as not to dominate the
 # time spent for cylinder synchronization
 cylinders.SPOKE_SLEEP_TIME = 0.0001
+
+write_solution = True
 
 def _parse_args():
     parser = baseparsers.make_multistage_parser()
@@ -93,13 +96,16 @@ def main():
     if with_xhatspecific:
         list_of_spoke_dict.append(xhatspecific_spoke)
 
-    spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
+    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 
     if "hub_class" in opt_dict:  # we are a hub rank
         if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
             print("BestInnerBound={} and BestOuterBound={}".\
                   format(spcomm.BestInnerBound, spcomm.BestOuterBound))
     
+    if write_solution:
+        sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'hydro_first_stage.csv')
+        sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'hydro_full_solution')
 
 if __name__ == "__main__":
     main()
