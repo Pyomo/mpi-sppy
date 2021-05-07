@@ -601,7 +601,9 @@ class SPBase:
         if not self.first_stage_solution_available:
             raise RuntimeError("No first stage solution available")
         if self.cylinder_rank == 0:
-            os.makedirs(os.path.dirname(file_name), exist_ok=True)
+            dirname = os.path.dirname(file_name)
+            if dirname != '':
+                os.makedirs(os.path.dirname(file_name), exist_ok=True)
             representative_scenario = self.local_scenarios[self.local_scenario_names[0]]
             first_stage_solution_writer(file_name, representative_scenario, self.bundling)
 
@@ -618,5 +620,5 @@ class SPBase:
         if self.cylinder_rank == 0:
             os.makedirs(directory_name, exist_ok=True)
         self.mpicomm.Barrier()
-        for scneraio_name, scenario in self.local_scenarios.items():
+        for scenario_name, scenario in self.local_scenarios.items():
             scenario_tree_solution_writer(directory_name, scenario_name, scenario, self.bundling)

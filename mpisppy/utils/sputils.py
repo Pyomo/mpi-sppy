@@ -140,7 +140,7 @@ def first_stage_solution_writer( file_name, scenario, bundling ):
                 dot_index = var_name.find('.')
                 assert dot_index >= 0
                 var_name = var_name[(dot_index+1):]
-            f.write(f"{var_name}, {pyo.value(var)}")
+            f.write(f"{var_name},{pyo.value(var)}\n")
 
 def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bundling ):
     with open(os.path.join(directory_name, scenario_name+'.csv'), 'w') as f:
@@ -149,13 +149,14 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 descend_into=True,
                 active=True,
                 sort=True):
+            # should this be here?
             if not var.stale:
                 var_name = var.name
                 if bundling:
                     dot_index = var_name.find('.')
                     assert dot_index >= 0
                     var_name = var_name[(dot_index+1):]
-                f.write(f"{var_name}, {pyo.value(var)}")
+                f.write(f"{var_name},{pyo.value(var)}\n")
 
 def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
         first_stage_solution_writer=first_stage_solution_writer):
@@ -187,7 +188,7 @@ def _determine_innerbound_winner(spcomm, opt_dict):
     if spcomm.global_rank == 0:
         if spcomm.last_ib_idx is None:
             best_strata_rank = -1
-            global_toc("No incumbent solution available!")
+            global_toc("No incumbent solution available to write!")
         else:
             best_strata_rank = spcomm.last_ib_idx
     else:
