@@ -194,13 +194,21 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
     derived from XhatBase, but that is not why the code is here. It was
     factored simply for the usual reasons to factor code.  """
 
-    def xhat_common_post_everything(self, extname, obj, snamedict):
+    def xhat_common_post_everything(self, extname, obj, snamedict, restored_nonants):
         """ Code that most xhat post_everything routines will want to call.
         Args:
             extname (str): the name of the extension for reporting
             obj (float): the xhat objective function
             snamedict (dict): the (scenario) names upon which xhat is based
+            restored_nonants (bool): if the restore_nonants flag was True on the last
+                call to _try_one.
         """
+        if (obj is not None) and (not restored_nonants):
+            # a tree solution is available
+            self.opt.tree_solution_available = True
+            self.opt.first_stage_solution_available = True
+        if (obj is not None) and (self.opt.spcomm is not None):
+            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')
         if self.cylinder_rank == 0 and self.verbose:
             print ("****", extname ,"Used scenarios",
                    str(snamedict),"to get xhat Eobj=",obj)

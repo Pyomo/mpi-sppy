@@ -6,9 +6,11 @@ import enum
 import logging
 import time
 import os
+import math
 
 # for SLEEP_TIME
 import mpisppy.cylinders as cylinders
+import mpisppy.utils.sputils as sputils
 
 from mpi4py import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
@@ -21,8 +23,8 @@ class ConvergerSpokeType(enum.Enum):
     NONANT_GETTER = 4
 
 class Spoke(SPCommunicator):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
         self.local_write_id = 0
         self.remote_write_id = 0
         self.local_length = 0  # Does NOT include the + 1
@@ -135,8 +137,8 @@ class Spoke(SPCommunicator):
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
         if self.cylinder_rank == 0 and \
                 'trace_prefix' in spbase_object.options and \
                 spbase_object.options['trace_prefix'] is not None:
@@ -299,13 +301,97 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
     """ For Spokes that provide an inner (incumbent) 
         bound through self.bound to the Hub,
         and receive the nonants from
-        the main PH OPT hub.
+        the main SPOpt hub.
+
+        Includes some helpful methods for saving
+        and restoring results
     """
     converger_spoke_types = (
         ConvergerSpokeType.INNER_BOUND,
         ConvergerSpokeType.NONANT_GETTER,
     )
     converger_spoke_char = 'I'
+
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        self.is_minimizing = self.opt.is_minimizing
+        self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
+        self.solver_options = None # can be overwritten by derived classes
+
+        # NOTE: defaults to True
+        self.save_tree_solution = True
+        if ('save_tree_solution' in self.options) and (not self.options['save_tree_solution']):
+            self.save_tree_solution = False
+
+        # set up best nonant cache
+        # NOTE: should we also cache the tree solution??
+        for k,s in self.opt.local_scenarios.items():
+            s._mpisppy_data.best_nonant_cache = None
+
+    def update_if_improving(self, candidate_inner_bound):
+        if candidate_inner_bound is None:
+            return False
+        update = (candidate_inner_bound < self.best_inner_bound) \
+                if self.is_minimizing else \
+                (self.best_inner_bound < candidate_inner_bound)
+        if not update:
+            return False
+
+        self.best_inner_bound = candidate_inner_bound
+        # send to hub
+        self.bound = candidate_inner_bound
+        self._cache_best_nonants()
+        return True
+
+    def finalize(self):
+        self._restore_and_fix_best_nonants()
+        if not self.opt.first_stage_solution_available:
+            return None
+        if not self.save_tree_solution:
+            return None
+
+        self.opt.solve_loop(solver_options=self.solver_options,
+                           verbose=False,
+                           tee=False)
+
+        ## NOTE: this should be feasible here,
+        ##       if not we've done something wrong
+        feasP = self.opt.feas_prob()
+        if abs(feasP - self.opt.E1) > self.opt.E1_tolerance:
+            raise RuntimeError(f"Found infeasible solution which was feasible before - feasP={feasP}, E1={self.opt.E1}, E1_tolerance={self.opt.E1_tolerance}")
+
+        obj = self.opt.Eobjective(verbose=False)
+
+        if not math.isclose(obj,self.best_inner_bound):
+            if self.cylinder_rank == 0:
+                print(f"WARNING: {self.__class__.__name__} best inner bound is different "
+                        f"from objective calculated in finalize")
+                print(f"Best inner bound: {self.best_inner_bound}")
+                print(f"Current objective: {obj}")
+
+        self.opt.tree_solution_available = True
+        self.final_bound = obj
+        return obj
+
+    def _cache_best_nonants(self):
+        for k,s in self.opt.local_scenarios.items():
+            scenario_cache = {}
+            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                scenario_cache[ndn_i] = var.value
+            s._mpisppy_data.best_nonant_cache = scenario_cache
+
+    def _restore_and_fix_best_nonants(self):
+        for k,s in self.opt.local_scenarios.items():
+            scenario_cache = s._mpisppy_data.best_nonant_cache
+            if scenario_cache is None:
+                return
+            is_persistent = sputils.is_persistent(s._solver_plugin)
+            solver = s._solver_plugin
+            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                var.fix(scenario_cache[ndn_i])
+                if is_persistent:
+                    solver.update_var(var)
+        self.opt.first_stage_solution_available = True
 
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):
@@ -319,4 +405,3 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
         ConvergerSpokeType.NONANT_GETTER,
     )
     converger_spoke_char = 'A'  # probably Lagrangian
-    

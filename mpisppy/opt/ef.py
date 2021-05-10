@@ -81,7 +81,14 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         if solver_options is not None:
             for (opt, value) in solver_options.items():
                 self.solver.options[opt] = value
-        results = self.solver.solve(self.ef, tee=tee)
+        results = self.solver.solve(self.ef, tee=tee, load_solutions=False)
+        if len(results.solution) > 0:
+            if sputils.is_persistent(self.solver):
+                self.solver.load_vars()
+            else:
+                self.ef.solutions.load_from(results)
+            self.first_stage_solution_available = True
+            self.tree_solution_available = True
         return results
 
     def get_objective_value(self):
