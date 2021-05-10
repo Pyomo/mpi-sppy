@@ -125,7 +125,6 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             result[var_name] = var.value
         return result
 
-
     def nonants(self):
         """ An iterator to give representative Vars subject to non-anticipitivity
         Args: None
