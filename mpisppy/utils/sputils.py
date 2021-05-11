@@ -130,7 +130,14 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
 
     return spcomm, opt_dict
 
-def first_stage_solution_writer( file_name, scenario, bundling ):
+def first_stage_nonant_npy(file_name, scenario, bundling):
+    # write just the nonants for ROOT in an npy file (e.g. for CI)
+    root = scenario._mpisppy_node_list[0]
+    assert root.name == "ROOT"
+    root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
+    np.save(file_name, root_nonants)
+
+def first_stage_nonant_writer( file_name, scenario, bundling ):
     with open(file_name, 'w') as f:
         root = scenario._mpisppy_node_list[0]
         assert root.name == "ROOT"
@@ -159,7 +166,7 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 f.write(f"{var_name},{pyo.value(var)}\n")
 
 def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
-        first_stage_solution_writer=first_stage_solution_writer):
+        first_stage_solution_writer=first_stage_nonant_writer):
     """ Write a solution file, if a solution is available, to the solution_file_name provided
     Args:
         spcomm : spcomm returned from spin_the_wheel
@@ -517,7 +524,7 @@ def ef_nonants_csv(ef, filename):
             outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
 
 
-def ef_ROOT_nonants_np(ef, filename):
+def ef_ROOT_nonants_npy(ef, filename):
     """ write the root node nonants to be ready by a numpy load
     Args:
         ef (ConcreteModel): the full extensive form model
@@ -534,8 +541,7 @@ def ef_scenarios(ef):
 
     Yields:
         scenario name, scenario instance (str, ConcreteModel)
-    """
-    
+    """    
     for sname in ef._ef_scenario_names:
         yield (sname, getattr(ef, sname))
 

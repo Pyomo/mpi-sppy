@@ -117,6 +117,10 @@ def main():
 
     if write_solution:
         sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'farmer_plant.csv')
+        sputils.write_spin_the_wheel_first_stage_solution(spcomm,
+                                                          opt_dict,
+                                                          'farmer_cyl_nonants.spy',
+                                                          first_stage_solution_writer=sputils.first_stage_nonant_npy)
         sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'farmer_full_solution')
 
 if __name__ == "__main__":
