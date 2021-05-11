@@ -8,7 +8,7 @@ import sys
 import os
 import re
 import time
-from numpy import prod
+import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 
@@ -497,6 +497,9 @@ def ef_nonants(ef):
 
     Yields:
         tree node name, full EF Var name, Var value
+
+    Note:
+        not on an EF object because not all ef's are part of an EF object
     """
     for (ndn,i), var in ef.ref_vars.items():
         yield (ndn, var, pyo.value(var))
@@ -510,10 +513,20 @@ def ef_nonants_csv(ef, filename):
     """
     with open(filename, "w") as outfile:
         outfile.write("Node, EF_VarName, Value\n")
-        for (ndname, varname, varval) in ef_nonants(ef):
+        for (ndname, varname, varval) in nonants(ef):
             outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
 
-            
+
+def ef_ROOT_nonants_np(ef, filename):
+    """ write the root node nonants to be ready by a numpy load
+    Args:
+        ef (ConcreteModel): the full extensive form model
+        filename (str): the full name of the .npy output file
+    """
+    root_nonants = np.fromiter((v for ndn,var,v in ef_nonants(ef) if ndn == "ROOT"), float)
+    np.save(filename, root_nonants)
+
+    
 def ef_scenarios(ef):
     """ An iterator to give the scenario sub-models in an ef
     Args:
@@ -644,7 +657,7 @@ class _ScenTree():
     def __init__(self, BFs, ScenNames):
         self.ScenNames = ScenNames
         self.NumScens = len(ScenNames)
-        assert(self.NumScens == prod(BFs))
+        assert(self.NumScens == np.prod(BFs))
         self.NumStages = len(BFs)
         self.BFs = BFs
         first = 0
@@ -821,7 +834,7 @@ def find_active_objective(pyomomodel):
 
 if __name__ == "__main__":
     BFs = [2,2,2,3]
-    numscens = prod(BFs)
+    numscens = np.prod(BFs)
     scennames = ["Scenario"+str(i) for i in range(numscens)]
     testtree = _ScenTree(BFs, scennames)
     print("nonleaves:")
