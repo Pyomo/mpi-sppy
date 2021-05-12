@@ -42,5 +42,5 @@ if __name__ == '__main__':
         quit()
     main_ef = main()
     print(f"EF objective: {pyo.value(main_ef.EF_Obj)}")
-    sputils.ef_ROOT_nonants_npy(main_ef, "farmer_root_nonants.npy")
+    sputils.ef_ROOT_nonants_npy_serializer(main_ef, "farmer_root_nonants.npy")
 

@@ -120,7 +120,8 @@ def main():
         sputils.write_spin_the_wheel_first_stage_solution(spcomm,
                                                           opt_dict,
                                                           'farmer_cyl_nonants.spy',
-                                                          first_stage_solution_writer=sputils.first_stage_nonant_npy)
+                                                          first_stage_solution_writer=\
+                                                          sputils.first_stage_nonant_npy_serializer)
         sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'farmer_full_solution')
 
 if __name__ == "__main__":

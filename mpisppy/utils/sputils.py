@@ -130,7 +130,7 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
 
     return spcomm, opt_dict
 
-def first_stage_nonant_npy(file_name, scenario, bundling):
+def first_stage_nonant_npy_serializer(file_name, scenario, bundling):
     # write just the nonants for ROOT in an npy file (e.g. for CI)
     root = scenario._mpisppy_node_list[0]
     assert root.name == "ROOT"
@@ -520,11 +520,11 @@ def ef_nonants_csv(ef, filename):
     """
     with open(filename, "w") as outfile:
         outfile.write("Node, EF_VarName, Value\n")
-        for (ndname, varname, varval) in nonants(ef):
+        for (ndname, varname, varval) in ef_nonants(ef):
             outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
 
 
-def ef_ROOT_nonants_npy(ef, filename):
+def ef_ROOT_nonants_npy_serializer(ef, filename):
     """ write the root node nonants to be ready by a numpy load
     Args:
         ef (ConcreteModel): the full extensive form model
