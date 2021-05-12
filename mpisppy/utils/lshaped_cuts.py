@@ -51,23 +51,23 @@ class LShapedCutGeneratorData(bc.BendersCutGeneratorData):
         for s in self._subproblem_ndx_map.keys():
             self._subproblem_ndx_map[s] = self.ls.all_scenario_names.index(self.ls.local_scenario_names[s])
         # print(self._subproblem_ndx_map)
-        self.all_master_etas = list(self.ls.master.eta.values())
+        self.all_root_etas = list(self.ls.root.eta.values())
 
     def global_num_subproblems(self):
         return self.global_subproblem_count
 
-    def add_subproblem(self, subproblem_fn, subproblem_fn_kwargs, master_eta, subproblem_solver='gurobi_persistent',
+    def add_subproblem(self, subproblem_fn, subproblem_fn_kwargs, root_eta, subproblem_solver='gurobi_persistent',
                        relax_subproblem_cons=False, subproblem_solver_options=None):
         # print(self._subproblem_ndx_map)
-        # self.all_master_etas.append(master_eta)
+        # self.all_root_etas.append(root_eta)
         # self.global_subproblem_count += 1
         if subproblem_fn_kwargs['scenario_name'] in self.ls.local_scenario_names:
             # self.local_subproblem_count += 1
-            self.master_etas.append(master_eta)
+            self.root_etas.append(root_eta)
             subproblem, complicating_vars_map = subproblem_fn(**subproblem_fn_kwargs)
             self.subproblems.append(subproblem)
             self.complicating_vars_maps.append(complicating_vars_map)
-            bc._setup_subproblem(subproblem, master_vars=[complicating_vars_map[i] for i in self.master_vars if
+            bc._setup_subproblem(subproblem, root_vars=[complicating_vars_map[i] for i in self.root_vars if
                                                        i in complicating_vars_map],
                               relax_subproblem_cons=relax_subproblem_cons)
 

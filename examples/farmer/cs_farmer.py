@@ -134,7 +134,7 @@ if __name__ == "__main__":
     }
 
     ls_options = {
-        "master_solver": "xpress_persistent",
+        "root_solver": "xpress_persistent",
         "sp_solver": "xpress_persistent",
         "sp_solver_options": {"threads":1},
        }

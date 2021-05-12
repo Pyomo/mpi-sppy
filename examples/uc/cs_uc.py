@@ -181,7 +181,7 @@ if __name__ == "__main__":
     }
 
     ls_options = {
-        "master_solver": "gurobi_persistent",
+        "root_solver": "gurobi_persistent",
         "sp_solver": "gurobi_persistent",
         "sp_solver_options":{"threads":1},
        }

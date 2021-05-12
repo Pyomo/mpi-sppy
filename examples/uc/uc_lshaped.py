@@ -48,14 +48,14 @@ def main():
     spo = None if args.max_solver_threads is None else {"threads": args.max_solver_threads}
     spo['mipgap'] = 0.005
     options = {
-        "master_solver": args.solver_name,
+        "root_solver": args.solver_name,
         "sp_solver": args.solver_name,
         "sp_solver_options" : spo,
-        "master_solver_options" : spo,
+        "root_solver_options" : spo,
         #"valid_eta_lb": {n:0. for n in all_scenario_names},
         "max_iter": args.max_iterations,
         "verbose": False,
-        "master_scenarios":[all_scenario_names[len(all_scenario_names)//2]],
+        "root_scenarios":[all_scenario_names[len(all_scenario_names)//2]],
    }
     
     # L-shaped hub
