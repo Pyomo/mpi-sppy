@@ -145,16 +145,16 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
         opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
         
         if not ('EF_solver_name' in opt):
-            opt["EF_solver_options"]["EF_mipgap"] = opt["EF_mipgap"]
+            opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
         else:
-            opt["EF_solver_options"] = {"EF_mipgap": opt["EF_mipgap"]}
+            opt["EF_solver_options"] = {"mipgap": opt["EF_mipgap"]}
     
     else:
         #Checking if options has all the options we need 
         if not ('EF_solver_name' in opt):
             opt['EF_solver_name'] = "gurobi"
         if not ('EF_solver_options' in opt):
-            opt['EF_solver_options'] = {'EF_mipgap': None}
+            opt['EF_solver_options'] = {'mipgap': None}
         if not ('num_scens' in opt):
             raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
         
@@ -194,7 +194,7 @@ class Amalgomator():
         if self.is_EF:
             self.solvername = options['EF_solver_name'] if  ('EF_solver_name' in options) else 'gurobi'
             self.solver_options = options['EF_solver_options'] \
-                if ('EF_solver_options' in options) else {'EF_mipgap': 0.1}
+                if ('EF_solver_options' in options) else {}
         
     def run(self):
         
