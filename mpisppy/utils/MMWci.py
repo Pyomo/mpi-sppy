@@ -192,7 +192,7 @@ class MMWci():
                      "display_timing": False,
                      "solvername": solvername,
                      "verbose": False,
-                     "solver_options":None}
+                     "solver_options":solver_options}
             # TBD: set solver options
             
             ev = xhat_eval.Xhat_Eval(options,

@@ -105,9 +105,9 @@ class Test_MMW_farmer(unittest.TestCase):
         xhat = MMWci.read_xhat(self.xhat_path)
 
         MMW = MMWci.MMWci(refmodelname,
-                                        options['opt'],
-                                        xhat,
-                                        options['num_batches'])
+                          options['opt'],
+                          xhat,
+                          options['num_batches'])
     
     def test_xhat_read_write(self):
         path = "test_xhat_read_write.npy"
@@ -133,7 +133,9 @@ class Test_MMW_farmer(unittest.TestCase):
         options = _get_base_options()
         ama_options = {"EF-2stage": True,}
         ama_options.update(options['opt'])
-        ama_object = ama.from_module(refmodelname, options=ama_options, use_command_line=False)
+        ama_object = ama.from_module(refmodelname,
+                                     options=ama_options,
+                                     use_command_line=False)
         #ama_object.run()
 
         
@@ -144,7 +146,8 @@ class Test_MMW_farmer(unittest.TestCase):
         options = _get_base_options()
         ama_options = {"EF-2stage": True}
         ama_options.update(options['opt'])
-        ama_object = ama.from_module(refmodelname, ama_options, use_command_line=False)
+        ama_object = ama.from_module(refmodelname,
+                                     ama_options, use_command_line=False)
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
         self.assertEqual(obj, -130000)
@@ -160,11 +163,11 @@ class Test_MMW_farmer(unittest.TestCase):
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         ev = Xhat_Eval(options,
-                   farmer.scenario_names_creator(100),
-                   farmer.scenario_creator,
-                   scenario_denouement=None,
-                   scenario_creator_kwargs=scenario_creator_kwargs
-                   )
+                       farmer.scenario_names_creator(100),
+                       farmer.scenario_creator,
+                       scenario_denouement=None,
+                       scenario_creator_kwargs=scenario_creator_kwargs
+                       )
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
