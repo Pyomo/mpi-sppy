@@ -27,7 +27,7 @@ global_rank = fullcomm.Get_rank()
 
 __version__ = 0.02
 
-solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
+solvers = [n+e for e in ('_persistent', '') for n in ("xpress","cplex","gurobi")]
 
 
 for solvername in solvers:
