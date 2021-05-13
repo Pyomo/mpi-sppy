@@ -35,8 +35,6 @@ for solvername in solvers:
     if solver_available:
         break
 
-#Overwriting
-solvername = "gurobi"
 
 if '_persistent' in solvername:
     persistentsolvername = solvername
