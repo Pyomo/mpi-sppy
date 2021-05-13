@@ -194,7 +194,7 @@ class Amalgomator():
         if self.is_EF:
             self.solvername = options['EF_solver_name'] if  ('EF_solver_name' in options) else 'gurobi'
             self.solver_options = options['EF_solver_options'] \
-                if ('EF_solver_options' in options) else {'EF_mipgap': None}
+                if ('EF_solver_options' in options) else {'EF_mipgap': 0.1}
         
     def run(self):
         
