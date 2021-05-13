@@ -3,21 +3,92 @@
 # Code to evaluate a given x-hat, but given as a nonant-cache
 # To test: python xhat_eval.py --num-scens=3 --EF-solver-name=cplex
 
-import shutil
+import inspect
 import pyomo.environ as pyo
 import mpisppy.phbase
 import mpi4py.MPI as mpi
 import mpisppy.utils.sputils as sputils
+import mpisppy.spopt
+
     
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-print("WHAT ABOUT MULTI-STAGE")
+if global_rank==0 :
+    print("WHAT ABOUT MULTI-STAGE")
 
 ############################################################################
-class Xhat_Eval(mpisppy.phbase.PHBase):
-    """ PH. See PHBase for list of args. """
+class Xhat_Eval(mpisppy.spopt.SPOpt):
+    """ PH. See SPOpt for list of args. """
+    
+    def __init__(
+        self,
+        options,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement=None,
+        all_nodenames=None,
+        mpicomm=None,
+        scenario_creator_kwargs=None,
+        variable_probability=None,
+        ):
+        
+        super().__init__(
+            options,
+            all_scenario_names,
+            scenario_creator,
+            scenario_denouement=scenario_denouement,
+            all_nodenames=all_nodenames,
+            mpicomm=mpicomm,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            variable_probability=variable_probability,
+        )
+        
+        self.verbose = self.options['verbose']
 
+        self.subproblem_creation(self.verbose)
+        self._create_solvers()
+        
+        #TODO: CHANGE THIS AFTER UPDATE
+        self.PH_extensions = None
+    
+    #==============
+    def evaluate_one(self, nonant_cache,scenario_name,s):
+        """ Evaluate xhat for one scenario.
+
+        Args:
+            nonant_cache(numpy vector): special numpy vector with nonant values (see ph)
+            scenario_name(str): TODO
+        
+
+        Returns:
+            Eobj (float or None): Expected value (or None if infeasible)
+
+        """
+
+        self._fix_nonants(nonant_cache)
+
+        solver_options = self.options["solver_options"] if "solver_options" in self.options else None
+        k = scenario_name
+        pyomo_solve_time = self.solve_one(solver_options,k, s,
+                                          dtiming=False,
+                                          verbose=self.verbose,
+                                          tee=False,
+                                          gripe=True,
+        )
+        if self.bundling:
+            #objfct = self.saved_objs[k]
+            raise RuntimeError("Bundling is not supported in evaluate_one")
+            #TBD : use bundling to improve running time
+        else:
+            objfct = sputils.find_active_objective(s)
+            #self.saved_objs[k] = objfct
+            if self.verbose:
+                print ("caller", inspect.stack()[1][3])
+                print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
+                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+        
+        return pyo.value(objfct)
     #======================================================================
     def evaluate(self, nonant_cache):
         """ Compute the expected value.
@@ -29,22 +100,17 @@ class Xhat_Eval(mpisppy.phbase.PHBase):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
-        verbose = self.PHoptions['verbose']
+        self._fix_nonants(nonant_cache)
 
-        self.subproblem_creation(verbose)
-        self._create_solvers()
-        self._fix_nonants(nonant_cache, verbose=False)
-
-        solver_options = None  # ???
+        solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         
         self.solve_loop(solver_options=solver_options,
-                        dis_prox=False, # Important
-                        use_scenarios_not_subproblems=True,  # ???
+                        use_scenarios_not_subproblems=True,
                         gripe=True, 
                         tee=False,
-                        verbose=verbose)
-
-        Eobj = self.Eobjective(verbose)
+                        verbose=self.verbose)
+        
+        Eobj = self.Eobjective(self.verbose)
         
         return Eobj
 
@@ -109,16 +175,16 @@ if __name__ == "__main__":
     MMW_scenario_names = ['scen' + str(i) for i in range(ScenCount)]
 
     # The options need to be re-done (and phase needs to be split up)
-    PHopt = {"iter0_solver_options": None,
+    options = {"iter0_solver_options": None,
              "iterk_solver_options": None,
              "solvername": solvername,
              "verbose": False}
     # TBD: set solver options
-    ev = Xhat_Eval(PHopt,
+    ev = Xhat_Eval(options,
                    MMW_scenario_names,
                    scenario_creator,
                    scenario_denouement,
-                   do_options_check=False)
+                   )
     obj_at_xhat = ev.evaluate(nonant_cache)
     print(f"Expected value at xhat={obj_at_xhat}")  # Left term of LHS of (9)
 

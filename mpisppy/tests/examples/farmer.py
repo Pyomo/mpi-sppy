@@ -23,6 +23,7 @@ farmerstream = np.random.RandomState()
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
+    num_scens=None
 ):
     """ Create a scenario for the (scalable) farmer example.
     
@@ -37,6 +38,9 @@ def scenario_creator(
         crops_multiplier (int, optional):
             Factor to control scaling. There will be three times this many
             crops. Default is 1.
+        num_scens (int, optional):
+            Number of scenarios. We use it to compute _mpisppy_probability. 
+            Default is None.
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex then
@@ -79,6 +83,10 @@ def scenario_creator(
             scen_model=model,
         )
     ]
+    
+    #Add the probability of the scenario
+    if num_scens is not None :
+        model._mpisppy_probability = 1/num_scens
     return model
 
 def pysp_instance_creation_callback(
@@ -224,9 +232,13 @@ def pysp_instance_creation_callback(
 
 
 #=========
-def scenario_names_creator(scnt):
-    # (only for Amalgomator): return the full list of names
-    return [f"scen{i}" for i in range(scnt)]
+def scenario_names_creator(num_scens,start=None):
+    # (only for Amalgomator): return the full list of num_scens scenario names
+    # if start!=None, the list starts with the 'start' labeled scenario
+    if (start is None) :
+        start=0
+    return [f"scen{i}" for i in range(start,start+num_scens)]
+        
 
 
 #=========
@@ -240,16 +252,18 @@ def inparser_adder(inparser):
     
     inparser.add_argument("--farmer-with-integers",
                           help="make the version that has integers (default False)",
-                          dest="farmer_with_integers",
-                          action="store_true")
-    inparser.set_defaults(farmer_with_integers=False)
+                          dest="use_integer",
+                          action="store_true",)
+    inparser.set_defaults(use_integer=False)
 
 
 #=========
-def kw_creator(args):
+def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
-    kwargs = {"use_integer": args.farmer_with_integers,
-              "crops_multiplier": args.crops_multiplier}
+    kwargs = {"use_integer": options['use_integer'],
+              "crops_multiplier": options['crops_multiplier'],
+              "num_scens" : options['num_scens'],
+              }
     return kwargs
 
 
@@ -262,3 +276,4 @@ def scenario_denouement(rank, scenario_name, scenario):
         print ("SUGAR_BEETS0 for scenario",sname,"is",
                pyo.value(s.DevotedAcreage["SUGAR_BEETS0"]))
         print ("FirstStageCost for scenario",sname,"is", pyo.value(s.FirstStageCost))
+        

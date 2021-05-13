@@ -430,8 +430,8 @@ def ef_nonants(ef):
     Yields:
         tree node name, full EF Var name, Var value
     """
-    for (ndn,i), var in ef.ref_vars.items():
-        yield (ndn, var, pyo.value(var))
+    for key, val in ef.ref_vars.items():
+        yield (key[0], val, pyo.value(val))
 
         
 def ef_nonants_csv(ef, filename):
@@ -446,7 +446,7 @@ def ef_nonants_csv(ef, filename):
             outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
 
             
-def nonant_cache_from_ef(ef):
+def nonant_cache_from_ef(ef,verbose=False):
     """ Populate a nonant_cache from an ef. Is it multi-stage?
     Args:
         ef (mpi-sppy ef): a solved ef
@@ -459,7 +459,8 @@ def nonant_cache_from_ef(ef):
         if ndn != "ROOT":
             raise RuntimeError("only two-stage is supported by nonant_cache_from_ef")
         nonant_cache["ROOT"][i] = pyo.value(xvar)
-        print("barfoo", i, pyo.value(xvar))
+        if verbose:
+            print("barfoo", i, pyo.value(xvar))
     return nonant_cache
 
 def ef_scenarios(ef):
