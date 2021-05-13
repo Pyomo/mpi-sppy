@@ -28,3 +28,4 @@ ef = ExtensiveForm(
 )
 ef.solve_extensive_form(tee=True)
 print(f'hydro objective value {pyo.value(ef.ef.EF_Obj)}')
+ef.report_var_values_at_rank0("Hydro")
