@@ -591,7 +591,7 @@ class SPBase:
                 print("")
 
     def write_first_stage_solution(self, file_name,
-            first_stage_solution_writer=sputils.first_stage_solution_writer):
+            first_stage_solution_writer=sputils.first_stage_nonant_writer):
         """ Writes the first-stage solution, if this object reports one available
             Args:
                 file_name: path of file to write first stage solution to
