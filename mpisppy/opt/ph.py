@@ -5,8 +5,7 @@
 import mpisppy.phbase
 import shutil
 import mpi4py.MPI as mpi
-import mpisppy.utils.listener_util.listener_util as listener_util
-    
+
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
     pass
@@ -51,7 +50,7 @@ class PH(mpisppy.phbase.PHBase):
         """
         verbose = self.PHoptions['verbose']
         self.PH_Prep()
-        # Why is subproblem_creation() not called in PH_Prep?
+        # Why is subproblem_creation() not called in PH_Prep? Answer: xhat_eval.
         self.subproblem_creation(verbose)
 
         if (verbose):

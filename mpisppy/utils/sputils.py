@@ -8,7 +8,7 @@ import sys
 import os
 import re
 import time
-from numpy import prod
+import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 
@@ -395,7 +395,6 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     nonant_constr = pyo.Constraint(pyo.Any, name='_C_EF_')
     EF_instance.add_component('_C_EF_', nonant_constr)
 
-
     nonant_constr_suppl = pyo.Constraint(pyo.Any, name='_C_EF_suppl')
     EF_instance.add_component('_C_EF_suppl', nonant_constr_suppl)
 
@@ -498,8 +497,8 @@ def ef_nonants(ef):
     Yields:
         tree node name, full EF Var name, Var value
     """
-    for (ndn,i), var in ef.ref_vars.items():
-        yield (ndn, var, pyo.value(var))
+    for key, val in ef.ref_vars.items():
+        yield (key[0], val, pyo.value(val))
 
         
 def ef_nonants_csv(ef, filename):
@@ -514,6 +513,23 @@ def ef_nonants_csv(ef, filename):
             outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
 
             
+def nonant_cache_from_ef(ef,verbose=False):
+    """ Populate a nonant_cache from an ef. Is it multi-stage?
+    Args:
+        ef (mpi-sppy ef): a solved ef
+    Returns:
+        nonant_cache (1-d numpy array): a special structure for nonant values
+    TDB: xxxxxx multi-stage
+    """
+    nonant_cache = {"ROOT": np.zeros(len(ef.ref_vars), dtype='d')}
+    for (ndn,i), xvar in ef.ref_vars.items():  
+        if ndn != "ROOT":
+            raise RuntimeError("only two-stage is supported by nonant_cache_from_ef")
+        nonant_cache["ROOT"][i] = pyo.value(xvar)
+        if verbose:
+            print("barfoo", i, pyo.value(xvar))
+    return nonant_cache
+
 def ef_scenarios(ef):
     """ An iterator to give the scenario sub-models in an ef
     Args:
@@ -644,7 +660,7 @@ class _ScenTree():
     def __init__(self, BFs, ScenNames):
         self.ScenNames = ScenNames
         self.NumScens = len(ScenNames)
-        assert(self.NumScens == prod(BFs))
+        assert(self.NumScens == np.prod(BFs))
         self.NumStages = len(BFs)
         self.BFs = BFs
         first = 0
@@ -821,7 +837,7 @@ def find_active_objective(pyomomodel):
 
 if __name__ == "__main__":
     BFs = [2,2,2,3]
-    numscens = prod(BFs)
+    numscens = np.prod(BFs)
     scennames = ["Scenario"+str(i) for i in range(numscens)]
     testtree = _ScenTree(BFs, scennames)
     print("nonleaves:")
