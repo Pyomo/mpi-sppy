@@ -112,18 +112,16 @@ class Test_MMW_farmer(unittest.TestCase):
         path = empty_path(path)
         
         MMWci.write_xhat(self.xhat,path=path)
-        x = MMWci.read_xhat(path)
+        x = MMWci.read_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
-        os.remove(path)
     
     def test_xhat_read_write_txt(self):
         path = "test_xhat_read_write.txt"
         path = empty_path(path)
 
         MMWci.writetxt_xhat(self.xhat,path=path)
-        x = MMWci.readtxt_xhat(path)
+        x = MMWci.readtxt_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
-        os.remove(path)
         
         
     

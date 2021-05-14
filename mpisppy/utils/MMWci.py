@@ -44,11 +44,13 @@ def writetxt_xhat(xhat,path="xhat.txt",num_stages=2):
     else:
         raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
 
-def readtxt_xhat(path="xhat.txt",num_stages=2):
+def readtxt_xhat(path="xhat.txt",num_stages=2,delete_file=False):
     if num_stages==2:
         xhat = {'ROOT': np.loadtxt(path)}
     else:
         raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
+    if delete_file and global_rank ==0:
+        os.remove(path)        
     return(xhat)
 
 def write_xhat(xhat,path="xhat.npy",num_stages=2):
@@ -58,11 +60,13 @@ def write_xhat(xhat,path="xhat.npy",num_stages=2):
         raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
     
 
-def read_xhat(path="xhat.npy",num_stages=2):
+def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
     if num_stages==2:
         xhat = {'ROOT': np.load(path)}
     else:
         raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
+    if delete_file and global_rank ==0:
+        os.remove(path)
     return(xhat)
                 
 

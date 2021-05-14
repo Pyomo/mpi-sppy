@@ -211,7 +211,8 @@ class Amalgomator():
             
             solvername = self.solvername
             solver = pyo.SolverFactory(solvername)
-            if hasattr(self, "solver_options"):
+            if hasattr(self, "solver_options") and \
+                (self.solver_options is not None):
                 for option_key,option_value in self.solver_options.items():
                     solver.options[option_key] = option_value
             if self.verbose :
