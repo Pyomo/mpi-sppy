@@ -32,7 +32,7 @@ def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
             return max(0,G)
     else:
         if (G<=-threshold):
-            RuntimeWarning("We compute a gap estimator that is anormaly negative")
+            raise RuntimeWarning("We compute a gap estimator that is anormaly negative")
             return G
         else: 
             return max(0,G)           

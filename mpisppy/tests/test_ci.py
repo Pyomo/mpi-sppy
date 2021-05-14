@@ -79,7 +79,7 @@ def empty_path(path,maxit=1000):
         if not os.path.exists(path0):
             return path0
         if t==maxit-1:
-            RuntimeError("No file name available")
+            raise RuntimeError("No file name available")
         t+=1
     
 
