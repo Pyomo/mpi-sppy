@@ -10,11 +10,10 @@ import tempfile
 import numpy as np
 import unittest
 
-from math import log10, floor
-import pyomo.environ as pyo
+
 import mpi4py.MPI as mpi
 
-from test_ef_ph import _get_solver, round_pos_sig
+from mpisppy.tests.test_utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer 
 
 
@@ -25,9 +24,9 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.1
+__version__ = 0.2
 
-solver_available,solvername, persistent_available, persistentsolvername= _get_solver()
+solver_available,solvername, persistent_available, persistentsolvername= get_solver()
 
 def _get_base_options():
     options = { "EF_solver_name": solvername,

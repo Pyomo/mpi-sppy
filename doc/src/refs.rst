@@ -8,3 +8,5 @@ References
 .. [gade2016] Gade, D., Hackebeil, G., Ryan, S., Watson, J.P., Wets, R., Woodruff, D.: Obtaining lower bounds from the progressive hedging algorithm for stochastic mixed-integer programming. Mathematical Programming 157(1), 47–67 (2016)
 
 .. [birge2011] Birge, J.R., Louveaux, F.: Introduction to Stochastic Programming, Second Ed. Springer Verlag (2011)
+
+..[mmw1999] Mak, W.K., Morton,D.P., Wood, R.K.: Monte Carlo bounding techniques for determining solution quality in stochastic programs. Operations Research Letters 24(1-2), 47-56 (1999)

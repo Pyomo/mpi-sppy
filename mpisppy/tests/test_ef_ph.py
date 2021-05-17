@@ -12,7 +12,6 @@ import os
 import pandas as pd
 import unittest
 
-from math import log10, floor
 import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.phbase
@@ -22,29 +21,11 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
+from mpisppy.tests.test_utils import get_solver,round_pos_sig
 
-__version__ = 0.53
+__version__ = 0.54
 
-def _get_solver():
-    solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
-    
-    for solvername in solvers:
-        solver_available = pyo.SolverFactory(solvername).available()
-        if solver_available:
-            break
-    
-    if '_persistent' in solvername:
-        persistentsolvername = solvername
-    else:
-        persistentsolvername = solvername+"_persistent"
-    try:
-        persistent_available = pyo.SolverFactory(persistentsolvername).available()
-    except:
-        persistent_available = False
-    
-    return solver_available, solvername, persistent_available, persistentsolvername
-
-solver_available,solvername, persistent_available, persistentsolvername= _get_solver()
+solver_available,solvername, persistent_available, persistentsolvername= get_solver()
 
 def _get_ph_base_options():
     BasePHoptions = {}
@@ -68,8 +49,7 @@ def _get_ph_base_options():
 
     return BasePHoptions
 
-def round_pos_sig(x, sig=1):
-    return round(x, sig-int(floor(log10(abs(x))))-1)
+
 
 
 #*****************************************************************************
