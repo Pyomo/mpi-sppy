@@ -17,7 +17,7 @@ from mpisppy.tests.test_utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer 
 
 
-import mpisppy.mmw_ci as MMWci
+import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.utils.amalgomator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
