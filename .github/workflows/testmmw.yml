@@ -1,6 +1,6 @@
 # aph (pyomo released)
 
-name: ci tests
+name: mmw tests
 
 on:
   push:
