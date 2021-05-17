@@ -14,38 +14,20 @@ from math import log10, floor
 import pyomo.environ as pyo
 import mpi4py.MPI as mpi
 
-
+from test_ef_ph import _get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer 
 
 
-import mpisppy.utils.MMWci as MMWci
+import mpisppy.mmw_ci as MMWci
 import mpisppy.utils.amalgomator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.02
+__version__ = 0.1
 
-solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
-
-
-for solvername in solvers:
-    solver_available = pyo.SolverFactory(solvername).available()
-    if solver_available:
-        break
-
-
-if '_persistent' in solvername:
-    persistentsolvername = solvername
-else:
-    persistentsolvername = solvername+"_persistent"
-try:
-    persistent_available = pyo.SolverFactory(persistentsolvername).available()
-except:
-    persistent_available = False
-
-
+solver_available,solvername, persistent_available, persistentsolvername= _get_solver()
 
 def _get_base_options():
     options = { "EF_solver_name": solvername,
@@ -69,19 +51,7 @@ def _get_xhatEval_options():
              "solver_options":None}
     return options
 
-def round_pos_sig(x, sig=1):
-    return round(x, sig-int(floor(log10(abs(x))))-1)
 
-def empty_path(path,maxit=1000):
-    t =0
-    while t<maxit :
-        path0 = "nbr"+str(t)+path
-        if not os.path.exists(path0):
-            return path0
-        if t==maxit-1:
-            raise RuntimeError("No file name available")
-        t+=1
-    
 
 refmodelname ="mpisppy.tests.examples.farmer"
 #*****************************************************************************
@@ -102,23 +72,19 @@ class Test_MMW_farmer(unittest.TestCase):
         options = _get_base_options()
         xhat = MMWci.read_xhat(self.xhat_path)
 
-        MMW = MMWci.MMWci(refmodelname,
+        MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                           options['opt'],
                           xhat,
                           options['num_batches'])
     
     def test_xhat_read_write(self):
-        path = "test_xhat_read_write.npy"
-        path = empty_path(path)
-        
+        path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
         MMWci.write_xhat(self.xhat,path=path)
         x = MMWci.read_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
     
     def test_xhat_read_write_txt(self):
-        path = "test_xhat_read_write.txt"
-        path = empty_path(path)
-
+        path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
         MMWci.writetxt_xhat(self.xhat,path=path)
         x = MMWci.readtxt_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
@@ -208,7 +174,7 @@ class Test_MMW_farmer(unittest.TestCase):
     def test_MMW_running(self):
         options = _get_base_options()
         xhat = MMWci.read_xhat(self.xhat_path)
-        MMW = MMWci.MMWci(refmodelname,
+        MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                                         options['opt'],
                                         xhat,
                                         options['num_batches'])

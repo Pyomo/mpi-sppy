@@ -23,23 +23,28 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
 
-__version__ = 0.52
+__version__ = 0.53
 
-solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
+def _get_solver():
+    solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
+    
+    for solvername in solvers:
+        solver_available = pyo.SolverFactory(solvername).available()
+        if solver_available:
+            break
+    
+    if '_persistent' in solvername:
+        persistentsolvername = solvername
+    else:
+        persistentsolvername = solvername+"_persistent"
+    try:
+        persistent_available = pyo.SolverFactory(persistentsolvername).available()
+    except:
+        persistent_available = False
+    
+    return solver_available, solvername, persistent_available, persistentsolvername
 
-for solvername in solvers:
-    solver_available = pyo.SolverFactory(solvername).available()
-    if solver_available:
-        break
-
-if '_persistent' in solvername:
-    persistentsolvername = solvername
-else:
-    persistentsolvername = solvername+"_persistent"
-try:
-    persistent_available = pyo.SolverFactory(persistentsolvername).available()
-except:
-    persistent_available = False
+solver_available,solvername, persistent_available, persistentsolvername= _get_solver()
 
 def _get_ph_base_options():
     BasePHoptions = {}

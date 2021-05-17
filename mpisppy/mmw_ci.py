@@ -70,7 +70,7 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
     return(xhat)
                 
 
-class MMWci():
+class MMWConfidenceIntervals():
     """Takes a model and options as input. 
 
     Args:
@@ -285,7 +285,7 @@ if __name__ == "__main__":
     num_batches = ama_object.options['num_batches']
     batch_size = ama_object.options['batch_size']
     
-    mmw = MMWci(refmodel, options, xhat, num_batches,batch_size=batch_size,
+    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                        verbose=False)
     r=mmw.run()
     global_toc(r)
