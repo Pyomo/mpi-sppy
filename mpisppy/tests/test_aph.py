@@ -9,7 +9,6 @@ IMPORTANT:
 version matter a lot, so we often just do smoke tests for sizes.
 """
 
-import sys
 import unittest
 from math import log10, floor
 import pyomo.environ as pyo
@@ -19,14 +18,10 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement, \
                                                _rho_setter
 import mpisppy.tests.examples.farmer as farmer
+from mpisppy.tests.test_utils import get_solver, round_pos_sig
 
-__version__ = 0.5
-solvers = ["xpress_persistent", "gurobi_persistent", "cplex"]
-
-for solvername in solvers:
-    solver_available = pyo.SolverFactory(solvername).available(exception_flag=False)
-    if solver_available:
-        break
+__version__ = 0.6
+solver_available,solvername, persistent_available, persistentsolvername= get_solver()
 
 import mpi4py.MPI as mpi
 fullcomm = mpi.COMM_WORLD
@@ -65,9 +60,6 @@ class Test_aph_sizes(unittest.TestCase):
         for k,v in self.BasePHoptions.items():
             retval[k] = v
         return retval
-
-    def round_pos_sig(self, x, sig=1):
-        return round(x, sig-int(floor(log10(abs(x))))-1)
         
     def test_make_aph(self):
         """ Just smoke to verify construction"""

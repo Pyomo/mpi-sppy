@@ -4,6 +4,7 @@ import time
 import mpisppy.utils.sputils as sputils
 import mpisppy.log
 import logging
+import numpy as np
 
 from mpisppy.phbase import PHBase
 from mpisppy.extensions.xhatbase import XhatBase
