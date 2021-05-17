@@ -9,4 +9,4 @@ References
 
 .. [birge2011] Birge, J.R., Louveaux, F.: Introduction to Stochastic Programming, Second Ed. Springer Verlag (2011)
 
-..[mmw1999] Mak, W.K., Morton,D.P., Wood, R.K.: Monte Carlo bounding techniques for determining solution quality in stochastic programs. Operations Research Letters 24(1-2), 47-56 (1999)
+.. [mmw1999] Mak, W.K., Morton,D.P., Wood, R.K.: Monte Carlo bounding techniques for determining solution quality in stochastic programs. Operations Research Letters 24(1-2), 47-56 (1999)
