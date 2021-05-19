@@ -10,7 +10,8 @@ import sys
 import json
 import uc_funcs as uc
 
-from mpisppy.utils.sputils import spin_the_wheel
+import mpisppy.utils.sputils as sputils
+
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
@@ -164,10 +165,11 @@ def main():
     if with_cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cut_spoke)
 
-    spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
+    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 
     if args.solution_dir is not None:
-        uc.write_solution(spcomm, opt_dict, args.solution_dir)
+        sputils.write_spin_the_wheel_tree_solution(
+                spcomm, opt_dict, args.solution_dir, uc.scenario_tree_solution_writer )
 
 
 if __name__ == "__main__":

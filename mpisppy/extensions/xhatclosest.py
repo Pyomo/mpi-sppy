@@ -16,6 +16,9 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
         super().__init__(ph)
         self.options = ph.PHoptions["xhat_closest_options"]
         self.solver_options = self.options["xhat_solver_options"]
+        self.keep_solution = True
+        if ('keep_solution' in self.options) and (not self.options['keep_solution']):
+            self.keep_solution = False
 
     def xhat_closest_to_xbar(self, verbose=False, restore_nonants=True):
         """ Get a truncated z score and look for the closest overall.
@@ -101,9 +104,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_everything(self):
         # if we're keeping the solution, we *do not* restore the nonants
-        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
+        restore_nonants = not self.keep_solution
         obj, srcsname = self.xhat_closest_to_xbar(verbose=self.verbose, restore_nonants=restore_nonants)
-        self.xhat_common_post_everything("closest to xbar", obj, srcsname)
+        self.xhat_common_post_everything("closest to xbar", obj, srcsname, restore_nonants)
         self._final_xhat_closest_obj = obj
-        if self.opt.spcomm is not None:
-            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')

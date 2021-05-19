@@ -16,6 +16,9 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
         super().__init__(ph)
         self.options = ph.PHoptions["xhat_specific_options"]
         self.solver_options = self.options["xhat_solver_options"]
+        self.keep_solution = True
+        if ('keep_solution' in self.options) and (not self.options['keep_solution']):
+            self.keep_solution = False
 
     #==========
     def xhat_tryit(self,
@@ -42,7 +45,6 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
 
         _vb("Enter XhatSpecific.xhat_tryit to try: "+str(xhat_scenario_dict))
 
-        self.opt._save_nonants()  # to cache for use in fixing
         _vb("   Solver options="+str(self.solver_options))
         obj = self._try_one(xhat_scenario_dict,
                             solver_options=self.solver_options,
@@ -70,13 +72,11 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_everything(self):
         # if we're keeping the solution, we *do not* restore the nonants
-        restore_nonants = not ('keep_solution' in self.options and self.options['keep_solution'])
+        restore_nonants = not self.keep_solution
         xhat_scenario_dict = self.options["xhat_scenario_dict"]
         obj = self.xhat_tryit(xhat_scenario_dict,
                               verbose=self.verbose,
                               restore_nonants=restore_nonants)
         # to make available to tester
         self._xhat_specific_obj_final = obj
-        self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict)
-        if self.opt.spcomm is not None:
-            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')
+        self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict, restore_nonants)

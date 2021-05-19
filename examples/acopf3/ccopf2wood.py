@@ -6,13 +6,13 @@
 import os
 import numpy as np
 # Hub and spoke SPBase classes
-from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.utils.xhat_tryer import XhatTryer
 
 # the problem
 import ACtree as etree
@@ -194,7 +194,7 @@ def main():
     ub2 = {
         'spoke_class': XhatSpecificInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,   
+        "opt_class": XhatTryer,
         'opt_kwargs': {
             'PHoptions': xhat_options,
             'all_scenario_names': all_scenario_names,

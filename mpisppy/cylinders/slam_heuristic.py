@@ -41,19 +41,9 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
             raise RuntimeError(f"{self.__class__.__name__} must be used with XhatTryer.")
         verbose = self.opt.options['verbose']
 
-        self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
         logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}")
 
         self.opt.subproblem_creation(verbose)
-
-        '''
-        ## do some checks
-        for sname, s in self.opt.local_scenarios.values():
-            for var in s._mpisppy_data.nonant_indices.values():
-                if not var.is_integer():
-                    raise Exception(f"{self.__class__.__name__} can only be used for problems "
-                                    "with pure-integer first-stage variables")
-        '''
 
         self.opt._update_E1()
 
@@ -64,7 +54,6 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
             self.tee = self.opt.options['tee-rank0-solves']
 
         self.verbose = verbose
-        self.is_minimizing = self.opt.is_minimizing
 
     def extract_local_candidate_soln(self):
         num_scen = len(self.opt.local_scenarios)
@@ -80,8 +69,6 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
     def main(self):
         self.slam_heur_prep()
-
-        self.ib = inf if self.is_minimizing else -inf
 
         slam_iter = 1
         while not self.got_kill_signal():
@@ -103,28 +90,18 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 '''
 
                 # Everyone has the candidate solution at this point
-                # Moreover, we are guaranteed that it is feasible
-                bundling = self.opt.bundling
-                for (sname, s) in self.opt.local_subproblems.items():
+                for s in self.opt.local_scenarios.values():
                     is_pers = sputils.is_persistent(s._solver_plugin)
                     solver = s._solver_plugin if is_pers else None
 
-                    nonant_source = s.ref_vars.values() if bundling else \
-                            s._mpisppy_data.nonant_indices.values()
-
-                    for ix, var in enumerate(nonant_source):
+                    for ix, var in enumerate(s._mpisppy_data.nonant_indices.values()):
                         var.fix(global_candidate[ix])
                         if (is_pers):
                             solver.update_var(var)
 
                 obj = self.opt.calculate_incumbent(fix_nonants=False)
 
-                update = (obj is not None) and \
-                         ((obj < self.ib) if self.is_minimizing else (self.ib < obj))
-
-                if update:
-                    self.bound = obj
-                    self.ib = obj
+                self.update_if_improving(obj)
                 
             slam_iter += 1
 

@@ -2,6 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
 
+import os
 import time
 import logging
 import weakref
@@ -113,6 +114,11 @@ class SPBase:
 
         ## SPCommunicator object
         self._spcomm = None
+
+        # for writers, if the appropriate
+        # solution is loaded into the subproblems
+        self.tree_solution_available = False
+        self.first_stage_solution_available = False
 
     def _set_sense(self, comm=None):
         """ Check to confirm that all the models constructed by scenario_crator
@@ -583,3 +589,36 @@ class SPBase:
                         print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
                     print(" ", end='')
                 print("")
+
+    def write_first_stage_solution(self, file_name,
+            first_stage_solution_writer=sputils.first_stage_nonant_writer):
+        """ Writes the first-stage solution, if this object reports one available
+            Args:
+                file_name: path of file to write first stage solution to
+                first_stage_solution_writer (optional): custom first stage solution writer function
+        """
+
+        if not self.first_stage_solution_available:
+            raise RuntimeError("No first stage solution available")
+        if self.cylinder_rank == 0:
+            dirname = os.path.dirname(file_name)
+            if dirname != '':
+                os.makedirs(os.path.dirname(file_name), exist_ok=True)
+            representative_scenario = self.local_scenarios[self.local_scenario_names[0]]
+            first_stage_solution_writer(file_name, representative_scenario, self.bundling)
+
+    def write_tree_solution(self, directory_name,
+            scenario_tree_solution_writer=sputils.scenario_tree_solution_writer):
+        """ Writes the tree solution, if this object reports one available.
+            Raises a RuntimeError if it is not
+            Args:
+                directory_name: directory to write tree solution to
+                scenario_tree_solution_writer (optional): custom scenario solution writer function
+        """
+        if not self.tree_solution_available:
+            raise RuntimeError("No tree solution available")
+        if self.cylinder_rank == 0:
+            os.makedirs(directory_name, exist_ok=True)
+        self.mpicomm.Barrier()
+        for scenario_name, scenario in self.local_scenarios.items():
+            scenario_tree_solution_writer(directory_name, scenario_name, scenario, self.bundling)

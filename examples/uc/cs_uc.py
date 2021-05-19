@@ -7,8 +7,8 @@ import os
 import mpi4py.MPI as mpi
 
 # Hub and spoke SPBase classes
-from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
+from mpisppy.utils.xhat_tryer import XhatTryer
 
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
@@ -170,7 +170,7 @@ if __name__ == "__main__":
     ub_spoke = {
         'spoke_class': XhatLooperInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": PHBase,
+        "opt_class": XhatTryer,
         'opt_kwargs': {
             'PHoptions': ph_options,
             'all_scenario_names': all_scenario_names,
