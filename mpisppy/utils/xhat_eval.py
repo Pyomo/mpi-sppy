@@ -9,6 +9,7 @@ import logging
 import numpy as np
 import math
 
+import mpisppy.log
 import mpisppy.phbase
 from mpi4py import MPI
 import mpisppy.utils.sputils as sputils
