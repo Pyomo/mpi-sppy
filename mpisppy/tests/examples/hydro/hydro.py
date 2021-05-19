@@ -310,7 +310,7 @@ if __name__ == "__main__":
     if ph.cylinder_rank == 0:
          print ("Trival bound =",tbound)
 
-    ph._disable_W_and_prox()
+    ph.disable_W_and_prox()
     e_obj = ph.Eobjective()
     if ph.cylinder_rank == 0:
          print ("unweighted e_obj={}".format(e_obj))

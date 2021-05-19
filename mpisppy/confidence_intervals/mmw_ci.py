@@ -1,5 +1,5 @@
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
-# To test: python MMWci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
+# To test: python mmw._cipy --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
 
 
 import mpi4py.MPI as mpi

@@ -24,7 +24,7 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.log import setup_logger
 
 # the problem
@@ -176,7 +176,7 @@ if __name__ == "__main__":
     ub_spoke = {
         'spoke_class': XhatLooperInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": XhatTryer,
+        "opt_class": Xhat_Eval,
         'opt_kwargs': {
             'options': xhat_options,
             'all_scenario_names': all_scenario_names,

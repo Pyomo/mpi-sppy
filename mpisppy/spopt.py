@@ -763,8 +763,8 @@ class SPOpt(SPBase):
             s._solver_plugin = SolverFactory(self.options["solvername"])
 
             if (sputils.is_persistent(s._solver_plugin)):
-
-                if (self.options["display_timing"]):
+                dtiming = ("display_timing" in self.options) and self.options["display_timing"]
+                if dtiming:
                     set_instance_start_time = time.time()
 
                 # this loop is required to address the sitution where license
@@ -798,7 +798,7 @@ class SPOpt(SPBase):
                             time.sleep(LICENSE_RETRY_SLEEP_TIME)
                             num_retry_attempts += 1
 
-                if (self.options["display_timing"]):
+                if dtiming:
                     set_instance_time = time.time() - set_instance_start_time
                     all_set_instance_times = self.mpicomm.gather(set_instance_time,
                                                                  root=0)

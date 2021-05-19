@@ -110,11 +110,14 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_everything(self):
         restore_nonants = not self.keep_solution
+
+        self.opt.disable_W_and_prox()
         obj, snamedict = self.xhat_looper(
             scen_limit=self.options["scen_limit"],
             verbose=self.verbose,
             restore_nonants=restore_nonants,
         )
+        self.opt.reenable_W_and_prox()
         # "secret menu" way to see the value in a script
         self._xhat_looper_obj_final = obj
         self.xhat_common_post_everything("xhatlooper", obj, snamedict, restore_nonants)
