@@ -12,7 +12,7 @@ from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # the problem
 import ACtree as etree
@@ -201,9 +201,9 @@ def main():
     ub2 = {
         'spoke_class': XhatSpecificInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": XhatTryer,
+        "opt_class": Xhat_Eval,
         'opt_kwargs': {
-            'PHoptions': xhat_options,
+            'options': xhat_options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': pysp2_callback,
             'scenario_denouement': scenario_denouement,

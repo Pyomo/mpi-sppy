@@ -152,10 +152,7 @@ def make_parser(progname=None, num_scens_reqd=False):
     parser = _common_args(parser)
     return parser
 
-def make_multistage_parser(progname=None):
-    # make a parser for the program named progname
-    # NOTE: if you want abbreviations, override the arguments in your example
-    # do not add abbreviations here.
+def _basic_multistage(progname=None):
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
     # the default is intended more as an example than as a default
@@ -164,9 +161,69 @@ def make_multistage_parser(progname=None):
                         dest="BFs",
                         type=str,
                         default="2,2")
+    return parser
+
+
+def make_multistage_parser(progname=None):
+    # make a parser for the program named progname
+    # NOTE: if you want abbreviations, override the arguments in your example
+    # do not add abbreviations here.
+    parser = _basic_multistage(progname=None)
     parser = _common_args(parser)
     return parser
 
+#### EF ####
+def make_EF2_parser(progname=None, num_scens_reqd=False):
+    # create a parser just for EF two-stage (does not call _common_args)
+    # NOTE: if you want abbreviations, override the arguments in your example
+    # do not add abbreviations here.
+    parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
+
+    if num_scens_reqd:
+        parser.add_argument(
+            "num_scens", help="Number of scenarios", type=int
+        )
+    else:
+        parser.add_argument(
+            "--num-scens",
+            help="Number of scenarios (default None)",
+            dest="num_scens",
+            type=int,
+            default=None,
+        )
+        
+    parser.add_argument("--EF-solver-name",
+                        help = "solver name (default gurobi)",
+                        dest="EF_solver_name",
+                        type = str,
+                        default="gurobi")
+
+
+    parser.add_argument("--EF-mipgap",
+                        help="mip gap option for the solver if needed (default None)",
+                        dest="EF_mipgap",
+                        type=float,
+                        default=None)
+    return parser
+
+def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
+    # create a parser just for EF two-stage (does not call _common_args)
+    # NOTE: if you want abbreviations, override the arguments in your example
+    # do not add abbreviations here.
+    parser = _basic_multistage(progname=None)
+    parser.add_argument("--EF-solver-name",
+                        help = "solver name (default gurobi)",
+                        dest="EF_solver_name",
+                        type = str,
+                        default="gurobi")
+
+
+    parser.add_argument("--EF-mipgap",
+                        help="mip gap option for the solver if needed (default None)",
+                        dest="EF_mipgap",
+                        type=float,
+                        default=None)
+    return parser
 ##### common additions to the command line #####
 
 def two_sided_args(inparser):
