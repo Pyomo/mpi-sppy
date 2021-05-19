@@ -539,7 +539,7 @@ class Test_hydro(unittest.TestCase):
         sig2tbnd = round_pos_sig(tbound, 2)
         self.assertEqual(180, sig2tbnd)
 
-        ph._disable_W_and_prox()
+        ph.disable_W_and_prox()
         sig2eobj = round_pos_sig(ph.Eobjective(), 2)
         self.assertEqual(190, sig2eobj)
 

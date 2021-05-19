@@ -73,10 +73,12 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     def post_everything(self):
         # if we're keeping the solution, we *do not* restore the nonants
         restore_nonants = not self.keep_solution
+        self.opt.disable_W_and_prox()
         xhat_scenario_dict = self.options["xhat_scenario_dict"]
         obj = self.xhat_tryit(xhat_scenario_dict,
                               verbose=self.verbose,
                               restore_nonants=restore_nonants)
+        self.opt.reenable_W_and_prox()
         # to make available to tester
         self._xhat_specific_obj_final = obj
         self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict, restore_nonants)
