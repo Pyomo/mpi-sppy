@@ -1,4 +1,4 @@
-name: mpi-sppy (Pyomo released)
+name: test_ef_ph (Pyomo released)
 
 on:
   push:
