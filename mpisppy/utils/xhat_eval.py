@@ -22,10 +22,10 @@ if global_rank==0 :
     print("WHAT ABOUT MULTI-STAGE")
     
 # Could also pass, e.g., sys.stdout instead of a filename
-mpisppy.log.setup_logger("mpisppy.utils.xhat_tryer",
-                         "xhattryer.log",
+mpisppy.log.setup_logger("mpisppy.utils.xhat_eval",
+                         "xhateval.log",
                          level=logging.CRITICAL)                         
-logger = logging.getLogger("mpisppy.utils.xhat_tryer")
+logger = logging.getLogger("mpisppy.utils.xhat_eval")
 
 ############################################################################
 class Xhat_Eval(mpisppy.spopt.SPOpt):
@@ -64,12 +64,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
     
 
-    def attach_PH_to_objective(self, add_duals=False , add_prox=False):
-        if add_duals:
-            raise RuntimeError("XhatTryer has no notion of duals")
-        if add_prox:
-            raise RuntimeError("XhatTryer has no notion of prox")
-        pass
 
     #======================================================================
     def solve_one(self, solver_options, k, s,
