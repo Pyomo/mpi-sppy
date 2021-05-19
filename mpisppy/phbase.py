@@ -347,7 +347,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.W_on = 0
 
 
-    def _disable_W_and_prox(self):
+    def disable_W_and_prox(self):
         self._disable_W()
         self._disable_prox()
 
@@ -363,7 +363,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.W_on = 1
 
 
-    def _reenable_W_and_prox(self):
+    def reenable_W_and_prox(self):
         self._reenable_W()
         self._reenable_prox()
 
@@ -471,7 +471,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         set_objective takes care of W and prox changes.
         """
         if dis_W and dis_prox:
-            self._disable_W_and_prox()
+            self.disable_W_and_prox()
         elif dis_W:
             self._disable_W()
         elif dis_prox:
@@ -489,7 +489,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                    verbose)
 
         if dis_W and dis_prox:
-            self._reenable_W_and_prox()
+            self.reenable_W_and_prox()
         elif dis_W:
             self._reenable_W()
         elif dis_prox:
@@ -788,7 +788,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         if dconvergence_detail:
             self.report_var_values_at_rank0(header="Convergence detail:")            
 
-        self._reenable_W_and_prox()
+        self.reenable_W_and_prox()
 
         self.current_solver_options = self.PHoptions["iterk_solver_options"]
 

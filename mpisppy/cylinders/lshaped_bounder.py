@@ -10,7 +10,7 @@ import mpisppy.cylinders.spoke as spoke
 from math import inf
 from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
 from mpisppy.phbase import PHBase
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
@@ -19,10 +19,8 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
     def xhatlshaped_prep(self):
         verbose = self.opt.options['verbose']
 
-        if not isinstance(self.opt, XhatTryer):
-            raise RuntimeError("XhatLShapedInnerBound must be used with XhatTryer.")
-
-        self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
+        if not isinstance(self.opt, Xhat_Eval):
+            raise RuntimeError("XhatLShapedInnerBound must be used with Xhat_Eval.")
 
         self.opt.subproblem_creation(verbose)
 
@@ -55,7 +53,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._save_nonants() # make the cache
 
-        self.opt.current_solver_options = self.opt.PHoptions["iterk_solver_options"]
+        self.opt.current_solver_options = self.opt.options["iterk_solver_options"]
         ### end iter0 stuff
 
     def main(self):

@@ -2,19 +2,19 @@
 # This software is distributed under the 3-clause BSD License.
 # Try a particular scenario as xhat. This is mainly for regression testing.
 # DLW, Feb 2019
-# This extension uses PHoptions["xhat_scenario_dict"] (keys are node names)
+# This extension uses options["xhat_scenario_dict"] (keys are node names)
 
 import mpisppy.extensions.xhatbase
 
 class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:
-        ph (PH object): the calling object
+        spo (SPOpt object): the calling object
         rank (int): mpi process rank of currently running process
     """
-    def __init__(self, ph):
-        super().__init__(ph)
-        self.options = ph.PHoptions["xhat_specific_options"]
+    def __init__(self, spo):
+        super().__init__(spo)
+        self.options = spo.options["xhat_specific_options"]
         self.solver_options = self.options["xhat_solver_options"]
         self.keep_solution = True
         if ('keep_solution' in self.options) and (not self.options['keep_solution']):
@@ -73,10 +73,12 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     def post_everything(self):
         # if we're keeping the solution, we *do not* restore the nonants
         restore_nonants = not self.keep_solution
+        self.opt.disable_W_and_prox()
         xhat_scenario_dict = self.options["xhat_scenario_dict"]
         obj = self.xhat_tryit(xhat_scenario_dict,
                               verbose=self.verbose,
                               restore_nonants=restore_nonants)
+        self.opt.reenable_W_and_prox()
         # to make available to tester
         self._xhat_specific_obj_final = obj
         self.xhat_common_post_everything("xhat specified scenario", obj, xhat_scenario_dict, restore_nonants)
