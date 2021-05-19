@@ -5,7 +5,7 @@
 
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatspecific import XhatSpecific
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 import mpi4py.MPI as mpi
 import logging
@@ -31,8 +31,8 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
-        if not isinstance(self.opt, XhatTryer):
-            raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
+        if not isinstance(self.opt, Xhat_Eval):
+            raise RuntimeError("XhatShuffleInnerBound must be used with Xhat_Eval.")
 
         verbose = self.opt.options['verbose']
         xhatter = XhatSpecific(self.opt)
