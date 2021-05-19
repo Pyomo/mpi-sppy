@@ -325,7 +325,7 @@ if __name__ == "__main__":
                               scenario_denouement,
                               all_nodenames = all_nodenames)
 
-    conv, obj, bnd = aph.APH_main(PH_extensions = XhatSpecific,
+    conv, obj, bnd = aph.APH_main(extensions = XhatSpecific,
         scenario_creator_kwargs={"branching_factors": BFs},
     )
     """

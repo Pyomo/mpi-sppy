@@ -69,10 +69,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 `MPI.COMM_WORLD`.
             scenario_creator_kwargs (dict, optional): 
                 Keyword arguments passed to `scenario_creator`.
-            PH_extensions (object, optional):
+            extensions (object, optional):
                 PH extension object.
-            PH_extension_kwargs (dict, optional):
-                Keyword arguments to pass to the PH_extensions.
+            extension_kwargs (dict, optional):
+                Keyword arguments to pass to the extensions.
             PH_converger (object, optional):
                 PH converger object.
             rho_setter (callable, optional):
@@ -90,8 +90,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         all_nodenames=None,
         mpicomm=None,
         scenario_creator_kwargs=None,
-        PH_extensions=None,
-        PH_extension_kwargs=None,
+        extensions=None,
+        extension_kwargs=None,
         PH_converger=None,
         rho_setter=None,
         variable_probability=None,
@@ -114,8 +114,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # self.options (from super) will archive the original options.
         self.PHoptions = PHoptions
         self.options_check()
-        self.PH_extensions = PH_extensions
-        self.PH_extension_kwargs = PH_extension_kwargs 
+        self.extensions = extensions
+        self.extension_kwargs = extension_kwargs 
         self.PH_converger = PH_converger
         self.rho_setter = rho_setter
 
@@ -127,12 +127,12 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.convobject = None  # PH converger
         self.attach_xbars()
 
-        if (self.PH_extensions is not None):
-            if self.PH_extension_kwargs is None:
-                self.extobject = self.PH_extensions(self)
+        if (self.extensions is not None):
+            if self.extension_kwargs is None:
+                self.extobject = self.extensions(self)
             else:
-                self.extobject = self.PH_extensions(
-                    self, **self.PH_extension_kwargs
+                self.extobject = self.extensions(
+                    self, **self.extension_kwargs
                 )
 
 
@@ -699,14 +699,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 stochastic program with the nonanticipativity constraints
                 removed.
         """
-        if (self.PH_extensions is not None):
+        if (self.extensions is not None):
             self.extobject.pre_iter0()
         
         verbose = self.PHoptions["verbose"]
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
         dconvergence_detail = self.PHoptions["display_convergence_detail"]        
-        have_extensions = self.PH_extensions is not None
+        have_extensions = self.extensions is not None
         have_converger = self.PH_converger is not None
 
         def _vb(msg):
@@ -812,7 +812,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         """
         verbose = self.PHoptions["verbose"]
-        have_extensions = self.PH_extensions is not None
+        have_extensions = self.extensions is not None
         have_converger = self.PH_converger is not None
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
@@ -892,19 +892,19 @@ class PHBase(mpisppy.spopt.SPOpt):
                 global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
 
-    def post_loops(self, PH_extensions=None):
+    def post_loops(self, extensions=None):
         """ Call scenario denouement methods, and report the expected objective
         value.
 
         Args:
-            PH_extensions (object, optional):
+            extensions (object, optional):
                 PH extension object.
         Returns:
             float:
                 Pretty useless weighted, proxed objective value.
         """
         verbose = self.PHoptions["verbose"]
-        have_extensions = PH_extensions is not None
+        have_extensions = extensions is not None
         dprogress = self.PHoptions["display_progress"]
         dtiming = self.PHoptions["display_timing"]
 

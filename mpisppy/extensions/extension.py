@@ -9,8 +9,6 @@
     NOTE: The return values of all non-constructor methods are ignored
 '''
 
-import abc
-
 class Extension:
     """ Abstract base class for extensions to general SPOpt objects.
     """
@@ -46,16 +44,6 @@ class Extension:
         '''
         return results
 
-class PHExtension(Extension):
-    ''' Abstract base class for extensions to general PHBase objects.
-
-        Args:
-            ph (PHBase): The PHBase object for the current model
-    '''
-    def __init__(self, phbase_object):
-        super().__init__(phbase_object)
-
-    @abc.abstractmethod
     def pre_iter0(self):
         ''' Method called at the end of PH_Prep().
             When this method is called, all scenarios have been created, and
@@ -64,7 +52,6 @@ class PHExtension(Extension):
         '''
         pass
 
-    @abc.abstractmethod
     def post_iter0(self):
         ''' Method called after the first PH iteration.
             When this method is called, one call to solve_loop() has been
@@ -73,7 +60,6 @@ class PHExtension(Extension):
         '''
         pass
 
-    @abc.abstractmethod
     def miditer(self):
         ''' Method called after x-bar has been computed and the dual weights
             have been updated, but before solve_loop(). 
@@ -82,15 +68,12 @@ class PHExtension(Extension):
         '''
         pass
 
-    @abc.abstractmethod
     def enditer(self):
         ''' Method called after the solve_loop(), but before the next x-bar and
             weight update.
         '''
         pass
 
-
-    @abc.abstractmethod
     def post_everything(self):
         ''' Method called after the termination of the algorithm.
             This method is called after the scenario_denouement, if a
@@ -101,7 +84,7 @@ class PHExtension(Extension):
         pass
 
 
-class MultiPHExtension(PHExtension):
+class MultiExtension(Extension):
     """ Container for all the extension classes we are using.
         Also grabs ph and rank, so ad hoc calls (e.g., lagrangian) can use them.
     """

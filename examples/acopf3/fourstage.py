@@ -186,7 +186,7 @@ def main():
             'scenario_denouement': scenario_denouement,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter.ph_rhosetter_callback,
-            "PH_extensions": None,
+            "extensions": None,
             "all_nodenames":all_nodenames,
         }
     }

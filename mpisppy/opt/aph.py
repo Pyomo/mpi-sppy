@@ -81,8 +81,8 @@ class APH(ph_base.PHBase):  # ??????
         all_nodenames=None,            
         mpicomm=None,
         scenario_creator_kwargs=None,
-        PH_extensions=None,
-        PH_extension_kwargs=None,
+        extensions=None,
+        extension_kwargs=None,
         PH_converger=None,
         rho_setter=None,
         variable_probability=None,
@@ -95,8 +95,8 @@ class APH(ph_base.PHBase):  # ??????
             mpicomm=mpicomm,
             all_nodenames=all_nodenames,
             scenario_creator_kwargs=scenario_creator_kwargs,
-            PH_extensions=PH_extensions,
-            PH_extension_kwargs=PH_extension_kwargs,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
             PH_converger=PH_converger,
             rho_setter=rho_setter,
             variable_probability=variable_probability,
@@ -711,7 +711,7 @@ class APH(ph_base.PHBase):  # ??????
         """
         logging.debug('==== enter iterk on rank {}'.format(self.cylinder_rank))
         verbose = self.PHoptions["verbose"]
-        have_extensions = self.PH_extensions is not None
+        have_extensions = self.extensions is not None
 
         # We have the "bottom of the loop at the top"
         # so we need a dlist to get the ball rolling (it might not be used)
@@ -900,7 +900,7 @@ class APH(ph_base.PHBase):  # ??????
                                                     asynch = True,
                                                     listener_gigs = listener_gigs)
         args = [spcomm] if spcomm is not None else [fullcomm]
-        kwargs = None  # {"PH_extensions": PH_extensions}
+        kwargs = None  # {"extensions": extensions}
         self.synchronizer.run(args, kwargs)
 
         if finalize:

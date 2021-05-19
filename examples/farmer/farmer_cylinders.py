@@ -77,7 +77,7 @@ def main():
 
     ## hack in adaptive rho
     if args.use_norm_rho_updater:
-        hub_dict['opt_kwargs']['PH_extensions'] = NormRhoUpdater
+        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
         hub_dict['opt_kwargs']['PHoptions']['norm_rho_options'] = {'verbose': True}
 
     # FWPH spoke

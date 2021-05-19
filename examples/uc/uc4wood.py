@@ -20,7 +20,7 @@ from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub
 # extensions for the hub
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 # Make it all go
@@ -122,8 +122,8 @@ if __name__ == "__main__":
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": _rho_setter,
-            "PH_extensions": MultiPHExtension,
-            "PH_extension_kwargs": multi_ext,
+            "extensions": MultiExtension,
+            "extension_kwargs": multi_ext,
         }
     }
 

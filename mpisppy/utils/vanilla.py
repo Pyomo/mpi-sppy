@@ -90,7 +90,7 @@ def ph_hub(
             "scenario_denouement": scenario_denouement,
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
-            "PH_extensions": ph_extensions,
+            "extensions": ph_extensions,
         }
     }
     return hub_dict

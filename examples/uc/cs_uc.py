@@ -14,7 +14,7 @@ from mpisppy.opt.ph import PH
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 
 # extensions for the hub
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
@@ -130,8 +130,8 @@ if __name__ == "__main__":
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": _rho_setter,
-            "PH_extensions": MultiPHExtension,
-            "PH_extension_kwargs": multi_ext,
+            "extensions": MultiExtension,
+            "extension_kwargs": multi_ext,
         }
     }
 

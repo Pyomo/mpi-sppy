@@ -172,7 +172,7 @@ if __name__ == "__main__":
     ###from mpisppy.xhatlooper import XhatLooper
     conv, eobj, tbound = ph.ph_main()
 
-    # PH_extensions=XhatLooper,
+    # extensions=XhatLooper,
 
     print("\nQUITTING EARLY; this needs to be a hub and have spokes!!!")
     quit()

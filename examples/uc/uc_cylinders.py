@@ -5,13 +5,13 @@
 
 # There is  manipulation of the mip gap,
 #  so we need modifications of the vanilla dicts.
-# Notice also that this uses MutliPHExtensions
+# Notice also that this uses MutliExtensions
 import sys
 import json
 import uc_funcs as uc
 
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
@@ -85,7 +85,7 @@ def main():
     # Start with Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=MultiPHExtension,
+                              ph_extensions=MultiExtension,
                               rho_setter = rho_setter)
 
     # Extend and/or correct the vanilla dictionary
@@ -97,7 +97,7 @@ def main():
     if args.xhat_closest_tree:
         ext_classes.append(XhatClosest)
         
-    hub_dict["opt_kwargs"]["PH_extension_kwargs"] = {"ext_classes" : ext_classes}
+    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if with_cross_scenario_cuts:
         hub_dict["opt_kwargs"]["PHoptions"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}

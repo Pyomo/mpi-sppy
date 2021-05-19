@@ -470,7 +470,7 @@ class PHHub(Hub):
 
     def finalize(self):
         """ does PH.post_loops, returns Eobj """
-        Eobj = self.opt.post_loops(self.opt.PH_extensions)
+        Eobj = self.opt.post_loops(self.opt.extensions)
         return Eobj
 
     def send_nonants(self):
@@ -680,7 +680,7 @@ class APHHub(PHHub):
 
     def finalize(self):
         """ does PH.post_loops, returns Eobj """
-        # NOTE: APH_main does NOT pass in PH_extensions
+        # NOTE: APH_main does NOT pass in extensions
         #       to APH.post_loops
         Eobj = self.opt.post_loops()
         return Eobj

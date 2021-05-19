@@ -65,7 +65,7 @@ class PH(mpisppy.phbase.PHBase):
         self.iterk_loop()
 
         if finalize:
-            Eobj = self.post_loops(self.PH_extensions)
+            Eobj = self.post_loops(self.extensions)
         else:
             Eobj = None
 
@@ -113,7 +113,7 @@ if __name__ == "__main__":
                                      "scen_limit": 3,
                                      "csvname": "looper.csv"}
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            PH_extensions=XhatLooper,
+            extensions=XhatLooper,
             PH_converger=FractionalConverger,
             rho_setter=None)
     conv, obj, bnd = ph.ph_main()
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     from mpisppy.extensions.diagnoser import Diagnoser
     # now test whatever is new
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            PH_extensions=Diagnoser, 
+            extensions=Diagnoser, 
             PH_converger=None,
             rho_setter=None)
     ph.PHoptions["PHIterLimit"] = 3
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     import mpisppy.extensions.avgminmaxer as minmax_extension
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            PH_extensions=MinMaxAvg,
+            extensions=MinMaxAvg,
             PH_converger=None,
             rho_setter=None)
     ph.PHoptions["avgminmax_name"] =  "FirstStageCost"

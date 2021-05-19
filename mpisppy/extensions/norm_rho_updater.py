@@ -30,7 +30,7 @@ _attr_to_option_name_map = {
     '_verbose' : 'verbose',
 }
 
-class NormRhoUpdater(mpisppy.extensions.extension.PHExtension):
+class NormRhoUpdater(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
 

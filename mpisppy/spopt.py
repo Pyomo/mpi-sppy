@@ -117,7 +117,7 @@ class SPOpt(SPBase):
                            np.mean(all_set_objective_times),
                            np.max(all_set_objective_times)))
 
-        if self.PH_extensions is not None:
+        if self.extensions is not None:
             results = self.extobject.pre_solve(s)
 
         solve_start_time = time.time()
@@ -145,7 +145,7 @@ class SPOpt(SPBase):
             results = None
             solver_exception = e
 
-        if self.PH_extensions is not None:
+        if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 
         pyomo_solve_time = time.time() - solve_start_time

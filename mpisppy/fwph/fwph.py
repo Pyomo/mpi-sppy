@@ -10,7 +10,7 @@
     Current implementation supports parallelism and bundling.
 
     Does not support:
-         1. The use of PH_extensions
+         1. The use of extensions
          2. The solution of models with more than two stages
          3. Simultaneous use of bundling and user-specified initial points
 
@@ -72,8 +72,8 @@ class FWPH(mpisppy.phbase.PHBase):
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
             scenario_creator_kwargs=scenario_creator_kwargs,
-            PH_extensions=None,
-            PH_extension_kwargs=None,
+            extensions=None,
+            extension_kwargs=None,
             PH_converger=PH_converger,
             rho_setter=rho_setter,
         )

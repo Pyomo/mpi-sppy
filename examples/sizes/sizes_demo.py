@@ -9,7 +9,7 @@ import pyomo.environ as pyo
 import mpisppy.phbase
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatlooper import XhatLooper
@@ -97,8 +97,8 @@ if __name__ == "__main__":
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
         rho_setter=_rho_setter, 
-        PH_extensions=MultiPHExtension,
-        PH_extension_kwargs=multi_ext,
+        extensions=MultiExtension,
+        extension_kwargs=multi_ext,
     )
     
     conv, obj, tbound = ph.ph_main()
@@ -157,7 +157,7 @@ if __name__ == "__main__":
                                            "csvname": "specific.csv"}
 
     conv = newph.ph_main(rho_setter=_rho_setter, 
-                         PH_extensions=XhatSpecific)
+                         extensions=XhatSpecific)
 
     ######### bundles #########
     PHoptions["bundles_per_rank"] = 2
@@ -185,7 +185,7 @@ if __name__ == "__main__":
 
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     PHoptions["avgminmax_name"] =  "FirstStageCost"
-    conv, obj, bnd = ph.ph_main(PH_extensions=MinMaxAvg,
+    conv, obj, bnd = ph.ph_main(extensions=MinMaxAvg,
                                 PH_converger=None,
                                 rho_setter=None)
 

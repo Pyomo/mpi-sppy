@@ -354,7 +354,7 @@ class Test_sizes(unittest.TestCase):
             scenario_creator,
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
-            PH_extensions=XhatLooper,
+            extensions=XhatLooper,
         )
         conv, basic_obj, tbound = ph.ph_main()
         # in this particular case, the extobject is an xhatter
@@ -379,7 +379,7 @@ class Test_sizes(unittest.TestCase):
             self._fix_creator,
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
-            PH_extensions=XhatLooper,
+            extensions=XhatLooper,
         )
         conv, basic_obj, tbound = ph.ph_main()
 
@@ -405,7 +405,7 @@ class Test_sizes(unittest.TestCase):
             scenario_creator,
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
-            PH_extensions=XhatLooper,
+            extensions=XhatLooper,
         )
         conv, basic_obj, tbound = ph.ph_main()
         xhatobj = ph.extobject._xhat_looper_obj_final
@@ -418,7 +418,7 @@ class Test_sizes(unittest.TestCase):
     def smoke_for_extensions(self):
         """ Make sure the example extensions can at least run.
         """
-        from mpisppy.extensions.extension import MultiPHExtension
+        from mpisppy.extensions.extension import MultiExtension
         from mpisppy.extensions.fixer import Fixer
         from mpisppy.extensions.mipgapper import Gapper
         from mpisppy.extensions.xhatlooper import XhatLooper
@@ -428,8 +428,8 @@ class Test_sizes(unittest.TestCase):
         PHoptions["PHIterLimit"] = 2
         ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
                                     scenario_creator, scenario_denouement,
-                                    PH_extensions=MultiPHExtension,
-                                    PH_extension_kwargs=multi_ext,
+                                    extensions=MultiExtension,
+                                    extension_kwargs=multi_ext,
         )
         multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
         conv, basic_obj, tbound = ph.ph_main()
@@ -440,7 +440,7 @@ class Test_sizes(unittest.TestCase):
     def fix_for_extensions(self):
         """ Make sure the example extensions don't destroy fixedness
         """
-        from mpisppy.extensions.extensions import MultiPHExtension
+        from mpisppy.extensions.extensions import MultiExtension
         from mpisppy.extensions.fixer import Fixer
         from mpisppy.extensions.mipgapper import Gapper
         from mpisppy.extensions.xhatlooper import XhatLooper
@@ -449,8 +449,8 @@ class Test_sizes(unittest.TestCase):
         PHoptions["PHIterLimit"] = 2
         ph = mpisppy.opt.ph.PH(PHoptions, self.all3_scenario_names,
                                     self._fix_creator, scenario_denouement,
-                                    PH_extensions=MultiPHExtension,
-                                    PH_extension_kwargs=multi_ext,
+                                    extensions=MultiExtension,
+                                    extension_kwargs=multi_ext,
         )
         multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
         conv, basic_obj, tbound = ph.ph_main( )
@@ -580,7 +580,7 @@ class Test_hydro(unittest.TestCase):
             hydro.scenario_denouement,
             all_nodenames=self.all_nodenames,
             scenario_creator_kwargs={"branching_factors": self.BFs},
-            PH_extensions = XhatSpecific
+            extensions = XhatSpecific
         )
         conv, obj, tbound = ph.ph_main()
         sig2xhatobj = round_pos_sig(ph.extobject._xhat_specific_obj_final, 2)

@@ -1,6 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-from mpisppy.extensions.extension import PHExtension
+from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
@@ -13,7 +13,7 @@ import mpisppy.utils.sputils as sputils
 import numpy as np
 import mpi4py.MPI as mpi
 
-class CrossScenarioExtension(PHExtension):
+class CrossScenarioExtension(Extension):
     def __init__(self, spbase_object):
         super().__init__(spbase_object)
 
