@@ -30,6 +30,8 @@ class SPOpt(SPBase):
             scenario_denouement=None,
             all_nodenames=None,
             mpicomm=None,
+            extensions=None,
+            extension_kwargs=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
             E1_tolerance=1e-5
@@ -45,6 +47,16 @@ class SPOpt(SPBase):
             variable_probability=variable_probability,
         )
         self.current_solver_options = None
+        self.extensions = extensions
+        self.extension_kwargs = extension_kwargs
+
+        if (self.extensions is not None):
+            if self.extension_kwargs is None:
+                self.extobject = self.extensions(self)
+            else:
+                self.extobject = self.extensions(
+                    self, **self.extension_kwargs
+                )
 
 
     def solve_one(self, solver_options, k, s,

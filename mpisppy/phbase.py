@@ -104,6 +104,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
@@ -114,8 +116,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         # self.options (from super) will archive the original options.
         self.PHoptions = PHoptions
         self.options_check()
-        self.extensions = extensions
-        self.extension_kwargs = extension_kwargs 
         self.PH_converger = PH_converger
         self.rho_setter = rho_setter
 
@@ -126,15 +126,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
-
-        if (self.extensions is not None):
-            if self.extension_kwargs is None:
-                self.extobject = self.extensions(self)
-            else:
-                self.extobject = self.extensions(
-                    self, **self.extension_kwargs
-                )
-
 
     def Compute_Xbar(self, verbose=False):
         """ Gather xbar and x squared bar for each node in the list and
