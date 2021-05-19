@@ -199,7 +199,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                " at xhat have to be computed before running Eobjective")
         
         if fct is None:
-            fct = lambda x: x
+            return super().Eobjective(verbose=verbose)
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
             if not k in self.objs_at_nonant:
