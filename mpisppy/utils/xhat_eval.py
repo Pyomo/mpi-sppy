@@ -30,7 +30,7 @@ logger = logging.getLogger("mpisppy.utils.xhat_eval")
 
 ############################################################################
 class Xhat_Eval(mpisppy.spopt.SPOpt):
-    """ PH. See SPOpt for list of args. """
+    """ See SPOpt for list of args. """
     
     def __init__(
         self,

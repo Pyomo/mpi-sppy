@@ -136,11 +136,11 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
             if verbose and src_rank == self.cylinder_rank:
                 print("   Feasible xhat found:")
                 self.opt.local_scenarios[sname].pprint()
-            self.opt._disable_W_and_prox()
+            #self.opt._disable_W_and_prox()
             obj = self.opt.Eobjective(verbose=verbose)
             if restore_nonants:
                 self.opt._restore_nonants()
-                self.opt._reenable_W_and_prox()  # not needed when a spoke
+                #self.opt._reenable_W_and_prox()  # not needed when a spoke
             return obj
 
     #**********
