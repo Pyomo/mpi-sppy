@@ -122,7 +122,7 @@ class XhatBase(mpisppy.extensions.extension.PHExtension):
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
         self.opt.solve_loop(solver_options=sopt,
-                           dis_W=True, dis_prox=True,
+                           #dis_W=True, dis_prox=True,
                            verbose=verbose,
                            tee=Tee)
 
