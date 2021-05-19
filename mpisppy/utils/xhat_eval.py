@@ -194,12 +194,14 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 If fct is R-->R, returns a float.
                 If fct is R-->R^p with p>1, returns a np.array of length p
         """
+        if fct is None:
+            return super().Eobjective(verbose=verbose)
+        
         if not hasattr(self, "objs_at_nonant"):
             raise RuntimeError("Values of the objective functions for each scenario"+
                                " at xhat have to be computed before running Eobjective")
         
-        if fct is None:
-            return super().Eobjective(verbose=verbose)
+
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
             if not k in self.objs_at_nonant:
