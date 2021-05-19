@@ -71,7 +71,7 @@ def main():
                               rho_setter = None)
 
     if with_cross_scenario_cuts:
-        hub_dict["opt_kwargs"]["PHoptions"]["cross_scen_options"]\
+        hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}
 
     # FWPH spoke

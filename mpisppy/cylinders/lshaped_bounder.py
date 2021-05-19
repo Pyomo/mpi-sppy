@@ -55,7 +55,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._save_nonants() # make the cache
 
-        self.opt.current_solver_options = self.opt.PHoptions["iterk_solver_options"]
+        self.opt.current_solver_options = self.opt.options["iterk_solver_options"]
         ### end iter0 stuff
 
     def main(self):

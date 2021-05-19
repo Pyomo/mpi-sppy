@@ -32,20 +32,20 @@ class Test_aph_sizes(unittest.TestCase):
     """ Test the aph mpisppy code using sizes."""
 
     def setUp(self):
-        self.BasePHoptions = {}
-        self.BasePHoptions["asynchronousPH"] = False
-        self.BasePHoptions["solvername"] = solvername
-        self.BasePHoptions["PHIterLimit"] = 10
-        self.BasePHoptions["defaultPHrho"] = 1
-        self.BasePHoptions["convthresh"] = 0.001
-        self.BasePHoptions["subsolvedirectives"] = None
-        self.BasePHoptions["verbose"] = False
-        self.BasePHoptions["display_timing"] = False
-        self.BasePHoptions["display_progress"] = False
-        self.BasePHoptions["iter0_solver_options"] = {"mipgap": 0.1}
-        self.BasePHoptions["iterk_solver_options"] = {"mipgap": 0.02}
+        self.Baseoptions = {}
+        self.Baseoptions["asynchronousPH"] = False
+        self.Baseoptions["solvername"] = solvername
+        self.Baseoptions["PHIterLimit"] = 10
+        self.Baseoptions["defaultPHrho"] = 1
+        self.Baseoptions["convthresh"] = 0.001
+        self.Baseoptions["subsolvedirectives"] = None
+        self.Baseoptions["verbose"] = False
+        self.Baseoptions["display_timing"] = False
+        self.Baseoptions["display_progress"] = False
+        self.Baseoptions["iter0_solver_options"] = {"mipgap": 0.1}
+        self.Baseoptions["iterk_solver_options"] = {"mipgap": 0.02}
 
-        self.BasePHoptions["display_progress"] = False
+        self.Baseoptions["display_progress"] = False
 
         self.all3_scenario_names = list()
         for sn in range(3):
@@ -57,18 +57,18 @@ class Test_aph_sizes(unittest.TestCase):
 
     def _copy_of_base_options(self):
         retval = {}
-        for k,v in self.BasePHoptions.items():
+        for k,v in self.Baseoptions.items():
             retval[k] = v
         return retval
         
     def test_make_aph(self):
         """ Just smoke to verify construction"""
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["async_frac_needed"] = 0.5
-        PHoptions["async_sleep_secs"] = 0.5
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["async_frac_needed"] = 0.5
+        options["async_sleep_secs"] = 0.5
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all3_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -78,12 +78,12 @@ class Test_aph_sizes(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
     def test_aph_basic(self):
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["async_frac_needed"] = 0.5
-        PHoptions["async_sleep_secs"] = 0.5
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["async_frac_needed"] = 0.5
+        options["async_sleep_secs"] = 0.5
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all3_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -95,13 +95,13 @@ class Test_aph_sizes(unittest.TestCase):
         print ("tbound ={} (was=224106)".format(tbound))
 
     def test_bundles(self):
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["bundles_per_rank"] = 2
-        PHoptions["async_frac_needed"] = 0.5
-        PHoptions["async_sleep_secs"] = 0.5
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["bundles_per_rank"] = 2
+        options["async_frac_needed"] = 0.5
+        options["async_sleep_secs"] = 0.5
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all10_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -115,14 +115,14 @@ class Test_aph_sizes(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
     def test_APHgamma(self):
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["async_frac_needed"] = 0.5
-        PHoptions["async_sleep_secs"] = 0.5
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["async_frac_needed"] = 0.5
+        options["async_sleep_secs"] = 0.5
         a = 2
-        PHoptions["APHgamma"] = a
+        options["APHgamma"] = a
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all3_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -137,14 +137,14 @@ class Test_aph_sizes(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
     def test_use_lag(self):
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["async_frac_needed"] = 0.5
-        PHoptions["async_sleep_secs"] = 0.5
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["async_frac_needed"] = 0.5
+        options["async_sleep_secs"] = 0.5
         a = 2
-        PHoptions["APHuse_lag"] = True
+        options["APHuse_lag"] = True
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all3_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -160,13 +160,13 @@ class Test_aph_sizes(unittest.TestCase):
                      "%s solver is not available" % (solvername,))
     def test_running_dump(self):
         # just see if "display_convergence_detail" causes a crash
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["display_convergence_detail"] = True
-        PHoptions["async_frac_needed"] = 1
-        PHoptions["async_sleep_secs"] = 0.5
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["display_convergence_detail"] = True
+        options["async_frac_needed"] = 1
+        options["async_sleep_secs"] = 0.5
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all3_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -176,14 +176,14 @@ class Test_aph_sizes(unittest.TestCase):
 
 
     def test_lags_bundles(self):
-        PHoptions = self._copy_of_base_options()
-        PHoptions["PHIterLimit"] = 2
-        PHoptions["bundles_per_rank"] = 2
-        PHoptions["async_frac_needed"] = 0.5
-        PHoptions["async_sleep_secs"] = 0.5
-        PHoptions["APHuse_lag"] = True
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["bundles_per_rank"] = 2
+        options["async_frac_needed"] = 0.5
+        options["async_sleep_secs"] = 0.5
+        options["APHuse_lag"] = True
         aph = mpisppy.opt.aph.APH(
-            PHoptions,
+            options,
             self.all10_scenario_names,
             scenario_creator,
             scenario_denouement,
@@ -198,24 +198,24 @@ class Test_aph_farmer(unittest.TestCase):
     """ Test the aph mpisppy code using farmer."""
 
     def setUp(self):
-        self.BasePHoptions = {}
-        self.BasePHoptions["asynchronousPH"] = False
-        self.BasePHoptions["solvername"] = solvername
-        self.BasePHoptions["PHIterLimit"] = 10
-        self.BasePHoptions["defaultPHrho"] = 1
-        self.BasePHoptions["convthresh"] = 0.001
-        self.BasePHoptions["subsolvedirectives"] = None
-        self.BasePHoptions["verbose"] = False
-        self.BasePHoptions["display_timing"] = False
-        self.BasePHoptions["display_progress"] = False
-        self.BasePHoptions["iter0_solver_options"] = None
-        self.BasePHoptions["iterk_solver_options"] = None
+        self.Baseoptions = {}
+        self.Baseoptions["asynchronousPH"] = False
+        self.Baseoptions["solvername"] = solvername
+        self.Baseoptions["PHIterLimit"] = 10
+        self.Baseoptions["defaultPHrho"] = 1
+        self.Baseoptions["convthresh"] = 0.001
+        self.Baseoptions["subsolvedirectives"] = None
+        self.Baseoptions["verbose"] = False
+        self.Baseoptions["display_timing"] = False
+        self.Baseoptions["display_progress"] = False
+        self.Baseoptions["iter0_solver_options"] = None
+        self.Baseoptions["iterk_solver_options"] = None
 
-        self.BasePHoptions["display_progress"] = False
+        self.Baseoptions["display_progress"] = False
 
     def _copy_of_base_options(self):
         retval = {}
-        for k,v in self.BasePHoptions.items():
+        for k,v in self.Baseoptions.items():
             retval[k] = v
         return retval
 
@@ -228,14 +228,14 @@ class Test_aph_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
     def test_aph_farmer_basic30(self):
-        APHoptions = self._copy_of_base_options()
-        APHoptions["PHIterLimit"] = 2
-        APHoptions["aph_dispatch_frac"] = 1
-        APHoptions["async_frac_needed"] = 1
-        APHoptions["async_sleep_secs"] = 0.01
-        APHoptions["aph_gamma"] = 1
+        Aoptions = self._copy_of_base_options()
+        Aoptions["PHIterLimit"] = 2
+        Aoptions["aph_dispatch_frac"] = 1
+        Aoptions["async_frac_needed"] = 1
+        Aoptions["async_sleep_secs"] = 0.01
+        Aoptions["aph_gamma"] = 1
         aph = mpisppy.opt.aph.APH(
-            APHoptions,
+            Aoptions,
             self._make_scenario_names(30),
             farmer.scenario_creator,
             farmer.scenario_denouement,
@@ -255,14 +255,14 @@ class Test_aph_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
     def test_aph_farmer_dispatch(self):
-        APHoptions = self._copy_of_base_options()
-        APHoptions["PHIterLimit"] = 2
-        APHoptions["dispatch_frac"] = 0.25
-        APHoptions["async_frac_needed"] = 1
-        APHoptions["async_sleep_secs"] = 0.01
-        APHoptions["aph_gamma"] = 1
+        Aoptions = self._copy_of_base_options()
+        Aoptions["PHIterLimit"] = 2
+        Aoptions["dispatch_frac"] = 0.25
+        Aoptions["async_frac_needed"] = 1
+        Aoptions["async_sleep_secs"] = 0.01
+        Aoptions["aph_gamma"] = 1
         aph = mpisppy.opt.aph.APH(
-            APHoptions,
+            Aoptions,
             self._make_scenario_names(30),
             farmer.scenario_creator,
             farmer.scenario_denouement,
@@ -283,16 +283,16 @@ class Test_aph_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solvername,))
     def test_aph_farmer_dispatch_bundles(self):
-        APHoptions = self._copy_of_base_options()
-        APHoptions["PHIterLimit"] = 2
-        APHoptions["dispatch_frac"] = 0.25
-        APHoptions["async_frac_needed"] = 1
-        APHoptions["async_sleep_secs"] = 0.01
-        APHoptions["aph_gamma"] = 1
-        APHoptions["bundles_per_rank"] = 5
+        Aoptions = self._copy_of_base_options()
+        Aoptions["PHIterLimit"] = 2
+        Aoptions["dispatch_frac"] = 0.25
+        Aoptions["async_frac_needed"] = 1
+        Aoptions["async_sleep_secs"] = 0.01
+        Aoptions["aph_gamma"] = 1
+        Aoptions["bundles_per_rank"] = 5
         
         aph = mpisppy.opt.aph.APH(
-            APHoptions,
+            Aoptions,
             self._make_scenario_names(30),
             farmer.scenario_creator,
             farmer.scenario_denouement,

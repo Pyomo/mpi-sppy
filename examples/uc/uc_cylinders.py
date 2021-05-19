@@ -100,17 +100,17 @@ def main():
         
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if with_cross_scenario_cuts:
-        hub_dict["opt_kwargs"]["PHoptions"]["cross_scen_options"]\
+        hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}
 
     if with_fixer:
-        hub_dict["opt_kwargs"]["PHoptions"]["fixeroptions"] = {
+        hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
             "verbose": args.with_verbose,
             "boundtol": fixer_tol,
             "id_fix_list_fct": uc.id_fix_list_fct,
         }
     if args.xhat_closest_tree:
-        hub_dict["opt_kwargs"]["PHoptions"]["xhat_closest_options"] = {
+        hub_dict["opt_kwargs"]["options"]["xhat_closest_options"] = {
             "xhat_solver_options" : dict(),
             "keep_solution" : True
         }
@@ -121,14 +121,14 @@ def main():
         mipgapdict = {int(i): din[i] for i in din}
     else:
         mipgapdict = None
-    hub_dict["opt_kwargs"]["PHoptions"]["gapperoptions"] = {
+    hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": args.with_verbose,
         "mipgapdict": mipgapdict
         }
         
     if args.default_rho is None:
         # since we are using a rho_setter anyway
-        hub_dict.opt_kwargs.PHoptions["defaultPHrho"] = 1  
+        hub_dict.opt_kwargs.options["defaultPHrho"] = 1  
     ### end ph spoke ###
     
     # FWPH spoke

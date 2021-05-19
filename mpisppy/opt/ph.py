@@ -48,7 +48,7 @@ class PH(mpisppy.phbase.PHBase):
         NOTE:
             You need an xhat finder either in denoument or in an extension.
         """
-        verbose = self.PHoptions['verbose']
+        verbose = self.options['verbose']
         self.PH_Prep()
         # Why is subproblem_creation() not called in PH_Prep? Answer: xhat_eval.
         self.subproblem_creation(verbose)
@@ -58,7 +58,7 @@ class PH(mpisppy.phbase.PHBase):
         trivial_bound = self.Iter0()
         if (verbose):
             print ('Completed PH Iter0 on global rank {}'.format(global_rank))
-        if ('asynchronousPH' in self.PHoptions) and (self.PHoptions['asynchronousPH']):
+        if ('asynchronousPH' in self.options) and (self.options['asynchronousPH']):
             raise RuntimeError("asynchronousPH is deprecated; use APH")
 
         self.iterk_loop()
@@ -100,7 +100,7 @@ if __name__ == "__main__":
     scenario_denouement = refmodel.scenario_denouement
 
     # now test extensions and convergers together.
-    # NOTE that the PHoptions is a reference,
+    # NOTE that the options is a reference,
     #   so you could have changed PHopt instead.
     PHopt["PHIterLimit"] = 5 # the converger will probably stop it.
     PHopt["asynchronousPH"] = False
@@ -125,7 +125,7 @@ if __name__ == "__main__":
             extensions=Diagnoser, 
             PH_converger=None,
             rho_setter=None)
-    ph.PHoptions["PHIterLimit"] = 3
+    ph.options["PHIterLimit"] = 3
 
     if global_rank == 0:
         try:
@@ -133,7 +133,7 @@ if __name__ == "__main__":
             print ("...deleted delme_diagdir")
         except:
             pass
-    ph.PHoptions["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
+    ph.options["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
     conv, obj, bnd = ph.ph_main()
 
     import mpisppy.extensions.avgminmaxer as minmax_extension
@@ -142,8 +142,8 @@ if __name__ == "__main__":
             extensions=MinMaxAvg,
             PH_converger=None,
             rho_setter=None)
-    ph.PHoptions["avgminmax_name"] =  "FirstStageCost"
-    ph.PHoptions["PHIterLimit"] = 3
+    ph.options["avgminmax_name"] =  "FirstStageCost"
+    ph.options["PHIterLimit"] = 3
     conv, obj, bnd = ph.ph_main()
 
         # trying asynchronous operation

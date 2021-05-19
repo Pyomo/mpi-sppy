@@ -55,7 +55,7 @@ if __name__=="__main__":
         },
         "opt_class": PH,
         "opt_kwargs": {
-            "PHoptions": hub_ph_options,
+            "options": hub_ph_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -101,7 +101,7 @@ if __name__=="__main__":
         "spoke_kwargs": dict(),
         "opt_class": PHBase,
         "opt_kwargs": {
-            "PHoptions": ph_options,
+            "options": ph_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -121,7 +121,7 @@ if __name__=="__main__":
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,

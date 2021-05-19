@@ -3,7 +3,7 @@
 # An extension to compute and output avg, min, max for
 # a component (e.g., first stage cost).
 # DLW, Feb 2019
-# This extension uses PHoptions["avgminmax_name"]
+# This extension uses options["avgminmax_name"]
 
 import mpisppy.extensions.xhatbase
 
@@ -15,7 +15,7 @@ class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
     """
     def __init__(self, ph, rank, n_proc):
         super().__init__(ph, rank, n_proc)
-        self.compstr = self.ph.PHoptions["avgminmax_name"]
+        self.compstr = self.ph.options["avgminmax_name"]
 
     def pre_iter0(self):
         return

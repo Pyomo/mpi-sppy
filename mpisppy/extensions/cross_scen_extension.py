@@ -80,16 +80,16 @@ class CrossScenarioExtension(Extension):
             s._mpisppy_model.EF_Obj.activate()
 
         teeme = (
-            "tee-rank0-solves" in opt.PHoptions
-             and opt.PHoptions["tee-rank0-solves"]
+            "tee-rank0-solves" in opt.options
+             and opt.options["tee-rank0-solves"]
         )
         opt.solve_loop(
                 solver_options=opt.current_solver_options,
-                dtiming=opt.PHoptions["display_timing"],
+                dtiming=opt.options["display_timing"],
                 gripe=True,
                 disable_pyomo_signal_handling=False,
                 tee=teeme,
-                verbose=opt.PHoptions["verbose"],
+                verbose=opt.options["verbose"],
         )
 
         local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_subproblems.values()),

@@ -65,12 +65,12 @@ def ph_hub(
     variable_probability=None,
 ):
     shoptions = shared_options(args)
-    PHoptions = copy.deepcopy(shoptions)
-    PHoptions["convthresh"] = args.intra_hub_conv_thresh
-    PHoptions["bundles_per_rank"] = args.bundles_per_rank
-    PHoptions["linearize_binary_proximal_terms"] = args.linearize_binary_proximal_terms
-    PHoptions["linearize_proximal_terms"] = args.linearize_proximal_terms
-    PHoptions["proximal_linearization_tolerance"] = args.proximal_linearization_tolerance
+    options = copy.deepcopy(shoptions)
+    options["convthresh"] = args.intra_hub_conv_thresh
+    options["bundles_per_rank"] = args.bundles_per_rank
+    options["linearize_binary_proximal_terms"] = args.linearize_binary_proximal_terms
+    options["linearize_proximal_terms"] = args.linearize_proximal_terms
+    options["proximal_linearization_tolerance"] = args.proximal_linearization_tolerance
 
     if _hasit(args, "with_cross_scenario_cuts") and args.with_cross_scenario_cuts:
         hub_class = CrossScenarioHub
@@ -83,7 +83,7 @@ def ph_hub(
                                    "abs_gap": args.abs_gap}},
         "opt_class": PH,
         "opt_kwargs": {
-            "PHoptions": PHoptions,
+            "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -118,11 +118,11 @@ def aph_hub(
     hub_dict['hub_class'] = APHHub
     hub_dict['opt_class'] = APH    
 
-    hub_dict['opt_kwargs']['PHoptions']['APHgamma'] = args.aph_gamma
-    hub_dict['opt_kwargs']['PHoptions']['APHnu'] = args.aph_nu
-    hub_dict['opt_kwargs']['PHoptions']['async_frac_needed'] = args.aph_frac_needed
-    hub_dict['opt_kwargs']['PHoptions']['dispatch_frac'] = args.aph_dispatch_frac
-    hub_dict['opt_kwargs']['PHoptions']['async_sleep_secs'] = args.aph_sleep_seconds
+    hub_dict['opt_kwargs']['options']['APHgamma'] = args.aph_gamma
+    hub_dict['opt_kwargs']['options']['APHnu'] = args.aph_nu
+    hub_dict['opt_kwargs']['options']['async_frac_needed'] = args.aph_frac_needed
+    hub_dict['opt_kwargs']['options']['dispatch_frac'] = args.aph_dispatch_frac
+    hub_dict['opt_kwargs']['options']['async_sleep_secs'] = args.aph_sleep_seconds
 
     return hub_dict
 
@@ -183,7 +183,7 @@ def lagrangian_spoke(
         "spoke_kwargs": dict(),
         "opt_class": PHBase,
         "opt_kwargs": {
-            "PHoptions": shoptions,
+            "options": shoptions,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -193,10 +193,10 @@ def lagrangian_spoke(
         }
     }
     if args.lagrangian_iter0_mipgap is not None:
-        lagrangian_spoke["opt_kwargs"]["PHoptions"]["iter0_solver_options"]\
+        lagrangian_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
             ["mipgap"] = args.lagrangian_iter0_mipgap
     if args.lagrangian_iterk_mipgap is not None:
-        lagrangian_spoke["opt_kwargs"]["PHoptions"]["iterk_solver_options"]\
+        lagrangian_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
             ["mipgap"] = args.lagrangian_iterk_mipgap
     return lagrangian_spoke
 
@@ -216,7 +216,7 @@ def lagranger_spoke(
         "spoke_kwargs": dict(),
         "opt_class": PHBase,
         "opt_kwargs": {
-            "PHoptions": shoptions,
+            "options": shoptions,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -225,13 +225,13 @@ def lagranger_spoke(
         }
     }
     if args.lagranger_iter0_mipgap is not None:
-        lagranger_spoke["opt_kwargs"]["PHoptions"]["iter0_solver_options"]\
+        lagranger_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
             ["mipgap"] = args.lagranger_iter0_mipgap
     if args.lagranger_iterk_mipgap is not None:
-        lagranger_spoke["opt_kwargs"]["PHoptions"]["iterk_solver_options"]\
+        lagranger_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
             ["mipgap"] = args.lagranger_iterk_mipgap
     if args.lagranger_rho_rescale_factors_json is not None:
-        lagranger_spoke["opt_kwargs"]["PHoptions"]\
+        lagranger_spoke["opt_kwargs"]["options"]\
             ["lagranger_rho_rescale_factors_json"]\
             = args.lagranger_rho_rescale_factors_json
         
@@ -260,7 +260,7 @@ def xhatlooper_spoke(
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -291,7 +291,7 @@ def xhatshuffle_spoke(
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -328,7 +328,7 @@ def xhatspecific_spoke(
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -355,7 +355,7 @@ def xhatlshaped_spoke(
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -380,7 +380,7 @@ def slamup_spoke(
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
@@ -405,7 +405,7 @@ def slamdown_spoke(
         "spoke_kwargs": dict(),
         "opt_class": XhatTryer,
         "opt_kwargs": {
-            "PHoptions": xhat_options,
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,

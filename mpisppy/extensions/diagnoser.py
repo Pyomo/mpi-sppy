@@ -3,7 +3,7 @@
 # An extension to output diagnostic information at each iteration
 # to a file for each scenario.
 # DLW, March 2019
-# This extension uses PHoptions["diagnostics_outdir"]
+# This extension uses options["diagnostics_outdir"]
 # This could be used as a starting point for writing your own diangostics;
 #   for "canned" diagnostics, use the baseparser PH option with-display-convergence-detail
 
@@ -20,7 +20,7 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
         rank (int): mpi process rank of currently running process
     """
     def __init__(self, ph):
-        dirname = ph.PHoptions["diagnoser_options"]["diagnoser_outdir"]
+        dirname = ph.options["diagnoser_options"]["diagnoser_outdir"]
         if os.path.exists(dirname):
             if ph.cylinder_rank == 0:
                 print ("Shutting down because Diagnostic directory exists:",
@@ -30,7 +30,7 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
             os.mkdir(dirname) # just let it crash
 
         super().__init__(ph)
-        self.options = self.ph.PHoptions["diagnoser_options"]
+        self.options = self.ph.options["diagnoser_options"]
         self.dirname = self.options["diagnoser_outdir"]
 
     def write_loop(self):

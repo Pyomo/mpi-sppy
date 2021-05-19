@@ -2,7 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 # Try a particular scenario as xhat. This is mainly for regression testing.
 # DLW, Feb 2019
-# This extension uses PHoptions["xhat_scenario_dict"] (keys are node names)
+# This extension uses options["xhat_scenario_dict"] (keys are node names)
 
 import mpisppy.extensions.xhatbase
 
@@ -14,7 +14,7 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
     """
     def __init__(self, ph):
         super().__init__(ph)
-        self.options = ph.PHoptions["xhat_specific_options"]
+        self.options = ph.options["xhat_specific_options"]
         self.solver_options = self.options["xhat_solver_options"]
         self.keep_solution = True
         if ('keep_solution' in self.options) and (not self.options['keep_solution']):

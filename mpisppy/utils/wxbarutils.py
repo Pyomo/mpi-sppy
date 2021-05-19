@@ -23,13 +23,13 @@
             Reading: Set "init_W_fname" to the directory containing the weight
             files. This directory must contain one file per scenario, each
             named <scenario_name>_weights.csv. Set "init_separate_W_files" to
-            True in the PHoptions dictionary.
+            True in the options dictionary.
 
             Writing: Set "W_fname" to the directory that will contain the
             weight files (this directory will be created if it does not already
             exist). The weight files will be corretly named in accordance with
             the naming convention above. Set "separate_W_files" to True in the
-            PHoptions dictionary.
+            options dictionary.
 '''
 
 import pyomo.environ as pyo

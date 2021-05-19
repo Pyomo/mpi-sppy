@@ -44,7 +44,7 @@ phoptions = {'defaultPHrho': 1.0,
              'iterk_solver_options': None
              }
 
-ph = PH( PHoptions = phoptions,
+ph = PH( options = phoptions,
          all_scenario_names = farmer.all_scenario_names,
          scenario_creator = farmer.scenario_creator,
          scenario_denouement = farmer.scenario_denouement,
