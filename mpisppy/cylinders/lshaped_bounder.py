@@ -22,8 +22,6 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
         if not isinstance(self.opt, Xhat_Eval):
             raise RuntimeError("XhatLShapedInnerBound must be used with Xhat_Eval.")
 
-        self.opt.PH_Prep(attach_duals=False, attach_prox=False)  
-
         self.opt.subproblem_creation(verbose)
 
         self.opt._create_solvers()
@@ -55,7 +53,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._save_nonants() # make the cache
 
-        self.opt.current_solver_options = self.opt.PHoptions["iterk_solver_options"]
+        self.opt.current_solver_options = self.opt.options["iterk_solver_options"]
         ### end iter0 stuff
 
     def main(self):

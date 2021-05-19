@@ -19,9 +19,6 @@ import mpisppy.spopt
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-if global_rank==0 :
-    print("WHAT ABOUT MULTI-STAGE")
-    
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.utils.xhat_eval",
                          "xhateval.log",
