@@ -8,7 +8,7 @@ import mpisppy.extensions.extension
 from mpisppy.utils.sputils import _ScenTree
 
 
-class XhatBase(mpisppy.extensions.extension.PHExtension):
+class XhatBase(mpisppy.extensions.extension.Extension):
     """
         Any inherited class must implement the preiter0, postiter etc. methods
         

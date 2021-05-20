@@ -27,9 +27,9 @@ class Test_sizes_abstract(unittest.TestCase):
 
     def test_ph_constructor(self):
         pysp_sizes = self.pysp_sizes3
-        PHoptions = _get_ph_base_options()
-        PHoptions['PHIterLimit'] = 0
-        ph = mpisppy.opt.ph.PH(PHoptions,
+        options = _get_ph_base_options()
+        options['PHIterLimit'] = 0
+        ph = mpisppy.opt.ph.PH(options,
                                   pysp_sizes.all_scenario_names,
                                   pysp_sizes.scenario_creator,
                                   lambda *args : None,
@@ -49,8 +49,8 @@ class Test_sizes_abstract(unittest.TestCase):
                      "no solver is available")
     def test_ef_solve(self):
         pysp_sizes = self.pysp_sizes3
-        PHoptions = _get_ph_base_options()
-        options = {"solver": PHoptions["solvername"]}
+        options = _get_ph_base_options()
+        options = {"solver": options["solvername"]}
         ef = mpisppy.opt.ef.ExtensiveForm(
             options,
             pysp_sizes.all_scenario_names,

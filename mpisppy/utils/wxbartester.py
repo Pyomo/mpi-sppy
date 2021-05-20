@@ -34,7 +34,7 @@ def read_test():
         'init_W_fname': 'david/weights.csv', # Path to the weight files
         'init_separate_W_files': False,
         'init_Xbar_fname': 'david/somexbars.csv',
-        'PH_extensions':WXBarReader,
+        'extensions':WXBarReader,
         'rho_setter':scenario_rhosetter,
     }
 
@@ -63,7 +63,7 @@ def write_test():
         'W_fname': 'david/weights.csv',
         'separate_W_files': False,
         'Xbar_fname': 'somexbars.csv',
-        'PH_extensions':WXBarReader,
+        'extensions':WXBarReader,
         'rho_setter':scenario_rhosetter,
     }
 

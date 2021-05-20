@@ -14,7 +14,7 @@ class XhatClosest(mpisppy.extensions.xhatbase.XhatBase):
     """
     def __init__(self, ph):
         super().__init__(ph)
-        self.options = ph.PHoptions["xhat_closest_options"]
+        self.options = ph.options["xhat_closest_options"]
         self.solver_options = self.options["xhat_solver_options"]
         self.keep_solution = True
         if ('keep_solution' in self.options) and (not self.options['keep_solution']):

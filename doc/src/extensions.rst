@@ -19,7 +19,7 @@ creation of more. Extensions can be found in ``mpisppy.extensions``.
 Multiple Extensions
 -------------------
 
-To employ multiple PH extensions, use ``mpisppy.extensions.extension import MultiPHExtension``
+To employ multiple PH extensions, use ``mpisppy.extensions.extension import MultiExtension``
 that allows you to give a list of extensions that will fire in order
 at each callout point. See, e.g. ``examples.sizes.sizes_demo.py`` for an
 example of use.

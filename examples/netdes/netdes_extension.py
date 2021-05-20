@@ -3,9 +3,9 @@
 import numpy as np
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-from mpisppy.extensions.extension import PHExtension
+from mpisppy.extensions.extension import Extension
 
-class NetworkDesignTracker(PHExtension):
+class NetworkDesignTracker(Extension):
 
     def __init__(self, ph):
         self.ph = ph

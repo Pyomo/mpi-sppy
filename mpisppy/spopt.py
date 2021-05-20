@@ -30,6 +30,8 @@ class SPOpt(SPBase):
             scenario_denouement=None,
             all_nodenames=None,
             mpicomm=None,
+            extensions=None,
+            extension_kwargs=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
             E1_tolerance=1e-5
@@ -45,6 +47,16 @@ class SPOpt(SPBase):
             variable_probability=variable_probability,
         )
         self.current_solver_options = None
+        self.extensions = extensions
+        self.extension_kwargs = extension_kwargs
+
+        if (self.extensions is not None):
+            if self.extension_kwargs is None:
+                self.extobject = self.extensions(self)
+            else:
+                self.extobject = self.extensions(
+                    self, **self.extension_kwargs
+                )
 
 
     def solve_one(self, solver_options, k, s,
@@ -117,6 +129,9 @@ class SPOpt(SPBase):
                            np.mean(all_set_objective_times),
                            np.max(all_set_objective_times)))
 
+        if self.extensions is not None:
+            results = self.extobject.pre_solve(s)
+
         solve_start_time = time.time()
         if (solver_options):
             _vb("Using sub-problem solver options="
@@ -142,7 +157,7 @@ class SPOpt(SPBase):
             results = None
             solver_exception = e
 
-        if self.PH_extensions is not None:
+        if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 
         pyomo_solve_time = time.time() - solve_start_time

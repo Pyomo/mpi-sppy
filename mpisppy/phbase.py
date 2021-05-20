@@ -47,12 +47,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             local_scenario_names (list):
                 List of local scenario names (strings). Should match the keys
                 of the local_scenarios dict.
-            current_solver_options (dict): from PHoptions, but callbacks might
-                Dictionary of solver options provided in PHoptions. Note that
+            current_solver_options (dict): from options, but callbacks might
+                Dictionary of solver options provided in options. Note that
                 callbacks could change these options.
 
         Args:
-            PHoptions (dict): 
+            options (dict): 
                 Options for the PH algorithm.
             all_scenario_names (list): 
                 List of all scenario names in the model (strings).
@@ -69,10 +69,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 `MPI.COMM_WORLD`.
             scenario_creator_kwargs (dict, optional): 
                 Keyword arguments passed to `scenario_creator`.
-            PH_extensions (object, optional):
+            extensions (object, optional):
                 PH extension object.
-            PH_extension_kwargs (dict, optional):
-                Keyword arguments to pass to the PH_extensions.
+            extension_kwargs (dict, optional):
+                Keyword arguments to pass to the extensions.
             PH_converger (object, optional):
                 PH converger object.
             rho_setter (callable, optional):
@@ -83,27 +83,29 @@ class PHBase(mpisppy.spopt.SPOpt):
     """
     def __init__(
         self,
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement=None,
         all_nodenames=None,
         mpicomm=None,
         scenario_creator_kwargs=None,
-        PH_extensions=None,
-        PH_extension_kwargs=None,
+        extensions=None,
+        extension_kwargs=None,
         PH_converger=None,
         rho_setter=None,
         variable_probability=None,
     ):
         """ PHBase constructor. """
         super().__init__(
-            PHoptions,
+            options,
             all_scenario_names,
             scenario_creator,
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
@@ -112,29 +114,18 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
-        self.PHoptions = PHoptions
+        self.options = options
         self.options_check()
-        self.PH_extensions = PH_extensions
-        self.PH_extension_kwargs = PH_extension_kwargs 
         self.PH_converger = PH_converger
         self.rho_setter = rho_setter
 
-        self.iter0_solver_options = PHoptions["iter0_solver_options"]
-        self.iterk_solver_options = PHoptions["iterk_solver_options"]
+        self.iter0_solver_options = options["iter0_solver_options"]
+        self.iterk_solver_options = options["iterk_solver_options"]
         self.current_solver_options = self.iter0_solver_options
 
         # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
-
-        if (self.PH_extensions is not None):
-            if self.PH_extension_kwargs is None:
-                self.extobject = self.PH_extensions(self)
-            else:
-                self.extobject = self.PH_extensions(
-                    self, **self.PH_extension_kwargs
-                )
-
 
     def Compute_Xbar(self, verbose=False):
         """ Gather xbar and x squared bar for each node in the list and
@@ -320,8 +311,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             return
         didit = 0
         skipped = 0
-        rho_setter_kwargs = self.PHoptions['rho_setter_kwargs'] \
-                            if 'rho_setter_kwargs' in self.PHoptions \
+        rho_setter_kwargs = self.options['rho_setter_kwargs'] \
+                            if 'rho_setter_kwargs' in self.options \
                             else dict()
         for sname, scenario in self.local_scenarios.items():
             rholist = self.rho_setter(scenario, **rho_setter_kwargs)
@@ -527,7 +518,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # note that rho is per var and scenario here
             scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
-                                        default=self.PHoptions["defaultPHrho"])
+                                        default=self.options["defaultPHrho"])
 
 
     @property
@@ -553,19 +544,19 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, adds the prox term to the objective.
         """
 
-        if ('linearize_binary_proximal_terms' in self.PHoptions):
-            lin_bin_prox = self.PHoptions['linearize_binary_proximal_terms']
+        if ('linearize_binary_proximal_terms' in self.options):
+            lin_bin_prox = self.options['linearize_binary_proximal_terms']
         else:
             lin_bin_prox = False
 
-        if ('linearize_proximal_terms' in self.PHoptions):
-            self._prox_approx = self.PHoptions['linearize_proximal_terms']
-            if 'proximal_linearization_tolerance' in self.PHoptions:
-                self.prox_approx_tol = self.PHoptions['proximal_linearization_tolerance']
+        if ('linearize_proximal_terms' in self.options):
+            self._prox_approx = self.options['linearize_proximal_terms']
+            if 'proximal_linearization_tolerance' in self.options:
+                self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
-            if 'initial_proximal_cut_count' in self.PHoptions:
-                initial_prox_cuts = self.PHoptions['initial_proximal_cut_count']
+            if 'initial_proximal_cut_count' in self.options:
+                initial_prox_cuts = self.options['initial_proximal_cut_count']
             else:
                 initial_prox_cuts = 2
         else:
@@ -652,7 +643,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def options_check(self):
-        """ Check whether the options in the `PHoptions` attribute are
+        """ Check whether the options in the `options` attribute are
         acceptable.
 
         Required options are
@@ -676,12 +667,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             "convthresh", "verbose", "display_progress", 
             "iter0_solver_options", "iterk_solver_options"
         ]
-        self._options_check(required, self.PHoptions)
+        self._options_check(required, self.options)
         # Display timing and display convergence detail are special for no good reason.
-        if "display_timing" not in self.PHoptions:
-            self.PHoptions["display_timing"] = False
-        if "display_convergence_detail" not in self.PHoptions:
-            self.PHoptions["display_convergence_detail"] = False
+        if "display_timing" not in self.options:
+            self.options["display_timing"] = False
+        if "display_convergence_detail" not in self.options:
+            self.options["display_convergence_detail"] = False
 
 
     def Iter0(self):
@@ -699,14 +690,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 stochastic program with the nonanticipativity constraints
                 removed.
         """
-        if (self.PH_extensions is not None):
+        if (self.extensions is not None):
             self.extobject.pre_iter0()
         
-        verbose = self.PHoptions["verbose"]
-        dprogress = self.PHoptions["display_progress"]
-        dtiming = self.PHoptions["display_timing"]
-        dconvergence_detail = self.PHoptions["display_convergence_detail"]        
-        have_extensions = self.PH_extensions is not None
+        verbose = self.options["verbose"]
+        dprogress = self.options["display_progress"]
+        dtiming = self.options["display_timing"]
+        dconvergence_detail = self.options["display_convergence_detail"]        
+        have_extensions = self.extensions is not None
         have_converger = self.PH_converger is not None
 
         def _vb(msg):
@@ -719,12 +710,12 @@ class PHBase(mpisppy.spopt.SPOpt):
         global_toc("Creating solvers")
         self._create_solvers()
         
-        teeme = ("tee-rank0-solves" in self.PHoptions
-                 and self.PHoptions['tee-rank0-solves']
+        teeme = ("tee-rank0-solves" in self.options
+                 and self.options['tee-rank0-solves']
                  and self.cylinder_rank == 0
                  )
             
-        if self.PHoptions["verbose"]:
+        if self.options["verbose"]:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
         global_toc("Entering solve loop in PHBase.Iter0")
 
@@ -734,7 +725,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                         tee=teeme,
                         verbose=verbose)
         
-        if self.PHoptions["verbose"]:
+        if self.options["verbose"]:
             print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
         
         self._update_E1()  # Apologies for doing this after the solves...
@@ -790,7 +781,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         self.reenable_W_and_prox()
 
-        self.current_solver_options = self.PHoptions["iterk_solver_options"]
+        self.current_solver_options = self.options["iterk_solver_options"]
 
         return self.trivial_bound
 
@@ -811,15 +802,15 @@ class PHBase(mpisppy.spopt.SPOpt):
         Args: None
 
         """
-        verbose = self.PHoptions["verbose"]
-        have_extensions = self.PH_extensions is not None
+        verbose = self.options["verbose"]
+        have_extensions = self.extensions is not None
         have_converger = self.PH_converger is not None
-        dprogress = self.PHoptions["display_progress"]
-        dtiming = self.PHoptions["display_timing"]
-        dconvergence_detail = self.PHoptions["display_convergence_detail"]
+        dprogress = self.options["display_progress"]
+        dtiming = self.options["display_timing"]
+        dconvergence_detail = self.options["display_convergence_detail"]
         self.conv = None
 
-        max_iterations = int(self.PHoptions["PHIterLimit"])
+        max_iterations = int(self.options["PHIterLimit"])
 
         for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
@@ -856,14 +847,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
             elif self.conv is not None:
-                if self.conv < self.PHoptions["convthresh"]:
+                if self.conv < self.options["convthresh"]:
                     converged = True
-                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.PHoptions["convthresh"]), self.cylinder_rank == 0)
+                    global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
                     break
 
             teeme = (
-                "tee-rank0-solves" in self.PHoptions
-                 and self.PHoptions["tee-rank0-solves"]
+                "tee-rank0-solves" in self.options
+                 and self.options["tee-rank0-solves"]
                 and self.cylinder_rank == 0
             )
             self.solve_loop(
@@ -892,21 +883,21 @@ class PHBase(mpisppy.spopt.SPOpt):
                 global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
 
-    def post_loops(self, PH_extensions=None):
+    def post_loops(self, extensions=None):
         """ Call scenario denouement methods, and report the expected objective
         value.
 
         Args:
-            PH_extensions (object, optional):
+            extensions (object, optional):
                 PH extension object.
         Returns:
             float:
                 Pretty useless weighted, proxed objective value.
         """
-        verbose = self.PHoptions["verbose"]
-        have_extensions = PH_extensions is not None
-        dprogress = self.PHoptions["display_progress"]
-        dtiming = self.PHoptions["display_timing"]
+        verbose = self.options["verbose"]
+        have_extensions = extensions is not None
+        dprogress = self.options["display_progress"]
+        dtiming = self.options["display_timing"]
 
         # for reporting sanity
         self.mpicomm.Barrier()

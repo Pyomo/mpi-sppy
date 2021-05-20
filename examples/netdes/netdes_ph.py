@@ -32,7 +32,7 @@ def main():
         scenario_names,
         scenario_creator,
         scenario_denouement,
-        PH_extensions=NetworkDesignTracker,
+        extensions=NetworkDesignTracker,
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
     conv, obj, triv = ph.ph_main()

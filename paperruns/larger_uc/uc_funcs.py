@@ -129,7 +129,7 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
     '''
     if (fname is None):
         raise RuntimeError('Please provide an "fname" kwarg to '
-                           'the "rho_setter_kwargs" option in PHoptions')
+                           'the "rho_setter_kwargs" option in options')
     computed_rhos = scenario_rhos(scenario_instance,
                                     rho_scale_factor=rho_scale_factor)
     try:
@@ -226,9 +226,9 @@ def write_solution(spcomm, opt_dict, solution_dir):
         assert opt_dict["spoke_class"] in (XhatShuffleInnerBound, )
     else: # this is the hub, TODO: also could check for XhatSpecific
         assert opt_dict["opt_class"] in (PH, )
-        assert XhatClosest in opt_dict["opt_kwargs"]["PH_extension_kwargs"]["ext_classes"]
-        assert "keep_solution" in opt_dict["opt_kwargs"]["PHoptions"]["xhat_closest_options"]
-        assert opt_dict["opt_kwargs"]["PHoptions"]["xhat_closest_options"]["keep_solution"] is True
+        assert XhatClosest in opt_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]
+        assert "keep_solution" in opt_dict["opt_kwargs"]["options"]["xhat_closest_options"]
+        assert opt_dict["opt_kwargs"]["options"]["xhat_closest_options"]["keep_solution"] is True
 
     ## if we've passed the above checks, the scenarios should have the tree solution
 

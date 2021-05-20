@@ -2,7 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 ''' An extension to initialize PH weights and/or PH xbar values from csv files.
 
-    To use, specify either or both of the following keys to the PHoptions dict:
+    To use, specify either or both of the following keys to the options dict:
 
         "init_W_fname" : <str filename>
         "init_Xbar_fname": <str filename>
@@ -36,11 +36,11 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = None, None, False
-        if ('init_separate_W_files' in ph.PHoptions):
-            sep_files = ph.PHoptions['init_separate_W_files']
+        if ('init_separate_W_files' in ph.options):
+            sep_files = ph.options['init_separate_W_files']
 
-        if ('init_W_fname' in ph.PHoptions):
-            w_fname = ph.PHoptions['init_W_fname']
+        if ('init_W_fname' in ph.options):
+            w_fname = ph.options['init_W_fname']
             if (not os.path.exists(w_fname)):
                 if (rank == 0):
                     if (sep_files):
@@ -49,8 +49,8 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
                         print('Cannot find file', w_fname)
                 quit()
 
-        if ('init_Xbar_fname' in ph.PHoptions):
-            x_fname = ph.PHoptions['init_Xbar_fname']
+        if ('init_Xbar_fname' in ph.options):
+            x_fname = ph.options['init_Xbar_fname']
             if (not os.path.exists(x_fname)):
                 if (rank == 0):
                     print('Cannot find file', x_fname)

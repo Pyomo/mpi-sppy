@@ -9,7 +9,7 @@ import pyomo.environ as pyo
 import mpisppy.phbase
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatlooper import XhatLooper
@@ -26,30 +26,30 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print("usage: python sizes_demo.py solvername")
         quit()
-    PHoptions = {}
-    PHoptions["solvername"] = sys.argv[1]
-    PHoptions["asynchronousPH"] = False
-    PHoptions["PHIterLimit"] = 2
-    PHoptions["defaultPHrho"] = 1
-    PHoptions["convthresh"] = 0.001
-    PHoptions["subsolvedirectives"] = None
-    PHoptions["verbose"] = False
-    PHoptions["display_timing"] = True
-    PHoptions["display_progress"] = True
+    options = {}
+    options["solvername"] = sys.argv[1]
+    options["asynchronousPH"] = False
+    options["PHIterLimit"] = 2
+    options["defaultPHrho"] = 1
+    options["convthresh"] = 0.001
+    options["subsolvedirectives"] = None
+    options["verbose"] = False
+    options["display_timing"] = True
+    options["display_progress"] = True
     # one way to set up sub-problem solver options
-    PHoptions["iter0_solver_options"] = {"mipgap": 0.01}
+    options["iter0_solver_options"] = {"mipgap": 0.01}
     # another way
-    PHoptions["iterk_solver_options"] = {"mipgap": 0.005}
-    PHoptions["xhat_looper_options"] =  {"xhat_solver_options":\
-                                         PHoptions["iterk_solver_options"],
+    options["iterk_solver_options"] = {"mipgap": 0.005}
+    options["xhat_looper_options"] =  {"xhat_solver_options":\
+                                         options["iterk_solver_options"],
                                          "scen_limit": 3,
                                          "dump_prefix": "delme",
                                          "csvname": "looper.csv"}
-    PHoptions["xhat_closest_options"] =  {"xhat_solver_options":\
-                                         PHoptions["iterk_solver_options"],
+    options["xhat_closest_options"] =  {"xhat_solver_options":\
+                                         options["iterk_solver_options"],
                                          "csvname": "closest.csv"}
-    PHoptions["xhat_specific_options"] =  {"xhat_solver_options":
-                                           PHoptions["iterk_solver_options"],
+    options["xhat_specific_options"] =  {"xhat_solver_options":
+                                           options["iterk_solver_options"],
                                            "xhat_scenario_dict": \
                                            {"ROOT": "Scenario3"},
                                            "csvname": "specific.csv"}
@@ -58,9 +58,9 @@ if __name__ == "__main__":
     fixoptions["boundtol"] = 0.01
     fixoptions["id_fix_list_fct"] = id_fix_list_fct
 
-    PHoptions["fixeroptions"] = fixoptions
+    options["fixeroptions"] = fixoptions
 
-    PHoptions["gapperoptions"] = {"verbose": True,
+    options["gapperoptions"] = {"verbose": True,
                    "mipgapdict": {0: 0.01,
                                   1: 0.009,
                                   5: 0.005,
@@ -73,17 +73,17 @@ if __name__ == "__main__":
     # end hardwire
 
     ######### EF ########
-    solver = pyo.SolverFactory(PHoptions["solvername"])
+    solver = pyo.SolverFactory(options["solvername"])
 
     ef = mpisppy.utils.sputils.create_EF(
         all_scenario_names,
         scenario_creator,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
-    if 'persistent' in PHoptions["solvername"]:
+    if 'persistent' in options["solvername"]:
         solver.set_instance(ef, symbolic_solver_labels=True)
     solver.options["mipgap"] = 0.01
-    results = solver.solve(ef, tee=PHoptions["verbose"])
+    results = solver.solve(ef, tee=options["verbose"])
     print('EF objective value:', pyo.value(ef.EF_Obj))
     #mpisppy.utils.sputils.ef_nonants_csv(ef, "vardump.csv")
     #### first PH ####
@@ -91,14 +91,14 @@ if __name__ == "__main__":
     #####multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
     multi_ext = {"ext_classes": [Fixer, Gapper]}
     ph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
         rho_setter=_rho_setter, 
-        PH_extensions=MultiPHExtension,
-        PH_extension_kwargs=multi_ext,
+        extensions=MultiExtension,
+        extension_kwargs=multi_ext,
     )
     
     conv, obj, tbound = ph.ph_main()
@@ -111,14 +111,14 @@ if __name__ == "__main__":
     from mpisppy.utils.wxbarwriter import WXBarWriter
     
     newph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
 
-    PHoptions["W_and_xbar_writer"] =  {"Wcsvdir": "Wdir",
+    options["W_and_xbar_writer"] =  {"Wcsvdir": "Wdir",
                                        "xbarcsvdir": "xbardir"}
 
     conv, obj, tbound = newph.ph_main()
@@ -126,14 +126,14 @@ if __name__ == "__main__":
     from mpisppy.utils.wxbarreader import WXBarReader
     
     newph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
 
-    PHoptions["W_and_xbar_reader"] =  {"Wcsvdir": "Wdir",
+    options["W_and_xbar_reader"] =  {"Wcsvdir": "Wdir",
                                        "xbarcsvdir": "xbardir"}
 
     conv, obj, tbound = newph.ph_main()
@@ -143,28 +143,28 @@ if __name__ == "__main__":
     from mpisppy.xhatspecific import XhatSpecific
     print ("... testing xhat specific....")
     newph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
 
-    PHoptions["xhat_specific_options"] =  {"xhat_solver_options":
-                                           PHoptions["iterk_solver_options"],
+    options["xhat_specific_options"] =  {"xhat_solver_options":
+                                           options["iterk_solver_options"],
                                            "xhat_scenario_dict": \
                                            {"ROOT": "Scenario3"},
                                            "csvname": "specific.csv"}
 
     conv = newph.ph_main(rho_setter=_rho_setter, 
-                         PH_extensions=XhatSpecific)
+                         extensions=XhatSpecific)
 
     ######### bundles #########
-    PHoptions["bundles_per_rank"] = 2
-    PHoptions["verbose"] = False
+    options["bundles_per_rank"] = 2
+    options["verbose"] = False
 
     ph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
@@ -175,17 +175,17 @@ if __name__ == "__main__":
 
     ### avg, min, max extension #####
     ph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
-    ph.PHoptions["PHIterLimit"] = 3
+    ph.options["PHIterLimit"] = 3
 
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
-    PHoptions["avgminmax_name"] =  "FirstStageCost"
-    conv, obj, bnd = ph.ph_main(PH_extensions=MinMaxAvg,
+    options["avgminmax_name"] =  "FirstStageCost"
+    conv, obj, bnd = ph.ph_main(extensions=MinMaxAvg,
                                 PH_converger=None,
                                 rho_setter=None)
 

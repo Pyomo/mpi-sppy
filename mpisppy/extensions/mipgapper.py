@@ -13,9 +13,9 @@ class Gapper(mpisppy.extensions.extension.Extension):
     def __init__(self, ph):
         self.ph = ph
         self.cylinder_rank = self.ph.cylinder_rank
-        self.gapperoptions = self.ph.PHoptions["gapperoptions"] # required
+        self.gapperoptions = self.ph.options["gapperoptions"] # required
         self.mipgapdict = self.gapperoptions["mipgapdict"]
-        self.verbose = self.ph.PHoptions["verbose"] \
+        self.verbose = self.ph.options["verbose"] \
                        or self.gapperoptions["verbose"]
                        
     def _vb(self, str):

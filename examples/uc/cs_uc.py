@@ -14,7 +14,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 
 # extensions for the hub
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
@@ -125,13 +125,13 @@ if __name__ == "__main__":
         "hub_kwargs": dict(),
         "opt_class": PH,
         "opt_kwargs": {
-            "PHoptions": hub_ph_options,
+            "options": hub_ph_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": _rho_setter,
-            "PH_extensions": MultiPHExtension,
-            "PH_extension_kwargs": multi_ext,
+            "extensions": MultiExtension,
+            "extension_kwargs": multi_ext,
         }
     }
 
@@ -172,7 +172,7 @@ if __name__ == "__main__":
         "spoke_kwargs": dict(),
         "opt_class": Xhat_Eval,
         'opt_kwargs': {
-            'PHoptions': ph_options,
+            'options': ph_options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
             'scenario_denouement': scenario_denouement,

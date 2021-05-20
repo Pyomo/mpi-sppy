@@ -30,13 +30,13 @@ _attr_to_option_name_map = {
     '_verbose' : 'verbose',
 }
 
-class NormRhoUpdater(mpisppy.extensions.extension.PHExtension):
+class NormRhoUpdater(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
 
         self.ph = ph
         self.norm_rho_options = \
-            ph.PHoptions['norm_rho_options'] if 'norm_rho_options' in ph.PHoptions else dict()
+            ph.options['norm_rho_options'] if 'norm_rho_options' in ph.options else dict()
 
         self._set_options()
         self._prev_avg = None

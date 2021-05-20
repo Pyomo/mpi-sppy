@@ -62,14 +62,14 @@ def main():
                               variable_probability = variable_probability)
 
     if with_fixer:
-        hub_dict["opt_kwargs"]["PHoptions"]["fixeroptions"] = {
+        hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
             "verbose": False,
             "boundtol": fixer_tol,
             "id_fix_list_fct": sizes.id_fix_list_fct,
         }
     if args.default_rho is None:
         # since we are using a rho_setter anyway
-        hub_dict.opt_kwargs.PHoptions["defaultPHrho"] = 1  
+        hub_dict.opt_kwargs.options["defaultPHrho"] = 1  
     
     # FWPH spoke
     if with_fwph:
