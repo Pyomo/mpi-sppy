@@ -21,10 +21,7 @@ RUN pip install xpress
 RUN apt update
 RUN apt install -y git-all
 
-# get pyutilib and pyomo from the web
-RUN git clone https://github.com/PyUtilib/pyutilib.git
-RUN cd pyutilib && python ./setup.py develop && cd ..
-# (the last cd .. is probably not needed)
+# get pyomo from the web
 
 RUN git clone https://github.com/pyomo/pyomo
 

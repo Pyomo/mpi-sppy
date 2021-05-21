@@ -1,14 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
-import pyomo as _pyo
-
-pyomo6 = (int(_pyo.__version__[0]) >= 6)
-
-if pyomo6:
-    from pyomo.common.timing import TicTocTimer as _TTT
-else:
-    from pyutilib.misc.timing import TicTocTimer as _TTT
+from pyomo.common.timing import TicTocTimer as _TTT
 
 try:
     import mpi4py.MPI as _mpi
