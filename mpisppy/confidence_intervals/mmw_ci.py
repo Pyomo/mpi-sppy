@@ -1,5 +1,5 @@
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
-# To test: python mmw._cipy --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
+# To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
 
 
 import mpi4py.MPI as mpi
@@ -19,9 +19,17 @@ import mpisppy.utils.amalgomator as ama
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.utils.sputils as sputils
 
+def remove_None(d):
+    if d is None:
+        return {}
+    d_copy = {}
+    for (key,value) in d.items():
+        if value is not None:
+            d_copy[key] = value
+    return d_copy
 
 def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
-    #Correcting small negative of G due to numerical eror while solving EF 
+    #Correcting small negative of G due to numerical error while solving EF 
     if relative_error:
         if objfct is None:
             raise RuntimeError("We need a value of the objective function to remove numerically negative G")
@@ -171,6 +179,9 @@ class MMWConfidenceIntervals():
         scenario_creator_kwargs=self.refmodel.kw_creator(self.options)
         scenario_creator_kwargs['num_scens'] = batch_size
         solvername = self.options['EF_solver_name']
+        solver_options = self.options['EF_solver_options'] if 'EF_solver_options' in self.options else None
+        solver_options = remove_None(solver_options)
+            
         #Now we compute for each batch the whole Gn term from MMW (9)
 
         
@@ -199,7 +210,7 @@ class MMWConfidenceIntervals():
             
             #Then we compute the left term of (9)
             # Create the eval object for the left term of the LHS of (9) in MMW
-            solver_options = self.options['EF_solver_options'] if 'EF_solver_options' in self.options else None
+            
             options = {"iter0_solver_options": None,
                      "iterk_solver_options": None,
                      "display_timing": False,
