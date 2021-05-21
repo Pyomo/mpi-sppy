@@ -1,6 +1,6 @@
 # pysp interface (pyomo released)
 
-name: aph tests
+name: pysp tests
 
 on:
   push:
