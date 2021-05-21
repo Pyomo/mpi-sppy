@@ -57,8 +57,8 @@ templates_path = ['_templates']
 # source_suffix = ['.rst', '.md']
 source_suffix = '.rst'
 
-# The master toctree document.
-master_doc = 'index'
+# The root toctree document.
+root_doc = 'index'
 
 # General information about the project.
 project = u'PySP'
@@ -167,7 +167,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'listener_util.tex', 'listener_util Documentation',
+    (root_doc, 'listener_util.tex', 'listener_util Documentation',
      'listener_util', 'manual'),
 ]
 
@@ -177,7 +177,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'listener_util', 'listener_util Documentation',
+    (root_doc, 'listener_util', 'listener_util Documentation',
      [author], 1)
 ]
 
@@ -188,7 +188,7 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'listener_util', 'listener_util Documentation',
+    (root_doc, 'listener_util', 'listener_util Documentation',
      author, 'listener_util', 'One line description of project.',
      'Miscellaneous'),
 

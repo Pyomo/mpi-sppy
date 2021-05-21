@@ -10,12 +10,12 @@
 
     When reading/writing the weight files, there are two options.
         
-     1. All weights are stored in a single master file. 
+     1. All weights are stored in a single main file. 
         
-            Reading: Set "init_W_fname" to the location of the master file
+            Reading: Set "init_W_fname" to the location of the main file
             containing all of the weights.
 
-            Writing: Set "W_fname" to the location of the master file that will
+            Writing: Set "W_fname" to the location of the main file that will
             contain all the weights.
 
      2. Each scenario's weights are stored in separate, individual files.
@@ -43,7 +43,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
         PHB (PHBase object) -- Where the W values live
         fname (str) -- name of file to which we write.
         sep_files (bool, optional) -- If True, one file will be written for
-            each scenario, rather than one master file. The names of the files
+            each scenario, rather than one main file. The names of the files
             are the names of the scenarios.
 
     Notes:
@@ -159,7 +159,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
     
         Notes:
             This function is only called if sep_files=False, i.e., if all of
-            the weights are stored in a single master file. The file must be
+            the weights are stored in a single root file. The file must be
             formatted as:
 
             scenario_name,variable_name,weight_value

@@ -1,5 +1,4 @@
 mpi4py>=3.0.3
 numpy>=1.19
-pyutilib>=6.0
-pyomo>=5.7.1
+pyomo>=6.0
 scipy>=1.5

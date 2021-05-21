@@ -47,26 +47,26 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
         self.scenario_to_index = { scen : indx for indx, scen in enumerate(self.opt.all_scenario_names) }
 
-        # create concrete model to use as pseudo-master
-        self.opt.master = pyo.ConcreteModel()
+        # create concrete model to use as pseudo-root
+        self.opt.root = pyo.ConcreteModel()
 
         ##get the nonants off an arbitrary scenario
         arb_scen = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
         non_ants = arb_scen._mpisppy_node_list[0].nonant_vardata_list
 
-        # add copies of the nonanticipatory variables to the master problem
+        # add copies of the nonanticipatory variables to the root problem
         # NOTE: the LShaped code expects the nonant vars to be in a particular
         #       order and with a particular *name*.
         #       We're also creating an index for reference against later 
         nonant_vid_to_copy_map = dict()
-        master_vars = list()
+        root_vars = list()
         for v in non_ants:
             non_ant_copy = pyo.Var(name=v.name)
-            self.opt.master.add_component(v.name, non_ant_copy)
-            master_vars.append(non_ant_copy)
+            self.opt.root.add_component(v.name, non_ant_copy)
+            root_vars.append(non_ant_copy)
             nonant_vid_to_copy_map[id(v)] = non_ant_copy
 
-        self.opt.master_vars = master_vars
+        self.opt.root_vars = root_vars
 
         # create an index of these non_ant_copies to be in the same
         # order as PH, used below
@@ -75,13 +75,13 @@ class CrossScenarioCutSpoke(spoke.Spoke):
             vid = id(nonant)
             nonants[ndn_i] = nonant_vid_to_copy_map[vid]
 
-        self.master_nonants = nonants
-        self.opt.master.eta = pyo.Var(self.opt.all_scenario_names)
+        self.root_nonants = nonants
+        self.opt.root.eta = pyo.Var(self.opt.all_scenario_names)
 
-        self.opt.master.bender = LShapedCutGenerator()
-        self.opt.master.bender.set_input(master_vars=self.opt.master_vars, 
+        self.opt.root.bender = LShapedCutGenerator()
+        self.opt.root.bender.set_input(root_vars=self.opt.root_vars, 
                                             tol=1e-4, comm=self.cylinder_comm)
-        self.opt.master.bender.set_ls(self.opt)
+        self.opt.root.bender.set_ls(self.opt)
 
         ## the below for loop can take some time,
         ## so return early if we get a kill signal,
@@ -96,9 +96,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
             # need to modify this to accept in user kwargs as well
             subproblem_fn_kwargs['scenario_name'] = scen
-            self.opt.master.bender.add_subproblem(subproblem_fn=self.opt.create_subproblem,
+            self.opt.root.bender.add_subproblem(subproblem_fn=self.opt.create_subproblem,
                                                  subproblem_fn_kwargs=subproblem_fn_kwargs,
-                                                 master_eta=self.opt.master.eta[scen],
+                                                 root_eta=self.opt.root.eta[scen],
                                                  subproblem_solver=self.opt.options["sp_solver"],
                                                  subproblem_solver_options=self.opt.options["sp_solver_options"])
 
@@ -121,7 +121,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
     def make_eta_lb_cut(self):
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
-        row_len = 1+1+len(self.master_nonants)
+        row_len = 1+1+len(self.root_nonants)
         all_coefs = np.zeros( self.nscen*row_len+1, dtype='d')
         for idx, k in enumerate(self.opt.all_scenario_names):
             ## cut_array -- [ constant, eta_coef, *nonant_coefs ]
@@ -166,17 +166,17 @@ class CrossScenarioCutSpoke(spoke.Spoke):
             self.make_eta_lb_cut()
             return
 
-        # set the master etas to be the minimum from every scenario
-        master_etas = opt.master.eta
+        # set the root etas to be the minimum from every scenario
+        root_etas = opt.root.eta
         for idx, scen_name in enumerate(opt.all_scenario_names):
-            master_etas[scen_name].set_value(global_eta_vals[idx])
+            root_etas[scen_name].set_value(global_eta_vals[idx])
 
         # sum the local nonants for average computation
-        master_nonants = self.master_nonants
+        root_nonants = self.root_nonants
 
         local_nonant_sum = np.fromiter( ( sum(nonants[k, nname, ix] for k in opt.local_scenarios)
-                                          for nname, ix in master_nonants),
-                                          dtype='d', count=len(master_nonants) )
+                                          for nname, ix in root_nonants),
+                                          dtype='d', count=len(root_nonants) )
 
 
         # Allreduce the xhats to get averages
@@ -189,8 +189,8 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         local_winner = None
         # iterate through the ranks xhats to get the ranks maximum dist
         for i, k in enumerate(opt.local_scenarios):
-            scenario_xhat = np.fromiter( (nonants[k, nname, ix] for nname, ix in master_nonants),
-                                         dtype='d', count=len(master_nonants) )
+            scenario_xhat = np.fromiter( (nonants[k, nname, ix] for nname, ix in root_nonants),
+                                         dtype='d', count=len(root_nonants) )
             scenario_dist = np.linalg.norm(scenario_xhat - global_xbar)
             local_dist[0] = max(local_dist[0], scenario_dist)
             if local_winner is None:
@@ -211,22 +211,22 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # if we are the winner, grab the xhat and bcast it to the other ranks
         if self.cylinder_comm.Get_rank() == global_rank[0]:
             farthest_xhat = np.fromiter( (nonants[local_winner, nname, ix] 
-                                            for nname, ix in master_nonants),
-                                         dtype='d', count=len(master_nonants) )
+                                            for nname, ix in root_nonants),
+                                         dtype='d', count=len(root_nonants) )
         else:
-            farthest_xhat = np.zeros(len(master_nonants), dtype='d')
+            farthest_xhat = np.zeros(len(root_nonants), dtype='d')
 
         self.cylinder_comm.Bcast(farthest_xhat, root=global_rank)
 
         # set the first stage in the lshape object to correspond to farthest_xhat
-        for ci, k in enumerate(master_nonants):
-            master_nonants[k].set_value(farthest_xhat[ci])
+        for ci, k in enumerate(root_nonants):
+            root_nonants[k].set_value(farthest_xhat[ci])
 
         # generate cuts
-        cuts = opt.master.bender.generate_cut()
+        cuts = opt.root.bender.generate_cut()
 
         # eta var_id map:
-        eta_id_map = { id(var) : k for k,var in master_etas.items()}
+        eta_id_map = { id(var) : k for k,var in root_etas.items()}
         coef_dict = dict()
         feas_cuts = list()
         # package cuts, slightly silly in that we reconstruct the coefficients from the cuts
@@ -260,9 +260,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
             ## be intentional about how these are loaded
             ## unloaded the same way
-            ## master_vars is in the order PH expects
+            ## root_vars is in the order PH expects
             ## (per above)
-            for var in master_nonants.values():
+            for var in root_nonants.values():
                 # each variable should only appear at most once in repn.linear_vars
                 idx = id_var_to_idx.pop(id(var), None)
                 if idx is not None:
@@ -277,7 +277,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
-        row_len = 1+1+len(master_nonants)
+        row_len = 1+1+len(root_nonants)
         all_coefs = np.zeros( self.nscen*row_len +1, dtype='d')
         for idx, k in enumerate(opt.all_scenario_names):
             if k in coef_dict:
