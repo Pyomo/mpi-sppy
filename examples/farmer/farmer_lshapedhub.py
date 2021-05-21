@@ -55,13 +55,13 @@ def main():
     # Bounds only valid for 3 scenarios, I think? Need to ask Chris
     spo = None if args.max_solver_threads is None else {"threads": args.max_solver_threads}
     options = {
-        "master_solver": args.solver_name,
+        "root_solver": args.solver_name,
         "sp_solver": args.solver_name,
         "sp_solver_options" : spo,
         #"valid_eta_lb": {i: -432000 for i in all_scenario_names},
         "max_iter": args.max_iterations,
         "verbose": False,
-        "master_scenarios":[all_scenario_names[len(all_scenario_names)//2]]
+        "root_scenarios":[all_scenario_names[len(all_scenario_names)//2]]
    }
     
     # L-shaped hub

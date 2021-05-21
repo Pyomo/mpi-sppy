@@ -430,7 +430,7 @@ def cross_scenario_cut_spoke(
     if _hasit(args, "eta_bounds_mipgap"):
         sp_solver_options["mipgap"] = args.eta_bounds_mipgap
 
-    ls_options = { "master_solver" : args.solver_name,
+    ls_options = { "root_solver" : args.solver_name,
                    "sp_solver": args.solver_name,
                    "sp_solver_options" : sp_solver_options,
                     "verbose": args.with_verbose,

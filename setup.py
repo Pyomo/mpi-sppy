@@ -24,6 +24,6 @@ setup(
     packages=packages,
     install_requires=[
         'numpy>=1.19',
-        'pyomo>=5.7.1'
+        'pyomo>=6.0.0.dev0'
     ]
 )

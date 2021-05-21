@@ -29,13 +29,13 @@ class LShapedMethod(spbase.SPBase):
         options (dict):
             Dictionary of options. Possible (optional) options include
 
-            - master_scenarios (list) - List of scenario names to include as
-              part of the master problem (default [])
+            - root_scenarios (list) - List of scenario names to include as
+              part of the root problem (default [])
             - store_subproblems (boolean) - If True, the BendersDecomp object
               will maintain a dictionary containing the subproblems created by
               the BendersCutGenerator.
-            - relax_master (boolean) - If True, the LP relaxation of the master
-              problem is solved (i.e. integer variables in the master problem
+            - relax_root (boolean) - If True, the LP relaxation of the root
+              problem is solved (i.e. integer variables in the root problem
               are relaxed).
             - scenario_creator_kwargs (dict) - Keyword args to pass to the scenario_creator.
             - valid_eta_lb (dict) - Dictionary mapping scenario names to valid
@@ -85,21 +85,21 @@ class LShapedMethod(spbase.SPBase):
         self.options = options
         self.options_check()
         self.all_scenario_names = all_scenario_names
-        self.master = None
-        self.master_vars = None
+        self.root = None
+        self.root_vars = None
         self.scenario_count = len(all_scenario_names)
 
         self.store_subproblems = False
         if "store_subproblems" in options:
             self.store_subproblems = options["store_subproblems"]
 
-        self.master_scenarios = None
-        if "master_scenarios" in options:
-            self.master_scenarios = options["master_scenarios"]
+        self.root_scenarios = None
+        if "root_scenarios" in options:
+            self.root_scenarios = options["root_scenarios"]
 
-        self.relax_master = False 
-        if "relax_master" in options:
-            self.relax_master = options["relax_master"]
+        self.relax_root = False 
+        if "relax_root" in options:
+            self.relax_root = options["relax_root"]
 
         self.valid_eta_lb = None
         if "valid_eta_lb" in options:
@@ -116,7 +116,7 @@ class LShapedMethod(spbase.SPBase):
             self.scenario_creator_kwargs = scenario_creator_kwargs
         self.indx_to_stage = None
         self.has_valid_eta_lb = self.valid_eta_lb is not None
-        self.has_master_scens = self.master_scenarios is not None
+        self.has_root_scens = self.root_scenarios is not None
 
         if self.store_subproblems:
             self.subproblems = dict.fromkeys(scenario_names)
@@ -125,51 +125,51 @@ class LShapedMethod(spbase.SPBase):
         """ Check to ensure that the user-specified options are valid. Requried
         options are:
 
-        - master_solver (string) - Solver to use for the master problem.
+        - root_solver (string) - Solver to use for the root problem.
         - sp_solver (string) - Solver to use for the subproblems.
         """
-        required = ["master_solver", "sp_solver"]
-        if "master_solver_options" not in self.options:
-            self.options["master_solver_options"] = dict()
+        required = ["root_solver", "sp_solver"]
+        if "root_solver_options" not in self.options:
+            self.options["root_solver_options"] = dict()
         if "sp_solver_options" not in self.options:
             self.options["sp_solver_options"] = dict()
         self._options_check(required, self.options)
 
-    def _add_master_etas(self, master, index):
+    def _add_root_etas(self, root, index):
         def _eta_bounds(m, s):
             return (self.valid_eta_lb[s],None)
-        master.eta = pyo.Var(index, within=pyo.Reals, bounds=_eta_bounds)
+        root.eta = pyo.Var(index, within=pyo.Reals, bounds=_eta_bounds)
 
-    def _create_master_no_scenarios(self):
+    def _create_root_no_scenarios(self):
 
         # using the first scenario as a basis
-        master = self.scenario_creator(
+        root = self.scenario_creator(
             self.all_scenario_names[0], **self.scenario_creator_kwargs
         )
 
-        if self.relax_master:
-            RelaxIntegerVars().apply_to(master)
+        if self.relax_root:
+            RelaxIntegerVars().apply_to(root)
 
-        nonant_list, nonant_ids = _get_nonant_ids(master)
+        nonant_list, nonant_ids = _get_nonant_ids(root)
 
-        self.master_vars = nonant_list
+        self.root_vars = nonant_list
 
         for constr_data in list(itertools.chain(
-                master.component_data_objects(SOSConstraint, active=True, descend_into=True)
-                , master.component_data_objects(Constraint, active=True, descend_into=True))):
+                root.component_data_objects(SOSConstraint, active=True, descend_into=True)
+                , root.component_data_objects(Constraint, active=True, descend_into=True))):
             if not _first_stage_only(constr_data, nonant_ids):
                 _del_con(constr_data)
 
         # delete the second stage variables
-        for var in list(master.component_data_objects(Var, active=True, descend_into=True)):
+        for var in list(root.component_data_objects(Var, active=True, descend_into=True)):
             if id(var) not in nonant_ids:
                 _del_var(var)
 
-        self._add_master_etas(master, self.all_scenario_names)
+        self._add_root_etas(root, self.all_scenario_names)
 
         # pulls the current objective expression, adds in the eta variables,
         # and removes the second stage variables from the expression
-        obj = find_active_objective(master)
+        obj = find_active_objective(root)
 
         repn = generate_standard_repn(obj.expr, quadratic=True)
         if len(repn.nonlinear_vars) > 0:
@@ -204,7 +204,7 @@ class LShapedMethod(spbase.SPBase):
                 quadratic_coefs[i] = -coef
 
         # add the etas
-        for var in master.eta.values():
+        for var in root.eta.values():
             linear_vars.append(var)
             linear_coefs.append(1)
 
@@ -215,16 +215,16 @@ class LShapedMethod(spbase.SPBase):
                         (coef*x*y for coef,(x,y) in zip(quadratic_coefs, quadratic_vars))
                     )
 
-        master.del_component(obj)
+        root.del_component(obj)
 
-        # set master objective function
-        master.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
+        # set root objective function
+        root.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
 
-        self.master = master
+        self.root = root
 
-    def _create_master_with_scenarios(self):
+    def _create_root_with_scenarios(self):
 
-        ef_scenarios = self.master_scenarios
+        ef_scenarios = self.root_scenarios
 
         ## we want the correct probabilities to be set when
         ## calling create_EF
@@ -234,32 +234,32 @@ class LShapedMethod(spbase.SPBase):
                 if not hasattr(scenario, '_mpisppy_probability'):
                     scenario._mpisppy_probability = 1./len(self.all_scenario_names)
                 return scenario
-            master = sputils.create_EF(
+            root = sputils.create_EF(
                 ef_scenarios,
                 scenario_creator_wrapper,
                 scenario_creator_kwargs=self.scenario_creator_kwargs,
             )
 
-            nonant_list, nonant_ids = _get_nonant_ids_EF(master)
+            nonant_list, nonant_ids = _get_nonant_ids_EF(root)
         else:
-            master = self.scenario_creator(
+            root = self.scenario_creator(
                 ef_scenarios[0],
                 **self.scenario_creator_kwargs,
             )
-            if not hasattr(master, '_mpisppy_probability'):
-                master._mpisppy_probability = 1./len(self.all_scenario_names)
+            if not hasattr(root, '_mpisppy_probability'):
+                root._mpisppy_probability = 1./len(self.all_scenario_names)
 
-            nonant_list, nonant_ids = _get_nonant_ids(master)
+            nonant_list, nonant_ids = _get_nonant_ids(root)
 
-        self.master_vars = nonant_list
+        self.root_vars = nonant_list
 
         # creates the eta variables for scenarios that are NOT selected to be
-        # included in the master problem
+        # included in the root problem
         eta_indx = [scenario_name for scenario_name in self.all_scenario_names
-                        if scenario_name not in self.master_scenarios]
-        self._add_master_etas(master, eta_indx)
+                        if scenario_name not in self.root_scenarios]
+        self._add_root_etas(root, eta_indx)
 
-        obj = find_active_objective(master)
+        obj = find_active_objective(root)
 
         repn = generate_standard_repn(obj.expr, quadratic=True)
         if len(repn.nonlinear_vars) > 0:
@@ -269,7 +269,7 @@ class LShapedMethod(spbase.SPBase):
         quadratic_coefs = list(repn.quadratic_coefs)
 
         # adjust coefficients by scenario/bundle probability
-        scen_prob = master._mpisppy_probability
+        scen_prob = root._mpisppy_probability
         for i,var in enumerate(repn.linear_vars):
             if id(var) not in nonant_ids:
                 linear_coefs[i] *= scen_prob
@@ -290,7 +290,7 @@ class LShapedMethod(spbase.SPBase):
                 quadratic_coefs[i] = -coef
 
         # add the etas
-        for var in master.eta.values():
+        for var in root.eta.values():
             linear_vars.append(var)
             linear_coefs.append(1)
 
@@ -301,36 +301,36 @@ class LShapedMethod(spbase.SPBase):
                 (coef*x*y for coef,(x,y) in zip(quadratic_coefs, repn.quadratic_vars))
             )
 
-        master.del_component(obj)
+        root.del_component(obj)
 
-        # set master objective function
-        master.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
+        # set root objective function
+        root.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
 
-        self.master = master
+        self.root = root
 
-    def _create_shadow_master(self):
+    def _create_shadow_root(self):
 
-        master = pyo.ConcreteModel()
+        root = pyo.ConcreteModel()
 
         arb_scen = self.local_scenarios[self.local_scenario_names[0]]
         nonants = arb_scen._mpisppy_node_list[0].nonant_vardata_list
 
-        master_vars = list()
+        root_vars = list()
         for v in nonants:
             nonant_shadow = pyo.Var(name=v.name)
-            master.add_component(v.name, nonant_shadow)
-            master_vars.append(nonant_shadow)
+            root.add_component(v.name, nonant_shadow)
+            root_vars.append(nonant_shadow)
         
-        if self.has_master_scens:
+        if self.has_root_scens:
             eta_indx = [scenario_name for scenario_name in self.all_scenario_names
-                            if scenario_name not in self.master_scenarios]
+                            if scenario_name not in self.root_scenarios]
         else:
             eta_indx = self.all_scenario_names
-        self._add_master_etas(master, eta_indx)
+        self._add_root_etas(root, eta_indx)
 
-        master.obj = None
-        self.master = master
-        self.master_vars = master_vars
+        root.obj = None
+        self.root = root
+        self.root_vars = root_vars
 
     def set_eta_bounds(self):
         if self.compute_eta_bound:
@@ -345,36 +345,36 @@ class LShapedMethod(spbase.SPBase):
             for idx, s in enumerate(self.all_scenario_names):
                 self.valid_eta_lb[s] = all_etas_lb[idx]
             
-            # master may not have etas for every scenarios
-            for s, v in self.master.eta.items():
+            # root may not have etas for every scenarios
+            for s, v in self.root.eta.items():
                 v.setlb(self.valid_eta_lb[s])
 
-    def create_master(self):
+    def create_root(self):
         """ creates a ConcreteModel from one of the problem scenarios then
-            modifies the model to serve as the master problem 
+            modifies the model to serve as the root problem 
         """
         if self.cylinder_rank == 0:
-            if self.has_master_scens:
-                self._create_master_with_scenarios()
+            if self.has_root_scens:
+                self._create_root_with_scenarios()
             else:
-                self._create_master_no_scenarios()
+                self._create_root_no_scenarios()
         else: 
-            ## if we're not rank0, just create a master to
+            ## if we're not rank0, just create a root to
             ## hold the nonants and etas; rank0 will do 
             ## the optimizing
-            self._create_shadow_master()
+            self._create_shadow_root()
         
     def attach_nonant_var_map(self, scenario_name):
         instance = self.local_scenarios[scenario_name]
 
-        subproblem_to_master_vars_map = pyo.ComponentMap()
-        for var, mvar in zip(instance._mpisppy_data.nonant_indices.values(), self.master_vars):
-            if var.name not in mvar.name:
+        subproblem_to_root_vars_map = pyo.ComponentMap()
+        for var, rvar in zip(instance._mpisppy_data.nonant_indices.values(), self.root_vars):
+            if var.name not in rvar.name:
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
-            subproblem_to_master_vars_map[var] = mvar 
+            subproblem_to_root_vars_map[var] = rvar 
 
         # this is for interefacing with PH code
-        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_root_vars_map = subproblem_to_root_vars_map
 
     def create_subproblem(self, scenario_name):
         """ the subproblem creation function passed into the
@@ -443,7 +443,7 @@ class LShapedMethod(spbase.SPBase):
         instance.obj = pyo.Objective(expr=expr, sense=pyo.minimize)
 
         ## need to do this here for validity if computing the eta bound
-        if self.relax_master:
+        if self.relax_root:
             # relaxes any integrality constraints for the subproblem
             RelaxIntegerVars().apply_to(instance)
 
@@ -466,7 +466,7 @@ class LShapedMethod(spbase.SPBase):
             self.valid_eta_lb[scenario_name] = eta_lb
 
         # if not done above
-        if not self.relax_master:
+        if not self.relax_root:
             # relaxes any integrality constraints for the subproblem
             RelaxIntegerVars().apply_to(instance)
 
@@ -480,24 +480,24 @@ class LShapedMethod(spbase.SPBase):
 
         # creates the sub map to remove first stage variables from objective expression
         complicating_vars_map = pyo.ComponentMap()
-        subproblem_to_master_vars_map = pyo.ComponentMap()
+        subproblem_to_root_vars_map = pyo.ComponentMap()
 
         # creates the complicating var map that connects the first stage variables in the sub problem to those in
-        # the master problem -- also set the bounds on the subproblem master vars to be none for better cuts
-        for var, mvar in zip(nonant_list, self.master_vars):
-            if var.name not in mvar.name: # mvar.name may be part of a bundle
+        # the root problem -- also set the bounds on the subproblem root vars to be none for better cuts
+        for var, rvar in zip(nonant_list, self.root_vars):
+            if var.name not in rvar.name: # rvar.name may be part of a bundle
                 raise Exception("Error: Complicating variable mismatch, sub-problem variables changed order")
-            complicating_vars_map[mvar] = var
-            subproblem_to_master_vars_map[var] = mvar 
+            complicating_vars_map[rvar] = var
+            subproblem_to_root_vars_map[var] = rvar 
 
-            # these are already enforced in the master
+            # these are already enforced in the root
             # don't need to be enfored in the subproblems
             var.setlb(None)
             var.setub(None)
             var.fixed = False
 
         # this is for interefacing with PH code
-        instance._mpisppy_model.subproblem_to_master_vars_map = subproblem_to_master_vars_map
+        instance._mpisppy_model.subproblem_to_root_vars_map = subproblem_to_root_vars_map
 
         if self.store_subproblems:
             self.subproblems[scenario_name] = instance
@@ -518,22 +518,22 @@ class LShapedMethod(spbase.SPBase):
         verbose = True
         if "verbose" in self.options:
             verbose = self.options["verbose"]
-        master_solver = self.options["master_solver"]
+        root_solver = self.options["root_solver"]
         sp_solver = self.options["sp_solver"]
 
-        # creates the master problem
-        self.create_master()
-        m = self.master
+        # creates the root problem
+        self.create_root()
+        m = self.root
         assert hasattr(m, "obj")
 
         # prevents problems from first stage variables becoming unconstrained
         # after processing
-        _init_vars(self.master_vars)
+        _init_vars(self.root_vars)
 
         # sets up the BendersCutGenerator object
         m.bender = LShapedCutGenerator()
 
-        m.bender.set_input(master_vars=self.master_vars, tol=tol, comm=self.mpicomm)
+        m.bender.set_input(root_vars=self.root_vars, tol=tol, comm=self.mpicomm)
 
         # let the cut generator know who's using it, probably should check that this is called after set input
         m.bender.set_ls(self)
@@ -542,10 +542,10 @@ class LShapedMethod(spbase.SPBase):
 
         # Pass all the scenarios in the problem to bender.add_subproblem
         # and let it internally handle which ranks get which scenarios
-        if self.has_master_scens:
+        if self.has_root_scens:
             sub_scenarios = [
                 scenario_name for scenario_name in self.local_scenario_names
-                if scenario_name not in self.master_scenarios
+                if scenario_name not in self.root_scenarios
             ]
         else:
             sub_scenarios = self.local_scenario_names
@@ -556,7 +556,7 @@ class LShapedMethod(spbase.SPBase):
                 m.bender.add_subproblem(
                     subproblem_fn=self.create_subproblem,
                     subproblem_fn_kwargs=subproblem_fn_kwargs,
-                    master_eta=m.eta[scenario_name],
+                    root_eta=m.eta[scenario_name],
                     subproblem_solver=sp_solver,
                     subproblem_solver_options=self.options["sp_solver_options"]
                 )
@@ -568,12 +568,12 @@ class LShapedMethod(spbase.SPBase):
         self.set_eta_bounds()
 
         if self.cylinder_rank == 0:
-            opt = pyo.SolverFactory(master_solver)
+            opt = pyo.SolverFactory(root_solver)
             if opt is None:
                 raise Exception("Error: Failed to Create Master Solver")
 
             # set options
-            for k,v in self.options["master_solver_options"].items():
+            for k,v in self.options["root_solver_options"].items():
                 opt.options[k] = v
 
             is_persistent = sputils.is_persistent(opt)
@@ -583,7 +583,7 @@ class LShapedMethod(spbase.SPBase):
         t = time.time()
         res, t1, t2 = None, None, None
 
-        # benders solve loop, repeats the benders master - subproblem
+        # benders solve loop, repeats the benders root - subproblem
         # loop until either a no more cuts can are generated
         # or the maximum iterations limit is reached
         for self.iter in range(max_iter):
@@ -594,7 +594,7 @@ class LShapedMethod(spbase.SPBase):
                 else:
                     print("Current Iteration:", self.iter + 1, "Time Elapsed:", "%7.2f" % (time.time() - t), "Current Objective: -Inf")
             t1 = time.time()
-            x_vals = np.zeros(len(self.master_vars))
+            x_vals = np.zeros(len(self.root_vars))
             eta_vals = np.zeros(self.scenario_count)
             outer_bound = np.zeros(1)
             if self.cylinder_rank == 0:
@@ -604,7 +604,7 @@ class LShapedMethod(spbase.SPBase):
                     res = opt.solve(m, tee=False)
                 # LShaped is always minimizing
                 outer_bound[0] = res.Problem[0].Lower_bound
-                for i, var in enumerate(self.master_vars):
+                for i, var in enumerate(self.root_vars):
                     x_vals[i] = var.value
                 for i, eta in enumerate(m.eta.values()):
                     eta_vals[i] = eta.value
@@ -621,7 +621,7 @@ class LShapedMethod(spbase.SPBase):
                 self._LShaped_bound = -outer_bound[0]
 
             if self.cylinder_rank != 0:
-                for i, var in enumerate(self.master_vars):
+                for i, var in enumerate(self.root_vars):
                     var._value = x_vals[i]
                 for i, eta in enumerate(m.eta.values()):
                     eta._value = eta_vals[i]
@@ -757,7 +757,7 @@ def main():
     scenario_names = ['scen' + str(i) for i in range(3)]
     bounds = {i:-432000 for i in scenario_names}
     options = {
-        "master_solver": "gurobi_persistent",
+        "root_solver": "gurobi_persistent",
         "sp_solver": "gurobi_persistent",
         "sp_solver_options" : {"threads" : 1},
         "valid_eta_lb": bounds,

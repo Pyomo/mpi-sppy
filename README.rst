@@ -10,6 +10,7 @@ Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. image:: https://github.com/Pyomo/mpi-sppy/workflows/pyomo%20tracker/badge.svg
+   :target: https://github.com/Pyomo/mpi-sppy/actions/workflows/pyotracker.yml
 
 
 MPI
