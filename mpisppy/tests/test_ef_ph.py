@@ -165,7 +165,7 @@ class Test_sizes(unittest.TestCase):
         results = solver.solve(ef, tee=False)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
         # the fix creator fixed num prod first stage for size 5 to 1134
-        self.assertEqual(ef.Scenario1.NumProducedFirstStage[5], 1134)
+        self.assertEqual(pyo.value(ef.Scenario1.NumProducedFirstStage[5]), 1134)
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
