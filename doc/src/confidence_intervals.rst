@@ -1,4 +1,4 @@
-.. Confidence intervals:
+.. _Confidence intervals:
 
 MMW confidence interval
 =======================
