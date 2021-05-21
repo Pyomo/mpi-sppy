@@ -30,8 +30,6 @@ jobs:
 
       - name: set up pyomo
         run: |
-          git clone https://github.com/PyUtilib/pyutilib.git
-          cd pyutilib && python ./setup.py develop && cd ..
           git clone https://github.com/pyomo/pyomo
           cd pyomo && python setup.py develop
 
