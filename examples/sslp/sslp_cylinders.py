@@ -67,7 +67,7 @@ def main():
                               rho_setter = None)
 
     if with_fixer:
-        hub_dict["opt_kwargs"]["PHoptions"]["fixeroptions"] = {
+        hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
             "verbose": False,
             "boundtol": fixer_tol,
             "id_fix_list_fct": sslp.id_fix_list_fct,

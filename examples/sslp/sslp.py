@@ -100,37 +100,37 @@ if __name__ == "__main__":
 
     start_time = dt.datetime.now()
 
-    PHoptions = {}
-    PHoptions["solvername"] = "gurobi_persistent"
-    PHoptions["PHIterLimit"] = maxit
-    PHoptions["defaultPHrho"] = rho
-    PHoptions["convthresh"] = -1
-    PHoptions["subsolvedirectives"] = None
-    PHoptions["verbose"] = False
-    PHoptions["display_timing"] = False
-    PHoptions["display_progress"] = True
+    options = {}
+    options["solvername"] = "gurobi_persistent"
+    options["PHIterLimit"] = maxit
+    options["defaultPHrho"] = rho
+    options["convthresh"] = -1
+    options["subsolvedirectives"] = None
+    options["verbose"] = False
+    options["display_timing"] = False
+    options["display_progress"] = True
     ### async section ###
-    PHoptions["asynchronous"] = True
-    PHoptions["async_frac_needed"] = 0.5
-    PHoptions["async_sleep_secs"] = 1
+    options["asynchronous"] = True
+    options["async_frac_needed"] = 0.5
+    options["async_sleep_secs"] = 1
     ### end asyn section ###
     # one way to set up sub-problem solver options
-    PHoptions["iter0_solver_options"] = {"mipgap": 0.01}
+    options["iter0_solver_options"] = {"mipgap": 0.01}
     # another way
-    PHoptions["iterk_solver_options"] = {"mipgap": 0.02, "threads": 4}
-    PHoptions["xhat_solver_options"] = PHoptions["iterk_solver_options"]
+    options["iterk_solver_options"] = {"mipgap": 0.02, "threads": 4}
+    options["xhat_solver_options"] = options["iterk_solver_options"]
     if bunper > 0:
-        PHoptions["bundles_per_rank"] = bunper
-    PHoptions["append_file_name"] = "sslp.app"
+        options["bundles_per_rank"] = bunper
+    options["append_file_name"] = "sslp.app"
 
     fixoptions = {}
     fixoptions["verbose"] = True
     fixoptions["boundtol"] = 0.01
     fixoptions["id_fix_list_fct"] = id_fix_list_fct
 
-    PHoptions["fixeroptions"] = fixoptions
+    options["fixeroptions"] = fixoptions
 
-    PHoptions["gapperoptions"] = {
+    options["gapperoptions"] = {
         "verbose": True,
         "mipgapdict": {0: 0.02, 1: 0.02, 5: 0.01, 10: 0.005},
     }
@@ -140,7 +140,7 @@ if __name__ == "__main__":
         all_scenario_names.append("Scenario" + str(sn + 1))
 
     ph = mpisppy.opt.ph.PH(
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement,
@@ -148,37 +148,37 @@ if __name__ == "__main__":
     )
 
     if ph.cylinder_rank == 0:
-        appfile = PHoptions["append_file_name"]
+        appfile = options["append_file_name"]
         if not os.path.isfile(appfile):
             with open(appfile, "w") as f:
                 f.write("datetime, hostname, instname, solver, n_proc")
                 f.write(", bunperank, PHIterLimit, convthresh, Rho")
                 f.write(", xhatobj, bound, trivialbnd, lastiter, wallclock")
                 f.write(", asyncfrac, asyncsleep")
-        if "bundles_per_rank" in PHoptions:
-            nbunstr = str(PHoptions["bundles_per_rank"])
+        if "bundles_per_rank" in options:
+            nbunstr = str(options["bundles_per_rank"])
         else:
             nbunstr = "0"
         with open(appfile, "a") as f:
             f.write(
                 "\n" + str(start_time) + "," + socket.gethostname() + "," + instname
             )
-            f.write(", " + str(PHoptions["solvername"]))
+            f.write(", " + str(options["solvername"]))
             f.write(", " + str(ph.n_proc))
             f.write(", " + nbunstr)
-            f.write(", " + str(PHoptions["PHIterLimit"]))
-            f.write(", " + str(PHoptions["convthresh"]))
-            f.write(", " + str(PHoptions["defaultPHrho"]))
+            f.write(", " + str(options["PHIterLimit"]))
+            f.write(", " + str(options["convthresh"]))
+            f.write(", " + str(options["defaultPHrho"]))
     ###from mpisppy.xhatlooper import XhatLooper
     conv, eobj, tbound = ph.ph_main()
 
-    # PH_extensions=XhatLooper,
+    # extensions=XhatLooper,
 
     print("\nQUITTING EARLY; this needs to be a hub and have spokes!!!")
     quit()
 
     dopts = {"mipgap": 0.001}
-    ph.PHoptions["asynchronous"] = False
+    ph.options["asynchronous"] = False
     objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
     if ph.cylinder_rank == 0:
         print("**** Lagrangian objective function bound=", objbound)
@@ -189,6 +189,6 @@ if __name__ == "__main__":
         with open(appfile, "a") as f:
             f.write(", " + str(objbound) + ", " + str(tbound) + ", " + str(ph._PHIter))
             f.write(", " + str((end_time - start_time).total_seconds()))
-            if PHoptions["asynchronous"]:
-                f.write(", " + str(PHoptions["async_frac_needed"]))
-                f.write(", " + str(PHoptions["async_sleep_secs"]))
+            if options["asynchronous"]:
+                f.write(", " + str(options["async_frac_needed"]))
+                f.write(", " + str(options["async_sleep_secs"]))

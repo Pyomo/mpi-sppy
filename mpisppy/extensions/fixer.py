@@ -52,13 +52,13 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def __init__(self, ph):
         self.ph = ph
         self.cylinder_rank = self.ph.cylinder_rank
-        self.PHoptions = ph.PHoptions
-        self.fixeroptions = self.PHoptions["fixeroptions"] # required
-        self.verbose = self.PHoptions["verbose"] \
+        self.options = ph.options
+        self.fixeroptions = self.options["fixeroptions"] # required
+        self.verbose = self.options["verbose"] \
                        or self.fixeroptions["verbose"]
         # this function is scenario specific (takes a scenario as an arg)
         self.id_fix_list_fct = self.fixeroptions["id_fix_list_fct"]
-        self.dprogress = ph.PHoptions["display_progress"]
+        self.dprogress = ph.options["display_progress"]
         self.fixed_so_far = 0
         self.boundtol = self.fixeroptions["boundtol"]
 

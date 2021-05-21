@@ -5,8 +5,7 @@
 import mpisppy.phbase
 import shutil
 import mpi4py.MPI as mpi
-import mpisppy.utils.listener_util.listener_util as listener_util
-    
+
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
     pass
@@ -49,9 +48,9 @@ class PH(mpisppy.phbase.PHBase):
         NOTE:
             You need an xhat finder either in denoument or in an extension.
         """
-        verbose = self.PHoptions['verbose']
+        verbose = self.options['verbose']
         self.PH_Prep()
-        # Why is subproblem_creation() not called in PH_Prep?
+        # Why is subproblem_creation() not called in PH_Prep? Answer: xhat_eval.
         self.subproblem_creation(verbose)
 
         if (verbose):
@@ -59,13 +58,13 @@ class PH(mpisppy.phbase.PHBase):
         trivial_bound = self.Iter0()
         if (verbose):
             print ('Completed PH Iter0 on global rank {}'.format(global_rank))
-        if ('asynchronousPH' in self.PHoptions) and (self.PHoptions['asynchronousPH']):
+        if ('asynchronousPH' in self.options) and (self.options['asynchronousPH']):
             raise RuntimeError("asynchronousPH is deprecated; use APH")
 
         self.iterk_loop()
 
         if finalize:
-            Eobj = self.post_loops(self.PH_extensions)
+            Eobj = self.post_loops(self.extensions)
         else:
             Eobj = None
 
@@ -101,7 +100,7 @@ if __name__ == "__main__":
     scenario_denouement = refmodel.scenario_denouement
 
     # now test extensions and convergers together.
-    # NOTE that the PHoptions is a reference,
+    # NOTE that the options is a reference,
     #   so you could have changed PHopt instead.
     PHopt["PHIterLimit"] = 5 # the converger will probably stop it.
     PHopt["asynchronousPH"] = False
@@ -113,7 +112,7 @@ if __name__ == "__main__":
                                      "scen_limit": 3,
                                      "csvname": "looper.csv"}
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            PH_extensions=XhatLooper,
+            extensions=XhatLooper,
             PH_converger=FractionalConverger,
             rho_setter=None)
     conv, obj, bnd = ph.ph_main()
@@ -123,10 +122,10 @@ if __name__ == "__main__":
     from mpisppy.extensions.diagnoser import Diagnoser
     # now test whatever is new
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            PH_extensions=Diagnoser, 
+            extensions=Diagnoser, 
             PH_converger=None,
             rho_setter=None)
-    ph.PHoptions["PHIterLimit"] = 3
+    ph.options["PHIterLimit"] = 3
 
     if global_rank == 0:
         try:
@@ -134,17 +133,17 @@ if __name__ == "__main__":
             print ("...deleted delme_diagdir")
         except:
             pass
-    ph.PHoptions["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
+    ph.options["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
     conv, obj, bnd = ph.ph_main()
 
     import mpisppy.extensions.avgminmaxer as minmax_extension
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            PH_extensions=MinMaxAvg,
+            extensions=MinMaxAvg,
             PH_converger=None,
             rho_setter=None)
-    ph.PHoptions["avgminmax_name"] =  "FirstStageCost"
-    ph.PHoptions["PHIterLimit"] = 3
+    ph.options["avgminmax_name"] =  "FirstStageCost"
+    ph.options["PHIterLimit"] = 3
     conv, obj, bnd = ph.ph_main()
 
         # trying asynchronous operation

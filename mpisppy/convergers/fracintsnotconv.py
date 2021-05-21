@@ -15,17 +15,17 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
           we need to keep references to everything we might want
           to look at.
     Args:
-        PHoptions (dict): keys are option names
+        options (dict): keys are option names
         local_scenarios (dict): keys are names, 
                                 vals are concrete models with attachments
         comms (dict): key is node name; val is a comm object
         rank (int): mpi process rank
     """
     def __init__(self, phb):
-        PHoptions = phb.PHoptions
+        options = phb.options
         self.name = "fractintsnotconv"
-        self.verbose = PHoptions["verbose"]
-        self._PHoptions = PHoptions
+        self.verbose = options["verbose"]
+        self._options = options
         self._local_scenarios = phb.local_scenarios
         self._comms = phb.comms
         self._rank = phb.cylinder_rank
@@ -72,4 +72,4 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         Returns:
            converged?: True if converged, False otherwise
         """
-        return self._convergence_value() < self._PHoptions['convthresh']
+        return self._convergence_value() < self._options['convthresh']

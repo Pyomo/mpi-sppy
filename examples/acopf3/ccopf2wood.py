@@ -12,7 +12,7 @@ from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.utils.sputils import spin_the_wheel
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # the problem
 import ACtree as etree
@@ -112,34 +112,34 @@ def main():
                                              rootnode.ScenarioList)+1)]
     all_nodenames = scenario_creator_kwargs["etree"].All_Nonleaf_Nodenames()
 
-    PHoptions = dict()
+    options = dict()
     if scenario_creator_kwargs["convex_relaxation"]:
-        PHoptions["solvername"] = solvername
-        if "gurobi" in PHoptions["solvername"]:
-            PHoptions["iter0_solver_options"] = {"BarHomogeneous": 1}
-            PHoptions["iterk_solver_options"] = {"BarHomogeneous": 1}
+        options["solvername"] = solvername
+        if "gurobi" in options["solvername"]:
+            options["iter0_solver_options"] = {"BarHomogeneous": 1}
+            options["iterk_solver_options"] = {"BarHomogeneous": 1}
         else:
-            PHoptions["iter0_solver_options"] = None
-            PHoptions["iterk_solver_options"] = None
+            options["iter0_solver_options"] = None
+            options["iterk_solver_options"] = None
     else:
-        PHoptions["solvername"] = solvername  # needs to be ipopt
-        PHoptions["iter0_solver_options"] = None
-        PHoptions["iterk_solver_options"] = None
-    PHoptions["PHIterLimit"] = PHIterLimit
-    PHoptions["defaultPHrho"] = 1
-    PHoptions["convthresh"] = 0.001
-    PHoptions["subsolvedirectives"] = None
-    PHoptions["verbose"] = False
-    PHoptions["display_timing"] = False
-    PHoptions["display_progress"] = True
-    PHoptions["iter0_solver_options"] = None
-    PHoptions["iterk_solver_options"] = None
-    PHoptions["branching_factors"] = branching_factors
+        options["solvername"] = solvername  # needs to be ipopt
+        options["iter0_solver_options"] = None
+        options["iterk_solver_options"] = None
+    options["PHIterLimit"] = PHIterLimit
+    options["defaultPHrho"] = 1
+    options["convthresh"] = 0.001
+    options["subsolvedirectives"] = None
+    options["verbose"] = False
+    options["display_timing"] = False
+    options["display_progress"] = True
+    options["iter0_solver_options"] = None
+    options["iterk_solver_options"] = None
+    options["branching_factors"] = branching_factors
 
     # try to do something interesting for bundles per rank
     if scenperbun > 0:
         nscen = branching_factors[0] * branching_factors[1]
-        PHoptions["bundles_per_rank"] = int((nscen / n_proc) / scenperbun)
+        options["bundles_per_rank"] = int((nscen / n_proc) / scenperbun)
     if global_rank == 0:
         appfile = "acopf.app"
         if not os.path.isfile(appfile):
@@ -150,16 +150,16 @@ def main():
                 f.write(", PH_lastiter, PH_wallclock, aph_frac_needed")
                 f.write(", APH_IB, APH_OB")
                 f.write(", APH_lastiter, APH_wallclock")
-        if "bundles_per_rank" in PHoptions:
-            nbunstr = str(PHoptions["bundles_per_rank"])
+        if "bundles_per_rank" in options:
+            nbunstr = str(options["bundles_per_rank"])
         else:
             nbunstr = "0"
         oline = "\n"+ str(start_time)+","+socket.gethostname()
         oline += ","+str(branching_factors[0])+","+str(branching_factors[1])
-        oline += ", "+str(seed) + ", "+str(PHoptions["solvername"])
+        oline += ", "+str(seed) + ", "+str(options["solvername"])
         oline += ", "+str(n_proc) + ", "+ nbunstr
-        oline += ", "+str(PHoptions["PHIterLimit"])
-        oline += ", "+str(PHoptions["convthresh"])
+        oline += ", "+str(options["PHIterLimit"])
+        oline += ", "+str(options["convthresh"])
 
         with open(appfile, "a") as f:
             f.write(oline)
@@ -167,36 +167,36 @@ def main():
 
 
     # PH hub
-    PHoptions["tee-rank0-solves"] = True
+    options["tee-rank0-solves"] = True
     hub_dict = {
         "hub_class": PHHub,
         "hub_kwargs": {"options": None},
         "opt_class": PH,
         "opt_kwargs": {
-            "PHoptions": PHoptions,
+            "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": pysp2_callback,
             'scenario_denouement': scenario_denouement,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter.ph_rhosetter_callback,
-            "PH_extensions": None,
+            "extensions": None,
             "all_nodenames":all_nodenames,
         }
     }
 
-    xhat_options = PHoptions.copy()
+    xhat_options = options.copy()
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhat_options["xhat_specific_options"] = {"xhat_solver_options":
-                                          PHoptions["iterk_solver_options"],
+                                          options["iterk_solver_options"],
                                           "xhat_scenario_dict": xhat_dict,
                                           "csvname": "specific.csv"}
 
     ub2 = {
         'spoke_class': XhatSpecificInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": XhatTryer,
+        "opt_class": Xhat_Eval,
         'opt_kwargs': {
-            'PHoptions': xhat_options,
+            'options': xhat_options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': pysp2_callback,
             'scenario_denouement': scenario_denouement,

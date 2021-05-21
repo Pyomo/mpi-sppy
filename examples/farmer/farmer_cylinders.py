@@ -80,8 +80,8 @@ def main():
 
     ## hack in adaptive rho
     if args.use_norm_rho_updater:
-        hub_dict['opt_kwargs']['PH_extensions'] = NormRhoUpdater
-        hub_dict['opt_kwargs']['PHoptions']['norm_rho_options'] = {'verbose': True}
+        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
     # FWPH spoke
     if args.with_fwph:
@@ -117,6 +117,11 @@ def main():
 
     if write_solution:
         sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'farmer_plant.csv')
+        sputils.write_spin_the_wheel_first_stage_solution(spcomm,
+                                                          opt_dict,
+                                                          'farmer_cyl_nonants.spy',
+                                                          first_stage_solution_writer=\
+                                                          sputils.first_stage_nonant_npy_serializer)
         sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'farmer_full_solution')
 
 if __name__ == "__main__":

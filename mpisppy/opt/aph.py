@@ -52,7 +52,7 @@ k is often used as the "key" (i.e., scenario name) for the local scenarios)
 class APH(ph_base.PHBase):  # ??????
     """
     Args:
-        PHoptions (dict): PH options
+        options (dict): PH options
         all_scenario_names (list): all scenario names
         scenario_creator (fct): returns a concrete model with special things
         scenario_denouement (fct): for post processing and reporting
@@ -66,7 +66,7 @@ class APH(ph_base.PHBase):  # ??????
         comms (dict): keys are node names values are comm objects.
         scenario_name_to_rank (dict): all scenario names
         local_scenario_names (list): names of locals 
-        current_solver_options (dict): from PHoptions; callbacks might change
+        current_solver_options (dict): from options; callbacks might change
         synchronizer (object): asynch listener management
         scenario_creator_kwargs (dict): keyword arguments passed to
             `scenario_creator`.
@@ -74,29 +74,29 @@ class APH(ph_base.PHBase):  # ??????
     """
     def __init__(
         self,
-        PHoptions,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement=None,
         all_nodenames=None,            
         mpicomm=None,
         scenario_creator_kwargs=None,
-        PH_extensions=None,
-        PH_extension_kwargs=None,
+        extensions=None,
+        extension_kwargs=None,
         PH_converger=None,
         rho_setter=None,
         variable_probability=None,
     ):
         super().__init__(
-            PHoptions,
+            options,
             all_scenario_names,
             scenario_creator,
             scenario_denouement,
             mpicomm=mpicomm,
             all_nodenames=all_nodenames,
             scenario_creator_kwargs=scenario_creator_kwargs,
-            PH_extensions=PH_extensions,
-            PH_extension_kwargs=PH_extension_kwargs,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
             PH_converger=PH_converger,
             rho_setter=rho_setter,
             variable_probability=variable_probability,
@@ -114,15 +114,15 @@ class APH(ph_base.PHBase):  # ??????
         self.local_pwsqnorm = 0
         self.local_pzsqnorm = 0
         self.conv = None
-        self.use_lag = False if "APHuse_lag" not in PHoptions\
-                        else PHoptions["APHuse_lag"]
-        self.APHgamma = 1 if "APHgamma" not in PHoptions\
-                        else PHoptions["APHgamma"]
+        self.use_lag = False if "APHuse_lag" not in options\
+                        else options["APHuse_lag"]
+        self.APHgamma = 1 if "APHgamma" not in options\
+                        else options["APHgamma"]
         assert(self.APHgamma > 0)
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
-        if "APHnu" in PHoptions:
-            self.nu = PHoptions["APHnu"]
+        if "APHnu" in options:
+            self.nu = options["APHnu"]
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems
 
@@ -216,7 +216,7 @@ class APH(ph_base.PHBase):  # ??????
         # This does unsafe things, so it can only be called when the worker is
         # in a tight loop that respects the data lock.
 
-        verbose = self.PHoptions["verbose"]
+        verbose = self.options["verbose"]
         # See if we have enough xbars to proceed (need not be perfect)
         xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         self.synchronizer._unsafe_get_global_data("FirstReduce",
@@ -234,7 +234,7 @@ class APH(ph_base.PHBase):  # ??????
             if  self.node_concats["FirstReduce"]["ROOT"][-backdist] \
                 >= lptut:
                 xbarin += 1
-        if xbarin/self.n_proc < self.PHoptions["async_frac_needed"]:
+        if xbarin/self.n_proc < self.options["async_frac_needed"]:
             logging.debug('   not enough on rank {}'.format(self.cylinder_rank))
             # We have not really "done" the side gig.
             return
@@ -429,7 +429,7 @@ class APH(ph_base.PHBase):  # ??????
                 logging.debug('   gig wait sleep on rank {}'.format(self.cylinder_rank))
                 if verbose and self.cylinder_rank == 0:
                     print ('s'),
-                time.sleep(self.PHoptions["async_sleep_secs"])
+                time.sleep(self.options["async_sleep_secs"])
 
         # (if the listener still has the lock, compute_global_will wait for it)
         self.synchronizer.compute_global_data(self.local_concats,
@@ -710,26 +710,26 @@ class APH(ph_base.PHBase):  # ??????
 
         """
         logging.debug('==== enter iterk on rank {}'.format(self.cylinder_rank))
-        verbose = self.PHoptions["verbose"]
-        have_extensions = self.PH_extensions is not None
+        verbose = self.options["verbose"]
+        have_extensions = self.extensions is not None
 
         # We have the "bottom of the loop at the top"
         # so we need a dlist to get the ball rolling (it might not be used)
         dlist = [(sn, 0.0) for sn in self.local_scenario_names]
         
         # put dispatch_frac on the object so extensions can modify it
-        self.dispatch_frac = self.PHoptions["dispatch_frac"]\
-                             if "dispatch_frac" in self.PHoptions else 1
+        self.dispatch_frac = self.options["dispatch_frac"]\
+                             if "dispatch_frac" in self.options else 1
 
         have_converger = self.PH_converger is not None
-        dprogress = self.PHoptions["display_progress"]
-        dtiming = self.PHoptions["display_timing"]
-        ddetail = "display_convergence_detail" in self.PHoptions and\
-            self.PHoptions["display_convergence_detail"]
+        dprogress = self.options["display_progress"]
+        dtiming = self.options["display_timing"]
+        ddetail = "display_convergence_detail" in self.options and\
+            self.options["display_convergence_detail"]
         self.conv = None
         # The notion of an iteration is unclear
         # we enter after the iteration 0 solves, so do updates first
-        for self._PHIter in range(1, self.PHoptions["PHIterLimit"]+1):
+        for self._PHIter in range(1, self.options["PHIterLimit"]+1):
             if self.synchronizer.global_quitting:
                 break
             iteration_start_time = time.time()
@@ -772,8 +772,8 @@ class APH(ph_base.PHBase):  # ??????
             if have_extensions:
                 self.extobject.miditer()
             
-            teeme = ("tee-rank0-solves" in self.PHoptions) \
-                 and (self.PHoptions["tee-rank0-solves"] == True
+            teeme = ("tee-rank0-solves" in self.options) \
+                 and (self.options["tee-rank0-solves"] == True
                       and self.cylinder_rank == 0)
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
@@ -880,14 +880,14 @@ class APH(ph_base.PHBase):  # ??????
 
         # End APH-specific Prep
         
-        self.subproblem_creation(self.PHoptions["verbose"])
+        self.subproblem_creation(self.options["verbose"])
 
         trivial_bound = self.Iter0()
 
         self.setup_Lens()
         self.setup_dispatchrecord()
 
-        sleep_secs = self.PHoptions["async_sleep_secs"]
+        sleep_secs = self.options["async_sleep_secs"]
 
         lkwargs = None  # nothing beyond synchro
         listener_gigs = {"FirstReduce": (self.listener_side_gig, lkwargs),
@@ -900,7 +900,7 @@ class APH(ph_base.PHBase):  # ??????
                                                     asynch = True,
                                                     listener_gigs = listener_gigs)
         args = [spcomm] if spcomm is not None else [fullcomm]
-        kwargs = None  # {"PH_extensions": PH_extensions}
+        kwargs = None  # {"extensions": extensions}
         self.synchronizer.run(args, kwargs)
 
         if finalize:

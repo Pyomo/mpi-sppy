@@ -12,7 +12,7 @@ import mpi4py.MPI as mpi
 import pyomo.environ as pyo
 import numpy as np
 
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 from math import inf
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -37,8 +37,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         if self.opt.multistage:
             raise RuntimeError(f'The {self.__class__.__name__} only supports '
                                'two-stage models at this time.')
-        if not isinstance(self.opt, XhatTryer):
-            raise RuntimeError(f"{self.__class__.__name__} must be used with XhatTryer.")
+        if not isinstance(self.opt, Xhat_Eval):
+            raise RuntimeError(f"{self.__class__.__name__} must be used with Xhat_Eval.")
         verbose = self.opt.options['verbose']
 
         logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}")

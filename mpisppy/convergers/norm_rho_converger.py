@@ -15,9 +15,9 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
         ## TODO: this will never do anything unless the norm rho updater is also used
         ## TODO: the rho updater should leave a flag on the data block of the local subproblems to indicate
         ##       its use and this converger should check for it.
-        if 'nrom_rho_converger_options' in ph.PHoptions and \
-                'verbose' in ph.PHoptions['norm_rho_converger_options'] and \
-                ph.PHoptions['norm_rho_converger_options']['verbose']:
+        if 'nrom_rho_converger_options' in ph.options and \
+                'verbose' in ph.options['norm_rho_converger_options'] and \
+                ph.options['norm_rho_converger_options']['verbose']:
             self._verbose = True
         else:
             self._verbose = False
@@ -41,13 +41,13 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
         """
         log_rho_norm = math.log(self._compute_rho_norm(self.ph))
 
-        ret_val = log_rho_norm < self.ph.PHoptions['convthresh']
+        ret_val = log_rho_norm < self.ph.options['convthresh']
         if self._verbose and self.ph.cylinder_rank == 0:
             print(f"log(|rho|) = {log_rho_norm}")
             if ret_val:
                 print("Norm rho convergence check passed")
             else:
                 print("Adaptive rho convergence check failed "
-                      f"(requires log(|rho|) < {self.ph.PHoptions['convthresh']}")
+                      f"(requires log(|rho|) < {self.ph.options['convthresh']}")
                 print("Continuing PH with updated rho")
         return ret_val 

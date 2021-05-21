@@ -15,7 +15,7 @@ from mpisppy.opt.ph import PH
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 
 # extensions for the hub
-from mpisppy.extensions.extension import MultiPHExtension
+from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.hub import PHHub 
@@ -23,7 +23,7 @@ from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.opt.lshaped import LShapedMethod
 
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
 
@@ -98,21 +98,21 @@ if __name__ == "__main__":
         "hub_kwargs": dict(),
         "opt_class": PH,
         "opt_kwargs": {
-            "PHoptions": hub_ph_options,
+            "options": hub_ph_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "rho_setter": rho_setter,
-            "PH_extensions": MultiPHExtension,
-            "PH_extension_kwargs": multi_ext,
+            "extensions": MultiExtension,
+            "extension_kwargs": multi_ext,
         }
     }
 
     # TBD: this should have a different rho setter than the optimizer
 
-    ph_options = copy.deepcopy(hub_ph_options)  # many will not be used
-    ph_options['bundles_per_rank'] = 0 # no bundles for xhat
-    ph_options["xhat_looper_options"] = \
+    options = copy.deepcopy(hub_ph_options)  # many will not be used
+    options['bundles_per_rank'] = 0 # no bundles for xhat
+    options["xhat_looper_options"] = \
         {
             "xhat_solver_options": None,
             "scen_limit": 3,
@@ -123,9 +123,9 @@ if __name__ == "__main__":
     ub_spoke = {
         'spoke_class': XhatShuffleInnerBound,
         "spoke_kwargs": dict(),
-        "opt_class": XhatTryer,
+        "opt_class": Xhat_Eval,
         'opt_kwargs': {
-            'PHoptions': ph_options,
+            'options': options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
             'scenario_denouement': scenario_denouement,
@@ -156,7 +156,7 @@ if __name__ == "__main__":
         "spoke_kwargs": dict(),
         "opt_class": PHBase,   
         'opt_kwargs': {
-            'PHoptions': hub_ph_options,
+            'options': hub_ph_options,
             'all_scenario_names': all_scenario_names,
             'scenario_creator': scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,

@@ -2,7 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 ''' An extension to save PH weights and/or PH xbar values to csv files.
 
-    To use, specify either or both of the following keys to the PHoptions dict:
+    To use, specify either or both of the following keys to the options dict:
 
         "W_fname" : <str filename>
         "Xbar_fname": <str filename>
@@ -35,12 +35,12 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
         # Check a bunch of files
         w_fname, x_fname, sep_files = None, None, False
 
-        if ('W_fname' in ph.PHoptions): # W_fname is a path if separate_W_files=True
-            w_fname = ph.PHoptions['W_fname']
-        if ('Xbar_fname' in ph.PHoptions):
-            x_fname = ph.PHoptions['Xbar_fname']
-        if ('separate_W_files' in ph.PHoptions):
-            sep_files = ph.PHoptions['separate_W_files']
+        if ('W_fname' in ph.options): # W_fname is a path if separate_W_files=True
+            w_fname = ph.options['W_fname']
+        if ('Xbar_fname' in ph.options):
+            x_fname = ph.options['Xbar_fname']
+        if ('separate_W_files' in ph.options):
+            sep_files = ph.options['separate_W_files']
 
         if (x_fname is None and w_fname is None and rank==0):
             print('Warning: no output files provided to WXBarWriter. '

@@ -33,11 +33,14 @@ def main():
     else:
         solver.solve(ef, tee=True, symbolic_solver_labels=True,)
 
-    print(f"EF objective: {pyo.value(ef.EF_Obj)}")
+    return ef
 
 if __name__ == '__main__':
     if len(sys.argv) != 4:
         print("usage python farmer_ef.py {crops_multiplier} {scen_count} {solver_name}")
         print("e.g., python farmer_ef.py 1 3 gurobi")
         quit()
-    main()
+    main_ef = main()
+    print(f"EF objective: {pyo.value(main_ef.EF_Obj)}")
+    sputils.ef_ROOT_nonants_npy_serializer(main_ef, "farmer_root_nonants.npy")
+

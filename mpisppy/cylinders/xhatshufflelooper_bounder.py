@@ -10,7 +10,7 @@ import mpisppy.cylinders.spoke as spoke
 import mpi4py.MPI as mpi
 
 from math import inf, isclose
-from mpisppy.utils.xhat_tryer import XhatTryer
+from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.extensions.xhatbase import XhatBase
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -50,8 +50,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             self.running_trace_filen = None
         # end code to support running trace
         
-        if not isinstance(self.opt, XhatTryer):
-            raise RuntimeError("XhatShuffleInnerBound must be used with XhatTryer.")
+        if not isinstance(self.opt, Xhat_Eval):
+            raise RuntimeError("XhatShuffleInnerBound must be used with Xhat_Eval.")
             
         xhatter = XhatBase(self.opt)
 
@@ -75,17 +75,12 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.opt.E1)
-                print("E1_tolerance = ", self.opt.E1_tolerance)
-            quit()
+            raise ValueError(f"Total probability of scenarios was {self.opt.E1}"+\
+                                 f"E1_tolerance = {self.opt.E1_tolerance}")
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
-            quit()
+            raise ValueError(f"Infeasibility detected; E_infeas={infeasP}")
+
         ### end iter0 stuff
 
         xhatter.post_iter0()

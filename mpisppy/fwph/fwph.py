@@ -10,7 +10,7 @@
     Current implementation supports parallelism and bundling.
 
     Does not support:
-         1. The use of PH_extensions
+         1. The use of extensions
          2. The solution of models with more than two stages
          3. Simultaneous use of bundling and user-specified initial points
 
@@ -72,8 +72,8 @@ class FWPH(mpisppy.phbase.PHBase):
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
             scenario_creator_kwargs=scenario_creator_kwargs,
-            PH_extensions=None,
-            PH_extension_kwargs=None,
+            extensions=None,
+            extension_kwargs=None,
             PH_converger=PH_converger,
             rho_setter=rho_setter,
         )
@@ -90,7 +90,7 @@ class FWPH(mpisppy.phbase.PHBase):
     def fw_prep(self):
         self.PH_Prep(attach_duals=True, attach_prox=False)
         self._check_for_multistage()
-        self.subproblem_creation(self.PHoptions['verbose'])
+        self.subproblem_creation(self.options['verbose'])
         self._output_header()
 
         if ('point_creator' in self.FW_options):
@@ -117,8 +117,8 @@ class FWPH(mpisppy.phbase.PHBase):
             self._set_MIP_solver_options()
 
         # Lines 2 and 3 of Algorithm 3 in Boland
-        self.Compute_Xbar(self.PHoptions['verbose'])
-        self.Update_W(self.PHoptions['verbose'])
+        self.Compute_Xbar(self.options['verbose'])
+        self.Update_W(self.options['verbose'])
 
         # Necessary pre-processing steps
         # We disable_W so they don't appear
@@ -149,7 +149,7 @@ class FWPH(mpisppy.phbase.PHBase):
             return None, None, None
 
         # The body of the algorithm
-        for itr in range(self.PHoptions['PHIterLimit']):
+        for itr in range(self.options['PHIterLimit']):
             self._PHIter = itr
             self._local_bound = 0
             for name in self.local_subproblems:
@@ -173,7 +173,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     break
                 self.spcomm.sync()
             if (self.PH_converger):
-                self.Compute_Xbar(self.PHoptions['verbose'])
+                self.Compute_Xbar(self.options['verbose'])
                 diff = self.convobject.convergence_value()
                 if (self.convobject.is_converged()):
                     secs = time.time() - self.t0
@@ -184,8 +184,8 @@ class FWPH(mpisppy.phbase.PHBase):
                     break
             else: # Convergence check from Boland
                 diff = self._conv_diff()
-                self.Compute_Xbar(self.PHoptions['verbose'])
-                if (diff < self.PHoptions['convthresh']):
+                self.Compute_Xbar(self.options['verbose'])
+                if (diff < self.options['convthresh']):
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
                                  best_bound, diff, secs)
@@ -195,7 +195,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             secs = time.time() - self.t0
             self._output(itr+1, self._local_bound, best_bound, diff, secs)
-            self.Update_W(self.PHoptions['verbose'])
+            self.Update_W(self.options['verbose'])
             timed_out = self._is_timed_out()
             if (self._is_timed_out()):
                 if (self.cylinder_rank == 0 and self.vb):
@@ -838,8 +838,8 @@ class FWPH(mpisppy.phbase.PHBase):
         # 2. Check that bundles, pre-specified points and t_max play nice. This
         #    is only checked on rank 0, because that is where the initial
         #    points are supposed to be specified.
-        use_bundles = ('bundles_per_rank' in self.PHoptions 
-                        and self.PHoptions['bundles_per_rank'] > 0)
+        use_bundles = ('bundles_per_rank' in self.options 
+                        and self.options['bundles_per_rank'] > 0)
         t_max = self.FW_options['FW_iter_limit']
         specd_init_pts = 'point_creator' in self.FW_options.keys() and \
                          self.FW_options['point_creator'] is not None
@@ -863,11 +863,11 @@ class FWPH(mpisppy.phbase.PHBase):
 
         # 3. Check that the user did not specify the linearization of binary
         #    proximal terms (no binary variables allowed in FWPH QPs)
-        if ('linearize_binary_proximal_terms' in self.PHoptions
-            and self.PHoptions['linearize_binary_proximal_terms']):
+        if ('linearize_binary_proximal_terms' in self.options
+            and self.options['linearize_binary_proximal_terms']):
             print('Warning: linearize_binary_proximal_terms cannot be used '
                   'with the FWPH algorithm. Ignoring...')
-            self.PHoptions['linearize_binary_proximal_terms'] = False
+            self.options['linearize_binary_proximal_terms'] = False
 
         # 4. Provide a time limit of inf if the user did not specify
         if ('time_limit' not in self.FW_options.keys()):

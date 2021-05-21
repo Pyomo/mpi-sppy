@@ -8,7 +8,7 @@ import sys
 import os
 import re
 import time
-from numpy import prod
+import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 
@@ -130,7 +130,14 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
 
     return spcomm, opt_dict
 
-def first_stage_solution_writer( file_name, scenario, bundling ):
+def first_stage_nonant_npy_serializer(file_name, scenario, bundling):
+    # write just the nonants for ROOT in an npy file (e.g. for CI)
+    root = scenario._mpisppy_node_list[0]
+    assert root.name == "ROOT"
+    root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
+    np.save(file_name, root_nonants)
+
+def first_stage_nonant_writer( file_name, scenario, bundling ):
     with open(file_name, 'w') as f:
         root = scenario._mpisppy_node_list[0]
         assert root.name == "ROOT"
@@ -159,7 +166,7 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 f.write(f"{var_name},{pyo.value(var)}\n")
 
 def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
-        first_stage_solution_writer=first_stage_solution_writer):
+        first_stage_solution_writer=first_stage_nonant_writer):
     """ Write a solution file, if a solution is available, to the solution_file_name provided
     Args:
         spcomm : spcomm returned from spin_the_wheel
@@ -395,7 +402,6 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     nonant_constr = pyo.Constraint(pyo.Any, name='_C_EF_')
     EF_instance.add_component('_C_EF_', nonant_constr)
 
-
     nonant_constr_suppl = pyo.Constraint(pyo.Any, name='_C_EF_suppl')
     EF_instance.add_component('_C_EF_suppl', nonant_constr_suppl)
 
@@ -497,6 +503,9 @@ def ef_nonants(ef):
 
     Yields:
         tree node name, full EF Var name, Var value
+
+    Note:
+        not on an EF object because not all ef's are part of an EF object
     """
     for (ndn,i), var in ef.ref_vars.items():
         yield (ndn, var, pyo.value(var))
@@ -514,6 +523,34 @@ def ef_nonants_csv(ef, filename):
             outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
 
             
+def nonant_cache_from_ef(ef,verbose=False):
+    """ Populate a nonant_cache from an ef. Is it multi-stage?
+    Args:
+        ef (mpi-sppy ef): a solved ef
+    Returns:
+        nonant_cache (1-d numpy array): a special structure for nonant values
+    TDB: xxxxxx multi-stage
+    """
+    nonant_cache = {"ROOT": np.zeros(len(ef.ref_vars), dtype='d')}
+    for (ndn,i), xvar in ef.ref_vars.items():  
+        if ndn != "ROOT":
+            raise RuntimeError("only two-stage is supported by nonant_cache_from_ef")
+        nonant_cache["ROOT"][i] = pyo.value(xvar)
+        if verbose:
+            print("barfoo", i, pyo.value(xvar))
+    return nonant_cache
+
+
+def ef_ROOT_nonants_npy_serializer(ef, filename):
+    """ write the root node nonants to be ready by a numpy load
+    Args:
+        ef (ConcreteModel): the full extensive form model
+        filename (str): the full name of the .npy output file
+    """
+    root_nonants = np.fromiter((v for ndn,var,v in ef_nonants(ef) if ndn == "ROOT"), float)
+    np.save(filename, root_nonants)
+
+    
 def ef_scenarios(ef):
     """ An iterator to give the scenario sub-models in an ef
     Args:
@@ -521,8 +558,7 @@ def ef_scenarios(ef):
 
     Yields:
         scenario name, scenario instance (str, ConcreteModel)
-    """
-    
+    """    
     for sname in ef._ef_scenario_names:
         yield (sname, getattr(ef, sname))
 
@@ -644,7 +680,7 @@ class _ScenTree():
     def __init__(self, BFs, ScenNames):
         self.ScenNames = ScenNames
         self.NumScens = len(ScenNames)
-        assert(self.NumScens == prod(BFs))
+        assert(self.NumScens == np.prod(BFs))
         self.NumStages = len(BFs)
         self.BFs = BFs
         first = 0
@@ -821,7 +857,7 @@ def find_active_objective(pyomomodel):
 
 if __name__ == "__main__":
     BFs = [2,2,2,3]
-    numscens = prod(BFs)
+    numscens = np.prod(BFs)
     scennames = ["Scenario"+str(i) for i in range(numscens)]
     testtree = _ScenTree(BFs, scennames)
     print("nonleaves:")

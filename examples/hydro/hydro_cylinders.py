@@ -67,7 +67,7 @@ def main():
                               ph_extensions=None,
                               rho_setter = rho_setter)
     hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    hub_dict["opt_kwargs"]["PHoptions"]["branching_factors"] = BFs
+    hub_dict["opt_kwargs"]["options"]["branching_factors"] = BFs
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
@@ -75,7 +75,7 @@ def main():
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
         lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
-        lagrangian_spoke["opt_kwargs"]["PHoptions"]["branching_factors"] = BFs
+        lagrangian_spoke["opt_kwargs"]["options"]["branching_factors"] = BFs
 
     # xhat looper bound spoke
     xhat_scenario_dict = {"ROOT": "Scen1",
