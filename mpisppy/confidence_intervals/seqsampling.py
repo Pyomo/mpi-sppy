@@ -401,7 +401,7 @@ class SeqSampling():
         Gk,sk = gap_estimators(xhat_k,
                                self.solvername, 
                                estimator_scenario_names, 
-                               refmodel.scenario_creator, 
+                               refmodel.scenario_creator, r=self.r
                                scenario_creator_kwargs=scenario_creator_kwargs,
                                scenario_denouement=scenario_denouement,
                                solver_options=self.solver_options)
@@ -444,7 +444,7 @@ class SeqSampling():
             Gk,sk = gap_estimators(xhat_k,
                                    self.solvername, 
                                    estimator_scenario_names, 
-                                   refmodel.scenario_creator, 
+                                   refmodel.scenario_creator, r=self.r
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    scenario_denouement=scenario_denouement,
                                    solver_options=self.solver_options)
