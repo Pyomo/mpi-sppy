@@ -194,8 +194,6 @@ class Test_MMW_farmer(unittest.TestCase):
         self.assertEqual((s,bound), (43.0,280.0))
     
     
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
