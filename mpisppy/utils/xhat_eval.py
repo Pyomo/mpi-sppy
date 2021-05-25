@@ -90,7 +90,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
                                .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
                 self.objs_at_nonant[k] = pyo.value(objfct)
-        
         return(pyomo_solve_time)
 
 
@@ -113,8 +112,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             solver_options (dict or None): the scenario solver options
             use_scenarios_not_subproblems (boolean): for use by bounds
             dtiming (boolean): indicates that timing should be reported
-            dis_W (boolean): indicates that W should be disabled (and re-enabled)
-            dis_prox (boolean): disable (and re-enable) prox term
             gripe (boolean): output a message if a solve fails
             disable_pyomo_signal_handling (boolean): set to true for asynch, 
                                                      ignored for persistent solvers.
@@ -275,7 +272,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         compute_val_at_nonant=True
                         )
         
-        Eobj = self.Eobjective(self.verbose)
+        Eobj = self.Eobjective(self.verbose,fct=fct)
         
         return Eobj
     

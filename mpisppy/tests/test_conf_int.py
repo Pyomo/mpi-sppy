@@ -15,12 +15,13 @@ import subprocess
 import mpi4py.MPI as mpi
 
 from mpisppy.tests.test_utils import get_solver, round_pos_sig
-import mpisppy.tests.examples.farmer as farmer 
+import mpisppy.tests.examples.farmer as farmer
 
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.utils.amalgomator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
+import mpisppy.confidence_intervals.seqsampling as seqsampling
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -28,6 +29,7 @@ global_rank = fullcomm.Get_rank()
 __version__ = 0.2
 
 solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+
 
 def test_command_line(dirname, progname, cl_options, nproc=2):
     os.chdir("..")
@@ -123,7 +125,6 @@ class Test_MMW_farmer(unittest.TestCase):
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
         self.assertEqual(obj, -130000)
-        #TODO : check if we get the right result using round_pos_sig
     
 
     @unittest.skipIf(not solver_available,
@@ -192,8 +193,7 @@ class Test_MMW_farmer(unittest.TestCase):
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
         self.assertEqual((s,bound), (43.0,280.0))
-    
-    
+
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -204,6 +204,18 @@ class Test_MMW_farmer(unittest.TestCase):
         res = str(subprocess.check_output(runstring, shell=True))
         os.chdir("../tests")
         self.assertIn("1050.77",res)
+    
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_gap_estimators(self):
+        scenario_names = farmer.scenario_names_creator(50,start=1000)
+        G,s = seqsampling.gap_estimators(self.xhat,
+                                         solvername,
+                                         #"gurobi", 
+                                         scenario_names,
+                                         farmer.scenario_creator)
+        print(G,s)
+    
         
 if __name__ == '__main__':
     unittest.main()

@@ -39,7 +39,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     scenario_names: int
         Names of the scenario we use
     solvername: str, optional
-        Name of the solver used. The default is "gurobi"
+        Name of the solver used. The default is "gurobi".
     solver_options: dict, optional
         Solving options. The default is None.
     crops_multiplier: int, optional
@@ -73,7 +73,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
 
     return xhat
 
-def gap_estimators(xhat,solvername, scenario_names, scenario_creator, 
+def gap_estimators(xhat,solvername, scenario_names, scenario_creator, r=1,
                    scenario_creator_kwargs={}, scenario_denouement=None,
                    solver_options=None):
     '''
@@ -89,6 +89,8 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
         List of scenario names used to compute G_n and s_n.
     scenario_creator: function
         A method creating scenarios.
+    r:int,optional
+        Number of batches (we create a ArRP model). Default is 1 (no batches).
     scenario_creator_kwargs: dict, optional
         Additional arguments for scenario_creator. Default is {}
     scenario_denouement: function, optional
@@ -101,6 +103,28 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
     G_k and s_k, gap estimator and associated standard deviation estimator.
 
     '''
+    if r>1: #Special case : ArRP, G and s are pooled from r estimators.
+        n = len(scenario_names)
+        if(n%r != 0):
+            raise RuntimeWarning("You put as an input a number of scenarios"+\
+                                 f" which is not a mutliple of {r}.")
+            n = n- n%r
+        G =[]
+        s = []
+        for k in range(n//r):
+            scennames = scenario_names[k*r,(k+1)*r -1]
+            tmpG,tmps = gap_estimators(xhat, solvername, scennames, 
+                                       scenario_creator, r=1,
+                                       scenario_creator_kwargs=scenario_creator_kwargs,
+                                       scenario_denouement=scenario_denouement,
+                                       solver_options=solver_options)
+            G.append(tmpG)
+            s.append(tmps)
+        G = np.mean(G)
+        s = np.linalg.norm(s)/np.sqrt(n//r)
+        return(G,s)
+    
+    
     #We start by computing the solution to the approximate problem induced by our scenarios
     ef = sputils.create_EF(
         scenario_names,
@@ -133,6 +157,7 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
                     scenario_creator_kwargs=scenario_creator_kwargs)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
+    
     ev.evaluate(xhat)
     objs_at_xhat = ev.objs_at_nonant
     ev.evaluate(xstar)
@@ -145,7 +170,9 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
         eval_scen_at_xhat.append(objs_at_xhat[k])
         eval_scen_at_xstar.append(objs_at_xstar[k])
         scen_probs.append(s._mpisppy_probability)
-        #print(objs_at_xhat[k]-objs_at_xstar[k])
+        # print(objs_at_xhat[k]-objs_at_xstar[k])
+        # print(objs_at_xhat[k])
+        # print(objs_at_xstar[k])
 
     
     scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
@@ -218,8 +245,8 @@ class SeqSampling():
             raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
             
         #Manage options
-        optional_things = ["kf_Gs","kf_xhat","confidence_level"]
-        optional_default_settings = [1,1,0.95]
+        optional_things = ["r","kf_Gs","kf_xhat","confidence_level"]
+        optional_default_settings = [1,1,1,0.95]
         add_options(options, optional_things, optional_default_settings)      
         
         if self.stochastic_sampling :
@@ -350,7 +377,7 @@ class SeqSampling():
                 s = sum(np.exp(-self.p*np.power(j,2*self.q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*self.confidence_level)))                
         
-        nk = self.sample_size(k, None, None, None)
+        nk = self.r *np.ceil(self.sample_size(k, None, None, None)/r)
         
         #Computing xhat_1. 
         #We use sample_size_ratio*n_k observations to compute xhat_k
@@ -385,7 +412,7 @@ class SeqSampling():
         #----------------------------Step 3 -------------------------------------#       
             k+=1
             nk_m1 = nk #n_{k-1}
-            nk = self.sample_size(k, Gk, sk, nk_m1)
+            nk = self.r*np.ceil(self.sample_size(k, Gk, sk, nk_m1)/r)
             assert nk>= nk_m1, "Our sample size should be increasing"
             #Computing xhat_k
             if (k%self.kf_xhat==0):
