@@ -9,6 +9,7 @@ import os
 import tempfile
 import numpy as np
 import unittest
+import subprocess
 
 
 import mpi4py.MPI as mpi
@@ -27,6 +28,16 @@ global_rank = fullcomm.Get_rank()
 __version__ = 0.2
 
 solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+
+def test_command_line(dirname, progname, cl_options, nproc=2):
+    os.chdir("..")
+    os.chdir(dirname)
+    runstring = "mpiexec -np {} python {} {}".\
+                                    format(nproc, progname, cl_options)                
+    res = os.system(runstring)
+    res = subprocess.check_output(runstring, shell=True)
+    os.chdir("../tests")
+    return(res)
 
 def _get_base_options():
     options = { "EF_solver_name": solvername,
@@ -182,6 +193,27 @@ class Test_MMW_farmer(unittest.TestCase):
         bound = round_pos_sig(r['gap_inner_bound'],2)
         self.assertEqual((s,bound), (43.0,280.0))
     
+    
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+        
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_mmwci_main(self):
+        # buf = io.StringIO()
+        # with redirect_stdout(buf):
+        #     x = test_command_line("confidence_intervals", "mmw_ci.py",
+        #                           "--num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3")
+        #     print(f"Error code is {x}")
+        # print(buf.getvalue())
+        # self.assertIn("1050.",buf.getvalue())
+        os.chdir("../confidence_intervals")
+        runstring = "python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 "
+        res = str(subprocess.check_output(runstring, shell=True))
+        print(str(res))
+        os.chdir("../tests")
+        self.assertIn("1050.77",res)
+        
 if __name__ == '__main__':
     unittest.main()
     

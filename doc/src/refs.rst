@@ -10,3 +10,6 @@ References
 .. [birge2011] Birge, J.R., Louveaux, F.: Introduction to Stochastic Programming, Second Ed. Springer Verlag (2011)
 
 .. [mmw1999] Mak, W.K., Morton,D.P., Wood, R.K.: Monte Carlo bounding techniques for determining solution quality in stochastic programs. Operations Research Letters 24(1-2), 47-56 (1999)
+
+.. [bm2011] Bayraksan, G., Morton,D.P.: A Sequential Sampling Procedure for Stochastic Programming. Operations Research 59(4), 898-913 (2011)
+.. [bpl2012] Bayraksan, G., Pierre-Louis, P.: Fixed-Width Sequential Stopping Rules for a Class of Stochastic Programs, SIAM Journal on Optimization 22(4), 1518-1548 (2012)

@@ -42,8 +42,8 @@ Sequential sampling
 Similarly, given an confidence interval, one can try to find a candidate solution
  ``xhat`` such that its optimality gap has this confidence interval.
 The class ``SeqSampling`` is implementing three procedures described in 
-[bm2009]_ and [bpl2011]_. It takes as an input a method to generate
+[bm2011]_ and [bpl2012]_. It takes as an input a method to generate
 candidate solutions and options, and returns a ``xhat`` and a confidence interval on
 its optimality gap. 
 
-Examples of use with the ``farmer`` problem and seveeral options can be found in the main of ``seqsampling.py``.
+Examples of use with the ``farmer`` problem and several options can be found in the main of ``seqsampling.py``.

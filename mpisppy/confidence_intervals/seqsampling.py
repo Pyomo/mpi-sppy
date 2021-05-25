@@ -15,6 +15,7 @@ global_rank = fullcomm.Get_rank()
 import mpisppy.utils.amalgomator as amalgomator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.mmw_ci as MMWci
+from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
 
@@ -46,8 +47,8 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
 
     Returns
     -------
-    path: str
-        The path to a .npy file containing a generated xhat.
+    xhat: xhat object (dict containing a 'ROOT' key with a np.array)
+        A generated xhat.
 
     '''
     num_scens = len(scenario_names)
@@ -61,17 +62,16 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
                     "_mpisppy_probability": 1/num_scens,
                     }
     #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("farmer",ama_options,use_command_line=False)
+    ama = amalgomator.from_module("mpisppy.tests.examples.farmer",
+                                  ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
     
-    # get the xhat and write it in a file
+    # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
-    path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
-    MMWci.write_xhat(xhat,path=path)
 
-    return path
+    return xhat
 
 def gap_estimators(xhat,solvername, scenario_names, scenario_creator, 
                    scenario_creator_kwargs={}, scenario_denouement=None,
@@ -81,20 +81,24 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
 
     Parameters
     ----------
+    xhat : xhat object
+        A candidate solution
+    solvername : str
+        Solver
     scenario_names: list
         List of scenario names used to compute G_n and s_n.
     scenario_creator: function
         A method creating scenarios.
     scenario_creator_kwargs: dict, optional
         Additional arguments for scenario_creator. Default is {}
-    scenario_c-denouement: function, optional
+    scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
     solver_options: dict, optional
         Solving options. Default is None
 
     Returns
     -------
-    G_k and s^2_k, gap estimator and associated variance estimator.
+    G_k and s_k, gap estimator and associated standard deviation estimator.
 
     '''
     #We start by computing the solution to the approximate problem induced by our scenarios
@@ -122,7 +126,6 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
     
 
     scenario_creator_kwargs['num_scens'] = len(scenario_names)
-    
     ev = xhat_eval.Xhat_Eval(options,
                     scenario_names,
                     scenario_creator,
@@ -142,7 +145,7 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator,
         eval_scen_at_xhat.append(objs_at_xhat[k])
         eval_scen_at_xstar.append(objs_at_xstar[k])
         scen_probs.append(s._mpisppy_probability)
-        print(objs_at_xhat[k]-objs_at_xstar[k])
+        #print(objs_at_xhat[k]-objs_at_xstar[k])
 
     
     scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
@@ -171,7 +174,7 @@ class SeqSampling():
         refmodel (str): path of the model we use (e.g. farmer, uc)
         xhat_generator (function): a function that takes scenario_names (and 
                                     and optional solvername and solver_options) as input
-                                    and return the path of a file containing xhat.
+                                    and return a xhat.
 
         options (dict): multiple useful parameters
         stochastic_sampling (bool, default False):  should we compute sample sizes using estimators ?
@@ -212,7 +215,7 @@ class SeqSampling():
                 print(f"Module {refmodel} is missing {ething}")
                 you_can_have_it_all = False
         if not you_can_have_it_all:
-            raise RuntimeError(f"Module {refmodel} not complete for MMW")
+            raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
             
         #Manage options
         optional_things = ["kf_Gs","kf_xhat","confidence_level"]
@@ -354,12 +357,10 @@ class SeqSampling():
         xhat_scenario_names = refmodel.scenario_names_creator(mult*nk, start=0)
         ScenCount+=mult*nk   
         
-        path = self.xhat_generator(xhat_scenario_names,
+        xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,
                                    **self.xhat_gen_options)
-        xhat_k = MMWci.read_xhat(path)
-        
         #Sample observations used to compute G_k and s_k
         estimator_scenario_names = refmodel.scenario_names_creator(nk,
                                                                    start=ScenCount)
@@ -379,10 +380,7 @@ class SeqSampling():
                                solver_options=self.solver_options)
         
         #----------------------------Step 2 -------------------------------------#
-        #maxit=200
-        
 
-        
         while( stop_criterion(Gk,sk,nk) and k<maxit):
         #----------------------------Step 3 -------------------------------------#       
             k+=1
@@ -400,12 +398,10 @@ class SeqSampling():
                 xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
                                                                       start=ScenCount)
                 ScenCount+= mult*(nk-nk_m1)
-            path = self.xhat_generator(xhat_scenario_names,
+            xhat_k = self.xhat_generator(xhat_scenario_names,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options,
                                        **self.xhat_gen_options)
-            xhat_k = MMWci.read_xhat(path)
-            
             #Computing G_k and s_k
             if (k%self.kf_Gs==0):
                 #We use only new scenarios to compute xhat
@@ -417,6 +413,7 @@ class SeqSampling():
                 estimator_scenario_names+= refmodel.scenario_names_creator((nk-nk_m1),
                                                                            start=ScenCount)
                 ScenCount+= (nk-nk_m1)
+
             Gk,sk = gap_estimators(xhat_k,
                                    self.solvername, 
                                    estimator_scenario_names, 
@@ -424,6 +421,7 @@ class SeqSampling():
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    scenario_denouement=scenario_denouement,
                                    solver_options=self.solver_options)
+
             if (k%10==0):
                 print(f"k={k}")
                 print(f"n_k={nk}")
@@ -446,30 +444,33 @@ class SeqSampling():
 
 if __name__ == "__main__":
     refmodel = "mpisppy.tests.examples.farmer"
-    
+    farmer_opt_dict = {"crops_multiplier":3}
     
     
     optionsBM = {'h':0.2,
                'hprime':0.015, 
-              'eps':0.2, 
-               'epsprime':0.1, 
+              'eps':0.5, 
+               'epsprime':0.4, 
                "p":2,
                "q":1.2,
                "solvername":"gurobi_direct",
                }
     optionsFSP = {'eps': 5.0,
-                  'solvername': "gurobi_direct"}
-    farmer_opt_dict = {"crops_multiplier":3}
-    optionsSSP = {'eps': 5.0,
+                  'solvername': "gurobi_direct",
+                  "c0":50,}
+
+    optionsSSP = {'eps': 1.0,
                   'solvername': "gurobi_direct",    
-                  "n0min":600,
-                  "xhat_gen_options": farmer_opt_dict,
-                  "crops_multiplier": 3}
+                  "n0min":200,
+                  #"xhat_gen_options": farmer_opt_dict,
+                  #"crops_multiplier": 3,
+                  }
     our_pb = SeqSampling(refmodel,
-                         xhat_generator_farmer,
-                         optionsBM,
-                         stochastic_sampling=True,
-                         stopping_criterion="BM",
-                         )
+                          xhat_generator_farmer,
+                          optionsFSP,
+                          stochastic_sampling=False,
+                          stopping_criterion="BPL",
+                          )
     res = our_pb.run()
+
     print(res)        

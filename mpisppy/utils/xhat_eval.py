@@ -348,10 +348,6 @@ if __name__ == "__main__":
     # hardwired by dlw for debugging (this main is like MMW, but strange)
     import mpisppy.tests.examples.farmer as refmodel
     import mpisppy.utils.amalgomator as ama
-
-    # IMPORTANT: we doing MMW out of order!!!!!
-    # (because of using canned software we want to test)
-    # We get the MMW right term, then xhat, then the MMW left term.
     
     # do the right term of MMW (9) using the first scenarios
     ama_options = {"EF-2stage": True}   # 2stage vs. mstage
@@ -364,15 +360,16 @@ if __name__ == "__main__":
     
     ############### now get an xhat using different scenarios
     # (use use the ama args to get problem parameters)
-    ScenCount = ama_object.args.num_scens
+    ScenCount = ama_object.options['num_scens']
     scenario_creator = refmodel.scenario_creator
     scenario_denouement = refmodel.scenario_denouement
-    crops_multiplier = ama_object.args.crops_multiplier
-    solvername = ama_object.args.EF_solver_name
+    crops_multiplier = ama_object.options['crops_multiplier']
+    solvername = ama_object.options['EF_solver_name']
 
     scenario_creator_kwargs = {
         "use_integer": False,
         "crops_multiplier": crops_multiplier,
+        "num_scens": ScenCount
     }
 
     # different scenarios for xhat
