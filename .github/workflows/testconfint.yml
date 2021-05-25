@@ -37,4 +37,4 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_mmw.py 
+          python test_conf_int.py 
