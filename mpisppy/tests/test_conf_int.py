@@ -200,17 +200,10 @@ class Test_MMW_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_mmwci_main(self):
-        # buf = io.StringIO()
-        # with redirect_stdout(buf):
-        #     x = test_command_line("confidence_intervals", "mmw_ci.py",
-        #                           "--num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3")
-        #     print(f"Error code is {x}")
-        # print(buf.getvalue())
-        # self.assertIn("1050.",buf.getvalue())
         os.chdir("../confidence_intervals")
-        runstring = "python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 "
+        runstring = "python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 " +\
+                    "--EF-solver-name="+solvername
         res = str(subprocess.check_output(runstring, shell=True))
-        print(str(res))
         os.chdir("../tests")
         self.assertIn("1050.77",res)
         
