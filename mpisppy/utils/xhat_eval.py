@@ -57,7 +57,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         #TODO: CHANGE THIS AFTER UPDATE
         self.PH_extensions = None
         
-    
+        self.subproblem_creation(self.verbose)
+        self._create_solvers()
 
 
     
@@ -89,8 +90,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         print ("caller", inspect.stack()[1][3])
                         print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
                                .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
-                self.objs_at_nonant[k] = pyo.value(objfct)
-        
+                self.objs_dict[k] = pyo.value(objfct)
         return(pyomo_solve_time)
 
 
@@ -113,14 +113,12 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             solver_options (dict or None): the scenario solver options
             use_scenarios_not_subproblems (boolean): for use by bounds
             dtiming (boolean): indicates that timing should be reported
-            dis_W (boolean): indicates that W should be disabled (and re-enabled)
-            dis_prox (boolean): disable (and re-enable) prox term
             gripe (boolean): output a message if a solve fails
             disable_pyomo_signal_handling (boolean): set to true for asynch, 
                                                      ignored for persistent solvers.
             tee (boolean): show solver output to screen if possible
             verbose (boolean): indicates verbose output
-            compute_val_at_nonant (boolean): indicate that self.objs_at_nonant should
+            compute_val_at_nonant (boolean): indicate that self.objs_dict should
                                             be created and computed.
                                             
 
@@ -141,7 +139,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             s_source = self.local_subproblems
             
         if compute_val_at_nonant:
-            self.objs_at_nonant={}
+            self.objs_dict={}
         
         for k,s in s_source.items():
             if tee:
@@ -194,16 +192,16 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         if fct is None:
             return super().Eobjective(verbose=verbose)
         
-        if not hasattr(self, "objs_at_nonant"):
+        if not hasattr(self, "objs_dict"):
             raise RuntimeError("Values of the objective functions for each scenario"+
                                " at xhat have to be computed before running Eobjective")
         
 
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if not k in self.objs_at_nonant:
+            if not k in self.objs_dict:
                 raise RuntimeError(f"No value has been calculated for the scenario {k}")
-            local_Eobjs.append(s._mpisppy_probability * fct(self.objs_at_nonant[k]))
+            local_Eobjs.append(s._mpisppy_probability * fct(self.objs_dict[k]))
         local_Eobjs = np.array(local_Eobjs)
         local_Eobj = np.array([np.sum(local_Eobjs,axis=0)])
         global_Eobj = np.zeros(len(local_Eobj))
@@ -226,11 +224,9 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
-        self.subproblem_creation(self.verbose)
-        self._create_solvers()
         self._fix_nonants(nonant_cache)
-        if not hasattr(self, "objs_at_nonant"):
-            self.objs_at_nonant = {}
+        if not hasattr(self, "objs_dict"):
+            self.objs_dict = {}
         
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
@@ -243,7 +239,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                           compute_val_at_nonant=True
                                           )
         
-        obj = self.objs_at_nonant[k]
+        obj = self.objs_dict[k]
         
         return obj
     
@@ -261,8 +257,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or numpy.array): Expected value
 
         """
-        self.subproblem_creation(self.verbose)
-        self._create_solvers()
         self._fix_nonants(nonant_cache)
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
@@ -275,7 +269,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         compute_val_at_nonant=True
                         )
         
-        Eobj = self.Eobjective(self.verbose)
+        Eobj = self.Eobjective(self.verbose,fct=fct)
         
         return Eobj
     
@@ -348,10 +342,6 @@ if __name__ == "__main__":
     # hardwired by dlw for debugging (this main is like MMW, but strange)
     import mpisppy.tests.examples.farmer as refmodel
     import mpisppy.utils.amalgomator as ama
-
-    # IMPORTANT: we doing MMW out of order!!!!!
-    # (because of using canned software we want to test)
-    # We get the MMW right term, then xhat, then the MMW left term.
     
     # do the right term of MMW (9) using the first scenarios
     ama_options = {"EF-2stage": True}   # 2stage vs. mstage
@@ -364,15 +354,16 @@ if __name__ == "__main__":
     
     ############### now get an xhat using different scenarios
     # (use use the ama args to get problem parameters)
-    ScenCount = ama_object.args.num_scens
+    ScenCount = ama_object.options['num_scens']
     scenario_creator = refmodel.scenario_creator
     scenario_denouement = refmodel.scenario_denouement
-    crops_multiplier = ama_object.args.crops_multiplier
-    solvername = ama_object.args.EF_solver_name
+    crops_multiplier = ama_object.options['crops_multiplier']
+    solvername = ama_object.options['EF_solver_name']
 
     scenario_creator_kwargs = {
         "use_integer": False,
         "crops_multiplier": crops_multiplier,
+        "num_scens": ScenCount
     }
 
     # different scenarios for xhat

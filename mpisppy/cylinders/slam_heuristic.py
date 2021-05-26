@@ -43,12 +43,6 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
         logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}")
 
-        self.opt.subproblem_creation(verbose)
-
-        self.opt._update_E1()
-
-        self.opt._create_solvers()
-
         self.tee = False
         if "tee-rank0-solves" in self.opt.options:
             self.tee = self.opt.options['tee-rank0-solves']

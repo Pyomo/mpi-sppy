@@ -38,12 +38,9 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         xhatter = XhatSpecific(self.opt)
         # somehow deal with the prox option .... TBD .... important for aph APH
 
-        self.opt.subproblem_creation(verbose)
-
         # begin iter0 stuff
         xhatter.pre_iter0()
         self.opt._save_original_nonants()
-        self.opt._create_solvers()
 
         teeme = False
         if ("tee-rank0-solves" in self.opt.options):

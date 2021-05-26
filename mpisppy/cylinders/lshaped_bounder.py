@@ -22,10 +22,6 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
         if not isinstance(self.opt, Xhat_Eval):
             raise RuntimeError("XhatLShapedInnerBound must be used with Xhat_Eval.")
 
-        self.opt.subproblem_creation(verbose)
-
-        self.opt._create_solvers()
-
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
             teeme = self.opt.options['tee-rank0-solves']

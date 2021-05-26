@@ -17,7 +17,7 @@ MPI is used.
    hubs.rst
    spokes.rst
    extensions.rst
-   mmw.rst
+   confidence_intervals.rst
    pysp.rst
    ef.rst
    secretmenu.rst
