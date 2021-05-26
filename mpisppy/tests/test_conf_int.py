@@ -224,8 +224,7 @@ class Test_MMW_farmer(unittest.TestCase):
                          'epsprime':0.1, 
                          "p":0.1,
                          "q":1.2,
-                         "solvername":solvername, 
-                         "solvername": "gurobi_direct",
+                         "solvername":solvername,
                          "xhat_gen_options": {"crops_multiplier": 3},
                          "crops_multiplier": 3,
                          }
