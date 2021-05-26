@@ -55,12 +55,9 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             
         xhatter = XhatBase(self.opt)
 
-        self.opt.subproblem_creation(verbose)
-
         ### begin iter0 stuff
         xhatter.pre_iter0()
         self.opt._save_original_nonants()
-        self.opt._create_solvers()
 
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
