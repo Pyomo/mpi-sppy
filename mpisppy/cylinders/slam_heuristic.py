@@ -49,6 +49,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
         self.verbose = verbose
 
+        self.opt._update_E1()
+
     def extract_local_candidate_soln(self):
         num_scen = len(self.opt.local_scenarios)
         num_vars = len(self.localnonants) // num_scen
