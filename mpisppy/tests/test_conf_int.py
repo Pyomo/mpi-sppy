@@ -218,8 +218,9 @@ class Test_MMW_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_seqsampling_running(self):
-            optionsBM = {'h':0.25,
-                         'hprime':0.05, 
+            #We need a very small instance for testing on GitHub.
+            optionsBM = {'h':1.75,
+                         'hprime':0.5, 
                          'eps':0.2, 
                          'epsprime':0.1, 
                          "p":0.1,
@@ -237,7 +238,7 @@ class Test_MMW_farmer(unittest.TestCase):
             x = seq_pb.run(maxit=50)
             T = x['T']
             ub = round_pos_sig(x['CI'][1],2)
-            self.assertEqual((T,ub), (3,4900.0))
+            self.assertEqual((T,ub), (5,14000.0))
             
 if __name__ == '__main__':
     unittest.main()

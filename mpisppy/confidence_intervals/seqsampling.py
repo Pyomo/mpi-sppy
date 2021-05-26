@@ -297,10 +297,13 @@ class SeqSampling():
                 add_options(options, optional_things, optional_default_settings)
         else:
             raise RuntimeError("Only BM and BPL criteria are supported yet")
-        
         for oname in options:
             setattr(self, oname, options[oname]) #Set every option as an attribute
-    
+        
+        #To be sure to always use new scenarios, we set a ScenCount that is 
+        #telling us how many scenarios has been used so far
+        self.ScenCount = 0
+            
     def bm_stopping_criterion(self,G,s,nk):
         return(G>self.hprime*s+self.epsprime)
     
@@ -383,10 +386,6 @@ class SeqSampling():
         else:
             raise RuntimeError("Only BM and BPL sample sizes are supported yet")
         
-        #To be sure to always use new scenarios, we set a ScenCount that is 
-        #telling us how many scenarios has been used so far
-        ScenCount = 0
-        
         #----------------------------Step 0 -------------------------------------#
         #Initialization
         k =1
@@ -412,7 +411,7 @@ class SeqSampling():
         #Computing xhat_1. 
         #We use sample_size_ratio*n_k observations to compute xhat_k
         xhat_scenario_names = refmodel.scenario_names_creator(mult*nk, start=0)
-        ScenCount+=mult*nk   
+        self.ScenCount+=mult*nk   
         
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
@@ -420,8 +419,8 @@ class SeqSampling():
                                    **self.xhat_gen_options)
         #Sample observations used to compute G_k and s_k
         estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                   start=ScenCount)
-        ScenCount+=nk
+                                                                   start=self.ScenCount)
+        self.ScenCount+=nk
     
         #----------------------------Step 1 -------------------------------------#
         
@@ -448,13 +447,13 @@ class SeqSampling():
             if (k%self.kf_xhat==0):
                 #We use only new scenarios to compute xhat
                 xhat_scenario_names = refmodel.scenario_names_creator(mult*nk,
-                                                                      start=ScenCount)
-                ScenCount+=mult*nk
+                                                                      start=self.ScenCount)
+                self.ScenCount+=mult*nk
             else:
                 #We reuse the previous scenarios
                 xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
-                                                                      start=ScenCount)
-                ScenCount+= mult*(nk-nk_m1)
+                                                                      start=self.ScenCount)
+                self.ScenCount+= mult*(nk-nk_m1)
             xhat_k = self.xhat_generator(xhat_scenario_names,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options,
@@ -463,13 +462,13 @@ class SeqSampling():
             if (k%self.kf_Gs==0):
                 #We use only new scenarios to compute xhat
                 estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                           start=ScenCount)
-                ScenCount+=nk
+                                                                           start=self.ScenCount)
+                self.ScenCount+=nk
             else:
                 #We reuse the previous scenarios
                 estimator_scenario_names+= refmodel.scenario_names_creator((nk-nk_m1),
-                                                                           start=ScenCount)
-                ScenCount+= (nk-nk_m1)
+                                                                           start=self.ScenCount)
+                self.ScenCount+= (nk-nk_m1)
 
             Gk,sk = gap_estimators(xhat_k,
                                    self.solvername, 
@@ -508,7 +507,7 @@ if __name__ == "__main__":
                'hprime':0.015, 
               'eps':0.5, 
                'epsprime':0.4, 
-               "p":2,
+               "p":0.2,
                "q":1.2,
                "solvername":"gurobi_direct",
                }
@@ -524,9 +523,9 @@ if __name__ == "__main__":
                   }
     our_pb = SeqSampling(refmodel,
                           xhat_generator_farmer,
-                          optionsFSP,
+                          optionsBM,
                           stochastic_sampling=False,
-                          stopping_criterion="BPL",
+                          stopping_criterion="BM",
                           )
     res = our_pb.run()
 
