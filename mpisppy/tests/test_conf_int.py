@@ -29,6 +29,7 @@ global_rank = fullcomm.Get_rank()
 __version__ = 0.2
 
 solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+module_dir = os.path.dirname(os.path.abspath(__file__))
 
 def _get_base_options():
     options = { "EF_solver_name": solvername,
@@ -197,11 +198,12 @@ class Test_MMW_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_mmwci_main(self):
-        os.chdir("../confidence_intervals")
+        current_dir = os.getcwd()
+        os.chdir(os.path.join(module_dir,"..","confidence_intervals"))
         runstring = "python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 " +\
                     "--EF-solver-name="+solvername
         res = str(subprocess.check_output(runstring, shell=True))
-        os.chdir("../tests")
+        os.chdir(current_dir)
         self.assertIn("1050.77",res)
     
     @unittest.skipIf(not solver_available,
