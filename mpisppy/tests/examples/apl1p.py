@@ -37,12 +37,8 @@ def APL1P_model_creator(seed):
     assert(max(avail_cumprob[0])==1.0 and max(avail_cumprob[1])==1.0)
     def availability_init(m,g):
         rd = random_array[g]
-        i = 0
-        while (rd>avail_cumprob[g-1][i] and i<=len(avail_cumprob[g-1])):
-            i+=1
-        
-        retval = avail_outcome[g-1][i]
-        return retval
+        i = np.searchsorted(avail_cumprob[g-1],rd)
+        return avail_outcome[g-1][i]
     
     model.Availability = pyo.Param(model.G, within=pyo.NonNegativeReals,
                                initialize=availability_init)
@@ -56,6 +52,7 @@ def APL1P_model_creator(seed):
     invest = np.array([.4,.25])
     def investment_init(m,g):
         return(invest[g-1])
+
     model.Investment = pyo.Param(model.G, within=pyo.NonNegativeReals,
                              initialize=investment_init)
     
@@ -74,12 +71,9 @@ def APL1P_model_creator(seed):
     assert(max(demand_cumprob == 1.0))
     def demand_init(m,dl):
         rd = random_array[2+dl]
-        i = 0
-        while (rd>demand_cumprob[i] and i<=len(demand_cumprob)):
-            i+=1
-        
-        retval = demand_outcome[i]
-        return retval
+        i = np.searchsorted(demand_cumprob,rd)
+        return demand_outcome[i]
+    
     model.Demand = pyo.Param(model.DL, within=pyo.NonNegativeReals,
                          initialize=demand_init)
     
@@ -91,7 +85,6 @@ def APL1P_model_creator(seed):
     #
     # Variables
     #
-    
     
     # Capacity of generators
     model.CapacityGenerators = pyo.Var(model.G, domain=pyo.NonNegativeReals)
@@ -111,25 +104,19 @@ def APL1P_model_creator(seed):
     def MinimumCapacity_rule(model, g):
         return model.CapacityGenerators[g] >= model.Cmin[g]
     
-    
     model.MinimumCapacity = pyo.Constraint(model.G, rule=MinimumCapacity_rule)
-    
     
     # Maximum operating level
     def MaximumOperating_rule(model, g):
         return sum(model.OperationLevel[g, dl] for dl in model.DL) <= model.Availability[g] * model.CapacityGenerators[g]
     
-    
     model.MaximumOperating = pyo.Constraint(model.G, rule=MaximumOperating_rule)
-    
     
     # Satisfy demand
     def SatisfyDemand_rule(model, dl):
         return sum(model.OperationLevel[g, dl] for g in model.G) + model.UnservedDemand[dl] >= model.Demand[dl]
     
-    
     model.SatisfyDemand = pyo.Constraint(model.DL, rule=SatisfyDemand_rule)
-    
     
     #
     # Stage-specific cost computations
@@ -137,7 +124,6 @@ def APL1P_model_creator(seed):
     
     def ComputeFirstStageCost_rule(model):
         return sum(model.Investment[g] * model.CapacityGenerators[g] for g in model.G)
-    
     
     model.FirstStageCost = pyo.Expression(rule=ComputeFirstStageCost_rule)
     
@@ -147,9 +133,9 @@ def APL1P_model_creator(seed):
             model.OperatingCost[g, dl] * model.OperationLevel[g, dl] for g in model.G for dl in model.DL) + sum(
             model.CostUnservedDemand[dl] * model.UnservedDemand[dl] for dl in model.DL)
         return expr
-    
-    
+
     model.SecondStageCost = pyo.Expression(rule=ComputeSecondStageCost_rule)
+    
     
     def total_cost_rule(model):
         return model.FirstStageCost + model.SecondStageCost
@@ -157,6 +143,7 @@ def APL1P_model_creator(seed):
     model.Total_Cost_Objective = pyo.Objective(rule=total_cost_rule, sense=pyo.minimize)
 
     return(model)
+
 
 def scenario_creator(sname, num_scens=None):
     scennum   = sputils.extract_num(sname)
@@ -193,11 +180,11 @@ def scenario_names_creator(num_scens,start=None):
     return [f"scen{i}" for i in range(start,start+num_scens)]
         
 
-
 #=========
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to apl1p
     pass
+
 
 #=========
 def kw_creator(options):
@@ -210,6 +197,7 @@ def kw_creator(options):
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
+
 
 #============================
 def xhat_generator_apl1p(scenario_names, solvername="gurobi", solver_options=None):
