@@ -170,7 +170,8 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
                     scenario_creator_kwargs=scenario_creator_kwargs)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    
+    global_toc(f"xhat={xhat}")
+    global_toc(f"xstar={xstar}")
     ev.evaluate(xhat)
     objs_at_xhat = ev.objs_dict
     ev.evaluate(xstar)
@@ -328,7 +329,7 @@ class SeqSampling():
                     raise RuntimeError("We need the confidence level to compute the constant cp")
                 j = np.arange(1,1000)
                 s = sum(np.power(j,-p*np.log(j)))
-                c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*confidence_level)))
+                c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-confidence_level))))
             
             lower_bound = (c+2*p* np.log(k)**2)/((h-hprime)**2)
         else :
@@ -340,9 +341,10 @@ class SeqSampling():
                     RuntimeError("We need the confidence level to compute the constant c_pq")
                 j = np.arange(1,1000)
                 s = sum(np.exp(-p*np.power(j,2*q/r)))
-                c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*confidence_level)))
+                c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-confidence_level))))
             
-            lower_bound = (c+2*p*np.power(k,2*q/r))/((h-hprime)**2)        
+            lower_bound = (c+2*p*np.power(k,2*q/r))/((h-hprime)**2)   
+        #print(f"nk={lower_bound}")
         return int(np.ceil(lower_bound))
     
     def bpl_fsp_sampsize(self,k,G,s,nk_m1):
@@ -399,12 +401,13 @@ class SeqSampling():
             r = 2 #TODO : we could add flexibility here
             j = np.arange(1,1000)
             if self.q is None:
-                s = sum(np.power(j,-self.p*np.log(j)))          
+                s = sum(np.power(j,-self.p*np.log(j)))
             else:
                 if self.q<1:
                     raise RuntimeError("Parameter q should be greater than 1.")
                 s = sum(np.exp(-self.p*np.power(j,2*self.q/r)))
-            self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*self.confidence_level)))                
+            self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
+                
         
         nk = self.ArRP *int(np.ceil(self.sample_size(k, None, None, None)/self.ArRP))
         
