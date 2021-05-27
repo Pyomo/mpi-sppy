@@ -240,7 +240,7 @@ class Test_MMW_farmer(unittest.TestCase):
             x = seq_pb.run(maxit=50)
             T = x['T']
             ub = round_pos_sig(x['CI'][1],2)
-            self.assertEqual((T,ub), (5,14000.0))
+            self.assertEqual((T,ub), (1,7400.0))
             
 if __name__ == '__main__':
     unittest.main()
