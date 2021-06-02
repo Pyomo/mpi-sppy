@@ -767,36 +767,7 @@ class SPOpt(SPBase):
                 if dtiming:
                     set_instance_start_time = time.time()
 
-                # this loop is required to address the sitution where license
-                # token servers become temporarily over-subscribed / non-responsive
-                # when large numbers of ranks are in use.
-
-                # these parameters should eventually be promoted to a non-PH
-                # general class / location. even better, the entire retry
-                # logic can be encapsulated in a sputils.py function.
-                MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
-                LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
-        
-                num_retry_attempts = 0
-                while True:
-                    try:
-                        s._solver_plugin.set_instance(s)
-                        if num_retry_attempts > 0:
-                            print("Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
-                        break
-                    # pyomo presently has no general way to trap a license acquisition
-                    # error - so we're stuck with trapping on "any" exception. not ideal.
-                    except:
-                        if num_retry_attempts == 0:
-                            print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
-                        else:
-                            print("Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
-                        if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
-                            raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
-                        else:
-                            print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
-                            time.sleep(LICENSE_RETRY_SLEEP_TIME)
-                            num_retry_attempts += 1
+                set_instance_retry(s, s._solver_plugin, sname)
 
                 if dtiming:
                     set_instance_time = time.time() - set_instance_start_time
@@ -816,3 +787,38 @@ class SPOpt(SPBase):
                 for scen_name in s.scen_list:
                     scen = self.local_scenarios[scen_name]
                     scen._solver_plugin = s._solver_plugin
+
+
+# these parameters should eventually be promoted to a non-PH
+# general class / location. even better, the entire retry
+# logic can be encapsulated in a sputils.py function.
+MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
+LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
+
+def set_instance_retry(subproblem, solver_plugin, subproblem_name):
+
+    sname = subproblem_name
+    # this loop is required to address the sitution where license
+    # token servers become temporarily over-subscribed / non-responsive
+    # when large numbers of ranks are in use.
+
+    num_retry_attempts = 0
+    while True:
+        try:
+            solver_plugin.set_instance(subproblem)
+            if num_retry_attempts > 0:
+                print("Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+            break
+        # pyomo presently has no general way to trap a license acquisition
+        # error - so we're stuck with trapping on "any" exception. not ideal.
+        except:
+            if num_retry_attempts == 0:
+                print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
+            else:
+                print("Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+            if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
+                raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
+            else:
+                print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
+                time.sleep(LICENSE_RETRY_SLEEP_TIME)
+                num_retry_attempts += 1

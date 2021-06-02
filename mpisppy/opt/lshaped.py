@@ -12,6 +12,7 @@ from mpi4py import MPI
 from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
 from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
+from mpisppy.spopt import set_instance_retry
 from pyomo.core import (
     Objective, SOSConstraint, Constraint, Var
 )
@@ -456,7 +457,7 @@ class LShapedMethod(spbase.SPBase):
                     opt.options[k] = v
 
             if sputils.is_persistent(opt):
-                opt.set_instance(instance)
+                set_instance_retry(instance, opt, scenario_name)
                 res = opt.solve(tee=False)
             else:
                 res = opt.solve(instance, tee=False)
@@ -578,7 +579,7 @@ class LShapedMethod(spbase.SPBase):
 
             is_persistent = sputils.is_persistent(opt)
             if is_persistent:
-                opt.set_instance(m)
+                set_instance_retry(m, opt, "root")
 
         t = time.time()
         res, t1, t2 = None, None, None
