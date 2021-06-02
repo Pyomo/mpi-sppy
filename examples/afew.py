@@ -43,6 +43,10 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 --with-display-convergence-detail "
        "--solver-name={} --no-fwph --use-norm-rho-updater".format(solver_name))
+do_one("farmer", "farmer_lshapedhub.py", 2,
+       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--solver-name={} --rel-gap=0.0 "
+       "--no-fwph --max-solver-threads=1".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",
        4,

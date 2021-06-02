@@ -5,6 +5,8 @@ import pyomo.environ as pe
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 import pyomo.contrib.benders.benders_cuts as bc
 
+from mpisppy.spopt import set_instance_retry
+
 try:
     from mpi4py import MPI
 
@@ -77,7 +79,7 @@ class LShapedCutGeneratorData(bc.BendersCutGeneratorData):
                 subproblem_solver = pe.SolverFactory(subproblem_solver)
             self.subproblem_solvers.append(subproblem_solver)
             if isinstance(subproblem_solver, PersistentSolver):
-                subproblem_solver.set_instance(subproblem)
+                set_instance_retry(subproblem, subproblem_solver, subproblem_fn_kwargs['scenario_name'])
             if subproblem_solver_options:
                 for k,v in subproblem_solver_options.items():
                     subproblem_solver.options[k] = v
