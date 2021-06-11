@@ -234,8 +234,6 @@ class MMWConfidenceIntervals():
                 options['branching_factors'] = self.options['BFs']
             else:
                 all_nodenames = None
-            print(f"Coucou: {all_nodenames}")
-            print(f"Coucou: {self.options['branching_factors']}")
                 
             ev = xhat_eval.Xhat_Eval(options,
                             MMW_scenario_names,

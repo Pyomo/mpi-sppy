@@ -203,6 +203,7 @@ class SPBase:
         self.scenario_names_to_rank, self._rank_slices, self._scenario_slices =\
                 tree.scen_names_to_ranks(self.n_proc)
         self._scenario_tree = tree
+        print("Hello"+f"{self.scenario_names_to_rank.keys()}")
 
         # list of scenario names owned locally
         self.local_scenario_names = [

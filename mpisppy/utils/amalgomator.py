@@ -161,8 +161,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
             raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
         if _bool_option(options, 'EF-mstage') and 'BFs' not in options:
             raise RuntimeError("For a multistage problem, otpions must have a 'BFs' attribute with branching factors")
-        
-      
+
     return opt
     
 

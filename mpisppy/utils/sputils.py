@@ -646,33 +646,40 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
         scenario_names_to_ranks, slices, = tree.scen_name_to_rank(n_proc, rank)
         return slices, scenario_names_to_ranks
 
+def _nodenum_before_stage(t,branching_factors):
+    #How many nodes in a tree of stage 1,2,...,t ?
+    return int(sum(np.prod(branching_factors[0:i]) for i in range(t)))
 class _TreeNode():
-    # everything is zero based, even stage numbers (perhaps not used)
+    # stages are 1-based, everything else is 0-based
     # scenario lists are stored as (first, last) indices in all_scenarios
     def __init__(self, Parent, scenfirst, scenlast, branching_factors, name):
-        self.scenfirst = scenfirst
-        self.scenlast = scenlast
+        self.scenfirst = scenfirst #id of the first scenario with this node
+        self.scenlast = scenlast #id of the last scenario with this node
         self.name = name
+        numscens = scenlast - scenfirst + 1 #number of scenarios with this node
+        assert np.prod(branching_factors) % numscens == 0
         if Parent is None:
             assert(self.name == "ROOT")
-            self.stage = 0
+            self.stage = 1
+            self.id_at_stage = 0
         else:
             self.stage = Parent.stage + 1
         # make children
         self.kids = list()
-        bf = branching_factors[self.stage]        
-        if self.stage < len(branching_factors)-1:
-            numscens = scenlast - scenfirst + 1
+        bf = branching_factors[self.stage-1]        
+        if self.stage < len(branching_factors):
             assert numscens % bf == 0
             scens_per_new_node = numscens // bf
             first = scenfirst
             ## FIX so scenfirst, scenlast is global
             for b in range(bf):
-                last = first+scens_per_new_node - 1 
+                last = first+scens_per_new_node - 1
+                kid_id_at_stage = int(first//np.prod(branching_factors[(self.stage):]))
+                kid_id = kid_id_at_stage+ _nodenum_before_stage(self.stage,branching_factors)
                 self.kids.append(_TreeNode(self,
                                            first, last,
-                                           BFs,
-                                           self.name+f'_{b}'))
+                                           branching_factors,
+                                           self.name+f'_{kid_id}'))
                 first += scens_per_new_node
             else: # no break
                 assert last == scenlast
@@ -691,12 +698,13 @@ class _ScenTree():
         self.rootnode = _TreeNode(None, first, last, BFs, "ROOT")
         def _nonleaves(nd):
             retval = [nd]
-            if nd.stage < len(BFs) - 1:
+            if nd.stage < len(BFs):
                 for kid in nd.kids:
                     retval += _nonleaves(kid)
             return retval
         self.nonleaves = _nonleaves(self.rootnode)
-        self.NonLeafTerminals = [nd for nd in self.nonleaves if nd.stage == len(BFs) - 1]
+        self.NonLeafTerminals = [nd for nd in self.nonleaves if nd.stage == len(BFs)]
+        print("Coucou"+f"{[nd.name for nd in self.nonleaves]}")
 
     def scen_names_to_ranks(self, n_proc):
         """ 
@@ -877,7 +885,9 @@ def create_nodenames_from_BFs(BFS):
     stage_nodes = ["ROOT"]
     node_count+=1
     nodenames = ['ROOT']
-    for bf in BFS[range(BFS)-1]:
+    if len(BFS)==1 :
+        return(nodenames)
+    for bf in BFS[:(len(BFS)-1)]:
         old_stage_nodes = stage_nodes
         stage_nodes = []
         for k in range(len(old_stage_nodes)):
