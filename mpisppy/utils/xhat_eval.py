@@ -224,7 +224,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
-        self._fix_root__nonants(nonant_cache['ROOT'])
+        self._fix_root_nonants(nonant_cache['ROOT'])
         if not hasattr(self, "objs_dict"):
             self.objs_dict = {}
         
