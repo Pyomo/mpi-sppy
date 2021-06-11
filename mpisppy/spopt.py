@@ -554,6 +554,50 @@ class SPOpt(SPBase):
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
+                        
+    def _fix_root_nonants(self,root_cache):
+        """ Fix the 1st stage Vars subject to non-anticipativity at given values.
+            Loop over the scenarios to restore, but loop over subproblems
+            to alert persistent solvers.
+            Useful for multistage to find feasible solutions with a given scenario.
+        Args:
+            root_cache (numpy vector): values at which to fix
+        WARNING: 
+            We are counting on Pyomo indices not to change order between
+            when the cache_list is created and used.
+        NOTE:
+            You probably want to call _save_nonants right before calling this
+        """
+        for k,s in self.local_scenarios.items():
+
+            persistent_solver = None
+            if (sputils.is_persistent(s._solver_plugin)):
+                persistent_solver = s._solver_plugin
+
+            nlens = s._mpisppy_data.nlens
+            
+            rootnode = None
+            for node in s._mpisppy_node_list:
+                if node.name is 'ROOT':
+                    rootnode = node
+                    break
+                
+            if rootnode is None:
+                raise RuntimeError("Could not find a 'ROOT' node in scen {}"\
+                                   .format(k))
+            if root_cache is None:
+                raise RuntimeError("Empty root cache for scen={}".format(k))
+            if len(root_cache) != nlens['ROOT']:
+                raise RuntimeError("Needed {} nonant Vars for 'ROOT', got {}"\
+                                   .format(nlens['ROOT'], len(root_cache)))
+            
+            for i in range(nlens['ROOT']): 
+                this_vardata = node.nonant_vardata_list[i]
+                this_vardata._value = root_cache[i]
+                this_vardata.fix()
+                if persistent_solver is not None:
+                    persistent_solver.update_var(this_vardata)
+                        
 
 
     def _restore_nonants(self):

@@ -129,8 +129,10 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     if use_command_line:
         if _bool_option(options, "EF-2stage"):
             parser = baseparsers.make_EF2_parser(num_scens_reqd=_bool_option(options, "num_scens_reqd"))
+        elif _bool_option(options, "EF-mstage"):
+            parser = baseparsers.make_EF_multistage_parser(num_scens_reqd=_bool_option(options, "num_scens_reqd"))
         else:
-            raise RuntimeError("only EF-2Stage is supported right now")
+            raise RuntimeError("only EF is supported from the command line right now")
     
         # TBD add args for everything else that is not EF, which is a lot
     
@@ -144,7 +146,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     
         opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
         
-        if not ('EF_solver_name' in opt):
+        if ('EF_solver_options' in opt):
             opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
         else:
             opt["EF_solver_options"] = {"mipgap": opt["EF_mipgap"]}
@@ -157,6 +159,8 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
             opt['EF_solver_options'] = {'mipgap': None}
         if not ('num_scens' in opt):
             raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
+        if _bool_option(options, 'EF-mstage') and 'BFs' not in options:
+            raise RuntimeError("For a multistage problem, otpions must have a 'BFs' attribute with branching factors")
         
       
     return opt

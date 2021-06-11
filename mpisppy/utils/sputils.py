@@ -524,20 +524,23 @@ def ef_nonants_csv(ef, filename):
 
             
 def nonant_cache_from_ef(ef,verbose=False):
-    """ Populate a nonant_cache from an ef. Is it multi-stage?
+    """ Populate a nonant_cache from an ef. Also works with multi-stage
     Args:
         ef (mpi-sppy ef): a solved ef
     Returns:
-        nonant_cache (1-d numpy array): a special structure for nonant values
-    TDB: xxxxxx multi-stage
-    """
-    nonant_cache = {"ROOT": np.zeros(len(ef.ref_vars), dtype='d')}
-    for (ndn,i), xvar in ef.ref_vars.items():  
-        if ndn != "ROOT":
-            raise RuntimeError("only two-stage is supported by nonant_cache_from_ef")
-        nonant_cache["ROOT"][i] = pyo.value(xvar)
-        if verbose:
-            print("barfoo", i, pyo.value(xvar))
+        nonant_cache (dict of numpy arrays): a special structure for nonant values
+    """     
+    nonant_cache = dict()
+    nodenames = set([ndn for (ndn,i) in ef.ref_vars])
+    for ndn in sorted(nodenames):
+        nonant_cache[ndn]=[]
+        i = 0
+        while ((ndn,i) in ef.ref_vars):
+            xvar = pyo.value(ef.ref_vars[(ndn,i)])
+            nonant_cache[ndn].append(xvar)
+            if verbose:
+                print("barfoo", i, xvar)
+            i+=1
     return nonant_cache
 
 
@@ -646,7 +649,7 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
 class _TreeNode():
     # everything is zero based, even stage numbers (perhaps not used)
     # scenario lists are stored as (first, last) indices in all_scenarios
-    def __init__(self, Parent, scenfirst, scenlast, BFs, name):
+    def __init__(self, Parent, scenfirst, scenlast, branching_factors, name):
         self.scenfirst = scenfirst
         self.scenlast = scenlast
         self.name = name
@@ -657,8 +660,8 @@ class _TreeNode():
             self.stage = Parent.stage + 1
         # make children
         self.kids = list()
-        bf = BFs[self.stage]        
-        if self.stage < len(BFs)-1:
+        bf = branching_factors[self.stage]        
+        if self.stage < len(branching_factors)-1:
             numscens = scenlast - scenfirst + 1
             assert numscens % bf == 0
             scens_per_new_node = numscens // bf
@@ -854,6 +857,36 @@ def find_active_objective(pyomomodel):
                            "Objective for model '%s' (found %d objectives)"
                            % (pyomomodel.name, len(obj)))
     return obj[0]
+
+def create_nodenames_from_BFs(BFS):
+    """
+    
+
+    Parameters
+    ----------
+    BFS : list of integers
+        Branching factors.
+
+    Returns
+    -------
+    nodenames : list of str
+        a list of the nonleaf node names induced by BFs.
+
+    """
+    node_count = 0
+    stage_nodes = ["ROOT"]
+    node_count+=1
+    nodenames = ['ROOT']
+    for bf in BFS[range(BFS)-1]:
+        old_stage_nodes = stage_nodes
+        stage_nodes = []
+        for k in range(len(old_stage_nodes)):
+            stage_nodes += ['%s_%i'%(old_stage_nodes[k],node_count+i) for i in range(bf)]
+            node_count += bf
+        nodenames += stage_nodes
+    return nodenames
+
+          
 
 if __name__ == "__main__":
     BFs = [2,2,2,3]
