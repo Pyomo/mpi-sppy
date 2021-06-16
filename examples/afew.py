@@ -50,7 +50,7 @@ do_one("sizes",
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
-       "--BFs=3,3 --bundles-per-rank=0 --max-iterations=100 "
+       "--BFs 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
 
