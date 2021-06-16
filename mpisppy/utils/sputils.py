@@ -726,7 +726,7 @@ class _ScenTree():
     def __init__(self, BFs, ScenNames):
         self.ScenNames = ScenNames
         self.NumScens = len(ScenNames)
-        # assert(self.NumScens == np.prod(BFs)) Not necessarily a full tree
+        #WARNING: this is method is not working for unbalanced trees (or trees from sampling)
         self.NumLeaves = np.prod(BFs)
         self.BFs = BFs
         first = 0

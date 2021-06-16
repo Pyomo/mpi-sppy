@@ -40,7 +40,7 @@ Sequential sampling
 ===================
 
 Similarly, given an confidence interval, one can try to find a candidate solution
- ``xhat`` such that its optimality gap has this confidence interval.
+``xhat`` such that its optimality gap has this confidence interval.
 The class ``SeqSampling`` implements three procedures described in 
 [bm2011]_ and [bpl2012]_. It takes as an input a method to generate
 candidate solutions and options, and returns a ``xhat`` and a confidence interval on

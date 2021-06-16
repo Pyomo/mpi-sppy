@@ -319,12 +319,9 @@ class SPBase:
 
         # Create communicator objects, one for each node
         nonleafnodes = dict()
-        nonleaf_associated_scen = dict()
         for (sname, scenario) in self.local_scenarios.items():
             for node in scenario._mpisppy_node_list:
                 nonleafnodes[node.name] = node  # might be assigned&reassigned
-                nonleaf_associated_scen[node.name] = sname
-        
 
         # check the node names given by the scenarios
         for nodename in nonleafnodes:
@@ -335,7 +332,6 @@ class SPBase:
         # make sure we loop in the same order, so every rank iterate over
         # the nodelist
         for nodename in self.all_nodenames:
-            parent_ndn = sputils._parent_ndn(nodename)
             if nodename == "ROOT":
                 self.comms["ROOT"] = self.mpicomm
             elif nodename in nonleafnodes:
@@ -364,6 +360,7 @@ class SPBase:
                     if comm.Get_rank() != scenario_names_to_comm_rank[sname]:
                         print(f"[scen POV]For the node {nodename}, the scenario {sname} get the rank {scenario_names_to_comm_rank[sname]} from scenario_names_to_rank and {comm.Get_rank()} from its comm ")
                     assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
+
 
     def _compute_unconditional_node_probabilities(self):
         """ calculates unconditional node probabilities and prob_coeff
