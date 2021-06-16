@@ -495,6 +495,44 @@ def extract_num(string):
     '''
     return int(re.compile(r'(\d+)$').search(string).group(1))
 
+def node_idx(stagelist,branching_factors):
+    if stagelist == []: #ROOT node
+        return 0
+    else:
+        stage_id = 0 #id among stage t+1 nodes.
+        for t in range(len(stagelist)):
+            stage_id = stagelist[t]+branching_factors[t]*stage_id
+            node_idx = _nodenum_before_stage(len(stagelist),branching_factors)+stage_id
+        return node_idx
+
+def _extract_node_idx(nodename,branching_factors):
+    """
+    
+
+    Parameters
+    ----------
+    nodename : str
+        The name of a node, e.g. 'ROOT_2_0_4'.
+    branching_factors : list
+        Branching factor of a scenario tree, e.g. [3,2,8,4,3].
+
+    Returns
+    -------
+    node_idx : int
+        A unique integer that can be used as a key to designate this scenario.
+
+    """
+    if nodename =='ROOT':
+        return 0
+    else:
+        to_list = [int(x) for x in re.findall(r'\d+',nodename)]
+        return node_idx(to_list,branching_factors)
+
+def _parent_ndn(nodename):
+    if nodename == 'ROOT':
+        return None
+    else:
+        return re.search('(.+)_(\d+)',nodename).group(1)
 
 def ef_nonants(ef):
     """ An iterator to give representative Vars subject to non-anticipitivity
@@ -649,6 +687,7 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
 def _nodenum_before_stage(t,branching_factors):
     #How many nodes in a tree of stage 1,2,...,t ?
     return int(sum(np.prod(branching_factors[0:i]) for i in range(t)))
+
 class _TreeNode():
     # stages are 1-based, everything else is 0-based
     # scenario lists are stored as (first, last) indices in all_scenarios
@@ -661,7 +700,6 @@ class _TreeNode():
         if Parent is None:
             assert(self.name == "ROOT")
             self.stage = 1
-            self.id_at_stage = 0
         else:
             self.stage = Parent.stage + 1
         # make children
@@ -674,12 +712,10 @@ class _TreeNode():
             ## FIX so scenfirst, scenlast is global
             for b in range(bf):
                 last = first+scens_per_new_node - 1
-                kid_id_at_stage = int(first//np.prod(branching_factors[(self.stage):]))
-                kid_id = kid_id_at_stage+ _nodenum_before_stage(self.stage,branching_factors)
                 self.kids.append(_TreeNode(self,
                                            first, last,
                                            branching_factors,
-                                           self.name+f'_{kid_id}'))
+                                           self.name+f'_{b}'))
                 first += scens_per_new_node
             else: # no break
                 assert last == scenlast
@@ -690,11 +726,11 @@ class _ScenTree():
     def __init__(self, BFs, ScenNames):
         self.ScenNames = ScenNames
         self.NumScens = len(ScenNames)
-        assert(self.NumScens == np.prod(BFs))
-        self.NumStages = len(BFs)
+        # assert(self.NumScens == np.prod(BFs)) Not necessarily a full tree
+        self.NumLeaves = np.prod(BFs)
         self.BFs = BFs
         first = 0
-        last = self.NumScens - 1
+        last = self.NumLeaves - 1
         self.rootnode = _TreeNode(None, first, last, BFs, "ROOT")
         def _nonleaves(nd):
             retval = [nd]
@@ -704,7 +740,6 @@ class _ScenTree():
             return retval
         self.nonleaves = _nonleaves(self.rootnode)
         self.NonLeafTerminals = [nd for nd in self.nonleaves if nd.stage == len(BFs)]
-        print("Coucou"+f"{[nd.name for nd in self.nonleaves]}")
 
     def scen_names_to_ranks(self, n_proc):
         """ 
@@ -868,7 +903,7 @@ def find_active_objective(pyomomodel):
 
 def create_nodenames_from_BFs(BFS):
     """
-    
+    This function creates the node names of a tree without creating the whole tree.
 
     Parameters
     ----------
@@ -881,20 +916,19 @@ def create_nodenames_from_BFs(BFS):
         a list of the nonleaf node names induced by BFs.
 
     """
-    node_count = 0
     stage_nodes = ["ROOT"]
-    node_count+=1
     nodenames = ['ROOT']
-    if len(BFS)==1 :
+    if len(BFS)==1 : #2stage
         return(nodenames)
     for bf in BFS[:(len(BFS)-1)]:
         old_stage_nodes = stage_nodes
         stage_nodes = []
         for k in range(len(old_stage_nodes)):
-            stage_nodes += ['%s_%i'%(old_stage_nodes[k],node_count+i) for i in range(bf)]
-            node_count += bf
+            stage_nodes += ['%s_%i'%(old_stage_nodes[k],b) for b in range(bf)]
         nodenames += stage_nodes
     return nodenames
+
+
 
           
 

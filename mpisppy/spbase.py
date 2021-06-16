@@ -203,7 +203,6 @@ class SPBase:
         self.scenario_names_to_rank, self._rank_slices, self._scenario_slices =\
                 tree.scen_names_to_ranks(self.n_proc)
         self._scenario_tree = tree
-        print("Hello"+f"{self.scenario_names_to_rank.keys()}")
 
         # list of scenario names owned locally
         self.local_scenario_names = [
@@ -320,9 +319,12 @@ class SPBase:
 
         # Create communicator objects, one for each node
         nonleafnodes = dict()
+        nonleaf_associated_scen = dict()
         for (sname, scenario) in self.local_scenarios.items():
             for node in scenario._mpisppy_node_list:
                 nonleafnodes[node.name] = node  # might be assigned&reassigned
+                nonleaf_associated_scen[node.name] = sname
+        
 
         # check the node names given by the scenarios
         for nodename in nonleafnodes:
@@ -333,10 +335,12 @@ class SPBase:
         # make sure we loop in the same order, so every rank iterate over
         # the nodelist
         for nodename in self.all_nodenames:
+            parent_ndn = sputils._parent_ndn(nodename)
             if nodename == "ROOT":
                 self.comms["ROOT"] = self.mpicomm
             elif nodename in nonleafnodes:
-                nodenumber = sputils.extract_num(nodename)
+                nodenumber = sputils._extract_node_idx(nodename,
+                                                      self.branching_factors)
                 # IMPORTANT: See note in sputils._ScenTree.scen_names_to_ranks. Need to keep
                 #            this split aligned with self.scenario_names_to_rank
                 self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.cylinder_rank)
@@ -348,15 +352,18 @@ class SPBase:
             scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
             for sname, rank in scenario_names_to_comm_rank.items():
                 if sname in self.local_scenarios:
+                    if rank != comm.Get_rank():
+                        print(f"[comm POV]For the node {nodename}, the scenario {sname} get the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm. Cylinder rank is {self.cylinder_rank}")
                     assert rank == comm.Get_rank()
-
+                        
         ## ensure we've set things up correctly for all local scenarios
         for sname in self.local_scenarios:
             for nodename, comm in self.comms.items():
                 scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
                 if sname in scenario_names_to_comm_rank:
+                    if comm.Get_rank() != scenario_names_to_comm_rank[sname]:
+                        print(f"[scen POV]For the node {nodename}, the scenario {sname} get the rank {scenario_names_to_comm_rank[sname]} from scenario_names_to_rank and {comm.Get_rank()} from its comm ")
                     assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
-
 
     def _compute_unconditional_node_probabilities(self):
         """ calculates unconditional node probabilities and prob_coeff

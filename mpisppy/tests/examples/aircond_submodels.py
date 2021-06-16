@@ -6,6 +6,7 @@ import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
+from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
@@ -132,24 +133,38 @@ def MakeNodesforScen(model,nodenames,branching_factors):
 def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_seed=0):
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
-    nleaf = np.prod(BFs)
-    s = scennum % nleaf
+    prod = np.prod(BFs)
+    s = int(scennum % prod)
     d = 200
     demands = [d]
     nodenames = ["ROOT"]
     nodenum = 0 #Node number among nodes of the same stage
-    nodecount = 1 #Number of nodes in the full tree fors stages 1,...,t
+    nodecount = 1 #Number of nodes in the full tree for stages 1,...,t
     nodes_at_this_stage = 1 #Number of nodes in the full tree for stage t
+    # for bf in BFs:
+    #     assert prod % bf == 0
+    #     prod = prod//bf
+    #     nodenum = s%prod+nodenum*bf
+    #     aircondstream.seed(start_seed+nodenum+nodecount)
+    #     nodenames.append(str(s%prod))
+    #     d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
+    #     demands.append(d)
+    #     nodes_at_this_stage *= bf
+    #     nodecount += nodes_at_this_stage
+    #     s = s//prod
+    
     for bf in BFs:
-        nodenum = int(s%bf+nodenum*bf) 
-        aircondstream.seed(start_seed+nodenum+nodecount)
-        nodenames.append(str(nodenum+nodecount))
+        assert prod%bf == 0
+        prod = prod//bf
+        nodenames.append(str(s//prod))
+        s = s%prod
+    
+    stagelist = [int(x) for x in nodenames[1:]]
+    for t in range(1,len(nodenames)):
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
         d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
         demands.append(d)
-        nodes_at_this_stage *= bf
-        nodecount += nodes_at_this_stage
-        s = s//bf
-        
+    
     model = aircond_model_creator(demands)
     
     if num_scens is not None:
@@ -227,6 +242,9 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     -------
     xhat: str
         A generated xhat, solution to the approximate problem induced by scenario_names.
+        
+    NOTE: This tool only works when the file is in mpisppy. In SPInstances, 
+            you must change the from_module line.
 
     '''
     num_scens = len(scenario_names)
@@ -253,7 +271,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     return xhat
 
 if __name__ == "__main__":
-    bfs = [3,2,3,4,8]
+    bfs = [4,3,2]
     num_scens = np.prod(bfs) #To check with a full tree
     ama_options = { "EF-mstage": True,
                     "EF_solver_name": "gurobi_direct",
@@ -263,7 +281,7 @@ if __name__ == "__main__":
                     "mudev":0,
                     "sigmadev":80
                     }
-    refmodel = "mpisppy.tests.examples.aircond_submodels"
+    refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances
     #We use from_module to build easily an Amalgomator object
     ama = amalgomator.from_module(refmodel,
                                   ama_options,use_command_line=False)
@@ -278,11 +296,11 @@ if __name__ == "__main__":
     xhat = sputils.nonant_cache_from_ef(ama.ef)
    
     
-    num_batches = 10
+    num_batches = 1
     batch_size = num_scens
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
-                       verbose=False)
+                        verbose=False)
     r=mmw.run()
     print(r)
     
