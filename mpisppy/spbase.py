@@ -349,8 +349,7 @@ class SPBase:
             for sname, rank in scenario_names_to_comm_rank.items():
                 if sname in self.local_scenarios:
                     if rank != comm.Get_rank():
-                        print(f"[comm POV]For the node {nodename}, the scenario {sname} get the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm. Cylinder rank is {self.cylinder_rank}")
-                    assert rank == comm.Get_rank()
+                        raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
                         
         ## ensure we've set things up correctly for all local scenarios
         for sname in self.local_scenarios:
@@ -358,8 +357,7 @@ class SPBase:
                 scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
                 if sname in scenario_names_to_comm_rank:
                     if comm.Get_rank() != scenario_names_to_comm_rank[sname]:
-                        print(f"[scen POV]For the node {nodename}, the scenario {sname} get the rank {scenario_names_to_comm_rank[sname]} from scenario_names_to_rank and {comm.Get_rank()} from its comm ")
-                    assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
+                        raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
 
 
     def _compute_unconditional_node_probabilities(self):
