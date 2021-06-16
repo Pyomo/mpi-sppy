@@ -271,7 +271,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     return xhat
 
 if __name__ == "__main__":
-    bfs = [4,3,2]
+    bfs = [3,3,2]
     num_scens = np.prod(bfs) #To check with a full tree
     ama_options = { "EF-mstage": True,
                     "EF_solver_name": "gurobi_direct",
@@ -296,7 +296,7 @@ if __name__ == "__main__":
     xhat = sputils.nonant_cache_from_ef(ama.ef)
    
     
-    num_batches = 1
+    num_batches = 10
     batch_size = num_scens
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
