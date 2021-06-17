@@ -5,7 +5,6 @@ import pyomo.environ as pyo
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
 
 import mpisppy.extensions.extension
-from mpisppy.utils.sputils import _ScenTree
 
 
 class XhatBase(mpisppy.extensions.extension.Extension):

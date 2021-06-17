@@ -36,7 +36,7 @@ def main():
 
     args = _parse_args()
 
-    BFs = [int(bf) for bf in args.BFs.split(',')]
+    BFs = args.BFs
     if len(BFs) != 2:
         raise RuntimeError("Hydro is a three stage problem, so it needs 2 BFs")
 

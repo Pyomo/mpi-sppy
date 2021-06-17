@@ -335,7 +335,8 @@ class SPBase:
             if nodename == "ROOT":
                 self.comms["ROOT"] = self.mpicomm
             elif nodename in nonleafnodes:
-                nodenumber = sputils.extract_num(nodename)
+                nodenumber = sputils._extract_node_idx(nodename,
+                                                      self.branching_factors)
                 # IMPORTANT: See note in sputils._ScenTree.scen_names_to_ranks. Need to keep
                 #            this split aligned with self.scenario_names_to_rank
                 self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.cylinder_rank)
@@ -347,14 +348,16 @@ class SPBase:
             scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
             for sname, rank in scenario_names_to_comm_rank.items():
                 if sname in self.local_scenarios:
-                    assert rank == comm.Get_rank()
-
+                    if rank != comm.Get_rank():
+                        raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
+                        
         ## ensure we've set things up correctly for all local scenarios
         for sname in self.local_scenarios:
             for nodename, comm in self.comms.items():
                 scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
                 if sname in scenario_names_to_comm_rank:
-                    assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
+                    if comm.Get_rank() != scenario_names_to_comm_rank[sname]:
+                        raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
 
 
     def _compute_unconditional_node_probabilities(self):

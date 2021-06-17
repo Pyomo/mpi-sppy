@@ -157,10 +157,11 @@ def _basic_multistage(progname=None):
 
     # the default is intended more as an example than as a default
     parser.add_argument("--BFs",
-                        help="Comma delimied branching factors (default 2,2)",
+                        help="Spaces delimied branching factors (default 2 2)",
                         dest="BFs",
-                        type=str,
-                        default="2,2")
+                        nargs="*",
+                        type=int,
+                        default=[2,2])
     return parser
 
 
@@ -207,10 +208,24 @@ def make_EF2_parser(progname=None, num_scens_reqd=False):
     return parser
 
 def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
-    # create a parser just for EF two-stage (does not call _common_args)
+    # create a parser just for EF multi-stage (does not call _common_args)
     # NOTE: if you want abbreviations, override the arguments in your example
     # do not add abbreviations here.
     parser = _basic_multistage(progname=None)
+    
+    if num_scens_reqd:
+        parser.add_argument(
+            "num_scens", help="Number of scenarios", type=int
+        )
+    else:
+        parser.add_argument(
+            "--num-scens",
+            help="Number of scenarios (default None)",
+            dest="num_scens",
+            type=int,
+            default=None,
+        )
+        
     parser.add_argument("--EF-solver-name",
                         help = "solver name (default gurobi)",
                         dest="EF_solver_name",

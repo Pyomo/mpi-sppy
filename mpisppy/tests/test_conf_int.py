@@ -36,7 +36,8 @@ def _get_base_options():
                      "use_integer": False,
                      "crops_multiplier": 1,
                      'num_scens': 12,
-                     'start': 0}
+                     'start': 0,
+                     "EF-2stage": True}
     Baseoptions =  {"num_batches": 2,
                      "batch_size": 10,
                      "opt":options}

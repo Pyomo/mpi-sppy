@@ -12,7 +12,6 @@ import mpisppy.utils.sputils as sputils
 import numpy as np
 import scipy.stats
 import importlib
-import tempfile
 from mpisppy import global_toc
     
 fullcomm = mpi.COMM_WORLD
