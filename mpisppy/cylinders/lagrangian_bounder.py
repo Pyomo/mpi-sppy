@@ -68,6 +68,10 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
 
         self.bound = self.trivial_bound
 
+        # change to the iterk solver options
+        # after first trivial bound solve
+        self.opt.current_solver_options = self.opt.options["iterk_solver_options"]
+
         dk_iter = 1
         while not self.got_kill_signal():
             if self.new_Ws:
