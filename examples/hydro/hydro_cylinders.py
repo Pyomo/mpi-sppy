@@ -44,12 +44,7 @@ def main():
     with_lagrangian = args.with_lagrangian
 
     # This is multi-stage, so we need to supply node names
-    all_nodenames = ["ROOT"] # all trees must have this node
-    # The rest is a naming convention invented for this problem.
-    # Note that mpisppy does not have nodes at the leaves,
-    # and node names must end in a serial number.
-    for b in range(BFs[0]):
-        all_nodenames.append("ROOT_"+str(b))
+    all_nodenames = sputils.create_nodenames_from_BFs(BFs)
 
     ScenCount = BFs[0] * BFs[1]
     scenario_creator_kwargs = {"branching_factors": BFs}

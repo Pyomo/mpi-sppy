@@ -117,7 +117,7 @@ def main():
     all_scenario_names=["Scenario_"+str(i)\
                         for i in range(1,len(scenario_creator_kwargs["etree"].\
                                              rootnode.ScenarioList)+1)]
-    all_nodenames = scenario_creator_kwargs["etree"].All_Nonleaf_Nodenames()
+    all_nodenames = scenario_creator_kwargs["etree"].All_Nodenames()
 
     options = dict()
     if convex_relaxation:
