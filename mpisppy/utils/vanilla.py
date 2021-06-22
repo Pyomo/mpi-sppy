@@ -321,6 +321,8 @@ def xhatspecific_spoke(
     }
     if BFs:
         xhat_options["branching_factors"] = BFs
+        if all_nodenames is None:
+            
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatspecific_dict = {
