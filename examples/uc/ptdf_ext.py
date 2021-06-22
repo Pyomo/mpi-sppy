@@ -19,6 +19,10 @@ from egret.common.log import logger
 
 logger.setLevel(logging.ERROR)
 
+_egret_ptdf_options = ('rel_ptdf_tol', 'abs_ptdf_tol', 'abs_flow_tol', 'rel_flow_tol',
+                       'lazy_rel_flow_tol', 'max_violations_per_iteration', 'lazy',
+                       'branch_kv_threshold', 'kv_threshold_type', 'active_flow_tol',)
+
 class PTDFExtension(Extension):
     ''' Abstract base class for extensions to general SPBase objects.
 
@@ -34,6 +38,12 @@ class PTDFExtension(Extension):
         self.lp_cleanup_phase = kwargs.get('lp_cleanup_phase', True)
         self.iteration_limit = kwargs.get('iteration_limit', 100000)
         self.verbose = kwargs.get('verbose',False)
+
+        # Egret PTDF options
+        self.egret_ptdf_options = {}
+        for option in _egret_ptdf_options:
+            if option in kwargs:
+                self.egret_ptdf_options[option] = kwargs[option]
 
         if self.verbose:
             logger.setLevel(logging.INFO)
@@ -88,6 +98,10 @@ class PTDFExtension(Extension):
                         s._mpisppy_data.bundle_conditional_probability
             else:
                 self.bundle_conditional_probability[s] = 1.
+
+            # load in user-specified PTDF options
+            for k,v in self.egret_ptdf_options:
+                s._ptdf_options[k] = v
 
         self.tee = ("tee-rank0-solves" in self.opt.options
                     and self.opt.options['tee-rank0-solves']
@@ -199,6 +213,10 @@ class PTDFExtension(Extension):
             _lazy_ptdf_warmstart_copy_violations(s, s.model_data, time_periods[s],
                     subproblem._solver_plugin, s._ptdf_options, prepend_str,
                     obj_multi=self.bundle_conditional_probability[s])
+
+        # the basis is usually not a good start now
+        # so reset the solver if we can
+        subproblem._solver_plugin.reset()
 
         results = _lazy_ptdf_solve(subproblem, subproblem._solver_plugin, persistent_solver,
                                    symbolic_solver_labels=False, solver_tee=self.tee,
