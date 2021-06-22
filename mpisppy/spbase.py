@@ -7,6 +7,7 @@ import time
 import logging
 import weakref
 import numpy as np
+import re
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
@@ -26,7 +27,7 @@ class SPBase:
             all_scenario_names (list): all scenario names
             scenario_creator (fct): returns a concrete model with special things
             scenario_denouement (fct): for post processing and reporting
-            all_nodenames (list): all non-leaf node names; can be None for 2 Stage
+            all_nodenames (list): all node names (including leaves); can be None for 2 Stage
             mpicomm (MPI comm): if not given, use the global fullcomm
             scenario_creator_kwargs (dict): kwargs passed directly to
                 scenario_creator.
@@ -71,6 +72,7 @@ class SPBase:
             self.all_nodenames = ["ROOT"]
         elif "ROOT" in all_nodenames:
             self.all_nodenames = all_nodenames
+            self._check_nodenames()
         else:
             raise RuntimeError("'ROOT' must be in the list of node names")
         self.variable_probability = variable_probability
@@ -90,11 +92,6 @@ class SPBase:
         if self.n_proc > len(self.all_scenario_names):
             raise RuntimeError("More ranks than scenarios")
 
-        # Call various initialization methods
-        if "branching_factors" in self.options:
-            self.branching_factors = self.options["branching_factors"]
-        else:
-            self.branching_factors = [len(self.all_scenario_names)]
         self._calculate_scenario_ranks()
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
             self._assign_bundles()
@@ -174,6 +171,12 @@ class SPBase:
             if val != int(max_val[0]):
                 raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
                         f"variables between scenarios {val} vs. max {max_val[0]}")
+                
+    def _check_nodenames(self):
+        for ndn in self.all_nodenames:
+            if ndn != 'ROOT' and sputils.parent_ndn(ndn) not in self.all_nodenames:
+                raise RuntimeError(f"all_nodenames is inconsistent:"
+                                   f"The node {sputils.parent_ndn(ndn)}, parent of {ndn}, is missing.")
 
 
     def _calculate_scenario_ranks(self):
@@ -198,7 +201,7 @@ class SPBase:
                List of index names owned by the local rank
 
         """
-        tree = sputils._ScenTree(self.branching_factors, self.all_scenario_names)
+        tree = sputils._ScenTree(self.all_nodenames, self.all_scenario_names)
 
         self.scenario_names_to_rank, self._rank_slices, self._scenario_slices =\
                 tree.scen_names_to_ranks(self.n_proc)
@@ -265,6 +268,13 @@ class SPBase:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
             self.local_scenarios[sname] = s
+            if self.multistage:
+                #Checking that the scenario can have an associated leaf node in all_nodenames
+                stmax = np.argmax([nd.stage for nd in s._mpisppy_node_list])
+                if(s._mpisppy_node_list[stmax].name)+'_0' not in self.all_nodenames:
+                    raise RuntimeError("The leaf node associated with this scenario is not on all_nodenames"
+                        f"Its last non-leaf node {s._mpisppy_node_list[stmax].name} has no first child {s._mpisppy_node_list[stmax].name+'_0'}")
+            
             if "display_timing" in self.options and self.options["display_timing"]:
                 instance_creation_time = time.time() - instance_creation_start_time
                 all_instance_creation_times = self.mpicomm.gather(
@@ -286,7 +296,7 @@ class SPBase:
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
             scenario._mpisppy_data.nonant_indices = _nonant_indices
 
-            
+
     def _attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
@@ -335,8 +345,8 @@ class SPBase:
             if nodename == "ROOT":
                 self.comms["ROOT"] = self.mpicomm
             elif nodename in nonleafnodes:
-                nodenumber = sputils._extract_node_idx(nodename,
-                                                      self.branching_factors)
+                #The position in all_nodenames is an integer unique id.
+                nodenumber = self.all_nodenames.index(nodename)
                 # IMPORTANT: See note in sputils._ScenTree.scen_names_to_ranks. Need to keep
                 #            this split aligned with self.scenario_names_to_rank
                 self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.cylinder_rank)

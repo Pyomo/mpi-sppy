@@ -157,7 +157,7 @@ def _basic_multistage(progname=None):
 
     # the default is intended more as an example than as a default
     parser.add_argument("--BFs",
-                        help="Spaces delimied branching factors (default 2 2)",
+                        help="Spaces delimited branching factors (default 2 2)",
                         dest="BFs",
                         nargs="*",
                         type=int,

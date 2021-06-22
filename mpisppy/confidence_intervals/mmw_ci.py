@@ -159,7 +159,6 @@ class MMWConfidenceIntervals():
             self.type = "EF-2stage" 
         elif ama._bool_option(options, "EF-mstage"):
             self.type = "EF-mstage"
-            raise RuntimeWarning("EF-mstage is not fully supported, as we can not deal with sample trees")
         else:
             raise RuntimeError(
                 "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")

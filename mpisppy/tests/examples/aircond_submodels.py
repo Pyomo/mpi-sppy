@@ -138,20 +138,6 @@ def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_see
     d = 200
     demands = [d]
     nodenames = ["ROOT"]
-    nodenum = 0 #Node number among nodes of the same stage
-    nodecount = 1 #Number of nodes in the full tree for stages 1,...,t
-    nodes_at_this_stage = 1 #Number of nodes in the full tree for stage t
-    # for bf in BFs:
-    #     assert prod % bf == 0
-    #     prod = prod//bf
-    #     nodenum = s%prod+nodenum*bf
-    #     aircondstream.seed(start_seed+nodenum+nodecount)
-    #     nodenames.append(str(s%prod))
-    #     d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
-    #     demands.append(d)
-    #     nodes_at_this_stage *= bf
-    #     nodecount += nodes_at_this_stage
-    #     s = s//prod
     
     for bf in BFs:
         assert prod%bf == 0
@@ -292,7 +278,6 @@ if __name__ == "__main__":
     from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
     options = ama.options
     options['solver_options'] = options['EF_solver_options']
-    options['branching_factors'] = options['BFs']
     xhat = sputils.nonant_cache_from_ef(ama.ef)
    
     
