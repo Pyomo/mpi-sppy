@@ -461,7 +461,7 @@ class Test_hydro(unittest.TestCase):
         self.all_scenario_names = list()
         for sn in range(self.ScenCount):
             self.all_scenario_names.append("Scen"+str(sn+1))
-        self.all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+        self.all_nodenames = sputils.create_nodenames_from_BFs(self.BFs)
         # end hardwire
 
     def test_ph_constructor(self):
