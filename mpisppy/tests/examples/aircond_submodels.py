@@ -192,6 +192,7 @@ def kw_creator(options):
               "BFs" : options['BFs'] if 'BFs' in options else [3,2,3],
               "mudev" : options['mudev'] if 'mudev' in options else 0.,
               "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
+              "start_seed": options['start_seed'] if 'start_seed' in options else 0,
               }
     return kwargs
 
@@ -202,7 +203,7 @@ def scenario_denouement(rank, scenario_name, scenario):
         
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           BFs=[3,2,3], mudev = 0, sigmadev = 40):
+                           BFs=[3,2,3], mudev = 0, sigmadev = 40, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -223,6 +224,9 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     sigma_dev: float, optional
         The standard deviation from mudev for the demand difference between
         two stages. The default is 40.
+    start_seed: int, optional
+        The starting seed, used to create different sample scenario trees.
+        The default is 0.
 
     Returns
     -------
