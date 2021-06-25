@@ -80,7 +80,6 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
 
 class MMWConfidenceIntervals():
     """Takes a model and options as input. 
-
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
         options (dict): useful options to run amalgomator or xhat_eval, 
@@ -319,4 +318,3 @@ if __name__ == "__main__":
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 
-    
