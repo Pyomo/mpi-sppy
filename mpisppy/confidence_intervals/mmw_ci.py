@@ -96,9 +96,8 @@ class MMWConfidenceIntervals():
     
     Note:
         Options can include the following things:
-            -The type of our problem. for now, MMWci only support 2-stage problems,
-             and solve it via solving directly extensive forms, so options must contains
-             an attribute 'EF-2stage' equals to True.
+            -The type of our solving. for now, MMWci only support EF, so it must
+            have an attribute 'EF-2stage' or 'EF-mstage' set equal to True
             - Solver-related options ('EF_solver_name' and 'EF_solver_options')
             
     
@@ -154,8 +153,19 @@ class MMWConfidenceIntervals():
         elif start < ScenCount :
             raise RuntimeWarning(
                 "Scenarios used to compute xhat may be used in MMW")
+            
+        #Type of our problem
+        if ama._bool_option(options, "EF-2stage"):
+            self.type = "EF-2stage" 
+        elif ama._bool_option(options, "EF-mstage"):
+            self.type = "EF-mstage"
+        else:
+            raise RuntimeError(
+                "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
         
-                
+        if self.type == "EF-mstage" and "BFs" not in options:
+            raise RuntimeError(
+                "For multi-stage problems, we need branching factors (an attribute 'BFs' to options)")
         
     def run(self,confidence_level=0.95):
         # We get the MMW right term, then xhat, then the MMW left term.
@@ -202,7 +212,7 @@ class MMWConfidenceIntervals():
             ama_options = dict(scenario_creator_kwargs)
             ama_options['start'] = start
             ama_options['EF_solver_name'] = solvername
-            ama_options["EF-2stage"] = True
+            ama_options[self.type] = True
             ama_object = ama.from_module(self.refmodelname, ama_options,use_command_line=False)
             ama_object.verbose = self.verbose
             ama_object.run()
@@ -217,13 +227,20 @@ class MMWConfidenceIntervals():
                      "solvername": solvername,
                      "verbose": False,
                      "solver_options":solver_options}
-            # TBD: set solver options
             
+            if self.type == "EF-mstage":
+                all_nodenames = sputils.create_nodenames_from_BFs(
+                    self.options['BFs'])
+                options['branching_factors'] = self.options['BFs']
+            else:
+                all_nodenames = None
+                
             ev = xhat_eval.Xhat_Eval(options,
                             MMW_scenario_names,
                             scenario_creator,
                             scenario_denouement,
-                            scenario_creator_kwargs=scenario_creator_kwargs)
+                            scenario_creator_kwargs=scenario_creator_kwargs,
+                            all_nodenames = all_nodenames)
             obj_at_xhat = ev.evaluate(xhat)
 
             #Now we can compute MMW (9)
@@ -251,6 +268,7 @@ class MMWConfidenceIntervals():
         
 
 if __name__ == "__main__":
+# To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
     refmodel = "mpisppy.tests.examples.farmer" #Change this path to use a different model
     #Compute the nonant xhat (the one used in the left term of MMW (9) ) using

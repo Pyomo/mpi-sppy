@@ -74,12 +74,12 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                   update_objective=True,
                   compute_val_at_nonant=False):
         pyomo_solve_time = super().solve_one(solver_options, k, s,
-                                             dtiming=False,
-                                             gripe=False,
-                                             tee=False,
-                                             verbose=False,
-                                             disable_pyomo_signal_handling=False,
-                                             update_objective=True)
+                                             dtiming=dtiming,
+                                             gripe=gripe,
+                                             tee=tee,
+                                             verbose=verbose,
+                                             disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+                                             update_objective=update_objective)
         if compute_val_at_nonant:
                 if self.bundling:
                     objfct = self.saved_objs[k]
@@ -224,7 +224,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
-        self._fix_nonants(nonant_cache)
+        self._fix_root_nonants(nonant_cache['ROOT'])
         if not hasattr(self, "objs_dict"):
             self.objs_dict = {}
         
@@ -257,7 +257,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or numpy.array): Expected value
 
         """
-        self._fix_nonants(nonant_cache)
+        self._fix_root_nonants(nonant_cache['ROOT'])
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         

@@ -1,5 +1,6 @@
 #ReferenceModel for full set of scenarios for APL1P; May 2021
-
+#We use costs from Bailey, Jensen and Morton, Response Surface Analysis of Two-Stage Stochastic Linear Programming with Recourse
+#(costs are 10x higher than in the original [Infanger 1992] paper)
 
 import pyomo.environ as pyo
 import numpy as np
@@ -49,7 +50,7 @@ def APL1P_model_creator(seed):
     
     
     # Investment, aka Capacity costs
-    invest = np.array([.4,.25])
+    invest = np.array([4.,2.5])
     def investment_init(m,g):
         return(invest[g-1])
 
@@ -57,7 +58,7 @@ def APL1P_model_creator(seed):
                              initialize=investment_init)
     
     # Operating Cost
-    op_cost = np.array([[.43,.2,.05],[.87,.4,.1]])
+    op_cost = np.array([[4.3,2.0,0.5],[8.7,4.0,1.0]])
     def operatingcost_init(m,g,dl):
         return(op_cost[g-1,dl-1])
     
@@ -68,7 +69,7 @@ def APL1P_model_creator(seed):
     demand_outcome = [900,1000,1100,1200]
     demand_prob = [.15,.45,.25,.15]
     demand_cumprob = np.cumsum(demand_prob)
-    assert(max(demand_cumprob == 1.0))
+    assert(max(demand_cumprob) == 1.0)
     def demand_init(m,dl):
         rd = random_array[2+dl]
         i = np.searchsorted(demand_cumprob,rd)
@@ -78,7 +79,7 @@ def APL1P_model_creator(seed):
                          initialize=demand_init)
     
     # Cost of unserved demand
-    unserved_cost =1.0
+    unserved_cost =10.0
     model.CostUnservedDemand = pyo.Param(model.DL, within=pyo.NonNegativeReals,
                                      initialize=unserved_cost)
     
