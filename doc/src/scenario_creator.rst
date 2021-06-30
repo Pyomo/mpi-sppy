@@ -60,3 +60,6 @@ multipliers by algorithms such as PH, but will be given non-anticipativity
 constraints when an EF is formed, either to solve the EF or when bundles are
 formed. For some problems, with the appropriate solver, adding redundant nonanticipativity constraints
 for auxilliary variables the bundle/EF will result in a (much) smaller pre-solved model.
+
+
+

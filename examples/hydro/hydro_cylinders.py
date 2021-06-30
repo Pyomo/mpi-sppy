@@ -44,12 +44,7 @@ def main():
     with_lagrangian = args.with_lagrangian
 
     # This is multi-stage, so we need to supply node names
-    all_nodenames = ["ROOT"] # all trees must have this node
-    # The rest is a naming convention invented for this problem.
-    # Note that mpisppy does not have nodes at the leaves,
-    # and node names must end in a serial number.
-    for b in range(BFs[0]):
-        all_nodenames.append("ROOT_"+str(b))
+    all_nodenames = sputils.create_nodenames_from_BFs(BFs)
 
     ScenCount = BFs[0] * BFs[1]
     scenario_creator_kwargs = {"branching_factors": BFs}
@@ -67,7 +62,6 @@ def main():
                               ph_extensions=None,
                               rho_setter = rho_setter)
     hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    hub_dict["opt_kwargs"]["options"]["branching_factors"] = BFs
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
@@ -75,7 +69,6 @@ def main():
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
         lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
-        lagrangian_spoke["opt_kwargs"]["options"]["branching_factors"] = BFs
 
     # xhat looper bound spoke
     xhat_scenario_dict = {"ROOT": "Scen1",
