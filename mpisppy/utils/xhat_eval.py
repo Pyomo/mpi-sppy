@@ -257,7 +257,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or numpy.array): Expected value
 
         """
-        self._fix_root_nonants(nonant_cache['ROOT']) #Change nonant_cache to nonant_stage1 and _fix_nonants to _fix_root_nonants
+        self._fix_root_nonants(nonant_cache['ROOT'])
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         

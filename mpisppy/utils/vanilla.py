@@ -14,6 +14,7 @@ from mpisppy.opt.aph import APH
 from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.fwph.fwph import FWPH
 from mpisppy.utils.xhat_eval import Xhat_Eval
+import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
@@ -321,6 +322,9 @@ def xhatspecific_spoke(
     }
     if BFs:
         xhat_options["branching_factors"] = BFs
+        if all_nodenames is None:
+            all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+    #TODO: We need to adjust Vanilla with multistage
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatspecific_dict = {

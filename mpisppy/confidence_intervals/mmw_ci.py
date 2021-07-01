@@ -456,6 +456,7 @@ class MMWObjectiveConfidenceIntervals():
         return(self.result)
         
 if __name__ == "__main__":
+# To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
     refmodel = "mpisppy.tests.examples.farmer" #Change this path to use a different model
     #Compute the nonant xhat (the one used in the left term of MMW (9) ) using
