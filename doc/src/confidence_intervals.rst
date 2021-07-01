@@ -35,6 +35,12 @@ Example
 
 An example of use, with the ``farmer`` problem, can be found in the main of ``mmwci.py``.
 
+Using stand alone ``mmw_conf.py``
+------------------------------
+
+To use the stand along program ``mmw_conf``, first a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
+``sputils.ef_ROOT_nonants_npy_serializer(instance, xhat.npy)`` after solving the concrete model ``instance``. Next, on the command line run
+``python -m mmw_conf instance.py xhat.npy solver --alpha 0.95 --MMW-num-batches 2 --MMW-batch-size 3``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case.
 
 Sequential sampling
 ===================
