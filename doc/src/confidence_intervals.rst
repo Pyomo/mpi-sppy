@@ -39,8 +39,8 @@ Using stand alone ``mmw_conf.py``
 ------------------------------
 
 To use the stand along program ``mmw_conf``, first a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
-``sputils.ef_ROOT_nonants_npy_serializer(instance, xhat.npy)`` after solving the concrete model ``instance``. Next, on the command line run
-``python -m mmw_conf instance.py xhat.npy solver --alpha 0.95 --MMW-num-batches 2 --MMW-batch-size 3``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case.
+``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the concrete model ``instance``. When using ``amalgomator`` to solve the program, first extract the ef solution from the amalgomator object via ``xhat = sputils.nonant_cache_from_ef(ama.ef)``, and write this to a ``.npy`` file using the ``write_xhat`` function in the ``mmw_ci`` module. Once this is accomplished, on the command line, run
+``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy solver --(options)``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case.
 
 Sequential sampling
 ===================
