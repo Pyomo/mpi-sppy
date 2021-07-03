@@ -196,7 +196,7 @@ class MMWConfidenceIntervals():
         
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        Z = np.zeros(num_batches) # objective function values
+        xhat_objectives = np.zeros(num_batches) # objective function values
         
         
         for i in range(num_batches) :
@@ -217,7 +217,6 @@ class MMWConfidenceIntervals():
             ama_object.verbose = self.verbose
             ama_object.run()
             MMW_right_term = ama_object.EF_Obj
-            Z[i] = MMW_right_term
             
             #Then we compute the left term of (9)
             # Create the eval object for the left term of the LHS of (9) in MMW
@@ -235,14 +234,20 @@ class MMWConfidenceIntervals():
                 options['branching_factors'] = self.options['BFs']
             else:
                 all_nodenames = None
-                
+            print(all_nodenames)
+            print(MMW_scenario_names)
             ev = xhat_eval.Xhat_Eval(options,
                             MMW_scenario_names,
                             scenario_creator,
                             scenario_denouement,
                             scenario_creator_kwargs=scenario_creator_kwargs,
                             all_nodenames = all_nodenames)
+            #pick up here...
+           #for j in range(batch_size):
+                #s is a scenario...
+                #xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[i], s)
             obj_at_xhat = ev.evaluate(xhat)
+            xhat_objectives[i] = obj_at_xhat
 
             #Now we can compute MMW (9)
             Gn = obj_at_xhat-MMW_right_term
@@ -254,21 +259,25 @@ class MMWConfidenceIntervals():
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
             G[i]=Gn             
-        s = np.std(G) #Standard deviation
+        s_g = np.std(G) #Standard deviation
+        print(xhat_objectives)
+        s_z = np.std(xhat_objectives) # this should be the std of all of them, these are clumped in batches...
         Gbar = np.mean(G)
-        Zbar = np.mean(Z)
-        t = scipy.stats.t.ppf(confidence_level,num_batches-1)
-        epsilon = t*s/np.sqrt(num_batches)
-        gap_inner_bound =  Gbar+epsilon
-        gap_outer_bound =0
+        Zhat_bar = np.mean(xhat_objectives)
+        t_G = scipy.stats.t.ppf(confidence_level,num_batches-1)
+        t_z = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
+        epsilon_g = t_G*s_g/np.sqrt(num_batches)
+        epsilon_z = t_z*s_z/np.sqrt(num_batches*batch_size)
+        gap_inner_bound =  Gbar+epsilon_g + epsilon_z
+        gap_outer_bound =0 - epsilon_z
         if objective_gap == True:
-            gap_inner_bound += Zbar
-            gap_outer_bound+= Zbar
+            gap_inner_bound += Zbar + epsilon_z
+            gap_outer_bound += Zbar - epsilon_z
 
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
-                      "std": s,
+                      "std": s_g,
                       "Glist": G}
         return(self.result)
         
