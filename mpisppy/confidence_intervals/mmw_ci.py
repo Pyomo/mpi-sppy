@@ -166,7 +166,7 @@ class MMWConfidenceIntervals():
             raise RuntimeError(
                 "For multi-stage problems, we need branching factors (an attribute 'BFs' to options)")
         
-    def run(self, confidence_level=0.95, objective_gap = False):
+    def run(self, confidence_level=0.95, objective_gap=False):
         # We get the MMW right term, then xhat, then the MMW left term.
 
 
@@ -196,8 +196,7 @@ class MMWConfidenceIntervals():
         
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        xhat_objectives = np.zeros(num_batches*batch_size) # objective function values
-        #xhat_objectives = np.zeros(num_batches) # how to cluster?
+        xhat_objectives = np.zeros(num_batches*batch_size) # objective function realizations at xhat
 
         for i in range(num_batches) :
             #First we compute the right term of MMW (9)
@@ -247,12 +246,10 @@ class MMWConfidenceIntervals():
             if objective_gap == True:
                 j = 0
                 for k, s in ev.local_scenarios.items():
-                    # I think this is the correct approach, but not getting a small ci...
                     xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[j], s)
                     j+=1
 
             obj_at_xhat = ev.evaluate(xhat)
-            xhat_objectives[i] = obj_at_xhat
 
             #Now we can compute MMW (9)
             Gn = obj_at_xhat-MMW_right_term
@@ -273,11 +270,9 @@ class MMWConfidenceIntervals():
 
         t_g = scipy.stats.t.ppf(confidence_level,num_batches-1)
         t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
-        #t_zhat = scipy.stats.t.ppf(confidence_level, num_batches-1) # how to cluster?
 
         epsilon_g = t_g*s_g/np.sqrt(num_batches)
         epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches*batch_size)
-        #epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches) # how to cluster?
 
         gap_inner_bound =  Gbar + epsilon_g
         gap_outer_bound = 0
