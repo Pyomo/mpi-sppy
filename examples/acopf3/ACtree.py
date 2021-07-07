@@ -127,7 +127,7 @@ class TreeNode():
                     removals.append((line, mo))
                     self.LinesUp.append(line)
                 else:
-                    mo += TreeInfo.StageDurations[stage-1]
+                    mo += TreeInfo.StageDurations[self.stage-1]
                     self.FailedLines[ell] = (line, mo)
             for r in removals:
                 self.FailedLines.remove(r)

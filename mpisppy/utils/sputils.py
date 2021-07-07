@@ -131,7 +131,7 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     return spcomm, opt_dict
 
 def first_stage_nonant_npy_serializer(file_name, scenario, bundling):
-    # write just the nonants for ROOT in an npy file (e.g. for CI)
+    # write just the nonants for ROOT in an npy file (e.g. for Conf Int)
     root = scenario._mpisppy_node_list[0]
     assert root.name == "ROOT"
     root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
@@ -729,7 +729,8 @@ class _TreeNode():
             self.is_leaf = True
             self.kids = []
         else:
-            assert len(desc_leaf_dict) >= numscens
+            if len(desc_leaf_dict) < numscens:
+                raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
             # make children
             first = scenfirst
             self.kids = list()
@@ -985,6 +986,11 @@ def create_nodenames_from_BFs(BFS):
         nodenames += stage_nodes
     return nodenames
 
+def number_of_nodes(BFs):
+    #How many nodes does a tree with a given BFs have ?
+    last_node_stage_num = [i-1 for i in BFs]
+    return node_idx(last_node_stage_num, BFs)
+    
 
 
           
