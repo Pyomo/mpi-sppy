@@ -83,13 +83,6 @@ os.chdir("..")
 #run mmw, remove .npy file
 do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "gurobi", "--alpha 0.95 --num-scens=3 --with-objective-gap --solver-options 'TimeLimit=1'")
 
-# solve ef and write .npy file for 2-stage aircond
-os.chdir('aircond')
-os.system("echo python aaircond.py --num-scens=3 && python aaircond.py --num-scens=3")
-os.chdir("..")
-#run mmw, remove .npy file
-do_one_mmw("aircond", "aaircond.py", "aircond_root_nonants_temp.npy", "gurobi", "--alpha 0.95 --num-scens=3")
-
 if len(badguys) > 0:
     print("\nBad Guys:")
     for i,v in badguys.items():
