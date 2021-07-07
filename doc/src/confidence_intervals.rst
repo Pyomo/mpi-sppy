@@ -51,16 +51,16 @@ Once a model satisfies the requirement for amalgomator, next a ``.npy`` file sho
 ``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``afarmer.py`` for an example of this).
 
 Once this is accomplished, on the command line, run
-``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy --solver-name gurobi --num-scens n --alpha 0.95 --(etc)``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponing path should be called on the command line.
+``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy gurobi --num-scens n --alpha 0.95``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponing path should be called on the command line.
 
-Additional solver options can be specified as desired. Though currently it looks as if the ``EF_solve_options`` in ``mmw_conf`` are related only to the evaluation at the given ``xhat``,
+Additional solver options can be specified with the ``--solver-options`` option.
 
-This program will out put a confidence interval on the gap between the solution to the EF and the optimal solution. There is an additional option ``--with-objective-gap``, which, if selected, returns a confidence interval around the actual optimal value of the stochastic program. This interval is necessarily larger (??) than the interval discussed in [mmw1999]_ (Section 3.2).
+This program will out put a confidence interval on the gap between the solution to the EF and the optimal solution. There is an additional option, ``--with-objective-gap``, which will computes a confidence interval around the solution of the stochastic program. Since the exact value of the objective function cannot be determined, we use the realizations of the objective function at the candidate solution to construct an additional confidence interval about the mean of the realizations computed.
 
 Sequential sampling
 ===================
 
-Similarly, given an confidence interval, one can try to find a candidate solution
+Similarly, given a confidence interval, one can try to find a candidate solution
 ``xhat`` such that its optimality gap has this confidence interval.
 The class ``SeqSampling`` implements three procedures described in 
 [bm2011]_ and [bpl2012]_. It takes as an input a method to generate
