@@ -309,6 +309,5 @@ if __name__ == "__main__":
         # This the xhat of the left term of LHS of MMW (9)
         print("outer bound=", ama_object.best_outer_bound)
     
-    print('woo')
     ########### get the nonants (the xhat)  
     sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "farmer_root_nonants_temp.npy")

@@ -1,4 +1,5 @@
-#for use with amalgomator mmw testing, so __main__ should be 2-stage for now
+#for use with amalgomator mmw testing, so __main__ should be 2-stage for now,
+# and kw_creator also defaults to 2-stage
 #ReferenceModel for full set of scenarios for AirCond; June 2021
 
 import pyomo.environ as pyo
@@ -189,7 +190,7 @@ def inparser_adder(inparser):
 def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "BFs" : options['BFs'] if 'BFs' in options else [3,2,3],
+              "BFs" : options['BFs'] if 'BFs' in options else [3],
               "mudev" : options['mudev'] if 'mudev' in options else 0.,
               "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
               "start_seed": options['start_seed'] if 'start_seed' in options else 0,
@@ -261,7 +262,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     return xhat
 
 if __name__ == "__main__":
-    bfs = [3,3]
+    bfs = [3]
     num_scens = np.prod(bfs) #To check with a full tree
     ama_options = { "EF-2stage": True,
                     "EF_solver_name": "gurobi_direct",
@@ -269,7 +270,8 @@ if __name__ == "__main__":
                     "_mpisppy_probability": 1/num_scens,
                     "BFs":bfs,
                     "mudev":0,
-                    "sigmadev":80
+                    "sigmadev":80,
+                    "start":1
                     }
     refmodel = "aaircond" # WARNING: Change this in SPInstances
     #We use from_module to build easily an Amalgomator object
@@ -279,5 +281,5 @@ if __name__ == "__main__":
     print(f"inner bound=", ama.best_inner_bound)
     print(f"outer bound=", ama.best_outer_bound)
 
-    sputils.ef_ROOT_nonants_npy_serializer(ama.ef, "aircond_root_nonants_temp.npy")
+    sputils.ef_ROOT_nonants_npy_serializer(ama.ef, "aircond_root_nonants_temp.npy") 
         

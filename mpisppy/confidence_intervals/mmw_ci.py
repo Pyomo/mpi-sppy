@@ -197,7 +197,7 @@ class MMWConfidenceIntervals():
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
         #xhat_objectives = np.zeros(num_batches*batch_size) # objective function values
-        xhat_objectives = np.zeros(num_batches*batch_size) # how to cluster?
+        xhat_objectives = np.zeros(num_batches) # how to cluster?
 
         for i in range(num_batches) :
             #First we compute the right term of MMW (9)
@@ -211,6 +211,8 @@ class MMWConfidenceIntervals():
             ama_options = dict(scenario_creator_kwargs)
             ama_options['start'] = start
             ama_options['EF_solver_name'] = solvername
+            # shouldn't we also pass solver options here? 
+            ama_options['EF_solver_options'] = solver_options
             ama_options[self.type] = True
             ama_object = ama.from_module(self.refmodelname, ama_options,use_command_line=False)
             ama_object.verbose = self.verbose

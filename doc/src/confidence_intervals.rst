@@ -38,9 +38,24 @@ An example of use, with the ``farmer`` problem, can be found in the main of ``mm
 Using stand alone ``mmw_conf.py``
 ------------------------------
 
-To use the stand along program ``mmw_conf``, first a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
-``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the concrete model ``instance``. When using ``amalgomator`` to solve the program, first extract the ef solution from the amalgomator object via ``xhat = sputils.nonant_cache_from_ef(ama.ef)``, and write this to a ``.npy`` file using the ``write_xhat`` function in the ``mmw_ci`` module. Once this is accomplished, on the command line, run
-``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy solver --(options)``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case.
+(Currently for use with 2-stage problem only)
+
+``mmw_conf`` uses the ``MMWConfidenceIntervals`` class from ``mmw_ci`` in order to construct a confidence interval on the optimality gap of a particular candidate solution ``xhat`` of a model instance. 
+
+To use the stand along program a model compatible with ``Amalgomator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
+
+First, assue that the model to be used is compatable with the ``Amalgomator`` class. This requires the model to have each of the following: a``scenario_names_creator``,  a ``scenario_creator``, an ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in ``examples`` for an example of an acceptable model.
+
+Once a model satisfies the requirement for amalgomator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
+``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgomator`` to solve the program, this can be done by adding the line
+``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``afarmer.py`` for an example of this).
+
+Once this is accomplished, on the command line, run
+``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy --solver-name gurobi --num-scens n --alpha 0.95 --(etc)``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponing path should be called on the command line.
+
+Additional solver options can be specified as desired. Though currently it looks as if the ``EF_solve_options`` in ``mmw_conf`` are related only to the evaluation at the given ``xhat``,
+
+This program will out put a confidence interval on the gap between the solution to the EF and the optimal solution. There is an additional option ``--with-objective-gap``, which, if selected, returns a confidence interval around the actual optimal value of the stochastic program. This interval is necessarily larger (??) than the interval discussed in [mmw1999]_ (Section 3.2).
 
 Sequential sampling
 ===================

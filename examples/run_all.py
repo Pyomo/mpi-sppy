@@ -70,6 +70,22 @@ def do_one(dirname, progname, np, argstring):
     else:
         os.chdir("../..")   # hack for one level of subdirectories
 
+def do_one_mmw(dirname, progname, npyfile, argstring):
+    os.chdir(dirname)
+
+    runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {}".\
+                format(progname, npyfile , argstring)
+    code = os.system("echo {} && {}".format(runstring, runstring))
+    if code != 0:
+        if dirname not in badguys:
+            badguys[dirname] = [runstring]
+        else:
+            badguys[dirname].append(runstring)
+
+    os.remove(npyfile)
+
+    os.chdir("..")
+
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
@@ -162,6 +178,22 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_ef.py", 1, solver_name)
 
+
+#=========MMW TESTS==========
+
+#write .npy file for farmer
+os.chdir("farmer")
+os.system("echo python afarmer.py --num-scens=3 && python afarmer.py --num-scens=3")
+os.chdir("..")
+#run mmw, remove .npy file
+do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--alpha 0.95 --num-scens=3 --solver-name gurobi_persistent")
+
+# solve ef and write .npy file for 2-stage aircond
+os.chdir('aircond')
+os.system("echo python aaircond.py --num-scens=3 && python aaircond.py --num-scens=3")
+os.chdir("..")
+#run mmw, remove .npy file
+do_one_mmw("aircond", "aaircond.py", "aircond_root_nonants_temp.npy", "--alpha 0.95 --num-scens=3 --solver-name gurobi_persistent")
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
