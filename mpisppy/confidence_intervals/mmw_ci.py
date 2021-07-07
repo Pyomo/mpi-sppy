@@ -196,8 +196,8 @@ class MMWConfidenceIntervals():
         
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        #xhat_objectives = np.zeros(num_batches*batch_size) # objective function values
-        xhat_objectives = np.zeros(num_batches) # how to cluster?
+        xhat_objectives = np.zeros(num_batches*batch_size) # objective function values
+        #xhat_objectives = np.zeros(num_batches) # how to cluster?
 
         for i in range(num_batches) :
             #First we compute the right term of MMW (9)
@@ -244,12 +244,12 @@ class MMWConfidenceIntervals():
                             all_nodenames = all_nodenames)
 
             # evaluate each scenario at xhat for zhat confidence interval
-            # if objective_gap == True:
-            #     j = 0
-            #     for k, s in ev.local_scenarios.items():
-            #         # I think this is the correct approach, but not getting a small ci...
-            #         xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[j], s)
-            #         j+=1
+            if objective_gap == True:
+                j = 0
+                for k, s in ev.local_scenarios.items():
+                    # I think this is the correct approach, but not getting a small ci...
+                    xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[j], s)
+                    j+=1
 
             obj_at_xhat = ev.evaluate(xhat)
             xhat_objectives[i] = obj_at_xhat
@@ -272,12 +272,12 @@ class MMWConfidenceIntervals():
         zhat_bar = np.mean(xhat_objectives)
 
         t_g = scipy.stats.t.ppf(confidence_level,num_batches-1)
-        #t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
-        t_zhat = scipy.stats.t.ppf(confidence_level, num_batches-1) # how to cluster?
+        t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
+        #t_zhat = scipy.stats.t.ppf(confidence_level, num_batches-1) # how to cluster?
 
         epsilon_g = t_g*s_g/np.sqrt(num_batches)
-        #epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches*batch_size)
-        epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches) # how to cluster?
+        epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches*batch_size)
+        #epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches) # how to cluster?
 
         gap_inner_bound =  Gbar + epsilon_g
         gap_outer_bound = 0

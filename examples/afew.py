@@ -40,11 +40,11 @@ def do_one(dirname, progname, np, argstring):
 solver_name = "gurobi_persistent"
 
 
-def do_one_mmw(dirname, progname, npyfile, argstring):
+def do_one_mmw(dirname, progname, npyfile, solvername, argstring):
     os.chdir(dirname)
 
-    runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {}".\
-                format(progname, npyfile , argstring)
+    runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {}".\
+                format(progname, npyfile, solvername, argstring)
     code = os.system("echo {} && {}".format(runstring, runstring))
     if code != 0:
         if dirname not in badguys:
@@ -81,7 +81,14 @@ os.chdir("farmer")
 os.system("echo python afarmer.py --num-scens=3 && python afarmer.py --num-scens=3")
 os.chdir("..")
 #run mmw, remove .npy file
-do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--alpha 0.95 --num-scens=3 --solver-name gurobi")
+do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "gurobi", "--alpha 0.95 --num-scens=3 --with-objective-gap --solver-options 'TimeLimit=1'")
+
+# solve ef and write .npy file for 2-stage aircond
+os.chdir('aircond')
+os.system("echo python aaircond.py --num-scens=3 && python aaircond.py --num-scens=3")
+os.chdir("..")
+#run mmw, remove .npy file
+do_one_mmw("aircond", "aaircond.py", "aircond_root_nonants_temp.npy", "gurobi", "--alpha 0.95 --num-scens=3")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
