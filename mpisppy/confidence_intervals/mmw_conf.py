@@ -102,3 +102,4 @@ if __name__ == "__main__":
     r = mmw.run(confidence_level=alpha, objective_gap = args.objective_gap)
 
     global_toc(r)
+    

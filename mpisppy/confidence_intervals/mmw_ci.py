@@ -263,21 +263,24 @@ class MMWConfidenceIntervals():
             G[i]=Gn   
 
         s_g = np.std(G) #Standard deviation of gap
-        s_zhat = np.std(xhat_objectives) # Standard deviation of objectives at xhat
 
         Gbar = np.mean(G)
-        zhat_bar = np.mean(xhat_objectives)
 
         t_g = scipy.stats.t.ppf(confidence_level,num_batches-1)
-        t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
 
         epsilon_g = t_g*s_g/np.sqrt(num_batches)
-        epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches*batch_size)
 
         gap_inner_bound =  Gbar + epsilon_g
         gap_outer_bound = 0
  
         if objective_gap == True:
+            zhat_bar = np.mean(xhat_objectives)
+
+            s_zhat = np.std(xhat_objectives) # Stanard deviation of objectives at xhat
+            t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
+
+            epsilon_zhat = t_zhat*s_zhat / np.sqrt(num_batches*batch_size)
+
             gap_inner_bound += zhat_bar + epsilon_zhat
             gap_outer_bound += zhat_bar - epsilon_zhat
 
