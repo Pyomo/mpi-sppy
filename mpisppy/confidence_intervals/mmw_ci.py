@@ -196,9 +196,9 @@ class MMWConfidenceIntervals():
         
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        xhat_objectives = np.zeros(num_batches) # objective function values
-        
-        
+        #xhat_objectives = np.zeros(num_batches*batch_size) # objective function values
+        xhat_objectives = np.zeros(num_batches*batch_size) # how to cluster?
+
         for i in range(num_batches) :
             #First we compute the right term of MMW (9)
             start = ScenCount+i*batch_size
@@ -206,7 +206,6 @@ class MMWConfidenceIntervals():
                 batch_size, start=start)
             
 
-            
             #We use amalgomator to do it
 
             ama_options = dict(scenario_creator_kwargs)
@@ -234,18 +233,22 @@ class MMWConfidenceIntervals():
                 options['branching_factors'] = self.options['BFs']
             else:
                 all_nodenames = None
-            print(all_nodenames)
-            print(MMW_scenario_names)
+
             ev = xhat_eval.Xhat_Eval(options,
                             MMW_scenario_names,
                             scenario_creator,
                             scenario_denouement,
                             scenario_creator_kwargs=scenario_creator_kwargs,
                             all_nodenames = all_nodenames)
-            #pick up here...
-           #for j in range(batch_size):
-                #s is a scenario...
-                #xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[i], s)
+
+            # evaluate each scenario at xhat for zhat confidence interval
+            # if objective_gap == True:
+            #     j = 0
+            #     for k, s in ev.local_scenarios.items():
+            #         # I think this is the correct approach, but not getting a small ci...
+            #         xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[j], s)
+            #         j+=1
+
             obj_at_xhat = ev.evaluate(xhat)
             xhat_objectives[i] = obj_at_xhat
 
@@ -258,21 +261,28 @@ class MMWConfidenceIntervals():
             
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
-            G[i]=Gn             
-        s_g = np.std(G) #Standard deviation
-        print(xhat_objectives)
-        s_z = np.std(xhat_objectives) # this should be the std of all of them, these are clumped in batches...
+            G[i]=Gn   
+
+        s_g = np.std(G) #Standard deviation of gap
+        s_zhat = np.std(xhat_objectives) # Standard deviation of objectives at xhat
+
         Gbar = np.mean(G)
-        Zhat_bar = np.mean(xhat_objectives)
-        t_G = scipy.stats.t.ppf(confidence_level,num_batches-1)
-        t_z = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
-        epsilon_g = t_G*s_g/np.sqrt(num_batches)
-        epsilon_z = t_z*s_z/np.sqrt(num_batches*batch_size)
-        gap_inner_bound =  Gbar+epsilon_g + epsilon_z
-        gap_outer_bound =0 - epsilon_z
+        zhat_bar = np.mean(xhat_objectives)
+
+        t_g = scipy.stats.t.ppf(confidence_level,num_batches-1)
+        #t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
+        t_zhat = scipy.stats.t.ppf(confidence_level, num_batches-1) # how to cluster?
+
+        epsilon_g = t_g*s_g/np.sqrt(num_batches)
+        #epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches*batch_size)
+        epsilon_zhat = t_zhat*s_zhat/np.sqrt(num_batches) # how to cluster?
+
+        gap_inner_bound =  Gbar + epsilon_g
+        gap_outer_bound = 0
+ 
         if objective_gap == True:
-            gap_inner_bound += Zbar + epsilon_z
-            gap_outer_bound += Zbar - epsilon_z
+            gap_inner_bound += zhat_bar + epsilon_zhat
+            gap_outer_bound += zhat_bar - epsilon_zhat
 
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
@@ -331,7 +341,7 @@ if __name__ == "__main__":
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                        verbose=False)
-    r=mmw.run()
+    r=mmw.run(objective_gap = True)
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 

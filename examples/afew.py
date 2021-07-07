@@ -10,6 +10,7 @@
 
 import os
 import sys
+import mpisppy.confidence_intervals.mmw_conf as mmw_conf
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -37,6 +38,17 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname].append(runstring)
     os.chdir("..")
 
+solver_name = "gurobi_persistent"
+
+
+def do_one_mmw(dirname, progname, npyfile, argstring):
+    os.chdir(dirname)
+
+    runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {}".\
+                format(progname, npyfile , argstring)
+    code = os.system("echo {} && {}".format(runstring, runstring))
+
+    os.chdir("..")
 
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
@@ -57,6 +69,17 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--BFs 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
+
+#mmw tests
+#write .npy file for farmer
+os.system("echo python farmer/afarmer.py --num-scens=3 && python farmer/afarmer.py --num-scens=3")
+do_one_mmw("farmer", "afarmer.py", "../farmer_root_nonants_temp.npy", "--alpha 0.95 --num-scens=3 --solver-name gurobi_persistent")
+os.remove("farmer_root_nonants_temp.npy")
+
+# this is broken still, issues w/ options...
+# os.system("echo python aircond/aaircond.py --num-scens=3 && python aircond/aaircond.py --num-scens=3")
+# do_one_mmw("aircond", "aaircond.py", "../aircond_root_nonants_temp.npy", "--alpha 0.95 --num-scens=3 --solver-name gurobi_persistent")
+# os.remove("aircond_root_nonants_temp.npy")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
