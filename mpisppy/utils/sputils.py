@@ -119,8 +119,11 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     # Anything that's left to do
     spcomm.finalize()
 
-    global_toc("Hub algorithm complete, waiting for spoke finalization")
+    # to ensure the messages below are True
+    cylinder_comm.Barrier()
+    global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
     global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
+
     fullcomm.Barrier()
 
     ## give the hub the chance to catch new values
