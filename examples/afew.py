@@ -81,7 +81,7 @@ os.chdir("farmer")
 os.system("echo python afarmer.py --EF-solver-name {} --num-scens=3 && python afarmer.py --EF-solver-name {} --num-scens=3".format(solver_name,solver_name))
 os.chdir("..")
 #run mmw, remove .npy file
-do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", solver_name, "--alpha 0.95 --num-scens=3 --with-objective-gap --solver-options 'TimeLimit=1'")
+do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", solver_name, "--alpha 0.95 --num-scens=3 --with-objective-gap")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
