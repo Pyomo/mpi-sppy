@@ -21,7 +21,6 @@ import mpisppy.utils.sputils as sputils
 import argparse
 import mpisppy.utils.amalgomator as ama
 from mpisppy import global_toc
-from mpisppy.confidence_intervals.mmw_ci import write_xhat
     
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
