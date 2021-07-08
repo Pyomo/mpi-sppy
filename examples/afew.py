@@ -12,8 +12,10 @@ import os
 import sys
 
 solver_name = "gurobi_persistent"
+print(len(sys.argv))
 if len(sys.argv) > 1:
     solver_name = sys.argv[1]
+
 
 # Use oversubscribe if your computer does not have enough cores.
 # Don't use this unless you have to.
@@ -37,21 +39,31 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname].append(runstring)
     os.chdir("..")
 
-solver_name = "gurobi_persistent"
 
-
-def do_one_mmw(dirname, progname, npyfile, solvername, argstring):
+def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
+    
     os.chdir(dirname)
+    # solve ef, save .npy file (file name hardcoded in progname at the moment)
+    runefstring = "python {} --EF-solver-name {} {}".format(progname, solver_name, efargstring)
+    code = os.system("echo {} && {}".format(runefstring, runefstring))
 
-    runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {}".\
-                format(progname, npyfile, solvername, argstring)
-    code = os.system("echo {} && {}".format(runstring, runstring))
-    if code != 0:
+    if code!=0:
         if dirname not in badguys:
-            badguys[dirname] = [runstring]
+            badguys[dirname] = [runefstring]
         else:
-            badguys[dirname].append(runstring)
-    os.remove(npyfile)
+            badguys[dirname].append(runefstring)
+    # run mmw, remove .npy file
+    else:
+        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {}".\
+                    format(progname, npyfile, solver_name, mmwargstring)
+        code = os.system("echo {} && {}".format(runstring, runstring))
+        if code != 0:
+            if dirname not in badguys:
+                badguys[dirname] = [runstring]
+            else:
+                badguys[dirname].append(runstring)
+        
+        os.remove(npyfile)
 
     os.chdir("..")
 
@@ -76,12 +88,7 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--solver-name={}".format(solver_name))
 
 #mmw tests
-#write .npy file for farmer
-os.chdir("farmer")
-os.system("echo python afarmer.py --EF-solver-name {} --num-scens=3 && python afarmer.py --EF-solver-name {} --num-scens=3".format(solver_name,solver_name))
-os.chdir("..")
-#run mmw, remove .npy file
-do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", solver_name, "--alpha 0.95 --num-scens=3 --with-objective-gap")
+do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --with-objective-gap")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
