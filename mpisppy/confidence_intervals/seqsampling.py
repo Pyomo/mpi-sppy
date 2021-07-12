@@ -19,7 +19,7 @@ global_rank = fullcomm.Get_rank()
 
 import mpisppy.utils.amalgomator as amalgomator
 import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.confidence_intervals.mmw_ci as MMWci
+import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
@@ -198,7 +198,7 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
         print(f"G = {G}")
     sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
     s = np.sqrt(sample_var)
-    G = MMWci.correcting_numeric(G,objfct=obj_at_xhat)
+    G = ciutils.correcting_numeric(G,objfct=obj_at_xhat)
     return [G,s]
 
 

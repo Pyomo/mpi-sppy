@@ -28,22 +28,7 @@ def remove_None(d):
             d_copy[key] = value
     return d_copy
 
-def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
-    #Correcting small negative of G due to numerical error while solving EF 
-    if relative_error:
-        if objfct is None:
-            raise RuntimeError("We need a value of the objective function to remove numerically negative G")
-        elif (G<= -threshold*np.abs(objfct)):
-            print("We compute a gap estimator that is anormaly negative")
-            return G
-        else:
-            return max(0,G)
-    else:
-        if (G<=-threshold):
-            raise RuntimeWarning("We compute a gap estimator that is anormaly negative")
-            return G
-        else: 
-            return max(0,G)           
+
 
 class MMWConfidenceIntervals():
     """Takes a model and options as input. 
@@ -144,13 +129,13 @@ class MMWConfidenceIntervals():
         #                                                        the first scenarios
         
         ############### get the parameters
-        ScenCount = self.start
+        start = self.start
         scenario_denouement = self.refmodel.scenario_denouement
 
         #Introducing batches otpions
         num_batches = self.num_batches
         bs=self.batch_size
-        batch_size = bs if (bs is not None) else ScenCount #is None : take size_batch=num_scens        
+        batch_size = bs if (bs is not None) else start #is None : take size_batch=num_scens        
         sample_options = self.options
         
         #Some options are specific to 2-stage or multi-stage problems
@@ -158,6 +143,8 @@ class MMWConfidenceIntervals():
             sampling_BFs = ciutils.BFs_from_numscens(batch_size,self.numstages)
             #TODO: Change this to get a more logical way to compute BFs
             batch_size = np.prod(sampling_BFs)
+        else:
+            sampling_BFs = None
             
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
@@ -176,84 +163,95 @@ class MMWConfidenceIntervals():
         
         
         for i in range(num_batches) :
-            if self.multistage:
-                #Sample a scenario tree: this is a subtree, but starting from stage 1
-                samp_tree = sample_tree.SampleSubtree(self.refmodelname,
-                                                      xhats =[],
-                                                      root_scen=None,
-                                                      starting_stage=1, 
-                                                      BFs=sampling_BFs, 
-                                                      seed=ScenCount, 
-                                                      options=sample_options,
-                                                      solvername=solvername,
-                                                      solver_options=solver_options)
-                samp_tree.run()
-                ScenCount += sputils.number_of_nodes(sampling_BFs)
-                ama_object = samp_tree.ama
-            else:
-                #First we compute the right term of MMW (9)
-                MMW_scenario_names = self.refmodel.scenario_names_creator(
-                    batch_size, start=ScenCount)
+            scenario_names = self.refmodel.scenario_names_creator(batch_size,start=start)
+            estim = ciutils.gap_estimators(self.xhat_one,solvername,
+                                            scenario_names, self.refmodelname, 
+                                            ArRP=1,
+                                            scenario_creator_kwargs=scenario_creator_kwargs,
+                                            scenario_denouement=scenario_denouement,
+                                            solver_options=solver_options,
+                                            solving_type=self.type,
+                                            BFs=sampling_BFs)
+            Gn = estim['G']
+            start = estim['seed']
+            # if self.multistage:
+            #     #Sample a scenario tree: this is a subtree, but starting from stage 1
+            #     samp_tree = sample_tree.SampleSubtree(self.refmodelname,
+            #                                           xhats =[],
+            #                                           root_scen=None,
+            #                                           starting_stage=1, 
+            #                                           BFs=sampling_BFs, 
+            #                                           seed=start, 
+            #                                           options=sample_options,
+            #                                           solvername=solvername,
+            #                                           solver_options=solver_options)
+            #     samp_tree.run()
+            #     start += sputils.number_of_nodes(sampling_BFs)
+            #     ama_object = samp_tree.ama
+            # else:
+            #     #First we compute the right term of MMW (9)
+            #     MMW_scenario_names = self.refmodel.scenario_names_creator(
+            #         batch_size, start=start)
                 
                 
-                #We use amalgomator to do it
+            #     #We use amalgomator to do it
     
-                ama_options = dict(scenario_creator_kwargs)
-                ama_options['start'] = ScenCount
-                ama_options['EF_solver_name'] = solvername
-                ama_options['EF_solver_options'] = solver_options
-                ama_options[self.type] = True
-                ama_object = ama.from_module(self.refmodelname, ama_options,use_command_line=False)
-                ama_object.verbose = self.verbose
-                ama_object.run()
-                ScenCount += batch_size
+            #     ama_options = dict(scenario_creator_kwargs)
+            #     ama_options['start'] = start
+            #     ama_options['EF_solver_name'] = solvername
+            #     ama_options['EF_solver_options'] = solver_options
+            #     ama_options[self.type] = True
+            #     ama_object = ama.from_module(self.refmodelname, ama_options,use_command_line=False)
+            #     ama_object.verbose = self.verbose
+            #     ama_object.run()
+            #     start += batch_size
                 
-            #Find the right term of MMW
-            MMW_right_term = ama_object.best_outer_bound
+            # #Find the right term of MMW
+            # MMW_right_term = ama_object.best_outer_bound
                 
-            if self.multistage:
-                #Now find feasible policies (i.e. xhats) for every non-leaf nodes
-                MMW_scenario_names = samp_tree.ef._ef_scenario_names
-                local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in MMW_scenario_names}
-                xhats,ScenCount = sample_tree.walking_tree_xhats(self.refmodelname,
-                                                            local_scenarios,
-                                                            self.xhat_one,
-                                                            sampling_BFs,
-                                                            ScenCount,
-                                                            sample_options,
-                                                            solvername=solvername,
-                                                            solver_options=solver_options)
+            # if self.multistage:
+            #     #Now find feasible policies (i.e. xhats) for every non-leaf nodes
+            #     MMW_scenario_names = samp_tree.ef._ef_scenario_names
+            #     local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in MMW_scenario_names}
+            #     xhats,start = sample_tree.walking_tree_xhats(self.refmodelname,
+            #                                                 local_scenarios,
+            #                                                 self.xhat_one,
+            #                                                 sampling_BFs,
+            #                                                 start,
+            #                                                 sample_options,
+            #                                                 solvername=solvername,
+            #                                                 solver_options=solver_options)
                 
-                #Compute then the average function value with this policy
-                sample_scen_creator = samp_tree.sample_creator
-                scenario_creator_kwargs = samp_tree.ama.kwargs
-                all_nodenames = sputils.create_nodenames_from_BFs(sampling_BFs)
-            else:
-                #In a 2-stage problem, we do not need to find feasible policies apart from xhat_one
-                xhats = self.xhat_one
-                all_nodenames = None
+            #     #Compute then the average function value with this policy
+            #     sample_scen_creator = samp_tree.sample_creator
+            #     scenario_creator_kwargs = samp_tree.ama.kwargs
+            #     all_nodenames = sputils.create_nodenames_from_BFs(sampling_BFs)
+            # else:
+            #     #In a 2-stage problem, we do not need to find feasible policies apart from xhat_one
+            #     xhats = self.xhat_one
+            #     all_nodenames = None
                 
-            xhat_eval_options = {"iter0_solver_options": None,
-                                 "iterk_solver_options": None,
-                                 "display_timing": False,
-                                 "solvername": solvername,
-                                 "verbose": False,
-                                 "solver_options":solver_options}
-            ev = xhat_eval.Xhat_Eval(xhat_eval_options,
-                                    MMW_scenario_names,
-                                    sample_scen_creator,
-                                    scenario_denouement,
-                                    scenario_creator_kwargs=scenario_creator_kwargs,
-                                    all_nodenames = all_nodenames)
-            MMW_left_term = ev.evaluate(xhats)
+            # xhat_eval_options = {"iter0_solver_options": None,
+            #                       "iterk_solver_options": None,
+            #                       "display_timing": False,
+            #                       "solvername": solvername,
+            #                       "verbose": False,
+            #                       "solver_options":solver_options}
+            # ev = xhat_eval.Xhat_Eval(xhat_eval_options,
+            #                         MMW_scenario_names,
+            #                         sample_scen_creator,
+            #                         scenario_denouement,
+            #                         scenario_creator_kwargs=scenario_creator_kwargs,
+            #                         all_nodenames = all_nodenames)
+            # MMW_left_term = ev.evaluate(xhats)
                             
     
-            #Now we can compute MMW (9)
-            Gn = MMW_left_term-MMW_right_term
-            use_relative_error = (np.abs(MMW_right_term)>1)
-            Gn = correcting_numeric(Gn,
-                                    relative_error=use_relative_error,
-                                    objfct=MMW_right_term)
+            # #Now we can compute MMW (9)
+            # Gn = MMW_left_term-MMW_right_term
+            # use_relative_error = (np.abs(MMW_right_term)>1)
+            # Gn = ciutils.correcting_numeric(Gn,
+            #                         relative_error=use_relative_error,
+            #                         objfct=MMW_right_term)
             
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)

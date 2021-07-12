@@ -112,7 +112,8 @@ class SampleSubtree():
         ama_options['num_scens'] = self.numscens
         ama_options['_mpisppy_probability'] = 1/self.numscens #Probably not used
         
-        scen_names = self.refmodel.scenario_names_creator(self.numscens)
+        scen_names = self.refmodel.scenario_names_creator(self.numscens,
+                                                          start=self.seed)
         denouement = self.refmodel.scenario_denouement if hasattr(self.refmodel, 'scenario_denouement') else None
         
         self.ama = amalgomator.Amalgomator(ama_options, scen_names,

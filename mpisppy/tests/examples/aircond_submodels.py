@@ -15,7 +15,7 @@ def demands_creator(sname,BFs,start_seed, mudev, sigmadev,
                     starting_d=200,root_name="ROOT"):
     if BFs is None:
         raise RuntimeError("scenario_creator for aircond needs BFs")
-    scennum   = sputils.extract_num(sname)
+    scennum   = sputils.extract_num(sname) - start_seed
     # Find the right path and the associated seeds (one for each node) using scennum
     prod = np.prod(BFs)
     s = int(scennum % prod)

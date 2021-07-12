@@ -10,7 +10,9 @@ import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
-import mpisppy.utils.xhat_eval
+import mpisppy.utils.xhat_eval as xhat_eval
+import mpisppy.utils.amalgomator as ama
+import mpisppy.confidence_intervals.sample_tree as sample_tree
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -74,9 +76,27 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
         os.remove(path)
     return(xhat)
 
-def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
+def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
+    #Correcting small negative of G due to numerical error while solving EF 
+    if relative_error:
+        if objfct is None:
+            raise RuntimeError("We need a value of the objective function to remove numerically negative G")
+        elif (G<= -threshold*np.abs(objfct)):
+            print("We compute a gap estimator that is anormaly negative")
+            return G
+        else:
+            return max(0,G)
+    else:
+        if (G<=-threshold):
+            raise RuntimeWarning("We compute a gap estimator that is anormaly negative")
+            return G
+        else: 
+            return max(0,G)           
+
+def gap_estimators(xhat_one,solvername, scenario_names, mname, ArRP=1,
                    scenario_creator_kwargs={}, scenario_denouement=None,
-                   solver_options=None,solving_type="EF-2stage"):
+                   solver_options=None,
+                   solving_type="EF-2stage", BFs=None):
     ''' Given a xhat, scenario names, a scenario creator and options, create
     the scenarios and the associatd estimators G and s from §2 of [bm2011].
     Returns G and s evaluated at xhat.
@@ -86,14 +106,14 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
 
     Parameters
     ----------
-    xhat : xhat object
-        A candidate solution
+    xhat_one : dict
+        A candidate first stage solution
     solvername : str
         Solver
     scenario_names: list
         List of scenario names used to compute G_n and s_n.
-    scenario_creator: function
-        A method creating scenarios.
+    mname: str
+        Name of the reference model, e.g. 'mpisppy.tests.examples.farmer'.
     ArRP:int,optional
         Number of batches (we create a ArRP model). Default is 1 (no batches).
     scenario_creator_kwargs: dict, optional
@@ -102,9 +122,11 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
         Function to run after scenario creation. Default is None.
     solver_options: dict, optional
         Solving options. Default is None
-    solving_type: str, optionale
+    solving_type: str, optional
         The way we solve the approximate problem. Can be "EF-2stage" (default)
         or "EF-mstage".
+    BFs: list, optional
+        Only for multistage. List of branching factors of the sample scenario tree.
 
     Returns
     -------
@@ -113,8 +135,20 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
     '''
     if solving_type not in ["EF-2stage","EF-mstage"]:
         raise RuntimeError("Only EF solve for the approximate problem is supported yet.")
+    else:
+        is_multi = (solving_type=="EF-mstage")
+    
+    start = sputils.extract_num(scenario_names[0])
+        
+    if is_multi:
+        if BFs is None:
+            raise RuntimeError("gap_estimators needs a BFs attribute for a multistage probleem")
+        elif np.prod(BFs) != len(scenario_names):
+            raise RuntimeError("The scenario number do not match the leaf number of the sample scenario tree")
     
     if ArRP>1: #Special case : ArRP, G and s are pooled from r>1 estimators.
+        if is_multi:
+            raise RuntimeError("Pooled estimators are not supported for multistage problems yet.")
         n = len(scenario_names)
         if(n%ArRP != 0):
             raise RuntimeWarning("You put as an input a number of scenarios"+\
@@ -124,8 +158,8 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
         s = []
         for k in range(n//ArRP):
             scennames = scenario_names[k*ArRP,(k+1)*ArRP -1]
-            tmpG,tmps = gap_estimators(xhat, solvername, scennames, 
-                                       scenario_creator, ArRP=1,
+            tmpG,tmps = gap_estimators(xhat_one, solvername, scennames, 
+                                       mname, ArRP=1,
                                        scenario_creator_kwargs=scenario_creator_kwargs,
                                        scenario_denouement=scenario_denouement,
                                        solver_options=solver_options,
@@ -138,43 +172,82 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
         return(G,s)
     
     #A1RP
-    #We start by computing the solution to the approximate problem induced by our scenarios
-    ef = sputils.create_EF(
-        scenario_names,
-        scenario_creator,
-        scenario_creator_kwargs=scenario_creator_kwargs,
-        suppress_warnings=True,
-        )
     
-    solver = pyo.SolverFactory(solvername)
-    if 'persistent' in solvername:
-        solver.set_instance(ef, symbolic_solver_labels=True)
-        solver.solve(tee=False)
+    #We start by computing the optimal solution to the approximate problem induced by our scenarios
+    if is_multi:
+        #Sample a scenario tree: this is a subtree, but starting from stage 1
+        samp_tree = sample_tree.SampleSubtree(mname,
+                                              xhats =[],
+                                              root_scen=None,
+                                              starting_stage=1, 
+                                              BFs=BFs,
+                                              seed=start, 
+                                              options=scenario_creator_kwargs,
+                                              solvername=solvername,
+                                              solver_options=solver_options)
+        samp_tree.run()
+        start += sputils.number_of_nodes(BFs)
+        ama_object = samp_tree.ama
     else:
-        solver.solve(ef, tee=False, symbolic_solver_labels=True,)
+        #We use amalgomator to do it
 
-    xstar = sputils.nonant_cache_from_ef(ef)
-    options = {"iter0_solver_options": None,
-             "iterk_solver_options": None,
-             "display_timing": False,
-             "solvername": solvername,
-             "verbose": False,
-             "solver_options":solver_options}
+        ama_options = dict(scenario_creator_kwargs)
+        ama_options['start'] = sputils.extract_num(scenario_names[0])
+        ama_options['EF_solver_name'] = solvername
+        ama_options['EF_solver_options'] = solver_options
+        ama_options[solving_type] = True
+        ama_object = ama.from_module(mname, ama_options,use_command_line=False)
+        ama_object.scenario_names = scenario_names
+        ama_object.verbose = False
+        ama_object.run()
+        start += len(scenario_names)
+        
+    #Optimal solution of the approximate problem
+    zstar = ama_object.best_outer_bound
+    #Associated policies
+    xstars = sputils.nonant_cache_from_ef(ama_object.ef)
     
-
-    scenario_creator_kwargs['num_scens'] = len(scenario_names)
-    ev = xhat_eval.Xhat_Eval(options,
-                    scenario_names,
-                    scenario_creator,
-                    scenario_denouement,
-                    scenario_creator_kwargs=scenario_creator_kwargs)
+    #Then, we evaluate the fonction value induced by the scenario at xstar.
+    
+    if is_multi:
+        # Find feasible policies (i.e. xhats) for every non-leaf nodes
+        local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in scenario_names}
+        xhats,start = sample_tree.walking_tree_xhats(mname,
+                                                    local_scenarios,
+                                                    xhat_one,
+                                                    BFs,
+                                                    start,
+                                                    scenario_creator_kwargs,
+                                                    solvername=solvername,
+                                                    solver_options=solver_options)
+        
+        #Compute then the average function value with this policy
+        scenario_creator_kwargs = samp_tree.ama.kwargs
+        all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+    else:
+        #In a 2 stage problem, the only non-leaf is the ROOT node
+        xhats = xhat_one
+        all_nodenames = None
+    
+    xhat_eval_options = {"iter0_solver_options": None,
+                         "iterk_solver_options": None,
+                         "display_timing": False,
+                         "solvername": solvername,
+                         "verbose": False,
+                         "solver_options":solver_options}
+    ev = xhat_eval.Xhat_Eval(xhat_eval_options,
+                            scenario_names,
+                            ama_object.scenario_creator,
+                            scenario_denouement,
+                            scenario_creator_kwargs=scenario_creator_kwargs,
+                            all_nodenames = all_nodenames)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    global_toc(f"xhat={xhat}")
-    global_toc(f"xstar={xstar}")
-    ev.evaluate(xhat)
+    # global_toc(f"xhats={xhats}")
+    # global_toc(f"xstars={xstars}")
+    ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
-    ev.evaluate(xstar)
+    ev.evaluate(xstars)
     objs_at_xstar = ev.objs_dict
     
     eval_scen_at_xhat = []
@@ -199,5 +272,8 @@ def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
         print(f"G = {G}")
     sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
     s = np.sqrt(sample_var)
-    G = MMWci.correcting_numeric(G,objfct=obj_at_xhat)
-    return [G,s]
+    
+    use_relative_error = (np.abs(zstar)>1)
+    G = correcting_numeric(G,objfct=obj_at_xhat,
+                           relative_error=use_relative_error)
+    return {"G":G,"s":s,"seed":start}

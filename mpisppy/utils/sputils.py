@@ -502,7 +502,7 @@ def node_idx(stagelist,branching_factors):
         stage_id = 0 #id among stage t+1 nodes.
         for t in range(len(stagelist)):
             stage_id = stagelist[t]+branching_factors[t]*stage_id
-            node_idx = _nodenum_before_stage(len(stagelist),branching_factors)+stage_id
+        node_idx = _nodenum_before_stage(len(stagelist),branching_factors)+stage_id
         return node_idx
 
 def _extract_node_idx(nodename,branching_factors):
