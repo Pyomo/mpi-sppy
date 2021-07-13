@@ -49,12 +49,38 @@ Example
 
 An example of use, with the ``farmer`` problem, can be found in the main of ``mmwci.py``.
 
+Using stand alone ``mmw_conf.py``
+------------------------------
+
+(Currently for use with 2-stage problem only)
+
+``mmw_conf`` uses the ``MMWConfidenceIntervals`` class from ``mmw_ci`` in order to construct a confidence interval on the optimality gap of a particular candidate solution ``xhat`` of a model instance. 
+
+To use the stand along program a model compatible with ``Amalgomator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
+
+First, assue that the model to be used is compatable with the ``Amalgomator`` class. This requires the model to have each of the following: a``scenario_names_creator``,  a ``scenario_creator``, an ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in ``examples`` for an example of an acceptable model.
+
+Once a model satisfies the requirement for amalgomator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
+``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgomator`` to solve the program, this can be done by adding the line
+``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``afarmer.py`` for an example of this).
+
+Once this is accomplished, on the command line, run
+``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy gurobi --num-scens n --alpha 0.95``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponing path should be called on the command line.
+
+Additional solver options can be specified with the ``--solver-options`` option.
+
+This program will out put a confidence interval on the gap between the solution to the EF and the optimal solution. There is an additional option, ``--with-objective-gap``, which will computes a confidence interval around the solution of the stochastic program. Since the exact value of the objective function cannot be determined, we use the realizations of the objective function at the candidate solution to construct an additional confidence interval about the mean of the realizations computed.
 
 Sequential sampling
 ===================
 
+<<<<<<< HEAD
 Similarly, given an confidence interval, one can try to find a candidate solution
 ``xhat_one`` such that its optimality gap has this confidence interval.
+=======
+Similarly, given a confidence interval, one can try to find a candidate solution
+``xhat`` such that its optimality gap has this confidence interval.
+>>>>>>> MMW
 The class ``SeqSampling`` implements three procedures described in 
 [bm2011]_ and [bpl2012]_. It takes as an input a method to generate
 candidate solutions and options, and returns a ``xhat_one`` and a confidence interval on

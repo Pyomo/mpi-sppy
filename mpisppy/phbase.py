@@ -879,8 +879,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             if dconvergence_detail:
                 self.report_var_values_at_rank0(header="Convergence detail:")                
 
-            if (self._PHIter == max_iterations):
-                global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
+        else: # no break, (self._PHIter == max_iterations)
+            # NOTE: If we return for any other reason things are reasonably in-sync.
+            #       due to the convergence check. However, here we return we'll be
+            #       out-of-sync because of the solve_loop could take vasty different
+            #       times on different threads. This can especially mess up finalization.
+            #       As a guard, we'll put a barrier here.
+            self.mpicomm.Barrier()
+            global_toc("Reached user-specified limit=%d on number of PH iterations" % max_iterations, self.cylinder_rank == 0)
 
 
     def post_loops(self, extensions=None):

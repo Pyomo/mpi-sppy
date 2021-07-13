@@ -102,7 +102,8 @@ def gap_estimators(xhat_one,
                    scenario_creator_kwargs={}, 
                    scenario_denouement=None,
                    solvername='gurobi', 
-                   solver_options=None
+                   solver_options=None,
+                   objective_gap=False
                    ):
     ''' Given a xhat, scenario names, a scenario creator and options, create
     the scenarios and the associatd estimators G and s from §2 of [bm2011].
@@ -137,6 +138,8 @@ def gap_estimators(xhat_one,
         Solver. Default is 'gurobi'
     solver_options: dict, optional
         Solving options. Default is None
+    objective_gap: bool, optional
+        Returns a gap estimate around approximate objective value
 
     BFs: list, optional
         Only for multistage. List of branching factors of the sample scenario tree.
@@ -292,4 +295,7 @@ def gap_estimators(xhat_one,
     use_relative_error = (np.abs(zstar)>1)
     G = correcting_numeric(G,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
-    return {"G":G,"s":s,"seed":start}
+    if objective_gap:
+       return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+    else:
+        return {"G":G,"s":s,"seed":start}

@@ -32,7 +32,6 @@ def remove_None(d):
 
 class MMWConfidenceIntervals():
     """Takes a model and options as input. 
-
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
         options (dict): useful options to run amalgomator or xhat_eval, 
@@ -70,7 +69,6 @@ class MMWConfidenceIntervals():
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
-        
         self.num_scens_xhat = options["num_scens"] if ("num_scens" in options) else 0
         
         #Getting the start
@@ -119,11 +117,10 @@ class MMWConfidenceIntervals():
                 you_can_have_it_all = False
         if not you_can_have_it_all:
             raise RuntimeError("Argument list not complete for MMW")   
-            
-            
-    def run(self,confidence_level=0.95):
-        # We get the MMW right term, then xhat, then the MMW left term.
 
+    def run(self, confidence_level=0.95, objective_gap=False):
+
+        # We get the MMW right term, then xhat, then the MMW left term.
 
         #Compute the nonant xhat (the one used in the left term of MMW (9) ) using
         #                                                        the first scenarios
@@ -160,8 +157,8 @@ class MMWConfidenceIntervals():
 
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        
-        
+        zhats = [] #evaluation of xhat at each scenario
+
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
             gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
@@ -174,105 +171,54 @@ class MMWConfidenceIntervals():
                                            scenario_creator_kwargs=scenario_creator_kwargs,
                                            scenario_denouement=scenario_denouement,
                                            solvername=solvername,
-                                           solver_options=solver_options)
+                                           solver_options=solver_options,
+                                           objective_gap=objective_gap)
             Gn = estim['G']
             start = estim['seed']
-            # if self.multistage:
-            #     #Sample a scenario tree: this is a subtree, but starting from stage 1
-            #     samp_tree = sample_tree.SampleSubtree(self.refmodelname,
-            #                                           xhats =[],
-            #                                           root_scen=None,
-            #                                           starting_stage=1, 
-            #                                           BFs=sampling_BFs, 
-            #                                           seed=start, 
-            #                                           options=sample_options,
-            #                                           solvername=solvername,
-            #                                           solver_options=solver_options)
-            #     samp_tree.run()
-            #     start += sputils.number_of_nodes(sampling_BFs)
-            #     ama_object = samp_tree.ama
-            # else:
-            #     #First we compute the right term of MMW (9)
-            #     MMW_scenario_names = self.refmodel.scenario_names_creator(
-            #         batch_size, start=start)
-                
-                
-            #     #We use amalgomator to do it
-    
-            #     ama_options = dict(scenario_creator_kwargs)
-            #     ama_options['start'] = start
-            #     ama_options['EF_solver_name'] = solvername
-            #     ama_options['EF_solver_options'] = solver_options
-            #     ama_options[self.type] = True
-            #     ama_object = ama.from_module(self.refmodelname, ama_options,use_command_line=False)
-            #     ama_object.verbose = self.verbose
-            #     ama_object.run()
-            #     start += batch_size
-                
-            # #Find the right term of MMW
-            # MMW_right_term = ama_object.best_outer_bound
-                
-            # if self.multistage:
-            #     #Now find feasible policies (i.e. xhats) for every non-leaf nodes
-            #     MMW_scenario_names = samp_tree.ef._ef_scenario_names
-            #     local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in MMW_scenario_names}
-            #     xhats,start = sample_tree.walking_tree_xhats(self.refmodelname,
-            #                                                 local_scenarios,
-            #                                                 self.xhat_one,
-            #                                                 sampling_BFs,
-            #                                                 start,
-            #                                                 sample_options,
-            #                                                 solvername=solvername,
-            #                                                 solver_options=solver_options)
-                
-            #     #Compute then the average function value with this policy
-            #     sample_scen_creator = samp_tree.sample_creator
-            #     scenario_creator_kwargs = samp_tree.ama.kwargs
-            #     all_nodenames = sputils.create_nodenames_from_BFs(sampling_BFs)
-            # else:
-            #     #In a 2-stage problem, we do not need to find feasible policies apart from xhat_one
-            #     xhats = self.xhat_one
-            #     all_nodenames = None
-                
-            # xhat_eval_options = {"iter0_solver_options": None,
-            #                       "iterk_solver_options": None,
-            #                       "display_timing": False,
-            #                       "solvername": solvername,
-            #                       "verbose": False,
-            #                       "solver_options":solver_options}
-            # ev = xhat_eval.Xhat_Eval(xhat_eval_options,
-            #                         MMW_scenario_names,
-            #                         sample_scen_creator,
-            #                         scenario_denouement,
-            #                         scenario_creator_kwargs=scenario_creator_kwargs,
-            #                         all_nodenames = all_nodenames)
-            # MMW_left_term = ev.evaluate(xhats)
-                            
-    
-            # #Now we can compute MMW (9)
-            # Gn = MMW_left_term-MMW_right_term
-            # use_relative_error = (np.abs(MMW_right_term)>1)
-            # Gn = ciutils.correcting_numeric(Gn,
-            #                         relative_error=use_relative_error,
-            #                         objfct=MMW_right_term)
-            
+            # collect evaluation of xhat at all scenario
+            if objective_gap:
+                for zhat in estim['zhats']:
+                    zhats.append(zhat)
+
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
-            G[i]=Gn             
-        s = np.std(G) #Standard deviation
+            G[i]=Gn 
+
+        s_g = np.std(G) #Standard deviation of gap
+
         Gbar = np.mean(G)
-        t = scipy.stats.t.ppf(confidence_level,num_batches-1)
-        epsilon = t*s/np.sqrt(num_batches)
-        gap_inner_bound =  Gbar+epsilon
-        gap_outer_bound =0
+
+        t_g = scipy.stats.t.ppf(confidence_level,num_batches-1)
+
+        epsilon_g = t_g*s_g/np.sqrt(num_batches)
+
+        gap_inner_bound =  Gbar + epsilon_g
+        gap_outer_bound = 0
+ 
+        if objective_gap == True:
+            zhat_bar = np.mean(zhats)
+
+            s_zhat = np.std(zhats) # Stanard deviation of objectives at xhat
+            t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
+
+            epsilon_zhat = t_zhat*s_zhat / np.sqrt(len(zhats))
+
+            gap_inner_bound += zhat_bar + epsilon_zhat
+            gap_outer_bound += zhat_bar - epsilon_zhat
+
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
-                      "std": s,
+                      "std": s_g,
                       "Glist": G}
+
+        if objective_gap:
+            self.result["zhat_bar"] = zhat_bar
+            self.result["std_zhat"] = s_zhat
+
         return(self.result)
         
-
+        
 if __name__ == "__main__":
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
@@ -322,8 +268,7 @@ if __name__ == "__main__":
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                        verbose=False)
-    r=mmw.run()
+    r=mmw.run(objective_gap=True)
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 
-    
