@@ -3,9 +3,9 @@
 MMW confidence interval
 =======================
 
-If we want to assess the quality of a given candidate solution ``xhat``, we could
+If we want to assess the quality of a given first stage policy ``xhat_one``, we could
 try and evaluate the optimality gap, i.e. the gap between the value of the objective function
-at ``xhat`` and the value of the solution to our problem.
+at ``xhat_one`` and the value of the solution to our problem.
 The class ``MMWConfidenceIntervals`` compute an estimator of the optimality gap
 as described in [mmw1999]_ (Section 3.2) and an asymptotic confidence interval for
 this gap. 

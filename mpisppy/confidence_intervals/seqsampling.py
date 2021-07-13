@@ -250,7 +250,6 @@ class SeqSampling():
         
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
-        self.scenario_creator_kwargs = self.refmodel.kw_creator(options)
         self.xhat_generator = xhat_generator
         self.options = options
         self.stochastic_sampling = stochastic_sampling
@@ -427,15 +426,20 @@ class SeqSampling():
         #----------------------------Step 1 -------------------------------------#
         
         #Computing G_nkand s_k associated with xhat_1
-        scenario_creator_kwargs = self.scenario_creator_kwargs if hasattr(self, "scenario_creator_kwargs") else {}
+        self.options['num_scens'] = nk
+        scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
         scenario_denouement = refmodel.scenario_denouement if hasattr(refmodel, "scenario_denouement") else None
-        Gk,sk = gap_estimators(xhat_k,
-                               self.solvername, 
-                               estimator_scenario_names, 
-                               refmodel.scenario_creator, ArRP=self.ArRP,
-                               scenario_creator_kwargs=scenario_creator_kwargs,
-                               scenario_denouement=scenario_denouement,
-                               solver_options=self.solver_options)
+        estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
+                                       solving_type="EF-2stage", #multistage not supported yet
+                                       scenario_names=estimator_scenario_names,
+                                       sample_options=None,
+                                       ArRP=1,
+                                       scenario_creator_kwargs=scenario_creator_kwargs,
+                                       scenario_denouement=scenario_denouement,
+                                       solvername=self.solvername,
+                                       solver_options=self.solver_options)
+        assert self.ScenCount == estim['seed']
+        Gk,sk = estim['G'],estim['s']
         
         #----------------------------Step 2 -------------------------------------#
 
@@ -456,6 +460,8 @@ class SeqSampling():
                 xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
                                                                       start=self.ScenCount)
                 self.ScenCount+= mult*(nk-nk_m1)
+            self.options['num_scens'] = nk
+            scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
             xhat_k = self.xhat_generator(xhat_scenario_names,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options,
@@ -472,13 +478,17 @@ class SeqSampling():
                                                                            start=self.ScenCount)
                 self.ScenCount+= (nk-nk_m1)
 
-            Gk,sk = gap_estimators(xhat_k,
-                                   self.solvername, 
-                                   estimator_scenario_names, 
-                                   refmodel.scenario_creator, ArRP=self.ArRP,
-                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                   scenario_denouement=scenario_denouement,
-                                   solver_options=self.solver_options)
+            estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
+                                           solving_type="EF-2stage", #multistage not supported yet
+                                           scenario_names=estimator_scenario_names,
+                                           sample_options=None,
+                                           ArRP=1,
+                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           scenario_denouement=scenario_denouement,
+                                           solvername=self.solvername,
+                                           solver_options=self.solver_options)
+            assert self.ScenCount == estim['seed']
+            Gk,sk = estim['G'],estim['s']
 
             if (k%10==0):
                 print(f"k={k}")

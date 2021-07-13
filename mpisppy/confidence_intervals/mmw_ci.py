@@ -163,15 +163,18 @@ class MMWConfidenceIntervals():
         
         
         for i in range(num_batches) :
-            scenario_names = self.refmodel.scenario_names_creator(batch_size,start=start)
-            estim = ciutils.gap_estimators(self.xhat_one,solvername,
-                                            scenario_names, self.refmodelname, 
-                                            ArRP=1,
-                                            scenario_creator_kwargs=scenario_creator_kwargs,
-                                            scenario_denouement=scenario_denouement,
-                                            solver_options=solver_options,
-                                            solving_type=self.type,
-                                            BFs=sampling_BFs)
+            scenstart = None if self.multistage else start
+            gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
+            scenario_names = self.refmodel.scenario_names_creator(batch_size,start=scenstart)
+            estim = ciutils.gap_estimators(self.xhat_one, self.refmodelname,
+                                           solving_type=self.type,
+                                           scenario_names=scenario_names,
+                                           sample_options=gap_options,
+                                           ArRP=1,
+                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           scenario_denouement=scenario_denouement,
+                                           solvername=solvername,
+                                           solver_options=solver_options)
             Gn = estim['G']
             start = estim['seed']
             # if self.multistage:

@@ -93,10 +93,17 @@ def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
         else: 
             return max(0,G)           
 
-def gap_estimators(xhat_one,solvername, scenario_names, mname, ArRP=1,
-                   scenario_creator_kwargs={}, scenario_denouement=None,
-                   solver_options=None,
-                   solving_type="EF-2stage", BFs=None):
+def gap_estimators(xhat_one,
+                   mname, 
+                   solving_type="EF-2stage",
+                   scenario_names=None,
+                   sample_options=None,
+                   ArRP=1,
+                   scenario_creator_kwargs={}, 
+                   scenario_denouement=None,
+                   solvername='gurobi', 
+                   solver_options=None
+                   ):
     ''' Given a xhat, scenario names, a scenario creator and options, create
     the scenarios and the associatd estimators G and s from §2 of [bm2011].
     Returns G and s evaluated at xhat.
@@ -108,23 +115,29 @@ def gap_estimators(xhat_one,solvername, scenario_names, mname, ArRP=1,
     ----------
     xhat_one : dict
         A candidate first stage solution
-    solvername : str
-        Solver
-    scenario_names: list
-        List of scenario names used to compute G_n and s_n.
     mname: str
         Name of the reference model, e.g. 'mpisppy.tests.examples.farmer'.
+    solving_type: str, optional
+        The way we solve the approximate problem. Can be "EF-2stage" (default)
+        or "EF-mstage".
+    scenario_names: list, optional
+        List of scenario names used to compute G_n and s_n. Default is None
+        Must be specified for 2 stage, but can be missing for multistage
+    sample_options: dict, optional
+        Only for multistage. Must contain a 'seed' and a 'BFs' attribute,
+        specifying the starting seed and the branching factors 
+        of the scenario tree
     ArRP:int,optional
-        Number of batches (we create a ArRP model). Default is 1 (no batches).
+        Number of batches (we create a ArRP model). Default is 1 (one batch).
     scenario_creator_kwargs: dict, optional
         Additional arguments for scenario_creator. Default is {}
     scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
+    solvername : str, optional
+        Solver. Default is 'gurobi'
     solver_options: dict, optional
         Solving options. Default is None
-    solving_type: str, optional
-        The way we solve the approximate problem. Can be "EF-2stage" (default)
-        or "EF-mstage".
+
     BFs: list, optional
         Only for multistage. List of branching factors of the sample scenario tree.
 
@@ -138,14 +151,16 @@ def gap_estimators(xhat_one,solvername, scenario_names, mname, ArRP=1,
     else:
         is_multi = (solving_type=="EF-mstage")
     
-    start = sputils.extract_num(scenario_names[0])
+    
         
     if is_multi:
-        if BFs is None:
-            raise RuntimeError("gap_estimators needs a BFs attribute for a multistage probleem")
-        elif np.prod(BFs) != len(scenario_names):
-            raise RuntimeError("The scenario number do not match the leaf number of the sample scenario tree")
-    
+        try:
+            BFs = sample_options['BFs']
+            start = sample_options['seed']
+        except (TypeError,KeyError,RuntimeError):
+            raise RuntimeError('For multistage problems, sample_options must be a dict woth BFs and seed attributes.')
+    else:
+        start = sputils.extract_num(scenario_names[0])
     if ArRP>1: #Special case : ArRP, G and s are pooled from r>1 estimators.
         if is_multi:
             raise RuntimeError("Pooled estimators are not supported for multistage problems yet.")
@@ -192,7 +207,8 @@ def gap_estimators(xhat_one,solvername, scenario_names, mname, ArRP=1,
         #We use amalgomator to do it
 
         ama_options = dict(scenario_creator_kwargs)
-        ama_options['start'] = sputils.extract_num(scenario_names[0])
+        ama_options['start'] = start
+        ama_options['num_scens'] = len(scenario_names)
         ama_options['EF_solver_name'] = solvername
         ama_options['EF_solver_options'] = solver_options
         ama_options[solving_type] = True
@@ -211,7 +227,7 @@ def gap_estimators(xhat_one,solvername, scenario_names, mname, ArRP=1,
     
     if is_multi:
         # Find feasible policies (i.e. xhats) for every non-leaf nodes
-        local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in scenario_names}
+        local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
         xhats,start = sample_tree.walking_tree_xhats(mname,
                                                     local_scenarios,
                                                     xhat_one,
