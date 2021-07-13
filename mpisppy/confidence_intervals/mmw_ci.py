@@ -196,7 +196,7 @@ class MMWConfidenceIntervals():
         
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        xhat_objectives = np.zeros(num_batches*batch_size) # objective function realizations at xhat
+        eval_scen_at_xhat = np.zeros(num_batches*batch_size) # objective function realizations at xhat
 
         for i in range(num_batches) :
             #First we compute the right term of MMW (9)
@@ -242,14 +242,13 @@ class MMWConfidenceIntervals():
                             scenario_creator_kwargs=scenario_creator_kwargs,
                             all_nodenames = all_nodenames)
 
+            obj_at_xhat = ev.evaluate(xhat)
             # evaluate each scenario at xhat for zhat confidence interval
             if objective_gap == True:
                 j = 0
                 for k, s in ev.local_scenarios.items():
-                    xhat_objectives[i*batch_size + j] = ev.evaluate_one(xhat, MMW_scenario_names[j], s)
+                    eval_scen_at_xhat[i*batch_size + j] = ev.objs_dict[k]
                     j+=1
-
-            obj_at_xhat = ev.evaluate(xhat)
 
             #Now we can compute MMW (9)
             Gn = obj_at_xhat-MMW_right_term
@@ -274,9 +273,9 @@ class MMWConfidenceIntervals():
         gap_outer_bound = 0
  
         if objective_gap == True:
-            zhat_bar = np.mean(xhat_objectives)
+            zhat_bar = np.mean(eval_scen_at_xhat)
 
-            s_zhat = np.std(xhat_objectives) # Stanard deviation of objectives at xhat
+            s_zhat = np.std(eval_scen_at_xhat) # Stanard deviation of objectives at xhat
             t_zhat = scipy.stats.t.ppf(confidence_level, num_batches*batch_size-1)
 
             epsilon_zhat = t_zhat*s_zhat / np.sqrt(num_batches*batch_size)
