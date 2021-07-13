@@ -205,9 +205,6 @@ def walking_tree_xhats(mname,local_scenarios,xhat_one,BFs,seed,options,
                scen_xhats.append(xhat)
     return xhats, seed
 
-def local_gap_estimator(mname,root_nonants,BFs,seed,options,
-                        solvername="gurobi", solver_options=None):
-    pass
                
             
 
