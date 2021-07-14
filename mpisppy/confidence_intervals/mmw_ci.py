@@ -268,7 +268,7 @@ if __name__ == "__main__":
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                        verbose=False)
-    r=mmw.run(objective_gap=True)
+    r=mmw.run()
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 
