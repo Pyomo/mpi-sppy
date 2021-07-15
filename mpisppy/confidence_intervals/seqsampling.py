@@ -313,17 +313,6 @@ class SeqSampling():
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
                 
         lower_bound_k = self.sample_size(k, None, None, None)
-            
-        else:
-            
-            
-            mk = int(np.floor(mult*lower_bound))
-            
-            nk = self.ArRP *int(np.ceil(lower_bound/self.ArRP))
-            #Sample observations used to compute G_k and s_k
-            estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                   start=self.ScenCount)
-            self.ScenCount+=nk
         
         #Computing xhat_1.
         
@@ -351,12 +340,12 @@ class SeqSampling():
         if self.multistage:
             self.SeedCount += sputils.number_of_nodes(xhat_BFs)
             
-            gap_BFs = ciutils.scalable_BFs(lower_bound_k, options['BFs'])
+            gap_BFs = ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])
             nk = np.prod(gap_BFs)
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
             sample_options = {'BFs':gap_BFs, 'seed':self.SeedCount}
         else:
-            nk = self.ArRP *int(np.ceil(lower_bound/self.ArRP))
+            nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
             estimator_scenario_names = refmodel.scenario_names_creator(nk,
                                                                        start=self.ScenCount)
             sample_options = None

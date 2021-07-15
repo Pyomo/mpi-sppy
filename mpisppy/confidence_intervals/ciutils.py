@@ -43,7 +43,6 @@ def scalable_BFs(numscens, ref_BFs):
         return [2]*(numstages-1)
     mult_coef = (numscens/np.prod(ref_BFs))**(1/(numstages-1))
     new_BFs = np.maximum(np.floor(np.array(ref_BFs)*mult_coef),1.) #BFs have to be positive integers
-    #TODO: Should we require to get every BF >=2 ?
     i=0
     while np.prod(new_BFs)<numscens:
         if i == numstages-1:
