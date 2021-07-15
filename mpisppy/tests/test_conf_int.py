@@ -212,10 +212,13 @@ class Test_MMW_farmer(unittest.TestCase):
                      "no solver is available")
     def test_gap_estimators(self):
         scenario_names = farmer.scenario_names_creator(50,start=1000)
-        G,s = seqsampling.gap_estimators(self.xhat,
-                                         solvername,
-                                         scenario_names,
-                                         farmer.scenario_creator)
+        estim = ciutils.gap_estimators(self.xhat,
+                                       refmodelname,
+                                       solvername=solvername,
+                                       scenario_names=scenario_names,
+                                       )
+        G = estim['G']
+        s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (110.0,426.0))
         
