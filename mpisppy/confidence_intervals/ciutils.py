@@ -76,19 +76,19 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
         os.remove(path)
     return(xhat)
 
-def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
+def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
     #Correcting small negative of G due to numerical error while solving EF 
     if relative_error:
         if objfct is None:
             raise RuntimeError("We need a value of the objective function to remove numerically negative G")
         elif (G<= -threshold*np.abs(objfct)):
-            print("We compute a gap estimator that is anormaly negative")
+            raise RuntimeWarning(f"WARNING: The gap estimator is anormaly negative : {G}")
             return G
         else:
             return max(0,G)
     else:
         if (G<=-threshold):
-            raise RuntimeWarning("We compute a gap estimator that is anormaly negative")
+            raise RuntimeWarning(f"WARNING: The gap estimator is anormaly negative : {G}")
             return G
         else: 
             return max(0,G)           
@@ -161,7 +161,7 @@ def gap_estimators(xhat_one,
             BFs = sample_options['BFs']
             start = sample_options['seed']
         except (TypeError,KeyError,RuntimeError):
-            raise RuntimeError('For multistage problems, sample_options must be a dict woth BFs and seed attributes.')
+            raise RuntimeError('For multistage problems, sample_options must be a dict with BFs and seed attributes.')
     else:
         start = sputils.extract_num(scenario_names[0])
     if ArRP>1: #Special case : ArRP, G and s are pooled from r>1 estimators.

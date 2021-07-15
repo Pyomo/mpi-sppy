@@ -175,6 +175,7 @@ class MMWConfidenceIntervals():
                                            objective_gap=objective_gap)
             Gn = estim['G']
             start = estim['seed']
+
             # collect evaluation of xhat at all scenario
             if objective_gap:
                 for zhat in estim['zhats']:

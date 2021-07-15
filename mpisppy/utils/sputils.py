@@ -499,14 +499,33 @@ def extract_num(string):
     '''
     return int(re.compile(r'(\d+)$').search(string).group(1))
 
-def node_idx(stagelist,branching_factors):
-    if stagelist == []: #ROOT node
+def node_idx(node_path,branching_factors):
+    '''
+    Computes a unique id for a given node in a scenario tree.
+    It follows the path to the node, computing the unique id for each ascendant.
+
+    Parameters
+    ----------
+    node_path : list of int
+        A list of integer, specifying the path of the node.
+    branching_factors : list of int
+        branching_factors of the scenario tree.
+
+    Returns
+    -------
+    node_idx
+        Node unique id.
+        
+    NOTE: Does not work with unbalanced trees.
+
+    '''
+    if node_path == []: #ROOT node
         return 0
     else:
-        stage_id = 0 #id among stage t+1 nodes.
-        for t in range(len(stagelist)):
-            stage_id = stagelist[t]+branching_factors[t]*stage_id
-        node_idx = _nodenum_before_stage(len(stagelist),branching_factors)+stage_id
+        stage_id = 0 #node unique id among stage t+1 nodes.
+        for t in range(len(node_path)):
+            stage_id = node_path[t]+branching_factors[t]*stage_id
+        node_idx = _nodenum_before_stage(len(node_path),branching_factors)+stage_id
         return node_idx
 
 def _extract_node_idx(nodename,branching_factors):
