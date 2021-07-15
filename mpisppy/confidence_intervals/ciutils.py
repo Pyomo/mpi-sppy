@@ -34,6 +34,23 @@ def BFs_from_numscens(numscens,num_stages=2):
                     BFs[k] = np.prod([fact_list[(num_stages-1)*i+k] for i in range(1+len(fact_list)//(num_stages-1)) if (num_stages-1)*i+k<len(fact_list)])
                 return BFs
         raise RuntimeError("BFs_from_numscens is not working correctly. Did you take num_stages>=2 ?")
+
+def scalable_BFs(numscens, ref_BFs):
+    #Given a scenario number and a branching factor list, rescale the branching factors
+    #to get the appropriate scenario number
+    numstages = len(ref_BFs)+1
+    if numscens < 2**(numstages-1):
+        return [2]*(numstages-1)
+    mult_coef = (numscens/np.prod(ref_BFs))**(1/(numstages-1))
+    new_BFs = np.maximum(np.floor(np.array(ref_BFs)*mult_coef),1.) #BFs have to be positive integers
+    #TODO: Should we require to get every BF >=2 ?
+    i=0
+    while np.prod(new_BFs)<numscens:
+        if i == numstages-1:
+            raise RuntimeError("scalable BFs is failing")
+        new_BFs[i]+=1
+        i+=1
+    return list(new_BFs.astype(int))
         
 def is_sorted(nodelist):
     #Take a list of scenario_tree.ScenarioNode and check that it is well constructed

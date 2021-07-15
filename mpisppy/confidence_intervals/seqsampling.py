@@ -80,127 +80,6 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
 
     return xhat
 
-def gap_estimators(xhat,solvername, scenario_names, scenario_creator, ArRP=1,
-                   scenario_creator_kwargs={}, scenario_denouement=None,
-                   solver_options=None):
-    ''' Given a xhat, scenario names, a scenario creator and options, create
-    the scenarios and the associatd estimators G and s from §2 of [bm2011].
-    Returns G and s evaluated at xhat.
-    If ArRP>1, G and s are pooled, from a number ArRP of estimators,
-        computed on different batches.
-    
-
-    Parameters
-    ----------
-    xhat : xhat object
-        A candidate solution
-    solvername : str
-        Solver
-    scenario_names: list
-        List of scenario names used to compute G_n and s_n.
-    scenario_creator: function
-        A method creating scenarios.
-    ArRP:int,optional
-        Number of batches (we create a ArRP model). Default is 1 (no batches).
-    scenario_creator_kwargs: dict, optional
-        Additional arguments for scenario_creator. Default is {}
-    scenario_denouement: function, optional
-        Function to run after scenario creation. Default is None.
-    solver_options: dict, optional
-        Solving options. Default is None
-
-    Returns
-    -------
-    G_k and s_k, gap estimator and associated standard deviation estimator.
-
-    '''
-    if ArRP>1: #Special case : ArRP, G and s are pooled from r>1 estimators.
-        n = len(scenario_names)
-        if(n%ArRP != 0):
-            raise RuntimeWarning("You put as an input a number of scenarios"+\
-                                 f" which is not a mutliple of {ArRP}.")
-            n = n- n%ArRP
-        G =[]
-        s = []
-        for k in range(n//ArRP):
-            scennames = scenario_names[k*ArRP,(k+1)*ArRP -1]
-            tmpG,tmps = gap_estimators(xhat, solvername, scennames, 
-                                       scenario_creator, ArRP=1,
-                                       scenario_creator_kwargs=scenario_creator_kwargs,
-                                       scenario_denouement=scenario_denouement,
-                                       solver_options=solver_options)
-            G.append(tmpG)
-            s.append(tmps)
-        #Pooling
-        G = np.mean(G)
-        s = np.linalg.norm(s)/np.sqrt(n//ArRP)
-        return(G,s)
-    
-    #A1RP
-    #We start by computing the solution to the approximate problem induced by our scenarios
-    ef = sputils.create_EF(
-        scenario_names,
-        scenario_creator,
-        scenario_creator_kwargs=scenario_creator_kwargs,
-        suppress_warnings=True,
-        )
-    
-    solver = pyo.SolverFactory(solvername)
-    if 'persistent' in solvername:
-        solver.set_instance(ef, symbolic_solver_labels=True)
-        solver.solve(tee=False)
-    else:
-        solver.solve(ef, tee=False, symbolic_solver_labels=True,)
-
-    xstar = sputils.nonant_cache_from_ef(ef)
-    options = {"iter0_solver_options": None,
-             "iterk_solver_options": None,
-             "display_timing": False,
-             "solvername": solvername,
-             "verbose": False,
-             "solver_options":solver_options}
-    
-
-    scenario_creator_kwargs['num_scens'] = len(scenario_names)
-    ev = xhat_eval.Xhat_Eval(options,
-                    scenario_names,
-                    scenario_creator,
-                    scenario_denouement,
-                    scenario_creator_kwargs=scenario_creator_kwargs)
-    #Evaluating xhat and xstar and getting the value of the objective function 
-    #for every (local) scenario
-    global_toc(f"xhat={xhat}")
-    global_toc(f"xstar={xstar}")
-    ev.evaluate(xhat)
-    objs_at_xhat = ev.objs_dict
-    ev.evaluate(xstar)
-    objs_at_xstar = ev.objs_dict
-    
-    eval_scen_at_xhat = []
-    eval_scen_at_xstar = []
-    scen_probs = []
-    for k,s in ev.local_scenarios.items():
-        eval_scen_at_xhat.append(objs_at_xhat[k])
-        eval_scen_at_xstar.append(objs_at_xstar[k])
-        scen_probs.append(s._mpisppy_probability)
-
-    
-    scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
-    local_gap = np.dot(scen_gaps,scen_probs)
-    local_ssq = np.dot(scen_gaps**2,scen_probs)
-    local_prob_sqnorm = np.linalg.norm(scen_probs)**2
-    local_obj_at_xhat = np.dot(eval_scen_at_xhat,scen_probs)
-    local_estim = np.array([local_gap,local_ssq,local_prob_sqnorm,local_obj_at_xhat])
-    global_estim = np.zeros(4)
-    ev.mpicomm.Allreduce(local_estim, global_estim, op=mpi.SUM) 
-    G,ssq, prob_sqnorm,obj_at_xhat = global_estim
-    if global_rank==0:
-        print(f"G = {G}")
-    sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
-    s = np.sqrt(sample_var)
-    G = ciutils.correcting_numeric(G,objfct=obj_at_xhat)
-    return [G,s]
-
 
 class SeqSampling():
     """
@@ -210,8 +89,9 @@ class SeqSampling():
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
         xhat_generator (function): a function that takes scenario_names (and 
-                                    and optional solvername and solver_options) as input
-                                    and return a xhat.
+                                    and optional solvername and solver_options) 
+                                    as input and returns a first stage policy 
+                                    xhat.
 
         options (dict): multiple useful parameters, e.g.:
                         - "solvername", str, the name of the solver we use 
@@ -239,6 +119,9 @@ class SeqSampling():
             else, we compute them using [Bayraksan and Morton] technique
         stopping_criterion (str, default 'BM'): which stopping criterion should be used ?
             2 criterions are supported : 'BM' for [Bayraksan and Morton] and 'BPL' for [Bayraksan and Pierre-Louis]
+        solving_type (str, default 'EF-2stage'): how do we solve the approximate problems ?
+            Must be one of 'EF-2stage' and 'EF-mstage' (for problems with more than 2 stages).
+            Solving methods outside EF are not supported yet.
     """
     
     def __init__(self,
@@ -246,7 +129,8 @@ class SeqSampling():
                  xhat_generator,
                  options,
                  stochastic_sampling = False,
-                 stopping_criterion = "BM"):
+                 stopping_criterion = "BM",
+                 solving_type = "EF-2stage"):
         
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
@@ -254,6 +138,7 @@ class SeqSampling():
         self.options = options
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
+        self.solving_type = solving_type
         self.solvername = options["solvername"] if "solvername" in options else "gurobi"
         self.solver_options = options["solver_options"] if "solver_options" in options else None
         self.sample_size_ratio = options["sample_size_ratio"] if "sample_size_ration" in options else 1
@@ -299,9 +184,30 @@ class SeqSampling():
         for oname in options:
             setattr(self, oname, options[oname]) #Set every option as an attribute
         
+        
+        #Check the solving_type, and find if the problem is multistage
+        two_stage_types = ['EF-2stage']
+        multistage_types = ['EF-mstage']
+        if self.solving_type in two_stage_types:
+            self.multistage = False
+        elif self.solving_type in multistage_types:
+            self.multistage = True
+        else:
+            raise RuntimeError(f"The solving_type {self.solving_type} is not supported."
+                               f"If you want to run a 2-stage problem, please use a solving_type in {two_stage_types}"
+                               f"If you want to run a multistage stage problem, please use a solving_type in {multistage_types}")
+        
+        #Check the multistage options
+        if self.multistage:
+            needed_things = ["BFs"]
+            is_needed(options, needed_things)
+        
         #To be sure to always use new scenarios, we set a ScenCount that is 
         #telling us how many scenarios has been used so far
         self.ScenCount = 0
+        
+        #If we are running a multistage problem, we also need a seed count
+        self.SeedCount = 0
             
     def bm_stopping_criterion(self,G,s,nk):
         return(G>self.hprime*s+self.epsprime)
@@ -391,7 +297,7 @@ class SeqSampling():
         k =1
         
         
-        #Computing n_1
+        #Computing the lower bound for n_1
 
 
         if self.stopping_criterion == "BM":
@@ -406,40 +312,73 @@ class SeqSampling():
                 s = sum(np.exp(-self.p*np.power(j,2*self.q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
                 
+        lower_bound_k = self.sample_size(k, None, None, None)
+            
+        else:
+            
+            
+            mk = int(np.floor(mult*lower_bound))
+            
+            nk = self.ArRP *int(np.ceil(lower_bound/self.ArRP))
+            #Sample observations used to compute G_k and s_k
+            estimator_scenario_names = refmodel.scenario_names_creator(nk,
+                                                                   start=self.ScenCount)
+            self.ScenCount+=nk
         
-        nk = self.ArRP *int(np.ceil(self.sample_size(k, None, None, None)/self.ArRP))
+        #Computing xhat_1.
         
-        #Computing xhat_1. 
         #We use sample_size_ratio*n_k observations to compute xhat_k
-        xhat_scenario_names = refmodel.scenario_names_creator(mult*nk, start=0)
-        self.ScenCount+=mult*nk   
+        if self.multistage:
+            xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
+            mk = np.prod(xhat_BFs)
+            self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+            xhat_scenario_names = refmodel.scenario_names_creator(mk)
+            
+        else:
+            mk = int(np.floor(mult*lower_bound_k))
+            xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
+            self.ScenCount+=mk
         
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,
                                    **self.xhat_gen_options)
-        #Sample observations used to compute G_k and s_k
-        estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                   start=self.ScenCount)
-        self.ScenCount+=nk
+
+        
     
         #----------------------------Step 1 -------------------------------------#
+        #Computing n_1
+        if self.multistage:
+            self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+            
+            gap_BFs = ciutils.scalable_BFs(lower_bound_k, options['BFs'])
+            nk = np.prod(gap_BFs)
+            estimator_scenario_names = refmodel.scenario_names_creator(nk)
+            sample_options = {'BFs':gap_BFs, 'seed':self.SeedCount}
+        else:
+            nk = self.ArRP *int(np.ceil(lower_bound/self.ArRP))
+            estimator_scenario_names = refmodel.scenario_names_creator(nk,
+                                                                       start=self.ScenCount)
+            sample_options = None
+            self.ScenCount+= nk
         
         #Computing G_nkand s_k associated with xhat_1
+            
         self.options['num_scens'] = nk
         scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
         scenario_denouement = refmodel.scenario_denouement if hasattr(refmodel, "scenario_denouement") else None
         estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
-                                       solving_type="EF-2stage", #multistage not supported yet
+                                       solving_type=self.solving_type,
                                        scenario_names=estimator_scenario_names,
-                                       sample_options=None,
-                                       ArRP=1,
+                                       sample_options=sample_options,
+                                       ArRP=self.ArRP,
                                        scenario_creator_kwargs=scenario_creator_kwargs,
                                        scenario_denouement=scenario_denouement,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options)
-        assert self.ScenCount == estim['seed']
         Gk,sk = estim['G'],estim['s']
+        if self.multistage:
+            self.SeedCount = estim['seed']
         
         #----------------------------Step 2 -------------------------------------#
 

@@ -325,7 +325,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
-    return xhat
+    return {'ROOT': xhat['ROOT']}
     
 
     
