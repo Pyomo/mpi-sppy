@@ -11,7 +11,30 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-
+def demands_creator(sname,BFs,start_seed, mudev, sigmadev, 
+                    starting_d=200,root_name="ROOT"):
+    if BFs is None:
+        raise RuntimeError("scenario_creator for aircond needs BFs")
+    scennum   = sputils.extract_num(sname)
+    # Find the right path and the associated seeds (one for each node) using scennum
+    prod = np.prod(BFs)
+    s = int(scennum % prod)
+    d = starting_d
+    demands = [d]
+    nodenames = [root_name]
+    for bf in BFs:
+        assert prod%bf == 0
+        prod = prod//bf
+        nodenames.append(str(s//prod))
+        s = s%prod
+    
+    stagelist = [int(x) for x in nodenames[1:]]
+    for t in range(1,len(nodenames)):
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
+        d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
+        demands.append(d)
+    
+    return demands,nodenames
 
 def StageModel_creator(time, demand, last_stage=False):
     model = pyo.ConcreteModel()
@@ -95,8 +118,9 @@ def aircond_model_creator(demands):
     
     return model
 
-def MakeNodesforScen(model,nodenames,branching_factors):
+def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     #Create all nonleaf nodes used by the scenario
+    #Compatible with sample scenario creation
     TreeNodes = []
     for stage in model.T:
         if stage ==1:
@@ -112,11 +136,26 @@ def MakeNodesforScen(model,nodenames,branching_factors):
                                                        nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
                                                        )
                              )
+        elif stage <=starting_stage:
+            parent_ndn = ndn
+            ndn = parent_ndn+"_0" #Only one node per stage before starting stage
+            TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
+                                                       cond_prob=1.0,
+                                                       stage=stage,
+                                                       cost_expression=model.stage_models[stage].StageObjective,
+                                                       scen_name_list=None, # Not maintained
+                                                       nonant_list=[model.stage_models[stage].RegularProd,
+                                                                    model.stage_models[stage].OvertimeProd],
+                                                       scen_model=model,
+                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
+                                                       parent_name = parent_ndn
+                                                       )
+                             )
         elif stage < max(model.T): #We don't add the leaf node
             parent_ndn = ndn
-            ndn = parent_ndn+"_"+nodenames[stage-1]
+            ndn = parent_ndn+"_"+nodenames[stage-starting_stage]
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0/branching_factors[stage-2],
+                                                       cond_prob=1.0/branching_factors[stage-starting_stage-1],
                                                        stage=stage,
                                                        cost_expression=model.stage_models[stage].StageObjective,
                                                        scen_name_list=None, # Not maintained
@@ -130,26 +169,11 @@ def MakeNodesforScen(model,nodenames,branching_factors):
     return(TreeNodes)
 
         
-def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_seed=0):
-    scennum   = sputils.extract_num(sname)
-    # Find the right path and the associated seeds (one for each node) using scennum
-    prod = np.prod(BFs)
-    s = int(scennum % prod)
-    d = 200
-    demands = [d]
-    nodenames = ["ROOT"]
-    
-    for bf in BFs:
-        assert prod%bf == 0
-        prod = prod//bf
-        nodenames.append(str(s//prod))
-        s = s%prod
-    
-    stagelist = [int(x) for x in nodenames[1:]]
-    for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
-        d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
-        demands.append(d)
+def scenario_creator(sname, BFs=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0):
+    if BFs is None:
+        raise RuntimeError("scenario_creator for aircond needs BFs")
+
+    demands,nodenames = demands_creator(sname, BFs, start_seed, mudev, sigmadev)
     
     model = aircond_model_creator(demands)
     
@@ -160,6 +184,49 @@ def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_see
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, BFs)
     
     return(model)
+
+def sample_tree_scen_creator(sname,given_scenario=None,stage=None,sample_BFs=None, seed=None, **scenario_creator_kwargs):
+    #For multistage confidence interval
+    
+    things = [stage,sample_BFs,seed]
+    names = ["stage","sample_BFs","seed"]
+    for i in range(len(things)):
+        if things[i] is None:
+            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a {names[i]} argument.")
+    
+    #Finding demands from stage 1 to t
+    if given_scenario is None:
+        if stage == 1:
+            past_demands = [200]
+        else:
+            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
+    else:
+        past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
+    optional_things = ['mudev','sigmadev']
+    default_values = [0,40]
+    for thing,value in zip(optional_things,default_values):
+        if thing not in scenario_creator_kwargs:
+            scenario_creator_kwargs[thing] = value
+    
+    #Finding demands for stages after t
+    future_demands,nodenames = demands_creator(sname, sample_BFs, 
+                                               start_seed = seed, 
+                                               mudev = scenario_creator_kwargs['mudev'], 
+                                               sigmadev = scenario_creator_kwargs['sigmadev'],
+                                               starting_d=past_demands[stage-1],
+                                               root_name='ROOT'+'_0'*(stage-1))
+    
+    demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
+    
+    model = aircond_model_creator(demands)
+    
+    model._mpisppy_probability = 1/np.prod(sample_BFs)
+    
+    #Constructing the nodes used by the scenario
+    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, sample_BFs,
+                                                starting_stage=stage)
+    
+    return model
                 
 
 #=========
@@ -259,6 +326,10 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
     return xhat
+    
+
+    
+    
 
 if __name__ == "__main__":
     bfs = [3,3,2]
@@ -282,11 +353,11 @@ if __name__ == "__main__":
     from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
     options = ama.options
     options['solver_options'] = options['EF_solver_options']
-    xhat = sputils.nonant_cache_from_ef(ama.ef)
+    xhat = sputils.nonant_cache_from_ef(ama.ef)['ROOT']
    
     
     num_batches = 10
-    batch_size = num_scens
+    batch_size = 100
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                         verbose=False)

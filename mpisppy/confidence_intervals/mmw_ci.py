@@ -3,8 +3,6 @@
 
 
 import mpi4py.MPI as mpi
-#import mpisppy.utils.sputils as sputils
-#import mpisppy.utils.xhat_eval as xhat_eval
 import argparse
 import numpy as np
 import scipy.stats
@@ -18,6 +16,8 @@ global_rank = fullcomm.Get_rank()
 import mpisppy.utils.amalgomator as ama
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.utils.sputils as sputils
+import mpisppy.confidence_intervals.sample_tree as sample_tree
+import mpisppy.confidence_intervals.ciutils as ciutils
 
 def remove_None(d):
     if d is None:
@@ -28,55 +28,7 @@ def remove_None(d):
             d_copy[key] = value
     return d_copy
 
-def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
-    #Correcting small negative of G due to numerical error while solving EF 
-    if relative_error:
-        if objfct is None:
-            raise RuntimeError("We need a value of the objective function to remove numerically negative G")
-        elif (G<= -threshold*np.abs(objfct)):
-            print("We compute a gap estimator that is anormaly negative")
-            return G
-        else:
-            return max(0,G)
-    else:
-        if (G<=-threshold):
-            raise RuntimeWarning("We compute a gap estimator that is anormaly negative")
-            return G
-        else: 
-            return max(0,G)           
-        
- 
-def writetxt_xhat(xhat,path="xhat.txt",num_stages=2):
-    if num_stages ==2:
-        np.savetxt(path,xhat['ROOT'])
-    else:
-        raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
 
-def readtxt_xhat(path="xhat.txt",num_stages=2,delete_file=False):
-    if num_stages==2:
-        xhat = {'ROOT': np.loadtxt(path)}
-    else:
-        raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
-    if delete_file and global_rank ==0:
-        os.remove(path)        
-    return(xhat)
-
-def write_xhat(xhat,path="xhat.npy",num_stages=2):
-    if num_stages==2:
-        np.save(path,xhat['ROOT'])
-    else:
-        raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
-    
-
-def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
-    if num_stages==2:
-        xhat = {'ROOT': np.load(path)}
-    else:
-        raise RuntimeError("Only 2-stage is suported to write/read xhat to a file")
-    if delete_file and global_rank ==0:
-        os.remove(path)
-    return(xhat)
-                
 
 class MMWConfidenceIntervals():
     """Takes a model and options as input. 
@@ -86,7 +38,7 @@ class MMWConfidenceIntervals():
         options (dict): useful options to run amalgomator or xhat_eval, 
                         including EF_solver_options and EF_solver_name
                         May include the options used to compute xhat
-        xhat (dict): Non-anticipative solution, computed before
+        xhat_one (dict): Non-anticipative first stage solution, computed before
         num_batches (int): Number of batches used to compute the MMW estimator
         batch_size (int): Size of MMW batches, default None. 
                 If batch_size is None, then batch_size=options['num_scens'] is used
@@ -105,7 +57,7 @@ class MMWConfidenceIntervals():
     def __init__(self,
                  refmodel,
                  options,
-                 xhat,
+                 xhat_one,
                  num_batches,
                  batch_size=None,
                  start=None,
@@ -114,16 +66,43 @@ class MMWConfidenceIntervals():
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
         self.options = options
-        self.xhat = xhat
+        self.xhat_one = xhat_one
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
         
-        #Check if refmodel and args have all needed attributes
+        self.num_scens_xhat = options["num_scens"] if ("num_scens" in options) else 0
         
+        #Getting the start
+        if start is not None :
+            self.start = start
+        ScenCount = self.num_scens_xhat + (
+            self.options['start'] if ("start" in options) else 0)
+        if start is None :
+            self.start = ScenCount
+        elif start < ScenCount :
+            raise RuntimeWarning(
+                "Scenarios used to compute xhat_one may be used in MMW")
+            
+        #Type of our problem
+        if ama._bool_option(options, "EF-2stage"):
+            self.type = "EF-2stage"
+            self.multistage = False
+            self.numstages = 2
+        elif ama._bool_option(options, "EF-mstage"):
+            self.type = "EF-mstage"
+            self.multistage = True
+            self.numstages = len(options['BFs'])+1
+        else:
+            raise RuntimeError(
+                "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
+        
+        #Check if refmodel and args have all needed attributes
         everything = ["scenario_names_creator",
                  "scenario_creator",
                  "kw_creator"]  # denouement can be missing.
+        if self.multistage:
+            everything[0] = "sample_tree_scen_creator"
     
         you_can_have_it_all = True
         for ething in everything:
@@ -139,116 +118,65 @@ class MMWConfidenceIntervals():
                 print(f"Argument list is missing {ething}")
                 you_can_have_it_all = False
         if not you_can_have_it_all:
-            raise RuntimeError("Argument list not complete for MMW")     
-        
-        self.num_scens_xhat = options["num_scens"] if ("num_scens" in options) else 0
-        
-        #Getting the start
-        if start is not None :
-            self.start = start
-        ScenCount = self.num_scens_xhat + (
-            self.options['start'] if ("start" in options) else 0)
-        if start is None :
-            self.start = ScenCount
-        elif start < ScenCount :
-            raise RuntimeWarning(
-                "Scenarios used to compute xhat may be used in MMW")
+            raise RuntimeError("Argument list not complete for MMW")   
             
-        #Type of our problem
-        if ama._bool_option(options, "EF-2stage"):
-            self.type = "EF-2stage" 
-        elif ama._bool_option(options, "EF-mstage"):
-            self.type = "EF-mstage"
-        else:
-            raise RuntimeError(
-                "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
-        
-        if self.type == "EF-mstage" and "BFs" not in options:
-            raise RuntimeError(
-                "For multi-stage problems, we need branching factors (an attribute 'BFs' to options)")
-        
+            
     def run(self,confidence_level=0.95):
         # We get the MMW right term, then xhat, then the MMW left term.
 
 
         #Compute the nonant xhat (the one used in the left term of MMW (9) ) using
         #                                                        the first scenarios
-        ########### get the nonants (the xhat)
-        xhat = self.xhat
         
         ############### get the parameters
-        ScenCount = self.start
-        scenario_creator = self.refmodel.scenario_creator
+        start = self.start
         scenario_denouement = self.refmodel.scenario_denouement
 
-        
         #Introducing batches otpions
         num_batches = self.num_batches
         bs=self.batch_size
-        batch_size = bs if (bs is not None) else ScenCount #is None : take size_batch=num_scens
-        scenario_creator_kwargs=self.refmodel.kw_creator(self.options)
-        scenario_creator_kwargs['num_scens'] = batch_size
+        batch_size = bs if (bs is not None) else start #is None : take size_batch=num_scens        
+        sample_options = self.options
+        
+        #Some options are specific to 2-stage or multi-stage problems
+        if self.multistage:
+            sampling_BFs = ciutils.BFs_from_numscens(batch_size,self.numstages)
+            #TODO: Change this to get a more logical way to compute BFs
+            batch_size = np.prod(sampling_BFs)
+        else:
+            sampling_BFs = None
+            
+        sample_options['num_scens'] = batch_size
+        sample_options['_mpisppy_probability'] = 1/batch_size
+        scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
+        sample_scen_creator = self.refmodel.scenario_creator
+        
+        #Solver settings
         solvername = self.options['EF_solver_name']
         solver_options = self.options['EF_solver_options'] if 'EF_solver_options' in self.options else None
         solver_options = remove_None(solver_options)
             
         #Now we compute for each batch the whole Gn term from MMW (9)
 
-        
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
         
         
         for i in range(num_batches) :
-            #First we compute the right term of MMW (9)
-            start = ScenCount+i*batch_size
-            MMW_scenario_names = self.refmodel.scenario_names_creator(
-                batch_size, start=start)
-            
-
-            
-            #We use amalgomator to do it
-
-            ama_options = dict(scenario_creator_kwargs)
-            ama_options['start'] = start
-            ama_options['EF_solver_name'] = solvername
-            ama_options[self.type] = True
-            ama_object = ama.from_module(self.refmodelname, ama_options,use_command_line=False)
-            ama_object.verbose = self.verbose
-            ama_object.run()
-            MMW_right_term = ama_object.EF_Obj
-            
-            #Then we compute the left term of (9)
-            # Create the eval object for the left term of the LHS of (9) in MMW
-            
-            options = {"iter0_solver_options": None,
-                     "iterk_solver_options": None,
-                     "display_timing": False,
-                     "solvername": solvername,
-                     "verbose": False,
-                     "solver_options":solver_options}
-            
-            if self.type == "EF-mstage":
-                all_nodenames = sputils.create_nodenames_from_BFs(
-                    self.options['BFs'])
-                options['branching_factors'] = self.options['BFs']
-            else:
-                all_nodenames = None
-                
-            ev = xhat_eval.Xhat_Eval(options,
-                            MMW_scenario_names,
-                            scenario_creator,
-                            scenario_denouement,
-                            scenario_creator_kwargs=scenario_creator_kwargs,
-                            all_nodenames = all_nodenames)
-            obj_at_xhat = ev.evaluate(xhat)
-
-            #Now we can compute MMW (9)
-            Gn = obj_at_xhat-MMW_right_term
-            use_relative_error = (np.abs(MMW_right_term)>1)
-            Gn = correcting_numeric(Gn,
-                                    relative_error=use_relative_error,
-                                    objfct=MMW_right_term)
+            scenstart = None if self.multistage else start
+            gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
+            scenario_names = self.refmodel.scenario_names_creator(batch_size,start=scenstart)
+            estim = ciutils.gap_estimators(self.xhat_one, self.refmodelname,
+                                           solving_type=self.type,
+                                           scenario_names=scenario_names,
+                                           sample_options=gap_options,
+                                           ArRP=1,
+                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           scenario_denouement=scenario_denouement,
+                                           solvername=solvername,
+                                           solver_options=solver_options)
+            Gn = estim['G']
+            start = estim['seed']
             
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
@@ -302,13 +230,13 @@ if __name__ == "__main__":
     
     ########### get the nonants (the xhat)
     nonant_cache = sputils.nonant_cache_from_ef(ama_object.ef)
-    write_xhat(nonant_cache, path="xhat.npy")
+    ciutils.write_xhat(nonant_cache, path="xhat.npy")
     
     #Set parameters for run()
 
     options = ama_object.options
     options['solver_options'] = options['EF_solver_options']
-    xhat = read_xhat("xhat.npy")
+    xhat = ciutils.read_xhat("xhat.npy")
    
     
     num_batches = ama_object.options['num_batches']

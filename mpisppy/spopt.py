@@ -491,7 +491,7 @@ class SPOpt(SPBase):
 
 
     def _put_nonant_cache(self, cache):
-        """ Put the value in the cache for noants *for all local scenarios*
+        """ Put the value in the cache for nonants *for all local scenarios*
         Args:
             cache (np vector) to receive the nonant's for all local scenarios
 

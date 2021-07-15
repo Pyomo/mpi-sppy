@@ -203,12 +203,12 @@ class Amalgomator():
         
         """ Top-level execution."""
         if self.is_EF:
-            kwargs = self.kw_creator(self.options)     
+            self.kwargs = self.kw_creator(self.options)     
             
             ef = sputils.create_EF(
                 self.scenario_names,
                 self.scenario_creator,
-                scenario_creator_kwargs=kwargs,
+                scenario_creator_kwargs=self.kwargs,
                 suppress_warnings=True,
             )
             

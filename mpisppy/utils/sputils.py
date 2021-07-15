@@ -135,7 +135,7 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
     return spcomm, opt_dict
 
 def first_stage_nonant_npy_serializer(file_name, scenario, bundling):
-    # write just the nonants for ROOT in an npy file (e.g. for CI)
+    # write just the nonants for ROOT in an npy file (e.g. for Conf Int)
     root = scenario._mpisppy_node_list[0]
     assert root.name == "ROOT"
     root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
@@ -499,14 +499,33 @@ def extract_num(string):
     '''
     return int(re.compile(r'(\d+)$').search(string).group(1))
 
-def node_idx(stagelist,branching_factors):
-    if stagelist == []: #ROOT node
+def node_idx(node_path,branching_factors):
+    '''
+    Computes a unique id for a given node in a scenario tree.
+    It follows the path to the node, computing the unique id for each ascendant.
+
+    Parameters
+    ----------
+    node_path : list of int
+        A list of integer, specifying the path of the node.
+    branching_factors : list of int
+        branching_factors of the scenario tree.
+
+    Returns
+    -------
+    node_idx
+        Node unique id.
+        
+    NOTE: Does not work with unbalanced trees.
+
+    '''
+    if node_path == []: #ROOT node
         return 0
     else:
-        stage_id = 0 #id among stage t+1 nodes.
-        for t in range(len(stagelist)):
-            stage_id = stagelist[t]+branching_factors[t]*stage_id
-            node_idx = _nodenum_before_stage(len(stagelist),branching_factors)+stage_id
+        stage_id = 0 #node unique id among stage t+1 nodes.
+        for t in range(len(node_path)):
+            stage_id = node_path[t]+branching_factors[t]*stage_id
+        node_idx = _nodenum_before_stage(len(node_path),branching_factors)+stage_id
         return node_idx
 
 def _extract_node_idx(nodename,branching_factors):
@@ -733,7 +752,8 @@ class _TreeNode():
             self.is_leaf = True
             self.kids = []
         else:
-            assert len(desc_leaf_dict) >= numscens
+            if len(desc_leaf_dict) < numscens:
+                raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
             # make children
             first = scenfirst
             self.kids = list()
@@ -989,6 +1009,11 @@ def create_nodenames_from_BFs(BFS):
         nodenames += stage_nodes
     return nodenames
 
+def number_of_nodes(BFs):
+    #How many nodes does a tree with a given BFs have ?
+    last_node_stage_num = [i-1 for i in BFs]
+    return node_idx(last_node_stage_num, BFs)
+    
 
 
           

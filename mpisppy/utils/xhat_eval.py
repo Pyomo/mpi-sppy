@@ -216,7 +216,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         """ Evaluate xhat for one scenario.
 
         Args:
-            nonant_cache(numpy vector): special numpy vector with nonant values (see ph)
+            nonant_cache(numpy vector): special numpy vector with nonant values (see spopt)
             scenario_name(str): TODO
         
 
@@ -224,7 +224,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
-        self._fix_root_nonants(nonant_cache['ROOT'])
+        self._fix_nonants(nonant_cache)
         if not hasattr(self, "objs_dict"):
             self.objs_dict = {}
         
@@ -257,7 +257,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or numpy.array): Expected value
 
         """
-        self._fix_root_nonants(nonant_cache['ROOT'])
+        self._fix_nonants(nonant_cache)
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         
@@ -273,6 +273,48 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         
         return Eobj
     
+    
+    
+    def fix_nonants_upto_stage(self,t,cache):
+        """ Fix the Vars subject to non-anticipativity at given values for stages 1 to t.
+            Loop over the scenarios to restore, but loop over subproblems
+            to alert persistent solvers.
+        Args:
+            cache (ndn dict of list or numpy vector): values at which to fix
+        WARNING: 
+            We are counting on Pyomo indices not to change order between
+            when the cache_list is created and used.
+        NOTE:
+            You probably want to call _save_nonants right before calling this
+        """
+        for k,s in self.local_scenarios.items():
+
+            persistent_solver = None
+            if (sputils.is_persistent(s._solver_plugin)):
+                persistent_solver = s._solver_plugin
+
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                if node.stage<=t:
+                    ndn = node.name
+                    if ndn not in cache:
+                        raise RuntimeError("Could not find {} in {}"\
+                                           .format(ndn, cache))
+                    if cache[ndn] is None:
+                        raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
+                    if len(cache[ndn]) != nlens[ndn]:
+                        raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
+                                           .format(nlens[ndn], ndn, len(cache[ndn])))
+                    for i in range(nlens[ndn]): 
+                        this_vardata = node.nonant_vardata_list[i]
+                        this_vardata._value = cache[ndn][i]
+                        this_vardata.fix()
+                        if persistent_solver is not None:
+                            persistent_solver.update_var(this_vardata)
+        
+    
+    
+        
     #======================================================================
     def _fix_nonants_at_value(self):
         """ Fix the Vars subject to non-anticipativity at their current values.

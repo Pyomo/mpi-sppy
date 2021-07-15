@@ -22,6 +22,7 @@ import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.utils.amalgomator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.confidence_intervals.ciutils as ciutils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -64,14 +65,14 @@ class Test_MMW_farmer(unittest.TestCase):
         self.xhat = {'ROOT': np.array([74.0,245.0,181.0])}
         tmpxhat = tempfile.mkstemp(prefix="xhat",suffix=".npy")
         self.xhat_path =  tmpxhat[1]#create an empty .npy file
-        MMWci.write_xhat(self.xhat,self.xhat_path)
+        ciutils.write_xhat(self.xhat,self.xhat_path)
 
     def tearDown(self):
         os.remove(self.xhat_path)
 
     def test_MMW_constructor(self):
         options = _get_base_options()
-        xhat = MMWci.read_xhat(self.xhat_path)
+        xhat = ciutils.read_xhat(self.xhat_path)
 
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                           options['opt'],
@@ -80,14 +81,14 @@ class Test_MMW_farmer(unittest.TestCase):
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
-        MMWci.write_xhat(self.xhat,path=path)
-        x = MMWci.read_xhat(path, delete_file=True)
+        ciutils.write_xhat(self.xhat,path=path)
+        x = ciutils.read_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
     
     def test_xhat_read_write_txt(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
-        MMWci.writetxt_xhat(self.xhat,path=path)
-        x = MMWci.readtxt_xhat(path, delete_file=True)
+        ciutils.writetxt_xhat(self.xhat,path=path)
+        x = ciutils.readtxt_xhat(path, delete_file=True)
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
     
     def test_ama_creator(self):
@@ -158,7 +159,7 @@ class Test_MMW_farmer(unittest.TestCase):
                    scenario_creator_kwargs=scenario_creator_kwargs
                    )
         
-        xhat = MMWci.read_xhat(self.xhat_path)
+        xhat = ciutils.read_xhat(self.xhat_path)
         obj = round_pos_sig(ev.evaluate(xhat),2)
         self.assertEqual(obj, -1300000.0)
  
@@ -167,7 +168,7 @@ class Test_MMW_farmer(unittest.TestCase):
     def test_xhat_eval_evaluate_one(self):
         options = _get_xhatEval_options()
         MMW_options = _get_base_options()
-        xhat = MMWci.read_xhat(self.xhat_path)
+        xhat = ciutils.read_xhat(self.xhat_path)
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         scenario_names = farmer.scenario_names_creator(100)
@@ -186,7 +187,7 @@ class Test_MMW_farmer(unittest.TestCase):
                      "no solver is available")  
     def test_MMW_running(self):
         options = _get_base_options()
-        xhat = MMWci.read_xhat(self.xhat_path)
+        xhat = ciutils.read_xhat(self.xhat_path)
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                                         options['opt'],
                                         xhat,
@@ -211,10 +212,13 @@ class Test_MMW_farmer(unittest.TestCase):
                      "no solver is available")
     def test_gap_estimators(self):
         scenario_names = farmer.scenario_names_creator(50,start=1000)
-        G,s = seqsampling.gap_estimators(self.xhat,
-                                         solvername,
-                                         scenario_names,
-                                         farmer.scenario_creator)
+        estim = ciutils.gap_estimators(self.xhat,
+                                       refmodelname,
+                                       solvername=solvername,
+                                       scenario_names=scenario_names,
+                                       )
+        G = estim['G']
+        s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (110.0,426.0))
         
