@@ -23,6 +23,9 @@ an approximate problem, and evaluate how good a solution to this approximate pro
 In order to use MMW, ``xhat_one`` must be written using one of two functions 
 ``ef_ROOT_nonants_npy_serializer`` or ``write_spin_the_wheel_first_stage_solution``.
 These functions write ``xhat`` to a file and can be read using ``read_xhat``.
+When using a cylinders driver, the function ``sputils.first_stage_nonant_npy_serializer``
+can be given as the ``first_stage_solution_writer`` argument to the function
+``sputils.write_spin_the_wheel_first_stage_solution``. See the ``farmer_cylinders.py`` example.
 
 Evaluating a candidate solution
 -------------------------------
