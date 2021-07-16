@@ -25,8 +25,8 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme xpress cplex scipy sympy
-
+          pip install pyomo sphinx sphinx_rtd_theme xpress cplex
+          
       - name: setup the program
         run: |
           python setup.py develop
@@ -38,7 +38,7 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent 
+          python afew.py xpress_persistent
 
       - name: Test docs
         run: |

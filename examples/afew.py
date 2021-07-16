@@ -12,10 +12,8 @@ import os
 import sys
 
 solver_name = "gurobi_persistent"
-print(len(sys.argv))
 if len(sys.argv) > 1:
     solver_name = sys.argv[1]
-
 
 # Use oversubscribe if your computer does not have enough cores.
 # Don't use this unless you have to.
@@ -40,33 +38,6 @@ def do_one(dirname, progname, np, argstring):
     os.chdir("..")
 
 
-def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
-    
-    os.chdir(dirname)
-    # solve ef, save .npy file (file name hardcoded in progname at the moment)
-    runefstring = "python {} --EF-solver-name {} {}".format(progname, solver_name, efargstring)
-    code = os.system("echo {} && {}".format(runefstring, runefstring))
-
-    if code!=0:
-        if dirname not in badguys:
-            badguys[dirname] = [runefstring]
-        else:
-            badguys[dirname].append(runefstring)
-    # run mmw, remove .npy file
-    else:
-        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {}".\
-                    format(progname, npyfile, solver_name, mmwargstring)
-        code = os.system("echo {} && {}".format(runstring, runstring))
-        if code != 0:
-            if dirname not in badguys:
-                badguys[dirname] = [runstring]
-            else:
-                badguys[dirname].append(runstring)
-        
-        os.remove(npyfile)
-
-    os.chdir("..")
-
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
@@ -86,9 +57,6 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--BFs 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
-
-#mmw tests
-do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --with-objective-gap")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
