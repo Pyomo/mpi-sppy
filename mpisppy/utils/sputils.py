@@ -282,15 +282,17 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         raise RuntimeError("create_EF() received empty scenario list")
     elif (len(scen_dict) == 1):
         scenario_instance = list(scen_dict.values())[0]
+        scenario_instance._ef_scenario_names = list(scen_dict.keys())
         if not suppress_warnings:
             print("WARNING: passed single scenario to create_EF()")
         # special code to patch in ref_vars
         scenario_instance.ref_vars = dict()
+        scenario_instance._nlens = {node.name: len(node.nonant_vardata_list) 
+                                for node in scenario_instance._mpisppy_node_list}
         for node in scenario_instance._mpisppy_node_list:
             ndn = node.name
-            nlens = {node.name: len(node.nonant_vardata_list) 
-                                for node in scenario_instance._mpisppy_node_list}
-            for i in range(nlens[ndn]):
+
+            for i in range(scenario_instance._nlens[ndn]):
                 v = node.nonant_vardata_list[i]
                 if (ndn, i) not in scenario_instance.ref_vars:
                     scenario_instance.ref_vars[(ndn, i)] = v

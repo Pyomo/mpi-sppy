@@ -353,7 +353,7 @@ if __name__ == "__main__":
     from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
     options = ama.options
     options['solver_options'] = options['EF_solver_options']
-    xhat = sputils.nonant_cache_from_ef(ama.ef)['ROOT']
+    xhat = sputils.nonant_cache_from_ef(ama.ef)
    
     
     num_batches = 10
@@ -364,18 +364,24 @@ if __name__ == "__main__":
     r=mmw.run()
     print(r)
     
-    # #An example of sequential sampling for the aircond model
-    # from mpisppy.confidence_intervals.seqsampling import SeqSampling
-    # optionsFSP = {'eps': 5.0,
-    #               'solvername': "gurobi_direct",
-    #               "c0":50,}
-    # apl1p_pb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
-    #                         xhat_generator_aircond, 
-    #                         optionsFSP,
-    #                         stopping_criterion="BPL",
-    #                         stochastic_sampling=False)
+    #An example of sequential sampling for the aircond model
+    from mpisppy.confidence_intervals.seqsampling import SeqSampling
+    optionsBM =  { 'h':0.5,
+                    'hprime':0.1, 
+                    'eps':0.5, 
+                    'epsprime':0.4, 
+                    "p":0.2,
+                    "q":1.2,
+                    "solvername":"gurobi_direct",
+                    "BFs": bfs}
+    aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
+                            xhat_generator_aircond, 
+                            optionsBM,
+                            stopping_criterion="BM",
+                            stochastic_sampling=False,
+                            solving_type="EF-mstage")
 
-    # res = apl1p_pb.run()
-    # print(res)
+    res = aircondpb.run()
+    print(res)
         
         

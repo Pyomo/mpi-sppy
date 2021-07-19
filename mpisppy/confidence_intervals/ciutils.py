@@ -38,6 +38,7 @@ def BFs_from_numscens(numscens,num_stages=2):
 def scalable_BFs(numscens, ref_BFs):
     #Given a scenario number and a branching factor list, rescale the branching factors
     #to get the appropriate scenario number
+    #WARNING: The leaf node number of the output tree is not always an increasing function of numscens
     numstages = len(ref_BFs)+1
     if numscens < 2**(numstages-1):
         return [2]*(numstages-1)
@@ -243,10 +244,14 @@ def gap_estimators(xhat_one,
     
     if is_multi:
         # Find feasible policies (i.e. xhats) for every non-leaf nodes
-        local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
+        print("Hello ",len(samp_tree.ef._ef_scenario_names))
+        if len(samp_tree.ef._ef_scenario_names)>1:
+            local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
+        else:
+            local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
         xhats,start = sample_tree.walking_tree_xhats(mname,
                                                     local_scenarios,
-                                                    xhat_one,
+                                                    xhat_one['ROOT'],
                                                     BFs,
                                                     start,
                                                     scenario_creator_kwargs,
