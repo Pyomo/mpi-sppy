@@ -119,7 +119,8 @@ def gap_estimators(xhat_one,
                    scenario_creator_kwargs={}, 
                    scenario_denouement=None,
                    solvername='gurobi', 
-                   solver_options=None
+                   solver_options=None,
+                   verbose=True
                    ):
     ''' Given a xhat, scenario names, a scenario creator and options, create
     the scenarios and the associatd estimators G and s from §2 of [bm2011].
@@ -154,6 +155,8 @@ def gap_estimators(xhat_one,
         Solver. Default is 'gurobi'
     solver_options: dict, optional
         Solving options. Default is None
+    verbose: bool, optional
+        Should it print the gap estimator ? Default is True
 
     BFs: list, optional
         Only for multistage. List of branching factors of the sample scenario tree.
@@ -244,7 +247,6 @@ def gap_estimators(xhat_one,
     
     if is_multi:
         # Find feasible policies (i.e. xhats) for every non-leaf nodes
-        print("Hello ",len(samp_tree.ef._ef_scenario_names))
         if len(samp_tree.ef._ef_scenario_names)>1:
             local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
         else:
@@ -305,7 +307,7 @@ def gap_estimators(xhat_one,
     global_estim = np.zeros(4)
     ev.mpicomm.Allreduce(local_estim, global_estim, op=mpi.SUM) 
     G,ssq, prob_sqnorm,obj_at_xhat = global_estim
-    if global_rank==0:
+    if global_rank==0 and verbose:
         print(f"G = {G}")
     sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
     s = np.sqrt(sample_var)

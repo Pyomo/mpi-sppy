@@ -133,7 +133,8 @@ def feasible_solution(mname,scenario,xhat_one,BFs,seed,options,
                       solvername="gurobi",solver_options=None):
     if xhat_one is None:
         raise RuntimeError("Xhat_one can't be None for now")
-    ciutils.is_sorted(scenario._mpisppy_node_list)   
+    ciutils.is_sorted(scenario._mpisppy_node_list)
+    nodenames = [node.name for node in scenario._mpisppy_node_list]
     num_stages = len(BFs)+1
     xhats = [xhat_one]
     for t in range(2,num_stages): #We do not compute xhat for the final stage
@@ -144,7 +145,8 @@ def feasible_solution(mname,scenario,xhat_one,BFs,seed,options,
         subtree.run()
         xhats.append(subtree.xhat_at_stage)
         seed+=sputils.number_of_nodes(BFs[(t-1):])
-    return xhats,seed
+    xhat_dict = {ndn:xhat for (ndn,xhat) in zip(nodenames,xhats)}
+    return xhat_dict,seed
 
 def walking_tree_xhats(mname,local_scenarios,xhat_one,BFs,seed,options,
                        solvername="gurobi", solver_options=None):
@@ -185,6 +187,15 @@ def walking_tree_xhats(mname,local_scenarios,xhat_one,BFs,seed,options,
         raise RuntimeError("Xhat_one can't be None for now")
         
     xhats = {'ROOT':xhat_one}
+    
+    #Special case if we only have one scenario
+    if len(local_scenarios)==1:
+        scen = list(local_scenarios.values())[0]
+        res = feasible_solution(mname, scen, xhat_one, BFs, seed, options,
+                                solvername=solvername,
+                                solver_options=solver_options)
+        return res
+        
     
     for k,s in local_scenarios.items():
         scen_xhats = []

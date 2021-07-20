@@ -448,7 +448,7 @@ class SeqSampling():
                 self.SeedCount = estim['seed']
             Gk,sk = estim['G'],estim['s']
 
-            if (k%10==0):
+            if (k%10==0) and global_rank==0:
                 print(f"k={k}")
                 print(f"n_k={nk}")
                 print(f"G_k={Gk}")

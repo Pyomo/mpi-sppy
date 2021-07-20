@@ -320,6 +320,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
+    ama.verbose = False
     ama.run()
     
     # get the xhat
@@ -343,26 +344,26 @@ if __name__ == "__main__":
                     "sigmadev":80
                     }
     refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module(refmodel,
-                                  ama_options,use_command_line=False)
-    ama.run()
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
+    # #We use from_module to build easily an Amalgomator object
+    # ama = amalgomator.from_module(refmodel,
+    #                               ama_options,use_command_line=False)
+    # ama.run()
+    # print(f"inner bound=", ama.best_inner_bound)
+    # print(f"outer bound=", ama.best_outer_bound)
     
-    from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
-    options = ama.options
-    options['solver_options'] = options['EF_solver_options']
-    xhat = sputils.nonant_cache_from_ef(ama.ef)
+    # from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
+    # options = ama.options
+    # options['solver_options'] = options['EF_solver_options']
+    # xhat = sputils.nonant_cache_from_ef(ama.ef)
    
     
-    num_batches = 10
-    batch_size = 100
+    # num_batches = 10
+    # batch_size = 100
     
-    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
-                        verbose=False)
-    r=mmw.run()
-    print(r)
+    # mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
+    #                     verbose=False)
+    # r=mmw.run()
+    # print(r)
     
     #An example of sequential sampling for the aircond model
     from mpisppy.confidence_intervals.seqsampling import SeqSampling
@@ -374,10 +375,15 @@ if __name__ == "__main__":
                     "q":1.2,
                     "solvername":"gurobi_direct",
                     "BFs": bfs}
+    
+    optionsFSP = {'eps': 1.0,
+                  'solvername': "gurobi_direct",
+                  "c0":50,
+                  "BFs": bfs}
     aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
                             xhat_generator_aircond, 
-                            optionsBM,
-                            stopping_criterion="BM",
+                            optionsFSP,
+                            stopping_criterion="BPL",
                             stochastic_sampling=False,
                             solving_type="EF-mstage")
 
