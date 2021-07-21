@@ -33,5 +33,5 @@ if __name__ == "__main__":
                                                              scenario_creator,
                                                              scenario_creator_kwargs = scenario_creator_kwargs,
                                                              solve_kwargs=solve_kwargs)
-    print(f"Done. This should be None={None}")
+    print(f"Done. This should be None={scenario_name}")
 
