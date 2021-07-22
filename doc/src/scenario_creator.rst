@@ -55,7 +55,7 @@ assumed to be equally likely.
 EF Supplement List
 ------------------
 
-The function ``attach_root_node`` takes an optional argument ``nonant_ef_supple_list`` (that is passed through to the ``ScenarioNode`` constructor). This is a list similar to the nonanticipate Var list. These variables will not be given
+The function ``attach_root_node`` takes an optional argument ``nonant_ef_suppl_list`` (that is passed through to the ``ScenarioNode`` constructor). This is a list similar to the nonanticipate Var list. These variables will not be given
 multipliers by algorithms such as PH, but will be given non-anticipativity
 constraints when an EF is formed, either to solve the EF or when bundles are
 formed. For some problems, with the appropriate solver, adding redundant nonanticipativity constraints

@@ -32,7 +32,6 @@ def remove_None(d):
 
 class MMWConfidenceIntervals():
     """Takes a model and options as input. 
-
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
         options (dict): useful options to run amalgomator or xhat_eval, 
@@ -70,7 +69,6 @@ class MMWConfidenceIntervals():
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
-        
         self.num_scens_xhat = options["num_scens"] if ("num_scens" in options) else 0
         
         #Getting the start
@@ -119,11 +117,10 @@ class MMWConfidenceIntervals():
                 you_can_have_it_all = False
         if not you_can_have_it_all:
             raise RuntimeError("Argument list not complete for MMW")   
-            
-            
-    def run(self,confidence_level=0.95):
-        # We get the MMW right term, then xhat, then the MMW left term.
 
+    def run(self, confidence_level=0.95, objective_gap=False):
+
+        # We get the MMW right term, then xhat, then the MMW left term.
 
         #Compute the nonant xhat (the one used in the left term of MMW (9) ) using
         #                                                        the first scenarios
@@ -160,8 +157,8 @@ class MMWConfidenceIntervals():
 
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        
-        
+        zhats = [] #evaluation of xhat at each scenario
+
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
             gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
@@ -174,26 +171,55 @@ class MMWConfidenceIntervals():
                                            scenario_creator_kwargs=scenario_creator_kwargs,
                                            scenario_denouement=scenario_denouement,
                                            solvername=solvername,
-                                           solver_options=solver_options)
+                                           solver_options=solver_options,
+                                           objective_gap=objective_gap)
             Gn = estim['G']
             start = estim['seed']
+
+            # collect evaluation of xhat at all scenario
+            if objective_gap:
+                for zhat in estim['zhats']:
+                    zhats.append(zhat)
+
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
-            G[i]=Gn             
-        s = np.std(G) #Standard deviation
+            G[i]=Gn 
+
+        s_g = np.std(G) #Standard deviation of gap
+
         Gbar = np.mean(G)
-        t = scipy.stats.t.ppf(confidence_level,num_batches-1)
-        epsilon = t*s/np.sqrt(num_batches)
-        gap_inner_bound =  Gbar+epsilon
-        gap_outer_bound =0
+
+        t_g = scipy.stats.t.ppf(confidence_level,num_batches-1)
+
+        epsilon_g = t_g*s_g/np.sqrt(num_batches)
+
+        gap_inner_bound =  Gbar + epsilon_g
+        gap_outer_bound = 0
+ 
+        if objective_gap == True:
+            zhat_bar = np.mean(zhats)
+
+            s_zhat = np.std(zhats) # Stanard deviation of objectives at xhat
+            t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
+
+            epsilon_zhat = t_zhat*s_zhat / np.sqrt(len(zhats))
+
+            gap_inner_bound += zhat_bar + epsilon_zhat
+            gap_outer_bound += zhat_bar - epsilon_zhat
+
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
-                      "std": s,
+                      "std": s_g,
                       "Glist": G}
+
+        if objective_gap:
+            self.result["zhat_bar"] = zhat_bar
+            self.result["std_zhat"] = s_zhat
+
         return(self.result)
         
-
+        
 if __name__ == "__main__":
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
@@ -247,4 +273,3 @@ if __name__ == "__main__":
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 
-    

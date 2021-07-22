@@ -70,6 +70,33 @@ def do_one(dirname, progname, np, argstring):
     else:
         os.chdir("../..")   # hack for one level of subdirectories
 
+def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
+    
+    os.chdir(dirname)
+    # solve ef, save .npy file (file name hardcoded in progname at the moment)
+    runefstring = "python {} --EF-solver-name {} {}".format(progname, solver_name, efargstring)
+    code = os.system("echo {} && {}".format(runefstring, runefstring))
+
+    if code!=0:
+        if dirname not in badguys:
+            badguys[dirname] = [runefstring]
+        else:
+            badguys[dirname].append(runefstring)
+    # run mmw, remove .npy file
+    else:
+        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {}".\
+                    format(progname, npyfile, solver_name, mmwargstring)
+        code = os.system("echo {} && {}".format(runstring, runstring))
+        if code != 0:
+            if dirname not in badguys:
+                badguys[dirname] = [runstring]
+            else:
+                badguys[dirname].append(runstring)
+        
+        os.remove(npyfile)
+
+    os.chdir("..")
+
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
@@ -161,7 +188,19 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_ef.py", 1, solver_name)
+do_one("aircond", "aircond_cylinders.py", 3,
+       "--BFs 4 3 2 --bundles-per-rank=0 --max-iterations=100 "
+       "--default-rho=1 --with-xhatspecific --with-lagrangian "
+       "--solver-name={}".format(solver_name))
 
+
+#=========MMW TESTS==========
+
+do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --with-objective-gap")
+
+do_one_mmw("aircond", "aaircond.py", "aircond_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --solver-options ''")
+
+#============================
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
