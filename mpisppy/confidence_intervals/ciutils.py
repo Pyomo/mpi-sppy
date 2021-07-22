@@ -114,19 +114,19 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
         os.remove(path)
     return(xhat)
 
-def correcting_numeric(G,relative_error=True,threshold=10**(-4),objfct=None):
+def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
     #Correcting small negative of G due to numerical error while solving EF 
     if relative_error:
         if objfct is None:
             raise RuntimeError("We need a value of the objective function to remove numerically negative G")
         elif (G<= -threshold*np.abs(objfct)):
-            print("We compute a gap estimator that is anormaly negative")
+            raise RuntimeWarning(f"WARNING: The gap estimator is anormaly negative : {G}")
             return G
         else:
             return max(0,G)
     else:
         if (G<=-threshold):
-            raise RuntimeWarning("We compute a gap estimator that is anormaly negative")
+            raise RuntimeWarning(f"WARNING: The gap estimator is anormaly negative : {G}")
             return G
         else: 
             return max(0,G)           
@@ -141,7 +141,8 @@ def gap_estimators(xhat_one,
                    scenario_denouement=None,
                    solvername='gurobi', 
                    solver_options=None,
-                   verbose=True
+                   verbose=True,
+                   objective_gap=False
                    ):
     ''' Given a xhat, scenario names, a scenario creator and options, create
     the scenarios and the associatd estimators G and s from §2 of [bm2011].
@@ -178,6 +179,8 @@ def gap_estimators(xhat_one,
         Solving options. Default is None
     verbose: bool, optional
         Should it print the gap estimator ? Default is True
+    objective_gap: bool, optional
+        Returns a gap estimate around approximate objective value
 
     BFs: list, optional
         Only for multistage. List of branching factors of the sample scenario tree.
@@ -199,7 +202,7 @@ def gap_estimators(xhat_one,
             BFs = sample_options['BFs']
             start = sample_options['seed']
         except (TypeError,KeyError,RuntimeError):
-            raise RuntimeError('For multistage problems, sample_options must be a dict woth BFs and seed attributes.')
+            raise RuntimeError('For multistage problems, sample_options must be a dict with BFs and seed attributes.')
     else:
         start = sputils.extract_num(scenario_names[0])
     if ArRP>1: #Special case : ArRP, G and s are pooled from r>1 estimators.
@@ -334,4 +337,7 @@ def gap_estimators(xhat_one,
     use_relative_error = (np.abs(zstar)>1)
     G = correcting_numeric(G,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
-    return {"G":G,"s":s,"seed":start}
+    if objective_gap:
+       return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+    else:
+        return {"G":G,"s":s,"seed":start}
