@@ -731,7 +731,7 @@ class _TreeNode():
             self.is_leaf = True
             self.kids = []
         else:
-            if len(desc_leaf_dict) < numscens:
+            if len(desc_leaf_dict) < numscens:                
                 raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
             # make children
             first = scenfirst
@@ -745,15 +745,18 @@ class _TreeNode():
                         raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
                                            f"The node {name} has {len(child_list)} children, but {childname} is not one of them.")
                     break
+                childdesc_regex = re.compile(childname+'(_\d*)*\Z')
                 child_leaf_dict = {ndn:desc_leaf_dict[ndn] for ndn in desc_leaf_dict \
-                                   if ndn.startswith(childname)}
+                                   if childdesc_regex.match(ndn)}
                 #We determine the number of children of this node
                 child_scens_num = sum(child_leaf_dict.values())
                 last = first+child_scens_num - 1
                 self.kids.append(_TreeNode(self, first, last, 
                                            child_leaf_dict, childname))
                 first += child_scens_num
-            assert last == scenlast
+            if last != scenlast:
+                print("Hello", numscens)
+                raise RuntimeError(f"Tree node did not initialize correctly for node {name}: "+f"{last =}"+f"{scenlast =}")
     def stage_max(self):
         #Return the number of stages of a subtree.
         #Also check that all the subtrees have the same number of stages

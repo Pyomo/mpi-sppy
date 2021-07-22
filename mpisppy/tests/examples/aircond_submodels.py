@@ -389,5 +389,22 @@ if __name__ == "__main__":
 
     res = aircondpb.run()
     print(res)
+    
+    #Doing replicates
+    nrep = 10
+    seed = 0
+    res = []
+    for k in range(nrep):
+        aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
+                            xhat_generator_aircond, 
+                            optionsFSP,
+                                stopping_criterion="BPL",
+                            stochastic_sampling=False,
+                            solving_type="EF-mstage")
+        aircondpb.SeedCount = seed
+        res.append(aircondpb.run())
+        seed = aircondpb.SeedCount
+    
+    print(res)
         
         

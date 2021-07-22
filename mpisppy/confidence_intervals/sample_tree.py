@@ -78,7 +78,14 @@ class SampleSubtree():
         
         
     def sample_creator(self,sname,**scenario_creator_kwargs):
-        #Creating a sample scenario
+        '''
+        This method is similar to scenario_creator function, but for subtrees.
+        Given a scenario names and kwargs, it creates a scenario from our subtree
+        
+        WARNING: The multistage model (aka refmodel) must contains a 
+        sample_tree_scen_creator function
+        
+        '''
         s = self.refmodel.sample_tree_scen_creator(sname,
                                                    given_scenario=self.root_scen,
                                                    stage=self.stage,
@@ -101,6 +108,11 @@ class SampleSubtree():
         return s
         
     def create_amalgomator(self):
+        '''
+        This method attaches an Amalgomator object to a sample subtree.
+        
+        WARNING: sample_creator must be called before that.
+        '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
         self.scenario_creator = self.sample_creator
         
@@ -122,6 +134,7 @@ class SampleSubtree():
                                            denouement,
                                            verbose = False)
     def run(self):
+        #Running the Amalgomator and attaching the result to the SampleSubtree object
         self.ama.run()
         self.ef = self.ama.ef
         self.EF_Obj = self.ama.EF_Obj
@@ -131,6 +144,11 @@ class SampleSubtree():
 
 def feasible_solution(mname,scenario,xhat_one,BFs,seed,options,
                       solvername="gurobi",solver_options=None):
+    '''
+    Given a scenario and a first-stage policy xhat_one, this method computes
+    non-anticipative feasible policies for the following stages.
+
+    '''
     if xhat_one is None:
         raise RuntimeError("Xhat_one can't be None for now")
     ciutils.is_sorted(scenario._mpisppy_node_list)

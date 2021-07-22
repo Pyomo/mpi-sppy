@@ -36,9 +36,29 @@ def BFs_from_numscens(numscens,num_stages=2):
         raise RuntimeError("BFs_from_numscens is not working correctly. Did you take num_stages>=2 ?")
 
 def scalable_BFs(numscens, ref_BFs):
-    #Given a scenario number and a branching factor list, rescale the branching factors
-    #to get the appropriate scenario number
-    #WARNING: The leaf node number of the output tree is not always an increasing function of numscens
+    '''
+    This utilitary find a good branching factor list to create a scenario tree
+    containing at least numscens leaf nodes, and scaled like ref_BFs.
+    For instance, if numscens=233 and reef_BFs=[5,3,2], it returns [10,6,4], 
+    branching factors for a 240-leafs tree
+    
+    NOTE: This method increasing in priority first stages branching factors,
+          so that a branching factor is an increasing function of numscens
+
+    Parameters
+    ----------
+    numscens : int
+        Number of leaf nodes/scenarios of the tree.
+    ref_BFs : list of int
+        Reference shape of the branching factors. It length must be equal to
+        number_of_stages-1
+
+    Returns
+    -------
+    new_BFs
+        DESCRIPTION.
+
+    '''
     numstages = len(ref_BFs)+1
     if numscens < 2**(numstages-1):
         return [2]*(numstages-1)
@@ -50,7 +70,8 @@ def scalable_BFs(numscens, ref_BFs):
             raise RuntimeError("scalable BFs is failing")
         new_BFs[i]+=1
         i+=1
-    return list(new_BFs.astype(int))
+    new_BFs = list(new_BFs.astype(int))
+    return new_BFs
         
 def is_sorted(nodelist):
     #Take a list of scenario_tree.ScenarioNode and check that it is well constructed
@@ -282,8 +303,6 @@ def gap_estimators(xhat_one,
                             all_nodenames = all_nodenames)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    # global_toc(f"xhats={xhats}")
-    # global_toc(f"xstars={xstars}")
     ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
     ev.evaluate(xstars)
