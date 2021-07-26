@@ -82,7 +82,7 @@ class SampleSubtree():
         This method is similar to scenario_creator function, but for subtrees.
         Given a scenario names and kwargs, it creates a scenario from our subtree
         
-        WARNING: The multistage model (aka refmodel) must contains a 
+        WARNING: The multistage model (aka refmodel) must contain a 
         sample_tree_scen_creator function
         
         '''
