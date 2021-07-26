@@ -144,11 +144,12 @@ def gap_estimators(xhat_one,
                    verbose=True,
                    objective_gap=False
                    ):
-    ''' Given a xhat, scenario names, a scenario creator and options, create
-    the scenarios and the associatd estimators G and s from §2 of [bm2011].
+    ''' Given a xhat, scenario names, a scenario creator and options, 
+    gap_estimators creates a scenario tree and the associatd estimators 
+    G and s from §2 of [bm2011].
     Returns G and s evaluated at xhat.
     If ArRP>1, G and s are pooled, from a number ArRP of estimators,
-        computed on different batches.
+        computed with different scenario trees.
     
 
     Parameters
