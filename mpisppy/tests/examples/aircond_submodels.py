@@ -320,12 +320,13 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
+    ama.verbose = False
     ama.run()
     
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
-    return xhat
+    return {'ROOT': xhat['ROOT']}
     
 
     
@@ -343,39 +344,67 @@ if __name__ == "__main__":
                     "sigmadev":80
                     }
     refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module(refmodel,
-                                  ama_options,use_command_line=False)
-    ama.run()
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
+    # #We use from_module to build easily an Amalgomator object
+    # ama = amalgomator.from_module(refmodel,
+    #                               ama_options,use_command_line=False)
+    # ama.run()
+    # print(f"inner bound=", ama.best_inner_bound)
+    # print(f"outer bound=", ama.best_outer_bound)
     
-    from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
-    options = ama.options
-    options['solver_options'] = options['EF_solver_options']
-    xhat = sputils.nonant_cache_from_ef(ama.ef)['ROOT']
+    # from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
+    # options = ama.options
+    # options['solver_options'] = options['EF_solver_options']
+    # xhat = sputils.nonant_cache_from_ef(ama.ef)
    
     
-    num_batches = 10
-    batch_size = 100
+    # num_batches = 10
+    # batch_size = 100
     
-    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
-                        verbose=False)
-    r=mmw.run()
-    print(r)
+    # mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
+    #                     verbose=False)
+    # r=mmw.run()
+    # print(r)
     
-    # #An example of sequential sampling for the aircond model
-    # from mpisppy.confidence_intervals.seqsampling import SeqSampling
-    # optionsFSP = {'eps': 5.0,
-    #               'solvername': "gurobi_direct",
-    #               "c0":50,}
-    # apl1p_pb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
-    #                         xhat_generator_aircond, 
-    #                         optionsFSP,
-    #                         stopping_criterion="BPL",
-    #                         stochastic_sampling=False)
+    #An example of sequential sampling for the aircond model
+    from mpisppy.confidence_intervals.seqsampling import SeqSampling
+    optionsBM =  { 'h':0.5,
+                    'hprime':0.1, 
+                    'eps':0.5, 
+                    'epsprime':0.4, 
+                    "p":0.2,
+                    "q":1.2,
+                    "solvername":"gurobi_direct",
+                    "BFs": bfs}
+    
+    optionsFSP = {'eps': 1.0,
+                  'solvername': "gurobi_direct",
+                  "c0":50,
+                  "BFs": bfs}
+    aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
+                            xhat_generator_aircond, 
+                            optionsFSP,
+                            stopping_criterion="BPL",
+                            stochastic_sampling=False,
+                            solving_type="EF-mstage")
 
-    # res = apl1p_pb.run()
-    # print(res)
+    res = aircondpb.run()
+    print(res)
+    
+    #Doing replicates
+    nrep = 10
+    seed = 0
+    res = []
+    for k in range(nrep):
+        aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
+                            xhat_generator_aircond, 
+                            optionsFSP,
+                                stopping_criterion="BPL",
+                            stochastic_sampling=False,
+                            solving_type="EF-mstage")
+        aircondpb.SeedCount = seed
+        res.append(aircondpb.run())
+        seed = aircondpb.SeedCount
+    
+    print(res)
         
         

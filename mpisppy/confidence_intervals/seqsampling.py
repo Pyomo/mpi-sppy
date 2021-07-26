@@ -1,6 +1,6 @@
 # Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Code that is producing a xhat and a confidence interval using sequantial sampling 
+# Code that is producing a xhat and a confidence interval using sequential sampling 
 # This is the implementation of the 2 following papers:
 # [bm2011] Bayraksan, G., Morton,D.P.: A Sequential Sampling Procedure for Stochastic Programming. Operations Research 59(4), 898-913 (2011)
 # [bpl2012] Bayraksan, G., Pierre-Louis, P.: Fixed-Width Sequential Stopping Rules for a Class of Stochastic Programs, SIAM Journal on Optimization 22(4), 1518-1548 (2012)
@@ -80,6 +80,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
 
     return xhat
 
+
 class SeqSampling():
     """
     Computing a solution xhat and a confidence interval for the optimality gap sequentially,
@@ -88,8 +89,9 @@ class SeqSampling():
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
         xhat_generator (function): a function that takes scenario_names (and 
-                                    and optional solvername and solver_options) as input
-                                    and return a xhat.
+                                    and optional solvername and solver_options) 
+                                    as input and returns a first stage policy 
+                                    xhat.
 
         options (dict): multiple useful parameters, e.g.:
                         - "solvername", str, the name of the solver we use 
@@ -117,6 +119,9 @@ class SeqSampling():
             else, we compute them using [Bayraksan and Morton] technique
         stopping_criterion (str, default 'BM'): which stopping criterion should be used ?
             2 criterions are supported : 'BM' for [Bayraksan and Morton] and 'BPL' for [Bayraksan and Pierre-Louis]
+        solving_type (str, default 'EF-2stage'): how do we solve the approximate problems ?
+            Must be one of 'EF-2stage' and 'EF-mstage' (for problems with more than 2 stages).
+            Solving methods outside EF are not supported yet.
     """
     
     def __init__(self,
@@ -124,7 +129,8 @@ class SeqSampling():
                  xhat_generator,
                  options,
                  stochastic_sampling = False,
-                 stopping_criterion = "BM"):
+                 stopping_criterion = "BM",
+                 solving_type = "EF-2stage"):
         
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
@@ -132,6 +138,7 @@ class SeqSampling():
         self.options = options
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
+        self.solving_type = solving_type
         self.solvername = options["solvername"] if "solvername" in options else "gurobi"
         self.solver_options = options["solver_options"] if "solver_options" in options else None
         self.sample_size_ratio = options["sample_size_ratio"] if "sample_size_ration" in options else 1
@@ -177,9 +184,50 @@ class SeqSampling():
         for oname in options:
             setattr(self, oname, options[oname]) #Set every option as an attribute
         
+        
+        #Check the solving_type, and find if the problem is multistage
+        two_stage_types = ['EF-2stage']
+        multistage_types = ['EF-mstage']
+        if self.solving_type in two_stage_types:
+            self.multistage = False
+        elif self.solving_type in multistage_types:
+            self.multistage = True
+        else:
+            raise RuntimeError(f"The solving_type {self.solving_type} is not supported."
+                               f"If you want to run a 2-stage problem, please use a solving_type in {two_stage_types}"
+                               f"If you want to run a multistage stage problem, please use a solving_type in {multistage_types}")
+        
+        #Check the multistage options
+        if self.multistage:
+            needed_things = ["BFs"]
+            is_needed(options, needed_things)
+            if options['kf_Gs'] != 1 or options['kf_xhat'] != 1:
+                raise RuntimeError("Resampling frequencies must be set equal to one for multistage.")
+        
+        #Get the stopping criterion
+        if self.stopping_criterion == "BM":
+            self.stop_criterion = self.bm_stopping_criterion
+        elif self.stopping_criterion == "BPL":
+            self.stop_criterion = self.bpl_stopping_criterion
+        else:
+            raise RuntimeError("Only BM and BPL criteria are supported yet")
+            
+        #Get the function computing sample size
+        if self.stochastic_sampling:
+            self.sample_size = self.stochastic_sampsize
+        elif self.stopping_criterion == "BM":
+            self.sample_size = self.bm_sampsize
+        elif self.stopping_criterion == "BPL":
+            self.sample_size = self.bpl_fsp_sampsize
+        else:
+            raise RuntimeError("Only BM and BPL sample sizes are supported yet")
+        
         #To be sure to always use new scenarios, we set a ScenCount that is 
         #telling us how many scenarios has been used so far
         self.ScenCount = 0
+        
+        #If we are running a multistage problem, we also need a seed count
+        self.SeedCount = 0
             
     def bm_stopping_criterion(self,G,s,nk):
         return(G>self.hprime*s+self.epsprime)
@@ -246,30 +294,13 @@ class SeqSampling():
         refmodel = self.refmodel
         mult = self.sample_size_ratio # used to set m_k= mult*n_k
         
-        #Get the stopping criterion
-        if self.stopping_criterion == "BM":
-            stop_criterion = self.bm_stopping_criterion
-        elif self.stopping_criterion == "BPL":
-            stop_criterion = self.bpl_stopping_criterion
-        else:
-            raise RuntimeError("Only BM and BPL criteria are supported yet")
-            
-        #Get the function computing sample size
-        if self.stochastic_sampling:
-            self.sample_size = self.stochastic_sampsize
-        elif self.stopping_criterion == "BM":
-            self.sample_size = self.bm_sampsize
-        elif self.stopping_criterion == "BPL":
-            self.sample_size = self.bpl_fsp_sampsize
-        else:
-            raise RuntimeError("Only BM and BPL sample sizes are supported yet")
         
         #----------------------------Step 0 -------------------------------------#
         #Initialization
         k =1
         
         
-        #Computing n_1
+        #Computing the lower bound for n_1
 
 
         if self.stopping_criterion == "BM":
@@ -284,93 +315,144 @@ class SeqSampling():
                 s = sum(np.exp(-self.p*np.power(j,2*self.q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
                 
+        lower_bound_k = self.sample_size(k, None, None, None)
         
-        nk = self.ArRP *int(np.ceil(self.sample_size(k, None, None, None)/self.ArRP))
+        #Computing xhat_1.
         
-        #Computing xhat_1. 
         #We use sample_size_ratio*n_k observations to compute xhat_k
-        xhat_scenario_names = refmodel.scenario_names_creator(mult*nk, start=0)
-        self.ScenCount+=mult*nk   
+        if self.multistage:
+            xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
+            mk = np.prod(xhat_BFs)
+            self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+            xhat_scenario_names = refmodel.scenario_names_creator(mk)
+            
+        else:
+            mk = int(np.floor(mult*lower_bound_k))
+            xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
+            self.ScenCount+=mk
         
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,
                                    **self.xhat_gen_options)
-        #Sample observations used to compute G_k and s_k
-        estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                   start=self.ScenCount)
-        self.ScenCount+=nk
+
     
         #----------------------------Step 1 -------------------------------------#
+        #Computing n_1 and associated scenario names
+        if self.multistage:
+            self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+            
+            gap_BFs = ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])
+            nk = np.prod(gap_BFs)
+            estimator_scenario_names = refmodel.scenario_names_creator(nk)
+            sample_options = {'BFs':gap_BFs, 'seed':self.SeedCount}
+        else:
+            nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
+            estimator_scenario_names = refmodel.scenario_names_creator(nk,
+                                                                       start=self.ScenCount)
+            sample_options = None
+            self.ScenCount+= nk
         
         #Computing G_nkand s_k associated with xhat_1
+            
         self.options['num_scens'] = nk
         scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
         scenario_denouement = refmodel.scenario_denouement if hasattr(refmodel, "scenario_denouement") else None
         estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
-                                       solving_type="EF-2stage", #multistage not supported yet
+                                       solving_type=self.solving_type,
                                        scenario_names=estimator_scenario_names,
-                                       sample_options=None,
-                                       ArRP=1,
+                                       sample_options=sample_options,
+                                       ArRP=self.ArRP,
                                        scenario_creator_kwargs=scenario_creator_kwargs,
                                        scenario_denouement=scenario_denouement,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options)
-        assert self.ScenCount == estim['seed']
         Gk,sk = estim['G'],estim['s']
+        if self.multistage:
+            self.SeedCount = estim['seed']
         
         #----------------------------Step 2 -------------------------------------#
 
-        while( stop_criterion(Gk,sk,nk) and k<maxit):
+        while( self.stop_criterion(Gk,sk,nk) and k<maxit):
         #----------------------------Step 3 -------------------------------------#       
             k+=1
             nk_m1 = nk #n_{k-1}
-            nk = self.ArRP*int(np.ceil(self.sample_size(k, Gk, sk, nk_m1)/self.ArRP))
-            assert nk>= nk_m1, "Our sample size should be increasing"
-            #Computing xhat_k
-            if (k%self.kf_xhat==0):
-                #We use only new scenarios to compute xhat
-                xhat_scenario_names = refmodel.scenario_names_creator(mult*nk,
-                                                                      start=self.ScenCount)
-                self.ScenCount+=mult*nk
+            mk_m1 = mk
+            lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
+            
+            #Computing m_k and associated scenario names
+            if self.multistage:
+                xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
+                mk = np.prod(xhat_BFs)
+                self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+                xhat_scenario_names = refmodel.scenario_names_creator(mk)
+            
             else:
-                #We reuse the previous scenarios
-                xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
-                                                                      start=self.ScenCount)
-                self.ScenCount+= mult*(nk-nk_m1)
+                mk = int(np.floor(mult*lower_bound_k))
+                assert mk>= mk_m1, "Our sample size should be increasing"
+                if (k%self.kf_xhat==0):
+                    #We use only new scenarios to compute xhat
+                    xhat_scenario_names = refmodel.scenario_names_creator(mult*nk,
+                                                                          start=self.ScenCount)
+                    self.ScenCount+= mk
+                else:
+                    #We reuse the previous scenarios
+                    xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
+                                                                          start=self.ScenCount)
+                    self.ScenCount+= mk-mk_m1
+            
+            #Computing xhat_k
+           
+            xhat_k = self.xhat_generator(xhat_scenario_names,
+                                        solvername=self.solvername,
+                                        solver_options=self.solver_options,
+                                        **self.xhat_gen_options)
+            
+            #Computing n_k and associated scenario names
+            if self.multistage:
+                self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+                
+                gap_BFs = ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])
+                nk = np.prod(gap_BFs)
+                estimator_scenario_names = refmodel.scenario_names_creator(nk)
+                sample_options = {'BFs':gap_BFs, 'seed':self.SeedCount}
+            else:
+                nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
+                assert nk>= nk_m1, "Our sample size should be increasing"
+                if (k%self.kf_Gs==0):
+                    #We use only new scenarios to compute gap estimators
+                    estimator_scenario_names = refmodel.scenario_names_creator(nk,
+                                                                               start=self.ScenCount)
+                    self.ScenCount+=nk
+                else:
+                    #We reuse the previous scenarios
+                    estimator_scenario_names+= refmodel.scenario_names_creator((nk-nk_m1),
+                                                                               start=self.ScenCount)
+                    self.ScenCount+= (nk-nk_m1)
+                sample_options = None
+            
+            
+            #Computing G_k and s_k
             self.options['num_scens'] = nk
             scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
-            xhat_k = self.xhat_generator(xhat_scenario_names,
-                                       solvername=self.solvername,
-                                       solver_options=self.solver_options,
-                                       **self.xhat_gen_options)
-            #Computing G_k and s_k
-            if (k%self.kf_Gs==0):
-                #We use only new scenarios to compute xhat
-                estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                           start=self.ScenCount)
-                self.ScenCount+=nk
-            else:
-                #We reuse the previous scenarios
-                estimator_scenario_names+= refmodel.scenario_names_creator((nk-nk_m1),
-                                                                           start=self.ScenCount)
-                self.ScenCount+= (nk-nk_m1)
-
             estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
-                                           solving_type="EF-2stage", #multistage not supported yet
+                                           solving_type=self.solving_type,
                                            scenario_names=estimator_scenario_names,
-                                           sample_options=None,
-                                           ArRP=1,
+                                           sample_options=sample_options,
+                                           ArRP=self.ArRP,
                                            scenario_creator_kwargs=scenario_creator_kwargs,
                                            scenario_denouement=scenario_denouement,
                                            solvername=self.solvername,
                                            solver_options=self.solver_options)
-            assert self.ScenCount == estim['seed']
+            if self.multistage:
+                self.SeedCount = estim['seed']
             Gk,sk = estim['G'],estim['s']
 
-            if (k%10==0):
+            if (k%10==0) and global_rank==0:
                 print(f"k={k}")
                 print(f"n_k={nk}")
+                print(f"G_k={Gk}")
+                print(f"s_k={sk}")
         #----------------------------Step 4 -------------------------------------#
         if (k==maxit) :
             raise RuntimeError(f"The loop terminated after {maxit} iteration with no acceptable solution")
