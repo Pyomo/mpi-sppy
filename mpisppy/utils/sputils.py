@@ -779,7 +779,7 @@ class _TreeNode():
                 first += child_scens_num
             if last != scenlast:
                 print("Hello", numscens)
-                raise RuntimeError(f"Tree node did not initialize correctly for node {name}: ")
+                raise RuntimeError(f"Tree node did not initialize correctly for node {name}.")
     def stage_max(self):
         #Return the number of stages of a subtree.
         #Also check that all the subtrees have the same number of stages
