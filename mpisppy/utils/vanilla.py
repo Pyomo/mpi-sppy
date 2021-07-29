@@ -64,6 +64,8 @@ def ph_hub(
     ph_extensions=None,
     rho_setter=None,
     variable_probability=None,
+    all_nodenames=None,
+    branching_factors=None
 ):
     shoptions = shared_options(args)
     options = copy.deepcopy(shoptions)
@@ -309,7 +311,7 @@ def xhatspecific_spoke(
     all_scenario_names,
     scenario_dict,
     all_nodenames=None,
-    BFs=None,
+    branching_factors=None,
     scenario_creator_kwargs=None,
 ):
     

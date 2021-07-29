@@ -578,7 +578,7 @@ class SPOpt(SPBase):
             
             rootnode = None
             for node in s._mpisppy_node_list:
-                if node.name is 'ROOT':
+                if node.name == 'ROOT':
                     rootnode = node
                     break
                 

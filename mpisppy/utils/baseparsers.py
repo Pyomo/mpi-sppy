@@ -156,12 +156,12 @@ def _basic_multistage(progname=None):
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
     # the default is intended more as an example than as a default
-    parser.add_argument("--BFs",
-                        help="Spaces delimited branching factors (default 2 2)",
-                        dest="BFs",
+    parser.add_argument("--branching_factors",
+                        help="Spaces delimited branching factors (e.g., 2 2)",
+                        dest="branching_factors",
                         nargs="*",
                         type=int,
-                        default=[2,2])
+                        default=None)
     return parser
 
 
@@ -429,14 +429,14 @@ def lagranger_args(inparser):
 def xhatlooper_args(inparser):
     parser = inparser
     parser.add_argument('--with-xhatlooper',
-                        help="have an xhatlooper spoke",
+                        help="have an xhatlooper spoke (default)",
                         dest='with_xhatlooper',
                         action='store_true')
     parser.add_argument('--no-xhatlooper',
-                        help="do not have an xhatlooper spoke (default)",
+                        help="do not have an xhatlooper spoke",
                         dest='with_xhatlooper',
                         action='store_false')
-    parser.set_defaults(with_xhatlooper=False)
+    parser.set_defaults(with_xhatlooper=True)
     parser.add_argument("--xhat-scen-limit",
                         help="scenario limit xhat looper to try (default 3)",
                         dest="xhat_scen_limit",
