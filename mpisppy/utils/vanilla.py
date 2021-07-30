@@ -276,7 +276,7 @@ def xhatshuffle_spoke(
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
-    scenario_dict,
+    scenario_dict=None,
     all_nodenames=None,
     branching_factors=None,
     scenario_creator_kwargs=None,
