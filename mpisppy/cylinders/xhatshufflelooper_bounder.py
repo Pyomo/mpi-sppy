@@ -24,9 +24,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
     converger_spoke_char = 'X'
 
     def xhatbase_prep(self):
-        if self.opt.multistage:
-            raise RuntimeError('The XhatShuffleInnerBound only supports '
-                               'two-stage models at this time.')
+        if self.opt.multistage and self.opt.options["xhat_looper_options"]["xhat_scenario_dict"] is None:
+            raise RuntimeError ("For multistage problems, XhatShuffleLooper needs a xhat_scenario_dict attribute")
 
         verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
@@ -94,8 +93,12 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         self.random_stream = random.Random()
 
 
-    def try_scenario(self, scenario):
-        obj = self.xhatter._try_one({"ROOT":scenario},
+    def try_scenario(self, scenario, xhat_scenario_dict):
+        if xhat_scenario_dict is None:
+            snamedict = {"ROOT":scenario}
+        else:
+            snamedict = xhat_scenario_dict
+        obj = self.xhatter._try_one(snamedict,
                             solver_options = self.solver_options,
                             verbose=False,
                             restore_nonants=False)
@@ -118,6 +121,10 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
     def main(self):
         verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
+
+        # What to try does not change, but the data in the scenarios should
+        xhat_scenario_dict = self.opt.options["xhat_looper_options"]\
+                                             ["xhat_scenario_dict"]
 
         self.xhatbase_prep()
 
@@ -151,13 +158,13 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
 
-            next_scenario = scenario_cycler.get_next()
-            if next_scenario is not None:
-                _vb(f"   Trying next {next_scenario}")
-                update = self.try_scenario(next_scenario)
+            next_scenario_name = scenario_cycler.get_next()
+            if next_scenario_name is not None:
+                _vb(f"   Trying next {next_scenario_name}")
+                update = self.try_scenario(next_scenario_name,xhat_scenario_dict)
                 if update:
-                    _vb(f"   Updating best to {next_scenario}")
-                    scenario_cycler.best = next_scenario
+                    _vb(f"   Updating best to {next_scenario_name}")
+                    scenario_cycler.best = next_scenario_name
             else:
                 scenario_cycler.begin_epoch()
 

@@ -167,6 +167,9 @@ def main():
                               rho_setter = rho_setter)
     hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
     hub_dict["opt_kwargs"]["options"]["branching_factors"] = BFs
+    if args.default_rho is None:
+        # we need to specify a rho
+        hub_dict["opt_kwargs"]["options"]["defaultPHrho"] = 1  
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
@@ -189,6 +192,7 @@ def main():
     
     if with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
+                                                      xhat_scenario_dict,
                                                       all_nodenames,
                                                       BFs,
                                                       scenario_creator_kwargs=scenario_creator_kwargs)
@@ -198,6 +202,8 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if with_xhatspecific:
         list_of_spoke_dict.append(xhatspecific_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 
