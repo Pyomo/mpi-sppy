@@ -136,7 +136,7 @@ spokes_and_multi_compatibility = {'fwph':True,
                                   'lagrangian':False,
                                   'lagranger':False,
                                   'xhatlooper':False,
-                                  'xhatshuffle':False,
+                                  'xhatshuffle':True,
                                   'xhatspecific':True,
                                   'xhatlshaped':False,
                                   'slamup':False,
@@ -192,6 +192,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
             else:
                 raise RuntimeError("The problem type (2stage or mstage) must be specified")
             parser = baseparsers.two_sided_args(parser)
+            parser = baseparsers.mip_options(parser)
                 
             #Adding cylinders
             if not "cylinders" in options:
@@ -200,10 +201,6 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
                 for cylinder in options['cylinders']:
                     #TODO: Add a list of existing cylinders value and check if they exists
                     parser = add_parser(parser,cylinder)
-            if "extensions" in options:
-                for extension in options["extensions"]:
-                    parser = add_parser(parser,extension)
-                raise RuntimeWarning("The extensions are not passed to cylinders for now.")
     
         # TBD add args for everything else that is not EF, which is a lot
     
@@ -324,6 +321,9 @@ class Amalgomator():
             self.ef = None
             args = argparse.Namespace(**self.options)
             
+            if args.default_rho is None:
+                args.default_rho =1
+            
             hub_name = find_hub(self.options['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
             hub_dict = hub_creator(args = args,
@@ -340,7 +340,7 @@ class Amalgomator():
             spokes = [spoke for spoke in potential_spokes if self.options['with_'+spoke]]
             list_of_spoke_dict = list()
             for spoke in spokes:
-                spoke_creator = getattr(vanilla, spoke+'_hub')
+                spoke_creator = getattr(vanilla, spoke+'_spoke')
                 spoke_dict = spoke_creator(args = args,
                                            scenario_creator = self.scenario_creator,
                                            scenario_denouement = self.scenario_denouement,
@@ -357,7 +357,7 @@ if __name__ == "__main__":
     import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
-                   "cylinders": ['ph'],
+                   "cylinders": ['ph','xhatshuffle'],
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
