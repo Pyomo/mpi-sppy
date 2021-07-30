@@ -322,10 +322,10 @@ def xhatspecific_spoke(
         "xhat_scenario_dict": scenario_dict,
         "csvname": "specific.csv",
     }
-    if BFs:
-        xhat_options["branching_factors"] = BFs
+    if branching_factors:
+        xhat_options["branching_factors"] = branching_factors
         if all_nodenames is None:
-            all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+            all_nodenames = sputils.create_nodenames_from_BFs(branching_factors)
     #TODO: We need to adjust Vanilla with multistage
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat

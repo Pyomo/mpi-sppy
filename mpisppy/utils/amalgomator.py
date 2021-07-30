@@ -110,11 +110,12 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
 def _bool_option(options, oname):
     return oname in options and options[oname]
 
-def _basic_parse_args(progname = None, is_multi=False):
+def _basic_parse_args(progname = None, is_multi=False,  num_scens_reqd=False):
     if is_multi:
         parser = baseparsers.make_multistage_parser(progname= progname)
     else:
-        parser = argparse.ArgumentParser(prog=progname,conflict_handler="resolve")
+        parser = baseparsers.make_parser(progname=progname, 
+                                         num_scens_reqd=num_scens_reqd)
         
     return parser
 
@@ -150,6 +151,7 @@ def find_hub(cylinders, is_multi=False):
             raise RuntimeError(f"The hub {hub} does not work with multistage problems" )
     else:
         raise RuntimeError("There must be exactly one hub among cylinders")
+    return hub
 
 def find_spokes(cylinders, is_multi=False):
     spokes = []
@@ -158,7 +160,7 @@ def find_spokes(cylinders, is_multi=False):
             if is_multi and not spokes_and_multi_compatibility[c]:
                 raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
             spokes.append(c)
-                
+    return spokes
                 
         
 #==========
@@ -177,19 +179,19 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     opt = {**options}
     
     if use_command_line:
-        parser = baseparsers.make_parser(progname=None, 
-                                         num_scens_reqd=_bool_option(options, "num_scens_reqd"))
+        num_scens_reqd=_bool_option(options, "num_scens_reqd")
         if _bool_option(options, "EF-2stage"):
-            parser = baseparsers.make_EF2_parser(progname=parser)
+            parser = baseparsers.make_EF2_parser(num_scens_reqd=num_scens_reqd)
         elif _bool_option(options, "EF-mstage"):
-            parser = baseparsers.make_EF_multistage_parser(progname=parser)
+            parser = baseparsers.make_EF_multistage_parser(num_scens_reqd=num_scens_reqd)
         else:
             if _bool_option(options, "2stage"):
-                parser = _basic_parse_args(progname= parser, is_multi=False)
+                parser = _basic_parse_args(is_multi=False, num_scens_reqd=num_scens_reqd)
             elif _bool_option(options, "mstage"):
                 parser = _basic_parse_args(progname = parser, is_multi=True)
             else:
                 raise RuntimeError("The problem type (2stage or mstage) must be specified")
+            parser = baseparsers.two_sided_args(parser)
                 
             #Adding cylinders
             if not "cylinders" in options:
@@ -215,6 +217,8 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
         args = parser.parse_args()
     
         opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
+        
+        print("Hello", opt)
         
         if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
             if ('EF_solver_options' in opt):
@@ -318,9 +322,11 @@ class Amalgomator():
 
         else:
             self.ef = None
+            args = argparse.Namespace(**self.options)
+            
             hub_name = find_hub(self.options['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
-            hub_dict = hub_creator(args = self.options,
+            hub_dict = hub_creator(args = args,
                                    scenario_creator = self.scenario_creator,
                                    scenario_denouement = self.scenario_denouement,
                                    all_scenario_names = self.scenario_names,
@@ -335,7 +341,7 @@ class Amalgomator():
             list_of_spoke_dict = list()
             for spoke in spokes:
                 spoke_creator = getattr(vanilla, spoke+'_hub')
-                spoke_dict = spoke_creator(args = self.options,
+                spoke_dict = spoke_creator(args = args,
                                            scenario_creator = self.scenario_creator,
                                            scenario_denouement = self.scenario_denouement,
                                            all_scenario_names = self.scenario_names,
@@ -352,7 +358,6 @@ if __name__ == "__main__":
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
                    "cylinders": ['ph'],
-                   'num_scens_reqd':True
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
