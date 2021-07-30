@@ -140,6 +140,7 @@ def main():
 
     with_xhatspecific = args.with_xhatspecific
     with_lagrangian = args.with_lagrangian
+    with_xhatshuffle = args.with_xhatshuffle
 
     # This is multi-stage, so we need to supply node names
     #all_nodenames = ["ROOT"] # all trees must have this node
@@ -184,6 +185,13 @@ def main():
                                                         BFs,
                                                         scenario_creator_kwargs=scenario_creator_kwargs)
     
+    #xhat shuffle looper bound spoke
+    
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
+                                                      all_nodenames,
+                                                      BFs,
+                                                      scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
     if with_lagrangian:
