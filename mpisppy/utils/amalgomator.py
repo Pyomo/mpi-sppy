@@ -321,9 +321,6 @@ class Amalgomator():
             self.ef = None
             args = argparse.Namespace(**self.options)
             
-            if args.default_rho is None:
-                args.default_rho =1
-            
             hub_name = find_hub(self.options['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
             hub_dict = hub_creator(args = args,
