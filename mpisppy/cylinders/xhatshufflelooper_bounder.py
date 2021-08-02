@@ -8,6 +8,8 @@ import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 import mpi4py.MPI as mpi
+fullcomm = mpi.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 from math import inf, isclose
 from mpisppy.utils.xhat_eval import Xhat_Eval
@@ -130,6 +132,10 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         # give all ranks the same seed
         self.random_stream.seed(self.random_seed)
+        #Check that they have the same stream
+        check = self.random_stream.normalvariate(0, 1)
+        print(f"Hello, for global rank {global_rank}, random stream gives a value of {check}")
+        
         # shuffle the scenarios (i.e., sample without replacement)
         shuffled_scenarios = self.random_stream.sample(
             self.opt.all_scenario_names,
