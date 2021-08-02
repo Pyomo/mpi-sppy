@@ -151,7 +151,7 @@ def main():
     ScenCount = np.prod(BFs)
     #ScenCount = _get_num_leaves(BFs)
     scenario_creator_kwargs = {"BFs": BFs}
-    all_scenario_names = [f"scen{i+1}" for i in range(ScenCount)]
+    all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
     # print(all_scenario_names)
     scenario_creator = aircond_submodels.scenario_creator
     scenario_denouement = aircond_submodels.scenario_denouement
@@ -167,9 +167,6 @@ def main():
                               rho_setter = rho_setter)
     hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
     hub_dict["opt_kwargs"]["options"]["branching_factors"] = BFs
-    if args.default_rho is None:
-        # we need to specify a rho
-        hub_dict["opt_kwargs"]["options"]["defaultPHrho"] = 1  
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
