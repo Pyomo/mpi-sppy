@@ -134,7 +134,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         self.random_stream.seed(self.random_seed)
         #Check that they have the same stream
         check = self.random_stream.normalvariate(0, 1)
-        chack2 = self.random_stream.normalvariate(0, 1)
+        check2 = self.random_stream.normalvariate(0, 1)
         print(f"Hello, for global rank {global_rank}, random stream gives a value of {check} and {check2}")
         
         # shuffle the scenarios (i.e., sample without replacement)
