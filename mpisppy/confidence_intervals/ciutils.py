@@ -339,6 +339,9 @@ def gap_estimators(xhat_one,
     G = correcting_numeric(G,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
     if objective_gap:
-       return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+        if is_multi:
+            return {"G":G,"s":s,"zhat": obj_at_xhat, "seed":start} 
+        else:
+            return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
     else:
         return {"G":G,"s":s,"seed":start}
