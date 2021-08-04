@@ -189,7 +189,6 @@ def main():
     
     if with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
-                                                      xhat_scenario_dict,
                                                       all_nodenames,
                                                       BFs,
                                                       scenario_creator_kwargs=scenario_creator_kwargs)

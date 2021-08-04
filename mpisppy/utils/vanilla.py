@@ -276,7 +276,6 @@ def xhatshuffle_spoke(
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
-    scenario_dict=None,
     all_nodenames=None,
     branching_factors=None,
     scenario_creator_kwargs=None,
@@ -287,7 +286,6 @@ def xhatshuffle_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhat_options["xhat_looper_options"] = {
         "xhat_solver_options": shoptions["iterk_solver_options"],
-        "xhat_scenario_dict": scenario_dict,
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
