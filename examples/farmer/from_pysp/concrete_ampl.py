@@ -46,3 +46,5 @@ ph = PH( options = phoptions,
         )
 
 ph.ph_main()
+
+farmer.close()

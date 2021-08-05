@@ -62,3 +62,4 @@ else:
     solver.solve(ef, tee=True, symbolic_solver_labels=True,)
 
 print(f"EF objective: {pyo.value(ef.EF_Obj)}")
+farmer.close()
