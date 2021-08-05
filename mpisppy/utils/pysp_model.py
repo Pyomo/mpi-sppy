@@ -1,64 +1,68 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-import os.path
-from inspect import signature
 import pyomo.environ as pyo
-
-import mpisppy
-
-from pysp.scenariotree.tree_structure_model import \
-        CreateAbstractScenarioTreeModel, ScenarioTreeModelFromNetworkX
-from pysp.phutils import isVariableNameIndexed,\
-                                extractVariableNameAndIndex
-from pyomo.common.fileutils import import_file
+from pysp.scenariotree.instance_factory import ScenarioTreeInstanceFactory
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
-from mpisppy.utils.sputils import create_EF as create_mpisppy_EF
 
-hasnetworkx = False
-try:
-    import networkx
-    hasnetworkx = True
-except:
-    pass
+def _get_nonant_list(model, variable_templates):
+    nonant_list = []
+    for varname, index_list in variable_templates.items():
+        var = model.find_component(varname)
+        for index in index_list:
+            if type(index) is tuple:
+                indices = tuple(idx if idx != '*' else slice(None) for idx in index)
+                for vardata in var.__getitem__(indices):
+                    nonant_list.append(vardata)
+            elif index == '*':
+                for vardata in var.values():
+                    nonant_list.append(vardata)
+            else:
+                nonant_list.append(var.__getitem__(index))
+    return nonant_list
 
-def _extract_name_and_index(name):
-    '''Determine if a variable name is indexed, strip off the
-       index, and return the name (without index) and the index.
-       The index will be None if no index is found'''
-    index = None
-    if isVariableNameIndexed(name):
-        name, index = extractVariableNameAndIndex(name)
-    return name, index
 
 class PySPModel:
     """A class for instantiating PySP models for use in mpisppy. 
 
     Args:
-      scenario_creator (str or fct): 
-                    is a path to the file that contains the scenario 
-                    callback for concrete or the reference model for abstract,
-                    or the scenario creator callback function
-      tree_model (concrete model, or networkx tree, or str, or None): 
-                    gives the tree as a concrete model 
-                    (which could be a fct) or a valid networkx scenario tree
-                    or path to AMPL data file.
-      scenarios_dir (str or None):
-                    For abstract models, gives the directory of the scenarios.
-                    If None for an abstract model, will be inferred from the
-                    directory of the tree_model
-      scenario_creator_callback_name (str or None):
-                    The name of the scenario creator callback function
-                    if specifying an concrete model module in
-                    scenario_creator
-      tree_model_callback_name (str or None):
-                    The name of the tree model creator callback function
-                    if specifying an concrete model module in
-                    scenario_creator
+        model: The reference scenario model. Can be set
+            to Pyomo model or the name of a file
+            containing a Pyomo model. For historical
+            reasons, this argument can also be set to a
+            directory name where it is assumed a file
+            named ReferenceModel.py exists.
+        scenario_tree: The scenario tree. Can be set to
+            a Pyomo model, a file containing a Pyomo
+            model, or a .dat file containing data for an
+            abstract scenario tree model representation,
+            which defines the structure of the scenario
+            tree. It can also be a .py file that
+            contains a networkx scenario tree or a
+            networkx scenario tree object.  For
+            historical reasons, this argument can also
+            be set to a directory name where it is
+            assumed a file named ScenarioStructure.dat
+            exists.
+        data: Directory containing .dat files necessary
+            for building the scenario instances
+            associated with the scenario tree. This
+            argument is required if no directory
+            information can be extracted from the first
+            two arguments and the reference model is an
+            abstract Pyomo model. Otherwise, it is not
+            required or the location will be inferred
+            from the scenario tree location (first) or
+            from the reference model location (second),
+            where it is assumed the data files reside in
+            the same directory.
 
     Properties:
       all_scenario_names (list):
-                    A list of scenario names base on the pysp model for
+                    A list of scenario names based on the pysp model for
+                    use in mpisppy
+      all_node_names (list):
+                    A list of all node names based on the pysp model for
                     use in mpisppy
       scenario_creator (fct):
                     A scenario creator function based on the pysp model
@@ -66,176 +70,111 @@ class PySPModel:
       scenario_denouement (fct):
                     A blank scenario_denouement function for use in mpisppy
     """
-    def __init__(self, scenario_creator, tree_model=None,
-            scenarios_dir=None,
-            scenario_creator_callback_name=None,
-            tree_model_callback_name=None):
+    def __init__(self,
+                 model,
+                 scenario_tree,
+                 data=None):
 
-        ## first, attempt to determine abstract vs concrete
-        ## and get a scenario instance creator
-
-        ## if callable, a instance creator
-        if callable(scenario_creator):
-            self.pysp_instance_creator = scenario_creator
-            self.abstract = False
-        else: ## else, either and abstract model or a module with a callback
-            if scenario_creator_callback_name is None:
-                scenario_creator_callback_name = 'pysp_instance_creation_callback'
-            module = import_file(scenario_creator)
-            if hasattr(module, scenario_creator_callback_name):
-                self.pysp_instance_creator = \
-                        getattr(module, scenario_creator_callback_name)
-                self.abstract = False
-            else:
-                self.pysp_instance_creator = module.model.create_instance
-                self.abstract = True
-
-        ## attempt to find and construct a tree model
-        if tree_model is None:
-            if tree_model_callback_name is None:
-                tree_model_callback_name = 'pysp_scenario_tree_model_callback'
-            tree_maker = getattr(module, tree_model_callback_name)
-
-            tree_model = tree_maker()
-        ## if we get a *.dat file, assume the scenarios are here unless
-        ## otherwise specified
-        if isinstance(tree_model, str):
-            self.tree_model = CreateAbstractScenarioTreeModel(\
-                                ).create_instance(tree_model)
-            self.scenarios_dir = os.path.dirname(tree_model)
-        elif hasnetworkx and isinstance(tree_model, networkx.DiGraph):
-            self.tree_model = ScenarioTreeModelFromNetworkX(tree_model)
-        elif isinstance(tree_model, pyo.ConcreteModel):
-            self.tree_model = tree_model
-        else:
-            raise RuntimeError("Type of tree_model {} unrecongized".format(
-                                type(tree_model)))
-
-        ## set the scenarios_dir if specified, but complain if 
-        ## we don't have an abstract model
-        if scenarios_dir is not None:
-            if not self.abstract:
-                raise RuntimeError("An abstract model is required for "
-                        "scenarios_dir")
-            self.scenarios_dir = scenarios_dir
-
-        self._init()
-    
-    def _init(self):
-        """Sets up things needed for mpisppy"""
+        self._scenario_tree_instance_factory = ScenarioTreeInstanceFactory(model, scenario_tree, data)
+        self._pysp_scenario_tree = self._scenario_tree_instance_factory.generate_scenario_tree()
 
         ## get the things out of the tree model we need
-        tree_model = self.tree_model
-        self._scenario_names = list(tree_model.Scenarios)
+        self._all_scenario_names = [s.name for s in self._pysp_scenario_tree.scenarios]
         
         ## check for more than two stages
-        if len(tree_model.Stages) != 2:
-            raise RuntimeError("Models for PySPModel must be 2-stage, "\
-                    "found {} stages".format(len(tree_model.Stages)))
         ## gripe if we see bundles
-        if len(tree_model.Bundles) != 0:
+        if self._pysp_scenario_tree.bundles:
             logger.warning("Bundles are ignored in PySPModel")
 
-        ## extract first stage information from the scenario tree
-        first_stage = tree_model.Stages[1]
-        first_stage_cost_str = tree_model.StageCost[first_stage].value 
+        root_node = self._pysp_scenario_tree.findRootNode()
+        root_node._mpisppy_stage = 1
+        root_node._mpisppy_name = "ROOT"
+        root_node._mpisppy_parent_name = None
+        nodenames = ["ROOT"]
+        def _add_next_stage(node):
+            for idx, child in enumerate(node.children):
+                child._mpisppy_name = node._mpisppy_name + f"_{idx}"
+                child._mpisppy_stage = node._mpisppy_stage + 1
+                child._mpisppy_parent_name = node._mpisppy_name
+                nodenames.append(child._mpisppy_name)
+                if not node.is_leaf_node():
+                    _add_next_stage(child)
+        _add_next_stage(root_node)
 
-        first_stage_cost_name, first_stage_cost_index = \
-                _extract_name_and_index(first_stage_cost_str)
+        self._all_nodenames = nodenames
 
-        ## this is the function that becomes the scenario creator callback
-        def scenario_creator_callback(scenario_name, **kwargs):
-            ## fist, get the model out
-            if self.abstract:
-                model = self.pysp_instance_creator(
-                        os.path.join(self.scenarios_dir,scenario_name+'.dat'))
-            else:
-                ## try to support both callback types, but pass in Nones for 
-                ## args that aren't scenario_name
-                # TBD (use inspect to match kwargs with signature)
-                try:
-                    model = self.pysp_instance_creator(None,
-                                                       scenario_name,
-                                                       None,
-                                                       **kwargs)
-                except TypeError:
-                    try:
-                        model = self.pysp_instance_creator(scenario_name,
-                                                           **kwargs)
-                    except TypeError:
-                        try:
-                            model = self.pysp_instance_creator(scenario_name, None)
-                            for key,val in kwargs.items():
-                                if val is not None:
-                                    print("WARNING: did not use {}={}".\
-                                          format(key, val))
-                        except:
-                            print("signature=",
-                                  str(signature(self.pysp_instance_creator)))
-                            raise RuntimeError("Could not match callback")
+    def scenario_creator_callback(self, scenario_name, **kwargs):
+        ## fist, get the model out
+        model = self._scenario_tree_instance_factory.construct_scenario_instance(
+                scenario_name, self._pysp_scenario_tree)
 
-            ## extract the first stage cost expression
-            stage_cost_expr = getattr(model, first_stage_cost_name)
-            if first_stage_cost_index is None:
-                cost_expression = stage_cost_expr
-            else:
-                cost_expression = stage_cost_expr[first_stage_cost_index]
+        tree_scenario = self._pysp_scenario_tree.get_scenario(scenario_name)
 
-            ## now collect the nonant vars from the model based
-            ## on the tree_model
-            nonant_list = list()
-            for var_str in tree_model.StageVariables[first_stage]:
-                var_name, var_index = _extract_name_and_index(var_str)
-                pyovar = getattr(model, var_name)
-                ## if there's no index, we can append the var
-                if var_index is None:
-                    nonant_list.append(pyovar)
-                ## if there is an index, it should be a single 
-                ## index or the whole thing.
-                ## NOTE: it would not be too difficult to enable
-                ##        slicing, if necessary
-                elif isinstance(var_index,tuple):
-                    if '*' in var_index:
-                        for i in var_index:
-                            if i != '*':
-                                raise RuntimeError("PySPModel does not "
-                                                    "support slicing")
-                        nonant_list.append(pyovar)
-                ## If we only have one index
-                elif var_index == '*':
-                    nonant_list.append(pyovar)
-                else: ## the index is not a slice
-                    nonant_list.append(pyovar[var_index])
+        non_leaf_nodes = tree_scenario.node_list[:-1]
 
-            ## get the probability from the tree_model
-            scen_prob = tree_model.ConditionalProbability[
-                            tree_model.ScenarioLeafNode[scenario_name].value
-                            ].value
+        for node in non_leaf_nodes:
+            if node.is_leaf_node():
+                raise Exception("Unexpected leaf node")
+            stage = node.stage
 
-            ## add the things mpisppy expects to the model
-            model._mpisppy_probability = scen_prob
+            node._mpisppy_cost_expression = model.find_component(stage._cost_variable[0])[stage._cost_variable[1]]
 
-            model._mpisppy_node_list = [mpisppyScenarioNode(
-                                        name="ROOT",
-                                        cond_prob=1.0,
-                                        stage=1,
-                                        cost_expression=cost_expression,
-                                        scen_name_list=self._scenario_names,
-                                        nonant_list = nonant_list,
-                                        scen_model=model)
-                                    ]
-            return model
+            node._mpisppy_nonant_list = _get_nonant_list(model, stage._variable_templates)
+            node._mpisppy_nonant_ef_suppl_list = _get_nonant_list(model, stage._derived_variable_templates)
 
-        ## add this function to the class
-        self._mpisppy_instance_creator = scenario_creator_callback
+        ## add the things mpisppy expects to the model
+        model._mpisppy_probability = tree_scenario.probability
+
+        model._mpisppy_node_list = [mpisppyScenarioNode(
+                                            name=node._mpisppy_name,
+                                            cond_prob=node.conditional_probability,
+                                            stage=node._mpisppy_stage,
+                                            cost_expression=node._mpisppy_cost_expression,
+                                            scen_name_list=None,
+                                            nonant_list=node._mpisppy_nonant_list,
+                                            scen_model=None,
+                                            nonant_ef_suppl_list=node._mpisppy_nonant_ef_suppl_list,
+                                            parent_name=node._mpisppy_parent_name,
+                                    )
+                                    for node in non_leaf_nodes
+                                   ]
+
+        for _ in model.component_data_objects(pyo.Objective, active=True, descend_into=True):
+            break
+        else: # no break
+            # attach PySP objective
+            leaf_node = tree_scenario.node_list[-1]
+            last_stage = leaf_node.stage
+            leaf_node._mpisppy_cost_expression = model.find_component(last_stage._cost_variable[0])[last_stage._cost_variable[1]]
+
+            if hasattr(model, "_PySPModel_objective"):
+                raise RuntimeError("provided model has attribute _PySPModel_objective")
+
+            model._PySPModel_objective = pyo.Objective(expr=\
+                    pyo.quicksum(node._mpisppy_cost_expression for node in tree_scenario.node_list))
+
+        return model
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+
+    def close(self):
+        self._scenario_tree_instance_factory.close()
 
     @property
     def scenario_creator(self):
-        return self._mpisppy_instance_creator
+        return lambda *args,**kwargs : self.scenario_creator_callback(*args,**kwargs)
 
     @property
     def all_scenario_names(self):
-        return self._scenario_names
+        return self._all_scenario_names
+
+    @property
+    def all_nodenames(self):
+        return self._all_nodenames
 
     @property
     def scenario_denouement(self):
