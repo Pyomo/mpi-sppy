@@ -24,9 +24,9 @@ except:
     sys.exit()
 
 pref = os.path.join("..","PySP")
-farmer = PySPModel(scenario_creator=os.path.join(pref,"concrete",
+farmer = PySPModel(model=os.path.join(pref,"concrete",
                                                  "ReferenceModel.py"),
-                   tree_model=os.path.join(pref,"ScenarioStructure.dat"))
+                   scenario_tree=os.path.join(pref,"ScenarioStructure.dat"))
 
 phoptions = {'defaultPHrho': 1.0,
              'solvername':sys.argv[1],

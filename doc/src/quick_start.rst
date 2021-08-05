@@ -41,7 +41,7 @@ concern yourself with MPI.
 PySP Users
 ----------
 
-If you are already using ``PySP`` for a two-stage model, getting started
+If you are already using ``PySP`` for a stochastic program, getting started
 with ``mpi-sppy`` is straightforward; however, unlike in ``PySP``, you will
 be required to create a Python program. Many of the advanced features
 of ``PySP`` are supported by ``mpi-sppy`` but they required creating Python
@@ -61,8 +61,10 @@ Here are the general steps:
 
 These steps alone will not result in use of the hub-spoke features of
 `mpi-sppy`, but they will get your PySP model running in
-``mpi-sppy``. See ``examples.farmer.from_pysp`` for some
+``mpi-sppy``. See ``examples/farmer/from_pysp`` for some
 examples and see :ref:`PySP conversion` for more details.
+For an example with the hub-spoke features of `mpi-sppy`,
+see ``examples/hydro/hydro_cylinders_pysp.py``.
 
 
 Pyomo Users who want to add stochastics
