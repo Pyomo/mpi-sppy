@@ -170,8 +170,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 class ScenarioCycler:
 
     def __init__(self, shuffled_snames,nonleaves):
-        root_kids = nonleaves['ROOT'].kids
-        if root_kids[0].is_leaf:
+        root_kids = nonleaves['ROOT'].kids if 'ROOT' in nonleaves else None
+        if root_kids is None or len(root_kids)==0 or root_kids[0].is_leaf:
             self._multi = False
             self._iter_shift = 1
         else:
@@ -226,11 +226,14 @@ class ScenarioCycler:
         Creates an attribute nodescen_dict. 
         Keys are nonleaf names, values are local scenario names 
         (a value can be None if the associated scenario is not in our rank)
+        
+        WARNING: _cur_ROOTscen must be up to date when calling this method
         '''
         if not self._multi:
-            raise RuntimeWarning("Using create_nodescen_dict for 2stage problems is deprecated. Use directly self._cycle_idx instead")
-        self.nodescen_dict = dict()
-        self._fill_nodescen_dict(self._nonleaves.keys())
+            self.nodescen_dict = {'ROOT':self._cur_ROOTscen}
+        else:
+            self.nodescen_dict = dict()
+            self._fill_nodescen_dict(self._nonleaves.keys())
     
     def update_nodescen_dict(self,snames_to_remove):
         raise RuntimeError("Do not work yet")
@@ -244,7 +247,7 @@ class ScenarioCycler:
         next_scendict = self.nodescen_dict
         if next_scen in self._scenarios_this_epoch:
             self._iter_scen()
-            if self._reversed or not self._multi:
+            if (not self._multi) or self._reversed :
                 #For 2stage problem, a scen can be used for 'ROOT' only once
                 #For a multi stage problem, it can be used twice (including reverse)
                 return None
