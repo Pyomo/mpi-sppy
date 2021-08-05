@@ -5,6 +5,9 @@ from pysp.scenariotree.instance_factory import ScenarioTreeInstanceFactory
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
 
+def _get_cost_expression(model, cost_variable):
+    return model.find_component(cost_variable[0])[cost_variable[1]]
+
 def _get_nonant_list(model, variable_templates):
     nonant_list = []
     for varname, index_list in variable_templates.items():
@@ -20,6 +23,22 @@ def _get_nonant_list(model, variable_templates):
             else:
                 nonant_list.append(var.__getitem__(index))
     return nonant_list
+
+def _get_nodenames(root_node):
+    root_node._mpisppy_stage = 1
+    root_node._mpisppy_name = "ROOT"
+    root_node._mpisppy_parent_name = None
+    nodenames = ["ROOT"]
+    _add_next_stage(root_node, nodenames)
+    return nodenames
+
+def _add_next_stage(node, nodenames):
+    for idx, child in enumerate(node.children):
+        child._mpisppy_name = node._mpisppy_name + f"_{idx}"
+        child._mpisppy_stage = node._mpisppy_stage + 1
+        child._mpisppy_parent_name = node._mpisppy_name
+        nodenames.append(child._mpisppy_name)
+        _add_next_stage(child, nodenames)
 
 
 class PySPModel:
@@ -86,22 +105,7 @@ class PySPModel:
         if self._pysp_scenario_tree.bundles:
             logger.warning("Bundles are ignored in PySPModel")
 
-        root_node = self._pysp_scenario_tree.findRootNode()
-        root_node._mpisppy_stage = 1
-        root_node._mpisppy_name = "ROOT"
-        root_node._mpisppy_parent_name = None
-        nodenames = ["ROOT"]
-        def _add_next_stage(node):
-            for idx, child in enumerate(node.children):
-                child._mpisppy_name = node._mpisppy_name + f"_{idx}"
-                child._mpisppy_stage = node._mpisppy_stage + 1
-                child._mpisppy_parent_name = node._mpisppy_name
-                nodenames.append(child._mpisppy_name)
-                if not node.is_leaf_node():
-                    _add_next_stage(child)
-        _add_next_stage(root_node)
-
-        self._all_nodenames = nodenames
+        self._all_nodenames = _get_nodenames(self._pysp_scenario_tree.findRootNode())
 
     def scenario_creator_callback(self, scenario_name, **kwargs):
         ## fist, get the model out
@@ -115,12 +119,10 @@ class PySPModel:
         for node in non_leaf_nodes:
             if node.is_leaf_node():
                 raise Exception("Unexpected leaf node")
-            stage = node.stage
 
-            node._mpisppy_cost_expression = model.find_component(stage._cost_variable[0])[stage._cost_variable[1]]
-
-            node._mpisppy_nonant_list = _get_nonant_list(model, stage._variable_templates)
-            node._mpisppy_nonant_ef_suppl_list = _get_nonant_list(model, stage._derived_variable_templates)
+            node._mpisppy_cost_expression = _get_cost_expression(model, node.stage._cost_variable)
+            node._mpisppy_nonant_list = _get_nonant_list(model, node.stage._variable_templates)
+            node._mpisppy_nonant_ef_suppl_list = _get_nonant_list(model, node.stage._derived_variable_templates)
 
         ## add the things mpisppy expects to the model
         model._mpisppy_probability = tree_scenario.probability
@@ -142,10 +144,11 @@ class PySPModel:
         for _ in model.component_data_objects(pyo.Objective, active=True, descend_into=True):
             break
         else: # no break
+            print("Provided model has no objective; using PySP auto-generated objective")
+
             # attach PySP objective
             leaf_node = tree_scenario.node_list[-1]
-            last_stage = leaf_node.stage
-            leaf_node._mpisppy_cost_expression = model.find_component(last_stage._cost_variable[0])[last_stage._cost_variable[1]]
+            leaf_node._mpisppy_cost_expression = _get_cost_expression(model, leaf_node.stage._cost_variable)
 
             if hasattr(model, "_PySPModel_objective"):
                 raise RuntimeError("provided model has attribute _PySPModel_objective")
