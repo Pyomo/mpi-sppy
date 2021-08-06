@@ -461,7 +461,7 @@ def xhatshuffle_args(inparser):
                         help="using also the reversed shuffling (multistage only, default True)",
                         dest = 'add_reversed_shuffle',
                         action='store_true')
-    parser.set_default(add_reversed_shuffle=True)
+    parser.set_defaults(add_reversed_shuffle=True)
     parser.add_argument('--xhatshuffle-iter-step',
                         help="step in shuffled list between 2 scenarios to try (default None)",
                         dest="xhatshuffle_iter_step",
