@@ -120,6 +120,14 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhatbase_prep()
+        if "reverse" in self.opt.options["xhat_looper_options"]:
+            self.reverse = self.opt.options["xhat_looper_options"]["reverse"]
+        else:
+            self.reverse = True
+        if "iter_step" in self.opt.options["xhat_looper_options"]:
+            self.iter_step = self.opt.options["xhat_looper_options"]["iter_step"]
+        else:
+            self.iter_step = None
 
         # give all ranks the same seed
         self.random_stream.seed(self.random_seed)
@@ -128,7 +136,9 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         shuffled_scenarios = self.random_stream.sample(self.opt.all_scenario_names, 
                                                        len(self.opt.all_scenario_names))
         scenario_cycler = ScenarioCycler(shuffled_scenarios,
-                                         self.opt.nonleaves)
+                                         self.opt.nonleaves,
+                                         self.reverse,
+                                         self.iter_step)
 
         def _vb(msg): 
             if self.verbose and self.opt.cylinder_rank == 0:
@@ -169,17 +179,19 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
 class ScenarioCycler:
 
-    def __init__(self, shuffled_snames,nonleaves):
+    def __init__(self, shuffled_snames,nonleaves,reverse,iter_step):
         root_kids = nonleaves['ROOT'].kids if 'ROOT' in nonleaves else None
         if root_kids is None or len(root_kids)==0 or root_kids[0].is_leaf:
             self._multi = False
-            self._iter_shift = 1
+            self._iter_shift = 1 if iter_step is None else iter_step
+            self._use_reverse = False #It is useless to reverse for 2stage SP
         else:
             self._multi = True
             self.BF0 = len(root_kids)
             self._nonleaves = nonleaves
             
-            self._iter_shift = self.BF0
+            self._iter_shift = self.BF0 if iter_step is None else iter_step
+            self._use_reverse = True if reverse is None else reverse
             self._reversed = False #Do we iter in reverse mode ?
         
         self._shuffled_snames = shuffled_snames
@@ -257,7 +269,7 @@ class ScenarioCycler:
 
     def _iter_scen(self):
         if len(self._scenarios_this_epoch) == self._num_scenarios:
-            if self._multi and not self._reversed:
+            if self._use_reverse and not self._reversed:
                 self.reverse()
         self._cycle_idx += self._iter_shift
         ## wrap around

@@ -289,6 +289,11 @@ def xhatshuffle_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
+    if _hasit(args,"add_reversed_shuffle"):
+        xhat_options["xhat_looper_options"]["reverse"] = args.add_reversed_shuffle
+    if _hasit(args,"add_reversed_shuffle"):
+        xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = args.xhatshuffle_iter_step
+    
     if branching_factors:
         xhat_options["branching_factors"] = branching_factors
         if all_nodenames is None:
