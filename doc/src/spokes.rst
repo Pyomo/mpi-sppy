@@ -61,8 +61,9 @@ trial values for :math:`\hat{x}`.
 xhatshufflelooper_bounder
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-This bounder shuffles the scenarios loops over them scenarios until
-the hub provides a new x.  To ensure that all subproblems are tried
+This bounder shuffles the scenarios and loops over them to try a 
+:math:`\hat{x}` until
+the hub provides a new x.  To ensure that all scenarios are tried
 eventually, the spoke remembers where it left off, and resumes from
 its prior position.  Since the resulting subproblems after fixing the
 first-stage variables are usually much easier to solve, many candidate
