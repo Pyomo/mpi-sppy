@@ -13,8 +13,6 @@
 
 from pyomo.core import Objective
 
-from six import iteritems, string_types
-
 
 class BasicSymbolMap(object):
 
@@ -55,7 +53,7 @@ class BasicSymbolMap(object):
     def pprint(self, **kwds):
         print("BasicSymbolMap:")
         lines = [repr(label)+" <-> "+obj.name+" (id="+str(id(obj))+")"
-                 for label, obj in iteritems(self.bySymbol)]
+                 for label, obj in self.bySymbol.items()]
         print('\n'.join(sorted(lines)))
         print("")
 
@@ -64,7 +62,7 @@ class BasicSymbolMap(object):
 # a simple utility function to pretty-print an index tuple into a [x,y] form string.
 #
 
-_nontuple = string_types + (int, float)
+_nontuple = (str, int, float)
 def indexToString(index):
 
     if index is None:

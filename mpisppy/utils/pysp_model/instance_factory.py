@@ -37,8 +37,6 @@ from .tree_structure_model import \
 from .tree_structure import \
     ScenarioTree
 
-import six
-
 from pyomo.common.dependencies import (
     networkx, networkx_available as has_networkx
 )
@@ -327,7 +325,7 @@ class ScenarioTreeInstanceFactory(object):
         self._model_module = None
         self._model_object = None
         self._model_callback = None
-        if isinstance(model, six.string_types):
+        if isinstance(model, str):
             logger.debug("A model filename was provided.")
             self._model_filename, self._archives = \
                 _extract_pathspec(model,
@@ -378,7 +376,7 @@ class ScenarioTreeInstanceFactory(object):
         elif has_networkx and \
              isinstance(scenario_tree, networkx.DiGraph):
             self._scenario_tree_model = scenario_tree
-        elif isinstance(scenario_tree, six.string_types):
+        elif isinstance(scenario_tree, str):
             logger.debug("scenario tree input is a string, attempting "
                          "to load file specification: %s"
                          % (scenario_tree))
@@ -772,7 +770,7 @@ class ScenarioTreeInstanceFactory(object):
                     str(scenario_tree_model)+" "+str(type(scenario_tree_model))
 
         if bundles is not None:
-            if isinstance(bundles, six.string_types):
+            if isinstance(bundles, str):
                 if scenario_tree_model is None:
                     raise ValueError(
                         "A bundles file can not be used when the "
@@ -849,7 +847,7 @@ class ScenarioTreeInstanceFactory(object):
         # create bundles from a dict, if requested
         #
         if bundles is not None:
-            if not isinstance(bundles, six.string_types):
+            if not isinstance(bundles, str):
                 if verbose:
                     print("Adding bundles to scenario tree from "
                           "user-specified dict")

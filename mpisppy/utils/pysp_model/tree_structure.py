@@ -42,9 +42,6 @@ from .phutils import (BasicSymbolMap,
                                 extractComponentIndices,
                                 find_active_objective)
 
-from six import iterkeys, iteritems, itervalues
-from six.moves import xrange
-
 logger = logging.getLogger('pysp')
 
 CUID_repr_version = 1
@@ -486,7 +483,7 @@ class ScenarioTreeNode(object):
         self._derived_variable_ids = set()
 
         stage_variables = self._stage._variable_templates
-        for component_name in sorted(iterkeys(stage_variables)):
+        for component_name in sorted(stage_variables.keys()):
             self.updateVariableIndicesAndValues(
                 component_name,
                 stage_variables[component_name],
@@ -494,7 +491,7 @@ class ScenarioTreeNode(object):
                 id_labeler=id_labeler,
                 name_index_to_id_map=name_index_to_id_map)
         node_variables = self._variable_templates
-        for component_name in sorted(iterkeys(node_variables)):
+        for component_name in sorted(node_variables.keys()):
             self.updateVariableIndicesAndValues(
                 component_name,
                 node_variables[component_name],
@@ -503,7 +500,7 @@ class ScenarioTreeNode(object):
                 name_index_to_id_map=name_index_to_id_map)
 
         stage_derived_variables = self._stage._derived_variable_templates
-        for component_name in sorted(iterkeys(stage_derived_variables)):
+        for component_name in sorted(stage_derived_variables.keys()):
             self.updateVariableIndicesAndValues(
                 component_name,
                 stage_derived_variables[component_name],
@@ -511,7 +508,7 @@ class ScenarioTreeNode(object):
                 id_labeler=id_labeler,
                 name_index_to_id_map=name_index_to_id_map)
         node_derived_variables = self._derived_variable_templates
-        for component_name in sorted(iterkeys(node_derived_variables)):
+        for component_name in sorted(node_derived_variables.keys()):
             self.updateVariableIndicesAndValues(
                 component_name,
                 node_derived_variables[component_name],
@@ -810,7 +807,7 @@ class ScenarioTreeNode(object):
 
     def push_fix_queue_to_instances(self):
         have_instances = (self._scenarios[0]._instance != None)
-        for variable_id, (fixed_status, new_value) in iteritems(self._fix_queue):
+        for variable_id, (fixed_status, new_value) in self._fix_queue.items():
             if fixed_status == self.VARIABLE_FREED:
                 assert new_value is None
                 if have_instances:
@@ -833,7 +830,7 @@ class ScenarioTreeNode(object):
     def push_all_fixed_to_instances(self):
         have_instances = (self._scenarios[0]._instance != None)
 
-        for variable_id, fix_value in iteritems(self._fixed):
+        for variable_id, fix_value in self._fixed.items():
             if have_instances:
                 for var_data, scenario_probability in \
                     self._variable_datas[variable_id]:
@@ -844,11 +841,11 @@ class ScenarioTreeNode(object):
 
     def has_fixed_in_queue(self):
         return any((v[0] == self.VARIABLE_FIXED) \
-                   for v in itervalues(self._fix_queue))
+                   for v in self._fix_queue.values())
 
     def has_freed_in_queue(self):
         return any((v[0] == self.VARIABLE_FREED) \
-                   for v in itervalues(self._fix_queue))
+                   for v in self._fix_queue.values())
 
     def clear_fix_queue(self):
 
@@ -1095,7 +1092,7 @@ class Scenario(object):
         for tree_node in self._node_list:
             # Some of these might be Expression objects so we check
             # for is_expression_type before changing.value
-            for variable_id, var_value in iteritems(self._x[tree_node._name]):
+            for variable_id, var_value in self._x[tree_node._name].items():
                 compdata = scenariotree_sm_bySymbol[variable_id]
                 if not compdata.is_expression_type():
                     compdata.value = var_value
@@ -1122,12 +1119,12 @@ class Scenario(object):
             solution['stale'] = copy.deepcopy(self._stale)
         else:
             resx = solution['x'] = {}
-            for tree_node_name, tree_node_x in iteritems(self._x):
+            for tree_node_name, tree_node_x in self._x.items():
                 tree_node_translate_ids = translate_ids[tree_node_name]
                 resx[tree_node_name] = \
                     dict((tree_node_translate_ids[scenario_tree_id],val) \
                          for scenario_tree_id, val in \
-                         iteritems(tree_node_x))
+                         tree_node_x.items())
             resfixed = solution['fixed'] = {}
             # NOTE: This function is frequently called to generate
             #       a set of results that is transmitted over the wire
@@ -1135,13 +1132,13 @@ class Scenario(object):
             #       have issues with set() objects, so we convert them
             #       to tuples here and then convert them back to
             #       set objects in the set_solution() method.
-            for tree_node_name, tree_node_fixed in iteritems(self._fixed):
+            for tree_node_name, tree_node_fixed in self._fixed.items():
                 tree_node_translate_ids = translate_ids[tree_node_name]
                 resfixed[tree_node_name] = \
                     tuple(set(tree_node_translate_ids[scenario_tree_id] \
                         for scenario_tree_id in tree_node_fixed))
             resstale = solution['stale'] = {}
-            for tree_node_name, tree_node_stale in iteritems(self._stale):
+            for tree_node_name, tree_node_stale in self._stale.items():
                 tree_node_translate_ids = translate_ids[tree_node_name]
                 resstale[tree_node_name] = \
                     tuple(set(tree_node_translate_ids[scenario_tree_id] \
@@ -2062,7 +2059,7 @@ class ScenarioTree(object):
 
         # indices of the objects in the scenario tree bundle list
         bundles_to_delete = []
-        for i in xrange(0,len(self._scenario_bundles)):
+        for i in range(0,len(self._scenario_bundles)):
             scenario_bundle = self._scenario_bundles[i]
             for scenario_name in scenario_bundle._scenario_names:
                 if scenario_name not in self._scenario_map:
@@ -2310,7 +2307,7 @@ class ScenarioTree(object):
             random_list=random.sample(range(len(self._scenarios)), number_to_retain)
 
             scenario_bundle_list = []
-            for i in xrange(number_to_retain):
+            for i in range(number_to_retain):
                 scenario_bundle_list.append(self._scenarios[random_list[i]].name)
 
             if verbose:
@@ -2443,14 +2440,14 @@ class ScenarioTree(object):
             # (because it is defined in the abstract model).  however, we
             # don't have a "clear" method on a set, so...
             bundle_names = ["Bundle"+str(i)
-                            for i in xrange(1, num_bundles+1)]
+                            for i in range(1, num_bundles+1)]
             bundles = OrderedDict()
-            for i in xrange(num_bundles):
+            for i in range(num_bundles):
                 bundles[bundle_names[i]] = []
 
             scenario_index = 0
             while (scenario_index < num_scenarios):
-                for bundle_index in xrange(num_bundles):
+                for bundle_index in range(num_bundles):
                     if (scenario_index == num_scenarios):
                         break
                     bundles[bundle_names[bundle_index]].append(
@@ -2473,7 +2470,7 @@ class ScenarioTree(object):
         print("----------------------------------------------------")
         print("Tree Nodes:")
         print("")
-        for tree_node_name in sorted(iterkeys(self._tree_node_map)):
+        for tree_node_name in sorted(self._tree_node_map.keys()):
             tree_node = self._tree_node_map[tree_node_name]
             print("\tName=%s" % (tree_node_name))
             if tree_node._stage is not None:
@@ -2502,7 +2499,7 @@ class ScenarioTree(object):
                     print("\t\t%s" % (scenario._name))
             if len(tree_node._variable_templates) > 0:
                 print("\tVariables: ")
-                for variable_name in sorted(iterkeys(tree_node._variable_templates)):
+                for variable_name in sorted(tree_node._variable_templates.keys()):
                     match_templates = tree_node._variable_templates[variable_name]
                     sys.stdout.write("\t\t "+variable_name+" : ")
                     for match_template in match_templates:
@@ -2510,7 +2507,7 @@ class ScenarioTree(object):
                     print("")
             if len(tree_node._derived_variable_templates) > 0:
                 print("\tDerived Variables: ")
-                for variable_name in sorted(iterkeys(tree_node._derived_variable_templates)):
+                for variable_name in sorted(tree_node._derived_variable_templates.keys()):
                     match_templates = tree_node._derived_variable_templates[variable_name]
                     sys.stdout.write("\t\t "+variable_name+" : ")
                     for match_template in match_templates:
@@ -2519,7 +2516,7 @@ class ScenarioTree(object):
             print("")
         print("----------------------------------------------------")
         print("Stages:")
-        for stage_name in sorted(iterkeys(self._stage_map)):
+        for stage_name in sorted(self._stage_map.keys()):
             stage = self._stage_map[stage_name]
             print("\tName=%s" % (stage_name))
             print("\tTree Nodes: ")
@@ -2527,7 +2524,7 @@ class ScenarioTree(object):
                 print("\t\t%s" % (tree_node._name))
             if len(stage._variable_templates) > 0:
                 print("\tVariables: ")
-                for variable_name in sorted(iterkeys(stage._variable_templates)):
+                for variable_name in sorted(stage._variable_templates.keys()):
                     match_templates = stage._variable_templates[variable_name]
                     sys.stdout.write("\t\t "+variable_name+" : ")
                     for match_template in match_templates:
@@ -2535,7 +2532,7 @@ class ScenarioTree(object):
                     print("")
             if len(stage._derived_variable_templates) > 0:
                 print("\tDerived Variables: ")
-                for variable_name in sorted(iterkeys(stage._derived_variable_templates)):
+                for variable_name in sorted(stage._derived_variable_templates.keys()):
                     match_templates = stage._derived_variable_templates[variable_name]
                     sys.stdout.write("\t\t "+variable_name+" : ")
                     for match_template in match_templates:
@@ -2555,7 +2552,7 @@ class ScenarioTree(object):
             print("")
         print("----------------------------------------------------")
         print("Scenarios:")
-        for scenario_name in sorted(iterkeys(self._scenario_map)):
+        for scenario_name in sorted(self._scenario_map.keys()):
             scenario = self._scenario_map[scenario_name]
             print("\tName=%s" % (scenario_name))
             print("\tProbability=%4.4f" % scenario._probability)
@@ -2570,7 +2567,7 @@ class ScenarioTree(object):
         print("----------------------------------------------------")
         if len(self._scenario_bundles) > 0:
             print("Scenario Bundles:")
-            for bundle_name in sorted(iterkeys(self._scenario_bundle_map)):
+            for bundle_name in sorted(self._scenario_bundle_map.keys()):
                 scenario_bundle = self._scenario_bundle_map[bundle_name]
                 print("\tName=%s" % (bundle_name))
                 print("\tProbability=%4.4f" % scenario_bundle._probability            )
@@ -2591,7 +2588,7 @@ class ScenarioTree(object):
         print("----------------------------------------------------")
         print("Tree Nodes:")
         print("")
-        for tree_node_name in sorted(iterkeys(self._tree_node_map)):
+        for tree_node_name in sorted(self._tree_node_map.keys()):
             tree_node = self._tree_node_map[tree_node_name]
             print("\tName=%s" % (tree_node_name))
             if tree_node._stage is not None:
@@ -2650,7 +2647,7 @@ class ScenarioTree(object):
         print("----------------------------------------------------")
         print("Tree Nodes:")
         print("")
-        for tree_node_name in sorted(iterkeys(self._tree_node_map)):
+        for tree_node_name in sorted(self._tree_node_map.keys()):
             tree_node = self._tree_node_map[tree_node_name]
             print("\tName=%s" % (tree_node_name))
             if tree_node._stage is not None:
@@ -2689,7 +2686,7 @@ class ScenarioTree(object):
         print("----------------------------------------------------")
         print("Scenarios:")
         print("")
-        for scenario_name in sorted(iterkeys(self._scenario_map)):
+        for scenario_name in sorted(self._scenario_map.keys()):
             scenario = self._scenario_map[scenario_name]
 
             print("\tName=%s" % (scenario_name))

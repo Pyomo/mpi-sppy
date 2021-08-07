@@ -15,8 +15,6 @@ __all__ = ()
 
 import pyomo.core
 
-import six
-
 from pyomo.common.dependencies import attempt_import
 
 # The code below conforms to the networkx>=2.0 API
@@ -352,7 +350,7 @@ def ScenarioTreeModelFromNetworkX(
             for varstring in node_derived_variables:
                 m.NodeDerivedVariables[node_name].add(varstring)
         if "cost" in tree.nodes[u]:
-            assert isinstance(tree.nodes[u]["cost"], six.string_types)
+            assert isinstance(tree.nodes[u]["cost"], str)
             m.NodeCost[node_name].value = tree.nodes[u]["cost"]
         if u in succ:
             child_names = []
