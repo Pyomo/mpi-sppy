@@ -20,8 +20,8 @@ import shutil
 import copy
 import logging
 
-from pyutilib.misc import (ArchiveReaderFactory,
-                           ArchiveReader)
+from .archivereader import (ArchiveReaderFactory,
+                            ArchiveReader)
 
 from pyomo.dataportal import DataPortal
 from pyomo.core import (Block,
