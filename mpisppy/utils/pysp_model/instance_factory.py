@@ -30,7 +30,7 @@ from pyomo.core.base.block import _BlockData
 from pyomo.common.dependencies import yaml, yaml_available, yaml_load_args
 from pyomo.common.gc_manager import PauseGC
 from pyomo.common.plugin import ExtensionPoint
-from .misc import load_external_module
+from pyomo.common.fileutils import import_file
 from .tree_structure_model import \
     (CreateAbstractScenarioTreeModel,
      ScenarioTreeModelFromNetworkX)
@@ -183,7 +183,7 @@ def _extract_pathspec(
 def _find_reference_model_or_callback(src):
     """Tries to find a single reference model or callback for
     generating scenario models."""
-    module, _ = load_external_module(src, clear_cache=True)
+    module = import_file(src, clear_cache=True)
     reference_model = None
     callback = None
     dir_module = dir(module)
@@ -214,7 +214,7 @@ def _find_scenariotree(src=None, module=None):
     generating scenario models."""
     if module is None:
         assert src is not None
-        module, _ = load_external_module(src, clear_cache=True)
+        module = import_file(src, clear_cache=True)
     else:
         assert src is None
     scenario_tree_object = None
