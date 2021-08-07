@@ -30,7 +30,6 @@ from pyomo.core.base.block import _BlockData
 from pyomo.common.dependencies import yaml, yaml_available, yaml_load_args
 from pyomo.common.gc_manager import PauseGC
 from pyomo.common.plugin import ExtensionPoint
-from pyomo.scripting.interface import IPyomoScriptModifyInstance
 from .misc import load_external_module
 from .tree_structure_model import \
     (CreateAbstractScenarioTreeModel,
@@ -694,20 +693,6 @@ class ScenarioTreeInstanceFactory(object):
 
             # name each instance with the scenario name
             scenario_instance._name = scenario_name
-
-            # apply each of the post-instance creation plugins. this
-            # really shouldn't be associated (in terms of naming) with the
-            # pyomo script - this should be rectified with a workflow
-            # re-work. it is unclear how this interacts, or doesn't, with
-            # the preprocessors.
-            ep = ExtensionPoint(IPyomoScriptModifyInstance)
-            for ep in ExtensionPoint(IPyomoScriptModifyInstance):
-                logger.warning(
-                    "DEPRECATED: IPyomoScriptModifyInstance extension "
-                    "point callbacks will be ignored by PySP in the future")
-                ep.apply(options=None,
-                         model=reference_model,
-                         instance=scenario_instance)
 
             if compile_instance:
                 from pyomo.repn.beta.matrix import \

@@ -1,9 +1,13 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
+import logging
+
 import pyomo.environ as pyo
-from .instance_factory import ScenarioTreeInstanceFactory
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
+from .instance_factory import ScenarioTreeInstanceFactory
+
+logger = logging.getLogger("mpisppy.utils.pysp_model")
 
 def _get_cost_expression(model, cost_variable):
     return model.find_component(cost_variable[0])[cost_variable[1]]
