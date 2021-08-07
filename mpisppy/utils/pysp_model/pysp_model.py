@@ -1,7 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 import pyomo.environ as pyo
-from pysp.scenariotree.instance_factory import ScenarioTreeInstanceFactory
+from .instance_factory import ScenarioTreeInstanceFactory
 
 from mpisppy.scenario_tree import ScenarioNode as mpisppyScenarioNode
 
