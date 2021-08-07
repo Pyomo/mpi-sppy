@@ -91,7 +91,7 @@ def ArchiveReaderFactory(dirname, **kwds):
                          "name '%s'" % dirname)
 
 
-class ArchiveReader(object):
+class ArchiveReader:
 
     @staticmethod
     def isDir(name):

@@ -41,7 +41,7 @@ from pyomo.common.dependencies import (
     networkx, networkx_available as has_networkx
 )
 
-logger = logging.getLogger('pysp')
+logger = logging.getLogger("mpisppy.utils.pysp_model")
 
 def _extract_pathspec(
         pathspec,
@@ -254,7 +254,7 @@ def _find_scenariotree(src=None, module=None):
 
     return module, scenario_tree_object, scenario_tree_model
 
-class ScenarioTreeInstanceFactory(object):
+class ScenarioTreeInstanceFactory:
 
     def __init__(self,
                  model,

@@ -14,7 +14,7 @@
 from pyomo.core import Objective
 
 
-class BasicSymbolMap(object):
+class BasicSymbolMap:
 
     def __init__(self):
 
@@ -235,34 +235,3 @@ def extractComponentIndices(component, index_template):
             result.append(index)
 
     return result
-
-
-#
-# Extracts an active objective from the instance (top-level only).
-# Works with index objectives that may have all but one index
-# deactivated. safety_checks=True asserts that exactly ONE active objective
-# is found on the top-level instance.
-#
-
-def find_active_objective(instance, safety_checks=False):
-
-    if safety_checks is False:
-        for objective_data in instance.component_data_objects(Objective,
-                                                              active=True,
-                                                              descend_into=True):
-            # Return the first active objective encountered
-            return objective_data
-    else:
-        objectives = []
-        for objective_data in instance.component_data_objects(Objective,
-                                                              active=True,
-                                                              descend_into=True):
-            objectives.append(objective_data)
-        if len(objectives) > 1:
-            names = [o.name for o in objectives]
-            raise AssertionError("More than one active objective was "
-                                 "found on instance %s: %s"
-                                 % (instance.name, names))
-        if len(objectives) > 0:
-            return objectives[0]
-    return None
