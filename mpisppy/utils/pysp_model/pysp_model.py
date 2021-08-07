@@ -12,21 +12,36 @@ logger = logging.getLogger("mpisppy.utils.pysp_model")
 def _get_cost_expression(model, cost_variable):
     return model.find_component(cost_variable[0])[cost_variable[1]]
 
-def _get_nonant_list(model, variable_templates):
+def _yeild_componentdata_from_indexlist(component, index_list):
+    for index in index_list:
+        if type(index) is tuple:
+            indices = tuple(idx if idx != '*' else slice(None) for idx in index)
+            yield from component.__getitem__(indices)
+        elif index == '*' or index == '':
+            yield from component.values()
+        else:
+            yield component.__getitem__(index)
+
+def _get_nonant_list_from_templates(model, templates):
     nonant_list = []
-    for varname, index_list in variable_templates.items():
-        var = model.find_component(varname)
-        for index in index_list:
-            if type(index) is tuple:
-                indices = tuple(idx if idx != '*' else slice(None) for idx in index)
-                for vardata in var.__getitem__(indices):
+    for name, index_list in templates.items():
+        component = model.find_component(name)
+        if isinstance(component, pyo.Var):
+            for vardata in _yeild_componentdata_from_indexlist(component, index_list):
+                nonant_list.append(vardata)
+        elif isinstance(component, pyo.Block):
+            for blockdata in _yeild_componentdata_from_indexlist(component, index_list):
+                for vardata in blockdata.component_data_objects(ctype=pyo.Var, active=True, descend_into=True):
                     nonant_list.append(vardata)
-            elif index == '*':
-                for vardata in var.values():
-                    nonant_list.append(vardata)
-            else:
-                nonant_list.append(var.__getitem__(index))
+        else:
+            raise RuntimeError("Cannot extract non-anticipative variables from component {component.name}")
     return nonant_list
+
+def _get_nonant_list(model, pysp_node):
+    return _get_nonant_list_from_templates(model, {**pysp_node.stage._variable_templates, **pysp_node._variable_templates})
+
+def _get_derived_nonant_list(model, pysp_node):
+    return _get_nonant_list_from_templates(model, {**pysp_node.stage._derived_variable_templates, **pysp_node._derived_variable_templates})
 
 def _get_nodenames(root_node):
     root_node._mpisppy_stage = 1
@@ -125,9 +140,9 @@ class PySPModel:
             if node.is_leaf_node():
                 raise Exception("Unexpected leaf node")
 
-            node._mpisppy_cost_expression = _get_cost_expression(model, node.stage._cost_variable)
-            node._mpisppy_nonant_list = _get_nonant_list(model, node.stage._variable_templates)
-            node._mpisppy_nonant_ef_suppl_list = _get_nonant_list(model, node.stage._derived_variable_templates)
+            node._mpisppy_cost_expression = _get_cost_expression(model, node._cost_variable)
+            node._mpisppy_nonant_list = _get_nonant_list(model, node)
+            node._mpisppy_nonant_ef_suppl_list = _get_derived_nonant_list(model, node)
 
         ## add the things mpisppy expects to the model
         model._mpisppy_probability = tree_scenario.probability
@@ -153,7 +168,7 @@ class PySPModel:
 
             # attach PySP objective
             leaf_node = tree_scenario.node_list[-1]
-            leaf_node._mpisppy_cost_expression = _get_cost_expression(model, leaf_node.stage._cost_variable)
+            leaf_node._mpisppy_cost_expression = _get_cost_expression(model, leaf_node._cost_variable)
 
             if hasattr(model, "_PySPModel_objective"):
                 raise RuntimeError("provided model has attribute _PySPModel_objective")
