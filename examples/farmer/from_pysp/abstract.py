@@ -31,7 +31,7 @@ except:
 pref = os.path.join("..","PySP","abstract")
 farmer = PySPModel(model=os.path.join(pref,"ReferenceModel.py"),
                    scenario_tree=os.path.join(pref,"ScenarioStructure.dat"),
-                   data=pref)
+                   data_dir=pref)
 
 phoptions = {'defaultPHrho': 1.0,
              'solvername':solver_name,

@@ -63,7 +63,7 @@ class PySPModel:
             be set to a directory name where it is
             assumed a file named ScenarioStructure.dat
             exists.
-        data: Directory containing .dat files necessary
+        data_dir: Directory containing .dat files necessary
             for building the scenario instances
             associated with the scenario tree. This
             argument is required if no directory
@@ -92,9 +92,10 @@ class PySPModel:
     def __init__(self,
                  model,
                  scenario_tree,
-                 data=None):
+                 data_dir=None):
 
-        self._scenario_tree_instance_factory = ScenarioTreeInstanceFactory(model, scenario_tree, data)
+        self._scenario_tree_instance_factory = \
+                ScenarioTreeInstanceFactory(model, scenario_tree, data=data_dir)
         self._pysp_scenario_tree = self._scenario_tree_instance_factory.generate_scenario_tree()
 
         ## get the things out of the tree model we need
