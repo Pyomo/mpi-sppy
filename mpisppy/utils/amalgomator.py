@@ -359,14 +359,17 @@ class Amalgomator():
             #Create a hub dict
             hub_name = find_hub(self.options['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
-            hub_dict = hub_creator(args = args,
-                                   scenario_creator = self.scenario_creator,
-                                   scenario_denouement = self.scenario_denouement,
-                                   all_scenario_names = self.scenario_names,
-                                   scenario_creator_kwargs= self.kwargs,
-                                   ph_extensions=None,
-                                   rho_setter=None,
-                                   variable_probability=None)
+            beans = {"args":args,
+                           "scenario_creator": self.scenario_creator,
+                           "scenario_denouement": self.scenario_denouement,
+                           "all_scenario_names": self.scenario_names,
+                           "scenario_creator_kwargs": self.kwargs}
+            if self.is_multi:
+                    if "all_nodenames" in self.options :
+                        beans["all_nodenames"] = self.options["all_nodenames"]
+                    elif "branching_factors" in self.options:
+                        beans["branching_factors"] = self.options["branching_factors"]
+            hub_dict = hub_creator(**beans)
             
             #Add extensions
             if 'extensions' in self.options:
@@ -382,11 +385,19 @@ class Amalgomator():
             list_of_spoke_dict = list()
             for spoke in spokes:
                 spoke_creator = getattr(vanilla, spoke+'_spoke')
-                spoke_dict = spoke_creator(args = args,
-                                           scenario_creator = self.scenario_creator,
-                                           scenario_denouement = self.scenario_denouement,
-                                           all_scenario_names = self.scenario_names,
-                                           scenario_creator_kwargs= self.kwargs,)
+                beans = {"args":args,
+                           "scenario_creator": self.scenario_creator,
+                           "scenario_denouement": self.scenario_denouement,
+                           "all_scenario_names": self.scenario_names,
+                           "scenario_creator_kwargs": self.kwargs}
+                if spoke == "xhatspecific":
+                    beans["scenario_dict"] = self.options["scenario_dict"]
+                if self.is_multi and spoke in ['xhatspecific','xhatshuffle']:
+                    if "all_nodenames" in self.options :
+                        beans["all_nodenames"] = self.options["all_nodenames"]
+                    elif "branching_factors" in self.options:
+                        beans["branching_factors"] = self.options["branching_factors"]
+                spoke_dict = spoke_creator(**beans)
                 list_of_spoke_dict.append(spoke_dict)
                 
             spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
@@ -394,7 +405,7 @@ class Amalgomator():
             if "hub_class" in opt_dict:  # we are a hub rank
                 self.best_inner_bound = spcomm.BestInnerBound
                 self.best_outer_bound = spcomm.BestOuterBound
-                
+                #TODO: Find a way to get this bound on every rank, including non-hub ranks
             
             if 'write_solution' in self.options:
                 if 'first_stage_solution' in self.options['write_solution']:
