@@ -63,12 +63,16 @@ xhatshufflelooper_bounder
 
 This bounder shuffles the scenarios and loops over them to try a 
 :math:`\hat{x}` until
-the hub provides a new x.  To ensure that all scenarios are tried
+the hub provides a new x.  To ensure that all subproblems are tried
 eventually, the spoke remembers where it left off, and resumes from
 its prior position.  Since the resulting subproblems after fixing the
 first-stage variables are usually much easier to solve, many candidate
 solutions can be tried before receiving new x values from the hub.
 
+This spoke also works with multistage. It does not try every subproblem, but
+shuffles the scenarios and tries subproblems with a first-stage 
+solution specified by the shuffled scenario.
+ 
 slam_heuristic
 ^^^^^^^^^^^^^^
 
