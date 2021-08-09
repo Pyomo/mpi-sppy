@@ -188,16 +188,13 @@ def extension_adder(hub_dict,ext_class):
     return hub_dict
     
 
-def add_fixer_extension(hub_dict,
-                        args,
-                        fixer_tol,
-                        id_fix_list_fct,
-                        verbose=False,
-                        ):
-    hub_dict = add_fixer_extension(hub_dict,Fixer)
-    hub_dict["opt_kwargs"]["fixeroptions"] = {"verbose":verbose,
-                                              "boundtol": fixer_tol,
-                                              "id_fix_list_fct": id_fix_list_fct}
+def add_fixer(hub_dict,
+              args,
+              ):
+    hub_dict = extension_adder(hub_dict,Fixer)
+    hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":False,
+                                              "boundtol": args.fixer_tol,
+                                              "id_fix_list_fct": args.id_fix_list_fct}
     return hub_dict
 
 

@@ -59,7 +59,7 @@ import importlib
 import pyomo.environ as pyo
 import argparse
 
-from mpisppy.utils.sputils import spin_the_wheel, get_objs, nonant_cache_from_ef
+from mpisppy.utils.sputils import spin_the_wheel, get_objs, nonant_cache_from_ef, write_spin_the_wheel_first_stage_solution, write_spin_the_wheel_tree_solution
 import mpisppy.utils.baseparsers as baseparsers
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import vanilla
@@ -175,7 +175,7 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                                  extraargs=extraargs,
                                  use_command_line=use_command_line)
     options['_mpisppy_probability'] = 1/options['num_scens']
-    start = options['start'] if(('start' in options)) else None
+    start = options['start'] if(('start' in options)) else 0
     sn = m.scenario_names_creator(options['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
     ama = Amalgomator(options,
@@ -330,7 +330,7 @@ class Amalgomator():
             
             self.EF_Obj = pyo.value(ef.EF_Obj)
 
-            objs = get_objs(ef)
+            objs = sputils.get_objs(ef)
             
             self.is_minimizing = objs[0].is_minimizing
             #TBD : Write a function doing this
@@ -341,11 +341,22 @@ class Amalgomator():
                 self.best_inner_bound = results.Problem[0]['Upper bound']
                 self.best_outer_bound = results.Problem[0]['Lower bound']
             self.ef = ef
+            
+            if 'write_solution' in self.options:
+                #TODO Write utils to mimic write_spin_the_wheel_XXX for EF
+                if 'first_stage_solution' in self.options['write_solution']:
+                    #TODO: Change this to write to a csv file instead
+                    sputils.ef_ROOT_nonants_npy_serializer(ef, self.options['write_solution']['first_stage_solution'])
+                if 'tree_solution' in self.options['write_solution']:
+                    pass
+            
+            self.xhats = sputils.nonant_cache_from_ef(ef)
 
         else:
             self.ef = None
             args = argparse.Namespace(**self.options)
             
+            #Create a hub dict
             hub_name = find_hub(self.options['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
             hub_dict = hub_creator(args = args,
@@ -357,6 +368,14 @@ class Amalgomator():
                                    rho_setter=None,
                                    variable_probability=None)
             
+            #Add extensions
+            if 'extensions' in self.options:
+                for extension in self.options['extensions']:
+                    extension_creator = getattr(vanilla, 'add_'+extension)
+                    hub_dict = extension_creator(hub_dict,
+                                                 args)
+            
+            #Create spoke dicts
             potential_spokes = find_spokes(self.options['cylinders'],
                                            self.is_multi)
             spokes = [spoke for spoke in potential_spokes if self.options['with_'+spoke]]
@@ -372,6 +391,23 @@ class Amalgomator():
                 
             spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
             
+            if "hub_class" in opt_dict:  # we are a hub rank
+                self.best_inner_bound = spcomm.BestInnerBound
+                self.best_outer_bound = spcomm.BestOuterBound
+                
+            
+            if 'write_solution' in self.options:
+                if 'first_stage_solution' in self.options['write_solution']:
+                    sputils.write_spin_the_wheel_first_stage_solution(spcomm,
+                                                                      opt_dict,
+                                                                      self.options['write_solution']['first_stage_solution'])
+                if 'tree_solution' in self.options['write_solution']:
+                    sputils.write_spin_the_wheel_tree_solution(spcomm,
+                                                               opt_dict,
+                                                               self.options['write_solution']['tree_solution'])
+            
+            #TODO: Add a xhats attribute, similar to the output of nonant_cache_from_ef
+            
 
 
 if __name__ == "__main__":
@@ -380,20 +416,18 @@ if __name__ == "__main__":
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
                    "cylinders": ['ph','xhatshuffle'],
-                   "extensions": ['fixer'],
-                   "id_fix_list_fct": farmer.id_fix_list_fct
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
     # print(f"inner bound=", ama.best_inner_bound)
     # print(f"outer bound=", ama.best_outer_bound)
-    # print(nonant_cache_from_ef(ama.ef))
+    # print(sputils.nonant_cache_from_ef(ama.ef))
     # wish list: allow for integer relaxation using the Pyomo inplace transformation
     """ Issues:
     0. What do we want to put in ama_options and what do we want to discover
        by looking at data? I am inclined to put things in the data and maybe
        check against data. Here are the things:
-       - 2-stage versus multi-stage
+       - 2-stage versus multi-stage [SOLVED: put it in ama_options]
        - MIP versus continuous only
        - linear/quadratic versus non-linear
     """
