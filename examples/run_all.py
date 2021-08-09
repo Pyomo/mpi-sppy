@@ -188,9 +188,9 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--default-rho=1 --with-xhatspecific --with-lagrangian "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_ef.py", 1, solver_name)
-do_one("aircond", "aircond_cylinders.py", 3,
+do_one("aircond", "aircond_cylinders.py", 4,
        "--BFs 4 3 2 --bundles-per-rank=0 --max-iterations=100 "
-       "--default-rho=1 --with-xhatspecific --with-lagrangian "
+       "--default-rho=1 --with-xhatspecific --with-lagrangian --with-xhat-shuffle"
        "--solver-name={}".format(solver_name))
 
 
