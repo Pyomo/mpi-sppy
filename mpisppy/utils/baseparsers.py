@@ -482,7 +482,7 @@ def xhatspecific_args(inparser):
                         help="do not have an xhatspecific spoke",
                         dest='with_xhatspecific',
                         action='store_false')
-    parser.set_defaults(with_xhatspecific=True)
+    parser.set_defaults(with_xhatspecific=False)
 
     return parser
 

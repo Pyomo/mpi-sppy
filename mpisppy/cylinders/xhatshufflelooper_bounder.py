@@ -4,13 +4,9 @@ import os
 import time
 import logging
 import random
-import numpy as np
 import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
-import mpi4py.MPI as mpi
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
 
 from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.extensions.xhatbase import XhatBase
@@ -215,7 +211,8 @@ class ScenarioCycler:
         filling_idx = self._cycle_idx
         while len(empty_nodes) >0:
             #Sanity check to make no infinite loop.
-            if filling_idx == self._cycle_idx and 'ROOT' in self.nodescen_dict:
+            if filling_idx == self._cycle_idx and 'ROOT' in self.nodescen_dict and self.nodescen_dict['ROOT'] is not None:
+                print(self.nodescen_dict)
                 raise RuntimeError("_fill_nodescen_dict looped over every scenario but was not able to find a scen for every nonleaf node.")
             sname = self._shuffled_snames[filling_idx]
             
@@ -248,7 +245,18 @@ class ScenarioCycler:
             self._fill_nodescen_dict(self._nonleaves.keys())
     
     def update_nodescen_dict(self,snames_to_remove):
-        raise RuntimeError("Do not work yet")
+        '''
+        WARNING: _cur_ROOTscen must be up to date when calling this method
+        '''
+        if not self._multi:
+            self.nodescen_dict = {'ROOT':self._cur_ROOTscen}
+        else:
+            empty_nodes = []
+            for ndn in self._nonleaves.keys():
+                if self.nodescen_dict[ndn] in snames_to_remove:
+                    self.nodescen_dict[ndn] = None
+                    empty_nodes.append(ndn)
+            self._fill_nodescen_dict(empty_nodes)
         
 
     def begin_epoch(self):
@@ -271,6 +279,7 @@ class ScenarioCycler:
         if len(self._scenarios_this_epoch) == self._num_scenarios:
             if self._use_reverse and not self._reversed:
                 self.reverse()
+        old_idx = self._cycle_idx
         self._cycle_idx += self._iter_shift
         ## wrap around
         self._cycle_idx %= self._num_scenarios
@@ -281,16 +290,16 @@ class ScenarioCycler:
                 (tmp_cycle_idx+1)%self._num_scenarios != self._cycle_idx):
             tmp_cycle_idx +=1
             tmp_cycle_idx %= self._num_scenarios
+        
         self._cycle_idx = tmp_cycle_idx
         
         #Updating scenarios
         self._cur_ROOTscen = self._shuffled_snames[self._cycle_idx]
-        self.create_nodescen_dict()
-        #TODO Make a better update system for multistage
-        # if self._multi:
-        #     self.nodescen_dict = {'ROOT': self._cur_ROOTscen}
-        # else:
-        #     self.create_nodescen_dict()
+        if old_idx<self._cycle_idx:
+            scens_to_remove = self._shuffled_snames[old_idx:self._cycle_idx]
+        else:
+            scens_to_remove = self._shuffled_snames[old_idx:]+self._shuffled_snames[:self._cycle_idx]
+        self.update_nodescen_dict(scens_to_remove)
         
     
     def reverse(self):
