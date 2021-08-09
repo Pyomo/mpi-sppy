@@ -69,16 +69,18 @@ its prior position.  Since the resulting subproblems after fixing the
 first-stage variables are usually much easier to solve, many candidate
 solutions can be tried before receiving new x values from the hub.
 
-This spoke also works with multistage. It does not try every subproblem, but
-shuffles the scenarios and tries subproblems with a first-stage 
-solution specified by the shuffled scenario.
+This spoke also supports multistage problems. It does not try every subproblem, but
+shuffles the scenarios and loops over the shuffled list.
+At each step, it takes the first-stage solution specified by a scenario, 
+ and then uses the scenarios that follows in the shuffled loop to get the 
+ values of the non-first-stage variables that were not fixed before.
  
 slam_heuristic
 ^^^^^^^^^^^^^^
 
 This heuristic attempts to find a feasible solution by slamming every
 variable to its maximum (or minimum) over every scenario associated 
-with that scenario tree node.
+with that scenario tree node. This spokes only supports two-stage problems at this time.
 
 
 General
