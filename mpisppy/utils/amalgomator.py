@@ -348,7 +348,7 @@ class Amalgomator():
                     #TODO: Change this to write to a csv file instead
                     sputils.ef_ROOT_nonants_npy_serializer(ef, self.options['write_solution']['first_stage_solution'])
                 if 'tree_solution' in self.options['write_solution']:
-                    pass
+                    print("No tree solution writer for EF for now")
             
             self.xhats = sputils.nonant_cache_from_ef(ef)
 
