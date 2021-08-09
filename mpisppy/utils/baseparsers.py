@@ -436,7 +436,7 @@ def xhatlooper_args(inparser):
                         help="do not have an xhatlooper spoke",
                         dest='with_xhatlooper',
                         action='store_false')
-    parser.set_defaults(with_xhatlooper=True)
+    parser.set_defaults(with_xhatlooper=False)
     parser.add_argument("--xhat-scen-limit",
                         help="scenario limit xhat looper to try (default 3)",
                         dest="xhat_scen_limit",

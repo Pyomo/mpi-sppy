@@ -20,13 +20,20 @@ has the needed stuff for the problem at hand.
 
 """
 Input options:
-EF|PH|APH|L, etc
+2-stage or multistage
+EF or not
 Assuming not EF:
   - list of cylinders
   - list of hub extensions
 
 The object will then call the appropriate baseparsers functions to set up
 the args and assemble the objects needed for spin-the-wheel, which it will call.
+
+WARNING: When updating baseparsers and vanilla to add new cylinders/extensions,
+you must keep up to date this file, especially the following dicts:
+    - hubs_and_multi_compatibility
+    - spokes_and_multi_compatibility
+    - extensions_classes
 
 [NOTE: argparse can be passed a command list and can generate a command list that can be passed]
 
@@ -58,6 +65,81 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.utils import vanilla
 from mpisppy import global_toc
 
+from mpisppy.extensions.fixer import Fixer
+
+hubs_and_multi_compatibility = {'ph': True,
+                                'aph': True, 
+                                #'lshaped':False, No parser = not incuded
+                                #'cross_scen_hub':False, No parser = not included
+                                }
+
+spokes_and_multi_compatibility = {'fwph':True,
+                                  'lagrangian':True,
+                                  'lagranger':True,
+                                  'xhatlooper':False,
+                                  'xhatshuffle':True,
+                                  'xhatspecific':True,
+                                  'xhatlshaped':False,
+                                  'slamup':False,
+                                  'slamdown':False,
+                                  'cross_scenario_cuts':False}
+
+extensions_classes = {'fixer':Fixer,
+                      #NOTE: Before adding other extensions classes there, create a parser for it in baseparsers.py
+                      }
+
+#==========
+#Parsing utiities
+
+def _bool_option(options, oname):
+    return oname in options and options[oname]
+
+def _basic_parse_args(progname = None, is_multi=False,  num_scens_reqd=False):
+    if is_multi:
+        parser = baseparsers.make_multistage_parser(progname= progname)
+    else:
+        parser = baseparsers.make_parser(progname=progname, 
+                                         num_scens_reqd=num_scens_reqd)
+        
+    return parser
+
+def add_parser(inparser, parser_choice=None):
+    if (parser_choice is None) or not hasattr(baseparsers,parser_choice+"_args"):
+        return inparser
+    else:
+        adder = getattr(baseparsers,parser_choice+"_args")
+        parser = adder(inparser)
+        return parser
+    
+
+#==========
+#Cylinder name checks
+
+def find_hub(cylinders, is_multi=False):
+    hubs = set(cylinders).intersection(set(hubs_and_multi_compatibility.keys()))
+    if len(hubs) == 1:
+        hub = list(hubs)[0]
+        if is_multi and not hubs_and_multi_compatibility[hub]:
+            raise RuntimeError(f"The hub {hub} does not work with multistage problems" )
+    else:
+        raise RuntimeError("There must be exactly one hub among cylinders")
+    return hub
+
+def find_spokes(cylinders, is_multi=False):
+    spokes = []
+    for c in cylinders:
+        if not c in hubs_and_multi_compatibility:
+            if c not in spokes_and_multi_compatibility:
+                raise RuntimeError(f"The cylinder {c} do not exist or cannot be called via amalgomator.")
+            if is_multi and not spokes_and_multi_compatibility[c]:
+                raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
+            spokes.append(c)
+    return spokes
+
+#==========
+
+
+
 #==========
 def from_module(mname, options, extraargs=None, use_command_line=True):
     """ Try to get everything from one file (this will not always be possible).
@@ -72,8 +154,6 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     Returns:
         ama (Amalgomator): the instantiated object
     
-    Note :
-        Use adict iif you want to bypass the command line.
     """
     everything = ["scenario_names_creator",
                  "scenario_creator",
@@ -104,63 +184,6 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                       m.kw_creator,
                       scenario_denouement=dn)
     return ama
-
-
-#==========
-def _bool_option(options, oname):
-    return oname in options and options[oname]
-
-def _basic_parse_args(progname = None, is_multi=False,  num_scens_reqd=False):
-    if is_multi:
-        parser = baseparsers.make_multistage_parser(progname= progname)
-    else:
-        parser = baseparsers.make_parser(progname=progname, 
-                                         num_scens_reqd=num_scens_reqd)
-        
-    return parser
-
-def add_parser(inparser, parser_choice=None):
-    if (parser_choice is None) or not hasattr(baseparsers,parser_choice+"_args"):
-        return inparser
-    else:
-        adder = getattr(baseparsers,parser_choice+"_args")
-        parser = adder(inparser)
-        return parser
-    
-hubs_and_multi_compatibility = {'ph': True,
-                                'aph': True, 
-                                'lshaped':False, #No parser
-                                'cross_scen_hub':False} #No parser
-
-spokes_and_multi_compatibility = {'fwph':True,
-                                  'lagrangian':False,
-                                  'lagranger':False,
-                                  'xhatlooper':False,
-                                  'xhatshuffle':True,
-                                  'xhatspecific':True,
-                                  'xhatlshaped':False,
-                                  'slamup':False,
-                                  'slamdown':False,
-                                  'cross_scenario_cuts':False}
-
-def find_hub(cylinders, is_multi=False):
-    hubs = set(cylinders).intersection(set(hubs_and_multi_compatibility.keys()))
-    if len(hubs) == 1:
-        hub = list(hubs)[0]
-        if is_multi and not hubs_and_multi_compatibility[hub]:
-            raise RuntimeError(f"The hub {hub} does not work with multistage problems" )
-    else:
-        raise RuntimeError("There must be exactly one hub among cylinders")
-    return hub
-
-def find_spokes(cylinders, is_multi=False):
-    spokes = []
-    for c in cylinders:
-        if not c in hubs_and_multi_compatibility:
-            if is_multi and not spokes_and_multi_compatibility[c]:
-                raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
-            spokes.append(c)
-    return spokes
                 
         
 #==========
@@ -184,6 +207,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
             parser = baseparsers.make_EF2_parser(num_scens_reqd=num_scens_reqd)
         elif _bool_option(options, "EF-mstage"):
             parser = baseparsers.make_EF_multistage_parser(num_scens_reqd=num_scens_reqd)
+            
         else:
             if _bool_option(options, "2stage"):
                 parser = _basic_parse_args(is_multi=False, num_scens_reqd=num_scens_reqd)
@@ -197,12 +221,15 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
             #Adding cylinders
             if not "cylinders" in options:
                 raise RuntimeError("A cylinder list must be specified")
-            else:
-                for cylinder in options['cylinders']:
-                    #TODO: Add a list of existing cylinders value and check if they exists
-                    parser = add_parser(parser,cylinder)
-    
-        # TBD add args for everything else that is not EF, which is a lot
+            
+            for cylinder in options['cylinders']:
+                #NOTE: This returns an error if the cylinder has no parser in baseparsers.py
+                parser = add_parser(parser,cylinder)
+            
+            #Adding extensions
+            if "extensions" in options:
+                for extension in options['extensions']:
+                    parser = add_parser(parser,extension)
     
         # call inparser last (so it can delete args if it needs to)
         inparser_adder(parser)
@@ -214,8 +241,6 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
         args = parser.parse_args()
     
         opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
-        
-        print("Hello", opt)
         
         if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
             if ('EF_solver_options' in opt):
@@ -350,11 +375,13 @@ class Amalgomator():
 
 
 if __name__ == "__main__":
-    # for debugging
+    # Our example is farmer
     import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
                    "cylinders": ['ph','xhatshuffle'],
+                   "extensions": ['fixer'],
+                   "id_fix_list_fct": farmer.id_fix_list_fct
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()

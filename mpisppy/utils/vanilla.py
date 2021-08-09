@@ -27,6 +27,8 @@ from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
+from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.fixer import Fixer
 
 def _hasit(args, argname):
     return hasattr(args, argname) and getattr(args, argname) is not None
@@ -170,6 +172,33 @@ def fwph_spoke(
         },
     }
     return fw_dict
+
+def extension_adder(hub_dict,ext_class):
+    if "extensions" not in hub_dict["opt_kwargs"] or \
+        hub_dict["opt_kwargs"]["extensions"] is None:
+        hub_dict["opt_kwargs"]["extensions"] = ext_class
+    elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
+        if not ext_class in  hub_dict["opt_kwargs"]["ext_classes"]:
+            hub_dict["opt_kwargs"]["ext_classes"].append(ext_class)
+    elif hub_dict["opt_kwargs"]["extensions"] != ext_class: 
+        #ext_class is the second extension
+        hub_dict["opt_kwargs"]["ext_classes"] = [hub_dict["opt_kwargs"]["extensions"],
+                                                 ext_class]
+        hub_dict["opt_kwargs"]["extensions"] = MultiExtension
+    return hub_dict
+    
+
+def add_fixer_extension(hub_dict,
+                        args,
+                        fixer_tol,
+                        id_fix_list_fct,
+                        verbose=False,
+                        ):
+    hub_dict = add_fixer_extension(hub_dict,Fixer)
+    hub_dict["opt_kwargs"]["fixeroptions"] = {"verbose":verbose,
+                                              "boundtol": fixer_tol,
+                                              "id_fix_list_fct": id_fix_list_fct}
+    return hub_dict
 
 
 def lagrangian_spoke(
@@ -455,3 +484,5 @@ def cross_scenario_cut_spoke(
         }
 
     return cut_spoke
+
+        
