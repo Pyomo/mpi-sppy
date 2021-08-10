@@ -1014,6 +1014,22 @@ def create_nodenames_from_BFs(BFS):
         nodenames += stage_nodes
     return nodenames
 
+def get_BFs_from_nodenames(all_nodenames):
+    #WARNING: Do not work with unbalanced trees
+    staget_node = "ROOT"
+    BFs = []
+    while staget_node+"_0" in all_nodenames:
+        child_regex = re.compile(staget_node+'_\d*\Z')
+        child_list = [x for x in all_nodenames if child_regex.match(x) ]
+        
+        BFs.append(len(child_list))
+        staget_node += "_0"
+    if len(BFs)==1:
+        #2stage
+        return None
+    else:
+        return BFs
+    
 def number_of_nodes(BFs):
     #How many nodes does a tree with a given BFs have ?
     last_node_stage_num = [i-1 for i in BFs]
