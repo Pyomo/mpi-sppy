@@ -279,8 +279,8 @@ class ScenarioCycler:
     
     def _begin_reverse_epoch(self):
         self._reversed = True
-        self._shuffled_snames = list(reversed([s[1] for s in self._shuffled_scenarios]))
-        self._original_order = list(reversed([s[0] for s in self._shuffled_scenarios]))
+        self._shuffled_snames = [s[1] for s in reversed(self._shuffled_scenarios)]
+        self._original_order = [s[0] for s in reversed(self._shuffled_scenarios)]
         self._cycle_idx = 0
         self._cur_ROOTscen = self._shuffled_snames[0]
         self.create_nodescen_dict()
