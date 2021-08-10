@@ -128,9 +128,13 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         # give all ranks the same seed
         self.random_stream.seed(self.random_seed)
         
+        #We need to keep track of the way scenario_names were sorted
+        scen_names = list(enumerate(self.opt.all_scenario_names))
+        
         # shuffle the scenarios associated (i.e., sample without replacement)
-        shuffled_scenarios = self.random_stream.sample(self.opt.all_scenario_names, 
-                                                       len(self.opt.all_scenario_names))
+        shuffled_scenarios = self.random_stream.sample(scen_names, 
+                                                       len(scen_names))
+        
         scenario_cycler = ScenarioCycler(shuffled_scenarios,
                                          self.opt.nonleaves,
                                          self.reverse,
@@ -175,7 +179,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
 class ScenarioCycler:
 
-    def __init__(self, shuffled_snames,nonleaves,reverse,iter_step):
+    def __init__(self, shuffled_scenarios,nonleaves,reverse,iter_step):
         root_kids = nonleaves['ROOT'].kids if 'ROOT' in nonleaves else None
         if root_kids is None or len(root_kids)==0 or root_kids[0].is_leaf:
             self._multi = False
@@ -189,14 +193,11 @@ class ScenarioCycler:
             self._iter_shift = self.BF0 if iter_step is None else iter_step
             self._use_reverse = True if reverse is None else reverse
             self._reversed = False #Do we iter in reverse mode ?
+        self._shuffled_scenarios = shuffled_scenarios
+        self._num_scenarios = len(shuffled_scenarios)
         
-        self._shuffled_snames = shuffled_snames
-        self._num_scenarios = len(shuffled_snames)
-        self._cycle_idx = 0
-        self._cur_ROOTscen = shuffled_snames[0]
-        self.create_nodescen_dict()
+        self._begin_normal_epoch()
         
-        self._scenarios_this_epoch = set()
         self._best = None
 
     @property
@@ -215,11 +216,11 @@ class ScenarioCycler:
                 print(self.nodescen_dict)
                 raise RuntimeError("_fill_nodescen_dict looped over every scenario but was not able to find a scen for every nonleaf node.")
             sname = self._shuffled_snames[filling_idx]
+            snum = self._original_order[filling_idx]
             
             def _add_sname_to_node(ndn):
                 first = self._nonleaves[ndn].scenfirst
                 last = self._nonleaves[ndn].scenlast
-                snum = sputils.extract_num(sname)
                 if snum>=first and snum<=last:
                     self.nodescen_dict[ndn] = sname
                     return False
@@ -260,25 +261,42 @@ class ScenarioCycler:
         
 
     def begin_epoch(self):
+        if self._multi and self._use_reverse and not self._reversed:
+            self._begin_reverse_epoch()
+        else:
+            self._begin_normal_epoch()
+        
+    def _begin_normal_epoch(self):
+        if self._multi:
+            self._reversed = False
+        self._shuffled_snames = [s[1] for s in self._shuffled_scenarios]
+        self._original_order = [s[0] for s in self._shuffled_scenarios]
+        self._cycle_idx = 0
+        self._cur_ROOTscen = self._shuffled_snames[0]
+        self.create_nodescen_dict()
+        
+        self._scenarios_this_epoch = set()
+    
+    def _begin_reverse_epoch(self):
+        self._reversed = True
+        self._shuffled_snames = list(reversed([s[1] for s in self._shuffled_scenarios]))
+        self._original_order = list(reversed([s[0] for s in self._shuffled_scenarios]))
+        self._cycle_idx = 0
+        self._cur_ROOTscen = self._shuffled_snames[0]
+        self.create_nodescen_dict()
+        
         self._scenarios_this_epoch = set()
 
     def get_next(self):
         next_scen = self._cur_ROOTscen
         next_scendict = self.nodescen_dict
         if next_scen in self._scenarios_this_epoch:
-            self._iter_scen()
-            if (not self._multi) or self._reversed :
-                #For 2stage problem, a scen can be used for 'ROOT' only once
-                #For a multi stage problem, it can be used twice (including reverse)
-                return None
+            return None
         self._scenarios_this_epoch.add(next_scen)
         self._iter_scen()
         return next_scendict
 
     def _iter_scen(self):
-        if len(self._scenarios_this_epoch) == self._num_scenarios:
-            if self._use_reverse and not self._reversed:
-                self.reverse()
         old_idx = self._cycle_idx
         self._cycle_idx += self._iter_shift
         ## wrap around
@@ -286,7 +304,7 @@ class ScenarioCycler:
         
         #do not reuse a previously visited scenario for 'ROOT'
         tmp_cycle_idx = self._cycle_idx
-        while tmp_cycle_idx in self._scenarios_this_epoch and (
+        while self._shuffled_snames[tmp_cycle_idx] in self._scenarios_this_epoch and (
                 (tmp_cycle_idx+1)%self._num_scenarios != self._cycle_idx):
             tmp_cycle_idx +=1
             tmp_cycle_idx %= self._num_scenarios
@@ -302,8 +320,3 @@ class ScenarioCycler:
         self.update_nodescen_dict(scens_to_remove)
         
     
-    def reverse(self):
-        self._shuffled_snames = list(reversed(self._shuffled_snames))
-        self._reversed = True
-        self._scenarios_this_epoch = set() #Resetting the set of visited scenarios
-        self._cycle_idx = 0

@@ -103,7 +103,6 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
                     raise
-    
             # assemble xhat (which is a nonants dict) from xhats
             for ndn in xhats:
                 for i in range(cistart[ndn], nlens[ndn]):
