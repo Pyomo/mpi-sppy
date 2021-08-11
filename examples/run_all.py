@@ -156,6 +156,11 @@ do_one("farmer",
        2,
        f"30 --max-iterations=10 --default-rho=1.0 --with-display-progress  --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
 
+do_one("farmer",
+       "farmer_ama.py",
+       3,
+       f"--num-scens=10 --crops-multiplier=3 --farmer-with-integer --EF-solver-name={solver_name}")
+
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
        "--solver-name={} --rel-gap=0.0 --default-rho=1 "
@@ -183,14 +188,20 @@ do_one("sslp",
        "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
        "--max-iterations=5 --default-rho=1 "
        "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
+
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatshuffle --with-lagrangian "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_ef.py", 1, solver_name)
+
 do_one("aircond", "aircond_cylinders.py", 4,
        "--branching-factors 4 3 2 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatspecific --with-lagrangian --with-xhatshuffle "
+       "--solver-name={}".format(solver_name))
+do_one("aircond", "aircond_ama.py", 3,
+       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--default-rho=1 --with-lagrangian --with-xhatshuffle "
        "--solver-name={}".format(solver_name))
 
 
@@ -233,6 +244,12 @@ if not nouc and egret_avail():
            "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json "
            "--solver-name={}".format(solver_name))
+    do_one("uc", "uc_ama.py", 3,
+           "--bundles-per-rank=0 --max-iterations=2 "
+           "--default-rho=1 --num-scens=3"
+           "--fixer-tol=1e-2 "
+           "--solver-name={}".format(solver_name))
+
     # 10-scenario UC
     do_one("uc", "uc_cylinders.py", 3,
            "--bundles-per-rank=5 --max-iterations=2 "
