@@ -61,7 +61,7 @@ Using stand alone ``mmw_conf.py``
 
 To use the stand along program a model compatible with ``Amalgomator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
 
-First, assue that the model to be used is compatable with the ``Amalgomator`` class. This requires the model to have each of the following: a ``scenario_names_creator``,  a ``scenario_creator``, an ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in ``examples`` for an example of an acceptable model.
+First, assume that the model to be used is compatable with the ``Amalgomator`` class. This requires the model to have each of the following: a ``scenario_names_creator``,  a ``scenario_creator``, an ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in ``examples`` for an example of an acceptable model.
 
 Once a model satisfies the requirement for amalgomator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
 ``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgomator`` to solve the program, this can be done by adding the line
