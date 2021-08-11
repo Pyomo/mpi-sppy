@@ -217,9 +217,6 @@ def gap_estimators(xhat_one,
         G =[]
         s = []
 
-        if objective_gap:
-            zhats=[]
-
         for k in range(ArRP):
             scennames = scenario_names[k*(n//ArRP):(k+1)*(n//ArRP)]
             tmp = gap_estimators(xhat_one, mname,
