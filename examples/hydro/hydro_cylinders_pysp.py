@@ -37,7 +37,7 @@ def main():
 
     args = _parse_args()
 
-    with_xhatspecific = args.with_xhatspecific
+    with_xhatshuffle = args.with_xhatshuffle
     with_lagrangian = args.with_lagrangian
 
     # This is multi-stage, so we need to supply node names
@@ -59,23 +59,15 @@ def main():
                                               rho_setter = rho_setter)
         lagrangian_spoke["opt_kwargs"]["all_nodenames"] = hydro.all_nodenames
 
-    # xhat looper bound spoke
-    xhat_scenario_dict = {"ROOT": "Scen1",
-                          "ROOT_0": "Scen1",
-                          "ROOT_1": "Scen4",
-                          "ROOT_2": "Scen7"}
-    
-    if with_xhatspecific:
-        xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
-                                                        xhat_scenario_dict,
-                                                        hydro.all_nodenames,
-                                                       )
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
+                                                      hydro.all_nodenames)
 
     list_of_spoke_dict = list()
     if with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if with_xhatspecific:
-        list_of_spoke_dict.append(xhatspecific_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 
