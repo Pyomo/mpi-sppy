@@ -35,7 +35,7 @@ def main():
                                  aaircond.scenario_creator, 
                                  aaircond.kw_creator)
     ama.run()
-    if ama.cylinder_rank == 0:
+    if ama.on_hub:
         print("first_stage_solution=", ama.first_stage_solution)
         print("inner bound=", ama.best_inner_bound)
         print("outer bound=", ama.best_outer_bound)
