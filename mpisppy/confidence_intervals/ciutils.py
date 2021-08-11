@@ -34,6 +34,44 @@ def BFs_from_numscens(numscens,num_stages=2):
                     BFs[k] = np.prod([fact_list[(num_stages-1)*i+k] for i in range(1+len(fact_list)//(num_stages-1)) if (num_stages-1)*i+k<len(fact_list)])
                 return BFs
         raise RuntimeError("BFs_from_numscens is not working correctly. Did you take num_stages>=2 ?")
+
+def scalable_BFs(numscens, ref_BFs):
+    '''
+    This utilitary find a good branching factor list to create a scenario tree
+    containing at least numscens leaf nodes, and scaled like ref_BFs.
+    For instance, if numscens=233 and reef_BFs=[5,3,2], it returns [10,6,4], 
+    branching factors for a 240-leafs tree
+    
+    NOTE: This method increasing in priority first stages branching factors,
+          so that a branching factor is an increasing function of numscens
+
+    Parameters
+    ----------
+    numscens : int
+        Number of leaf nodes/scenarios of the tree.
+    ref_BFs : list of int
+        Reference shape of the branching factors. It length must be equal to
+        number_of_stages-1
+
+    Returns
+    -------
+    new_BFs
+        DESCRIPTION.
+
+    '''
+    numstages = len(ref_BFs)+1
+    if numscens < 2**(numstages-1):
+        return [2]*(numstages-1)
+    mult_coef = (numscens/np.prod(ref_BFs))**(1/(numstages-1))
+    new_BFs = np.maximum(np.floor(np.array(ref_BFs)*mult_coef),1.) #BFs have to be positive integers
+    i=0
+    while np.prod(new_BFs)<numscens:
+        if i == numstages-1:
+            raise RuntimeError("scalable BFs is failing")
+        new_BFs[i]+=1
+        i+=1
+    new_BFs = list(new_BFs.astype(int))
+    return new_BFs
         
 def is_sorted(nodelist):
     #Take a list of scenario_tree.ScenarioNode and check that it is well constructed
@@ -103,13 +141,15 @@ def gap_estimators(xhat_one,
                    scenario_denouement=None,
                    solvername='gurobi', 
                    solver_options=None,
+                   verbose=True,
                    objective_gap=False
                    ):
-    ''' Given a xhat, scenario names, a scenario creator and options, create
-    the scenarios and the associatd estimators G and s from §2 of [bm2011].
+    ''' Given a xhat, scenario names, a scenario creator and options, 
+    gap_estimators creates a scenario tree and the associatd estimators 
+    G and s from §2 of [bm2011].
     Returns G and s evaluated at xhat.
     If ArRP>1, G and s are pooled, from a number ArRP of estimators,
-        computed on different batches.
+        computed with different scenario trees.
     
 
     Parameters
@@ -138,6 +178,8 @@ def gap_estimators(xhat_one,
         Solver. Default is 'gurobi'
     solver_options: dict, optional
         Solving options. Default is None
+    verbose: bool, optional
+        Should it print the gap estimator ? Default is True
     objective_gap: bool, optional
         Returns a gap estimate around approximate objective value
 
@@ -230,10 +272,13 @@ def gap_estimators(xhat_one,
     
     if is_multi:
         # Find feasible policies (i.e. xhats) for every non-leaf nodes
-        local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
+        if len(samp_tree.ef._ef_scenario_names)>1:
+            local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
+        else:
+            local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
         xhats,start = sample_tree.walking_tree_xhats(mname,
                                                     local_scenarios,
-                                                    xhat_one,
+                                                    xhat_one['ROOT'],
                                                     BFs,
                                                     start,
                                                     scenario_creator_kwargs,
@@ -262,8 +307,6 @@ def gap_estimators(xhat_one,
                             all_nodenames = all_nodenames)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    # global_toc(f"xhats={xhats}")
-    # global_toc(f"xstars={xstars}")
     ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
     ev.evaluate(xstars)
@@ -287,7 +330,7 @@ def gap_estimators(xhat_one,
     global_estim = np.zeros(4)
     ev.mpicomm.Allreduce(local_estim, global_estim, op=mpi.SUM) 
     G,ssq, prob_sqnorm,obj_at_xhat = global_estim
-    if global_rank==0:
+    if global_rank==0 and verbose:
         print(f"G = {G}")
     sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
     s = np.sqrt(sample_var)

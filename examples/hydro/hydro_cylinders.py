@@ -40,7 +40,7 @@ def main():
     if len(BFs) != 2:
         raise RuntimeError("Hydro is a three stage problem, so it needs 2 BFs")
 
-    with_xhatspecific = args.with_xhatspecific
+    with_xhatshuffle = args.with_xhatshuffle
     with_lagrangian = args.with_lagrangian
 
     # This is multi-stage, so we need to supply node names
@@ -71,14 +71,9 @@ def main():
         lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
 
     # xhat looper bound spoke
-    xhat_scenario_dict = {"ROOT": "Scen1",
-                          "ROOT_0": "Scen1",
-                          "ROOT_1": "Scen4",
-                          "ROOT_2": "Scen7"}
     
-    if with_xhatspecific:
-        xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
-                                                        xhat_scenario_dict,
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                         all_nodenames,
                                                         BFs,
                                                         scenario_creator_kwargs=scenario_creator_kwargs)
@@ -86,8 +81,8 @@ def main():
     list_of_spoke_dict = list()
     if with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if with_xhatspecific:
-        list_of_spoke_dict.append(xhatspecific_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 

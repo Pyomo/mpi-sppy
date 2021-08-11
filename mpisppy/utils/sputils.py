@@ -298,15 +298,17 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         raise RuntimeError("create_EF() received empty scenario list")
     elif (len(scen_dict) == 1):
         scenario_instance = list(scen_dict.values())[0]
+        scenario_instance._ef_scenario_names = list(scen_dict.keys())
         if not suppress_warnings:
             print("WARNING: passed single scenario to create_EF()")
         # special code to patch in ref_vars
         scenario_instance.ref_vars = dict()
+        scenario_instance._nlens = {node.name: len(node.nonant_vardata_list) 
+                                for node in scenario_instance._mpisppy_node_list}
         for node in scenario_instance._mpisppy_node_list:
             ndn = node.name
-            nlens = {node.name: len(node.nonant_vardata_list) 
-                                for node in scenario_instance._mpisppy_node_list}
-            for i in range(nlens[ndn]):
+
+            for i in range(scenario_instance._nlens[ndn]):
                 v = node.nonant_vardata_list[i]
                 if (ndn, i) not in scenario_instance.ref_vars:
                     scenario_instance.ref_vars[(ndn, i)] = v
@@ -806,7 +808,7 @@ class _TreeNode():
             self.is_leaf = True
             self.kids = []
         else:
-            if len(desc_leaf_dict) < numscens:
+            if len(desc_leaf_dict) < numscens:                
                 raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
             # make children
             first = scenfirst
@@ -820,15 +822,18 @@ class _TreeNode():
                         raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
                                            f"The node {name} has {len(child_list)} children, but {childname} is not one of them.")
                     break
+                childdesc_regex = re.compile(childname+'(_\d*)*\Z')
                 child_leaf_dict = {ndn:desc_leaf_dict[ndn] for ndn in desc_leaf_dict \
-                                   if ndn.startswith(childname)}
+                                   if childdesc_regex.match(ndn)}
                 #We determine the number of children of this node
                 child_scens_num = sum(child_leaf_dict.values())
                 last = first+child_scens_num - 1
                 self.kids.append(_TreeNode(self, first, last, 
                                            child_leaf_dict, childname))
                 first += child_scens_num
-            assert last == scenlast
+            if last != scenlast:
+                print("Hello", numscens)
+                raise RuntimeError(f"Tree node did not initialize correctly for node {name}.")
     def stage_max(self):
         #Return the number of stages of a subtree.
         #Also check that all the subtrees have the same number of stages
@@ -1063,6 +1068,22 @@ def create_nodenames_from_BFs(BFS):
         nodenames += stage_nodes
     return nodenames
 
+def get_BFs_from_nodenames(all_nodenames):
+    #WARNING: Do not work with unbalanced trees
+    staget_node = "ROOT"
+    BFs = []
+    while staget_node+"_0" in all_nodenames:
+        child_regex = re.compile(staget_node+'_\d*\Z')
+        child_list = [x for x in all_nodenames if child_regex.match(x) ]
+        
+        BFs.append(len(child_list))
+        staget_node += "_0"
+    if len(BFs)==1:
+        #2stage
+        return None
+    else:
+        return BFs
+    
 def number_of_nodes(BFs):
     #How many nodes does a tree with a given BFs have ?
     last_node_stage_num = [i-1 for i in BFs]

@@ -469,6 +469,16 @@ def xhatshuffle_args(inparser):
                         dest='with_xhatshuffle',
                         action='store_false')
     parser.set_defaults(with_xhatshuffle=True)
+    parser.add_argument('--add-reversed-shuffle',
+                        help="using also the reversed shuffling (multistage only, default True)",
+                        dest = 'add_reversed_shuffle',
+                        action='store_true')
+    parser.set_defaults(add_reversed_shuffle=True)
+    parser.add_argument('--xhatshuffle-iter-step',
+                        help="step in shuffled list between 2 scenarios to try (default None)",
+                        dest="xhatshuffle_iter_step",
+                        type=int,
+                        default=None)
 
     return parser
 
@@ -484,7 +494,7 @@ def xhatspecific_args(inparser):
                         help="do not have an xhatspecific spoke",
                         dest='with_xhatspecific',
                         action='store_false')
-    parser.set_defaults(with_xhatspecific=True)
+    parser.set_defaults(with_xhatspecific=False)
 
     return parser
 
