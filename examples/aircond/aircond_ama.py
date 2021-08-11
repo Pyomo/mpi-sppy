@@ -3,7 +3,7 @@
 """
 An example of using amalgomator with 3 cylinders for a multistage problem
 To execute this:
-    mpiexec -np 3 python aircond_ama.py --default-rho=1 --BFs 3 3
+    mpiexec -np 3 python aircond_ama.py --default-rho=1 --branching-factors 3 3
     
 WARNING:
     do not use the num-scens argument on the command line
@@ -13,7 +13,7 @@ import mpisppy.utils.amalgomator as amalgomator
 import aaircond
 
 def main():
-    solution_files = {"first_stage_solution":"aricond_first_stage.csv",
+    solution_files = {"first_stage_solution":"aircond_first_stage.csv",
                       "tree_solution":"aircond_full_solution" 
                       }
     options = {"mstage": True,   # 2stage vs. mstage
