@@ -1,5 +1,6 @@
+#for use with amalgomator mmw testing, so __main__ should be 2-stage for now,
+# and kw_creator also defaults to 2-stage
 #ReferenceModel for full set of scenarios for AirCond; June 2021
-
 
 import pyomo.environ as pyo
 import numpy as np
@@ -11,30 +12,7 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-def demands_creator(sname,BFs,start_seed, mudev, sigmadev, 
-                    starting_d=200,root_name="ROOT"):
-    if BFs is None:
-        raise RuntimeError("scenario_creator for aircond needs BFs")
-    scennum   = sputils.extract_num(sname)
-    # Find the right path and the associated seeds (one for each node) using scennum
-    prod = np.prod(BFs)
-    s = int(scennum % prod)
-    d = starting_d
-    demands = [d]
-    nodenames = [root_name]
-    for bf in BFs:
-        assert prod%bf == 0
-        prod = prod//bf
-        nodenames.append(str(s//prod))
-        s = s%prod
-    
-    stagelist = [int(x) for x in nodenames[1:]]
-    for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
-        d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
-        demands.append(d)
-    
-    return demands,nodenames
+
 
 def StageModel_creator(time, demand, last_stage=False):
     model = pyo.ConcreteModel()
@@ -118,9 +96,8 @@ def aircond_model_creator(demands):
     
     return model
 
-def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
+def MakeNodesforScen(model,nodenames,branching_factors):
     #Create all nonleaf nodes used by the scenario
-    #Compatible with sample scenario creation
     TreeNodes = []
     for stage in model.T:
         if stage ==1:
@@ -136,26 +113,11 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
                                                        nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
                                                        )
                              )
-        elif stage <=starting_stage:
-            parent_ndn = ndn
-            ndn = parent_ndn+"_0" #Only one node per stage before starting stage
-            TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0,
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=[model.stage_models[stage].RegularProd,
-                                                                    model.stage_models[stage].OvertimeProd],
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
-                                                       parent_name = parent_ndn
-                                                       )
-                             )
         elif stage < max(model.T): #We don't add the leaf node
             parent_ndn = ndn
-            ndn = parent_ndn+"_"+nodenames[stage-starting_stage]
+            ndn = parent_ndn+"_"+nodenames[stage-1]
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0/branching_factors[stage-starting_stage-1],
+                                                       cond_prob=1.0/branching_factors[stage-2],
                                                        stage=stage,
                                                        cost_expression=model.stage_models[stage].StageObjective,
                                                        scen_name_list=None, # Not maintained
@@ -169,11 +131,26 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return(TreeNodes)
 
         
-def scenario_creator(sname, BFs=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0):
-    if BFs is None:
-        raise RuntimeError("scenario_creator for aircond needs BFs")
-
-    demands,nodenames = demands_creator(sname, BFs, start_seed, mudev, sigmadev)
+def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_seed=0):
+    scennum   = sputils.extract_num(sname)
+    # Find the right path and the associated seeds (one for each node) using scennum
+    prod = np.prod(BFs)
+    s = int(scennum % prod)
+    d = 200
+    demands = [d]
+    nodenames = ["ROOT"]
+    
+    for bf in BFs:
+        assert prod%bf == 0
+        prod = prod//bf
+        nodenames.append(str(s//prod))
+        s = s%prod
+    
+    stagelist = [int(x) for x in nodenames[1:]]
+    for t in range(1,len(nodenames)):
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
+        d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
+        demands.append(d)
     
     model = aircond_model_creator(demands)
     
@@ -184,49 +161,6 @@ def scenario_creator(sname, BFs=None, num_scens=None, mudev=0, sigmadev=40, star
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, BFs)
     
     return(model)
-
-def sample_tree_scen_creator(sname,given_scenario=None,stage=None,sample_BFs=None, seed=None, **scenario_creator_kwargs):
-    #For multistage confidence interval
-    
-    things = [stage,sample_BFs,seed]
-    names = ["stage","sample_BFs","seed"]
-    for i in range(len(things)):
-        if things[i] is None:
-            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a {names[i]} argument.")
-    
-    #Finding demands from stage 1 to t
-    if given_scenario is None:
-        if stage == 1:
-            past_demands = [200]
-        else:
-            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
-    else:
-        past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
-    optional_things = ['mudev','sigmadev']
-    default_values = [0,40]
-    for thing,value in zip(optional_things,default_values):
-        if thing not in scenario_creator_kwargs:
-            scenario_creator_kwargs[thing] = value
-    
-    #Finding demands for stages after t
-    future_demands,nodenames = demands_creator(sname, sample_BFs, 
-                                               start_seed = seed, 
-                                               mudev = scenario_creator_kwargs['mudev'], 
-                                               sigmadev = scenario_creator_kwargs['sigmadev'],
-                                               starting_d=past_demands[stage-1],
-                                               root_name='ROOT'+'_0'*(stage-1))
-    
-    demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
-    
-    model = aircond_model_creator(demands)
-    
-    model._mpisppy_probability = 1/np.prod(sample_BFs)
-    
-    #Constructing the nodes used by the scenario
-    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, sample_BFs,
-                                                starting_stage=stage)
-    
-    return model
                 
 
 #=========
@@ -256,7 +190,7 @@ def inparser_adder(inparser):
 def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "BFs" : options['BFs'] if 'BFs' in options else [3,2,3],
+              "BFs" : options['BFs'] if 'BFs' in options else [3],
               "mudev" : options['mudev'] if 'mudev' in options else 0.,
               "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
               "start_seed": options['start_seed'] if 'start_seed' in options else 0,
@@ -313,7 +247,6 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "_mpisppy_probability": 1/num_scens,
                     "BFs":BFs,
                     "mudev":mudev,
-                    "start_seed":start_seed,
                     "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
@@ -321,95 +254,32 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
-    ama.verbose = False
     ama.run()
     
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
-    return {'ROOT': xhat['ROOT']}
-    
-
-    
-    
+    return xhat
 
 if __name__ == "__main__":
-    bfs = [3,3,2]
+    bfs = [3]
     num_scens = np.prod(bfs) #To check with a full tree
-    ama_options = { "EF-mstage": True,
+    ama_options = { "EF-2stage": True,
                     "EF_solver_name": "gurobi_direct",
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     "BFs":bfs,
                     "mudev":0,
-                    "sigmadev":80
+                    "sigmadev":80,
+                    "start":1
                     }
-    refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances
-    # #We use from_module to build easily an Amalgomator object
-    # ama = amalgomator.from_module(refmodel,
-    #                               ama_options,use_command_line=False)
-    # ama.run()
-    # print(f"inner bound=", ama.best_inner_bound)
-    # print(f"outer bound=", ama.best_outer_bound)
-    
-    # from mpisppy.confidence_intervals.mmw_ci import MMWConfidenceIntervals
-    # options = ama.options
-    # options['solver_options'] = options['EF_solver_options']
-    # xhat = sputils.nonant_cache_from_ef(ama.ef)
-   
-    
-    # num_batches = 10
-    # batch_size = 100
-    
-    # mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
-    #                     verbose=False)
-    # r=mmw.run(objective_gap=True)
-    # print(r)
-    
-    #An example of sequential sampling for the aircond model
-    from mpisppy.confidence_intervals.seqsampling import SeqSampling
-    optionsBM =  { 'h':0.5,
-                    'hprime':0.1, 
-                    'eps':0.5, 
-                    'epsprime':0.4, 
-                    "p":0.2,
-                    "q":1.2,
-                    "solvername":"gurobi_direct",
-                    "BFs": bfs}
-    
-    optionsFSP = {'eps': 50.0,
-                  'solvername': "gurobi_direct",
-                  "c0":50,
-                  "BFs": bfs,
-                  "xhat_gen_options":{'mudev':0, 'sigmadev':40},
-                  'mudev':0,
-                  'sigmadev':40
-                  }
-    aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
-                            xhat_generator_aircond, 
-                            optionsFSP,
-                            stopping_criterion="BPL",
-                            stochastic_sampling=False,
-                            solving_type="EF-mstage")
+    refmodel = "aaircond" # WARNING: Change this in SPInstances
+    #We use from_module to build easily an Amalgomator object
+    ama = amalgomator.from_module(refmodel,
+                                  ama_options,use_command_line=False)
+    ama.run()
+    print(f"inner bound=", ama.best_inner_bound)
+    print(f"outer bound=", ama.best_outer_bound)
 
-    res = aircondpb.run()
-    print(res)
-    
-    #Doing replicates
-    nrep = 10
-    seed = 0
-    res = []
-    for k in range(nrep):
-        aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
-                            xhat_generator_aircond, 
-                            optionsFSP,
-                                stopping_criterion="BPL",
-                            stochastic_sampling=False,
-                            solving_type="EF-mstage")
-        aircondpb.SeedCount = seed
-        res.append(aircondpb.run())
-        seed = aircondpb.SeedCount
-    
-    print(res)
-        
+    sputils.ef_ROOT_nonants_npy_serializer(ama.ef, "aircond_root_nonants_temp.npy") 
         
