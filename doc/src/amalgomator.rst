@@ -9,15 +9,15 @@ that creates the cylinders one by one. ``amalgomator.from_module`` enables
 a high-level user to create a hub-and-spoke architecture using the command 
 line, with only a few lines of code.
 
-The Amalgomato` class
+The Amalgomator class
 -------------------------
 The ``Amalgomator`` class basically wraps up the creation and run of a simple
 hub-and-spokes architecture.
 It creates hub and spokes dictionaries using vanilla,
-call ``sputils.spin_the_wheel`` and finally write 
+call ``sputils.spin_the_wheel`` and finally writes 
 the solution to a file or a directory.
 
-It takes as an input scenario names, a scenario creator, options and
+It takes as inputs scenario names, a scenario creator, options and
 a ``kw_creator`` function. ``kw_creator`` must be a function specific to your
 problem, taking the amalgomator options as an input, and giving as an output
 additional arguments for the ``scenario_creator``.
@@ -43,26 +43,26 @@ It must contains the following attributes:
   arguments
   
 .. Note::
-   Amalgomator do not work with everything. It only supports the cylinders and
+   Amalgomator does not work with everything. It only supports the cylinders and
    extensions that have a dedicated method in ``vanilla.py``.
 
 
 Create Amalgomator from a module and command line
 -------------------------------------------------
-Given a options dictionary as above, ``amalgomator.Amalgomator_parser``
-calls the appropriate parsers from ``baseparsers.py`` and complete the options
+Given an options dictionary as above, ``amalgomator.Amalgomator_parser``
+calls the appropriate parsers from ``baseparsers.py`` and completes the options
 to add the necessary information for different modules.
 
-The method ``amalgomator.from_module`` uses the two utilities described before.
+The method ``amalgomator.from_module`` uses the two utilities described above.
 It takes as input a module name, and calls ``amalgomator.Amalgomator_parser``
 to get cylinder options and the number of scenarios from the command line.
 Then, it computes the scenario names, and finally creates and
-run an Amalgomator object.
+runs an Amalgomator object.
 
 .. Note::
    The module must contains several methods:
    ``scenario_creator``, ``scenario_names_creator``, ``inparser_adder`` and
-   ``kw_creator``. ``farmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contains
+   ``kw_creator``. ``farmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
    examples of these functions.
    
 Amalgomator with EF
@@ -70,7 +70,7 @@ Amalgomator with EF
 
 It is possible to use ``amalgomator.py`` to solve a problem by solving 
 directly its extensive form (see the section :ref:`EF Directly`). The options
-must then contains an attribute ``EF-2stage``or ``EF-mstage`` set equal to 
+must then include an attribute ``EF-2stage``or ``EF-mstage`` set equal to 
 True. It uses the ``sputils.create_EF`` method.
 
 Examples
@@ -88,7 +88,7 @@ function "id_fix_list_fct" as a parameter. However, a function cannot be
 passed via the command line. "id_fix_list_fct" must thus be an attribute of 
 the options of ``amalgomator.from_module``.
 
-Finally, it is possibl to use Amalgomator without calling directly 
+Finally, it is possible to use Amalgomator without calling directly 
 ``amalgomator.from_module``. The example ``aircond_ama`` is first of all
 fetching informations from the command line via 
 ``amalgomator.Aamgomator_parser``, and then modifying the options to get an
