@@ -155,7 +155,7 @@ def make_parser(progname=None, num_scens_reqd=False):
 def _basic_multistage(progname=None, num_scens_reqd=False):
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
-    parser.add_argument("--branching_factors",
+    parser.add_argument("--branching-factors",
                         help="Spaces delimited branching factors (e.g., 2 2)",
                         dest="branching_factors",
                         nargs="*",
