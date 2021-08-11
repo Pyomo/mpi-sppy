@@ -377,10 +377,14 @@ if __name__ == "__main__":
                     "solvername":"gurobi_direct",
                     "BFs": bfs}
     
-    optionsFSP = {'eps': 1.0,
+    optionsFSP = {'eps': 50.0,
                   'solvername': "gurobi_direct",
                   "c0":50,
-                  "BFs": bfs}
+                  "BFs": bfs,
+                  "xhat_gen_options":{'mudev':0, 'sigmadev':40},
+                  'mudev':0,
+                  'sigmadev':40
+                  }
     aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
                             xhat_generator_aircond, 
                             optionsFSP,

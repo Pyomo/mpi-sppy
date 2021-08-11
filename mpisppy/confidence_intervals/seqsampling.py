@@ -483,9 +483,12 @@ if __name__ == "__main__":
                "q":1.2,
                "solvername":"gurobi_direct",
                }
-    optionsFSP = {'eps': 5.0,
+    optionsFSP = {'eps': 50.0,
                   'solvername': "gurobi_direct",
-                  "c0":50,}
+                  "c0":50,
+                  "xhat_gen_options":farmer_opt_dict,
+                  "crops_multiplier":3,
+                  "ArRP":2}
 
     optionsSSP = {'eps': 1.0,
                   'solvername': "gurobi_direct",    
@@ -495,9 +498,9 @@ if __name__ == "__main__":
                   }
     our_pb = SeqSampling(refmodel,
                           xhat_generator_farmer,
-                          optionsBM,
+                          optionsFSP,
                           stochastic_sampling=False,
-                          stopping_criterion="BM",
+                          stopping_criterion="BPL",
                           )
     res = our_pb.run()
 

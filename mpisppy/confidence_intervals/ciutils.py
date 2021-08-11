@@ -220,7 +220,7 @@ def gap_estimators(xhat_one,
         if objective_gap:
             zhats=[]
 
-        for k in range(int(n/(n//ArRP))):
+        for k in range(ArRP):
             scennames = scenario_names[k*(n//ArRP):(k+1)*(n//ArRP)]
             tmp = gap_estimators(xhat_one, mname,
                                    solvername=solvername,
@@ -238,118 +238,118 @@ def gap_estimators(xhat_one,
         s = np.linalg.norm(s)/np.sqrt(n//ArRP)
         return {"G": G, "s": s, "seed": start}
     
+
+    #A1RP
+    
+    #We start by computing the optimal solution to the approximate problem induced by our scenarios
+    if is_multi:
+        #Sample a scenario tree: this is a subtree, but starting from stage 1
+        samp_tree = sample_tree.SampleSubtree(mname,
+                                              xhats =[],
+                                              root_scen=None,
+                                              starting_stage=1, 
+                                              BFs=BFs,
+                                              seed=start, 
+                                              options=scenario_creator_kwargs,
+                                              solvername=solvername,
+                                              solver_options=solver_options)
+        samp_tree.run()
+        start += sputils.number_of_nodes(BFs)
+        ama_object = samp_tree.ama
     else:
-        #A1RP
-        
-        #We start by computing the optimal solution to the approximate problem induced by our scenarios
-        if is_multi:
-            #Sample a scenario tree: this is a subtree, but starting from stage 1
-            samp_tree = sample_tree.SampleSubtree(mname,
-                                                  xhats =[],
-                                                  root_scen=None,
-                                                  starting_stage=1, 
-                                                  BFs=BFs,
-                                                  seed=start, 
-                                                  options=scenario_creator_kwargs,
-                                                  solvername=solvername,
-                                                  solver_options=solver_options)
-            samp_tree.run()
-            start += sputils.number_of_nodes(BFs)
-            ama_object = samp_tree.ama
-        else:
-            #We use amalgomator to do it
+        #We use amalgomator to do it
 
-            ama_options = dict(scenario_creator_kwargs)
-            ama_options['start'] = start
-            ama_options['num_scens'] = len(scenario_names)
-            ama_options['EF_solver_name'] = solvername
-            ama_options['EF_solver_options'] = solver_options
-            ama_options[solving_type] = True
-            ama_object = ama.from_module(mname, ama_options,use_command_line=False)
-            ama_object.scenario_names = scenario_names
-            ama_object.verbose = False
-            ama_object.run()
-            start += len(scenario_names)
-            
-        #Optimal solution of the approximate problem
-        zstar = ama_object.best_outer_bound
-        #Associated policies
-        xstars = sputils.nonant_cache_from_ef(ama_object.ef)
+        ama_options = dict(scenario_creator_kwargs)
+        ama_options['start'] = start
+        ama_options['num_scens'] = len(scenario_names)
+        ama_options['EF_solver_name'] = solvername
+        ama_options['EF_solver_options'] = solver_options
+        ama_options[solving_type] = True
+        ama_object = ama.from_module(mname, ama_options,use_command_line=False)
+        ama_object.scenario_names = scenario_names
+        ama_object.verbose = False
+        ama_object.run()
+        start += len(scenario_names)
         
-        #Then, we evaluate the fonction value induced by the scenario at xstar.
-        
-        if is_multi:
-            # Find feasible policies (i.e. xhats) for every non-leaf nodes
-            if len(samp_tree.ef._ef_scenario_names)>1:
-                local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
-            else:
-                local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
-            xhats,start = sample_tree.walking_tree_xhats(mname,
-                                                        local_scenarios,
-                                                        xhat_one['ROOT'],
-                                                        BFs,
-                                                        start,
-                                                        scenario_creator_kwargs,
-                                                        solvername=solvername,
-                                                        solver_options=solver_options)
-            
-            #Compute then the average function value with this policy
-            scenario_creator_kwargs = samp_tree.ama.kwargs
-            all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+    #Optimal solution of the approximate problem
+    zstar = ama_object.best_outer_bound
+    #Associated policies
+    xstars = sputils.nonant_cache_from_ef(ama_object.ef)
+    
+    #Then, we evaluate the fonction value induced by the scenario at xstar.
+    
+    if is_multi:
+        # Find feasible policies (i.e. xhats) for every non-leaf nodes
+        if len(samp_tree.ef._ef_scenario_names)>1:
+            local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
         else:
-            #In a 2 stage problem, the only non-leaf is the ROOT node
-            xhats = xhat_one
-            all_nodenames = None
+            local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
+        xhats,start = sample_tree.walking_tree_xhats(mname,
+                                                    local_scenarios,
+                                                    xhat_one['ROOT'],
+                                                    BFs,
+                                                    start,
+                                                    scenario_creator_kwargs,
+                                                    solvername=solvername,
+                                                    solver_options=solver_options)
         
-        xhat_eval_options = {"iter0_solver_options": None,
-                             "iterk_solver_options": None,
-                             "display_timing": False,
-                             "solvername": solvername,
-                             "verbose": False,
-                             "solver_options":solver_options}
-        ev = xhat_eval.Xhat_Eval(xhat_eval_options,
-                                scenario_names,
-                                ama_object.scenario_creator,
-                                scenario_denouement,
-                                scenario_creator_kwargs=scenario_creator_kwargs,
-                                all_nodenames = all_nodenames)
-        #Evaluating xhat and xstar and getting the value of the objective function 
-        #for every (local) scenario
-        ev.evaluate(xhats)
-        objs_at_xhat = ev.objs_dict
-        ev.evaluate(xstars)
-        objs_at_xstar = ev.objs_dict
-        
-        eval_scen_at_xhat = []
-        eval_scen_at_xstar = []
-        scen_probs = []
-        for k,s in ev.local_scenarios.items():
-            eval_scen_at_xhat.append(objs_at_xhat[k])
-            eval_scen_at_xstar.append(objs_at_xstar[k])
-            scen_probs.append(s._mpisppy_probability)
+        #Compute then the average function value with this policy
+        scenario_creator_kwargs = samp_tree.ama.kwargs
+        all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+    else:
+        #In a 2 stage problem, the only non-leaf is the ROOT node
+        xhats = xhat_one
+        all_nodenames = None
+    
+    xhat_eval_options = {"iter0_solver_options": None,
+                         "iterk_solver_options": None,
+                         "display_timing": False,
+                         "solvername": solvername,
+                         "verbose": False,
+                         "solver_options":solver_options}
+    ev = xhat_eval.Xhat_Eval(xhat_eval_options,
+                            scenario_names,
+                            ama_object.scenario_creator,
+                            scenario_denouement,
+                            scenario_creator_kwargs=scenario_creator_kwargs,
+                            all_nodenames = all_nodenames)
+    #Evaluating xhat and xstar and getting the value of the objective function 
+    #for every (local) scenario
+    ev.evaluate(xhats)
+    objs_at_xhat = ev.objs_dict
+    ev.evaluate(xstars)
+    objs_at_xstar = ev.objs_dict
+    
+    eval_scen_at_xhat = []
+    eval_scen_at_xstar = []
+    scen_probs = []
+    for k,s in ev.local_scenarios.items():
+        eval_scen_at_xhat.append(objs_at_xhat[k])
+        eval_scen_at_xstar.append(objs_at_xstar[k])
+        scen_probs.append(s._mpisppy_probability)
 
-        
-        scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
-        local_gap = np.dot(scen_gaps,scen_probs)
-        local_ssq = np.dot(scen_gaps**2,scen_probs)
-        local_prob_sqnorm = np.linalg.norm(scen_probs)**2
-        local_obj_at_xhat = np.dot(eval_scen_at_xhat,scen_probs)
-        local_estim = np.array([local_gap,local_ssq,local_prob_sqnorm,local_obj_at_xhat])
-        global_estim = np.zeros(4)
-        ev.mpicomm.Allreduce(local_estim, global_estim, op=mpi.SUM) 
-        G,ssq, prob_sqnorm,obj_at_xhat = global_estim
-        if global_rank==0 and verbose:
-            print(f"G = {G}")
-        sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
-        s = np.sqrt(sample_var)
-        
-        use_relative_error = (np.abs(zstar)>1)
-        G = correcting_numeric(G,objfct=obj_at_xhat,
-                               relative_error=use_relative_error)
-        if objective_gap:
-            if is_multi:
-                return {"G":G,"s":s,"zhats": [obj_at_xhat], "seed":start} 
-            else:
-                return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+    
+    scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
+    local_gap = np.dot(scen_gaps,scen_probs)
+    local_ssq = np.dot(scen_gaps**2,scen_probs)
+    local_prob_sqnorm = np.linalg.norm(scen_probs)**2
+    local_obj_at_xhat = np.dot(eval_scen_at_xhat,scen_probs)
+    local_estim = np.array([local_gap,local_ssq,local_prob_sqnorm,local_obj_at_xhat])
+    global_estim = np.zeros(4)
+    ev.mpicomm.Allreduce(local_estim, global_estim, op=mpi.SUM) 
+    G,ssq, prob_sqnorm,obj_at_xhat = global_estim
+    if global_rank==0 and verbose:
+        print(f"G = {G}")
+    sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
+    s = np.sqrt(sample_var)
+    
+    use_relative_error = (np.abs(zstar)>1)
+    G = correcting_numeric(G,objfct=obj_at_xhat,
+                           relative_error=use_relative_error)
+    if objective_gap:
+        if is_multi:
+            return {"G":G,"s":s,"zhats": [obj_at_xhat], "seed":start} 
         else:
-            return {"G":G,"s":s,"seed":start}
+            return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+    else:
+        return {"G":G,"s":s,"seed":start}
