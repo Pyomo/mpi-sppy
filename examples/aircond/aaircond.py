@@ -188,12 +188,14 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
-    if 'BFs' in options:
+    if 'branching_factors' in options:
         BFs = options['BFs']
+    else:
+        [3]
         
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "BFs" : options['BFs'] if 'BFs' in options else [3],
+              "BFs" : BFs,
               "mudev" : options['mudev'] if 'mudev' in options else 0.,
               "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
               "start_seed": options['start_seed'] if 'start_seed' in options else 0,
