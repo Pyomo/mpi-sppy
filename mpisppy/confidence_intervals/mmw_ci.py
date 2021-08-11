@@ -178,11 +178,8 @@ class MMWConfidenceIntervals():
 
             # collect evaluation of xhat at all scenario
             if objective_gap:
-                if self.multistage:
-                    zhats.append(estim['zhat'])
-                else:
-                    for zhat in estim['zhats']:
-                        zhats.append(zhat)
+                for zhat in estim['zhats']:
+                    zhats.append(zhat)
 
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
