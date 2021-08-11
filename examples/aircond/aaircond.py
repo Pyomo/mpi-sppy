@@ -188,6 +188,9 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
+    if 'BFs' in options:
+        BFs = options['BFs']
+        
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
               "BFs" : options['BFs'] if 'BFs' in options else [3],

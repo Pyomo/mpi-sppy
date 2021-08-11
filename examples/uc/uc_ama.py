@@ -4,6 +4,9 @@
 An example of using amalgomator with 3 cylinders and one extension 
 To execute this:
     mpiexec -np 3 python uc_ama.py --default-rho=1 --num-scens=3 --fixer-tol=1e-2
+    
+WARNING:
+    num-scens must be taken as a valid value, i.e. among (3,5,10,25,50,100)
 """
 import mpisppy.utils.amalgomator as amalgomator
 from uc_funcs import id_fix_list_fct
@@ -21,8 +24,10 @@ def main():
                    }
     ama = amalgomator.from_module("uc_funcs", ama_options)
     ama.run()
-    # print(f"inner bound=", ama.best_inner_bound)
-    # print(f"outer bound=", ama.best_outer_bound)
+    if ama.cylinder_rank == 0:
+        print("first_stage_solution=", ama.first_stage_solution)
+        print("inner bound=", ama.best_inner_bound)
+        print("outer bound=", ama.best_outer_bound)
 
 if __name__ == "__main__":
     main()

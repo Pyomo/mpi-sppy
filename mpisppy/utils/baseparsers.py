@@ -152,16 +152,28 @@ def make_parser(progname=None, num_scens_reqd=False):
     parser = _common_args(parser)
     return parser
 
-def _basic_multistage(progname=None):
+def _basic_multistage(progname=None, num_scens_reqd=False):
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
-    # the default is intended more as an example than as a default
     parser.add_argument("--branching_factors",
                         help="Spaces delimited branching factors (e.g., 2 2)",
                         dest="branching_factors",
                         nargs="*",
                         type=int,
                         default=None)
+        
+    if num_scens_reqd:
+        parser.add_argument(
+            "num_scens", help="Number of scenarios", type=int
+        )
+    else:
+        parser.add_argument(
+            "--num-scens",
+            help="Number of scenarios (default None)",
+            dest="num_scens",
+            type=int,
+            default=None,
+        )
     return parser
 
 

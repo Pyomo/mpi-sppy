@@ -222,6 +222,40 @@ def pysp_instance_creation_callback(
 
     return model
 
+#=========
+def scenario_names_creator(num_scens,start=None):
+    # (only for Amalgomator): return the full list of num_scens scenario names
+    # if start!=None, the list starts with the 'start' labeled scenario
+    if (start is None) :
+        start=0
+    return [f"scen{i}" for i in range(start,start+num_scens)]
+        
+
+
+#=========
+def inparser_adder(inparser):
+    # (only for Amalgomator): add command options unique to farmer
+    inparser.add_argument("--crops-multiplier",
+                          help="number of crops will be three times this (default 1)",
+                          dest="crops_multiplier",
+                          type=int,
+                          default=1)
+    
+    inparser.add_argument("--farmer-with-integers",
+                          help="make the version that has integers (default False)",
+                          dest="use_integer",
+                          action="store_true",)
+    inparser.set_defaults(use_integer=False)
+
+
+#=========
+def kw_creator(options):
+    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    kwargs = {"use_integer": options['use_integer'] if 'use_integer' in options else False,
+              "crops_multiplier": options['crops_multiplier'] if 'crops_multiplier' in options else 1,
+              }
+    return kwargs
+
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     sname = scenario_name

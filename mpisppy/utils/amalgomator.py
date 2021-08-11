@@ -212,7 +212,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
             if _bool_option(options, "2stage"):
                 parser = _basic_parse_args(is_multi=False, num_scens_reqd=num_scens_reqd)
             elif _bool_option(options, "mstage"):
-                parser = _basic_parse_args(progname = parser, is_multi=True)
+                parser = _basic_parse_args(is_multi=True, num_scens_reqd=num_scens_reqd)
             else:
                 raise RuntimeError("The problem type (2stage or mstage) must be specified")
             parser = baseparsers.two_sided_args(parser)
@@ -241,7 +241,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
         args = parser.parse_args()
     
         opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
-        
+                
         if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
             if ('EF_solver_options' in opt):
                 opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
@@ -343,14 +343,16 @@ class Amalgomator():
             self.ef = ef
             
             if 'write_solution' in self.options:
-                #TODO Write utils to mimic write_spin_the_wheel_XXX for EF
                 if 'first_stage_solution' in self.options['write_solution']:
-                    #TODO: Change this to write to a csv file instead
-                    sputils.ef_ROOT_nonants_npy_serializer(ef, self.options['write_solution']['first_stage_solution'])
+                    sputils.write_ef_first_stage_solution(self.ef,
+                                                          self.options['write_solution']['first_stage_solution'])
                 if 'tree_solution' in self.options['write_solution']:
-                    print("No tree solution writer for EF for now")
+                    sputils.write_ef_tree_solution(self.ef,
+                                                   self.options['write_solution']['tree_solution'])
             
             self.xhats = sputils.nonant_cache_from_ef(ef)
+            self.local_xhats = self.xhats #Every scenario is local for EF
+            self.first_stage_solution = {"ROOT": self.xhats["ROOT"]}
 
         else:
             self.ef = None
@@ -369,6 +371,8 @@ class Amalgomator():
                         beans["all_nodenames"] = self.options["all_nodenames"]
                     elif "branching_factors" in self.options:
                         beans["branching_factors"] = self.options["branching_factors"]
+                    elif "BFs" in self.options:
+                        beans["branching_factors"] = self.options["BFs"]
             hub_dict = hub_creator(**beans)
             
             #Add extensions
@@ -397,15 +401,23 @@ class Amalgomator():
                         beans["all_nodenames"] = self.options["all_nodenames"]
                     elif "branching_factors" in self.options:
                         beans["branching_factors"] = self.options["branching_factors"]
+                    elif "BFs" in self.options:
+                        beans["branching_factors"] = self.options["BFs"]
                 spoke_dict = spoke_creator(**beans)
                 list_of_spoke_dict.append(spoke_dict)
                 
             spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
             
-            if "hub_class" in opt_dict:  # we are a hub rank
+            self.opt = spcomm.opt
+            self.cylinder_rank = self.opt.cylinder_rank
+            self.on_hub = ("hub_class" in opt_dict)
+            
+            if self.on_hub:  # we are on a hub rank
                 self.best_inner_bound = spcomm.BestInnerBound
                 self.best_outer_bound = spcomm.BestOuterBound
-                #TODO: Find a way to get this bound on every rank, including non-hub ranks
+                #NOTE: We do not get bounds on every rank, only on hub
+                #      This should change if we want to use cylinders for MMW
+                
             
             if 'write_solution' in self.options:
                 if 'first_stage_solution' in self.options['write_solution']:
@@ -417,8 +429,14 @@ class Amalgomator():
                                                                opt_dict,
                                                                self.options['write_solution']['tree_solution'])
             
+            if self.on_hub: #we are on a hub rank
+                a_sname = self.opt.local_scenario_names[0]
+                root = self.opt.local_scenarios[a_sname]._mpisppy_node_list[0]
+                self.first_stage_solution = {"ROOT":[pyo.value(var) for var in root.nonant_vardata_list]}
+                self.local_xhats = sputils.local_nonant_cache(spcomm)
+                
             #TODO: Add a xhats attribute, similar to the output of nonant_cache_from_ef
-            
+            #      It means doing a MPI operation over hub ranks
 
 
 if __name__ == "__main__":
