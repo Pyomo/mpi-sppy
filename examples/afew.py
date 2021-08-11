@@ -51,10 +51,11 @@ do_one("sizes",
        "sizes_cylinders.py",
        4,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
-do_one("hydro", "hydro_cylinders.py", 3,
-       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+
+do_one("hydro", "hydro_cylinders_pysp.py", 3,
+       "--bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatshuffle --with-lagrangian "
        "--solver-name={}".format(solver_name))
 

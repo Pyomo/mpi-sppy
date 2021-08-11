@@ -313,6 +313,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "_mpisppy_probability": 1/num_scens,
                     "BFs":BFs,
                     "mudev":mudev,
+                    "start_seed":start_seed,
                     "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
@@ -362,7 +363,7 @@ if __name__ == "__main__":
     
     # mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
     #                     verbose=False)
-    # r=mmw.run()
+    # r=mmw.run(objective_gap=True)
     # print(r)
     
     #An example of sequential sampling for the aircond model
@@ -376,10 +377,14 @@ if __name__ == "__main__":
                     "solvername":"gurobi_direct",
                     "BFs": bfs}
     
-    optionsFSP = {'eps': 1.0,
+    optionsFSP = {'eps': 50.0,
                   'solvername': "gurobi_direct",
                   "c0":50,
-                  "BFs": bfs}
+                  "BFs": bfs,
+                  "xhat_gen_options":{'mudev':0, 'sigmadev':40},
+                  'mudev':0,
+                  'sigmadev':40
+                  }
     aircondpb = SeqSampling("mpisppy.tests.examples.aircond_submodels",
                             xhat_generator_aircond, 
                             optionsFSP,
