@@ -133,7 +133,7 @@ def main():
 
     args = _parse_args()
 
-    BFs = args.BFs
+    BFs = args.branching_factors
 
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
