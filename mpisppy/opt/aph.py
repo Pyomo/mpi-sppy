@@ -1,15 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # APH
-"""
-TBD: dlw june 2020 look at this code in phbase:
-            if spcomm is not None: 
-                spcomm.sync_with_spokes()
-                if spcomm.is_converged():
-                    break    
-
-"""
-
 
 import numpy as np
 import math
