@@ -115,7 +115,7 @@ class APH(ph_base.PHBase):  # ??????
         if "APHnu" in options:
             self.nu = options["APHnu"]
         assert 0 < self.nu and self.nu < 2
-        self.dispatchrecord = dict()   # for local subproblems
+        self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
 
     #============================
     def setup_Lens(self):
@@ -597,6 +597,20 @@ class APH(ph_base.PHBase):  # ??????
             # Return the entire source dict and list of scnt (subproblems,phi) 
             # pairs for dispatch.
             retval = list()  # the list to return
+            # see if any are too old
+            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                 key=lambda item: item[1][-1])}
+            for k,t in sortedbyI.items():
+                if False:
+                    retval.append((k, sortedbyI[k]))  # sname, phi
+                    i += 1
+                    if i >= scnt:
+                        logging.debug("Dispatch list filled with stale scenarios {}/{} (frac needed={})".\
+                                      format(i, len(sortedbyphi), dispatch_frac))
+                        return None, retval
+            
+
+            # now take the most negative phi
             s_source, sortedbyphi = _best_phis()
             i = 0
             for k,p in sortedbyphi.items():
@@ -618,7 +632,7 @@ class APH(ph_base.PHBase):  # ??????
             for k,t in sortedbyI.items():
                 if k in retval:
                     continue
-                retval.append((k, sortedbyphi[k]))  # sname, phi
+                retval.append((k, sortedbyI[k]))  # sname, phi
                 i += 1
                 if i >= scnt:
                     logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
