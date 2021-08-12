@@ -110,6 +110,8 @@ class APH(ph_base.PHBase):  # ??????
         self.APHgamma = 1 if "APHgamma" not in options\
                         else options["APHgamma"]
         assert(self.APHgamma > 0)
+        self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
+        self.with_round_robin_dispatch = options.get("with_round_robin_dispatch", False)
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
         if "APHnu" in options:
@@ -596,12 +598,26 @@ class APH(ph_base.PHBase):  # ??????
         def _dispatch_list(scnt):
             # Return the entire source dict and list of scnt (subproblems,phi) 
             # pairs for dispatch.
+            # There is an option to allow for round-robin for research purposes.
             retval = list()  # the list to return
+            if self.with_round_robin_dispatch:
+                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                     key=lambda item: item[1][-1])}
+                for k,t in sortedbyI.items():
+                    retval.append((k, sortedbyI[k]))  # sname, phi
+                    i += 1
+                    if i >= scnt:
+                        logging.debug("Dispatch list filled with stale scenarios {}/{} (frac needed={})".\
+                                      format(i, len(sortedbyphi), dispatch_frac))
+                        return None, retval
+
+
+            # if we are still here, it is not round-robin
             # see if any are too old
             sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                  key=lambda item: item[1][-1])}
             for k,t in sortedbyI.items():
-                if False:
+                if v[-1] > self.shelf_life:
                     retval.append((k, sortedbyI[k]))  # sname, phi
                     i += 1
                     if i >= scnt:
