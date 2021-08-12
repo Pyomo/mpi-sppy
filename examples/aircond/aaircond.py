@@ -189,7 +189,7 @@ def inparser_adder(inparser):
 #=========
 def kw_creator(options):
     if 'branching_factors' in options:
-        BFs = options['BFs']
+        BFs = options['branching_factors']
     else:
         [3]
         

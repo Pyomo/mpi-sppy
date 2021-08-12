@@ -62,7 +62,7 @@ runs an Amalgomator object.
 .. Note::
    The module must contains several methods:
    ``scenario_creator``, ``scenario_names_creator``, ``inparser_adder`` and
-   ``kw_creator``. ``farmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
+   ``kw_creator``. ``afarmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
    examples of these functions.
    
 Amalgomator with EF
@@ -92,5 +92,5 @@ Finally, it is possible to use Amalgomator without calling directly
 ``amalgomator.from_module``. The example ``aircond_ama`` is first of all
 fetching informations from the command line via 
 ``amalgomator.Aamgomator_parser``, and then modifying the options to get an
-appropriate number of scenarios before creating an Amalgomator object.
+appropriate number of scenarios before creating an Amalgomator object. 
 

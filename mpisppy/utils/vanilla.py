@@ -56,6 +56,18 @@ def shared_options(args):
         shoptions["iterk_solver_options"]["mipgap"] = args.iterk_mipgap
     return shoptions
 
+def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
+    cylinder_dict = copy.deepcopy(cylinder_dict)
+    if branching_factors is not None:
+        if hasattr(cylinder_dict["opt_kwargs"], "options"):
+            cylinder_dict["opt_kwargs"]["options"]["branching_factors"] = branching_factors
+        if all_nodenames is None:
+            all_nodenames = sputils.create_nodenames_from_BFs(branching_factors)
+    if all_nodenames is not None:
+        print("Hello, surprise !!")
+        cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
+    print("Hello,",cylinder_dict)
+    return cylinder_dict
 
 def ph_hub(
     args,
@@ -67,7 +79,6 @@ def ph_hub(
     rho_setter=None,
     variable_probability=None,
     all_nodenames=None,
-    branching_factors=None
 ):
     shoptions = shared_options(args)
     options = copy.deepcopy(shoptions)
@@ -96,8 +107,10 @@ def ph_hub(
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "extensions": ph_extensions,
+            "all_nodenames": all_nodenames
         }
     }
+    
     return hub_dict
 
 
@@ -110,6 +123,7 @@ def aph_hub(
     ph_extensions=None,
     rho_setter=None,
     variable_probability=None,
+    all_nodenames=None,
 ):
     hub_dict = ph_hub(args,
                       scenario_creator,
@@ -118,7 +132,8 @@ def aph_hub(
                       scenario_creator_kwargs=scenario_creator_kwargs,
                       ph_extensions=ph_extensions,
                       rho_setter=rho_setter,
-                      variable_probability=variable_probability)
+                      variable_probability=variable_probability,
+                      all_nodenames = all_nodenames,)
 
     hub_dict['hub_class'] = APHHub
     hub_dict['opt_class'] = APH    
@@ -132,12 +147,38 @@ def aph_hub(
     return hub_dict
 
 
+def extension_adder(hub_dict,ext_class):
+    if "extensions" not in hub_dict["opt_kwargs"] or \
+        hub_dict["opt_kwargs"]["extensions"] is None:
+        hub_dict["opt_kwargs"]["extensions"] = ext_class
+    elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
+        if not ext_class in  hub_dict["opt_kwargs"]["ext_classes"]:
+            hub_dict["opt_kwargs"]["ext_classes"].append(ext_class)
+    elif hub_dict["opt_kwargs"]["extensions"] != ext_class: 
+        #ext_class is the second extension
+        hub_dict["opt_kwargs"]["ext_classes"] = [hub_dict["opt_kwargs"]["extensions"],
+                                                 ext_class]
+        hub_dict["opt_kwargs"]["extensions"] = MultiExtension
+    return hub_dict
+    
+
+def add_fixer(hub_dict,
+              args,
+              ):
+    hub_dict = extension_adder(hub_dict,Fixer)
+    hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":False,
+                                              "boundtol": args.fixer_tol,
+                                              "id_fix_list_fct": args.id_fix_list_fct}
+    return hub_dict
+
+
 def fwph_spoke(
     args,
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    all_nodenames=None,
 ):
     shoptions = shared_options(args)
 
@@ -168,34 +209,12 @@ def fwph_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement,
+            "all_nodenames": all_nodenames            
         },
     }
-    return fw_dict
-
-def extension_adder(hub_dict,ext_class):
-    if "extensions" not in hub_dict["opt_kwargs"] or \
-        hub_dict["opt_kwargs"]["extensions"] is None:
-        hub_dict["opt_kwargs"]["extensions"] = ext_class
-    elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
-        if not ext_class in  hub_dict["opt_kwargs"]["ext_classes"]:
-            hub_dict["opt_kwargs"]["ext_classes"].append(ext_class)
-    elif hub_dict["opt_kwargs"]["extensions"] != ext_class: 
-        #ext_class is the second extension
-        hub_dict["opt_kwargs"]["ext_classes"] = [hub_dict["opt_kwargs"]["extensions"],
-                                                 ext_class]
-        hub_dict["opt_kwargs"]["extensions"] = MultiExtension
-    return hub_dict
     
-
-def add_fixer(hub_dict,
-              args,
-              ):
-    hub_dict = extension_adder(hub_dict,Fixer)
-    hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":False,
-                                              "boundtol": args.fixer_tol,
-                                              "id_fix_list_fct": args.id_fix_list_fct}
-    return hub_dict
+    return fw_dict
 
 
 def lagrangian_spoke(
@@ -205,6 +224,7 @@ def lagrangian_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     rho_setter=None,
+    all_nodenames=None,
 ):
     shoptions = shared_options(args)
     lagrangian_spoke = {
@@ -217,7 +237,8 @@ def lagrangian_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,            
-            "rho_setter": rho_setter
+            "rho_setter": rho_setter,
+            "all_nodenames": all_nodenames
 
         }
     }
@@ -227,6 +248,7 @@ def lagrangian_spoke(
     if args.lagrangian_iterk_mipgap is not None:
         lagrangian_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
             ["mipgap"] = args.lagrangian_iterk_mipgap
+    
     return lagrangian_spoke
 
 
@@ -237,7 +259,8 @@ def lagranger_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
-    rho_setter=None
+    rho_setter=None,
+    all_nodenames = None,
 ):
     shoptions = shared_options(args)
     lagranger_spoke = {
@@ -250,7 +273,8 @@ def lagranger_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,            
-            "rho_setter": rho_setter
+            "rho_setter": rho_setter,
+            "all_nodenames": all_nodenames
         }
     }
     if args.lagranger_iter0_mipgap is not None:
@@ -263,7 +287,7 @@ def lagranger_spoke(
         lagranger_spoke["opt_kwargs"]["options"]\
             ["lagranger_rho_rescale_factors_json"]\
             = args.lagranger_rho_rescale_factors_json
-        
+    
     return lagranger_spoke
 
         
@@ -305,7 +329,6 @@ def xhatshuffle_spoke(
     scenario_denouement,
     all_scenario_names,
     all_nodenames=None,
-    branching_factors=None,
     scenario_creator_kwargs=None,
 ):
 
@@ -322,10 +345,6 @@ def xhatshuffle_spoke(
     if _hasit(args,"add_reversed_shuffle"):
         xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = args.xhatshuffle_iter_step
     
-    if branching_factors:
-        xhat_options["branching_factors"] = branching_factors
-        if all_nodenames is None:
-            all_nodenames = sputils.create_nodenames_from_BFs(branching_factors)
     xhatlooper_dict = {
         "spoke_class": XhatShuffleInnerBound,
         "spoke_kwargs": dict(),
@@ -335,10 +354,11 @@ def xhatshuffle_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames                        
+            "scenario_denouement": scenario_denouement,   
+            "all_nodenames": all_nodenames                    
         },
     }
+
     return xhatlooper_dict
 
 
@@ -349,7 +369,6 @@ def xhatspecific_spoke(
     all_scenario_names,
     scenario_dict,
     all_nodenames=None,
-    branching_factors=None,
     scenario_creator_kwargs=None,
 ):
     
@@ -360,11 +379,6 @@ def xhatspecific_spoke(
         "xhat_scenario_dict": scenario_dict,
         "csvname": "specific.csv",
     }
-    if branching_factors:
-        xhat_options["branching_factors"] = branching_factors
-        if all_nodenames is None:
-            all_nodenames = sputils.create_nodenames_from_BFs(branching_factors)
-    #TODO: We need to adjust Vanilla with multistage
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatspecific_dict = {
@@ -377,9 +391,10 @@ def xhatspecific_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames,
+            "all_nodenames": all_nodenames
         },
     }
+
     return xhatspecific_dict
 
 def xhatlshaped_spoke(

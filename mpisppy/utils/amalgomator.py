@@ -58,6 +58,7 @@ import numpy as np
 import importlib
 import pyomo.environ as pyo
 import argparse
+import copy
 
 from mpisppy.utils.sputils import spin_the_wheel, get_objs, nonant_cache_from_ef, write_spin_the_wheel_first_stage_solution, write_spin_the_wheel_tree_solution
 import mpisppy.utils.baseparsers as baseparsers
@@ -84,8 +85,13 @@ spokes_and_multi_compatibility = {'fwph':True,
                                   'slamdown':False,
                                   'cross_scenario_cuts':False}
 
+default_unused_spokes = ['xhatlooper', 'xhatspecific']
+
 extensions_classes = {'fixer':Fixer,
-                      #NOTE: Before adding other extensions classes there, create a parser for it in baseparsers.py
+                      #NOTE: Before adding other extensions classes there, create:
+                      #         - a parser for it in baseparsers.py
+                      #         - a function add_EXTNAME in vanila.py
+                      
                       }
 
 #==========
@@ -125,6 +131,7 @@ def find_hub(cylinders, is_multi=False):
         raise RuntimeError("There must be exactly one hub among cylinders")
     return hub
 
+
 def find_spokes(cylinders, is_multi=False):
     spokes = []
     for c in cylinders:
@@ -133,6 +140,8 @@ def find_spokes(cylinders, is_multi=False):
                 raise RuntimeError(f"The cylinder {c} do not exist or cannot be called via amalgomator.")
             if is_multi and not spokes_and_multi_compatibility[c]:
                 raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
+            if c in default_unused_spokes:
+                raise RuntimeWarning(f"{c} is unused by default. Please specify --with-{c}=True in the command line to activate this spoke")
             spokes.append(c)
     return spokes
 
@@ -367,12 +376,7 @@ class Amalgomator():
                            "all_scenario_names": self.scenario_names,
                            "scenario_creator_kwargs": self.kwargs}
             if self.is_multi:
-                    if "all_nodenames" in self.options :
-                        beans["all_nodenames"] = self.options["all_nodenames"]
-                    elif "branching_factors" in self.options:
-                        beans["branching_factors"] = self.options["branching_factors"]
-                    elif "BFs" in self.options:
-                        beans["branching_factors"] = self.options["BFs"]
+                beans["all_nodenames"] = self.options["all_nodenames"]
             hub_dict = hub_creator(**beans)
             
             #Add extensions
@@ -385,25 +389,15 @@ class Amalgomator():
             #Create spoke dicts
             potential_spokes = find_spokes(self.options['cylinders'],
                                            self.is_multi)
+            #We only use the spokes with an associated command line arg set to True
             spokes = [spoke for spoke in potential_spokes if self.options['with_'+spoke]]
             list_of_spoke_dict = list()
             for spoke in spokes:
                 spoke_creator = getattr(vanilla, spoke+'_spoke')
-                beans = {"args":args,
-                           "scenario_creator": self.scenario_creator,
-                           "scenario_denouement": self.scenario_denouement,
-                           "all_scenario_names": self.scenario_names,
-                           "scenario_creator_kwargs": self.kwargs}
+                spoke_beans = copy.deepcopy(beans)
                 if spoke == "xhatspecific":
-                    beans["scenario_dict"] = self.options["scenario_dict"]
-                if self.is_multi and spoke in ['xhatspecific','xhatshuffle']:
-                    if "all_nodenames" in self.options :
-                        beans["all_nodenames"] = self.options["all_nodenames"]
-                    elif "branching_factors" in self.options:
-                        beans["branching_factors"] = self.options["branching_factors"]
-                    elif "BFs" in self.options:
-                        beans["branching_factors"] = self.options["BFs"]
-                spoke_dict = spoke_creator(**beans)
+                    spoke_beans["scenario_dict"] = self.options["scenario_dict"]
+                spoke_dict = spoke_creator(**spoke_beans)
                 list_of_spoke_dict.append(spoke_dict)
                 
             spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)

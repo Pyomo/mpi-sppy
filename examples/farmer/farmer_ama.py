@@ -16,7 +16,7 @@ def main():
     ama_options = {"EF-2stage": True,   # We are solving directly the EF
                    "write_solution":solution_files}
     #The module can be a local file
-    ama = amalgomator.from_module("farmer", ama_options)
+    ama = amalgomator.from_module("afarmer", ama_options)
     ama.run()
     print("first_stage_solution=", ama.first_stage_solution)
     print("inner bound=", ama.best_inner_bound)

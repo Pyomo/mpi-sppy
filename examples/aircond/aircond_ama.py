@@ -23,13 +23,11 @@ def main():
     ama_options = amalgomator.Amalgomator_parser(options, aaircond.inparser_adder)
     
     #Here, we need to change something specified by the command line
-    #That's why we cannot use amalgomator.from_module directly
+    #That's why we cannot use amalgomator.from_module
     if ama_options['num_scens'] is not None:
         raise RuntimeError("Do not use num_scens here, we want to solve the problem for the whole sample scenario tree")
     
-    print(ama_options)
     num_scens = np.prod(ama_options['branching_factors'])
-    print(num_scens)
     scenario_names = aaircond.scenario_names_creator(num_scens,0)
     
     ama =amalgomator.Amalgomator(ama_options, 
