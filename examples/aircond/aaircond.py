@@ -191,7 +191,7 @@ def kw_creator(options):
     if 'branching_factors' in options:
         BFs = options['branching_factors']
     else:
-        [3]
+        BFs = [3]
         
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,

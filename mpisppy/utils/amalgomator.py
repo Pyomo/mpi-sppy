@@ -308,6 +308,11 @@ class Amalgomator():
             self.solver_options = options['EF_solver_options'] \
                 if ('EF_solver_options' in options) else {}
         self.is_multi = _bool_option(options, "EF-mstage") or _bool_option(options, "mstage")
+        if self.is_multi and not "all_nodenames" in options:
+            if "branching_factors" in options:
+                self.options["all_nodenames"] = sputils.create_nodenames_from_BFs(options["branching_factors"])
+            else:
+                raise RuntimeError("For a multistage problem, please provide branching factors or all_nodenames")
         
     def run(self):
         
