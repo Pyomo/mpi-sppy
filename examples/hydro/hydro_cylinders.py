@@ -60,22 +60,21 @@ def main():
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=None,
-                              rho_setter = rho_setter)
-    hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
+                              rho_setter = rho_setter,
+                              all_nodenames = all_nodenames)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter)
-        lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
+                                              rho_setter = rho_setter,
+                                              all_nodenames = all_nodenames)
 
     # xhat looper bound spoke
     
     if with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
-                                                        all_nodenames,
-                                                        BFs,
+                                                        all_nodenames=all_nodenames,
                                                         scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()

@@ -50,14 +50,14 @@ def main():
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
                               ph_extensions=None,
-                              rho_setter = rho_setter)
-    hub_dict["opt_kwargs"]["all_nodenames"] = hydro.all_nodenames
+                              rho_setter = rho_setter,
+                              all_nodenames=hydro.all_nodenames)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              rho_setter = rho_setter)
-        lagrangian_spoke["opt_kwargs"]["all_nodenames"] = hydro.all_nodenames
+                                              rho_setter = rho_setter,
+                                              all_nodenames=hydro.all_nodenames)
 
     if with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
