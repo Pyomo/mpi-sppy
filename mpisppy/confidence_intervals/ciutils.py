@@ -216,21 +216,26 @@ def gap_estimators(xhat_one,
             n = n- n%ArRP
         G =[]
         s = []
-        for k in range(n//ArRP):
-            scennames = scenario_names[k*ArRP,(k+1)*ArRP -1]
-            tmpG,tmps = gap_estimators(xhat_one, solvername, scennames, 
-                                       mname, ArRP=1,
-                                       scenario_creator_kwargs=scenario_creator_kwargs,
-                                       scenario_denouement=scenario_denouement,
-                                       solver_options=solver_options,
-                                       solving_type=solving_type)
-            G.append(tmpG)
-            s.append(tmps)
+
+        for k in range(ArRP):
+            scennames = scenario_names[k*(n//ArRP):(k+1)*(n//ArRP)]
+            tmp = gap_estimators(xhat_one, mname,
+                                   solvername=solvername,
+                                   scenario_names=scennames, ArRP=1,
+                                   scenario_creator_kwargs=scenario_creator_kwargs,
+                                   scenario_denouement=scenario_denouement,
+                                   solver_options=solver_options,
+                                   solving_type=solving_type
+                                   )
+            G.append(tmp['G'])
+            s.append(tmp['s']) 
+
         #Pooling
         G = np.mean(G)
         s = np.linalg.norm(s)/np.sqrt(n//ArRP)
-        return(G,s)
+        return {"G": G, "s": s, "seed": start}
     
+
     #A1RP
     
     #We start by computing the optimal solution to the approximate problem induced by our scenarios
@@ -339,6 +344,9 @@ def gap_estimators(xhat_one,
     G = correcting_numeric(G,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
     if objective_gap:
-       return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+        if is_multi:
+            return {"G":G,"s":s,"zhats": [obj_at_xhat], "seed":start} 
+        else:
+            return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
     else:
         return {"G":G,"s":s,"seed":start}

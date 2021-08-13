@@ -276,6 +276,8 @@ def xhatshuffle_spoke(
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
+    all_nodenames=None,
+    branching_factors=None,
     scenario_creator_kwargs=None,
 ):
 
@@ -287,6 +289,15 @@ def xhatshuffle_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
+    if _hasit(args,"add_reversed_shuffle"):
+        xhat_options["xhat_looper_options"]["reverse"] = args.add_reversed_shuffle
+    if _hasit(args,"add_reversed_shuffle"):
+        xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = args.xhatshuffle_iter_step
+    
+    if branching_factors:
+        xhat_options["branching_factors"] = branching_factors
+        if all_nodenames is None:
+            all_nodenames = sputils.create_nodenames_from_BFs(branching_factors)
     xhatlooper_dict = {
         "spoke_class": XhatShuffleInnerBound,
         "spoke_kwargs": dict(),
@@ -296,7 +307,8 @@ def xhatshuffle_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement                        
+            "scenario_denouement": scenario_denouement,
+            "all_nodenames": all_nodenames                        
         },
     }
     return xhatlooper_dict
@@ -309,7 +321,7 @@ def xhatspecific_spoke(
     all_scenario_names,
     scenario_dict,
     all_nodenames=None,
-    BFs=None,
+    branching_factors=None,
     scenario_creator_kwargs=None,
 ):
     
@@ -320,10 +332,10 @@ def xhatspecific_spoke(
         "xhat_scenario_dict": scenario_dict,
         "csvname": "specific.csv",
     }
-    if BFs:
-        xhat_options["branching_factors"] = BFs
+    if branching_factors:
+        xhat_options["branching_factors"] = branching_factors
         if all_nodenames is None:
-            all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+            all_nodenames = sputils.create_nodenames_from_BFs(branching_factors)
     #TODO: We need to adjust Vanilla with multistage
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
