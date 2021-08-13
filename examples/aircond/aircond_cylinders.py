@@ -140,6 +140,7 @@ def main():
 
     with_xhatspecific = args.with_xhatspecific
     with_lagrangian = args.with_lagrangian
+    with_xhatshuffle = args.with_xhatshuffle
 
     # This is multi-stage, so we need to supply node names
     #all_nodenames = ["ROOT"] # all trees must have this node
@@ -150,7 +151,7 @@ def main():
     ScenCount = np.prod(BFs)
     #ScenCount = _get_num_leaves(BFs)
     scenario_creator_kwargs = {"BFs": BFs}
-    all_scenario_names = [f"scen{i+1}" for i in range(ScenCount)]
+    all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
     # print(all_scenario_names)
     scenario_creator = aircond_submodels.scenario_creator
     scenario_denouement = aircond_submodels.scenario_denouement
@@ -184,12 +185,21 @@ def main():
                                                         BFs,
                                                         scenario_creator_kwargs=scenario_creator_kwargs)
     
+    #xhat shuffle looper bound spoke
+    
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
+                                                      all_nodenames,
+                                                      BFs,
+                                                      scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
     if with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
     if with_xhatspecific:
         list_of_spoke_dict.append(xhatspecific_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
     spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 

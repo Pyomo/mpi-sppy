@@ -12,7 +12,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         Any inherited class must implement the preiter0, postiter etc. methods
         
         Args:
-            opt (SPBase object): gives the problem that we bound
+            opt (SPOpt object): gives the problem that we bound
 
         Attributes:
           scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
@@ -103,7 +103,6 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
                     raise
-    
             # assemble xhat (which is a nonants dict) from xhats
             for ndn in xhats:
                 for i in range(cistart[ndn], nlens[ndn]):
@@ -269,7 +268,7 @@ to a dictionary mapping scenario name to rank number.
 Naming conventions:
 
 = non-leaf nodes other than ROOT are named <parent>_nodenum so for the
-example, there are three non-leaf nodes named ROOT, ROOT_1, and ROOT_2
+example, there are three non-leaf nodes named ROOT, ROOT_0, and ROOT_1
 
 = we happen to be given a list of scenario names that has the same
 length as the number of scenarios (i.e., the product of the branching

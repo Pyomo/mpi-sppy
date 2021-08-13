@@ -29,8 +29,8 @@ except:
 num_scen = int(sys.argv[1])
 solver = sys.argv[2]
 
-sizes = PySPModel(scenario_creator='./models/ReferenceModel.py',
-                  tree_model=f'./SIZES{num_scen}/ScenarioStructure.dat',
+sizes = PySPModel(model='./models/ReferenceModel.py',
+                  scenario_tree=f'./SIZES{num_scen}/ScenarioStructure.dat',
                   )
 
 
@@ -40,3 +40,5 @@ ef = ExtensiveForm(options={'solver':solver},
                    model_name='sizes_EF')
 
 ef.solve_extensive_form(tee=True)
+
+sizes.close()
