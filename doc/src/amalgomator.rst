@@ -70,7 +70,7 @@ Amalgomator with EF
 
 It is possible to use ``amalgomator.py`` to solve a problem by solving 
 directly its extensive form (see the section :ref:`EF Directly`). The options
-must then include an attribute ``EF-2stage``or ``EF-mstage`` set equal to 
+must then include an attribute ``EF-2stage`` or ``EF-mstage`` set equal to 
 True. It uses the ``sputils.create_EF`` method.
 
 Examples

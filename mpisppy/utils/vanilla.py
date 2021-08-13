@@ -29,6 +29,7 @@ from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 def _hasit(args, argname):
     return hasattr(args, argname) and getattr(args, argname) is not None
@@ -156,7 +157,13 @@ def extension_adder(hub_dict,ext_class):
             hub_dict["opt_kwargs"]["ext_classes"].append(ext_class)
     elif hub_dict["opt_kwargs"]["extensions"] != ext_class: 
         #ext_class is the second extension
-        hub_dict["opt_kwargs"]["ext_classes"] = [hub_dict["opt_kwargs"]["extensions"],
+        if not "extensions_kwargs" in hub_dict["opt_kwargs"]:
+            hub_dict["opt_kwargs"]["extension_kwargs"] = {
+                "ext_classes": [hub_dict["opt_kwargs"]["extensions"],
+                                                 ext_class]}
+        else:
+            hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"] = \
+                [hub_dict["opt_kwargs"]["extensions"],
                                                  ext_class]
         hub_dict["opt_kwargs"]["extensions"] = MultiExtension
     return hub_dict
@@ -171,6 +178,14 @@ def add_fixer(hub_dict,
                                               "id_fix_list_fct": args.id_fix_list_fct}
     return hub_dict
 
+def add_cross_scenario_cuts(hub_dict,
+                            args,
+                            ):
+    #WARNING: Do not use without a cross_scenario_cuts spoke
+    hub_dict = extension_adder(hub_dict, CrossScenarioExtension)
+    hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
+            = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}
+    return hub_dict
 
 def fwph_spoke(
     args,
@@ -473,12 +488,13 @@ def slamdown_spoke(
     }
     return xhatlooper_dict
 
-def cross_scenario_cut_spoke(
+def cross_scenario_cuts_spoke(
     args,
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    all_nodenames=None
 ):
 
     if _hasit(args, "max_solver_threads"):
@@ -503,7 +519,8 @@ def cross_scenario_cut_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement,
+            "all_nodenames": all_nodenames
             },
         }
 

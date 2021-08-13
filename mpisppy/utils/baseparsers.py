@@ -548,11 +548,11 @@ def cross_scenario_cuts_args(inparser):
     # we will not try to get the specification from the command line
     parser = inparser
     parser.add_argument('--with-cross-scenario-cuts',
-                        help="have a cross scenario cut spoke (default)",
+                        help="have a cross scenario cuts spoke (default)",
                         dest='with_cross_scenario_cuts',
                         action='store_true')
     parser.add_argument('--no-cross-scenario-cuts',
-                        help="do not have a cross scenario cut spoke",
+                        help="do not have a cross scenario cuts spoke",
                         dest='with_cross_scenario_cuts',
                         action='store_false')
     parser.set_defaults(with_cross_scenario_cuts=True)

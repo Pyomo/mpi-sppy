@@ -74,7 +74,7 @@ hubs_and_multi_compatibility = {'ph': True,
                                 #'cross_scen_hub':False, No parser = not included
                                 }
 
-spokes_and_multi_compatibility = {'fwph':True,
+spokes_and_multi_compatibility = {'fwph':False,
                                   'lagrangian':True,
                                   'lagranger':True,
                                   'xhatlooper':False,
@@ -110,10 +110,11 @@ def _basic_parse_args(progname = None, is_multi=False,  num_scens_reqd=False):
     return parser
 
 def add_parser(inparser, parser_choice=None):
-    if (parser_choice is None) or not hasattr(baseparsers,parser_choice+"_args"):
+    if (parser_choice is None):
         return inparser
     else:
-        adder = getattr(baseparsers,parser_choice+"_args")
+        parser_name = parser_choice+"_args"
+        adder = getattr(baseparsers,parser_name,lambda x:x)
         parser = adder(inparser)
         return parser
     
@@ -141,7 +142,7 @@ def find_spokes(cylinders, is_multi=False):
             if is_multi and not spokes_and_multi_compatibility[c]:
                 raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
             if c in default_unused_spokes:
-                raise RuntimeWarning(f"{c} is unused by default. Please specify --with-{c}=True in the command line to activate this spoke")
+                print(f"{c} is unused by default. Please specify --with-{c}=True in the command line to activate this spoke")
             spokes.append(c)
     return spokes
 
@@ -443,7 +444,8 @@ if __name__ == "__main__":
     import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
-                   "cylinders": ['ph','xhatshuffle'],
+                   "cylinders": ['ph','cross_scenario_cuts'],
+                   "extensions": ['cross_scenario_cuts']
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()

@@ -17,14 +17,14 @@ def main():
                       #It takes too long to right the full solution
                       }
     ama_options = {"2stage": True,   # 2stage vs. mstage
-                   "cylinders": ['ph','xhatshuffle','lagrangian'],
+                   "cylinders": ['ph','xhatshuffle','lagranger'],
                    "extensions": ['fixer'],
                    "id_fix_list_fct": id_fix_list_fct, #Needed for fixer, but not passed in baseparsers
                    "write_solution": solution_files
                    }
     ama = amalgomator.from_module("uc_funcs", ama_options)
     ama.run()
-    if ama.cylinder_rank == 0:
+    if ama.on_hub:
         print("first_stage_solution=", ama.first_stage_solution)
         print("inner bound=", ama.best_inner_bound)
         print("outer bound=", ama.best_outer_bound)
