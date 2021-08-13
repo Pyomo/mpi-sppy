@@ -248,3 +248,26 @@ def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
     file_name = os.path.join(solution_dir, sname+'.json')
     mds = uc._save_uc_results(scenario, relaxed=False)
     mds.write(file_name)
+
+#=========
+def scenario_names_creator(scnt,start=0):
+    # (only for Amalgomator): return the full list of names
+    print(scnt)
+    return [F"Scenario{i+1}" for i in range(start,scnt+start)]
+
+#=========
+def inparser_adder(inparser):
+    # (only for Amalgomator): add command options unique to uc
+    # we don't need to add any command for the uc problem
+    return()
+
+
+#=========
+def kw_creator(options):
+    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    #no kwargs argument because no argument in the scenario creator
+    kwargs = {
+        "scenario_count": options['num_scens'],
+        "path": str(options['num_scens']) + "scenarios_r1",
+    }
+    return kwargs

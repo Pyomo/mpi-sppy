@@ -141,7 +141,7 @@ def main():
        
     # cross scenario cut spoke
     if with_cross_scenario_cuts:
-        cross_scenario_cut_spoke = vanilla.cross_scenario_cut_spoke(
+        cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(
             *beans,
             scenario_creator_kwargs=scenario_creator_kwargs,
         )
@@ -156,7 +156,7 @@ def main():
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if with_cross_scenario_cuts:
-        list_of_spoke_dict.append(cross_scenario_cut_spoke)
+        list_of_spoke_dict.append(cross_scenario_cuts_spoke)
 
     spin_the_wheel(hub_dict, list_of_spoke_dict)
 

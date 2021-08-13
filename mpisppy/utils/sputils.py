@@ -15,6 +15,7 @@ from pyomo.core import Objective
 try:
     from mpi4py import MPI
     haveMPI = True
+    global_rank = MPI.COMM_WORLD.Get_rank()
 except:
     haveMPI = False
 from pyomo.core.expr.numeric_expr import LinearExpression
@@ -194,6 +195,18 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
     winner = _determine_innerbound_winner(spcomm, opt_dict)
     if winner:
         spcomm.opt.write_tree_solution(solution_directory_name,scenario_tree_solution_writer)
+        
+def local_nonant_cache(spcomm):
+    """ Returns a dict with non-anticipative values at each local node
+        We assume that the optimization has been done before calling this
+    """
+    local_xhats = dict()
+    for k,s in spcomm.opt.local_scenarios.items():
+        for node in s._mpisppy_node_list:
+            if node.name not in local_xhats:
+                local_xhats[node.name] = [
+                    pyo.value(var) for var in node.nonant_vardata_list]
+    return local_xhats
 
 def _determine_innerbound_winner(spcomm, opt_dict):
     if spcomm.global_rank == 0:
@@ -227,7 +240,6 @@ def make_comms(n_spokes, fullcomm=None):
     strata_comm = fullcomm.Split(key=global_rank, color=global_rank // nsp1)
     cylinder_comm = fullcomm.Split(key=global_rank, color=global_rank % nsp1)
     return strata_comm, cylinder_comm
-
 
 def get_objs(scenario_instance):
     """ return the list of objective functions for scenario_instance"""
@@ -489,6 +501,118 @@ def _models_have_same_sense(models):
 def is_persistent(solver):
     return isinstance(solver,
         pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
+    
+def ef_scenarios(ef):
+    """ An iterator to give the scenario sub-models in an ef
+    Args:
+        ef (ConcreteModel): the full extensive form model
+
+    Yields:
+        scenario name, scenario instance (str, ConcreteModel)
+    """    
+    for sname in ef._ef_scenario_names:
+        yield (sname, getattr(ef, sname))
+
+def ef_nonants(ef):
+    """ An iterator to give representative Vars subject to non-anticipitivity
+    Args:
+        ef (ConcreteModel): the full extensive form model
+
+    Yields:
+        tree node name, full EF Var name, Var value
+
+    Note:
+        not on an EF object because not all ef's are part of an EF object
+    """
+    for (ndn,i), var in ef.ref_vars.items():
+        yield (ndn, var, pyo.value(var))
+
+        
+def ef_nonants_csv(ef, filename):
+    """ Dump the nonant vars from an ef to a csv file; truly a dump...
+    Args:
+        ef (ConcreteModel): the full extensive form model
+        filename (str): the full name of the csv output file
+    """
+    with open(filename, "w") as outfile:
+        outfile.write("Node, EF_VarName, Value\n")
+        for (ndname, varname, varval) in ef_nonants(ef):
+            outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
+
+            
+def nonant_cache_from_ef(ef,verbose=False):
+    """ Populate a nonant_cache from an ef. Also works with multi-stage
+    Args:
+        ef (mpi-sppy ef): a solved ef
+    Returns:
+        nonant_cache (dict of numpy arrays): a special structure for nonant values
+    """     
+    nonant_cache = dict()
+    nodenames = set([ndn for (ndn,i) in ef.ref_vars])
+    for ndn in sorted(nodenames):
+        nonant_cache[ndn]=[]
+        i = 0
+        while ((ndn,i) in ef.ref_vars):
+            xvar = pyo.value(ef.ref_vars[(ndn,i)])
+            nonant_cache[ndn].append(xvar)
+            if verbose:
+                print("barfoo", i, xvar)
+            i+=1
+    return nonant_cache
+
+
+def ef_ROOT_nonants_npy_serializer(ef, filename):
+    """ write the root node nonants to be ready by a numpy load
+    Args:
+        ef (ConcreteModel): the full extensive form model
+        filename (str): the full name of the .npy output file
+    """
+    root_nonants = np.fromiter((v for ndn,var,v in ef_nonants(ef) if ndn == "ROOT"), float)
+    np.save(filename, root_nonants)
+
+def write_ef_first_stage_solution(ef,
+                                  solution_file_name,
+                                  first_stage_solution_writer=first_stage_nonant_writer):
+    """ 
+    Write a solution file, if a solution is available, to the solution_file_name provided
+    Args:
+        ef : A Concrete Model of the Extensive Form (output of create_EF). 
+             We assume it has already been solved.
+        solution_file_name : filename to write the solution to
+        first_stage_solution_writer (optional) : custom first stage solution writer function
+    
+    NOTE:
+        This utility is replicating write_spin_the_wheel_first_stage_solution for EF
+    """
+    if not haveMPI or (global_rank==0):
+        dirname = os.path.dirname(solution_file_name)
+        if dirname != '':
+            os.makedirs(os.path.dirname(solution_file_name), exist_ok=True)
+            representative_scenario = getattr(ef,ef._ef_scenario_names[0])
+            first_stage_solution_writer(solution_file_name, 
+                                        representative_scenario,
+                                        bundling=False)
+
+def write_ef_tree_solution(ef, solution_directory_name,
+        scenario_tree_solution_writer=scenario_tree_solution_writer):
+    """ Write a tree solution directory, if available, to the solution_directory_name provided
+    Args:
+        ef : A Concrete Model of the Extensive Form (output of create_EF). 
+             We assume it has already been solved.
+        solution_file_name : filename to write the solution to
+        scenario_tree_solution_writer (optional) : custom scenario solution writer function
+        
+    NOTE:
+        This utility is replicating write_spin_the_wheel_tree_solution for EF
+    """
+    if not haveMPI or (global_rank==0):
+        os.makedirs(solution_directory_name, exist_ok=True)
+        for scenario_name, scenario in ef_scenarios(ef):
+            scenario_tree_solution_writer(solution_directory_name,
+                                          scenario_name, 
+                                          scenario,
+                                          bundling=False)
+    
 
 def extract_num(string):
     ''' Given a string, extract the longest contiguous
@@ -558,76 +682,6 @@ def parent_ndn(nodename):
         return None
     else:
         return re.search('(.+)_(\d+)',nodename).group(1)
-
-def ef_nonants(ef):
-    """ An iterator to give representative Vars subject to non-anticipitivity
-    Args:
-        ef (ConcreteModel): the full extensive form model
-
-    Yields:
-        tree node name, full EF Var name, Var value
-
-    Note:
-        not on an EF object because not all ef's are part of an EF object
-    """
-    for (ndn,i), var in ef.ref_vars.items():
-        yield (ndn, var, pyo.value(var))
-
-        
-def ef_nonants_csv(ef, filename):
-    """ Dump the nonant vars from an ef to a csv file; truly a dump...
-    Args:
-        ef (ConcreteModel): the full extensive form model
-        filename (str): the full name of the csv output file
-    """
-    with open(filename, "w") as outfile:
-        outfile.write("Node, EF_VarName, Value\n")
-        for (ndname, varname, varval) in ef_nonants(ef):
-            outfile.write("{}, {}, {}\n".format(ndname, varname, varval))
-
-            
-def nonant_cache_from_ef(ef,verbose=False):
-    """ Populate a nonant_cache from an ef. Also works with multi-stage
-    Args:
-        ef (mpi-sppy ef): a solved ef
-    Returns:
-        nonant_cache (dict of numpy arrays): a special structure for nonant values
-    """     
-    nonant_cache = dict()
-    nodenames = set([ndn for (ndn,i) in ef.ref_vars])
-    for ndn in sorted(nodenames):
-        nonant_cache[ndn]=[]
-        i = 0
-        while ((ndn,i) in ef.ref_vars):
-            xvar = pyo.value(ef.ref_vars[(ndn,i)])
-            nonant_cache[ndn].append(xvar)
-            if verbose:
-                print("barfoo", i, xvar)
-            i+=1
-    return nonant_cache
-
-
-def ef_ROOT_nonants_npy_serializer(ef, filename):
-    """ write the root node nonants to be ready by a numpy load
-    Args:
-        ef (ConcreteModel): the full extensive form model
-        filename (str): the full name of the .npy output file
-    """
-    root_nonants = np.fromiter((v for ndn,var,v in ef_nonants(ef) if ndn == "ROOT"), float)
-    np.save(filename, root_nonants)
-
-    
-def ef_scenarios(ef):
-    """ An iterator to give the scenario sub-models in an ef
-    Args:
-        ef (ConcreteModel): the full extensive form model
-
-    Yields:
-        scenario name, scenario instance (str, ConcreteModel)
-    """    
-    for sname in ef._ef_scenario_names:
-        yield (sname, getattr(ef, sname))
-
         
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
