@@ -612,19 +612,20 @@ class APH(ph_base.PHBase):  # ??????
                         return None, retval
 
 
-            # if we are still here, it is not round-robin
-            # see if any are too old
-            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                 key=lambda item: item[1][-1])}
-            for k,t in sortedbyI.items():
-                if v[-1] > self.shelf_life:
-                    retval.append((k, sortedbyI[k]))  # sname, phi
-                    i += 1
-                    if i >= scnt:
-                        logging.debug("Dispatch list filled with stale scenarios {}/{} (frac needed={})".\
-                                      format(i, len(sortedbyphi), dispatch_frac))
-                        return None, retval
-            
+            else:
+                # if we are still here, it is not round-robin
+                # see if any are too old
+                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                     key=lambda item: item[1][-1])}
+                for k,v in sortedbyI.items():
+                    if v[-1] > self.shelf_life:
+                        retval.append((k, sortedbyI[k]))  # sname, phi
+                        i += 1
+                        if i >= scnt:
+                            logging.debug("Dispatch list filled with stale scenarios {}/{} (frac needed={})".\
+                                          format(i, len(sortedbyphi), dispatch_frac))
+                            return None, retval
+
 
             # now take the most negative phi
             s_source, sortedbyphi = _best_phis()
