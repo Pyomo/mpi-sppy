@@ -574,96 +574,53 @@ class APH(ph_base.PHBase):  # ??????
         _vb("Entering solve_loop function.")
 
 
-        #==========
-        def _best_phis():
-            # for dispatch based on phi
-            # note that when there is no bundling, scenarios are subproblems
-            # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
-            if use_scenarios_not_subproblems:
-                s_source = self.local_scenarios
+        if use_scenarios_not_subproblems:
+            s_source = self.local_scenarios
+            phidict = self.phis
+        else:
+            s_source = self.local_subproblems
+            if not self.bundling:
                 phidict = self.phis
             else:
-                s_source = self.local_subproblems
-                if not self.bundling:
-                    phidict = self.phis
-                else:
-                    phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
-            # dict(sorted(phidict.items(), key=lambda item: item[1]))
-            sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
-
-            return s_source, sortedbyphi
+                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+        # dict(sorted(phidict.items(), key=lambda item: item[1]))
+        sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 
 
         #========
         def _dispatch_list(scnt):
-            # Return the entire source dict and list of scnt (subproblems,phi) 
+            # Return the list of scnt (subproblems,phi) 
             # pairs for dispatch.
             # There is an option to allow for round-robin for research purposes.
-            retval = list()  # the list to return
+            # NOTE: intermediate lists are created to help with verification.
+            # reminder: dispatchrecord is sname:[(iter,phi)...]
+            retval = list()  # the list to return (we will overwrite; delete this line)
             if self.with_round_robin_dispatch:
+                # TBD: check this sort
                 sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                      key=lambda item: item[1][-1])}
-                for k,t in sortedbyI.items():
-                    retval.append((k, sortedbyI[k]))  # sname, phi
-                    i += 1
-                    if i >= scnt:
-                        logging.debug("Dispatch list filled with stale scenarios {}/{} (frac needed={})".\
-                                      format(i, len(sortedbyphi), dispatch_frac))
-                        return None, retval
-
-
+                retval = [(k, v[-1][1]) for k, v in dispatchrecord[:scnt].values()]
             else:
-                # if we are still here, it is not round-robin
-                # see if any are too old
-                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                     key=lambda item: item[1][-1])}
-                for k,v in sortedbyI.items():
-                    if v[-1] > self.shelf_life:
-                        retval.append((k, sortedbyI[k]))  # sname, phi
-                        i += 1
-                        if i >= scnt:
-                            logging.debug("Dispatch list filled with stale scenarios {}/{} (frac needed={})".\
-                                          format(i, len(sortedbyphi), dispatch_frac))
-                            return None, retval
+                # Not doing round robin
+                # k is sname
+                tosort = [(k, -max(self.dispatchrecord[k][-1][0], self.shelf_life-1), phidict[k])\
+                          for k in self.dispatchrecord.keys()]
+                print(f"{tosort =}")
+                sortedlist = sorted(tosort, key=lambda element: (element[1], element[2]))
+                print(f"{sortedlist =}")
+                retval = [(sortedlist[k][0], sortedlist[k][2]) for k in range(scnt)]
+                print(f"{retval =}")
+                # TBD: See if there were enough w/negative phi values and warn.
+                # TBD: see if shelf-life is hitting and warn
+            return retval
 
 
-            # now take the most negative phi
-            s_source, sortedbyphi = _best_phis()
-            i = 0
-            for k,p in sortedbyphi.items():
-                if p < 0:
-                    retval.append((k,p))
-                    i += 1
-                    if i >= scnt:
-                        logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
-                                      format(i, len(sortedbyphi), dispatch_frac))
-                        return s_source, retval
-
-            # If we are still here, there were not enough w/negative phi values.
-            if i == 0 and self.nu == 1.0 and self._PHIter > 1:
-                print(f"WARNING: no negative phi on rank {self.cylinder_rank}"
-                      f" at iteration {self._PHIter}")
-            # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
-            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                 key=lambda item: item[1][-1])}
-            for k,t in sortedbyI.items():
-                if k in retval:
-                    continue
-                retval.append((k, sortedbyI[k]))  # sname, phi
-                i += 1
-                if i >= scnt:
-                    logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
-                                  format(i, len(sortedbyphi), dispatch_frac))
-                    break
-            return s_source, retval
-
-
-        # body of fct starts hare
+        # body of APH_solve_loop fct starts hare
         logging.debug("  early APH solve_loop for rank={}".format(self.cylinder_rank))
 
-        scnt = max(1, len(self.dispatchrecord) * dispatch_frac)
-        s_source, dlist = _dispatch_list(scnt)
-        for dguy in dlist:
+        scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
+        dispatch_list = _dispatch_list(scnt)
+        for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
             s = s_source[k]
@@ -686,7 +643,7 @@ class APH(ph_base.PHBase):  # ??????
                       (np.min(all_pyomo_solve_times),
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
-        return dlist
+        return dispatch_list
 
     #========
     def _print_conv_detail(self):
