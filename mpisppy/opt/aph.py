@@ -112,6 +112,7 @@ class APH(ph_base.PHBase):  # ??????
         assert(self.APHgamma > 0)
         self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
         self.with_round_robin_dispatch = options.get("with_round_robin_dispatch", False)
+        ##self.with_round_robin_dispatch = True
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
         if "APHnu" in options:
@@ -594,12 +595,22 @@ class APH(ph_base.PHBase):  # ??????
             # There is an option to allow for round-robin for research purposes.
             # NOTE: intermediate lists are created to help with verification.
             # reminder: dispatchrecord is sname:[(iter,phi)...]
-            retval = list()  # the list to return (we will overwrite; delete this line)
             if self.with_round_robin_dispatch:
                 # TBD: check this sort
                 sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                      key=lambda item: item[1][-1])}
-                retval = [(k, v[-1][1]) for k, v in dispatchrecord[:scnt].values()]
+                print(f"{sortedbyI =}")
+                # There is presumably a pythonic way to do this...
+                retval = list()
+                i = 0
+                for k,v in sortedbyI.items():
+                    retval.append((k, v[-1][1]))  # sname, phi
+                    i += 1
+                    if i >= scnt:
+                        print(f"round_robin {retval =}")
+                        return retval
+                raise RuntimeError(f"bad scnt={scnt} in _dispatch_list;"
+                                   f" len(sortedbyI)={len(sortedbyI)}")
             else:
                 # Not doing round robin
                 # k is sname
@@ -612,7 +623,7 @@ class APH(ph_base.PHBase):  # ??????
                 print(f"{retval =}")
                 # TBD: See if there were enough w/negative phi values and warn.
                 # TBD: see if shelf-life is hitting and warn
-            return retval
+                return retval
 
 
         # body of APH_solve_loop fct starts hare
