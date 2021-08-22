@@ -112,7 +112,7 @@ class APH(ph_base.PHBase):  # ??????
         assert(self.APHgamma > 0)
         self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
         self.with_round_robin_dispatch = options.get("with_round_robin_dispatch", False)
-        ##self.with_round_robin_dispatch = True
+        ###self.with_round_robin_dispatch = True
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
         if "APHnu" in options:
@@ -585,7 +585,7 @@ class APH(ph_base.PHBase):  # ??????
             else:
                 phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
         # dict(sorted(phidict.items(), key=lambda item: item[1]))
-        sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
+        # sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 
 
         #========
@@ -599,15 +599,13 @@ class APH(ph_base.PHBase):  # ??????
                 # TBD: check this sort
                 sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                      key=lambda item: item[1][-1])}
-                print(f"{sortedbyI =}")
                 # There is presumably a pythonic way to do this...
                 retval = list()
                 i = 0
                 for k,v in sortedbyI.items():
-                    retval.append((k, v[-1][1]))  # sname, phi
+                    retval.append((k, phidict[k]))  # sname, phi
                     i += 1
                     if i >= scnt:
-                        print(f"round_robin {retval =}")
                         return retval
                 raise RuntimeError(f"bad scnt={scnt} in _dispatch_list;"
                                    f" len(sortedbyI)={len(sortedbyI)}")
@@ -616,11 +614,8 @@ class APH(ph_base.PHBase):  # ??????
                 # k is sname
                 tosort = [(k, -max(self.dispatchrecord[k][-1][0], self.shelf_life-1), phidict[k])\
                           for k in self.dispatchrecord.keys()]
-                print(f"{tosort =}")
                 sortedlist = sorted(tosort, key=lambda element: (element[1], element[2]))
-                print(f"{sortedlist =}")
                 retval = [(sortedlist[k][0], sortedlist[k][2]) for k in range(scnt)]
-                print(f"{retval =}")
                 # TBD: See if there were enough w/negative phi values and warn.
                 # TBD: see if shelf-life is hitting and warn
                 return retval
