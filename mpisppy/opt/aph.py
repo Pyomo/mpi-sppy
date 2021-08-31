@@ -1,15 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # APH
-"""
-TBD: dlw june 2020 look at this code in phbase:
-            if spcomm is not None: 
-                spcomm.sync_with_spokes()
-                if spcomm.is_converged():
-                    break    
-
-"""
-
 
 import numpy as np
 import math
@@ -119,12 +110,15 @@ class APH(ph_base.PHBase):  # ??????
         self.APHgamma = 1 if "APHgamma" not in options\
                         else options["APHgamma"]
         assert(self.APHgamma > 0)
+        self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
+        self.with_round_robin_dispatch = options.get("with_round_robin_dispatch", False)
+        ###self.with_round_robin_dispatch = True
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
         if "APHnu" in options:
             self.nu = options["APHnu"]
         assert 0 < self.nu and self.nu < 2
-        self.dispatchrecord = dict()   # for local subproblems
+        self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
 
     #============================
     def setup_Lens(self):
@@ -581,67 +575,58 @@ class APH(ph_base.PHBase):  # ??????
         _vb("Entering solve_loop function.")
 
 
-        #==========
-        def _best_phis():
-            # for dispatch based on phi
-            # note that when there is no bundling, scenarios are subproblems
-            # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
-            if use_scenarios_not_subproblems:
-                s_source = self.local_scenarios
+        if use_scenarios_not_subproblems:
+            s_source = self.local_scenarios
+            phidict = self.phis
+        else:
+            s_source = self.local_subproblems
+            if not self.bundling:
                 phidict = self.phis
             else:
-                s_source = self.local_subproblems
-                if not self.bundling:
-                    phidict = self.phis
-                else:
-                    phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
-            # dict(sorted(phidict.items(), key=lambda item: item[1]))
-            sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
-
-            return s_source, sortedbyphi
+                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+        # dict(sorted(phidict.items(), key=lambda item: item[1]))
+        # sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 
 
         #========
         def _dispatch_list(scnt):
-            # Return the entire source dict and list of scnt (subproblems,phi) 
+            # Return the list of scnt (subproblems,phi) 
             # pairs for dispatch.
-            retval = list()  # the list to return
-            s_source, sortedbyphi = _best_phis()
-            i = 0
-            for k,p in sortedbyphi.items():
-                if p < 0:
-                    retval.append((k,p))
+            # There is an option to allow for round-robin for research purposes.
+            # NOTE: intermediate lists are created to help with verification.
+            # reminder: dispatchrecord is sname:[(iter,phi)...]
+            if self.with_round_robin_dispatch:
+                # TBD: check this sort
+                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                     key=lambda item: item[1][-1])}
+                # There is presumably a pythonic way to do this...
+                retval = list()
+                i = 0
+                for k,v in sortedbyI.items():
+                    retval.append((k, phidict[k]))  # sname, phi
                     i += 1
                     if i >= scnt:
-                        logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
-                                      format(i, len(sortedbyphi), dispatch_frac))
-                        return s_source, retval
-
-            # If we are still here, there were not enough w/negative phi values.
-            if i == 0 and self.nu == 1.0 and self._PHIter > 1:
-                print(f"WARNING: no negative phi on rank {self.cylinder_rank}"
-                      f" at iteration {self._PHIter}")
-            # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
-            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                 key=lambda item: item[1][-1])}
-            for k,t in sortedbyI.items():
-                if k in retval:
-                    continue
-                retval.append((k, sortedbyphi[k]))  # sname, phi
-                i += 1
-                if i >= scnt:
-                    logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
-                                  format(i, len(sortedbyphi), dispatch_frac))
-                    break
-            return s_source, retval
+                        return retval
+                raise RuntimeError(f"bad scnt={scnt} in _dispatch_list;"
+                                   f" len(sortedbyI)={len(sortedbyI)}")
+            else:
+                # Not doing round robin
+                # k is sname
+                tosort = [(k, -max(self.dispatchrecord[k][-1][0], self.shelf_life-1), phidict[k])\
+                          for k in self.dispatchrecord.keys()]
+                sortedlist = sorted(tosort, key=lambda element: (element[1], element[2]))
+                retval = [(sortedlist[k][0], sortedlist[k][2]) for k in range(scnt)]
+                # TBD: See if there were enough w/negative phi values and warn.
+                # TBD: see if shelf-life is hitting and warn
+                return retval
 
 
-        # body of fct starts hare
+        # body of APH_solve_loop fct starts hare
         logging.debug("  early APH solve_loop for rank={}".format(self.cylinder_rank))
 
-        scnt = max(1, len(self.dispatchrecord) * dispatch_frac)
-        s_source, dlist = _dispatch_list(scnt)
-        for dguy in dlist:
+        scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
+        dispatch_list = _dispatch_list(scnt)
+        for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
             s = s_source[k]
@@ -664,7 +649,7 @@ class APH(ph_base.PHBase):  # ??????
                       (np.min(all_pyomo_solve_times),
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
-        return dlist
+        return dispatch_list
 
     #========
     def _print_conv_detail(self):
