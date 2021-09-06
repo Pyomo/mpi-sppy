@@ -20,13 +20,20 @@ has the needed stuff for the problem at hand.
 
 """
 Input options:
-EF|PH|APH|L, etc
+2-stage or multistage
+EF or not
 Assuming not EF:
   - list of cylinders
   - list of hub extensions
 
 The object will then call the appropriate baseparsers functions to set up
 the args and assemble the objects needed for spin-the-wheel, which it will call.
+
+WARNING: When updating baseparsers and vanilla to add new cylinders/extensions,
+you must keep up to date this file, especially the following dicts:
+    - hubs_and_multi_compatibility
+    - spokes_and_multi_compatibility
+    - extensions_classes
 
 [NOTE: argparse can be passed a command list and can generate a command list that can be passed]
 
@@ -51,12 +58,97 @@ import numpy as np
 import importlib
 import pyomo.environ as pyo
 import argparse
+import copy
 
-from mpisppy.utils.sputils import spin_the_wheel, get_objs, nonant_cache_from_ef
+from mpisppy.utils.sputils import spin_the_wheel, get_objs, nonant_cache_from_ef, write_spin_the_wheel_first_stage_solution, write_spin_the_wheel_tree_solution
 import mpisppy.utils.baseparsers as baseparsers
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import vanilla
 from mpisppy import global_toc
+
+from mpisppy.extensions.fixer import Fixer
+
+hubs_and_multi_compatibility = {'ph': True,
+                                'aph': True, 
+                                #'lshaped':False, No parser = not incuded
+                                #'cross_scen_hub':False, No parser = not included
+                                }
+
+spokes_and_multi_compatibility = {'fwph':False,
+                                  'lagrangian':True,
+                                  'lagranger':True,
+                                  'xhatlooper':False,
+                                  'xhatshuffle':True,
+                                  'xhatspecific':True,
+                                  'xhatlshaped':False,
+                                  'slamup':False,
+                                  'slamdown':False,
+                                  'cross_scenario_cuts':False}
+
+default_unused_spokes = ['xhatlooper', 'xhatspecific']
+
+extensions_classes = {'fixer':Fixer,
+                      #NOTE: Before adding other extensions classes there, create:
+                      #         - a parser for it in baseparsers.py
+                      #         - a function add_EXTNAME in vanila.py
+                      
+                      }
+
+#==========
+#Parsing utiities
+
+def _bool_option(options, oname):
+    return oname in options and options[oname]
+
+def _basic_parse_args(progname = None, is_multi=False,  num_scens_reqd=False):
+    if is_multi:
+        parser = baseparsers.make_multistage_parser(progname= progname)
+    else:
+        parser = baseparsers.make_parser(progname=progname, 
+                                         num_scens_reqd=num_scens_reqd)
+        
+    return parser
+
+def add_parser(inparser, parser_choice=None):
+    if (parser_choice is None):
+        return inparser
+    else:
+        parser_name = parser_choice+"_args"
+        adder = getattr(baseparsers,parser_name,lambda x:x)
+        parser = adder(inparser)
+        return parser
+    
+
+#==========
+#Cylinder name checks
+
+def find_hub(cylinders, is_multi=False):
+    hubs = set(cylinders).intersection(set(hubs_and_multi_compatibility.keys()))
+    if len(hubs) == 1:
+        hub = list(hubs)[0]
+        if is_multi and not hubs_and_multi_compatibility[hub]:
+            raise RuntimeError(f"The hub {hub} does not work with multistage problems" )
+    else:
+        raise RuntimeError("There must be exactly one hub among cylinders")
+    return hub
+
+
+def find_spokes(cylinders, is_multi=False):
+    spokes = []
+    for c in cylinders:
+        if not c in hubs_and_multi_compatibility:
+            if c not in spokes_and_multi_compatibility:
+                raise RuntimeError(f"The cylinder {c} do not exist or cannot be called via amalgomator.")
+            if is_multi and not spokes_and_multi_compatibility[c]:
+                raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
+            if c in default_unused_spokes:
+                print(f"{c} is unused by default. Please specify --with-{c}=True in the command line to activate this spoke")
+            spokes.append(c)
+    return spokes
+
+#==========
+
+
 
 #==========
 def from_module(mname, options, extraargs=None, use_command_line=True):
@@ -72,8 +164,6 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     Returns:
         ama (Amalgomator): the instantiated object
     
-    Note :
-        Use adict iif you want to bypass the command line.
     """
     everything = ["scenario_names_creator",
                  "scenario_creator",
@@ -95,7 +185,7 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                                  extraargs=extraargs,
                                  use_command_line=use_command_line)
     options['_mpisppy_probability'] = 1/options['num_scens']
-    start = options['start'] if(('start' in options)) else None
+    start = options['start'] if(('start' in options)) else 0
     sn = m.scenario_names_creator(options['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
     ama = Amalgomator(options,
@@ -104,13 +194,8 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                       m.kw_creator,
                       scenario_denouement=dn)
     return ama
-
-
-#==========
-def _bool_option(options, oname):
-    return oname in options and options[oname]
-
-
+                
+        
 #==========
 def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line=True):
     """ Helper function for Amalgomator.  This gives us flexibility (e.g., get scen count)
@@ -127,32 +212,56 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     opt = {**options}
     
     if use_command_line:
+        num_scens_reqd=_bool_option(options, "num_scens_reqd")
         if _bool_option(options, "EF-2stage"):
-            parser = baseparsers.make_EF2_parser(num_scens_reqd=_bool_option(options, "num_scens_reqd"))
+            parser = baseparsers.make_EF2_parser(num_scens_reqd=num_scens_reqd)
         elif _bool_option(options, "EF-mstage"):
-            parser = baseparsers.make_EF_multistage_parser(num_scens_reqd=_bool_option(options, "num_scens_reqd"))
+            parser = baseparsers.make_EF_multistage_parser(num_scens_reqd=num_scens_reqd)
+            
         else:
-            raise RuntimeError("only EF is supported from the command line right now")
-    
-        # TBD add args for everything else that is not EF, which is a lot
+            if _bool_option(options, "2stage"):
+                parser = _basic_parse_args(is_multi=False, num_scens_reqd=num_scens_reqd)
+            elif _bool_option(options, "mstage"):
+                parser = _basic_parse_args(is_multi=True, num_scens_reqd=num_scens_reqd)
+            else:
+                raise RuntimeError("The problem type (2stage or mstage) must be specified")
+            parser = baseparsers.two_sided_args(parser)
+            parser = baseparsers.mip_options(parser)
+                
+            #Adding cylinders
+            if not "cylinders" in options:
+                raise RuntimeError("A cylinder list must be specified")
+            
+            for cylinder in options['cylinders']:
+                #NOTE: This returns an error if the cylinder has no parser in baseparsers.py
+                parser = add_parser(parser,cylinder)
+            
+            #Adding extensions
+            if "extensions" in options:
+                for extension in options['extensions']:
+                    parser = add_parser(parser,extension)
     
         # call inparser last (so it can delete args if it needs to)
         inparser_adder(parser)
         
         if extraargs is not None:
-            parser = argparse.ArgumentParser(parents = [parser,extraargs],conflict_handler='resolve')
+            parser = argparse.ArgumentParser(parents = [parser,extraargs],
+                                             conflict_handler='resolve')
         
         args = parser.parse_args()
     
         opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
-        
-        if ('EF_solver_options' in opt):
-            opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
-        else:
-            opt["EF_solver_options"] = {"mipgap": opt["EF_mipgap"]}
+                
+        if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
+            if ('EF_solver_options' in opt):
+                opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
+            else:
+                opt["EF_solver_options"] = {"mipgap": opt["EF_mipgap"]}
     
     else:
         #Checking if options has all the options we need 
+        if not _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"):
+            raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in opt):
             opt['EF_solver_name'] = "gurobi"
         if not ('EF_solver_options' in opt):
@@ -192,19 +301,24 @@ class Amalgomator():
         self.scenario_creator = scenario_creator
         self.scenario_denouement = scenario_denouement
         self.kw_creator = kw_creator
+        self.kwargs = self.kw_creator(self.options)
         self.verbose = verbose
         self.is_EF = _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")
         if self.is_EF:
             self.solvername = options['EF_solver_name'] if  ('EF_solver_name' in options) else 'gurobi'
             self.solver_options = options['EF_solver_options'] \
                 if ('EF_solver_options' in options) else {}
+        self.is_multi = _bool_option(options, "EF-mstage") or _bool_option(options, "mstage")
+        if self.is_multi and not "all_nodenames" in options:
+            if "branching_factors" in options:
+                self.options["all_nodenames"] = sputils.create_nodenames_from_BFs(options["branching_factors"])
+            else:
+                raise RuntimeError("For a multistage problem, please provide branching factors or all_nodenames")
         
     def run(self):
         
         """ Top-level execution."""
         if self.is_EF:
-            self.kwargs = self.kw_creator(self.options)     
-            
             ef = sputils.create_EF(
                 self.scenario_names,
                 self.scenario_creator,
@@ -231,7 +345,7 @@ class Amalgomator():
             
             self.EF_Obj = pyo.value(ef.EF_Obj)
 
-            objs = get_objs(ef)
+            objs = sputils.get_objs(ef)
             
             self.is_minimizing = objs[0].is_minimizing
             #TBD : Write a function doing this
@@ -242,29 +356,108 @@ class Amalgomator():
                 self.best_inner_bound = results.Problem[0]['Upper bound']
                 self.best_outer_bound = results.Problem[0]['Lower bound']
             self.ef = ef
+            
+            if 'write_solution' in self.options:
+                if 'first_stage_solution' in self.options['write_solution']:
+                    sputils.write_ef_first_stage_solution(self.ef,
+                                                          self.options['write_solution']['first_stage_solution'])
+                if 'tree_solution' in self.options['write_solution']:
+                    sputils.write_ef_tree_solution(self.ef,
+                                                   self.options['write_solution']['tree_solution'])
+            
+            self.xhats = sputils.nonant_cache_from_ef(ef)
+            self.local_xhats = self.xhats #Every scenario is local for EF
+            self.first_stage_solution = {"ROOT": self.xhats["ROOT"]}
 
         else:
-            self.ef = None   # ???? do we want to retain these objects?
-            raise RuntimeError("We can only do EF right now")
+            self.ef = None
+            args = argparse.Namespace(**self.options)
+            
+            #Create a hub dict
+            hub_name = find_hub(self.options['cylinders'], self.is_multi)
+            hub_creator = getattr(vanilla, hub_name+'_hub')
+            beans = {"args":args,
+                           "scenario_creator": self.scenario_creator,
+                           "scenario_denouement": self.scenario_denouement,
+                           "all_scenario_names": self.scenario_names,
+                           "scenario_creator_kwargs": self.kwargs}
+            if self.is_multi:
+                beans["all_nodenames"] = self.options["all_nodenames"]
+            hub_dict = hub_creator(**beans)
+            
+            #Add extensions
+            if 'extensions' in self.options:
+                for extension in self.options['extensions']:
+                    extension_creator = getattr(vanilla, 'add_'+extension)
+                    hub_dict = extension_creator(hub_dict,
+                                                 args)
+            
+            #Create spoke dicts
+            potential_spokes = find_spokes(self.options['cylinders'],
+                                           self.is_multi)
+            #We only use the spokes with an associated command line arg set to True
+            spokes = [spoke for spoke in potential_spokes if self.options['with_'+spoke]]
+            list_of_spoke_dict = list()
+            for spoke in spokes:
+                spoke_creator = getattr(vanilla, spoke+'_spoke')
+                spoke_beans = copy.deepcopy(beans)
+                if spoke == "xhatspecific":
+                    spoke_beans["scenario_dict"] = self.options["scenario_dict"]
+                spoke_dict = spoke_creator(**spoke_beans)
+                list_of_spoke_dict.append(spoke_dict)
+                
+            spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+            
+            self.opt = spcomm.opt
+            self.cylinder_rank = self.opt.cylinder_rank
+            self.on_hub = ("hub_class" in opt_dict)
+            
+            if self.on_hub:  # we are on a hub rank
+                self.best_inner_bound = spcomm.BestInnerBound
+                self.best_outer_bound = spcomm.BestOuterBound
+                #NOTE: We do not get bounds on every rank, only on hub
+                #      This should change if we want to use cylinders for MMW
+                
+            
+            if 'write_solution' in self.options:
+                if 'first_stage_solution' in self.options['write_solution']:
+                    sputils.write_spin_the_wheel_first_stage_solution(spcomm,
+                                                                      opt_dict,
+                                                                      self.options['write_solution']['first_stage_solution'])
+                if 'tree_solution' in self.options['write_solution']:
+                    sputils.write_spin_the_wheel_tree_solution(spcomm,
+                                                               opt_dict,
+                                                               self.options['write_solution']['tree_solution'])
+            
+            if self.on_hub: #we are on a hub rank
+                a_sname = self.opt.local_scenario_names[0]
+                root = self.opt.local_scenarios[a_sname]._mpisppy_node_list[0]
+                self.first_stage_solution = {"ROOT":[pyo.value(var) for var in root.nonant_vardata_list]}
+                self.local_xhats = sputils.local_nonant_cache(spcomm)
+                
+            #TODO: Add a xhats attribute, similar to the output of nonant_cache_from_ef
+            #      It means doing a MPI operation over hub ranks
 
 
 if __name__ == "__main__":
-    # for debugging
+    # Our example is farmer
     import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
-    ama_options = {"EF-2stage": True}   # 2stage vs. mstage
-    
+    ama_options = {"2stage": True,   # 2stage vs. mstage
+                   "cylinders": ['ph','cross_scenario_cuts'],
+                   "extensions": ['cross_scenario_cuts']
+                   }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
-    print(nonant_cache_from_ef(ama.ef))
+    # print(f"inner bound=", ama.best_inner_bound)
+    # print(f"outer bound=", ama.best_outer_bound)
+    # print(sputils.nonant_cache_from_ef(ama.ef))
     # wish list: allow for integer relaxation using the Pyomo inplace transformation
     """ Issues:
     0. What do we want to put in ama_options and what do we want to discover
        by looking at data? I am inclined to put things in the data and maybe
        check against data. Here are the things:
-       - 2-stage versus multi-stage
+       - 2-stage versus multi-stage [SOLVED: put it in ama_options]
        - MIP versus continuous only
        - linear/quadratic versus non-linear
     """

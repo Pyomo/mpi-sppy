@@ -133,7 +133,7 @@ def main():
 
     args = _parse_args()
 
-    BFs = args.BFs
+    BFs = args.branching_factors
 
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
@@ -164,33 +164,29 @@ def main():
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=None,
-                              rho_setter = rho_setter)
-    hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    hub_dict["opt_kwargs"]["options"]["branching_factors"] = BFs
+                              rho_setter = rho_setter,
+                              all_nodenames=all_nodenames)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter)
-        lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
-        lagrangian_spoke["opt_kwargs"]["options"]["branching_factors"] = BFs
+                                              rho_setter = rho_setter,
+                                              all_nodenames = all_nodenames)
 
     # xhat specific bound spoke
 
     if with_xhatspecific:
         xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
                                                         xhat_scenario_dict,
-                                                        all_nodenames,
-                                                        BFs,
+                                                        all_nodenames=all_nodenames,
                                                         scenario_creator_kwargs=scenario_creator_kwargs)
     
     #xhat shuffle looper bound spoke
     
     if with_xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
-                                                      all_nodenames,
-                                                      BFs,
+                                                      all_nodenames=all_nodenames,
                                                       scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()

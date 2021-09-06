@@ -222,6 +222,7 @@ def pysp_instance_creation_callback(
 
     return model
 
+
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     sname = scenario_name
