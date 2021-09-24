@@ -56,12 +56,16 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         
         #TODO: CHANGE THIS AFTER UPDATE
         self.PH_extensions = None
+
+        self._subproblems_solvers_created = False
         
+
+    def _lazy_create_solvers(self):
+        if self._subproblems_solvers_created:
+            return
         self.subproblem_creation(self.verbose)
         self._create_solvers()
-
-
-    
+        self._subproblems_solvers_created = True
 
 
     #======================================================================
@@ -73,6 +77,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
                   compute_val_at_nonant=False):
+        self._lazy_create_solvers()
         pyomo_solve_time = super().solve_one(solver_options, k, s,
                                              dtiming=dtiming,
                                              gripe=gripe,
@@ -127,6 +132,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         NOTE: set_objective takes care of W and prox changes.
         """
+        self._lazy_create_solvers()
         def _vb(msg): 
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
@@ -189,6 +195,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 If fct is R-->R, returns a float.
                 If fct is R-->R^p with p>1, returns a np.array of length p
         """
+        self._lazy_create_solvers()
         if fct is None:
             return super().Eobjective(verbose=verbose)
         
@@ -224,6 +231,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
+        self._lazy_create_solvers()
         self._fix_nonants(nonant_cache)
         if not hasattr(self, "objs_dict"):
             self.objs_dict = {}
@@ -257,6 +265,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or numpy.array): Expected value
 
         """
+        self._lazy_create_solvers()
         self._fix_nonants(nonant_cache)
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
@@ -287,6 +296,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
+        self._lazy_create_solvers()
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -361,6 +371,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             xhatobjective (float or None): the objective function
                 or None if one could not be obtained.
         """
+        self._lazy_create_solvers()
 
         if fix_nonants:
             self._fix_nonants_at_value()

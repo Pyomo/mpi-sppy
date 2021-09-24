@@ -14,7 +14,7 @@ The Amalgomator class
 The ``Amalgomator`` class basically wraps up the creation and run of a simple
 hub-and-spokes architecture.
 It creates hub and spokes dictionaries using vanilla,
-call ``sputils.spin_the_wheel`` and finally writes 
+calls ``sputils.spin_the_wheel`` and finally writes 
 the solution to a file or a directory.
 
 It takes as inputs scenario names, a scenario creator, options and
@@ -22,11 +22,11 @@ a ``kw_creator`` function. ``kw_creator`` must be a function specific to your
 problem, taking the amalgomator options as an input, and giving as an output
 additional arguments for the ``scenario_creator``.
 
-The ``options`` argument is a dictionnary that specifies useful informations 
-over our problem, and dictates the way Amalgomator runs. 
-It must contains the following attributes:
+The ``options`` argument is a dictionary that specifies information 
+about the problem, and dictates the way Amalgomator runs. 
+It must contains the following attributes for use with cylinders:
 
-* An boolean ``2stage`` or ``mstage`` equal to True, indicating a 2-stage or 
+* A boolean ``2stage`` or ``mstage`` equal to True, indicating a 2-stage or 
   a multistage problem.
 
 * A list ``cylinders``, containing the names of the desired hub and spokes.
@@ -62,7 +62,7 @@ runs an Amalgomator object.
 .. Note::
    The module must contains several methods:
    ``scenario_creator``, ``scenario_names_creator``, ``inparser_adder`` and
-   ``kw_creator``. ``afarmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
+   ``kw_creator``. The files ``afarmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
    examples of these functions.
    
 Amalgomator with EF
@@ -81,16 +81,16 @@ example, ``farmer_ama.py``, solves directly the EF. The model can be specified,
 e.g. by taking an integer version of it. This specification can be made via
 the command line, thanks to the ``inparser_adder`` method of ``farmer.py``.
 
-Another example uses amalgomator, this time to create a true hub-and-spokes 
+Another example uses amalgomator, this time to create a hub-and-spokes 
 architecture. ``uc_ama.py`` creates a hub and 2 spokes. A notable feature of
 this example is the use of the ``fixer`` extension. This extension needs a 
 function "id_fix_list_fct" as a parameter. However, a function cannot be
 passed via the command line. "id_fix_list_fct" must thus be an attribute of 
 the options of ``amalgomator.from_module``.
 
-Finally, it is possible to use Amalgomator without calling directly 
-``amalgomator.from_module``. The example ``aircond_ama`` is first of all
+Finally, it is possible to use Amalgomator without calling 
+``amalgomator.from_module``. The example ``aircond_ama`` starts by
 fetching informations from the command line via 
-``amalgomator.Aamgomator_parser``, and then modifying the options to get an
+``amalgomator.Aamgomator_parser``, and then modifies the options to get an
 appropriate number of scenarios before creating an Amalgomator object. 
 
