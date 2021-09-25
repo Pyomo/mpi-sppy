@@ -12,6 +12,7 @@
 
 import os
 import sys
+import datetime as dt
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -54,6 +55,7 @@ def egret_avail():
     return True
 
 def do_one(dirname, progname, np, argstring):
+    """ return the code"""
     os.chdir(dirname)
     runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
                 format(mpiexec_arg, np, progname, argstring)
@@ -69,7 +71,47 @@ def do_one(dirname, progname, np, argstring):
         os.chdir("..")
     else:
         os.chdir("../..")   # hack for one level of subdirectories
+    return code
 
+def time_one(ID, dirname, progname, np, argstring):
+    """ same as do_one, but also check the running time.
+        ID must be unique and ID.perf.csv will be(come) a local file name
+        and should be allowed to sit on your machine in your examples directory.
+        Do not record a time for a bad guy."""
+    
+    ID_check = ID_check or list()
+    if ID in ID_check:
+        raise RuntimeError(f"Duplicate time_one ID={ID}")
+    else:
+        ID_check.append(ID)
+
+    listfname = ID+".perf.json"
+    if os.path.isfile(listname):
+        timelistdf = pd.read_csv(listfname, index_col="datetime")
+    else:
+        print(f"{listname} will be created.")
+        timelistdf = pd.DataFrame(columns=["datetime", "reftime", "time"])
+        
+    start = dt.now()
+    code = do_one(dirname, progname, np, argstring)
+    finish = dt.now()
+    runsecs = (start - finish).total_seconds()
+    if code != 0:
+        return   # Nothing to see here, folks.
+    if len(timelist > 0):
+        deltafrac = (timelist[-1] - runsecs) / timelist[-1]
+    
+    start = dt.now()
+    for i in range(int(1e7)):   # don't change this unless you *really* have to
+        if (i % 2) == 0:
+            foo = i * i
+            bar = str(i)+"!"
+    finish = dt.now()
+    refsecs = (start - finish).total_seconds()
+    
+    timelistdf.loc[len(df.index)] = [str(finish), refsecs, runsecs]
+    timelist.write_csv(listfname)
+    
 def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
     
     os.chdir(dirname)
