@@ -12,7 +12,8 @@
 
 import os
 import sys
-import datetime as dt
+import pandas as pd
+from datetime import datetime as dt
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -79,17 +80,16 @@ def time_one(ID, dirname, progname, np, argstring):
         and should be allowed to sit on your machine in your examples directory.
         Do not record a time for a bad guy."""
     
-    ID_check = ID_check or list()
-    if ID in ID_check:
+    if ID in time_one.ID_check:
         raise RuntimeError(f"Duplicate time_one ID={ID}")
     else:
-        ID_check.append(ID)
+        time_one.ID_check.append(ID)
 
     listfname = ID+".perf.json"
-    if os.path.isfile(listname):
+    if os.path.isfile(listfname):
         timelistdf = pd.read_csv(listfname, index_col="datetime")
     else:
-        print(f"{listname} will be created.")
+        print(f"{listfname} will be created.")
         timelistdf = pd.DataFrame(columns=["datetime", "reftime", "time"])
         
     start = dt.now()
@@ -98,9 +98,8 @@ def time_one(ID, dirname, progname, np, argstring):
     runsecs = (start - finish).total_seconds()
     if code != 0:
         return   # Nothing to see here, folks.
-    if len(timelist > 0):
-        deltafrac = (timelist[-1] - runsecs) / timelist[-1]
-    
+
+    # get a reference time
     start = dt.now()
     for i in range(int(1e7)):   # don't change this unless you *really* have to
         if (i % 2) == 0:
@@ -109,8 +108,20 @@ def time_one(ID, dirname, progname, np, argstring):
     finish = dt.now()
     refsecs = (start - finish).total_seconds()
     
+    # Quick look for trouble
+    if len(timelistdf) > 0:
+        thisscaled = runsecs / refsecs
+        lastrow = timelistdf.iloc[-1]
+        lastrefsecs = lastrow["reftime"]
+        lastrunsecs = lastrow["time"]
+        lastscaled = lastrunsecs / lastrefsecs
+        deltafrac = (lastscaled - thisscaled) / lastscaled
+        if deltafrac < -0.1:
+            print(f"**** WARNING: time increase for {ID}, see {listfname}")
+            
     timelistdf.loc[len(df.index)] = [str(finish), refsecs, runsecs]
-    timelist.write_csv(listfname)
+    timelistdf.write_csv(listfname)
+time_one.ID_check = list()
     
 def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
     
@@ -139,6 +150,9 @@ def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
 
     os.chdir("..")
 
+time_one("Farmer1", "farmer", "farmer_ef.py", 1,
+       "1 3 {}".format(solver_name))
+quit()
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
