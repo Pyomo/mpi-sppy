@@ -17,3 +17,4 @@ else:
     _global_rank = 0
 
 global_toc = lambda msg, cond=(_global_rank==0) : tt_timer.toc(msg, delta=False) if cond else None
+global_toc("Initializing mpi-sppy")
