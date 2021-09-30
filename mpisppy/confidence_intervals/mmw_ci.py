@@ -142,7 +142,7 @@ class MMWConfidenceIntervals():
             batch_size = np.prod(sampling_BFs)
         else:
             sampling_BFs = None
-            
+        print('sampling_BFs=', sampling_BFs)
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
         scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
@@ -158,7 +158,7 @@ class MMWConfidenceIntervals():
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
         zhats = [] #evaluation of xhat at each scenario
-
+        zstars=[]
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
             gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
@@ -180,6 +180,8 @@ class MMWConfidenceIntervals():
             if objective_gap:
                 for zhat in estim['zhats']:
                     zhats.append(zhat)
+                for zstar in estim['zstars']:
+                    zstars.append(zstar)      
 
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
@@ -197,25 +199,33 @@ class MMWConfidenceIntervals():
         gap_outer_bound = 0
  
         if objective_gap == True:
+            # find confidence interval for zhat
             zhat_bar = np.mean(zhats)
-
-            s_zhat = np.std(zhats) # Stanard deviation of objectives at xhat
+            s_zhat = np.std(zhats)
             t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
-
             epsilon_zhat = t_zhat*s_zhat / np.sqrt(len(zhats))
 
-            gap_inner_bound += zhat_bar + epsilon_zhat
-            gap_outer_bound += zhat_bar - epsilon_zhat
+            zstar_bar = np.mean(zstars)
+            s_zstar = np.std(zstars)
+
+            # compute conservative interval on zhat plus 
+            # optimality gap in which we expect zstar to lie
+            obj_upper_bound = zhat_bar + epsilon_zhat
+            obj_lower_bound = zhat_bar - epsilon_zhat - (Gbar + epsilon_g)
 
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
-                      "std": s_g,
+                      "std_G": s_g,
                       "Glist": G}
 
         if objective_gap:
+            self.result["obj_upper_bound"] = obj_upper_bound
+            self.result["obj_lower_bound"] = obj_lower_bound
             self.result["zhat_bar"] = zhat_bar
             self.result["std_zhat"] = s_zhat
+            self.result["zstar_bar"] = zstar_bar
+            self.result["std_zstar"] = s_zstar
 
         return(self.result)
         
@@ -269,7 +279,7 @@ if __name__ == "__main__":
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                        verbose=False)
-    r=mmw.run()
+    r=mmw.run(objective_gap=True)
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 
