@@ -469,11 +469,11 @@ if __name__ == "__main__":
     print('start ups costs: ', start_ups)
     print('branching factors: ', bfs)
     print('run time: ', time.time()-t0)
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
+    print(f"inner bound =", ama.best_inner_bound)
+    print(f"outer bound =", ama.best_outer_bound)
     
     xhat = sputils.nonant_cache_from_ef(ama.ef)
-    print(xhat['ROOT'])
+    print('xhat_one = ', xhat['ROOT'])
 
     if save_xhat:
         bf_string = ''
