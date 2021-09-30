@@ -142,7 +142,7 @@ class MMWConfidenceIntervals():
             batch_size = np.prod(sampling_BFs)
         else:
             sampling_BFs = None
-            
+
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
         scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
@@ -216,7 +216,7 @@ class MMWConfidenceIntervals():
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
-                      "std_G": s_g,
+                      "std": s_g,
                       "Glist": G}
 
         if objective_gap:
@@ -279,7 +279,7 @@ if __name__ == "__main__":
     
     mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
                        verbose=False)
-    r=mmw.run(objective_gap=True)
+    r=mmw.run(objective_gap=False)
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 
