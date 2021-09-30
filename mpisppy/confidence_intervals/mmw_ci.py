@@ -142,7 +142,7 @@ class MMWConfidenceIntervals():
             batch_size = np.prod(sampling_BFs)
         else:
             sampling_BFs = None
-        print('sampling_BFs=', sampling_BFs)
+            
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
         scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
