@@ -260,7 +260,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     
     else:
         #Checking if options has all the options we need 
-        if not _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"):
+        if not (_bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in opt):
             opt['EF_solver_name'] = "gurobi"
