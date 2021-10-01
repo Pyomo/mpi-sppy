@@ -1,5 +1,5 @@
 #ReferenceModel for full set of scenarios for GBD; Aug 2021
-#From original Ferguson and Dantzik 1956 (paper in MMW repo)
+#From original Ferguson and Dantzig 1956
 #Extended scenarios as done in Seq Sampling by B&M
 
 import pyomo.environ as pyo
