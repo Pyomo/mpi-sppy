@@ -120,13 +120,13 @@ def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
         if objfct is None:
             raise RuntimeError("We need a value of the objective function to remove numerically negative G")
         elif (G<= -threshold*np.abs(objfct)):
-            raise RuntimeWarning(f"WARNING: The gap estimator is anormaly negative : {G}")
+            print(f"WARNING: The gap estimator is anormaly negative : {G}")
             return G
         else:
             return max(0,G)
     else:
         if (G<=-threshold):
-            raise RuntimeWarning(f"WARNING: The gap estimator is anormaly negative : {G}")
+            print(f"WARNING: The gap estimator is anormaly negative : {G}")
             return G
         else: 
             return max(0,G)           
@@ -312,9 +312,9 @@ def gap_estimators(xhat_one,
                             all_nodenames = all_nodenames)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    ev.evaluate(xhats)
+    zhat=ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
-    ev.evaluate(xstars)
+    zstar=ev.evaluate(xstars)
     objs_at_xstar = ev.objs_dict
     
     eval_scen_at_xhat = []
@@ -345,8 +345,8 @@ def gap_estimators(xhat_one,
                            relative_error=use_relative_error)
     if objective_gap:
         if is_multi:
-            return {"G":G,"s":s,"zhats": [obj_at_xhat], "seed":start} 
+            return {"G":G,"s":s,"zhats": [zhat],"zstars":[zstar], "seed":start} 
         else:
-            return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "seed":start} 
+            return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "zstars": eval_scen_at_xstar, "seed":start} 
     else:
         return {"G":G,"s":s,"seed":start}
