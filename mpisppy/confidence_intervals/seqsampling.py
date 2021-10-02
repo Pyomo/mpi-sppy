@@ -199,7 +199,7 @@ class SeqSampling():
         
         #Check the multistage options
         if self.multistage:
-            needed_things = ["BFs"]
+            needed_things = ["branching_factors"]
             is_needed(options, needed_things)
             if options['kf_Gs'] != 1 or options['kf_xhat'] != 1:
                 raise RuntimeError("Resampling frequencies must be set equal to one for multistage.")
@@ -321,8 +321,8 @@ class SeqSampling():
         
         #We use sample_size_ratio*n_k observations to compute xhat_k
         if self.multistage:
-            xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
-            mk = np.prod(xhat_BFs)
+            xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+            mk = np.prod(xhat_branching_factors)
             self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
             
@@ -340,12 +340,12 @@ class SeqSampling():
         #----------------------------Step 1 -------------------------------------#
         #Computing n_1 and associated scenario names
         if self.multistage:
-            self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+            self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
             
-            gap_BFs = ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])
-            nk = np.prod(gap_BFs)
+            gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])
+            nk = np.prod(gap_branching_factors)
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
-            sample_options = {'BFs':gap_BFs, 'seed':self.SeedCount}
+            sample_options = {'branching_factors':gap_branching_factors, 'seed':self.SeedCount}
         else:
             nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
             estimator_scenario_names = refmodel.scenario_names_creator(nk,
@@ -382,8 +382,8 @@ class SeqSampling():
             
             #Computing m_k and associated scenario names
             if self.multistage:
-                xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
-                mk = np.prod(xhat_BFs)
+                xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+                mk = np.prod(xhat_branching_factors)
                 self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
                 xhat_scenario_names = refmodel.scenario_names_creator(mk)
             
@@ -410,12 +410,12 @@ class SeqSampling():
             
             #Computing n_k and associated scenario names
             if self.multistage:
-                self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+                self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
                 
-                gap_BFs = ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])
-                nk = np.prod(gap_BFs)
+                gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])
+                nk = np.prod(gap_branching_factors)
                 estimator_scenario_names = refmodel.scenario_names_creator(nk)
-                sample_options = {'BFs':gap_BFs, 'seed':self.SeedCount}
+                sample_options = {'branching_factors':gap_branching_factors, 'seed':self.SeedCount}
             else:
                 nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
                 assert nk>= nk_m1, "Our sample size should be increasing"
