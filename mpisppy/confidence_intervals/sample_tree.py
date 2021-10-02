@@ -190,7 +190,7 @@ def walking_tree_xhats(mname,local_scenarios,xhat_one,branching_factors,seed,opt
     seed : int
         Starting seed to create scenarios.
     options : dict
-        Arguments passed to the scenario creator.
+        Arguments passed to the scenario creator (TBD: change this comment).
 
     Returns
     -------
