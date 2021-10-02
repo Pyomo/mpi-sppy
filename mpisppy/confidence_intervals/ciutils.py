@@ -17,7 +17,7 @@ import mpisppy.confidence_intervals.sample_tree as sample_tree
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-def BFs_from_numscens(numscens,num_stages=2):
+def branching_factors_from_numscens(numscens,num_stages=2):
     #For now, we do not create unbalanced trees. 
     #If numscens cant be written as the product of a num_stages branching factors,
     #We take numscens <-numscens+1
@@ -28,18 +28,18 @@ def BFs_from_numscens(numscens,num_stages=2):
             n = numscens+i
             prime_fact = factorint(n)
             if sum(prime_fact.values())>=num_stages-1: #Checking that we have enough factors
-                BFs = [0]*(num_stages-1)
+                branching_factors = [0]*(num_stages-1)
                 fact_list = [factor for (factor,mult) in prime_fact.items() for i in range(mult) ]
                 for k in range(num_stages-1):
-                    BFs[k] = np.prod([fact_list[(num_stages-1)*i+k] for i in range(1+len(fact_list)//(num_stages-1)) if (num_stages-1)*i+k<len(fact_list)])
-                return BFs
-        raise RuntimeError("BFs_from_numscens is not working correctly. Did you take num_stages>=2 ?")
+                    branching_factors[k] = np.prod([fact_list[(num_stages-1)*i+k] for i in range(1+len(fact_list)//(num_stages-1)) if (num_stages-1)*i+k<len(fact_list)])
+                return branching_factors
+        raise RuntimeError("branching_factors_from_numscens is not working correctly. Did you take num_stages>=2 ?")
 
-def scalable_BFs(numscens, ref_BFs):
+def scalable_branching_factors(numscens, ref_branching_factors):
     '''
     This utilitary find a good branching factor list to create a scenario tree
-    containing at least numscens leaf nodes, and scaled like ref_BFs.
-    For instance, if numscens=233 and reef_BFs=[5,3,2], it returns [10,6,4], 
+    containing at least numscens leaf nodes, and scaled like ref_branching_factors.
+    For instance, if numscens=233 and ref_branching_factors=[5,3,2], it returns [10,6,4], 
     branching factors for a 240-leafs tree
     
     NOTE: This method increasing in priority first stages branching factors,
@@ -49,29 +49,30 @@ def scalable_BFs(numscens, ref_BFs):
     ----------
     numscens : int
         Number of leaf nodes/scenarios of the tree.
-    ref_BFs : list of int
+    ref_branching_factors : list of int
         Reference shape of the branching factors. It length must be equal to
         number_of_stages-1
 
     Returns
     -------
-    new_BFs
+    new_branching_factors
         DESCRIPTION.
 
     '''
-    numstages = len(ref_BFs)+1
+    numstages = len(ref_branching_factors)+1
     if numscens < 2**(numstages-1):
         return [2]*(numstages-1)
-    mult_coef = (numscens/np.prod(ref_BFs))**(1/(numstages-1))
-    new_BFs = np.maximum(np.floor(np.array(ref_BFs)*mult_coef),1.) #BFs have to be positive integers
+    mult_coef = (numscens/np.prod(ref_branching_factors))**(1/(numstages-1))
+    # branching_factors have to be positive integers
+    new_branching_factors = np.maximum(np.floor(np.array(ref_branching_factors)*mult_coef),1.) 
     i=0
-    while np.prod(new_BFs)<numscens:
+    while np.prod(new_branching_factors)<numscens:
         if i == numstages-1:
-            raise RuntimeError("scalable BFs is failing")
-        new_BFs[i]+=1
+            raise RuntimeError("scalable branching_factors is failing")
+        new_branching_factors[i]+=1
         i+=1
-    new_BFs = list(new_BFs.astype(int))
-    return new_BFs
+    new_branching_factors = list(new_branching_factors.astype(int))
+    return new_branching_factors
         
 def is_sorted(nodelist):
     #Take a list of scenario_tree.ScenarioNode and check that it is well constructed
@@ -165,7 +166,7 @@ def gap_estimators(xhat_one,
         List of scenario names used to compute G_n and s_n. Default is None
         Must be specified for 2 stage, but can be missing for multistage
     sample_options: dict, optional
-        Only for multistage. Must contain a 'seed' and a 'BFs' attribute,
+        Only for multistage. Must contain a 'seed' and a 'branching_factors' attribute,
         specifying the starting seed and the branching factors 
         of the scenario tree
     ArRP:int,optional
@@ -183,7 +184,7 @@ def gap_estimators(xhat_one,
     objective_gap: bool, optional
         Returns a gap estimate around approximate objective value
 
-    BFs: list, optional
+    branching_factors: list, optional
         Only for multistage. List of branching factors of the sample scenario tree.
 
     Returns
@@ -200,10 +201,10 @@ def gap_estimators(xhat_one,
         
     if is_multi:
         try:
-            BFs = sample_options['BFs']
+            branching_factors = sample_options['branching_factors']
             start = sample_options['seed']
         except (TypeError,KeyError,RuntimeError):
-            raise RuntimeError('For multistage problems, sample_options must be a dict with BFs and seed attributes.')
+            raise RuntimeError('For multistage problems, sample_options must be a dict with branching_factors and seed attributes.')
     else:
         start = sputils.extract_num(scenario_names[0])
     if ArRP>1: #Special case : ArRP, G and s are pooled from r>1 estimators.
@@ -245,13 +246,13 @@ def gap_estimators(xhat_one,
                                               xhats =[],
                                               root_scen=None,
                                               starting_stage=1, 
-                                              BFs=BFs,
+                                              branching_factors=branching_factors,
                                               seed=start, 
                                               options=scenario_creator_kwargs,
                                               solvername=solvername,
                                               solver_options=solver_options)
         samp_tree.run()
-        start += sputils.number_of_nodes(BFs)
+        start += sputils.number_of_nodes(branching_factors)
         ama_object = samp_tree.ama
     else:
         #We use amalgomator to do it
@@ -284,7 +285,7 @@ def gap_estimators(xhat_one,
         xhats,start = sample_tree.walking_tree_xhats(mname,
                                                     local_scenarios,
                                                     xhat_one['ROOT'],
-                                                    BFs,
+                                                    branching_factors,
                                                     start,
                                                     scenario_creator_kwargs,
                                                     solvername=solvername,
@@ -292,7 +293,7 @@ def gap_estimators(xhat_one,
         
         #Compute then the average function value with this policy
         scenario_creator_kwargs = samp_tree.ama.kwargs
-        all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+        all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
     else:
         #In a 2 stage problem, the only non-leaf is the ROOT node
         xhats = xhat_one
