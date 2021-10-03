@@ -184,7 +184,7 @@ class IndepScens_SeqSampling(SeqSampling):
                                                     xhat_k['ROOT'],
                                                     self.options['branching_factors'],
                                                     self.SeedCount,
-                                                    scenario_creator_kwargs,
+                                                    self.options,  # not scenario_creator_kwargs,
                                                     solvername=self.solvername,
                                                     solver_options=self.solver_options)
         
