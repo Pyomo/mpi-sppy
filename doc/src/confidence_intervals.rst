@@ -87,6 +87,5 @@ its optimality gap.
 
 Examples of use with the ``farmer`` problem and several options can be found in the main of ``seqsampling.py``.
 
-.. Note::
-   Unlike MMW, sequential samping does not run with multistage problems.
+
 
