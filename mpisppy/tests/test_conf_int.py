@@ -36,8 +36,7 @@ def _get_base_options():
     options = { "EF_solver_name": solvername,
                      "use_integer": False,
                      "crops_multiplier": 1,
-                     'num_scens': 12,
-                     'start': 0,
+                     "num_scens": 12,
                      "EF-2stage": True}
     Baseoptions =  {"num_batches": 2,
                      "batch_size": 10,
@@ -77,7 +76,7 @@ class Test_MMW_farmer(unittest.TestCase):
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                           options['opt'],
                           xhat,
-                          options['num_batches'])
+                          options['num_batches'], batch_size = options["batch_size"], start = options['opt']['num_scens'])
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
@@ -191,11 +190,13 @@ class Test_MMW_farmer(unittest.TestCase):
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                                         options['opt'],
                                         xhat,
-                                        options['num_batches'])
+                                        options['num_batches'],
+                                        batch_size = options["batch_size"],
+                                         start = options['opt']['num_scens'])
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
-        self.assertEqual((s,bound), (43.0,280.0))
+        self.assertEqual((s,bound), (1.5,96.0))
    
     @unittest.skipIf(not solver_available,
                      "no solver is available")
