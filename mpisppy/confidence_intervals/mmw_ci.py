@@ -74,7 +74,7 @@ class MMWConfidenceIntervals():
         #Getting the start
         if start is None :
             raise RuntimeError( "Start must be specified")
-	self.start = start
+        self.start = start
             
         #Type of our problem
         if ama._bool_option(options, "EF-2stage"):
