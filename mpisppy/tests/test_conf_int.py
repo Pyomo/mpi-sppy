@@ -79,7 +79,7 @@ class Test_MMW_farmer(unittest.TestCase):
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                           options['opt'],
                           xhat,
-                          options['num_batches'], batch_size = options["batch_size"], start = 10)
+                          options['num_batches'], batch_size = options["batch_size"], start = 12)
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
@@ -195,7 +195,7 @@ class Test_MMW_farmer(unittest.TestCase):
                                         xhat,
                                         options['num_batches'],
                                         batch_size = options["batch_size"],
-                                         start = 10)
+                                         start = 12)
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
