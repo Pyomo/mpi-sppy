@@ -269,7 +269,7 @@ if __name__ == "__main__":
     num_batches = ama_object.options['num_batches']
     batch_size = ama_object.options['batch_size']
     
-    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size, start = 0,
+    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size, start = ama_object.options['num_scens'],
                        verbose=False)
     r=mmw.run(objective_gap=False)
     global_toc(r)

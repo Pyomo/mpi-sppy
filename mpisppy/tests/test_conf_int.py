@@ -29,10 +29,7 @@ global_rank = fullcomm.Get_rank()
 
 __version__ = 0.2
 
-#solver_available,solvername, persistent_available, persistentsolvername= get_solver()
-print("hacking")
-solvername = "gurobi"
-solver_available = True
+solver_available,solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 def _get_base_options():
@@ -79,7 +76,7 @@ class Test_MMW_farmer(unittest.TestCase):
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                           options['opt'],
                           xhat,
-                          options['num_batches'], batch_size = options["batch_size"], start = 12)
+                          options['num_batches'], batch_size = options["batch_size"], start = options['opt']['num_scens'])
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
@@ -195,11 +192,11 @@ class Test_MMW_farmer(unittest.TestCase):
                                         xhat,
                                         options['num_batches'],
                                         batch_size = options["batch_size"],
-                                         start = 12)
+                                         start = options['opt']['num_scens'])
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
-        self.assertEqual((s,bound), (43.0,280.0))
+        self.assertEqual((s,bound), (1.5,96.0))
    
     @unittest.skipIf(not solver_available,
                      "no solver is available")
