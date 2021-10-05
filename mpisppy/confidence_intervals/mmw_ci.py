@@ -69,18 +69,12 @@ class MMWConfidenceIntervals():
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
-        self.num_scens_xhat = options["num_scens"] if ("num_scens" in options) else 0
+        self.start_scen = options["start_scen"] if ("start_scen" in options) else 0
         
         #Getting the start
-        if start is not None :
-            self.start = start
-        ScenCount = self.num_scens_xhat + (
-            self.options['start'] if ("start" in options) else 0)
         if start is None :
-            self.start = ScenCount
-        elif start < ScenCount :
-            raise RuntimeWarning(
-                "Scenarios used to compute xhat_one may be used in MMW")
+            raise RuntimeError( "Start must be specified")
+	self.start = start
             
         #Type of our problem
         if ama._bool_option(options, "EF-2stage"):
@@ -111,7 +105,7 @@ class MMWConfidenceIntervals():
             raise RuntimeError(f"Module {refmodel} not complete for MMW")
         
         you_can_have_it_all = True
-        for ething in ["num_scens","EF_solver_name"]:
+        for ething in ["start_scen","EF_solver_name"]:
             if not ething in self.options:
                 print(f"Argument list is missing {ething}")
                 you_can_have_it_all = False
@@ -231,6 +225,8 @@ class MMWConfidenceIntervals():
         
         
 if __name__ == "__main__":
+
+# This main function is for developers 
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
     refmodel = "mpisppy.tests.examples.farmer" #Change this path to use a different model
