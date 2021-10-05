@@ -69,8 +69,7 @@ class MMWConfidenceIntervals():
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
-        self.start_scen = options["start_scen"] if ("start_scen" in options) else 0
-        
+
         #Getting the start
         if start is None :
             raise RuntimeError( "Start must be specified")
@@ -104,13 +103,9 @@ class MMWConfidenceIntervals():
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for MMW")
         
-        you_can_have_it_all = True
-        for ething in ["start_scen","EF_solver_name"]:
-            if not ething in self.options:
-                print(f"Argument list is missing {ething}")
-                you_can_have_it_all = False
-        if not you_can_have_it_all:
-            raise RuntimeError("Argument list not complete for MMW")   
+
+        if "EF_solver_name" not in self.options:
+            raise RuntimeError("EF_solver_name not in Argument list for MMW")
 
     def run(self, confidence_level=0.95, objective_gap=False):
 
@@ -125,8 +120,7 @@ class MMWConfidenceIntervals():
 
         #Introducing batches otpions
         num_batches = self.num_batches
-        bs=self.batch_size
-        batch_size = bs if (bs is not None) else start #is None : take size_batch=num_scens        
+        batch_size = self.batch_size
         sample_options = self.options
         
         #Some options are specific to 2-stage or multi-stage problems
@@ -136,7 +130,9 @@ class MMWConfidenceIntervals():
             batch_size = np.prod(sampling_BFs)
         else:
             sampling_BFs = None
-
+            if batch_size == 0:
+                raise RuntimeError("batch size can't be zero for two stage problems")
+            
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
         scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
@@ -273,7 +269,7 @@ if __name__ == "__main__":
     num_batches = ama_object.options['num_batches']
     batch_size = ama_object.options['batch_size']
     
-    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
+    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size, start = 0,
                        verbose=False)
     r=mmw.run(objective_gap=False)
     global_toc(r)

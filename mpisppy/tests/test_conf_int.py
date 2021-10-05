@@ -29,15 +29,17 @@ global_rank = fullcomm.Get_rank()
 
 __version__ = 0.2
 
-solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+#solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+print("hacking")
+solvername = "gurobi"
+solver_available = True
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 def _get_base_options():
     options = { "EF_solver_name": solvername,
                      "use_integer": False,
                      "crops_multiplier": 1,
-                     'num_scens': 12,
-                     'start': 0,
+                     "num_scens": 12,
                      "EF-2stage": True}
     Baseoptions =  {"num_batches": 2,
                      "batch_size": 10,
@@ -77,7 +79,7 @@ class Test_MMW_farmer(unittest.TestCase):
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                           options['opt'],
                           xhat,
-                          options['num_batches'])
+                          options['num_batches'], batch_size = options["batch_size"], start = 10)
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
@@ -191,7 +193,9 @@ class Test_MMW_farmer(unittest.TestCase):
         MMW = MMWci.MMWConfidenceIntervals(refmodelname,
                                         options['opt'],
                                         xhat,
-                                        options['num_batches'])
+                                        options['num_batches'],
+                                        batch_size = options["batch_size"],
+                                         start = 10)
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
