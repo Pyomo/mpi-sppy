@@ -79,7 +79,14 @@ Once this is accomplished, on the command line, run
 
 Additional solver options can be specified with the ``--solver-options`` option.
 
-This program will out put a confidence interval on the gap between the solution to the EF and the optimal solution. There is an additional option, ``--with-objective-gap``, which will computes a confidence interval around the solution of the stochastic program. Since the exact value of the objective function cannot be determined, we use the realizations of the objective function at the candidate solution to construct an additional confidence interval about the mean of the realizations computed.
+This program will output a confidence interval on the gap between the
+solution to the EF and the optimal solution. There is an additional
+option, ``--with-objective-gap``, which will computes a confidence
+interval around the solution of the stochastic program. Since the
+exact value of the objective function cannot be determined, we use the
+realizations of the objective function at the candidate solution to
+construct an additional confidence interval about the mean of the
+realizations computed.
 
 
 
