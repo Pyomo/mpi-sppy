@@ -135,6 +135,7 @@ class SampleSubtree():
                                            verbose = False)
     def run(self):
         #Running the Amalgomator and attaching the result to the SampleSubtree object
+        global_toc("Enter SampleSubTree run")
         self.ama.run()
         self.ef = self.ama.ef
         self.EF_Obj = self.ama.EF_Obj
