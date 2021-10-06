@@ -191,6 +191,7 @@ def gap_estimators(xhat_one,
     G_k and s_k, gap estimator and associated standard deviation estimator.
 
     '''
+    global_toc("Enter gap_estimators")
     if solving_type not in ["EF-2stage","EF-mstage"]:
         raise RuntimeError("Only EF solve for the approximate problem is supported yet.")
     else:
@@ -228,7 +229,8 @@ def gap_estimators(xhat_one,
                                    solving_type=solving_type
                                    )
             G.append(tmp['G'])
-            s.append(tmp['s']) 
+            s.append(tmp['s'])
+            global_toc(f"ArRP {k} of {ArRP}")
 
         #Pooling
         G = np.mean(G)
@@ -324,7 +326,6 @@ def gap_estimators(xhat_one,
         eval_scen_at_xhat.append(objs_at_xhat[k])
         eval_scen_at_xstar.append(objs_at_xstar[k])
         scen_probs.append(s._mpisppy_probability)
-
     
     scen_gaps = np.array(eval_scen_at_xhat)-np.array(eval_scen_at_xstar)
     local_gap = np.dot(scen_gaps,scen_probs)
