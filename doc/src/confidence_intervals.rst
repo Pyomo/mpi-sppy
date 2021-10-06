@@ -26,12 +26,13 @@ Finding a candidate solution
 Computing this confidence interval means that we need to find a solution to 
 an approximate problem, and evaluate how good a solution to this approximate problem ``xhat_one`` is.
 In order to use MMW, ``xhat_one`` must be written using one of two functions 
-``ef_ROOT_nonants_npy_serializer`` or ``write_spin_the_wheel_first_stage_solution``.
-These functions write ``xhat`` to a file and can be read using ``read_xhat``.
+``ef_ROOT_nonants_npy_serializer`` or ``write_spin_the_wheel_first_stage_solution`` with an npy serializer
+argument.
+These functions write ``xhat`` for the root node of the scenario tree to a file and can be read using ``read_xhat``.
 When using a cylinders driver, the function ``sputils.first_stage_nonant_npy_serializer``
 can be given as the ``first_stage_solution_writer`` argument to the function
 ``sputils.write_spin_the_wheel_first_stage_solution``. See the ``farmer_cylinders.py``
-and ``farmer_ef.py`` examples.
+and ``farmer_ef.py`` examples. The ``uc_cylinders.py`` file also shows an example.
 
 Evaluating a candidate solution
 -------------------------------
@@ -56,12 +57,12 @@ This object has a ``run`` method that returns a gap estimator and a confidence i
 Example
 -------
 
-An example of use, with the ``farmer`` problem, can be found in the main of ``mmwci.py``.
+An example of use with the ``farmer`` problem, can be found in the main of ``mmwci.py``.
 
 Using stand alone ``mmw_conf.py``
 ---------------------------------
 
-(Currently for use with 2-stage problem only)
+(Currently for use with 2-stage problem only; for multi-stage problems, instantiate an ``MMWConfidenceItervals`` object directly)
 
 ``mmw_conf`` uses the ``MMWConfidenceIntervals`` class from ``mmw_ci`` in order to construct a confidence interval on the optimality gap of a particular candidate solution ``xhat`` of a model instance. 
 
