@@ -1,4 +1,4 @@
-.. _Confidence intervals:
+.. _MMW Confidence Intervals:
 
 MMW confidence interval
 =======================
@@ -14,6 +14,11 @@ this gap.
 We will document two steps in the process : finding a candidate solution 
 ``xhat_one``, and evaluating it.
 
+Sequential sampling is also supported; see `Sequential Sampling Confidence Intervals`_
+
+..note ::
+At the time of this writing, the confidence interval software assumes that the scenarios
+are presented in random order (i.e., they are not ordered by scenario number).
 
 Finding a candidate solution
 ----------------------------
@@ -74,18 +79,6 @@ Once this is accomplished, on the command line, run
 Additional solver options can be specified with the ``--solver-options`` option.
 
 This program will out put a confidence interval on the gap between the solution to the EF and the optimal solution. There is an additional option, ``--with-objective-gap``, which will computes a confidence interval around the solution of the stochastic program. Since the exact value of the objective function cannot be determined, we use the realizations of the objective function at the candidate solution to construct an additional confidence interval about the mean of the realizations computed.
-
-Sequential sampling
-===================
-
-Similarly, given an confidence interval, one can try to find a candidate solution
-``xhat_one`` such that its optimality gap has this confidence interval.
-The class ``SeqSampling`` implements three procedures described in 
-[bm2011]_ and [bpl2012]_. It takes as an input a method to generate
-candidate solutions and options, and returns a ``xhat_one`` and a confidence interval on
-its optimality gap.
-
-Examples of use with the ``farmer`` problem and several options can be found in the main of ``seqsampling.py``.
 
 
 
