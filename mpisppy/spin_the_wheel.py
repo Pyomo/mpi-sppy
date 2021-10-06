@@ -1,14 +1,18 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
-class SpinTheWheel:
+from mpisppy.utils.sputils import (
+        first_stage_nonant_writer,
+        scenario_tree_solution_writer,
+        )
 
-    def __init__(self, hub_dict, list_of_spoke_dict, comm_world=None):
+class WheelSpinner:
+
+    def __init__(self, hub_dict, list_of_spoke_dict):
         """ top level for the hub and spoke system
         Args:
             hub_dict(dict): controls hub creation
             list_of_spoke_dict(list dict): controls creation of spokes
-            comm_world (MPI comm): the world for this hub-spoke system
     
         Returns:
             spcomm (Hub or Spoke object): the object that did the work (windowless)
@@ -19,6 +23,22 @@ class SpinTheWheel:
         """
         if not haveMPI:
             raise RuntimeError("spin_the_wheel called, but cannot import mpi4py")
+        self.hub_dict = hub_dict
+        self.list_of_spoke_dict = list_of_spoke_dict
+
+        self._ran = False
+
+    def spin(self, comm_world=None):
+        return self.run(comm_world=comm_world)
+
+    def run(self, comm_world=None):
+        """ top level for the hub and spoke system
+        Args:
+            comm_world (MPI comm): the world for this hub-spoke system
+        """
+        if self._ran:
+            raise RuntimeError("WheelSpinner can only be run once")
+
         # Confirm that the provided dictionaries specifying
         # the hubs and spokes contain the appropriate keys
         if "hub_class" not in hub_dict:
@@ -77,6 +97,7 @@ class SpinTheWheel:
             opt_kwargs = spoke_dict["opt_kwargs"]
             opt_dict = spoke_dict
     
+
         # Create the appropriate opt object locally
         opt_kwargs["mpicomm"] = cylinder_comm
         opt = opt_class(**opt_kwargs)
@@ -93,6 +114,7 @@ class SpinTheWheel:
         spcomm.make_windows()
         if strata_rank == 0:
             spcomm.setup_hub()
+
         global_toc("Starting spcomm.main()")
         spcomm.main()
         if strata_rank == 0: # If this is the hub
@@ -117,6 +139,13 @@ class SpinTheWheel:
         self.spcomm = spcomm
         self.opt_dict = opt_dict
 
+        self._ran = True
+
+    def on_hub(self):
+        if not self._ran:
+            raise RuntimeError("Need to call WheelSpinner.run() before finding out.")
+        return ("hub_class" in self.opt_dict)
+
     def write_first_stage_solution(self, solution_file_name,
             first_stage_solution_writer=first_stage_nonant_writer):
         """ Write a solution file, if a solution is available, to the solution_file_name provided
@@ -124,6 +153,8 @@ class SpinTheWheel:
             solution_file_name : filename to write the solution to
             first_stage_solution_writer (optional) : custom first stage solution writer function
         """
+        if not self._ran:
+            raise RuntimeError("Need to call WheelSpinner.run() before querying solutions.")
         winner = self._determine_innerbound_winner()
         if winner:
             self.spcomm.opt.write_first_stage_solution(solution_file_name,first_stage_solution_writer)
@@ -135,6 +166,8 @@ class SpinTheWheel:
             solution_file_name : filename to write the solution to
             scenario_tree_solution_writer (optional) : custom scenario solution writer function
         """
+        if not self._ran:
+            raise RuntimeError("Need to call WheelSpinner.run() before querying solutions.")
         winner = self._determine_innerbound_winner()
         if winner:
             self.spcomm.opt.write_tree_solution(solution_directory_name,scenario_tree_solution_writer)
@@ -143,6 +176,8 @@ class SpinTheWheel:
         """ Returns a dict with non-anticipative values at each local node
             We assume that the optimization has been done before calling this
         """
+        if not self._ran:
+            raise RuntimeError("Need to call WheelSpinner.run() before querying solutions.")
         local_xhats = dict()
         for k,s in self.spcomm.opt.local_scenarios.items():
             for node in s._mpisppy_node_list:

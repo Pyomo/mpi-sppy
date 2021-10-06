@@ -22,13 +22,21 @@ from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy import tt_timer, global_toc
 
+_spin_the_wheel_move_msg = \
+        "spin_the_wheel should now be used as the class "\
+        "mpisppy.spin_the_wheel.WheelSpinner using the method `run()`. Output "\
+        "are now methods of the class WheelSpinner."
+
 def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
-    '''
-    For backward compatability
+    raise RuntimeError(
+            _spin_the_wheel_move_msg + \
+            " See the example code below for a fix:\n"
     '''
     from mpisppy.spin_the_wheel import SpinTheWheel
-    s = SpinTheWheel(hub_dict, list_of_spoke_dict, comm_world)
-    return s.spcomm, s.opt_dict
+    s = SpinTheWheel(hub_dict, list_of_spoke_dict)
+    s.run(comm_world=comm_world)
+    '''
+    )
 
 def first_stage_nonant_npy_serializer(file_name, scenario, bundling):
     # write just the nonants for ROOT in an npy file (e.g. for Conf Int)
@@ -65,6 +73,16 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                     var_name = var_name[(dot_index+1):]
                 f.write(f"{var_name},{pyo.value(var)}\n")
         
+def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
+        first_stage_solution_writer=first_stage_nonant_writer):
+    raise RuntimeError(_spin_the_wheel_move_msg)
+
+def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name,
+        scenario_tree_solution_writer=scenario_tree_solution_writer):
+    raise RuntimeError(_spin_the_wheel_move_msg)
+
+def local_nonant_cache(spcomm):
+    raise RuntimeError(_spin_the_wheel_move_msg)
 
 def get_objs(scenario_instance):
     """ return the list of objective functions for scenario_instance"""
@@ -407,7 +425,7 @@ def write_ef_first_stage_solution(ef,
         first_stage_solution_writer (optional) : custom first stage solution writer function
     
     NOTE:
-        This utility is replicating write_spin_the_wheel_first_stage_solution for EF
+        This utility is replicating WheelSpinner.write_first_stage_solution for EF
     """
     if not haveMPI or (global_rank==0):
         dirname = os.path.dirname(solution_file_name)
@@ -428,7 +446,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
         scenario_tree_solution_writer (optional) : custom scenario solution writer function
         
     NOTE:
-        This utility is replicating write_spin_the_wheel_tree_solution for EF
+        This utility is replicating WheelSpinner.write_tree_solution for EF
     """
     if not haveMPI or (global_rank==0):
         os.makedirs(solution_directory_name, exist_ok=True)
