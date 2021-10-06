@@ -252,7 +252,8 @@ def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
 #=========
 def scenario_names_creator(scnt,start=0):
     # (only for Amalgomator): return the full list of names
-    print(scnt)
+    print(f"{scnt =}; {start =}")
+    quit()
     return [F"Scenario{i+1}" for i in range(start,scnt+start)]
 
 #=========
