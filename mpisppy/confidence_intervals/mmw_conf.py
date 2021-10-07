@@ -3,24 +3,25 @@
 # To test: (from confidence_intervals directory) 
 # python mmw_conf.py mpisppy/tests/examples/farmer.py ../../examples/farmer/farmer_root_nonants.npy gurobi --MMW-num-batches 3 --MMW-batch-size 3 --num-scens 3
 
+import os
+import re
 import sys
 import argparse
+import importlib
 import mpisppy.utils.xhat_eval as xhat_eval
 from mpisppy.utils.sputils import option_string_to_dict
-import re
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.confidence_intervals import mmw_ci
-import os
 from mpisppy import global_toc
 
 
 
 if __name__ == "__main__":
 
-    # parse args
+    # parse args for mmw part of things
     parser = argparse.ArgumentParser()
     parser.add_argument('instance',
-                            help="name of model, must be compatible with amalgomator")
+                            help="name of model module, must be compatible with amalgomator")
     parser.add_argument('xhatpath',
                             help="path to .npy file with feasible nonant solution xhat")
     parser.add_argument('solver_name',
@@ -55,7 +56,16 @@ if __name__ == "__main__":
                             help="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
                             default='')
 
-    args = parser.parse_args()
+    # now get the extra args from the module
+    mname = sys.argv[1]  # args.instance eventually
+    if mname[-3:] == ".py":
+        mname = mname[-3:]
+    try:
+        m = importlib.import_module(mname)
+    except:
+        raise RuntimeError(f"Could not import module: {mname}")
+    m.inparser_adder(parser)
+    args = parser.parse_args()  
 
     #parses solver options string
     solver_options = option_string_to_dict(args.solver_options)
@@ -72,13 +82,13 @@ if __name__ == "__main__":
     # Read xhats from xhatpath
     xhat = ciutils.read_xhat(args.xhatpath)
 
-
     if args.batch_size == None:
         args.batch_size = args.num_scens
 
     refmodel = modelpath #Change this path to use a different model
     
-    options = {"EF-2stage": True,# 2stage vs. mstage
+    options = {"args": args,  # in case of problem specific args
+               "EF-2stage": True,  # 2stage vs. mstage
                "EF_solver_name": args.solver_name,
                "EF_solver_options": solver_options,
                "start_scen": args.start_scen}   #Are the scenario shifted by a start arg ?
