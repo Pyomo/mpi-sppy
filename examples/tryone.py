@@ -37,13 +37,6 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname].append(runstring)
     os.chdir("..")
 
-do_one("uc", "uc_cylinders.py", 4,
-   "--bundles-per-rank=0 --max-iterations=2 "
-   "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
-   "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts "
-   "--ph-mipgaps-json=phmipgaps.json "
-   "--solver-name={}".format(solver_name))
-quit()
 print("** Starting sizes_demo **")
 do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 

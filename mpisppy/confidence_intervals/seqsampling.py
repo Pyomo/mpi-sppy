@@ -5,6 +5,7 @@
 # [bm2011] Bayraksan, G., Morton,D.P.: A Sequential Sampling Procedure for Stochastic Programming. Operations Research 59(4), 898-913 (2011)
 # [bpl2012] Bayraksan, G., Pierre-Louis, P.: Fixed-Width Sequential Stopping Rules for a Class of Stochastic Programs, SIAM Journal on Optimization 22(4), 1518-1548 (2012)
 
+# see also multi_seqsampling.py, which has a class derived from this class
 
 import pyomo.environ as pyo
 import mpi4py.MPI as mpi
@@ -143,8 +144,6 @@ class SeqSampling():
         self.solver_options = options["solver_options"] if "solver_options" in options else None
         self.sample_size_ratio = options["sample_size_ratio"] if "sample_size_ration" in options else 1
         self.xhat_gen_options = options["xhat_gen_options"] if "xhat_gen_options" in options else {}
-        
-        
         
         #Check if refmodel has all needed attributes
         everything = ["scenario_names_creator",
@@ -291,6 +290,10 @@ class SeqSampling():
     
     
     def run(self,maxit=200):
+        if self.multistage:
+            raise RuntimeWarning("Multistage sequential sampling can be done "
+                                 "using the SeqSampling, but dependent samples\n"
+                                 "will be used. The class IndepScens_SeqSampling uses independent samples and therefor has better theoretical support."
         refmodel = self.refmodel
         mult = self.sample_size_ratio # used to set m_k= mult*n_k
         
@@ -471,35 +474,48 @@ class SeqSampling():
         return {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
 
 if __name__ == "__main__":
+    solvername = "cplex"
+    
     refmodel = "mpisppy.tests.examples.farmer"
     farmer_opt_dict = {"crops_multiplier":3}
     
-    
+    # create three options dictionaries, then use one of them
+
+    # relative width
     optionsBM = {'h':0.2,
                'hprime':0.015, 
               'eps':0.5, 
                'epsprime':0.4, 
                "p":0.2,
                "q":1.2,
-               "solvername":"gurobi_direct",
+               "solvername":solvername,
+               "stopping": "BM"  # TBD use this and drop stopping_criterion from the constructor
                }
+
+    # fixed width, fully sequential
     optionsFSP = {'eps': 50.0,
-                  'solvername': "gurobi_direct",
-                  "c0":50,
+                  'solvername': solvername,
+                  "c0":50,  # starting sample size
                   "xhat_gen_options":farmer_opt_dict,
                   "crops_multiplier":3,
-                  "ArRP":2}
+                  "ArRP":2,  # this must be 1 for any multi-stage problems
+                  "stopping": "BPL"
+}
 
+    # fixed width sequential with stochastic samples
     optionsSSP = {'eps': 1.0,
-                  'solvername': "gurobi_direct",    
-                  "n0min":200,
+                  'solvername': solvername,    
+                  "n0min":200,   # only for stochastic sampling
+                  "stopping": "BPL",
                   #"xhat_gen_options": farmer_opt_dict,
                   #"crops_multiplier": 3,
                   }
+
+    # change the options argument and stopping criterion
     our_pb = SeqSampling(refmodel,
                           xhat_generator_farmer,
                           optionsFSP,
-                          stochastic_sampling=False,
+                          stochastic_sampling=False,  # maybe this should move to the options dict?
                           stopping_criterion="BPL",
                           )
     res = our_pb.run()

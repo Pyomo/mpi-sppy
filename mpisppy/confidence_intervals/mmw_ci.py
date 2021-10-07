@@ -246,7 +246,7 @@ if __name__ == "__main__":
                             default=None) #None means take batch_size=num_scens
     
     ama_object = ama.from_module(refmodel, ama_options,extraargs=ama_extraargs)
-    ama_object.run()  # this is to get x-hat
+    ama_object.run()  # this is to get xhat
     
     if global_rank==0 :
         print("inner bound=", ama_object.best_inner_bound)
