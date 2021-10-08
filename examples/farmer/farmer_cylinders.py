@@ -119,7 +119,6 @@ def main():
     
     if write_solution and on_hub:
         sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'farmer_plant.csv')
-        print("debug write spy")
         sputils.write_spin_the_wheel_first_stage_solution(spcomm,
                                                           opt_dict,
                                                           'farmer_cyl_nonants.spy',
