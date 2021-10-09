@@ -176,29 +176,46 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to farmer
     inparser.add_argument("--mu-dev",
-                          help="average deviation of demand between two periods",
+                          help="average deviation of demand between two periods (default 0)",
                           dest="mudev",
                           type=float,
                           default=0.)
     inparser.add_argument("--sigma-dev",
-                          help="average standard deviation of demands between two periods",
+                          help="average standard deviation of demands between two periods (default 40)",
                           dest="sigmadev",
                           type=float,
                           default=40.)
+    inparser.add_argument("--start-seed",
+                          help="random number seed (default 1134)",
+                          dest="sigmadev",
+                          type=int,
+                          default=1134)
 
 #=========
 def kw_creator(options):
-    if 'branching_factors' in options:
-        BFs = options['branching_factors']
-    else:
-        BFs = [3]
-        
+
+    def _kw_arg(option_name, default = None, arg_name=None):
+        # options trumps args
+        retval = options.get(option_name)
+        if retval is not None:
+            return retval
+        args = options.get('args')
+        aname = option_name if arg_name is None else arg_name
+        retval = getattr(args, aname) if hasattr(args, aname) else None
+        retval = default if retval is None else retval
+        return retval
+
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # for confidence intervals, we need to see if the values are in args
+    BFs = _kwarg("branching_factors")
+    mudev = _kwarg("mudev", 0.)
+    sigmadev = _kwarg("sigmadev", 40.)
+    start_seed = _kwarg("start_seed", 1134)
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "BFs" : BFs,
-              "mudev" : options['mudev'] if 'mudev' in options else 0.,
-              "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
-              "start_seed": options['start_seed'] if 'start_seed' in options else 0,
+              "BFs": BFs,
+              "mudev": mudev,
+              "sigmadev": sigmadev,
+              "start_seed": start_seed,
               }
     return kwargs
 

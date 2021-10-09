@@ -1,22 +1,23 @@
 # script to estimate zhat from a given xhat for a given model
 
-####from mpisppy.tests.examples import aircond_submodels 
-from mpisppy.confidence_intervals.multi_seqsampling import IndepScens_SeqSampling
-from mpisppy.confidence_intervals import mmw_ci
+import sys
+import argparse
+import importlib
+import numpy as np
+import scipy.stats
 from mpisppy.confidence_intervals import sample_tree
 from mpisppy.utils import sputils
+from mpisppy.confidence_intervals import ciutils
 from mpisppy.utils.xhat_eval import Xhat_Eval
-import numpy as np
-import time
-import scipy.stats
-import argparse
+from mpisppy.utils.sputils import option_string_to_dict
+##from mpisppy.confidence_intervals.multi_seqsampling import IndepScens_SeqSampling
 
 
 def evaluate_sample_trees(xhat_one, 
                           num_samples,
                           ama_options,  
                           SeedCount=0,  
-                          mname='mpisppy.tests.examples.aircond_submodels'):
+                          model_module=None):
     ''' creates batch_size sample trees with first-stage solution xhat_one
     using SampleSubtree class from sample_tree
     used to approximate E_{xi_2} phi(x_1, xi_2) for confidence interval coverage experiments
@@ -25,7 +26,6 @@ def evaluate_sample_trees(xhat_one,
     seed = SeedCount
     zhats = list()
     bfs = ama_options["branching_factors"]
-    cb_dict = ama_options['cb_dict']
     solvername = ama_options["EF_solver_name"]
     #sampling_bfs = ciutils.scalable_BFs(batch_size, bfs) # use for variance?
     xhat_eval_options = {"iter0_solver_options": None,
@@ -35,13 +35,13 @@ def evaluate_sample_trees(xhat_one,
                      "verbose": False,
                      "solver_options":{}}
 
+    scenario_creator_kwargs = model_module.kw_creator(ama_options)
     for j in range(num_samples): # number of sample trees to create
-        scenario_creator_kwargs={'branching_factors':bfs, 'start_seed':seed,'cb_dict':cb_dict}
         samp_tree = sample_tree.SampleSubtree(mname,
                                               xhats = [],
                                               root_scen=None,
                                               starting_stage=1, 
-                                              BFs=bfs,
+                                              branching_factors=bfs,
                                               seed=seed, 
                                               options=scenario_creator_kwargs,
                                               solvername=solvername,
@@ -52,7 +52,7 @@ def evaluate_sample_trees(xhat_one,
         ama_options['verbose'] = False
         scenario_creator_kwargs = ama_object.kwargs
         if len(samp_tree.ef._ef_scenario_names)>1:
-            local_scenarios = {sname: getattr(samp_tree.ef,sname)/
+            local_scenarios = {sname: getattr(samp_tree.ef, sname)
                                for sname in samp_tree.ef._ef_scenario_names}
         else:
             local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
@@ -85,16 +85,15 @@ def evaluate_sample_trees(xhat_one,
 def run_samples(ama_options, args):
     # TBD: This has evolved so there may be overlap between ama_options and args
     # Read xhats from xhatpath
-    xhat = ciutils.read_xhat(args.xhatpath)
-    
-    zhats,seed = evaluate_sample_trees(xhat_one, num_samples, ama_options, SeedCount=0)
+    xhat_one = ciutils.read_xhat(args.xhatpath)
 
-    start_ups = ama_options["cb_dict"]["start_ups"]
-    np.savetxt('aircondResults/aircond_start_ups='+str(start_ups)+\
-        'xhat_one='+str(xhat_one[0])+'_'+str(xhat_one[1])+\
-        '_zhatstars.txt', zhats)        
+    model_module = importlib.import_module(args.instance)  # TBD: don't import here
 
-    confidence_level=.99
+    zhats,seed = evaluate_sample_trees(xhat_one, num_samples,
+                                       ama_options, SeedCount=0,
+                                       model_module=model_module)
+
+    confidence_level = .95
     zhatbar = np.mean(zhats)
     s_zhat = np.std(np.array(zhats))
     t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
@@ -102,6 +101,7 @@ def run_samples(ama_options, args):
 
     print('zhatbar: ', zhatbar)
     print('estimate: ', [zhatbar-eps_z, zhatbar+eps_z])
+    print('confidence_level', confidence_level)
 
 if __name__ == "__main__":
 
@@ -119,7 +119,7 @@ if __name__ == "__main__":
     parser.add_argument("--branching-factors",
                         help="Spaces delimited branching factors (default 10 10) for two "
                         "stage, just enter one number",
-                        dest="BFs",
+                        dest="branching_factors",
                         nargs="*",
                         type=int,
                         default=[10,10])
@@ -128,7 +128,9 @@ if __name__ == "__main__":
                         dest="num_samples",
                         type=int,
                         default=10)
-    args = parser.parse_args()
+    parser.add_argument("--solver-options",
+                            help="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
+                            default='')
 
     # now get the extra args from the module
     mname = sys.argv[1]  # args.instance eventually

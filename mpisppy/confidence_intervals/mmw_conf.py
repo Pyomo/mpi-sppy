@@ -3,12 +3,10 @@
 # To test: (from confidence_intervals directory) 
 # python mmw_conf.py mpisppy/tests/examples/farmer.py ../../examples/farmer/farmer_root_nonants.npy gurobi --MMW-num-batches 3 --MMW-batch-size 3 --num-scens 3
 
-import os
 import re
 import sys
 import argparse
 import importlib
-import mpisppy.utils.xhat_eval as xhat_eval
 from mpisppy.utils.sputils import option_string_to_dict
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.confidence_intervals import mmw_ci

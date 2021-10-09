@@ -73,7 +73,9 @@ First, ensure that the model to be used is compatable with the
 following: a ``scenario_names_creator``, a ``scenario_creator``, an
 ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in
 ``examples`` for an example of an acceptable model. Note: the `options` dictionary
-passed to ``kw_creator`` will have the command line arguments object in `args`.
+passed to ``kw_creator`` will have the command line arguments object in `args`, which
+is not required (or used) by ``amalgomator`` but is used by confidence interval codes
+to be able to pass problem-specific args down without knowing what they are. 
 
 Once a model satisfies the requirement for amalgomator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
 ``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgomator`` to solve the program, this can be done by adding the line

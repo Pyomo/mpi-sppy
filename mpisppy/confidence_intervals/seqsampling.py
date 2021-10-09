@@ -293,7 +293,7 @@ class SeqSampling():
         if self.multistage:
             raise RuntimeWarning("Multistage sequential sampling can be done "
                                  "using the SeqSampling, but dependent samples\n"
-                                 "will be used. The class IndepScens_SeqSampling uses independent samples and therefor has better theoretical support."
+                                 "will be used. The class IndepScens_SeqSampling uses independent samples and therefor has better theoretical support.")
         refmodel = self.refmodel
         mult = self.sample_size_ratio # used to set m_k= mult*n_k
         

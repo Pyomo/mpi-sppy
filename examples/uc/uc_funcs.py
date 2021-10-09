@@ -270,16 +270,18 @@ def inparser_adder(inparser):
 def kw_creator(options):
     # (only for Amalgomator and MMW_conf): linked to the scenario_creator and inparser_adder
     #no kwargs argument because no argument in the scenario creator
+    # we might get args from confidence interval code
     if "path" in options:
         path = options["path"]
     else:
         UCC = options.get('UC_count_for_path', 0)
         args = options.get('args')
         UCC = args.UC_count_for_path if hasattr(args, "UC_count_for_path") else UCC
-        scens_for_path = max(options['num_scens'], UCC)
+        num_scens = options.get('num_scens', 0)
+        scens_for_path = max(num_scens, UCC)
         path = str(scens_for_path) + "scenarios_r1"
     kwargs = {
-        "scenario_count": options['num_scens'],
+        "scenario_count": num_scens,
         "path": path
     }
     return kwargs
