@@ -12,5 +12,10 @@ candidate solutions and options, and returns a ``xhat_one`` and a confidence int
 There are two stopping criterion supported with names based on the initials of
 the authors: "BM" and "BPL".
 
-Examples of use with the ``farmer`` problem and several options can be found in the main of ``seqsampling.py``.
+Examples of use with the ``farmer`` problem and several options can be found in the main of ``seqsampling.py``. The following options dictionaries are illustrated:
 
+- Relative Width
+
+- fixed width, sequential
+
+- fixed width with stochastic samples.
