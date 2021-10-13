@@ -12,6 +12,8 @@
 
 import os
 import sys
+import pandas as pd
+from datetime import datetime as dt
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -54,6 +56,7 @@ def egret_avail():
     return True
 
 def do_one(dirname, progname, np, argstring):
+    """ return the code"""
     os.chdir(dirname)
     runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
                 format(mpiexec_arg, np, progname, argstring)
@@ -69,7 +72,59 @@ def do_one(dirname, progname, np, argstring):
         os.chdir("..")
     else:
         os.chdir("../..")   # hack for one level of subdirectories
+    return code
 
+def time_one(ID, dirname, progname, np, argstring):
+    """ same as do_one, but also check the running time.
+        ID must be unique and ID.perf.csv will be(come) a local file name
+        and should be allowed to sit on your machine in your examples directory.
+        Do not record a time for a bad guy."""
+    
+    if ID in time_one.ID_check:
+        raise RuntimeError(f"Duplicate time_one ID={ID}")
+    else:
+        time_one.ID_check.append(ID)
+
+    listfname = ID+".perf.csv"
+        
+    start = dt.now()
+    code = do_one(dirname, progname, np, argstring)
+    finish = dt.now()
+    runsecs = (finish-start).total_seconds()
+    if code != 0:
+        return   # Nothing to see here, folks.
+
+    # get a reference time
+    start = dt.now()
+    for i in range(int(1e7)):   # don't change this unless you *really* have to
+        if (i % 2) == 0:
+            foo = i * i
+            bar = str(i)+"!"
+    finish = dt.now()
+    refsecs = (finish-start).total_seconds()
+    
+    if os.path.isfile(listfname):
+        timelistdf = pd.read_csv(listfname)
+        timelistdf.loc[len(timelistdf.index)] = [str(finish), refsecs, runsecs]
+    else:
+        print(f"{listfname} will be created.")
+        timelistdf = pd.DataFrame([[finish, refsecs, runsecs]],
+                                  columns=["datetime", "reftime", "time"])
+
+    # Quick look for trouble
+    if len(timelistdf) > 0:
+        thisscaled = runsecs / refsecs
+        lastrow = timelistdf.iloc[-1]
+        lastrefsecs = lastrow["reftime"]
+        lastrunsecs = lastrow["time"]
+        lastscaled = lastrunsecs / lastrefsecs
+        deltafrac = (thisscaled - lastscaled) / lastscaled
+        if deltafrac > 0.1:
+            print(f"**** WARNING: {100*deltafrac}% time increase for {ID}, see {listfname}")
+            
+    timelistdf.to_csv(listfname, index=False)
+time_one.ID_check = list()
+    
 def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
     
     os.chdir(dirname)
@@ -128,7 +183,7 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=1 "
        "--default-rho=1 --with-tee-rank0-solves "
        "--solver-name={} --no-fwph".format(solver_name))
-do_one("farmer", "farmer_cylinders.py", 3,
+time_one("FarmerLinProx", "farmer", "farmer_cylinders.py", 3,
        "3 --default-rho=1.0 --max-iterations=50 "
        "--with-display-progress --rel-gap=0.0 --abs-gap=0.0 "
        "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
@@ -207,6 +262,10 @@ do_one("aircond", "aircond_ama.py", 3,
        "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-lagrangian --with-xhatshuffle "
        "--solver-name={}".format(solver_name))
+time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
+       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--default-rho=1 --with-lagrangian --with-xhatshuffle "
+       "--solver-name={}".format(solver_name))
 
 
 #=========MMW TESTS==========
@@ -255,7 +314,7 @@ if not nouc and egret_avail():
            "--solver-name={}".format(solver_name))
 
     # 10-scenario UC
-    do_one("uc", "uc_cylinders.py", 3,
+    time_one("UC_cylinder10scen", "uc", "uc_cylinders.py", 3,
            "--bundles-per-rank=5 --max-iterations=2 "
            "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
            "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts "

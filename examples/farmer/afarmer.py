@@ -1,4 +1,4 @@
-# special for use with amalgomator/mmw_conf.py
+# special for use with amalgomator
 # unlimited crops
 # ALL INDEXES ARE ZERO-BASED
 #  ___________________________________________________________________________
@@ -246,7 +246,6 @@ def scenario_names_creator(num_scens,start=None):
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
         
-
 
 #=========
 def inparser_adder(inparser):

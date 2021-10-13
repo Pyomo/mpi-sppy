@@ -83,7 +83,7 @@ class MMWConfidenceIntervals():
         elif ama._bool_option(options, "EF-mstage"):
             self.type = "EF-mstage"
             self.multistage = True
-            self.numstages = len(options['BFs'])+1
+            self.numstages = len(options['branching_factors'])+1
         else:
             raise RuntimeError(
                 "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
@@ -125,14 +125,13 @@ class MMWConfidenceIntervals():
         
         #Some options are specific to 2-stage or multi-stage problems
         if self.multistage:
-            sampling_BFs = ciutils.BFs_from_numscens(batch_size,self.numstages)
-            #TODO: Change this to get a more logical way to compute BFs
-            batch_size = np.prod(sampling_BFs)
+            sampling_branching_factors = ciutils.branching_factors_from_numscens(batch_size,self.numstages)
+            #TODO: Change this to get a more logical way to compute branching_factors
+            batch_size = np.prod(sampling_branching_factors)
         else:
             sampling_BFs = None
             if batch_size == 0:
                 raise RuntimeError("batch size can't be zero for two stage problems")
-            
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
         scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
@@ -151,7 +150,7 @@ class MMWConfidenceIntervals():
         zstars=[]
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
-            gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
+            gap_options = {'seed':start,'branching_factors':sampling_branching_factors} if self.multistage else None
             scenario_names = self.refmodel.scenario_names_creator(batch_size,start=scenstart)
             estim = ciutils.gap_estimators(self.xhat_one, self.refmodelname,
                                            solving_type=self.type,
@@ -247,7 +246,7 @@ if __name__ == "__main__":
                             default=None) #None means take batch_size=num_scens
     
     ama_object = ama.from_module(refmodel, ama_options,extraargs=ama_extraargs)
-    ama_object.run()
+    ama_object.run()  # this is to get xhat
     
     if global_rank==0 :
         print("inner bound=", ama_object.best_inner_bound)
