@@ -13,22 +13,22 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-def demands_creator(sname,BFs,start_seed, mudev, sigmadev, 
+def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
                     starting_d=200,root_name="ROOT"):
     
     max_d = 400
     min_d = 0
 
-    if BFs is None:
-        raise RuntimeError("scenario_creator for aircond needs BFs")
+    if branching_factors is None:
+        raise RuntimeError("scenario_creator for aircond needs branching_factors")
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
-    prod = np.prod(BFs)
+    prod = np.prod(branching_factors)
     s = int(scennum % prod)
     d = starting_d
     demands = [d]
     nodenames = [root_name]
-    for bf in BFs:
+    for bf in branching_factors:
         assert prod%bf == 0
         prod = prod//bf
         nodenames.append(str(s//prod))
@@ -36,7 +36,7 @@ def demands_creator(sname,BFs,start_seed, mudev, sigmadev,
     
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],branching_factors))
         d = min(max_d,max(min_d,d+aircondstream.normal(mudev,sigmadev)))
         demands.append(d)
     
@@ -238,11 +238,11 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return(TreeNodes)
 
         
-def scenario_creator(sname, BFs=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, cb_dict={"start_ups":False}):
-    if BFs is None:
-        raise RuntimeError("scenario_creator for aircond needs BFs")
+def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, cb_dict={"start_ups":False}):
+    if branching_factors is None:
+        raise RuntimeError("scenario_creator for aircond needs branching_factors")
 
-    demands,nodenames = demands_creator(sname, BFs, start_seed, mudev, sigmadev)
+    demands,nodenames = demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
     
     model = aircond_model_creator(demands, cb_dict=cb_dict)
     
@@ -250,15 +250,16 @@ def scenario_creator(sname, BFs=None, num_scens=None, mudev=0, sigmadev=40, star
         model._mpisppy_probability = 1/num_scens
     
     #Constructing the nodes used by the scenario
-    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, BFs)
+    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     
     return(model)
 
-def sample_tree_scen_creator(sname,given_scenario=None,stage=None,sample_BFs=None, seed=None, **scenario_creator_kwargs):
+def sample_tree_scen_creator(sname,given_scenario=None,stage=None,
+                             sample_branching_factors=None, seed=None, **scenario_creator_kwargs):
     #For multistage confidence interval
     
-    things = [stage,sample_BFs,seed]
-    names = ["stage","sample_BFs","seed"]
+    things = [stage,sample_branching_factors,seed]
+    names = ["stage","sample_branching_factors","seed"]
     for i in range(len(things)):
         if things[i] is None:
             raise RuntimeError(f"sample_tree_scen_creator for aircond needs a {names[i]} argument.")
@@ -278,7 +279,7 @@ def sample_tree_scen_creator(sname,given_scenario=None,stage=None,sample_BFs=Non
             scenario_creator_kwargs[thing] = value
     
     #Finding demands for stages after t
-    future_demands,nodenames = demands_creator(sname, sample_BFs, 
+    future_demands,nodenames = demands_creator(sname, sample_branching_factors, 
                                                start_seed = seed, 
                                                mudev = scenario_creator_kwargs['mudev'], 
                                                sigmadev = scenario_creator_kwargs['sigmadev'],
@@ -289,10 +290,10 @@ def sample_tree_scen_creator(sname,given_scenario=None,stage=None,sample_BFs=Non
     
     model = aircond_model_creator(demands,cb_dict=scenario_creator_kwargs['cb_dict'])
     
-    model._mpisppy_probability = 1/np.prod(sample_BFs)
+    model._mpisppy_probability = 1/np.prod(sample_branching_factors)
     
     #Constructing the nodes used by the scenario
-    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, sample_BFs,
+    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, sample_branching_factors,
                                                 starting_stage=stage)
     
     return model
@@ -332,7 +333,7 @@ def inparser_adder(inparser):
 def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "BFs" : options['BFs'] if 'BFs' in options else [3,2,3],
+              "branching_factors" : options['branching_factors'] if 'branching_factors' in options else [3,2,3],
               "mudev" : options['mudev'] if 'mudev' in options else 0.,
               "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
               "start_seed": options['start_seed'] if 'start_seed' in options else 0,
@@ -347,7 +348,7 @@ def scenario_denouement(rank, scenario_name, scenario):
         
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           BFs=[3,2,3], mudev = 0, sigmadev = 40, cb_dict={"start_ups": False}, start_seed = 0):
+                           branching_factors=[3,2,3], mudev = 0, sigmadev = 40, cb_dict={"start_ups": False}, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -360,7 +361,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
-    BFs: list, optional
+    branching_factors: list, optional
         Branching factors of the scenario 3. The default is [3,2,3] 
         (a 4 stage model with 18 different scenarios)
     mudev: float, optional
@@ -388,8 +389,8 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
-                    "BFs":BFs,
-                    "branching_factors":BFs,
+                    "branching_factors":branching_factors,
+                    "branching_factors":branching_factors,
                     "mudev":mudev,
                     "cb_dict":cb_dict,
                     "start_seed":start_seed,
@@ -419,7 +420,7 @@ if __name__ == "__main__":
                         default='gurobi_direct')
     parser.add_argument("--branching-factors",
                         help="Spaces delimited branching factors (default 3 3)",
-                        dest="BFs",
+                        dest="branching_factors",
                         nargs="*",
                         type=int,
                         default=[10,10])
@@ -439,7 +440,7 @@ if __name__ == "__main__":
 
     solver_name=args.solver_name
     start_ups=args.start_ups
-    bfs = args.BFs
+    bfs = args.branching_factors
     save_xhat = args.save_xhat
 
     if start_ups:
@@ -452,7 +453,6 @@ if __name__ == "__main__":
                     "EF_solver_name": solver_name,
                     "EF_solver_options":solver_options,
                     "num_scens": num_scens,
-                    "BFs":bfs,
                     "branching_factors":bfs,
                     "mudev":0,
                     "sigmadev":40,

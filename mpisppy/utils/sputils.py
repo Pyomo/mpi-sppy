@@ -725,7 +725,7 @@ def option_string_to_dict(ostr):
 # Various utilities related to scenario rank maps (some may not be in use)
 
 
-def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
+def scens_to_ranks(scen_count, n_proc, rank, branching_factors = None):
     """ Determine the rank assignments that are made in spbase.
     NOTE: Callers to this should call _scentree.scen_names_to_ranks
     Args:
@@ -749,7 +749,7 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
         )
 
     # for now, we are treating two-stage as a special case
-    if (BFs is None):
+    if (branching_factors is None):
         avg = scen_count / n_proc
         slices = [list(range(int(i * avg), int((i + 1) * avg))) for i in range(n_proc)]
         return slices, None
@@ -759,7 +759,7 @@ def scens_to_ranks(scen_count, n_proc, rank, BFs = None):
         # just make sure things are consistent with what xhat will do...
         # TBD: streamline
         all_scenario_names = ["ID"+str(i) for i in range(scen_count)]
-        tree = _ScenTree(BFs, all_scenario_names)
+        tree = _ScenTree(branching_factors, all_scenario_names)
         scenario_names_to_ranks, slices, = tree.scen_name_to_rank(n_proc, rank)
         return slices, scenario_names_to_ranks
 
@@ -972,12 +972,12 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
     ]
 
 ### utilities to check the slices and the map ###
-def check4losses(numscens, BFs,
+def check4losses(numscens, branching_factors,
                  scenario_names_to_rank,slices,list_of_ranks_per_scenario_idx):
     """ Check the data structures; gag and die if it looks bad.
     Args:
         numscens (int): number of scenarios
-        BFs (list of int): branching factors
+        branching_factors (list of int): branching factors
         scenario_names_to_rank (dict of dict):
             keys are comms (i.e., tree nodes); values are dicts with keys
             that are scenario names and values that are ranks within that comm
@@ -1005,7 +1005,7 @@ def check4losses(numscens, BFs,
         raise RuntimeError("Internal error: slices is not correct")
 
     # not stage presence...
-    stagepresents = {stage: [False for _ in range(numscens)] for stage in range(len(BFs))}
+    stagepresents = {stage: [False for _ in range(numscens)] for stage in range(len(branching_factors))}
     # loop over the entire structure, marking those found as present
     for nodename, scenlist in scenario_names_to_rank.items():
         stagenum = nodename.count('_')
@@ -1043,7 +1043,7 @@ def find_active_objective(pyomomodel):
                            % (pyomomodel.name, len(obj)))
     return obj[0]
 
-def create_nodenames_from_BFs(BFS):
+def create_nodenames_from_branching_factors(BFS):
     """
     This function creates the node names of a tree without creating the whole tree.
 
@@ -1055,7 +1055,7 @@ def create_nodenames_from_BFs(BFS):
     Returns
     -------
     nodenames : list of str
-        a list of the node names induced by BFs, including leaf nodes.
+        a list of the node names induced by branching_factors, including leaf nodes.
 
     """
     stage_nodes = ["ROOT"]
@@ -1070,36 +1070,36 @@ def create_nodenames_from_BFs(BFS):
         nodenames += stage_nodes
     return nodenames
 
-def get_BFs_from_nodenames(all_nodenames):
+def get_branching_factors_from_nodenames(all_nodenames):
     #WARNING: Do not work with unbalanced trees
     staget_node = "ROOT"
-    BFs = []
+    branching_factors = []
     while staget_node+"_0" in all_nodenames:
         child_regex = re.compile(staget_node+'_\d*\Z')
         child_list = [x for x in all_nodenames if child_regex.match(x) ]
         
-        BFs.append(len(child_list))
+        branching_factors.append(len(child_list))
         staget_node += "_0"
-    if len(BFs)==1:
+    if len(branching_factors)==1:
         #2stage
         return None
     else:
-        return BFs
+        return branching_factors
     
-def number_of_nodes(BFs):
-    #How many nodes does a tree with a given BFs have ?
-    last_node_stage_num = [i-1 for i in BFs]
-    return node_idx(last_node_stage_num, BFs)
+def number_of_nodes(branching_factors):
+    #How many nodes does a tree with a given branching_factors have ?
+    last_node_stage_num = [i-1 for i in branching_factors]
+    return node_idx(last_node_stage_num, branching_factors)
     
 
 
           
 
 if __name__ == "__main__":
-    BFs = [2,2,2,3]
-    numscens = np.prod(BFs)
+    branching_factors = [2,2,2,3]
+    numscens = np.prod(branching_factors)
     scennames = ["Scenario"+str(i) for i in range(numscens)]
-    testtree = _ScenTree(BFs, scennames)
+    testtree = _ScenTree(branching_factors, scennames)
     print("nonleaves:")
     for nd in testtree.nonleaves:
         print("   ", nd.name)
@@ -1112,4 +1112,4 @@ if __name__ == "__main__":
     for ndn,v in sntr.items():
         print(ndn, v)
     print(f"slices: {slices}")
-    check4losses(numscens, BFs, sntr, slices, ranks_per_scenario)
+    check4losses(numscens, branching_factors, sntr, slices, ranks_per_scenario)

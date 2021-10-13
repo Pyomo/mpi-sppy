@@ -252,22 +252,36 @@ def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
 #=========
 def scenario_names_creator(scnt,start=0):
     # (only for Amalgomator): return the full list of names
-    print(scnt)
     return [F"Scenario{i+1}" for i in range(start,scnt+start)]
 
 #=========
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to uc
     # we don't need to add any command for the uc problem
+    inparser.add_argument("--UC-count-for-path",
+                          help="Mainly for confidence intervals to give a prefix for the directory provides the scenario data but will be overridden if scen_count is greater (default 0)",
+                          dest="UC_count_for_path",
+                          type=int,
+                          default=0)
     return()
 
 
 #=========
 def kw_creator(options):
-    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # (only for Amalgomator and MMW_conf): linked to the scenario_creator and inparser_adder
     #no kwargs argument because no argument in the scenario creator
+    # we might get args from confidence interval code
+    if "path" in options:
+        path = options["path"]
+    else:
+        UCC = options.get('UC_count_for_path', 0)
+        args = options.get('args')
+        UCC = args.UC_count_for_path if hasattr(args, "UC_count_for_path") else UCC
+        num_scens = options.get('num_scens', 0)
+        scens_for_path = max(num_scens, UCC)
+        path = str(scens_for_path) + "scenarios_r1"
     kwargs = {
-        "scenario_count": options['num_scens'],
-        "path": str(options['num_scens']) + "scenarios_r1",
+        "scenario_count": num_scens,
+        "path": path
     }
     return kwargs

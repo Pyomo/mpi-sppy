@@ -171,6 +171,12 @@ def main():
         sputils.write_spin_the_wheel_tree_solution(
                 spcomm, opt_dict, args.solution_dir, uc.scenario_tree_solution_writer )
 
+    sputils.write_spin_the_wheel_first_stage_solution(spcomm,
+                                                      opt_dict,
+                                                      'uc_cyl_nonants.spy',
+                                                      first_stage_solution_writer=\
+                                                      sputils.first_stage_nonant_npy_serializer)
+
 
 if __name__ == "__main__":
     main()

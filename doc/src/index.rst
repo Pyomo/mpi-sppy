@@ -19,6 +19,7 @@ MPI is used.
    spokes.rst
    extensions.rst
    confidence_intervals.rst
+   seqsamp.rst
    pysp.rst
    ef.rst
    secretmenu.rst
