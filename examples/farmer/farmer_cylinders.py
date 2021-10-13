@@ -115,9 +115,7 @@ def main():
 
     spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
 
-    on_hub = ("hub_class" in opt_dict)
-    
-    if write_solution and on_hub:
+    if write_solution:
         sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'farmer_plant.csv')
         sputils.write_spin_the_wheel_first_stage_solution(spcomm,
                                                           opt_dict,
