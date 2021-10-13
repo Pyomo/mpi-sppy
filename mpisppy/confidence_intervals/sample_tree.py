@@ -9,10 +9,10 @@ import importlib
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
 import mpisppy.confidence_intervals.ciutils as ciutils
+from mpisppy import global_toc
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
-
 
 
 class SampleSubtree():
