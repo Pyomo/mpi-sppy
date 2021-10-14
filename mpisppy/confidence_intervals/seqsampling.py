@@ -25,7 +25,6 @@ from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
 
-
 def is_needed(options,needed_things,message=""):
     if not set(needed_things)<= set(options):
         print("Some options are missing. "+message)
@@ -94,7 +93,7 @@ class SeqSampling():
                                     as input and returns a first stage policy 
                                     xhat.
 
-        options (dict): multiple useful parameters, e.g.:
+        options (dict): multiple parameters, e.g.:
                         - "solvername", str, the name of the solver we use 
                             (default is gurobi)
                         - "solver_options", dict containing solver options 
@@ -179,10 +178,9 @@ class SeqSampling():
                 optional_default_settings = [50,2,(lambda x : x-1)]
                 add_options(options, optional_things, optional_default_settings)
         else:
-            raise RuntimeError("Only BM and BPL criteria are supported yet")
+            raise RuntimeError("Only BM and BPL criteria are supported at this time.")
         for oname in options:
             setattr(self, oname, options[oname]) #Set every option as an attribute
-        
         
         #Check the solving_type, and find if the problem is multistage
         two_stage_types = ['EF-2stage']
@@ -229,15 +227,18 @@ class SeqSampling():
         self.SeedCount = 0
             
     def bm_stopping_criterion(self,G,s,nk):
+        # arguments defined in [bm2011]
         return(G>self.hprime*s+self.epsprime)
     
     def bpl_stopping_criterion(self,G,s,nk):
+        # arguments defined in [bpl2012]
         t = scipy.stats.t.ppf(self.confidence_level,nk-1)
         sample_error = t*s/np.sqrt(nk)
         inflation_factor = 1/np.sqrt(nk)
         return(G+sample_error+inflation_factor>self.eps)
     
     def bm_sampsize(self,k,G,s,nk_m1, r=2):
+        # arguments defined in [bm2011]
         h = self.h
         hprime = self.hprime
         p = self.p
@@ -271,9 +272,11 @@ class SeqSampling():
         return int(np.ceil(lower_bound))
     
     def bpl_fsp_sampsize(self,k,G,s,nk_m1):
+        # arguments defined in [bpl2012]
         return(int(np.ceil(self.c0+self.c1*self.growth_function(k))))
         
     def stochastic_sampsize(self,k,G,s,nk_m1):
+        # arguments defined in [bpl2012]
         if (k==1):
             #Initialization
             return(int(np.ceil(max(self.n0min,np.log(1/self.eps)))))
@@ -290,6 +293,12 @@ class SeqSampling():
     
     
     def run(self,maxit=200):
+        """ Execute a sequental sampling algorithm
+        Args:
+            maxit (int): override the stopping criteria based on iterations
+        Returns:
+            {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
+        """
         if self.multistage:
             raise RuntimeWarning("Multistage sequential sampling can be done "
                                  "using the SeqSampling, but dependent samples\n"
@@ -497,7 +506,7 @@ if __name__ == "__main__":
                   'solvername': solvername,
                   "c0":50,  # starting sample size
                   "xhat_gen_options":farmer_opt_dict,
-                  "crops_multiplier":3,
+                  "crops_multiplier":3, # option for the farmer problem
                   "ArRP":2,  # this must be 1 for any multi-stage problems
                   "stopping": "BPL"
 }
