@@ -167,7 +167,7 @@ def feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
     xhat_dict = {ndn:xhat for (ndn,xhat) in zip(nodenames,xhats)}
     return xhat_dict,seed
 
-def walking_tree_xhats(mname,local_scenarios,xhat_one,branching_factors,seed,options,
+def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, options,
                        solvername="gurobi", solver_options=None):
     """
     This methods takes a scenario tree (represented by a scenario list) as an input, 
@@ -228,8 +228,9 @@ def walking_tree_xhats(mname,local_scenarios,xhat_one,branching_factors,seed,opt
                                        solvername, solver_options)
                subtree.run()
                xhat = subtree.xhat_at_stage
-               
-               seed+=sputils.number_of_nodes(branching_factors[(node.stage-1):])
+
+               # TBD: is this needed
+               seed += sputils.number_of_nodes(branching_factors[(node.stage-1):])
                
                xhats[node.name] = xhat
                scen_xhats.append(xhat)

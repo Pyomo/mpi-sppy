@@ -30,7 +30,7 @@ farmerstream = np.random.RandomState()
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
-    num_scens=None
+        num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example.
     
@@ -48,6 +48,7 @@ def scenario_creator(
         num_scens (int, optional):
             Number of scenarios. We use it to compute _mpisppy_probability. 
             Default is None.
+        seedoffset (int, optional): a seed offset for use with replicates
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex then
@@ -61,8 +62,8 @@ def scenario_creator(
     # The RNG is seeded with the scenario number so that it is
     # reproducible when used with multiple threads.
     # NOTE: if you want to do replicates, you will need to pass a seed
-    # as a kwarg to scenario_creator then use seed+scennum as the seed argument.
-    farmerstream.seed(scennum)
+    # as a kwarg to scenario_creator then use seedoffset+scennum as the seed argument.
+    farmerstream.seed(scennum + seedoffset)
 
     # Check for minimization vs. maximization
     if sense not in [pyo.minimize, pyo.maximize]:
@@ -266,9 +267,9 @@ def inparser_adder(inparser):
 #=========
 def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
-    kwargs = {"use_integer": options['use_integer'] if 'use_integer' in options else False,
-              "crops_multiplier": options['crops_multiplier'] if 'crops_multiplier' in options else 1,
-              "num_scens" : options['num_scens'] if 'num_scens' in options else None,
+    kwargs = {"use_integer": options.get('use_integer', False),
+              "crops_multiplier": options.get('crops_multiplier', 1),
+              "num_scens" : options.get('num_scens', None),
               }
     return kwargs
 
@@ -281,7 +282,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
         sname (string): scenario name to be created
         stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
         sample_branching_factors (list of ints): branching factors for the sample tree
-        seed (int): To allow randome sampling (for some problems, it might be scenario offset)
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
         given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
         scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
     Returns:
@@ -289,7 +290,10 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                                          by the arguments
     """
     # Since this is a two-stage problem, we don't have to do much.
-    return scenario_creator(sname, scenario_creator_kwargs)
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
