@@ -65,6 +65,7 @@ class SampleSubtree():
         self.root_scen = root_scen
         self.stage = starting_stage
         self.sampling_branching_factors = branching_factors[(self.stage-1):]
+        self.original_branching_factors = branching_factors
         self.numscens = np.prod(self.sampling_branching_factors)
         self.seed = seed
         self.options = options
@@ -115,7 +116,8 @@ class SampleSubtree():
         self.scenario_creator = self.sample_creator
         
         ama_options = self.options.copy()
-        ama_options['EF-mstage'] =True
+        ama_options['EF-mstage'] = len(self.original_branching_factors) > 1
+        ama_options['EF-2stage'] = len(self.original_branching_factors) <= 1
         ama_options['EF_solver_name']= self.solvername
         if self.solver_options is not None:
             ama_options['EF_solver_options']= self.solver_options
@@ -231,6 +233,7 @@ def walking_tree_xhats(mname,local_scenarios,xhat_one,branching_factors,seed,opt
                
                xhats[node.name] = xhat
                scen_xhats.append(xhat)
+
     return xhats, seed
 
                

@@ -289,8 +289,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                                          by the arguments
     """
     # Since this is a two-stage problem, we don't have to do much.
-    print(f"{kwargs =}")
-    quit()
+    return scenario_creator(sname, scenario_creator_kwargs)
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
