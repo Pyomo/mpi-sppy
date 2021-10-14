@@ -72,12 +72,10 @@ class SampleSubtree():
         self.solver_options = solver_options
         
         #Create an amalgomator object to solve the subtree problem
-        self.create_amalgomator()
+        self._create_amalgomator()
 
-        
-        
-        
-    def sample_creator(self,sname,**scenario_creator_kwargs):
+                
+    def sample_creator(self, sname, **scenario_creator_kwargs):
         '''
         This method is similar to scenario_creator function, but for subtrees.
         Given a scenario names and kwargs, it creates a scenario from our subtree
@@ -107,11 +105,11 @@ class SampleSubtree():
                 node.nonant_vardata_list[i].fixed = True
         return s
         
-    def create_amalgomator(self):
+    def _create_amalgomator(self):
         '''
         This method attaches an Amalgomator object to a sample subtree.
         
-        WARNING: sample_creator must be called before that.
+        WARNING: sample_creator must be called before using for stages beyond 1
         '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
         self.scenario_creator = self.sample_creator

@@ -254,17 +254,21 @@ def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sig
     
     return(model)
 
-def sample_tree_scen_creator(sname,given_scenario=None,stage=None,
-                             sample_branching_factors=None, seed=None, **scenario_creator_kwargs):
-    #For multistage confidence interval
-    
-    things = [stage,sample_branching_factors,seed]
-    names = ["stage","sample_branching_factors","seed"]
-    for i in range(len(things)):
-        if things[i] is None:
-            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a {names[i]} argument.")
-    
-    #Finding demands from stage 1 to t
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow randome sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Finding demands from stage 1 to t
     if given_scenario is None:
         if stage == 1:
             past_demands = [200]
