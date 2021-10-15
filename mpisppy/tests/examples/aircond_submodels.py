@@ -42,7 +42,7 @@ def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev,
     
     return demands,nodenames
 
-def StageModel_creator(time, demand, last_stage=False, cb_dict={"start_ups":False}):
+def StageModel_creator(time, demand, last_stage=False, start_ups=None):
     model = pyo.ConcreteModel()
     model.T = [time]
 
@@ -58,7 +58,7 @@ def StageModel_creator(time, demand, last_stage=False, cb_dict={"start_ups":Fals
     #Overtime Production Cost
     model.OvertimeProdCost = 3
 
-    model.start_ups = cb_dict["start_ups"]
+    model.start_ups = start_ups
 
     if model.start_ups:
         # Start-up Cost
@@ -116,7 +116,7 @@ def StageModel_creator(time, demand, last_stage=False, cb_dict={"start_ups":Fals
     return model
 
 #Assume that demands has been drawn before
-def aircond_model_creator(demands, cb_dict={"start_ups":False}):
+def aircond_model_creator(demands, start_ups=None):
 
     model = pyo.ConcreteModel()
     num_stages = len(demands)
@@ -126,10 +126,7 @@ def aircond_model_creator(demands, cb_dict={"start_ups":False}):
         raise RuntimeError(
             'The number of stages exceeds the maximum expected for this model.')
     
-    if "start_ups" not in cb_dict:
-        cb_dict["start_ups"] = False
-
-    model.start_ups = cb_dict["start_ups"]
+    model.start_ups = start_ups
 
     #Parameters
     model.BeginInventory = 100
@@ -139,7 +136,7 @@ def aircond_model_creator(demands, cb_dict={"start_ups":False}):
     for t in model.T:
         last_stage = (t==num_stages)
         model.stage_models[t] = StageModel_creator(t, demands[t-1],
-            last_stage=last_stage, cb_dict={"start_ups":model.start_ups})  
+            last_stage=last_stage, start_ups=model.start_ups)  
 
     #Constraints
     
@@ -238,13 +235,13 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return(TreeNodes)
 
         
-def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, cb_dict={"start_ups":False}):
+def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
     if branching_factors is None:
         raise RuntimeError("scenario_creator for aircond needs branching_factors")
 
     demands,nodenames = demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
     
-    model = aircond_model_creator(demands, cb_dict=cb_dict)
+    model = aircond_model_creator(demands, start_ups=start_ups)
     
     if num_scens is not None:
         model._mpisppy_probability = 1/num_scens
@@ -253,6 +250,7 @@ def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sig
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     
     return(model)
+
 
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
@@ -268,6 +266,8 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
         scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
                                          by the arguments
     """
+    
+    start_ups = scenario_creator_kwargs["start_ups"]
     # Finding demands from stage 1 to t
     if given_scenario is None:
         if stage == 1:
@@ -292,7 +292,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     
     demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
     
-    model = aircond_model_creator(demands,cb_dict=scenario_creator_kwargs['cb_dict'])
+    model = aircond_model_creator(demands, start_ups=start_ups)
     
     model._mpisppy_probability = 1/np.prod(sample_branching_factors)
     
@@ -325,7 +325,7 @@ def inparser_adder(inparser):
                           dest="sigmadev",
                           type=float,
                           default=40.)
-    inpparser.add_argument("--with-start-ups",
+    inparser.add_argument("--with-start-ups",
                            help="Include start-up costs in model (this is a MIP)",
                            dest="start_ups",
                            action="store_true"
@@ -335,14 +335,34 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
+
+    def _kwarg(option_name, default = None, arg_name=None):
+        # options trumps args
+        retval = options.get(option_name)
+        if retval is not None:
+            return retval
+        args = options.get('args')
+        aname = option_name if arg_name is None else arg_name
+        retval = getattr(args, aname) if hasattr(args, aname) else None
+        retval = default if retval is None else retval
+        return retval
+
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # for confidence intervals, we need to see if the values are in args
+    BFs = _kwarg("branching_factors")
+    mudev = _kwarg("mudev", 0.)
+    sigmadev = _kwarg("sigmadev", 40.)
+    start_seed = _kwarg("start_seed", 1134)
+    start_ups = _kwarg("start_ups", None)
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "branching_factors" : options['branching_factors'] if 'branching_factors' in options else [3,2,3],
-              "mudev" : options['mudev'] if 'mudev' in options else 0.,
-              "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
-              "start_seed": options['start_seed'] if 'start_seed' in options else 0,
-              "cb_dict":options['cb_dict'] if 'cb_dict' in options else {"start_ups":False},
+              "branching_factors": BFs,
+              "mudev": mudev,
+              "sigmadev": sigmadev,
+              "start_seed": start_seed,
+              "start_ups": start_ups,
               }
+    if kwargs["start_ups"] is None:
+        raise
     return kwargs
 
 
@@ -352,7 +372,7 @@ def scenario_denouement(rank, scenario_name, scenario):
         
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           branching_factors=[3,2,3], mudev = 0, sigmadev = 40, cb_dict={"start_ups": False}, start_seed = 0):
+                           branching_factors=[3,2,3], mudev = 0, sigmadev = 40, start_ups=None, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -396,7 +416,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "branching_factors":branching_factors,
                     "branching_factors":branching_factors,
                     "mudev":mudev,
-                    "cb_dict":cb_dict,
+                    "start_ups":start_ups,
                     "start_seed":start_seed,
                     "sigmadev":sigmadev
                     }
@@ -418,6 +438,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     
 
 if __name__ == "__main__":
+    # This __main__ is just for developers to use for quick tests
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver-name',
                         help="solver name (default 'gurobi_direct'",
@@ -460,7 +481,7 @@ if __name__ == "__main__":
                     "branching_factors":bfs,
                     "mudev":0,
                     "sigmadev":40,
-                    "cb_dict":{"start_ups":start_ups},
+                    "start_ups":start_ups,
                     "start_seed":0
                     }
     refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances

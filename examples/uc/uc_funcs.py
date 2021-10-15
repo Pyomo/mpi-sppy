@@ -286,17 +286,6 @@ def inparser_adder(inparser):
                           default=0)
     return()
 
-#=========
-def kw_creator(options):
-    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
-    #no kwargs argument because no argument in the scenario creator
-    kwargs = {
-        "scenario_count": options['num_scens'],
-        "path": str(options['num_scens']) + "scenarios_r1",
-    }
-    return kwargs
-
-
 
 #=========
 def kw_creator(options):

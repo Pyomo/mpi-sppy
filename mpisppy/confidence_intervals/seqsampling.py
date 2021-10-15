@@ -37,9 +37,9 @@ def add_options(options,optional_things,optional_default_settings):
             options[ething]=optional_default_settings[i]
 
 def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None, crops_multiplier=1):
-    '''Farmer example applied to sequential sampling. Given scenario names and
+    ''' For developer testing: Given scenario names and
     options, create the scenarios and compute the xhat that is minimizing the
-    approximate probleme associatd with these scenarios.
+    approximate problem associated with these scenarios.
 
     Parameters
     ----------
@@ -56,6 +56,8 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     -------
     xhat: xhat object (dict containing a 'ROOT' key with a np.array)
         A generated xhat.
+
+    NOTE: this is here for testing during development.
 
     '''
     num_scens = len(scenario_names)
