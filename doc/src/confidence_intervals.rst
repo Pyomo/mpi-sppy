@@ -4,9 +4,9 @@ MMW confidence interval
 =======================
 
 If we want to assess the quality of a given candidate solution ``xhat_one`` 
-(a first stage policy), we could try and evaluate the optimality gap, i.e. 
+(a first stage solution), we could try and evaluate the optimality gap, i.e. 
 the gap between the value of the objective function
-at ``xhat_one`` and the value of the solution to our problem.
+at ``xhat_one`` and the value of the solution to the problem.
 The class ``MMWConfidenceIntervals`` compute an estimator of the optimality gap
 as described in [mmw1999]_ (Section 3.2) and an asymptotic confidence interval for
 this gap. 
@@ -40,10 +40,10 @@ Evaluating a candidate solution
 To evaluate a candidate solution with some scenarios, one might
 create a ``Xhat_Eval`` object and call its ``evaluate`` method 
 (resp. ``evaluate_one`` for a single scenario). It takes as
-an argument ``xhats``, a dictionnary of noon-anticipative policies for all 
+an argument ``xhats``, a dictionary of noon-anticipative policies for all 
 non-leaf nodes of a scenario tree. While for a 2-stage problem, ``xhats`` is
 just the candidate solution ``xhat_one``, for multistage problem the 
-dictionnary can be computed using the function ``walking_tree_xhats`` 
+dictionary can be computed using the function ``walking_tree_xhats`` 
 (resp. ``feasible_solution``).
 
 
@@ -68,7 +68,7 @@ Using stand alone ``mmw_conf.py``
 
 To use the stand along program a model compatible with ``Amalgomator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
 
-First, ensure that the model to be used is compatable with the
+First, ensure that the model to be used is compatible with the
 ``Amalgomator`` class. This requires the model to have each of the
 following: a ``scenario_names_creator``, a ``scenario_creator``, an
 ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in
@@ -82,7 +82,7 @@ Once a model satisfies the requirement for amalgomator, next a ``.npy`` file sho
 ``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``afarmer.py`` for an example of this).
 
 Once this is accomplished, on the command line, run
-``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy gurobi --num-scens n --alpha 0.95``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponing path should be called on the command line.
+``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy gurobi --num-scens n --alpha 0.95``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponding path should be called on the command line.
 
 Additional solver options can be specified with the ``--solver-options`` option.
 
@@ -94,6 +94,4 @@ exact value of the objective function cannot be determined, we use the
 realizations of the objective function at the candidate solution to
 construct an additional confidence interval about the mean of the
 realizations computed.
-
-
 

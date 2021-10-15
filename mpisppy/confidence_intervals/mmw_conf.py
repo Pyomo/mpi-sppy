@@ -25,9 +25,9 @@ if __name__ == "__main__":
     parser.add_argument('solver_name',
                             help="name of solver to be used",
                             default='gurobi_persistent')
-    parser.add_argument('--alpha', 
+    parser.add_argument('--confidence-level', 
                             help="defines confidence interval size (default 0.95)", 
-                            dest="alpha", 
+                            dest="confidence_level", 
                             type = float,
                             default=None) #None will set alpha = 0.95 and tell user
     parser.add_argument('--with-objective-gap',
@@ -98,16 +98,9 @@ if __name__ == "__main__":
     mmw = mmw_ci.MMWConfidenceIntervals(refmodel, options, xhat, num_batches, batch_size=batch_size, start = args.start_scen,
                        verbose=True)
 
-    if args.alpha == None:
-        print('\nNo alpha given, defaulting to alpha = 0.95. To provide an alpha try:\n')
-        print('python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {} --alpha 0.97 --MMW-num-batches {} --MMW-batch-size {} --start-scen {}\
-            \n'.format(sys.argv[0], args.instance, args.xhatpath, args.solver_name, 
-                args.num_batches, args.batch_size, args.start_scen))
-        alpha = 0.95
-    else: 
-        alpha = float(args.alpha)
+    cl = float(args.confidence_level)
 
-    r = mmw.run(confidence_level=alpha, objective_gap = args.objective_gap)
+    r = mmw.run(confidence_level=cl, objective_gap = args.objective_gap)
 
     global_toc(r)
     

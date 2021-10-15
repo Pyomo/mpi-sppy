@@ -237,8 +237,6 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 
     return xhats, seed
 
-               
-            
 
 if __name__ == "__main__":
     branching_factors = [3,2,4,4]
