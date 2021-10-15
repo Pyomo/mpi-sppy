@@ -260,8 +260,11 @@ class Test_confint_farmer(unittest.TestCase):
         print(f"^^^ {args =}")
         model_module = importlib.import_module(arefmodelname)
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
-        print(f" **** {zhatbar =} {eps_z =}")
 
+        z2 = round_pos_sig(-zhatbar, 2)
+        self.assertEqual(z2, 130000.)
+        e2 = round_pos_sig(eps_z, 2)
+        self.assertEqual(e2, 6600.0)
         
 if __name__ == '__main__':
     unittest.main()
