@@ -16,9 +16,9 @@ We will document two steps in the process : finding a candidate solution
 
 Sequential sampling is also supported; see `Sequential Sampling Confidence Intervals`_
 
-..note ::
-At the time of this writing, the confidence interval software assumes that the scenarios
-are presented in random order (i.e., they are not ordered by scenario number).
+.. note :: At the time of this writing, the confidence interval
+   software assumes that the scenarios are presented in random order
+   (i.e., they are not ordered by scenario number).
 
 Finding a candidate solution
 ----------------------------

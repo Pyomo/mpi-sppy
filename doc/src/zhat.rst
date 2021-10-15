@@ -23,9 +23,9 @@ for the objective function value, zhat, given an xhat. See
 ``examples.farmer.farmer_zhat.bash`` for a bash script that first
 creates the xhat file, then computes an out-of-sample confidence
 interval for it. Note: this program does not compute a confidence
-interval for zstar, which is done using software documented in `MMW
-Confidence Intervals`_ and `Sequential Sampling Confidence
-Intervals`_. Note: at the time of this writing, `zhat4xhat` does
+interval for zstar, which is done using software documented in
+`MMWConfidence Intervals`_ and
+`Sequential Sampling Confidence Intervals`_. Note: at the time of this writing, `zhat4xhat` does
 not support a starting scenario other than the first scenario, so
 some care might be needed if you want to avoid including scenarios
 used to compute xhat.
