@@ -33,34 +33,38 @@ __version__ = 0.3
 solver_available, solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
-def _get_base_options():
-    options = { "EF_solver_name": solvername,
-                     "use_integer": False,
-                     "crops_multiplier": 1,
-                     "num_scens": 12,
-                     "EF-2stage": True}
-    Baseoptions =  {"num_batches": 2,
-                     "batch_size": 10,
-                     "opt":options}
-    scenario_creator_kwargs = farmer.kw_creator(options)
-    Baseoptions['kwargs'] = scenario_creator_kwargs
-    return Baseoptions
 
-def _get_xhatEval_options():
-    options = {"iter0_solver_options": None,
-             "iterk_solver_options": None,
-             "display_timing": False,
-             "solvername": solvername,
-             "verbose": False,
-             "solver_options":None}
-    return options
-
-
-refmodelname ="mpisppy.tests.examples.farmer"
-arefmodelname ="mpisppy.tests.examples.afarmer"  # amalgomator compatible
 #*****************************************************************************
 class Test_confint_farmer(unittest.TestCase):
     """ Test the confint code using farmer."""
+
+    @classmethod
+    def setUpClass(self):
+        self.refmodelname ="mpisppy.tests.examples.farmer"
+        self.arefmodelname ="mpisppy.tests.examples.afarmer"  # amalgomator compatible
+
+
+    def _get_base_options(self):
+        options = { "EF_solver_name": solvername,
+                         "use_integer": False,
+                         "crops_multiplier": 1,
+                         "num_scens": 12,
+                         "EF-2stage": True}
+        Baseoptions =  {"num_batches": 2,
+                         "batch_size": 10,
+                         "opt":options}
+        scenario_creator_kwargs = farmer.kw_creator(options)
+        Baseoptions['kwargs'] = scenario_creator_kwargs
+        return Baseoptions
+
+    def _get_xhatEval_options(self):
+        options = {"iter0_solver_options": None,
+                 "iterk_solver_options": None,
+                 "display_timing": False,
+                 "solvername": solvername,
+                 "verbose": False,
+                 "solver_options":None}
+        return options
 
     def setUp(self):
         self.xhat = {'ROOT': np.array([74.0,245.0,181.0])}
@@ -72,10 +76,10 @@ class Test_confint_farmer(unittest.TestCase):
         os.remove(self.xhat_path)
 
     def test_MMW_constructor(self):
-        options = _get_base_options()
+        options = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
 
-        MMW = MMWci.MMWConfidenceIntervals(refmodelname,
+        MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
                           options['opt'],
                           xhat,
                           options['num_batches'], batch_size = options["batch_size"], start = options['opt']['num_scens'])
@@ -93,10 +97,10 @@ class Test_confint_farmer(unittest.TestCase):
         self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
     
     def test_ama_creator(self):
-        options = _get_base_options()
+        options = self._get_base_options()
         ama_options = {"EF-2stage": True,}
         ama_options.update(options['opt'])
-        ama_object = ama.from_module(refmodelname,
+        ama_object = ama.from_module(self.refmodelname,
                                      options=ama_options,
                                      use_command_line=False)   
         
@@ -121,10 +125,10 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ama_running(self):
-        options = _get_base_options()
+        options = self._get_base_options()
         ama_options = {"EF-2stage": True}
         ama_options.update(options['opt'])
-        ama_object = ama.from_module(refmodelname,
+        ama_object = ama.from_module(self.refmodelname,
                                      ama_options, use_command_line=False)
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
@@ -134,9 +138,9 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_creator(self):
-        options = _get_xhatEval_options()
+        options = self._get_xhatEval_options()
         
-        MMW_options = _get_base_options()
+        MMW_options = self._get_base_options()
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         ev = Xhat_Eval(options,
@@ -149,8 +153,8 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_evaluate(self):
-        options = _get_xhatEval_options()
-        MMW_options = _get_base_options()
+        options = self._get_xhatEval_options()
+        MMW_options = self._get_base_options()
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         ev = Xhat_Eval(options,
@@ -167,8 +171,8 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_xhat_eval_evaluate_one(self):
-        options = _get_xhatEval_options()
-        MMW_options = _get_base_options()
+        options = self._get_xhatEval_options()
+        MMW_options = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
@@ -187,9 +191,9 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_MMW_running(self):
-        options = _get_base_options()
+        options = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
-        MMW = MMWci.MMWConfidenceIntervals(refmodelname,
+        MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
                                         options['opt'],
                                         xhat,
                                         options['num_batches'],
@@ -216,7 +220,7 @@ class Test_confint_farmer(unittest.TestCase):
     def test_gap_estimators(self):
         scenario_names = farmer.scenario_names_creator(50,start=1000)
         estim = ciutils.gap_estimators(self.xhat,
-                                       refmodelname,
+                                       self.refmodelname,
                                        solvername=solvername,
                                        scenario_names=scenario_names,
                                        )
@@ -254,11 +258,10 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_zhat4xhat(self):
-        cmdline = [arefmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
+        cmdline = [self.arefmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
         parser = zhat4xhat._parser_setup()
         args = parser.parse_args(cmdline)
-        print(f"^^^ {args =}")
-        model_module = importlib.import_module(arefmodelname)
+        model_module = importlib.import_module(self.arefmodelname)
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
 
         z2 = round_pos_sig(-zhatbar, 2)
