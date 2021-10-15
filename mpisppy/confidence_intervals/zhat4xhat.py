@@ -10,14 +10,13 @@ from mpisppy.utils import sputils
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.utils.sputils import option_string_to_dict
-##from mpisppy.confidence_intervals.multi_seqsampling import IndepScens_SeqSampling
 
 
 def evaluate_sample_trees(xhat_one, 
                           num_samples,
                           ama_options,  
                           InitSeed=0,  
-                          model_module=None):
+                          model_module = None):
     """ Create and evaluate multiple sampled trees.
     Args:
         xhat_one : list or np.array of float (*not* a dict)
@@ -35,6 +34,7 @@ def evaluate_sample_trees(xhat_one,
     used to approximate E_{xi_2} phi(x_1, xi_2) for confidence interval coverage experiments
     note: ama_options will include the command line args as 'args'
     '''
+    mname = ama_options["args"].model_module_name
     seed = InitSeed
     zhats = list()
     bfs = ama_options["branching_factors"]
@@ -97,12 +97,14 @@ def evaluate_sample_trees(xhat_one,
 
     return np.array(zhats), seed
 
-def run_samples(ama_options, args):
+def run_samples(ama_options, args, model_module):
+    
     # TBD: This has evolved so there may be overlap between ama_options and args
+    
     # Read xhats from xhatpath
     xhat_one = ciutils.read_xhat(args.xhatpath)["ROOT"]
 
-    model_module = importlib.import_module(args.instance)  # TBD: don't import here
+    num_samples = args.num_samples
 
     zhats,seed = evaluate_sample_trees(xhat_one, num_samples,
                                        ama_options, InitSeed=0,
@@ -118,12 +120,14 @@ def run_samples(ama_options, args):
     print('estimate: ', [zhatbar-eps_z, zhatbar+eps_z])
     print('confidence_level', confidence_level)
 
-if __name__ == "__main__":
+    return zhatbar, eps_z
 
-    # parsers for the non-model-specific arguments; but the instance will be pull off first
+def _parser_setup():
+    # return the parser
+    # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('instance',
+    parser.add_argument('model_module_name',
                         help="name of model module, must be compatible with amalgomator")
     parser.add_argument('xhatpath',
                         help="path to .npy file with feasible nonant solution xhat")
@@ -152,19 +156,11 @@ if __name__ == "__main__":
                         dest="confidence_level",
                         type=float,
                         default=0.95)
+    return parser
 
-    # now get the extra args from the module
-    mname = sys.argv[1]  # args.instance eventually
-    if mname[-3:] == ".py":
-        mname = mname[-3:]
-    try:
-        model_module = importlib.import_module(mname)
-    except:
-        raise RuntimeError(f"Could not import module: {mname}")
-    model_module.inparser_adder(parser)
-    args = parser.parse_args()  
 
-    #parses solver options string
+def _main_body(args, model_module):
+    # body of main, pulled out for testing
     solver_options = option_string_to_dict(args.solver_options)
 
     bfs = args.branching_factors
@@ -178,4 +174,22 @@ if __name__ == "__main__":
                    "args": args,
                    }
 
-    run_samples(ama_options, args)
+    return run_samples(ama_options, args, model_module)
+
+
+if __name__ == "__main__":
+
+    parser = _parser_setup()
+    
+    # now get the extra args from the module
+    mname = sys.argv[1]  # args.model_module_name eventually
+    if mname[-3:] == ".py":
+        raise ValueError(f"Module name should end in .py ({mname})")
+    try:
+        model_module = importlib.import_module(mname)
+    except:
+        raise RuntimeError(f"Could not import module: {mname}")
+    model_module.inparser_adder(parser)
+    args = parser.parse_args()  
+
+    zhatbar, eps_z = _main_body(args, model_module)

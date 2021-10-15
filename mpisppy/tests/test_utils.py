@@ -9,7 +9,10 @@ def get_solver():
     solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
     
     for solvername in solvers:
-        solver_available = pyo.SolverFactory(solvername).available()
+        try:
+            solver_available = pyo.SolverFactory(solvername).available()
+        except:
+            solver_available = False
         if solver_available:
             break
     

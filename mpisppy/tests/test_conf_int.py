@@ -10,7 +10,7 @@ import tempfile
 import numpy as np
 import unittest
 import subprocess
-
+import importlib
 
 import mpi4py.MPI as mpi
 
@@ -19,6 +19,7 @@ import mpisppy.tests.examples.farmer as farmer
 
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
+import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
 import mpisppy.utils.amalgomator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
@@ -27,9 +28,9 @@ import mpisppy.confidence_intervals.ciutils as ciutils
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.2
+__version__ = 0.3
 
-solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+solver_available, solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 def _get_base_options():
@@ -56,14 +57,15 @@ def _get_xhatEval_options():
 
 
 refmodelname ="mpisppy.tests.examples.farmer"
+arefmodelname ="mpisppy.tests.examples.afarmer"  # amalgomator compatible
 #*****************************************************************************
-class Test_MMW_farmer(unittest.TestCase):
-    """ Test the MMWci code using farmer."""
+class Test_confint_farmer(unittest.TestCase):
+    """ Test the confint code using farmer."""
 
     def setUp(self):
         self.xhat = {'ROOT': np.array([74.0,245.0,181.0])}
         tmpxhat = tempfile.mkstemp(prefix="xhat",suffix=".npy")
-        self.xhat_path =  tmpxhat[1]#create an empty .npy file
+        self.xhat_path =  tmpxhat[1]  # create an empty .npy file
         ciutils.write_xhat(self.xhat,self.xhat_path)
 
     def tearDown(self):
@@ -247,7 +249,20 @@ class Test_MMW_farmer(unittest.TestCase):
             T = x['T']
             ub = round_pos_sig(x['CI'][1],2)
             self.assertEqual((T,ub), (1,7400.0))
-            
+
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_zhat4xhat(self):
+        cmdline = [arefmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
+        parser = zhat4xhat._parser_setup()
+        args = parser.parse_args(cmdline)
+        print(f"^^^ {args =}")
+        model_module = importlib.import_module(arefmodelname)
+        zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
+        print(f" **** {zhatbar =} {eps_z =}")
+
+        
 if __name__ == '__main__':
     unittest.main()
     
