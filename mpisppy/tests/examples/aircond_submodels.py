@@ -379,7 +379,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
         approximate problem associated with the scenarios.
     Parameters
     ----------
-    scenario_names: int
+    scenario_names: list of str
         Names of the scenario we use
     solvername: str, optional
         Name of the solver used. The default is "gurobi"
