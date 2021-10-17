@@ -47,7 +47,7 @@ class Test_confint_aircond(unittest.TestCase):
         options = { "EF_solver_name": solvername,
                     "start_ups": False,
                     "branching_factors": [4, 3, 2],
-                    "num_scens": 12,
+                    "num_scens": 24,
                     "EF-mstage": True}
         Baseoptions =  {"num_batches": 5,
                         "batch_size": 6,
@@ -140,7 +140,7 @@ class Test_confint_aircond(unittest.TestCase):
                                      ama_options, use_command_line=False)
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
-        self.assertEqual(obj, 720.)
+        self.assertEqual(obj, 800.)
 
         
     def _eval_creator(self):
@@ -199,7 +199,7 @@ class Test_confint_aircond(unittest.TestCase):
         obj = round_pos_sig(obj,2)
         self.assertEqual(obj, 820.0)
 
-    """           
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_MMW_running(self):
@@ -214,21 +214,31 @@ class Test_confint_aircond(unittest.TestCase):
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
-        self.assertEqual((s,bound), (1.5,96.0))
-       
+        self.assertEqual((s,bound), (24.0, 49.0))
+
+   
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_gap_estimators(self):
-        scenario_names = aircond.scenario_names_creator(50,start=1000)
+        options = self._get_base_options()
+        branching_factors= options['opt']['branching_factors']
+        scen_count = np.prod(branching_factors)
+        scenario_names = aircond.scenario_names_creator(scen_count, start=1000)
+        sample_options = {"seed": 0,
+                          "branching_factors": options['opt']['branching_factors']}
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
+                                       solving_type="EF-mstage",
+                                       sample_options=sample_options,
+                                       scenario_creator_kwargs = options['kwargs'],
                                        solvername=solvername,
                                        scenario_names=scenario_names,
                                        )
         G = estim['G']
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
-        self.assertEqual((G,s), (110.0,426.0))
+        self.assertEqual((G,s), (7.51, 26.4))
+    """           
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
