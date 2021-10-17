@@ -15,8 +15,8 @@ import importlib
 import mpi4py.MPI as mpi
 
 from mpisppy.tests.test_utils import get_solver, round_pos_sig
+import mpisppy.utils.sputils as sputils
 import mpisppy.tests.examples.aircond_submodels as aircond
-
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
@@ -40,6 +40,8 @@ class Test_confint_aircond(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.refmodelname ="mpisppy.tests.examples.aircond_submodels"  # amalgomator compatible
+        # TBD: maybe this code should create the file
+        self.xhatpath = "farmer_cyl_nonants.spy.npy"      
 
     def _get_base_options(self):
         options = { "EF_solver_name": solvername,
@@ -63,7 +65,7 @@ class Test_confint_aircond(unittest.TestCase):
                  "solver_options":None}
         return options
 
-    def _make_xhat_gen_options(self, BFs):
+    def _get_xhat_gen_options(self, BFs):
         num_scens = np.prod(BFs)
         scenario_names = aircond.scenario_names_creator(num_scens)
         xhat_gen_options = {"scenario_names": scenario_names,
@@ -76,16 +78,24 @@ class Test_confint_aircond(unittest.TestCase):
                             "start_seed": 0,
                             }
         return xhat_gen_options
-    
+
+    def _make_full_xhat(self, BFs):
+        ndns = sputils.create_nodenames_from_branching_factors(BFs)
+        retval = {i: [200.0,0] for i in ndns}
+        return retval
+
+        
     def setUp(self):
-        self.xhat = {'ROOT': np.array([200.0, 0.0])}
+        self.xhat = {'ROOT': np.array([200.0, 0.0])}  # really xhat_1
         tmpxhat = tempfile.mkstemp(prefix="xhat",suffix=".npy")
         self.xhat_path =  tmpxhat[1]  # create an empty .npy file
         ciutils.write_xhat(self.xhat,self.xhat_path)
 
-    def tearDown(self):
-        os.remove(self.xhat_path)
 
+    def tearDown(self):
+         os.remove(self.xhat_path)
+
+    
     def test_ama_creator(self):
         options = self._get_base_options()
         ama_options = options['opt']
@@ -102,21 +112,9 @@ class Test_confint_aircond(unittest.TestCase):
                           xhat,
                           options['num_batches'], batch_size = options["batch_size"], start = options['opt']['num_scens'])
 
-    def test_xhat_read_write(self):
-        path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
-        ciutils.write_xhat(self.xhat,path=path)
-        x = ciutils.read_xhat(path, delete_file=True)
-        self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
-
-    def test_xhat_read_write_txt(self):
-        path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
-        ciutils.writetxt_xhat(self.xhat,path=path)
-        x = ciutils.readtxt_xhat(path, delete_file=True)
-        self.assertEqual(list(x['ROOT']), list(self.xhat['ROOT']))
-
     def test_seqsampling_creator(self):
         BFs = [4, 3, 2]
-        xhat_gen_options = self._make_xhat_gen_options(BFs)
+        xhat_gen_options = self._get_xhat_gen_options(BFs)
         optionsBM = {'h':0.2,
                      'hprime':0.015, 
                      'eps':0.5, 
@@ -143,63 +141,65 @@ class Test_confint_aircond(unittest.TestCase):
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
         self.assertEqual(obj, 720.)
-    
+
+        
+    def _eval_creator(self):
+        options = self._get_xhatEval_options()
+        
+        MMW_options = self._get_base_options()
+        branching_factors= MMW_options['opt']['branching_factors']
+        scen_count = np.prod(branching_factors)
+        scenario_creator_kwargs = MMW_options['kwargs']
+        scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
+        all_scenario_names = aircond.scenario_names_creator(scen_count)
+        all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
+        ev = Xhat_Eval(options,
+                       all_scenario_names,
+                       aircond.scenario_creator,
+                       scenario_denouement=None,
+                       all_nodenames=all_nodenames,
+                       scenario_creator_kwargs=scenario_creator_kwargs
+                       )
+        return ev
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_creator(self):
-        options = self._get_xhatEval_options()
-        
-        MMW_options = self._get_base_options()
-        scenario_creator_kwargs = MMW_options['kwargs']
-        scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
-        all_names = aircond.scenario_names_creator(MMW_options['batch_size'])  # ???
-        ev = Xhat_Eval(options,
-                       all_names,
-                       aircond.scenario_creator,
-                       scenario_denouement=None,
-                       scenario_creator_kwargs=scenario_creator_kwargs
-                       )
+        ev = self._eval_creator()
 
-    """    
+        
     @unittest.skipIf(not solver_available,
                      "no solver is available")      
     def test_xhat_eval_evaluate(self):
-        options = self._get_xhatEval_options()
-        MMW_options = self._get_base_options()
-        scenario_creator_kwargs = MMW_options['kwargs']
-        scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
-        ev = Xhat_Eval(options,
-                   aircond.scenario_names_creator(100),
-                   aircond.scenario_creator,
-                   scenario_denouement=None,
-                   scenario_creator_kwargs=scenario_creator_kwargs
-                   )
-        
-        xhat = ciutils.read_xhat(self.xhat_path)
-        obj = round_pos_sig(ev.evaluate(xhat),2)
-        self.assertEqual(obj, -1300000.0)
- 
+        ev = self._eval_creator()
+
+        base_options = self._get_base_options()
+        branching_factors= base_options['opt']['branching_factors']
+        full_xhat = self._make_full_xhat(branching_factors)
+        obj = round_pos_sig(ev.evaluate(full_xhat),2)
+        self.assertEqual(obj, 3500.0)
+
+
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_xhat_eval_evaluate_one(self):
-        options = self._get_xhatEval_options()
-        MMW_options = self._get_base_options()
-        xhat = ciutils.read_xhat(self.xhat_path)
-        scenario_creator_kwargs = MMW_options['kwargs']
-        scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
-        scenario_names = aircond.scenario_names_creator(100)
-        ev = Xhat_Eval(options,
-                   scenario_names,
-                   aircond.scenario_creator,
-                   scenario_denouement=None,
-                   scenario_creator_kwargs=scenario_creator_kwargs
-                   )
-        k = scenario_names[0]
-        obj = ev.evaluate_one(xhat,k,ev.local_scenarios[k])
+        ev = self._eval_creator()
+        options = self._get_base_options()
+        branching_factors= options['opt']['branching_factors']
+        full_xhat = self._make_full_xhat(branching_factors)
+
+        num_scens = np.prod(branching_factors)
+        scenario_creator_kwargs = options['kwargs']
+        scenario_creator_kwargs['num_scens'] = num_scens
+        all_scenario_names = aircond.scenario_names_creator(num_scens)
+
+        k = all_scenario_names[0]
+        obj = ev.evaluate_one(full_xhat,k,ev.local_scenarios[k])
         obj = round_pos_sig(obj,2)
-        self.assertEqual(obj, -48000.0)
-      
+        self.assertEqual(obj, 820.0)
+
+    """           
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_MMW_running(self):
