@@ -260,7 +260,7 @@ class Test_confint_farmer(unittest.TestCase):
     def test_zhat4xhat(self):
         cmdline = [self.arefmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
         parser = zhat4xhat._parser_setup()
-        model_module.inparser_adder(parser)
+        afarmer.inparser_adder(parser)
         args = parser.parse_args(cmdline)
         model_module = importlib.import_module(self.arefmodelname)
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
