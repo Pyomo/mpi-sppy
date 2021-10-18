@@ -335,7 +335,6 @@ class SeqSampling():
         
         #Computing xhat_1.
 
-        print(f"{self.multistage =}")
         #We use sample_size_ratio*n_k observations to compute xhat_k
         if self.multistage:
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
