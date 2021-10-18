@@ -23,6 +23,7 @@ import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
 import mpisppy.utils.amalgomator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.ciutils as ciutils
 
 fullcomm = mpi.COMM_WORLD
@@ -95,7 +96,7 @@ class Test_confint_aircond(unittest.TestCase):
     def tearDown(self):
          os.remove(self.xhat_path)
 
-    
+
     def test_ama_creator(self):
         options = self._get_base_options()
         ama_options = options['opt']
@@ -130,6 +131,31 @@ class Test_confint_aircond(unittest.TestCase):
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
                                 )
+
+        
+    def test_indepscens_seqsampling_creator(self):
+        options = self._get_base_options()
+        branching_factors= options['opt']['branching_factors']
+        xhat_gen_options = self._get_xhat_gen_options(branching_factors)
+        
+        # We want a very small instance for testing on GitHub.
+        optionsBM = {'h':1.75,
+                     'hprime':0.5, 
+                     'eps':0.2, 
+                     'epsprime':0.1, 
+                     "p":0.1,
+                     "q":1.2,
+                     "branching_factors": branching_factors,
+                     "xhat_gen_options": xhat_gen_options,
+                     }
+
+        multi_seqsampling.IndepScens_SeqSampling(self.refmodelname,
+                                aircond.xhat_generator_aircond,
+                                optionsBM,
+                                stochastic_sampling=False,
+                                stopping_criterion="BM",
+                                )
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -238,48 +264,59 @@ class Test_confint_aircond(unittest.TestCase):
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
         self.assertEqual((G,s), (7.51, 26.4))
-    """           
-        
+
+    
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    def test_seqsampling_running(self):
-            # We want a very small instance for testing on GitHub.
-            optionsBM = {'h':1.75,
-                         'hprime':0.5, 
-                         'eps':0.2, 
-                         'epsprime':0.1, 
-                         "p":0.1,
-                         "q":1.2,
-                         "solvername":solvername,
-                         "xhat_gen_options": self.xhat_gen_options,
-                         }
-            seq_pb = seqsampling.SeqSampling(self.refmodelname,
-                                            aircond.xhat_generator_aircond,
-                                            optionsBM,
-                                            stochastic_sampling=False,
-                                            stopping_criterion="BM",
-                                            )
-            x = seq_pb.run(maxit=50)
-            T = x['T']
-            ub = round_pos_sig(x['CI'][1],2)
-            self.assertEqual((T,ub), (1,7400.0))
+    def test_indepscens_seqsampling_running(self):
+        options = self._get_base_options()
+        branching_factors= options['opt']['branching_factors']
+        xhat_gen_options = self._get_xhat_gen_options(branching_factors)
+        
+        # We want a very small instance for testing on GitHub.
+        optionsBM = {'h':1.75,
+                     'hprime':0.5, 
+                     'eps':0.2, 
+                     'epsprime':0.1, 
+                     "p":0.1,
+                     "q":1.2,
+                     "branching_factors": branching_factors,
+                     "xhat_gen_options": xhat_gen_options,
+                     "start_ups": False,
+                     "solvername":solvername,
+                     }
+        seq_pb = multi_seqsampling.IndepScens_SeqSampling(self.refmodelname,
+                                                          aircond.xhat_generator_aircond,
+                                                          optionsBM,
+                                                          stochastic_sampling=False,
+                                                          stopping_criterion="BM",
+                                                          )
+        x = seq_pb.run(maxit=50)
+        T = x['T']
+        ub = round_pos_sig(x['CI'][1],2)
+        self.assertEqual((T,ub), (13, 110.0))
 
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_zhat4xhat(self):
-        cmdline = [self.refmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", [4, 3, 2]]  # mainly defaults
+        cmdline = [self.refmodelname, self.xhat_path, "--solver-name",
+                   solvername, "--branching-factors",  "4" ]   # mainly using defaults
         parser = zhat4xhat._parser_setup()
+        aircond.inparser_adder(parser)
         args = parser.parse_args(cmdline)
+        # I couldnt't figure out how to get the branching factors parsed from this list, so
+        args.branching_factors = [4, 3, 2]
+                      
         model_module = importlib.import_module(self.refmodelname)
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
 
         z2 = round_pos_sig(zhatbar, 2)
-        self.assertEqual(z2, 360.)
+        self.assertEqual(z2, 900.)
         e2 = round_pos_sig(eps_z, 2)
-        self.assertEqual(e2, 11.)
+        self.assertEqual(e2, 74.)
         print(f"*** {z2 =} {e2 =}")
-"""
+
 if __name__ == '__main__':
     unittest.main()
     

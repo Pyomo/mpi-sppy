@@ -362,7 +362,7 @@ def kw_creator(options):
               "start_ups": start_ups,
               }
     if kwargs["start_ups"] is None:
-        raise
+        raise ValueError("kw_creator called, but no value given for start_ups")
     return kwargs
 
 

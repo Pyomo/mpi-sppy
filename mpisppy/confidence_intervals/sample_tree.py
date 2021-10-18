@@ -47,13 +47,13 @@ class SampleSubtree():
     options : dict
         Arguments passed to the scenario creator.
     solvername : str, optional
-        Solver name. The default is 'gurobi'.
+        Solver name. The default is None.
     solver_options : dict, optional
         Solver options. The default is None.
 
     '''
     def __init__(self, mname, xhats, root_scen, starting_stage, branching_factors,
-                 seed, options, solvername='gurobi', solver_options=None):
+                 seed, options, solvername=None, solver_options=None):
 
         self.refmodel = importlib.import_module(mname)
         #Checking that refmodel has all the needed attributes
@@ -135,7 +135,7 @@ class SampleSubtree():
                                            verbose = False)
     def run(self):
         #Running the Amalgomator and attaching the result to the SampleSubtree object
-        global_toc("Enter SampleSubTree run")
+        #global_toc("Enter SampleSubTree run")
         self.ama.run()
         self.ef = self.ama.ef
         self.EF_Obj = self.ama.EF_Obj
@@ -144,7 +144,7 @@ class SampleSubtree():
 
 
 def feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
-                      solvername="gurobi",solver_options=None):
+                      solvername=None, solver_options=None):
     '''
     Given a scenario and a first-stage policy xhat_one, this method computes
     non-anticipative feasible policies for the following stages.
@@ -168,7 +168,7 @@ def feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
     return xhat_dict,seed
 
 def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, options,
-                       solvername="gurobi", solver_options=None):
+                       solvername=None, solver_options=None):
     """
     This methods takes a scenario tree (represented by a scenario list) as an input, 
     a first stage policy xhat_one and several settings, and computes 

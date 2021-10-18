@@ -27,7 +27,9 @@ from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 def is_needed(options,needed_things,message=""):
     if not set(needed_things)<= set(options):
-        print("Some options are missing. "+message)
+        raise RuntimeError("Some options are missing from this list of needed options:\n"
+                           f"{needed_things}\n"
+                           f"{message}")
         
 
 def add_options(options,optional_things,optional_default_settings):
@@ -141,7 +143,7 @@ class SeqSampling():
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
         self.solving_type = solving_type
-        self.solvername = options["solvername"] if "solvername" in options else "gurobi"
+        self.solvername = options.get("solvername", None)
         self.solver_options = options["solver_options"] if "solver_options" in options else None
         self.sample_size_ratio = options["sample_size_ratio"] if "sample_size_ration" in options else 1
         self.xhat_gen_options = options["xhat_gen_options"] if "xhat_gen_options" in options else {}
@@ -332,7 +334,8 @@ class SeqSampling():
         lower_bound_k = self.sample_size(k, None, None, None)
         
         #Computing xhat_1.
-        
+
+        print(f"{self.multistage =}")
         #We use sample_size_ratio*n_k observations to compute xhat_k
         if self.multistage:
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
@@ -344,11 +347,14 @@ class SeqSampling():
             mk = int(np.floor(mult*lower_bound_k))
             xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
             self.ScenCount+=mk
-        
+
+        xgo = self.xhat_gen_options.copy()
+        xgo.pop("solvername", None)  # it will be given explicitly
+        xgo.pop("solver_options", None)  # it will be given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,
-                                   **self.xhat_gen_options)
+                                     **xgo)
 
     
         #----------------------------Step 1 -------------------------------------#

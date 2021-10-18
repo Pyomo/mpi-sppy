@@ -74,10 +74,12 @@ class IndepScens_SeqSampling(SeqSampling):
         self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
 
+        xgo = self.xhat_gen_options.copy()
+        xgo.pop("solver_options", None)  # it will be given explicitly
+        xgo.pop("scenario_names", None)  # it will be given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
-                                   solvername=self.solvername,
                                    solver_options=self.solver_options,
-                                   **self.xhat_gen_options)
+                                   **xgo)
         self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
 
         #----------------------------Step 1 -------------------------------------#
@@ -88,7 +90,10 @@ class IndepScens_SeqSampling(SeqSampling):
         
         #Computing G_nk and s_k associated with xhat_1
         
-        Gk, sk = self.gap_estimators_with_independant_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
+        Gk, sk = self.gap_estimators_with_independant_scenarios(xhat_k,
+                                                                nk,
+                                                                estimator_scenario_names,
+                                                                scenario_denouement)
 
         
         #----------------------------Step 2 -------------------------------------#
@@ -108,10 +113,12 @@ class IndepScens_SeqSampling(SeqSampling):
             
             #Computing xhat_k
            
+            xgo = self.xhat_gen_options.copy()
+            xgo.pop("solver_options", None)  # it will be given explicitly
+            xgo.pop("scenario_names", None)  # it will be given explicitly
             xhat_k = self.xhat_generator(xhat_scenario_names,
-                                        solvername=self.solvername,
                                         solver_options=self.solver_options,
-                                        **self.xhat_gen_options)
+                                         **xgo)
             
             #Computing n_k and associated scenario names
             self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)

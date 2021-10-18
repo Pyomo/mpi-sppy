@@ -140,7 +140,7 @@ def gap_estimators(xhat_one,
                    ArRP=1,
                    scenario_creator_kwargs={}, 
                    scenario_denouement=None,
-                   solvername='gurobi', 
+                   solvername=None, 
                    solver_options=None,
                    verbose=True,
                    objective_gap=False
@@ -176,7 +176,7 @@ def gap_estimators(xhat_one,
     scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
     solvername : str, optional
-        Solver. Default is 'gurobi'
+        Solver. Default is None
     solver_options: dict, optional
         Solving options. Default is None
     verbose: bool, optional
