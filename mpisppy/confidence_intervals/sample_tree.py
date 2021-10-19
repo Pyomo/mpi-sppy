@@ -47,13 +47,13 @@ class SampleSubtree():
     options : dict
         Arguments passed to the scenario creator.
     solvername : str, optional
-        Solver name. The default is 'gurobi'.
+        Solver name. The default is None.
     solver_options : dict, optional
         Solver options. The default is None.
 
     '''
     def __init__(self, mname, xhats, root_scen, starting_stage, branching_factors,
-                 seed, options, solvername='gurobi', solver_options=None):
+                 seed, options, solvername=None, solver_options=None):
 
         self.refmodel = importlib.import_module(mname)
         #Checking that refmodel has all the needed attributes
@@ -65,6 +65,7 @@ class SampleSubtree():
         self.root_scen = root_scen
         self.stage = starting_stage
         self.sampling_branching_factors = branching_factors[(self.stage-1):]
+        self.original_branching_factors = branching_factors
         self.numscens = np.prod(self.sampling_branching_factors)
         self.seed = seed
         self.options = options
@@ -72,12 +73,10 @@ class SampleSubtree():
         self.solver_options = solver_options
         
         #Create an amalgomator object to solve the subtree problem
-        self.create_amalgomator()
+        self._create_amalgomator()
 
-        
-        
-        
-    def sample_creator(self,sname,**scenario_creator_kwargs):
+                
+    def sample_creator(self, sname, **scenario_creator_kwargs):
         '''
         This method is similar to scenario_creator function, but for subtrees.
         Given a scenario names and kwargs, it creates a scenario from our subtree
@@ -107,17 +106,18 @@ class SampleSubtree():
                 node.nonant_vardata_list[i].fixed = True
         return s
         
-    def create_amalgomator(self):
+    def _create_amalgomator(self):
         '''
         This method attaches an Amalgomator object to a sample subtree.
         
-        WARNING: sample_creator must be called before that.
+        WARNING: sample_creator must be called before using for stages beyond 1
         '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
         self.scenario_creator = self.sample_creator
         
         ama_options = self.options.copy()
-        ama_options['EF-mstage'] =True
+        ama_options['EF-mstage'] = len(self.original_branching_factors) > 1
+        ama_options['EF-2stage'] = len(self.original_branching_factors) <= 1
         ama_options['EF_solver_name']= self.solvername
         if self.solver_options is not None:
             ama_options['EF_solver_options']= self.solver_options
@@ -135,7 +135,7 @@ class SampleSubtree():
                                            verbose = False)
     def run(self):
         #Running the Amalgomator and attaching the result to the SampleSubtree object
-        global_toc("Enter SampleSubTree run")
+        #global_toc("Enter SampleSubTree run")
         self.ama.run()
         self.ef = self.ama.ef
         self.EF_Obj = self.ama.EF_Obj
@@ -144,7 +144,7 @@ class SampleSubtree():
 
 
 def feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
-                      solvername="gurobi",solver_options=None):
+                      solvername=None, solver_options=None):
     '''
     Given a scenario and a first-stage policy xhat_one, this method computes
     non-anticipative feasible policies for the following stages.
@@ -167,8 +167,8 @@ def feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
     xhat_dict = {ndn:xhat for (ndn,xhat) in zip(nodenames,xhats)}
     return xhat_dict,seed
 
-def walking_tree_xhats(mname,local_scenarios,xhat_one,branching_factors,seed,options,
-                       solvername="gurobi", solver_options=None):
+def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, options,
+                       solvername=None, solver_options=None):
     """
     This methods takes a scenario tree (represented by a scenario list) as an input, 
     a first stage policy xhat_one and several settings, and computes 
@@ -228,15 +228,15 @@ def walking_tree_xhats(mname,local_scenarios,xhat_one,branching_factors,seed,opt
                                        solvername, solver_options)
                subtree.run()
                xhat = subtree.xhat_at_stage
-               
-               seed+=sputils.number_of_nodes(branching_factors[(node.stage-1):])
+
+               # TBD: is this needed
+               seed += sputils.number_of_nodes(branching_factors[(node.stage-1):])
                
                xhats[node.name] = xhat
                scen_xhats.append(xhat)
+
     return xhats, seed
 
-               
-            
 
 if __name__ == "__main__":
     branching_factors = [3,2,4,4]

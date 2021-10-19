@@ -25,10 +25,11 @@ from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
 
-
 def is_needed(options,needed_things,message=""):
     if not set(needed_things)<= set(options):
-        print("Some options are missing. "+message)
+        raise RuntimeError("Some options are missing from this list of needed options:\n"
+                           f"{needed_things}\n"
+                           f"{message}")
         
 
 def add_options(options,optional_things,optional_default_settings):
@@ -38,9 +39,9 @@ def add_options(options,optional_things,optional_default_settings):
             options[ething]=optional_default_settings[i]
 
 def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None, crops_multiplier=1):
-    '''Farmer example applied to sequential sampling. Given scenario names and
+    ''' For developer testing: Given scenario names and
     options, create the scenarios and compute the xhat that is minimizing the
-    approximate probleme associatd with these scenarios.
+    approximate problem associated with these scenarios.
 
     Parameters
     ----------
@@ -57,6 +58,8 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     -------
     xhat: xhat object (dict containing a 'ROOT' key with a np.array)
         A generated xhat.
+
+    NOTE: this is here for testing during development.
 
     '''
     num_scens = len(scenario_names)
@@ -94,7 +97,7 @@ class SeqSampling():
                                     as input and returns a first stage policy 
                                     xhat.
 
-        options (dict): multiple useful parameters, e.g.:
+        options (dict): multiple parameters, e.g.:
                         - "solvername", str, the name of the solver we use 
                             (default is gurobi)
                         - "solver_options", dict containing solver options 
@@ -140,7 +143,7 @@ class SeqSampling():
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
         self.solving_type = solving_type
-        self.solvername = options["solvername"] if "solvername" in options else "gurobi"
+        self.solvername = options.get("solvername", None)
         self.solver_options = options["solver_options"] if "solver_options" in options else None
         self.sample_size_ratio = options["sample_size_ratio"] if "sample_size_ration" in options else 1
         self.xhat_gen_options = options["xhat_gen_options"] if "xhat_gen_options" in options else {}
@@ -179,10 +182,9 @@ class SeqSampling():
                 optional_default_settings = [50,2,(lambda x : x-1)]
                 add_options(options, optional_things, optional_default_settings)
         else:
-            raise RuntimeError("Only BM and BPL criteria are supported yet")
+            raise RuntimeError("Only BM and BPL criteria are supported at this time.")
         for oname in options:
             setattr(self, oname, options[oname]) #Set every option as an attribute
-        
         
         #Check the solving_type, and find if the problem is multistage
         two_stage_types = ['EF-2stage']
@@ -229,15 +231,18 @@ class SeqSampling():
         self.SeedCount = 0
             
     def bm_stopping_criterion(self,G,s,nk):
+        # arguments defined in [bm2011]
         return(G>self.hprime*s+self.epsprime)
     
     def bpl_stopping_criterion(self,G,s,nk):
+        # arguments defined in [bpl2012]
         t = scipy.stats.t.ppf(self.confidence_level,nk-1)
         sample_error = t*s/np.sqrt(nk)
         inflation_factor = 1/np.sqrt(nk)
         return(G+sample_error+inflation_factor>self.eps)
     
     def bm_sampsize(self,k,G,s,nk_m1, r=2):
+        # arguments defined in [bm2011]
         h = self.h
         hprime = self.hprime
         p = self.p
@@ -271,9 +276,11 @@ class SeqSampling():
         return int(np.ceil(lower_bound))
     
     def bpl_fsp_sampsize(self,k,G,s,nk_m1):
+        # arguments defined in [bpl2012]
         return(int(np.ceil(self.c0+self.c1*self.growth_function(k))))
         
     def stochastic_sampsize(self,k,G,s,nk_m1):
+        # arguments defined in [bpl2012]
         if (k==1):
             #Initialization
             return(int(np.ceil(max(self.n0min,np.log(1/self.eps)))))
@@ -290,6 +297,12 @@ class SeqSampling():
     
     
     def run(self,maxit=200):
+        """ Execute a sequental sampling algorithm
+        Args:
+            maxit (int): override the stopping criteria based on iterations
+        Returns:
+            {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
+        """
         if self.multistage:
             raise RuntimeWarning("Multistage sequential sampling can be done "
                                  "using the SeqSampling, but dependent samples\n"
@@ -321,7 +334,7 @@ class SeqSampling():
         lower_bound_k = self.sample_size(k, None, None, None)
         
         #Computing xhat_1.
-        
+
         #We use sample_size_ratio*n_k observations to compute xhat_k
         if self.multistage:
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
@@ -333,11 +346,14 @@ class SeqSampling():
             mk = int(np.floor(mult*lower_bound_k))
             xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
             self.ScenCount+=mk
-        
+
+        xgo = self.xhat_gen_options.copy()
+        xgo.pop("solvername", None)  # it will be given explicitly
+        xgo.pop("solver_options", None)  # it will be given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,
-                                   **self.xhat_gen_options)
+                                     **xgo)
 
     
         #----------------------------Step 1 -------------------------------------#
@@ -497,7 +513,7 @@ if __name__ == "__main__":
                   'solvername': solvername,
                   "c0":50,  # starting sample size
                   "xhat_gen_options":farmer_opt_dict,
-                  "crops_multiplier":3,
+                  "crops_multiplier":3, # option for the farmer problem
                   "ArRP":2,  # this must be 1 for any multi-stage problems
                   "stopping": "BPL"
 }

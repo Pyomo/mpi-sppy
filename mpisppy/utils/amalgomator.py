@@ -263,7 +263,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
         if not (_bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in opt):
-            opt['EF_solver_name'] = "gurobi"
+            raise RuntimeError("EF_solver_name must be specified for the amalgomator." )
         if not ('EF_solver_options' in opt):
             opt['EF_solver_options'] = {'mipgap': None}
         if not ('num_scens' in opt):
@@ -305,7 +305,7 @@ class Amalgomator():
         self.verbose = verbose
         self.is_EF = _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")
         if self.is_EF:
-            self.solvername = options['EF_solver_name'] if  ('EF_solver_name' in options) else 'gurobi'
+            self.solvername = options.get('EF_solver_name', None)
             self.solver_options = options['EF_solver_options'] \
                 if ('EF_solver_options' in options) else {}
         self.is_multi = _bool_option(options, "EF-mstage") or _bool_option(options, "mstage")
