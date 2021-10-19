@@ -249,31 +249,48 @@ class IndepScens_SeqSampling(SeqSampling):
     
 
 if __name__ == "__main__":
-   #An example of sequential sampling for the aircond model
-   bfs = [3,3,2]
-   optionsBM =  { 'h':0.55,
-                'hprime':0.5, 
-                'eps':0.5, 
-                'epsprime':0.4, 
-                "p":0.2,
-                "q":1.2,
-                "solvername":"gurobi_direct",
-                "branching_factors": bfs}
-   
-   optionsFSP = {'eps': 15.0,
-               'solvername': "gurobi_direct",
-               "c0":50,
-               "branching_factors": bfs}
-   aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond_submodels",
-                                 xhat_generator_aircond, 
-                                 optionsBM,
-                                 stopping_criterion="BM"
-                                 )
+    solvername = "cplex"
+    #An example of sequential sampling for the aircond model
+    import mpisppy.tests.examples.aircond_submodels
+    bfs = [3,3,2]
+    num_scens = np.prod(bfs)
+    scenario_names = mpisppy.tests.examples.aircond_submodels.scenario_names_creator(num_scens)
+    xhat_gen_options = {"scenario_names": scenario_names,
+                        "solvername": solvername,
+                        "solver_options": None,
+                        "branching_factors": bfs,
+                        "mudev": 0,
+                        "sigmadev": 40,
+                        "start_ups": False,
+                        "start_seed": 0,
+                        }
 
-   res = aircondpb.run(maxit=50)
-   print(res)
+    optionsBM =  {'h':0.55,
+                 'hprime':0.5, 
+                 'eps':0.5, 
+                 'epsprime':0.4, 
+                 "p":0.2,
+                 "q":1.2,
+                 "solvername": solvername,
+                 "xhat_gen_options": xhat_gen_options,
+                  "start_ups": False,
+                 "branching_factors": bfs}
    
+    optionsFSP = {'eps': 15.0,
+                  'solvername': solvername,
+                  "c0":50,
+                  "xhat_gen_options": xhat_gen_options,
+                  "start_ups": False,
+                  "branching_factors": bfs}
    
-    
+    aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond_submodels",
+                                       xhat_generator_aircond, 
+                                       optionsBM,
+                                       stopping_criterion="BM"
+                                       )
+
+    res = aircondpb.run(maxit=50)
+    print(res)
+
     
     
