@@ -161,8 +161,19 @@ class IndepScens_SeqSampling(SeqSampling):
         kwargs.pop("start_seed")
         return kwargs
     
-    def gap_estimators_with_independant_scenarios(self,xhat_k,nk,estimator_scenario_names,scenario_denouement):
-        #Sample a scenario tree: this is a subtree, but starting from stage 1
+    def gap_estimators_with_independant_scenarios(self, xhat_k, nk,
+                                                  estimator_scenario_names, scenario_denouement):
+        """ Sample a scenario tree: this is a subtree, but starting from stage 1.
+        Args:
+            xhat_k (dict[nodename] of list): the solution to lead the walk
+            nk (int): number of scenarios,
+            estimator_scenario_names(list of str): scenario names
+            scenario_denouement (fct): called for each scenario at the end
+                 (TBD: drop this arg and just use the function in refmodel)
+        Returns:
+            Gk, Sk (float): mean and standard devation of the gap estimate
+
+        """
         ama_options = self.options.copy()
         ama_options['EF-mstage'] =True
         ama_options['EF_solver_name']= self.solvername
