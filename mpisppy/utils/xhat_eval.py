@@ -256,7 +256,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             and a given function fct across all scenarios.
 
         Args:
-            nonant_cache(numpy vector): special numpy vector with nonant values (see spopt)
+            nonant_cache(ndn dict of numpy vector): special numpy vector with nonant values (see spopt)
             fct (function, optional):
                 A function R-->R^p, such as x|-->(x,x^2,x^3). Default is None
                 If fct is None, evaluate returns the exepected value.

@@ -1,6 +1,8 @@
+# This software is distributed under the 3-clause BSD License.
+
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
-
+# or: python3 mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 --EF-solver-name cplex
 
 import mpi4py.MPI as mpi
 import argparse
@@ -103,7 +105,6 @@ class MMWConfidenceIntervals():
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for MMW")
         
-
         if "EF_solver_name" not in self.options:
             raise RuntimeError("EF_solver_name not in Argument list for MMW")
 
@@ -246,6 +247,7 @@ if __name__ == "__main__":
                             default=None) #None means take batch_size=num_scens
     
     ama_object = ama.from_module(refmodel, ama_options,extraargs=ama_extraargs)
+
     ama_object.run()  # this is to get xhat
     
     if global_rank==0 :

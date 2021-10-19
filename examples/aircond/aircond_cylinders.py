@@ -1,12 +1,13 @@
 import sys
 import os
 import copy
-import mpisppy.tests.examples.aircond_submodels as aircond_submodels
 import numpy as np
 import itertools
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
+###import mpisppy.tests.examples.aircond_submodels as aircond
+import aaircond as aircond
 
 write_solution = True
 
@@ -26,7 +27,7 @@ def make_node_scenario_dict_balanced(BFs,leaf_nodes=True,start=1):
     """
     nodenames = make_nodenames_balanced(BFs, leaf_nodes)
     num_scens = np.prod(BFs)
-    scenario_names = aircond_submodels.scenario_names_creator(num_scens, start)
+    scenario_names = aircond.scenario_names_creator(num_scens, start)
     
     stages = len(BFs)
     node_scenario_dict ={"ROOT": scenario_names[0]}
@@ -150,11 +151,11 @@ def main():
 
     ScenCount = np.prod(BFs)
     #ScenCount = _get_num_leaves(BFs)
-    scenario_creator_kwargs = {"BFs": BFs}
+    scenario_creator_kwargs = {"branching_factors": BFs}
     all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
     # print(all_scenario_names)
-    scenario_creator = aircond_submodels.scenario_creator
-    scenario_denouement = aircond_submodels.scenario_denouement
+    scenario_creator = aircond.scenario_creator
+    scenario_denouement = aircond.scenario_denouement
     rho_setter = None
     
     # Things needed for vanilla cylinders
@@ -207,7 +208,11 @@ def main():
     if write_solution:
         sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'aircond_first_stage.csv')
         sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'aircond_full_solution')
-
+        sputils.write_spin_the_wheel_first_stage_solution(spcomm,
+                                                          opt_dict,
+                                                          'aircond_cyl_nonants',
+                                                          first_stage_solution_writer=\
+                                                          sputils.first_stage_nonant_npy_serializer)
 if __name__ == "__main__":
     main()
     

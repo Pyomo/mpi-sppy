@@ -33,8 +33,14 @@ jobs:
         run: |
           python setup.py develop
 
-      - name: run tests
+      - name: run farmer tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_conf_int.py 
+          python test_conf_int_farmer.py 
+
+      - name: run aircond tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          python test_conf_int_aircond.py	  

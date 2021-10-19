@@ -1,6 +1,10 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
+# NOTE: this file has some "legacy" functions with wrappers
+#  (but it even has some legacy wrappers....)
+
+
 import os
 
 from pyomo.dataportal import DataPortal
@@ -17,6 +21,7 @@ import egret.models.unit_commitment as uc
 
 def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None):
     """
+    All this does is create the concrete model instance.
     Notes:
     - The uc_cylinders.py code has a `scenario_count` kwarg that gets passed to
       the spokes, but it seems to be unused here...
@@ -47,18 +52,34 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
     return scenario_instance
 
-def scenario_creator(scenario_name, scenario_count=None, path=None):
-    return pysp2_callback(scenario_name, scenario_count=scenario_count, path=path)
 
-def pysp2_callback(scenario_name, scenario_count=None, path=None):
+# TBD: there are legacy functions here that should probably be factored.
+
+def scenario_creator(scenario_name, scenario_count=None, path=None,
+                     num_scens=None, seedoffset=0):
+
+    # Do some calculations that might be needed by confidence interval software
+    scennum = sputils.extract_num(scenario_name)
+    newnum = scennum + seedoffset
+    newname = f"Scenario{newnum}"
+    
+    return pysp2_callback(scenario_name, scenario_count=scenario_count,
+                          path=path, num_scens=num_scens, seedoffset=seedoffset)
+
+def pysp2_callback(scenario_name, scenario_count=None, path=None,
+                     num_scens=None, seedoffset=0):
     ''' The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
-        Optionally attach _PHrho. Standard (1.0) PySP signature for now...
+        the nodes to it in a list _mpisppy_node_list ordered by stages.
+        Optionally attach _PHrho. 
     '''
 
     instance = pysp_instance_creation_callback(
         scenario_name, scenario_count=scenario_count, path=path,
     )
+
+    #Add the probability of the scenario
+    if num_scens is not None :
+        instance._mpisppy_probability = 1/num_scens
 
     # now attach the one and only tree node (ROOT is a reserved word)
     # UnitOn[*,*] is the only set of nonant variables
@@ -269,10 +290,9 @@ def inparser_adder(inparser):
 #=========
 def kw_creator(options):
     # (only for Amalgomator and MMW_conf): linked to the scenario_creator and inparser_adder
-    #no kwargs argument because no argument in the scenario creator
-    # we might get args from confidence interval code
     if "path" in options:
         path = options["path"]
+        num_scens = options.get('num_scens', 0)
     else:
         UCC = options.get('UC_count_for_path', 0)
         args = options.get('args')
@@ -280,8 +300,31 @@ def kw_creator(options):
         num_scens = options.get('num_scens', 0)
         scens_for_path = max(num_scens, UCC)
         path = str(scens_for_path) + "scenarios_r1"
+    num_scens = None if num_scens == 0 else num_scens
     kwargs = {
         "scenario_count": num_scens,
         "path": path
     }
     return kwargs
+
+#============================
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Since this is a two-stage problem, we don't have to do much.
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
+

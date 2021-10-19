@@ -7,7 +7,7 @@ To make use of the hub and spoke system, you must come up with a
 driver that instantiates the objects and calls them. Nearly the
 last step in most drivers is a call to ``mpisppy.utils.sputils.spin_the_wheel``
 that calls the hub and spokes. Many of the example drivers take
-advanatage of shared code in the ``mpisppy.utils`` directory.
+advantage of shared code in the ``mpisppy.utils`` directory.
 
 We now proceed to consider driver examples that do not use the shared
 services provided with the examples; however, many developers will prefer
@@ -25,7 +25,7 @@ are
   creation. These dictionaries are ultimately fed to
   ``sputils.spin_the_wheel``.
 
-The contructors for the vanilla spokes take arguments that vary slightly depending
+The constructors for the vanilla spokes take arguments that vary slightly depending
 on the spoke, but all want the args passed in by the args parser,
 followed by ``scenario_creator`` function, a ``scenario_denoument`` function
 (that can be ``None``), a list of scenario names as ``all_scenario_names``,
@@ -83,8 +83,8 @@ they like. The disadvantage is that developers who use ``mpi-sppy``
 cannot count on it to detect spelling errors in options names.
 
 
-Contrasting ``_mpisppy_node_list` and ``all_node_names``
---------------------------------------------------------
+Contrasting ``_mpisppy_node_list`` and ``all_node_names``
+---------------------------------------------------------
 
 Note that ``_mpisppy_node_list``that is attached to scenarios does not have the leaf nodes, but ``all_node_names``
 that is part of the hub dictionary does.
