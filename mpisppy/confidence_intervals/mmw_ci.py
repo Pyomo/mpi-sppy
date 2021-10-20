@@ -1,6 +1,8 @@
+# This software is distributed under the 3-clause BSD License.
+
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
-
+# or: python3 mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 --EF-solver-name cplex
 
 import mpi4py.MPI as mpi
 import argparse
@@ -69,18 +71,11 @@ class MMWConfidenceIntervals():
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
-        self.num_scens_xhat = options["num_scens"] if ("num_scens" in options) else 0
-        
+
         #Getting the start
-        if start is not None :
-            self.start = start
-        ScenCount = self.num_scens_xhat + (
-            self.options['start'] if ("start" in options) else 0)
         if start is None :
-            self.start = ScenCount
-        elif start < ScenCount :
-            raise RuntimeWarning(
-                "Scenarios used to compute xhat_one may be used in MMW")
+            raise RuntimeError( "Start must be specified")
+        self.start = start
             
         #Type of our problem
         if ama._bool_option(options, "EF-2stage"):
@@ -90,7 +85,7 @@ class MMWConfidenceIntervals():
         elif ama._bool_option(options, "EF-mstage"):
             self.type = "EF-mstage"
             self.multistage = True
-            self.numstages = len(options['BFs'])+1
+            self.numstages = len(options['branching_factors'])+1
         else:
             raise RuntimeError(
                 "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
@@ -110,13 +105,8 @@ class MMWConfidenceIntervals():
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for MMW")
         
-        you_can_have_it_all = True
-        for ething in ["num_scens","EF_solver_name"]:
-            if not ething in self.options:
-                print(f"Argument list is missing {ething}")
-                you_can_have_it_all = False
-        if not you_can_have_it_all:
-            raise RuntimeError("Argument list not complete for MMW")   
+        if "EF_solver_name" not in self.options:
+            raise RuntimeError("EF_solver_name not in Argument list for MMW")
 
     def run(self, confidence_level=0.95, objective_gap=False):
 
@@ -131,18 +121,18 @@ class MMWConfidenceIntervals():
 
         #Introducing batches otpions
         num_batches = self.num_batches
-        bs=self.batch_size
-        batch_size = bs if (bs is not None) else start #is None : take size_batch=num_scens        
+        batch_size = self.batch_size
         sample_options = self.options
         
         #Some options are specific to 2-stage or multi-stage problems
         if self.multistage:
-            sampling_BFs = ciutils.BFs_from_numscens(batch_size,self.numstages)
-            #TODO: Change this to get a more logical way to compute BFs
-            batch_size = np.prod(sampling_BFs)
+            sampling_branching_factors = ciutils.branching_factors_from_numscens(batch_size,self.numstages)
+            #TODO: Change this to get a more logical way to compute branching_factors
+            batch_size = np.prod(sampling_branching_factors)
         else:
             sampling_BFs = None
-            
+            if batch_size == 0:
+                raise RuntimeError("batch size can't be zero for two stage problems")
         sample_options['num_scens'] = batch_size
         sample_options['_mpisppy_probability'] = 1/batch_size
         scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
@@ -158,10 +148,10 @@ class MMWConfidenceIntervals():
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
         zhats = [] #evaluation of xhat at each scenario
-
+        zstars=[]
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
-            gap_options = {'seed':start,'BFs':sampling_BFs} if self.multistage else None
+            gap_options = {'seed':start,'branching_factors':sampling_branching_factors} if self.multistage else None
             scenario_names = self.refmodel.scenario_names_creator(batch_size,start=scenstart)
             estim = ciutils.gap_estimators(self.xhat_one, self.refmodelname,
                                            solving_type=self.type,
@@ -180,6 +170,8 @@ class MMWConfidenceIntervals():
             if objective_gap:
                 for zhat in estim['zhats']:
                     zhats.append(zhat)
+                for zstar in estim['zstars']:
+                    zstars.append(zstar)      
 
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
@@ -197,15 +189,19 @@ class MMWConfidenceIntervals():
         gap_outer_bound = 0
  
         if objective_gap == True:
+            # find confidence interval for zhat
             zhat_bar = np.mean(zhats)
-
-            s_zhat = np.std(zhats) # Stanard deviation of objectives at xhat
+            s_zhat = np.std(zhats)
             t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
-
             epsilon_zhat = t_zhat*s_zhat / np.sqrt(len(zhats))
 
-            gap_inner_bound += zhat_bar + epsilon_zhat
-            gap_outer_bound += zhat_bar - epsilon_zhat
+            zstar_bar = np.mean(zstars)
+            s_zstar = np.std(zstars)
+
+            # compute conservative interval on zhat plus 
+            # optimality gap in which we expect zstar to lie
+            obj_upper_bound = zhat_bar + epsilon_zhat
+            obj_lower_bound = zhat_bar - epsilon_zhat - (Gbar + epsilon_g)
 
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
@@ -214,13 +210,19 @@ class MMWConfidenceIntervals():
                       "Glist": G}
 
         if objective_gap:
+            self.result["obj_upper_bound"] = obj_upper_bound
+            self.result["obj_lower_bound"] = obj_lower_bound
             self.result["zhat_bar"] = zhat_bar
             self.result["std_zhat"] = s_zhat
+            self.result["zstar_bar"] = zstar_bar
+            self.result["std_zstar"] = s_zstar
 
         return(self.result)
         
         
 if __name__ == "__main__":
+
+# This main function is for developers 
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
     refmodel = "mpisppy.tests.examples.farmer" #Change this path to use a different model
@@ -245,7 +247,8 @@ if __name__ == "__main__":
                             default=None) #None means take batch_size=num_scens
     
     ama_object = ama.from_module(refmodel, ama_options,extraargs=ama_extraargs)
-    ama_object.run()
+
+    ama_object.run()  # this is to get xhat
     
     if global_rank==0 :
         print("inner bound=", ama_object.best_inner_bound)
@@ -267,9 +270,9 @@ if __name__ == "__main__":
     num_batches = ama_object.options['num_batches']
     batch_size = ama_object.options['batch_size']
     
-    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size,
+    mmw = MMWConfidenceIntervals(refmodel, options, xhat, num_batches,batch_size=batch_size, start = ama_object.options['num_scens'],
                        verbose=False)
-    r=mmw.run()
+    r=mmw.run(objective_gap=False)
     global_toc(r)
     if global_rank==0:
         os.remove("xhat.npy") 

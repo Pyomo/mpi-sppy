@@ -39,8 +39,8 @@ class IndepScens_SeqSampling(SeqSampling):
                  stopping_criterion = stopping_criterion,
                  solving_type = "EF-mstage")
         
-        self.numstages = len(self.options['BFs'])+1
-        self.batch_BFs = [1]*(self.numstages-1)
+        self.numstages = len(self.options['branching_factors'])+1
+        self.batch_branching_factors = [1]*(self.numstages-1)
         self.batch_size = 1
     
     #TODO: Add a override specifier if it exists
@@ -69,26 +69,31 @@ class IndepScens_SeqSampling(SeqSampling):
         #Computing xhat_1.
         
         #We use sample_size_ratio*n_k observations to compute xhat_k
-        xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
-        mk = np.prod(xhat_BFs)
+        xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+        mk = np.prod(xhat_branching_factors)
         self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
 
+        xgo = self.xhat_gen_options.copy()
+        xgo.pop("solver_options", None)  # it will be given explicitly
+        xgo.pop("scenario_names", None)  # it will be given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
-                                   solvername=self.solvername,
                                    solver_options=self.solver_options,
-                                   **self.xhat_gen_options)
-        self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+                                   **xgo)
+        self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
 
         #----------------------------Step 1 -------------------------------------#
         #Computing n_1 and associated scenario names
         
-        nk = np.prod(ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])) #To ensure the same growth that in the one-tree seqsampling
+        nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
         estimator_scenario_names = refmodel.scenario_names_creator(nk)
         
         #Computing G_nk and s_k associated with xhat_1
         
-        Gk, sk = self.gap_estimators_with_independant_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
+        Gk, sk = self.gap_estimators_with_independant_scenarios(xhat_k,
+                                                                nk,
+                                                                estimator_scenario_names,
+                                                                scenario_denouement)
 
         
         #----------------------------Step 2 -------------------------------------#
@@ -101,22 +106,24 @@ class IndepScens_SeqSampling(SeqSampling):
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
             
             #Computing m_k and associated scenario names
-            xhat_BFs = ciutils.scalable_BFs(mult*lower_bound_k, self.options['BFs'])
-            mk = np.prod(xhat_BFs)
+            xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+            mk = np.prod(xhat_branching_factors)
             self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
             
             #Computing xhat_k
            
+            xgo = self.xhat_gen_options.copy()
+            xgo.pop("solver_options", None)  # it will be given explicitly
+            xgo.pop("scenario_names", None)  # it will be given explicitly
             xhat_k = self.xhat_generator(xhat_scenario_names,
-                                        solvername=self.solvername,
                                         solver_options=self.solver_options,
-                                        **self.xhat_gen_options)
+                                         **xgo)
             
             #Computing n_k and associated scenario names
-            self.SeedCount += sputils.number_of_nodes(xhat_BFs)
+            self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
             
-            nk = np.prod(ciutils.scalable_BFs(lower_bound_k, self.options['BFs'])) #To ensure the same growth that in the one-tree seqsampling
+            nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
             nk += self.batch_size - nk%self.batch_size
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
             
@@ -154,8 +161,19 @@ class IndepScens_SeqSampling(SeqSampling):
         kwargs.pop("start_seed")
         return kwargs
     
-    def gap_estimators_with_independant_scenarios(self,xhat_k,nk,estimator_scenario_names,scenario_denouement):
-        #Sample a scenario tree: this is a subtree, but starting from stage 1
+    def gap_estimators_with_independant_scenarios(self, xhat_k, nk,
+                                                  estimator_scenario_names, scenario_denouement):
+        """ Sample a scenario tree: this is a subtree, but starting from stage 1.
+        Args:
+            xhat_k (dict[nodename] of list): the solution to lead the walk
+            nk (int): number of scenarios,
+            estimator_scenario_names(list of str): scenario names
+            scenario_denouement (fct): called for each scenario at the end
+                 (TBD: drop this arg and just use the function in refmodel)
+        Returns:
+            Gk, Sk (float): mean and standard devation of the gap estimate
+
+        """
         ama_options = self.options.copy()
         ama_options['EF-mstage'] =True
         ama_options['EF_solver_name']= self.solvername
@@ -164,8 +182,8 @@ class IndepScens_SeqSampling(SeqSampling):
         ama_options['num_scens'] = nk
         ama_options['_mpisppy_probability'] = 1/nk #Probably not used
         
-        pseudo_BFs = [nk]+[1]*(self.numstages-2)
-        ama_options['BFs'] = pseudo_BFs
+        pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
+        ama_options['branching_factors'] = pseudo_branching_factors
         ama = amalgomator.Amalgomator(options=ama_options, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
@@ -182,14 +200,14 @@ class IndepScens_SeqSampling(SeqSampling):
         xhats,start = sample_tree.walking_tree_xhats(self.refmodelname,
                                                     local_scenarios,
                                                     xhat_k['ROOT'],
-                                                    self.options['BFs'],
+                                                    self.options['branching_factors'],
                                                     self.SeedCount,
-                                                    scenario_creator_kwargs,
+                                                    self.options,  # not scenario_creator_kwargs,
                                                     solvername=self.solvername,
                                                     solver_options=self.solver_options)
         
         #Compute then the average function value with this policy
-        all_nodenames = sputils.create_nodenames_from_BFs(pseudo_BFs)
+        all_nodenames = sputils.create_nodenames_from_branching_factors(pseudo_branching_factors)
         xhat_eval_options = {"iter0_solver_options": None,
                          "iterk_solver_options": None,
                          "display_timing": False,
@@ -242,31 +260,48 @@ class IndepScens_SeqSampling(SeqSampling):
     
 
 if __name__ == "__main__":
-   #An example of sequential sampling for the aircond model
-   bfs = [3,3,2]
-   optionsBM =  { 'h':0.55,
-                'hprime':0.5, 
-                'eps':0.5, 
-                'epsprime':0.4, 
-                "p":0.2,
-                "q":1.2,
-                "solvername":"gurobi_direct",
-                "BFs": bfs}
-   
-   optionsFSP = {'eps': 15.0,
-               'solvername': "gurobi_direct",
-               "c0":50,
-               "BFs": bfs}
-   aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond_submodels",
-                                 xhat_generator_aircond, 
-                                 optionsBM,
-                                 stopping_criterion="BM"
-                                 )
+    solvername = "cplex"
+    #An example of sequential sampling for the aircond model
+    import mpisppy.tests.examples.aircond_submodels
+    bfs = [3,3,2]
+    num_scens = np.prod(bfs)
+    scenario_names = mpisppy.tests.examples.aircond_submodels.scenario_names_creator(num_scens)
+    xhat_gen_options = {"scenario_names": scenario_names,
+                        "solvername": solvername,
+                        "solver_options": None,
+                        "branching_factors": bfs,
+                        "mudev": 0,
+                        "sigmadev": 40,
+                        "start_ups": False,
+                        "start_seed": 0,
+                        }
 
-   res = aircondpb.run(maxit=50)
-   print(res)
+    optionsBM =  {'h':0.55,
+                 'hprime':0.5, 
+                 'eps':0.5, 
+                 'epsprime':0.4, 
+                 "p":0.2,
+                 "q":1.2,
+                 "solvername": solvername,
+                 "xhat_gen_options": xhat_gen_options,
+                  "start_ups": False,
+                 "branching_factors": bfs}
    
+    optionsFSP = {'eps': 15.0,
+                  'solvername': solvername,
+                  "c0":50,
+                  "xhat_gen_options": xhat_gen_options,
+                  "start_ups": False,
+                  "branching_factors": bfs}
    
-    
+    aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond_submodels",
+                                       xhat_generator_aircond, 
+                                       optionsBM,
+                                       stopping_criterion="BM"
+                                       )
+
+    res = aircondpb.run(maxit=50)
+    print(res)
+
     
     

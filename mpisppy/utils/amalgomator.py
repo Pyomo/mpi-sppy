@@ -261,16 +261,16 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     
     else:
         #Checking if options has all the options we need 
-        if not _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"):
+        if not (_bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in opt):
-            opt['EF_solver_name'] = "gurobi"
+            raise RuntimeError("EF_solver_name must be specified for the amalgomator." )
         if not ('EF_solver_options' in opt):
             opt['EF_solver_options'] = {'mipgap': None}
         if not ('num_scens' in opt):
             raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
-        if _bool_option(options, 'EF-mstage') and 'BFs' not in options:
-            raise RuntimeError("For a multistage problem, otpions must have a 'BFs' attribute with branching factors")
+        if _bool_option(options, 'EF-mstage') and 'branching_factors' not in options:
+            raise RuntimeError("For a multistage problem, otpions must have a 'branching_factors' attribute with branching factors")
 
     return opt
     
@@ -306,15 +306,15 @@ class Amalgomator():
         self.verbose = verbose
         self.is_EF = _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")
         if self.is_EF:
-            self.solvername = options['EF_solver_name'] if  ('EF_solver_name' in options) else 'gurobi'
+            self.solvername = options.get('EF_solver_name', None)
             self.solver_options = options['EF_solver_options'] \
                 if ('EF_solver_options' in options) else {}
         self.is_multi = _bool_option(options, "EF-mstage") or _bool_option(options, "mstage")
         if self.is_multi and not "all_nodenames" in options:
             if "branching_factors" in options:
-                self.options["all_nodenames"] = sputils.create_nodenames_from_BFs(options["branching_factors"])
+                self.options["all_nodenames"] = sputils.create_nodenames_from_branching_factors(options["branching_factors"])
             else:
-                raise RuntimeError("For a multistage problem, please provide branching factors or all_nodenames")
+                raise RuntimeError("For a multistage problem, please provide branching_factors or all_nodenames")
         
     def run(self):
         

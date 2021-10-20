@@ -1,6 +1,8 @@
 #for use with amalgomator mmw testing, so __main__ should be 2-stage for now,
 # and kw_creator also defaults to 2-stage
 #ReferenceModel for full set of scenarios for AirCond; June 2021
+# As of Oct 2021, aircond_submodels.py in the test directory has diverged
+# (it includes startups, but that needs to be handled with more elegance.)
 
 import pyomo.environ as pyo
 import numpy as np
@@ -12,6 +14,34 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
+def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
+                    starting_d=200,root_name="ROOT"):
+    
+    max_d = 400
+    min_d = 0
+
+    if branching_factors is None:
+        raise RuntimeError("scenario_creator for aircond needs branching_factors")
+    scennum   = sputils.extract_num(sname)
+    # Find the right path and the associated seeds (one for each node) using scennum
+    prod = np.prod(branching_factors)
+    s = int(scennum % prod)
+    d = starting_d
+    demands = [d]
+    nodenames = [root_name]
+    for bf in branching_factors:
+        assert prod%bf == 0
+        prod = prod//bf
+        nodenames.append(str(s//prod))
+        s = s%prod
+    
+    stagelist = [int(x) for x in nodenames[1:]]
+    for t in range(1,len(nodenames)):
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],branching_factors))
+        d = min(max_d,max(min_d,d+aircondstream.normal(mudev,sigmadev)))
+        demands.append(d)
+    
+    return demands,nodenames
 
 
 def StageModel_creator(time, demand, last_stage=False):
@@ -96,10 +126,19 @@ def aircond_model_creator(demands):
     
     return model
 
-def MakeNodesforScen(model,nodenames,branching_factors):
+
+def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     #Create all nonleaf nodes used by the scenario
+    #Compatible with sample scenario creation
     TreeNodes = []
     for stage in model.T:
+
+        nonant_list=[model.stage_models[stage].RegularProd,
+                     model.stage_models[stage].OvertimeProd]
+        """
+        if model.start_ups:
+            nonant_list.append(model.stage_models[stage].StartUp)
+        """
         if stage ==1:
             ndn="ROOT"
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
@@ -107,22 +146,34 @@ def MakeNodesforScen(model,nodenames,branching_factors):
                                                        stage=stage,
                                                        cost_expression=model.stage_models[stage].StageObjective,
                                                        scen_name_list=None, # Not maintained
-                                                       nonant_list=[model.stage_models[stage].RegularProd,
-                                                                    model.stage_models[stage].OvertimeProd],
+                                                       nonant_list=nonant_list,
                                                        scen_model=model,
                                                        nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
                                                        )
                              )
-        elif stage < max(model.T): #We don't add the leaf node
+        elif stage <=starting_stage:
             parent_ndn = ndn
-            ndn = parent_ndn+"_"+nodenames[stage-1]
+            ndn = parent_ndn+"_0" #Only one node per stage before starting stage
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0/branching_factors[stage-2],
+                                                       cond_prob=1.0,
                                                        stage=stage,
                                                        cost_expression=model.stage_models[stage].StageObjective,
                                                        scen_name_list=None, # Not maintained
-                                                       nonant_list=[model.stage_models[stage].RegularProd,
-                                                                    model.stage_models[stage].OvertimeProd],
+                                                       nonant_list=nonant_list,
+                                                       scen_model=model,
+                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
+                                                       parent_name = parent_ndn
+                                                       )
+                             )
+        elif stage < max(model.T): #We don't add the leaf node
+            parent_ndn = ndn
+            ndn = parent_ndn+"_"+nodenames[stage-starting_stage]
+            TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
+                                                       cond_prob=1.0/branching_factors[stage-starting_stage-1],
+                                                       stage=stage,
+                                                       cost_expression=model.stage_models[stage].StageObjective,
+                                                       scen_name_list=None, # Not maintained
+                                                       nonant_list=nonant_list,
                                                        scen_model=model,
                                                        nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
                                                        parent_name = parent_ndn
@@ -131,8 +182,10 @@ def MakeNodesforScen(model,nodenames,branching_factors):
     return(TreeNodes)
 
         
-def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_seed=0):
+def scenario_creator(sname, branching_factors, num_scens=None,
+                     mudev=0, sigmadev=40, start_seed=0):
     scennum   = sputils.extract_num(sname)
+    BFs = branching_factors
     # Find the right path and the associated seeds (one for each node) using scennum
     prod = np.prod(BFs)
     s = int(scennum % prod)
@@ -164,6 +217,56 @@ def scenario_creator(sname, BFs, num_scens=None, mudev=0, sigmadev=40, start_see
                 
 
 #=========
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow randome sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Finding demands from stage 1 to t
+    if given_scenario is None:
+        if stage == 1:
+            past_demands = [200]
+        else:
+            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
+    else:
+        past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
+    optional_things = ['mudev','sigmadev','start_ups']
+    default_values = [0,40,False]
+    for thing,value in zip(optional_things,default_values):
+        if thing not in scenario_creator_kwargs:
+            scenario_creator_kwargs[thing] = value
+    
+    #Finding demands for stages after t
+    future_demands,nodenames = demands_creator(sname, sample_branching_factors, 
+                                               start_seed = seed, 
+                                               mudev = scenario_creator_kwargs['mudev'], 
+                                               sigmadev = scenario_creator_kwargs['sigmadev'],
+                                               starting_d=past_demands[stage-1],
+                                               root_name='ROOT'+'_0'*(stage-1))
+    
+    demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
+    
+    model = aircond_model_creator(demands)
+    
+    model._mpisppy_probability = 1/np.prod(sample_branching_factors)
+    
+    #Constructing the nodes used by the scenario
+    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, sample_branching_factors,
+                                                starting_stage=stage)
+    
+    return model
+                
+
+#=========
 def scenario_names_creator(num_scens,start=None):
     # (only for Amalgomator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
@@ -176,29 +279,46 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to farmer
     inparser.add_argument("--mu-dev",
-                          help="average deviation of demand between two periods",
+                          help="average deviation of demand between two periods (default 0)",
                           dest="mudev",
                           type=float,
                           default=0.)
     inparser.add_argument("--sigma-dev",
-                          help="average standard deviation of demands between two periods",
+                          help="average standard deviation of demands between two periods (default 40)",
                           dest="sigmadev",
                           type=float,
                           default=40.)
+    inparser.add_argument("--start-seed",
+                          help="random number seed (default 1134)",
+                          dest="sigmadev",
+                          type=int,
+                          default=1134)
 
 #=========
 def kw_creator(options):
-    if 'branching_factors' in options:
-        BFs = options['branching_factors']
-    else:
-        BFs = [3]
-        
+
+    def _kwarg(option_name, default = None, arg_name=None):
+        # options trumps args
+        retval = options.get(option_name)
+        if retval is not None:
+            return retval
+        args = options.get('args')
+        aname = option_name if arg_name is None else arg_name
+        retval = getattr(args, aname) if hasattr(args, aname) else None
+        retval = default if retval is None else retval
+        return retval
+
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # for confidence intervals, we need to see if the values are in args
+    BFs = _kwarg("branching_factors")
+    mudev = _kwarg("mudev", 0.)
+    sigmadev = _kwarg("sigmadev", 40.)
+    start_seed = _kwarg("start_seed", 1134)
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
-              "BFs" : BFs,
-              "mudev" : options['mudev'] if 'mudev' in options else 0.,
-              "sigmadev" : options['sigmadev'] if 'sigmadev' in options else 40.,
-              "start_seed": options['start_seed'] if 'start_seed' in options else 0,
+              "branching_factors": BFs,
+              "mudev": mudev,
+              "sigmadev": sigmadev,
+              "start_seed": start_seed,
               }
     return kwargs
 
