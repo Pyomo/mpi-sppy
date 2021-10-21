@@ -24,7 +24,7 @@ from mpisppy import tt_timer, global_toc
 
 _spin_the_wheel_move_msg = \
         "spin_the_wheel should now be used as the class "\
-        "mpisppy.spin_the_wheel.WheelSpinner using the method `run()`. Output "\
+        "mpisppy.spin_the_wheel.WheelSpinner using the method `spin()`. Output "\
         "writers are now methods of the class WheelSpinner."
 
 def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
