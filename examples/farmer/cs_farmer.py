@@ -28,7 +28,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.log import setup_logger
 
 # the problem
@@ -167,12 +167,11 @@ if __name__ == "__main__":
     list_of_spoke_dict = (ub_spoke, cut_spoke, ) #lagrangian_spoke)
     #list_of_spoke_dict = (ub_spoke, )
 
-    spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
 
-    # there are ways to get the answer sooner
-    if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
-            print("BestInnerBound={} and BestOuterBound={}". \
-                  format(spcomm.BestInnerBound, spcomm.BestOuterBound))
+    if wheel.global_rank == 0:  # we are the reporting hub rank
+        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
+
     print("End time={} for global rank={}". \
           format(datetime.datetime.now(), global_rank))

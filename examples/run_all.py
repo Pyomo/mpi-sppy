@@ -309,7 +309,7 @@ if not nouc and egret_avail():
            "--solver-name={}".format(solver_name))
     do_one("uc", "uc_ama.py", 3,
            "--bundles-per-rank=0 --max-iterations=2 "
-           "--default-rho=1 --num-scens=3"
+           "--default-rho=1 --num-scens=3 "
            "--fixer-tol=1e-2 "
            "--solver-name={}".format(solver_name))
 

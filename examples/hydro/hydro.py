@@ -267,7 +267,7 @@ if __name__ == "__main__":
     # end hardwire
 
     # This is multi-stage, so we need to supply node names
-    all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+    all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 
     # **** ef ****
     solver = pyo.SolverFactory(options["solvername"])

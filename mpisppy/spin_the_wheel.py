@@ -1,6 +1,9 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
+from pyomo.environ import value
+from mpisppy import haveMPI, global_toc, _mpi as MPI
+
 from mpisppy.utils.sputils import (
         first_stage_nonant_writer,
         scenario_tree_solution_writer,
@@ -38,6 +41,9 @@ class WheelSpinner:
         """
         if self._ran:
             raise RuntimeError("WheelSpinner can only be run once")
+
+        hub_dict = self.hub_dict
+        list_of_spoke_dict = self.list_of_spoke_dict
 
         # Confirm that the provided dictionaries specifying
         # the hubs and spokes contain the appropriate keys
@@ -138,6 +144,16 @@ class WheelSpinner:
 
         self.spcomm = spcomm
         self.opt_dict = opt_dict
+        self.global_rank = global_rank
+        self.strata_rank = strata_rank
+        self.cylinder_rank = cylinder_rank
+
+        if self.strata_rank == 0:
+            self.BestInnerBound = spcomm.BestInnerBound
+            self.BestOuterBound = spcomm.BestOuterBound
+        else: # the cylinder ranks don't track the inner / outer bounds
+            self.BestInnerBound = None
+            self.BestOuterBound = None
 
         self._ran = True
 
@@ -183,7 +199,7 @@ class WheelSpinner:
             for node in s._mpisppy_node_list:
                 if node.name not in local_xhats:
                     local_xhats[node.name] = [
-                        pyo.value(var) for var in node.nonant_vardata_list]
+                        value(var) for var in node.nonant_vardata_list]
         return local_xhats
 
     def _determine_innerbound_winner(self):

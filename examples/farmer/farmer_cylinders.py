@@ -6,6 +6,7 @@ import farmer
 import mpisppy.cylinders
 
 # Make it all go
+from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils
 
 from mpisppy.utils import baseparsers
@@ -113,16 +114,14 @@ def main():
 
     mpisppy.cylinders.SPOKE_SLEEP_TIME = 0.1
 
-    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
 
     if write_solution:
-        sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'farmer_plant.csv')
-        sputils.write_spin_the_wheel_first_stage_solution(spcomm,
-                                                          opt_dict,
-                                                          'farmer_cyl_nonants.spy',
-                                                          first_stage_solution_writer=\
-                                                          sputils.first_stage_nonant_npy_serializer)
-        sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'farmer_full_solution')
+        wheel.write_first_stage_solution('farmer_plant.csv')
+        wheel.write_first_stage_solution('farmer_cyl_nonants.npy',
+                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
+        wheel.write_tree_solution('farmer_full_solution')
 
 if __name__ == "__main__":
     main()
