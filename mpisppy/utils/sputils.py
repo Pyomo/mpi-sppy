@@ -32,9 +32,9 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
             _spin_the_wheel_move_msg + \
             " See the example code below for a fix:\n"
     '''
-    from mpisppy.spin_the_wheel import SpinTheWheel
+    from mpisppy.spin_the_wheel import WheelSpinner
     s = SpinTheWheel(hub_dict, list_of_spoke_dict)
-    s.run(comm_world=comm_world)
+    s.spin(comm_world=comm_world)
     '''
     )
 
