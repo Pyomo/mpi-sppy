@@ -270,9 +270,7 @@ time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
 
 #=========MMW TESTS==========
 
-do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --with-objective-gap")
-
-do_one_mmw("aircond", "aaircond.py", "aircond_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --solver-options ''")
+do_one_mmw("farmer", "afarmer.py", "farmer_cyl_nonants.npy", "--num-scens=3", "--confidence-level 0.95 --MMW-batch-size=3 --with-objective-gap")
 
 #============================
 
