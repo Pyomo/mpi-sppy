@@ -12,7 +12,7 @@ BFs = [3, 3]
 all_scenario_names = [f"Scen{i+1}" for i in range(num_scenarios)]
 
 # This is multi-stage, so we need to supply node names
-all_nodenames = sputils.create_nodenames_from_BFs(BFs)
+all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 
 options["branching_factors"] = BFs
 ef = ExtensiveForm(

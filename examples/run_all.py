@@ -270,9 +270,7 @@ time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
 
 #=========MMW TESTS==========
 
-do_one_mmw("farmer", "afarmer.py", "farmer_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --with-objective-gap")
-
-do_one_mmw("aircond", "aaircond.py", "aircond_root_nonants_temp.npy", "--num-scens=3", "--alpha 0.95 --num-scens=3 --solver-options ''")
+do_one_mmw("farmer", "afarmer.py", "farmer_cyl_nonants.npy", "--num-scens=3", "--confidence-level 0.95 --MMW-batch-size=3 --with-objective-gap")
 
 #============================
 
@@ -280,16 +278,16 @@ if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
     do_one("acopf3", "fourstage.py", 4, f"2 2 2 1 0 {solver_name}")        
 
-if not nouc:
-    #  sizes kills the github tests using xpress, so hack to avoid it there
-    do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
+#  sizes kills the github tests using xpress
+#  so we use linearized proximal terms
+do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
-    do_one("sizes",
-           "special_cylinders.py",
-           4,
-           "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-           "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-           "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+do_one("sizes",
+       "special_cylinders.py",
+       4,
+       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
+       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 
     
 
@@ -309,7 +307,7 @@ if not nouc and egret_avail():
            "--solver-name={}".format(solver_name))
     do_one("uc", "uc_ama.py", 3,
            "--bundles-per-rank=0 --max-iterations=2 "
-           "--default-rho=1 --num-scens=3"
+           "--default-rho=1 --num-scens=3 "
            "--fixer-tol=1e-2 "
            "--solver-name={}".format(solver_name))
 

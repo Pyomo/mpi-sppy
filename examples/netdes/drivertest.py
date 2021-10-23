@@ -13,7 +13,7 @@ from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
@@ -129,4 +129,4 @@ if __name__=="__main__":
     }
     list_of_spoke_dict = (fw_spoke, lagrangian_spoke, xhatlooper_spoke)
 
-    spin_the_wheel(hub_dict, list_of_spoke_dict)
+    WheelSpinner(hub_dict, list_of_spoke_dict).spin()

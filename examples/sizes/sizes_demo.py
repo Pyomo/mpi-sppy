@@ -36,6 +36,7 @@ if __name__ == "__main__":
     options["verbose"] = False
     options["display_timing"] = True
     options["display_progress"] = True
+    options["linearize_proximal_terms"] = True
     # one way to set up sub-problem solver options
     options["iter0_solver_options"] = {"mipgap": 0.01}
     # another way

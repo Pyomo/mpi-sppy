@@ -6,7 +6,7 @@
 import re
 import sys
 import argparse
-import importlib
+from pyomo.common.fileutils import import_file
 from mpisppy.utils.sputils import option_string_to_dict
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.confidence_intervals import mmw_ci
@@ -56,10 +56,8 @@ if __name__ == "__main__":
 
     # now get the extra args from the module
     mname = sys.argv[1]  # args.instance eventually
-    if mname[-3:] == ".py":
-        mname = mname[-3:]
     try:
-        m = importlib.import_module(mname)
+        m = import_file(mname)
     except:
         raise RuntimeError(f"Could not import module: {mname}")
     m.inparser_adder(parser)

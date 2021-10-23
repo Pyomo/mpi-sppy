@@ -5,7 +5,7 @@
 import uc_funcs as uc
 
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 from mpisppy.cylinders.hub import LShapedHub
@@ -92,7 +92,7 @@ def main():
     if with_xhatlshaped:
         list_of_spoke_dict.append(xhatlshaped_spoke)
 
-    spin_the_wheel(hub_dict, list_of_spoke_dict)
+    WheelSpinner(hub_dict, list_of_spoke_dict).spin()
 
 
 if __name__ == "__main__":

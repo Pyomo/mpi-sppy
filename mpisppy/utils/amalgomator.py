@@ -60,7 +60,8 @@ import pyomo.environ as pyo
 import argparse
 import copy
 
-from mpisppy.utils.sputils import spin_the_wheel, get_objs, nonant_cache_from_ef, write_spin_the_wheel_first_stage_solution, write_spin_the_wheel_tree_solution
+from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
+from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.baseparsers as baseparsers
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import vanilla
@@ -406,11 +407,13 @@ class Amalgomator():
                 spoke_dict = spoke_creator(**spoke_beans)
                 list_of_spoke_dict.append(spoke_dict)
                 
-            spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+            ws =  WheelSpinner(hub_dict, list_of_spoke_dict)
+            ws.run()
+
+            spcomm = ws.spcomm
             
             self.opt = spcomm.opt
-            self.cylinder_rank = self.opt.cylinder_rank
-            self.on_hub = ("hub_class" in opt_dict)
+            self.on_hub = ws.on_hub()
             
             if self.on_hub:  # we are on a hub rank
                 self.best_inner_bound = spcomm.BestInnerBound
@@ -421,19 +424,15 @@ class Amalgomator():
             
             if 'write_solution' in self.options:
                 if 'first_stage_solution' in self.options['write_solution']:
-                    sputils.write_spin_the_wheel_first_stage_solution(spcomm,
-                                                                      opt_dict,
-                                                                      self.options['write_solution']['first_stage_solution'])
+                    ws.write_first_stage_solution(self.options['write_solution']['first_stage_solution'])
                 if 'tree_solution' in self.options['write_solution']:
-                    sputils.write_spin_the_wheel_tree_solution(spcomm,
-                                                               opt_dict,
-                                                               self.options['write_solution']['tree_solution'])
+                    ws.write_tree_solution(self.options['write_solution']['tree_solution'])
             
             if self.on_hub: #we are on a hub rank
                 a_sname = self.opt.local_scenario_names[0]
                 root = self.opt.local_scenarios[a_sname]._mpisppy_node_list[0]
                 self.first_stage_solution = {"ROOT":[pyo.value(var) for var in root.nonant_vardata_list]}
-                self.local_xhats = sputils.local_nonant_cache(spcomm)
+                self.local_xhats = ws.local_nonant_cache()
                 
             #TODO: Add a xhats attribute, similar to the output of nonant_cache_from_ef
             #      It means doing a MPI operation over hub ranks

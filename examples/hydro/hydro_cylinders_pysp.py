@@ -4,8 +4,7 @@
 
 import hydro
 
-import mpisppy.utils.sputils as sputils
-
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 from mpisppy.utils.pysp_model import PySPModel
@@ -69,16 +68,15 @@ def main():
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
 
-    if "hub_class" in opt_dict:  # we are a hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
-            print("BestInnerBound={} and BestOuterBound={}".\
-                  format(spcomm.BestInnerBound, spcomm.BestOuterBound))
+    if wheel.global_rank == 0:  # we are the reporting hub rank
+        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
     
     if write_solution:
-        sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'hydro_first_stage.csv')
-        sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'hydro_full_solution')
+        wheel.write_first_stage_solution('hydro_first_stage.csv')
+        wheel.write_tree_solution('hydro_full_solution')
 
     hydro.close()
 
