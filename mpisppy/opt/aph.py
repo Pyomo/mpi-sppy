@@ -224,13 +224,13 @@ class APH(ph_base.PHBase):
         # The six is because the reduced data (e.g. phi) are in the first 6.
         lptut =  np.max(self.node_concats["SecondReduce"]["ROOT"][6:])
 
-        logging.critical('   +++ debug enter listener_side_gig on cylinder_rank {} last phi update {}'\
+        logging.debug('   +++ debug enter listener_side_gig on cylinder_rank {} last phi update {}'\
               .format(self.cylinder_rank, lptut))
 
         xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         for cr in range(self.n_proc):
             backdist = self.n_proc - cr  # how far back into the vector
-            ##logging.critical('      *side_gig* cr {} on rank {} time {}'.\
+            ##logging.debug('      *side_gig* cr {} on rank {} time {}'.\
             ##    format(cr, self.cylinder_rank,
             ##        self.node_concats["FirstReduce"]["ROOT"][-backdist]))
             if  self.node_concats["FirstReduce"]["ROOT"][-backdist] \
@@ -240,12 +240,12 @@ class APH(ph_base.PHBase):
         fracin = xbarin/self.n_proc + EPSILON
         if  fracin < self.options["async_frac_needed"]:
             # We have not really "done" the side gig.
-            logging.critical('  ^ debug not good to go listener_side_gig on cylinder_rank {}; xbarin={}; fracin={}'\
+            logging.debug('  ^ debug not good to go listener_side_gig on cylinder_rank {}; xbarin={}; fracin={}'\
                   .format(self.cylinder_rank, xbarin, fracin))
             return
 
         # If we are still here, we have enough to do the calculations
-        logging.critical('^^^ debug good to go  listener_side_gig on cylinder_rank {}; xbarin={}'\
+        logging.debug('^^^ debug good to go  listener_side_gig on cylinder_rank {}; xbarin={}'\
               .format(self.cylinder_rank, xbarin))
         if verbose and self.cylinder_rank == 0:
             print ("(%d)" % xbarin)
@@ -745,7 +745,7 @@ class APH(ph_base.PHBase):
             self.Compute_Averages(verbose)
             logging.debug('post Compute_Averages on rank {}'.format(self.cylinder_rank))
             if self.global_tau <= 0:
-                logging.debug('***tau is 0 on rank {}'.format(self.cylinder_rank))
+                logging.critical('***tau is 0 on rank {}'.format(self.cylinder_rank))
 
             # Apr 2019 dlw: If you want the convergence crit. to be up to date,
             # do this as a listener side-gig and add another reduction.
@@ -833,7 +833,7 @@ class APH(ph_base.PHBase):
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
-        logging.critical('enter aph main on cylinder_rank {}'.format(self.cylinder_rank))
+        logging.debug('enter aph main on cylinder_rank {}'.format(self.cylinder_rank))
         self.PH_Prep(attach_duals=False, attach_prox=False)
 
         # Begin APH-specific Prep
@@ -889,7 +889,6 @@ class APH(ph_base.PHBase):
         self.setup_dispatchrecord()
 
         sleep_secs = self.options["async_sleep_secs"]
-        ##logging.critical('  the value of sleep_secs is {} in aph main on cylinder_rank {}'.format(sleep_secs, self.cylinder_rank))
 
         lkwargs = None  # nothing beyond synchro
         listener_gigs = {"FirstReduce": (self.listener_side_gig, lkwargs),
