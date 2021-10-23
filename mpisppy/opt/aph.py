@@ -23,6 +23,7 @@ logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
             )
 
+EPSILON = 1e-5  # for, e.g., fractions of ranks
 
 """
 Delete this comment block; dlw May 2019
@@ -40,7 +41,7 @@ Note: we deviate from the paper's notation in the use of i and k
 k is often used as the "key" (i.e., scenario name) for the local scenarios)
 """
 
-class APH(ph_base.PHBase):  # ??????
+class APH(ph_base.PHBase):
     """
     Args:
         options (dict): PH options
@@ -212,29 +213,40 @@ class APH(ph_base.PHBase):  # ??????
 
         verbose = self.options["verbose"]
         # See if we have enough xbars to proceed (need not be perfect)
-        xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         self.synchronizer._unsafe_get_global_data("FirstReduce",
                                                   self.node_concats)
         self.synchronizer._unsafe_get_global_data("SecondReduce",
                                                   self.node_concats)
         # last_phi_tau_update_time
+        # (the last time this side-gig did the calculations)
+        # We are going to see how many rank's xbars have been computed
+        # since then. If enough (determined by frac_needed), the do the calcs.
+        # The six is because the reduced data (e.g. phi) are in the first 6.
         lptut =  np.max(self.node_concats["SecondReduce"]["ROOT"][6:])
-        logging.debug('enter side gig, last phi update={}'.format(lptut))
+
+        logging.debug('   +++ debug enter listener_side_gig on cylinder_rank {} last phi update {}'\
+              .format(self.cylinder_rank, lptut))
+
+        xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         for cr in range(self.n_proc):
-            backdist = self.n_proc - cr
-            logging.debug('*side_gig* cr {} on rank {} time {}'.\
-                format(cr, self.cylinder_rank,
-                    self.node_concats["FirstReduce"]["ROOT"][-backdist]))
+            backdist = self.n_proc - cr  # how far back into the vector
+            ##logging.debug('      *side_gig* cr {} on rank {} time {}'.\
+            ##    format(cr, self.cylinder_rank,
+            ##        self.node_concats["FirstReduce"]["ROOT"][-backdist]))
             if  self.node_concats["FirstReduce"]["ROOT"][-backdist] \
-                >= lptut:
+                > lptut:
                 xbarin += 1
-        if xbarin/self.n_proc < self.options["async_frac_needed"]:
-            logging.debug('   not enough on rank {}'.format(self.cylinder_rank))
+
+        fracin = xbarin/self.n_proc + EPSILON
+        if  fracin < self.options["async_frac_needed"]:
             # We have not really "done" the side gig.
+            logging.debug('  ^ debug not good to go listener_side_gig on cylinder_rank {}; xbarin={}; fracin={}'\
+                  .format(self.cylinder_rank, xbarin, fracin))
             return
 
         # If we are still here, we have enough to do the calculations
-        logging.debug('   good to go on rank {}'.format(self.cylinder_rank))
+        logging.debug('^^^ debug good to go  listener_side_gig on cylinder_rank {}; xbarin={}'\
+              .format(self.cylinder_rank, xbarin))
         if verbose and self.cylinder_rank == 0:
             print ("(%d)" % xbarin)
             
@@ -258,15 +270,14 @@ class APH(ph_base.PHBase):  # ??????
         # we get here because we could not compute it until the averages were.
         # vk is just going to be ybar directly
         if not hasattr(self, "uk"):
-            self.uk = {} # indexed by sname and nonant index [sname][(ndn,i)]
+            # indexed by sname and nonant index [sname][(ndn,i)]
+            self.uk = {sname: dict() for sname in self.local_scenarios.keys()} 
         self.local_pusqnorm = 0  # local summand for probability weighted sqnorm
         self.local_pvsqnorm = 0
         new_tau_summand = 0  # for this rank
         for sname,s in self.local_scenarios.items():
             scen_usqnorm = 0.0
             scen_vsqnorm = 0.0
-            if sname not in self.uk:
-                self.uk[sname] = {}
             nlens = s._mpisppy_data.nlens        
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 self.uk[sname][(ndn,i)] = xvar._value \
@@ -298,6 +309,7 @@ class APH(ph_base.PHBase):  # ??????
         self.phi_summand = self.compute_phis_summand()
 
         # prepare for the reduction that will take place after this side-gig
+        # (this is where the 6 comes from)
         self.local_concats["SecondReduce"]["ROOT"][0] = self.tau_summand
         self.local_concats["SecondReduce"]["ROOT"][1] = self.phi_summand
         self.local_concats["SecondReduce"]["ROOT"][2] = self.local_pusqnorm
@@ -571,7 +583,7 @@ class APH(ph_base.PHBase):  # ??????
         #==========
         def _vb(msg): 
             if verbose and self.cylinder_rank == 0:
-                print ("(rank0) " + msg)
+                print ("(cylinder rank {}) {}".format(self.cylinder_rank, msg))
         _vb("Entering solve_loop function.")
 
 
@@ -599,6 +611,7 @@ class APH(ph_base.PHBase):  # ??????
                 # TBD: check this sort
                 sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                      key=lambda item: item[1][-1])}
+                _vb("  sortedbyI={}.format(sortedbyI)")
                 # There is presumably a pythonic way to do this...
                 retval = list()
                 i = 0
@@ -626,11 +639,13 @@ class APH(ph_base.PHBase):  # ??????
 
         scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
         dispatch_list = _dispatch_list(scnt)
+        _vb("dispatch list before dispath: {}".format(dispatch_list))
         for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
             s = s_source[k]
             self.dispatchrecord[k].append((self._PHIter, p))
+            _vb("dispatch k={}; phi={}".format(k, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.cylinder_rank, k, p))
             pyomo_solve_time = self.solve_one(solver_options, k, s,
@@ -730,7 +745,7 @@ class APH(ph_base.PHBase):  # ??????
             self.Compute_Averages(verbose)
             logging.debug('post Compute_Averages on rank {}'.format(self.cylinder_rank))
             if self.global_tau <= 0:
-                logging.debug('***tau is 0 on rank {}'.format(self.cylinder_rank))
+                logging.critical('***tau is 0 on rank {}'.format(self.cylinder_rank))
 
             # Apr 2019 dlw: If you want the convergence crit. to be up to date,
             # do this as a listener side-gig and add another reduction.
@@ -818,6 +833,7 @@ class APH(ph_base.PHBase):  # ??????
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
+        logging.debug('enter aph main on cylinder_rank {}'.format(self.cylinder_rank))
         self.PH_Prep(attach_duals=False, attach_prox=False)
 
         # Begin APH-specific Prep

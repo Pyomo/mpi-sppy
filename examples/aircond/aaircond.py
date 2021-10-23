@@ -393,7 +393,7 @@ if __name__ == "__main__":
                     "EF_solver_name": "gurobi_direct",
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
-                    "BFs":bfs,
+                    "branching_factors":bfs,
                     "mudev":0,
                     "sigmadev":80,
                     "start":1

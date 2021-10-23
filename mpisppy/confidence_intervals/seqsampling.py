@@ -490,6 +490,7 @@ class SeqSampling():
         return {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
 
 if __name__ == "__main__":
+    # for developer testing
     solvername = "cplex"
     
     refmodel = "mpisppy.tests.examples.farmer"

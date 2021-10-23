@@ -3,7 +3,7 @@
 # set up the most common parser args for mpi-sppy examples
 """ NOTE TO NEW USERS: just using these parsers will not, itself, do anything.
     You have to use the values when you create the dictionaries that are passed
-    to spin_the_wheel. Further note that not all examples use all values
+    to WheelSpinner. Further note that not all examples use all values
     in the parsers.
 """
 import argparse

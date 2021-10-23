@@ -6,7 +6,7 @@ import farmer
 import mpisppy.cylinders
 
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
@@ -87,7 +87,7 @@ def main():
 
     mpisppy.cylinders.SPOKE_SLEEP_TIME = 0.1
 
-    spin_the_wheel(hub_dict, list_of_spoke_dict)
+    WheelSpinner(hub_dict, list_of_spoke_dict).spin()
 
 
 if __name__ == "__main__":
