@@ -1,6 +1,9 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
+
+import dill
+
 import logging
 import time
 import math
@@ -795,6 +798,11 @@ class SPOpt(SPBase):
                     self.names_in_bundles[rank_local][bun]
                 self.local_subproblems[bname]._mpisppy_probability = \
                                     sum(s._mpisppy_probability for s in sdict.values())
+                global_toc("start PICKLE (dill) HACK!!!")
+                dillname = "dill_"+bname+".pkl"
+                with open(dillname, "wb") as dill_file:
+                    dill.dump(resultstatsDF, dill_file)
+                global_toc("complete PICKLE (dill) HACK!!!")
         else:
             for sname, s in self.local_scenarios.items():
                 self.local_subproblems[sname] = s
