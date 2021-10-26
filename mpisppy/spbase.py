@@ -485,19 +485,14 @@ class SPBase:
                                            " which are not 1")
                     checked_nodes.append(ndn)
 
-    def _look_before_leap(self, scen, addlist):
-        """ utility to check before attaching something to the user's model
-        """
-        for attr in addlist:
-            if hasattr(scen, attr):
-                raise RuntimeError(f"Model ({scen.name}) already has `internal' attribute " + attr)
 
     def _look_and_leap(self):
         for (sname, scenario) in self.local_scenarios.items():
-            self._look_before_leap( scenario, ['_mpisppy_data', '_mpisppy_model' ] )
 
-            scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
-            scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+            if not hasattr(scenario, "_mpisppy_data"):
+                scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
+            if not hasattr(scenario, "_mpisppy_model"):
+                scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
             if hasattr(scenario, "PySP_prob"):
                 raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
