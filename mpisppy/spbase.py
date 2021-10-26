@@ -490,7 +490,7 @@ class SPBase:
         """
         for attr in addlist:
             if hasattr(scen, attr):
-                raise RuntimeError("Model already has `internal' attribute" + attr)
+                raise RuntimeError(f"Model ({scen.name}) already has `internal' attribute " + attr)
 
     def _look_and_leap(self):
         for (sname, scenario) in self.local_scenarios.items():
