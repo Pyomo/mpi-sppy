@@ -25,6 +25,7 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 def _parse_args():
     parser = baseparsers.make_parser("uc_cylinders")
     parser = baseparsers.two_sided_args(parser)
+    parser = baseparsers.aph_args(parser)        
     parser = baseparsers.fixer_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
@@ -48,6 +49,11 @@ def _parse_args():
                         action='store_true',
                         dest='xhat_closest_tree',
                         default=False)
+    parser.add_argument("--run-aph",
+                        help="Run with async projective hedging instead of progressive hedging",
+                        dest="run_aph",
+                        action="store_true",
+                        default=False)        
     args = parser.parse_args()
     return args
 
@@ -84,12 +90,17 @@ def main():
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
     ### start ph spoke ###
-    # Start with Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=MultiExtension,
-                              rho_setter = rho_setter)
-
+    if args.run_aph:
+        hub_dict = vanilla.aph_hub(*beans,
+                                   scenario_creator_kwargs=scenario_creator_kwargs,
+                                   ph_extensions=MultiExtension,
+                                   rho_setter = rho_setter)
+    else:
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=MultiExtension,
+                                  rho_setter = rho_setter)
+        
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
     if with_fixer:

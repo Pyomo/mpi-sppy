@@ -112,8 +112,7 @@ class APH(ph_base.PHBase):
                         else options["APHgamma"]
         assert(self.APHgamma > 0)
         self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
-        self.with_round_robin_dispatch = options.get("with_round_robin_dispatch", False)
-        ###self.with_round_robin_dispatch = True
+        self.round_robin_dispatch = options.get("round_robin_dispatch", False)
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
         if "APHnu" in options:
@@ -604,7 +603,7 @@ class APH(ph_base.PHBase):
             # There is an option to allow for round-robin for research purposes.
             # NOTE: intermediate lists are created to help with verification.
             # reminder: dispatchrecord is sname:[(iter,phi)...]
-            if self.with_round_robin_dispatch:
+            if self.round_robin_dispatch:
                 # TBD: check this sort
                 sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
                                                      key=lambda item: item[1][-1])}
