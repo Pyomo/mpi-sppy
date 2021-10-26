@@ -372,11 +372,8 @@ class APH(ph_base.PHBase):
             self.node_concats["SecondReduce"]["ROOT"]\
                 = np.zeros(mylen, dtype='d')
         else: # concats are here, just zero them out. 
-            """ delete this comment block after sept 2020:
-            DLW Aug 2020: why zero?
-            We zero them so we can use an accumulator in the next loop and
-              that seems to be OK.
-            """
+            # We zero them so we can use an accumulator in the next loop and
+            # that seems to be OK.
             nodenames = []
             for k,s in self.local_scenarios.items():
                 nlens = s._mpisppy_data.nlens        
@@ -777,6 +774,8 @@ class APH(ph_base.PHBase):
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
             # Aug2020 ... at least you would get dispatch
+            # Oct 2021: still need full dispatch in iter 1 (as well as iter 0)
+            # TBD: ? restructure so iter 1 can have partial dispatch
             if self._PHIter == 1:
                 savefrac = self.dispatch_frac
                 self.dispatch_frac = 1   # to get a decent w for everyone
