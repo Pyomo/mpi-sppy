@@ -59,7 +59,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
         # this function is scenario specific (takes a scenario as an arg)
         self.id_fix_list_fct = self.fixeroptions["id_fix_list_fct"]
         self.dprogress = ph.options["display_progress"]
-        self.fixed_so_far = 0
+        self.fixed_prior_iter0 = 0
+        self.fixed_so_far = 0        
         self.boundtol = self.fixeroptions["boundtol"]
 
     def populate(self, local_scenarios):
@@ -100,10 +101,12 @@ class Fixer(mpisppy.extensions.extension.Extension):
                             raise RuntimeError("Attempt to vary fixer "+\
                                                "threshold across scenarios")
 
+    # verbose utility
     def _vb(self, str):
         if self.verbose and self.cylinder_rank == 0:
             print ("(rank0) " + str)
 
+    # display progress utility
     def _dp(self, str):
         if (self.dprogress or self.verbose) and self.cylinder_rank == 0:
             print ("(rank0) " + str)
@@ -138,11 +141,14 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 vars_to_update = {}
 
         fixoptions = self.fixeroptions
-        raw_fixed_so_far = 0   # count those fixed in each scenario
+        # modelers might have already fixed variables - count those up and output the result
+        raw_fixed_on_arrival = 0
+        raw_fixed_this_iter = 0   
         for sname,s in self.ph.local_scenarios.items():
             if self.iter0_fixer_tuples[s] is None:
                 print ("WARNING: No Iter0 fixer tuple for s.name=",s.name)
                 return
+            
             if not have_bundles:
                 solver_is_persistent = isinstance(s._solver_plugin,
                     pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
@@ -183,13 +189,18 @@ class Fixer(mpisppy.extensions.extension.Extension):
                             was_fixed = True
 
                     if was_fixed:
-                        raw_fixed_so_far += 1
+                        raw_fixed_this_iter += 1
                         if not have_bundles and solver_is_persistent:
                             s._solver_plugin.update_var(xvar)
                         if have_bundles and solver_is_persistent:
                             if sname not in vars_to_update:
                                 vars_to_update[sname] = []
                             vars_to_update[sname].append(xvar)
+                else:
+                    # TODO: a paranoid would and should put a check to ensure
+                    # that variables are fixed in all scenarios and are fixed
+                    # to the same value.
+                    raw_fixed_on_arrival += 1
 
         if have_bundles and solver_is_persistent:
             for k,subp in self.ph.local_subproblems.items():
@@ -200,12 +211,17 @@ class Fixer(mpisppy.extensions.extension.Extension):
                         for xvar in vars_to_update[sname]:
                             subp._solver_plugin.update_var(xvar)
                         
-        self.fixed_so_far += raw_fixed_so_far / len(local_scenarios)
-        self._dp("Unique Vars fixed so far %s" % (self.fixed_so_far))
-        if raw_fixed_so_far % len(local_scenarios) != 0:
+        self.fixed_prior_iter0 += raw_fixed_on_arrival / len(local_scenarios)
+        self.fixed_so_far += raw_fixed_this_iter / len(local_scenarios)
+        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))
+        if raw_fixed_this_iter % len(local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios detected "
                                 "in fixer.py (iter0)")
-            # maybe to do mpicomm.abort()
+            # maybe to do mpicomm.abort()        
+        if raw_fixed_on_arrival % len(local_scenarios) != 0:
+            raise RuntimeError ("Variation in fixing across scenarios prior to iteration 0 detected "
+                                "in fixer.py (iter0)")        
+
 
     def iterk(self, PHIter):
         """ Before iter k>1 solves, but after x-bar update.
@@ -221,7 +237,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 vars_to_update = {}
 
         fixoptions = self.fixeroptions
-        raw_fixed_so_far = 0
+        raw_fixed_this_iter = 0
         self._update_fix_counts()
         for sname,s in self.local_scenarios.items():
             if self.fixer_tuples[s] is None:
@@ -263,7 +279,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
                             was_fixed = True
 
                     if was_fixed:
-                        raw_fixed_so_far += 1
+                        raw_fixed_this_iter += 1
                         if not have_bundles and solver_is_persistent:
                             s._solver_plugin.update_var(xvar)
                         if have_bundles and solver_is_persistent:
@@ -280,10 +296,10 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     if sname in vars_to_update:
                         for xvar in vars_to_update[sname]:
                             subp._solver_plugin.update_var(xvar)
-                        
-        self.fixed_so_far += raw_fixed_so_far / len(self.local_scenarios)
-        self._dp("Unique Vars fixed so far %s" % (self.fixed_so_far))
-        if raw_fixed_so_far % len(self.local_scenarios) != 0:
+
+        self.fixed_so_far += raw_fixed_this_iter / len(self.local_scenarios)
+        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))        
+        if raw_fixed_this_iter % len(self.local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios detected "
                                 "in fixer.py")
 
@@ -309,6 +325,6 @@ class Fixer(mpisppy.extensions.extension.Extension):
         return
 
     def post_everything(self):
-        self._dp("Final unique Vars fixed by fixer= %s" % \
+        self._dp("Final unique vars fixed by fixer= %s" % \
                       (self.fixed_so_far))
 
