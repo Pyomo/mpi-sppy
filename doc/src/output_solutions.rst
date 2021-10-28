@@ -20,14 +20,15 @@ file name (string) as positional argument (and optionally a customized
 writer function).
 
 For example, suppose you have an extensive form (EF) object, ef, that
-is of a type derived from spbase (which is almost surely is), then you
+is of a type derived from SPBase (which is almost surely is), then you
 can print the tree solution to a directory named `efsol` using
 
 ::
+   
    ef.write_tree_solution("efsol")
 
 
-See `spase`_ for a description of the APIs.
+See `SPBase`_ for a description of the APIs.
 
 WheelSpinner
 ------------
