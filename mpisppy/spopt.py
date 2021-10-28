@@ -284,13 +284,19 @@ class SPOpt(SPBase):
             if s._mpisppy_data.scenario_feasible:
                 for v in s._mpisppy_data.nonant_indices.values():
                     if v.stale:
-                        raise RuntimeError(
-                                f"Non-anticipative variable {v.name} on scenario {sn} "
-                                 "reported as stale. This usually means this variable "
-                                 "did not appear in any (active) constraints, and hence "
-                                 "was not communicated to the subproblem solver. Please "
-                                 "ensure all non-anticipative variables appear in some "
-                                 "constraint.")
+                        if self.is_zero_prob(s, v) and v._value is None:
+                            raise RuntimeError(
+                                    f"Non-anticipative zero-probability variable {v.name} "
+                                    f"on scenario {sn} reported as stale and has no value. "
+                                     "Zero-probability variables should have a value set.")
+                        else:
+                            raise RuntimeError(
+                                    f"Non-anticipative variable {v.name} on scenario {sn} "
+                                     "reported as stale. This usually means this variable "
+                                     "did not appear in any (active) constraints, and hence "
+                                     "was not communicated to the subproblem solver. Please "
+                                     "ensure all non-anticipative variables appear in some "
+                                     "constraint.")
 
 
 
