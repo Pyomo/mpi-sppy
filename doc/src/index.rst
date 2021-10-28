@@ -15,6 +15,7 @@ MPI is used.
    drivers.rst
    amalgomator.rst
    examples.rst
+   output_solutions.rst
    hubs.rst
    spokes.rst
    extensions.rst
