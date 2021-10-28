@@ -277,6 +277,22 @@ class SPOpt(SPBase):
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
 
+        # Look at the feasible scenarios. If we have any stale non-anticipative
+        # variables, complain. Otherwise the user will hit this issue later when
+        # we attempt to access the variables `value` attribute (see Issue #170).
+        for sn, s in self.local_scenarios.items():
+            if s._mpisppy_data.scenario_feasible:
+                for v in s._mpisppy_data.nonant_indices.values():
+                    if v.stale:
+                        raise RuntimeError(
+                                f"Non-anticipative variable {v.name} on scenario {sn} "
+                                 "reported as stale. This usually means this variable "
+                                 "did not appear in any (active) constraints, and hence "
+                                 "was not communicated to the subproblem solver. Please "
+                                 "ensure all non-anticipative variables appear in some "
+                                 "constraint.")
+
+
 
     def Eobjective(self, verbose=False):
         """ Compute the expected objective function across all scenarios.
