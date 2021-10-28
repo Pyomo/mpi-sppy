@@ -60,7 +60,8 @@ This is the base class for PH and PH-like algorithms.
    :undoc-members:
    :show-inheritance:
 
-
+.. _spbase:
+      
 spbase.py
 ^^^^^^^^^
 
