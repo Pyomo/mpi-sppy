@@ -283,7 +283,7 @@ class SPOpt(SPBase):
         for sn, s in self.local_scenarios.items():
             if s._mpisppy_data.scenario_feasible:
                 for v in s._mpisppy_data.nonant_indices.values():
-                    if v.stale:
+                    if (not v.fixed) and v.stale:
                         if self.is_zero_prob(s, v) and v._value is None:
                             raise RuntimeError(
                                     f"Non-anticipative zero-probability variable {v.name} "
