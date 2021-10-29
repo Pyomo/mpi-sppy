@@ -15,9 +15,10 @@ MPI is used.
    drivers.rst
    amalgomator.rst
    examples.rst
-   output_solutions.rst
    hubs.rst
    spokes.rst
+   output_solutions.rst
+   access_solutions.rst
    extensions.rst
    zhat.rst
    confidence_intervals.rst
