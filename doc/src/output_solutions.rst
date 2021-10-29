@@ -6,8 +6,8 @@ Output Solutions
 The mechanisms for outputting and accessing solutions depends on how the solutions
 were obtained. We will describe some of the possibilities here.
 
-Mid-level
----------
+EF (and Mid-level)
+------------------
 
 If you are not using a ``WheelSpinner`` object, but rather creating an
 ``EF`` object directly (or ``PH``, ``APH`` or ``L-shaped`` directly),
@@ -19,7 +19,7 @@ writer function).  You can output just the first stage solution using
 file name (string) as positional argument (and optionally a customized
 writer function).
 
-For example, suppose you have an extensive form (EF) object, ef, that
+For example, suppose you have an extensive form (EF) object, `ef`, that
 is of a type derived from SPBase (which is almost surely is), then you
 can print the tree solution to a directory named `efsol` using
 
@@ -51,3 +51,18 @@ the function ``sputils.first_stage_nonant_npy_serializer`` can be
 passed as the ``first_stage_solution_writer`` keyword argument to the
 ``WheelSpinner.write_tree_solution`` function.  See the
 `farmer_cylinders` example.
+
+Customized Writer Function
+--------------------------
+
+See ``examples.uc.uc_funcs.py`` for an example called `` scenario_tree_solution_writer``,
+which matches the argument name in the ``write_tree_solution`` function. The most
+important thing to note is that these functions are passed a scenario model (a Pyomo model) that
+is populated with the solution for the given scenario.
+
+Amalgomator
+-----------
+
+To get solution output when using `Amalgomator`, you can supply a file name in
+``options['write_solution']['first_stage_solution']`` and/or a directory name in
+``options['write_solution']['tree_solution']``
