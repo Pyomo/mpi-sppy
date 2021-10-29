@@ -59,7 +59,10 @@ if __name__ == "__main__":
     try:
         m = import_file(mname)
     except:
-        raise RuntimeError(f"Could not import module: {mname}")
+        try:
+            m = import_file(f"{mname}.py")
+        except:
+            raise RuntimeError(f"Could not import module: {mname}")
     m.inparser_adder(parser)
     args = parser.parse_args()  
 
