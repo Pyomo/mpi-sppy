@@ -314,7 +314,7 @@ def kw_creator(options):
     mudev = _kwarg("mudev", 0.)
     sigmadev = _kwarg("sigmadev", 40.)
     start_seed = _kwarg("start_seed", 1134)
-    kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
+    kwargs = {"num_scens" : options.get('num_scens', None),
               "branching_factors": BFs,
               "mudev": mudev,
               "sigmadev": sigmadev,
