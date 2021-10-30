@@ -28,6 +28,10 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
+        ## for later
+        self.verbose = self.opt.options["verbose"] # typing aid  
+        self.solver_options = self.opt.options["xhat_looper_options"]["xhat_solver_options"]
+
         # Start code to support running trace. TBD: factor this up?
         if self.cylinder_rank == 0 and \
                 'suffle_running_trace_prefix' in self.opt.options and \
@@ -49,9 +53,10 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             raise RuntimeError("XhatShuffleInnerBound must be used with Xhat_Eval.")
             
         xhatter = XhatBase(self.opt)
+        self.xhatter = xhatter
 
         ### begin iter0 stuff
-        xhatter.pre_iter0()
+        xhatter.pre_iter0()  # for an extension
         self.opt._save_original_nonants()
 
         teeme = False
@@ -59,7 +64,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             teeme = self.opt.options['tee-rank0-solves']
 
         self.opt.solve_loop(
-            solver_options=self.opt.current_solver_options,
+            solver_options=self.solver_options,
             dtiming=False,
             gripe=True,
             tee=teeme,
@@ -72,16 +77,12 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
             raise ValueError(f"Infeasibility detected; E_infeas={infeasP}")
-
+        
         ### end iter0 stuff
 
         xhatter.post_iter0()
+ 
         self.opt._save_nonants() # make the cache
-
-        ## for later
-        self.verbose = self.opt.options["verbose"] # typing aid  
-        self.solver_options = self.opt.options["xhat_looper_options"]["xhat_solver_options"]
-        self.xhatter = xhatter
 
         ## option drive this? (could be dangerous)
         self.random_seed = 42
@@ -91,6 +92,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def try_scenario_dict(self, xhat_scenario_dict):
         snamedict = xhat_scenario_dict
+
         obj = self.xhatter._try_one(snamedict,
                             solver_options = self.solver_options,
                             verbose=False,
