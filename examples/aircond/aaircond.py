@@ -212,7 +212,8 @@ def scenario_creator(sname, branching_factors, num_scens=None,
     
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, BFs)
-    
+
+    model._mpisppy_probability = 1 / np.prod(BFs)
     return(model)
                 
 
@@ -314,7 +315,7 @@ def kw_creator(options):
     mudev = _kwarg("mudev", 0.)
     sigmadev = _kwarg("sigmadev", 40.)
     start_seed = _kwarg("start_seed", 1134)
-    kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
+    kwargs = {"num_scens" : options.get('num_scens', None),
               "branching_factors": BFs,
               "mudev": mudev,
               "sigmadev": sigmadev,
@@ -329,7 +330,7 @@ def scenario_denouement(rank, scenario_name, scenario):
         
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           BFs=[3,2,3], mudev = 0, sigmadev = 40, start_seed = 0):
+                           BFs=None, mudev = 0, sigmadev = 40, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -343,7 +344,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     solver_options: dict, optional
         Solving options. The default is None.
     BFs: list, optional
-        Branching factors of the scenario 3. The default is [3,2,3] 
+        Branching factors of the scenario 3, e.g., [3,2,3] 
         (a 4 stage model with 18 different scenarios)
     mudev: float, optional
         The average deviation of demand between two stages; The default is 0.

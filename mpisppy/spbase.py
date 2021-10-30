@@ -275,7 +275,7 @@ class SPBase:
                     raise RuntimeError("The leaf node associated with this scenario is not on all_nodenames"
                         f"Its last non-leaf node {s._mpisppy_node_list[stmax].name} has no first child {s._mpisppy_node_list[stmax].name+'_0'}")
             
-            if "display_timing" in self.options and self.options["display_timing"]:
+            if self.options.get("display_timing", False):
                 instance_creation_time = time.time() - instance_creation_start_time
                 all_instance_creation_times = self.mpicomm.gather(
                     instance_creation_time, root=0
