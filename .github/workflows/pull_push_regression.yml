@@ -26,7 +26,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme cplex
-	  pip install xpress==8.12
+          pip install xpress==8.12
 
       - name: setup the program
         run: |
