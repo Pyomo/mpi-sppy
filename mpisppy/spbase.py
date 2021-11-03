@@ -436,7 +436,10 @@ class SPBase:
             return False
         _mpisppy_data = scenario_model._mpisppy_data
         ndn, i = _mpisppy_data.varid_to_nonant_index[id(var)]
-        return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+        if isinstance(_mpisppy_data.prob_coeff[ndn], np.ndarray):
+            return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+        else:
+            return False
 
     def _check_variable_probabilities_sum(self, verbose):
 
