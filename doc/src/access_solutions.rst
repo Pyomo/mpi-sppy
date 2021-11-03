@@ -11,13 +11,13 @@ EF
 --
 
 If you are not using a ``WheelSpinner`` object, but rather creating an
-``EF`` object directly,
+``EF`` object directly using ``mpisppy.sputils.create_EF``,
 you can use the function ``mpisppy.sputils.ef_scenarios`` to loop over
 the scenario models after solution. The function takes one arugment,
 which is the EF object.
 
-For example, suppose you have an extensive form (EF) object, `ef`, that
-is of a type derived from SPBase (which is almost surely is), then you
+For example, suppose you have such an extensive form (EF) object, `ef`,
+then you
 can access the ``Pyomo`` model for every scenario using something like:
 
 ::
