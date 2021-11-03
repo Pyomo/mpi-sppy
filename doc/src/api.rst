@@ -60,11 +60,11 @@ This is the base class for PH and PH-like algorithms.
    :undoc-members:
    :show-inheritance:
 
-
+      
 spbase.py
 ^^^^^^^^^
 
-This is the base class for many algorithms.
+_`SPBase` is the base class for many algorithms.
 
 .. automodule:: mpisppy.spbase
    :members:
