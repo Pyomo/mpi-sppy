@@ -308,7 +308,7 @@ if not nouc and egret_avail():
     do_one("uc", "uc_cylinders.py", 3,
            "--run-aph --bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts --no-fwph"
+           "--lagrangian-iter0-mipgap=1e-7 --no-cross-scenario-cuts --no-fwph "
            "--ph-mipgaps-json=phmipgaps.json "
            "--solver-name={}".format(solver_name))    
     do_one("uc", "uc_ama.py", 3,
