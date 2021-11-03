@@ -34,7 +34,7 @@ WheelSpinner
 ------------
 
 The ``WheelSpinner`` class has member functions that can write
-solutions that are very similar to the functions on ``spabse``.
+solutions that are very similar to the functions on ``SPBase``.
 You can use the function ``WheelSpinner.write_tree_solution``
 to output the entire solution tree; the function takes a directory
 name (string) as positional argument (and optionally a customized

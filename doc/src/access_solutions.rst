@@ -13,7 +13,7 @@ EF
 If you are not using a ``WheelSpinner`` object, but rather creating an
 ``EF`` object directly,
 you can use the function ``mpisppy.sputils.ef_scenarios`` to loop over
-the scenario models after sololution. The function takes one arugment,
+the scenario models after solution. The function takes one arugment,
 which is the EF object.
 
 For example, suppose you have an extensive form (EF) object, `ef`, that
