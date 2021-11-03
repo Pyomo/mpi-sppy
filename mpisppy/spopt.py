@@ -288,7 +288,7 @@ class SPOpt(SPBase):
                             raise RuntimeError(
                                     f"Non-anticipative zero-probability variable {v.name} "
                                     f"on scenario {sn} reported as stale and has no value. "
-                                     "Zero-probability variables should have a value set.")
+                                     "Zero-probability variables must have a value (e.g., fixed).")
                         else:
                             raise RuntimeError(
                                     f"Non-anticipative variable {v.name} on scenario {sn} "
