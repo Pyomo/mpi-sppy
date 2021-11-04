@@ -436,7 +436,10 @@ class SPBase:
             return False
         _mpisppy_data = scenario_model._mpisppy_data
         ndn, i = _mpisppy_data.varid_to_nonant_index[id(var)]
-        return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+        if isinstance(_mpisppy_data.prob_coeff[ndn], np.ndarray):
+            return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+        else:
+            return False
 
     def _check_variable_probabilities_sum(self, verbose):
 
@@ -600,7 +603,8 @@ class SPBase:
 
     def write_first_stage_solution(self, file_name,
             first_stage_solution_writer=sputils.first_stage_nonant_writer):
-        """ Writes the first-stage solution, if this object reports one available
+        """ Writes the first-stage solution, if this object reports one available.
+
             Args:
                 file_name: path of file to write first stage solution to
                 first_stage_solution_writer (optional): custom first stage solution writer function
@@ -618,7 +622,8 @@ class SPBase:
     def write_tree_solution(self, directory_name,
             scenario_tree_solution_writer=sputils.scenario_tree_solution_writer):
         """ Writes the tree solution, if this object reports one available.
-            Raises a RuntimeError if it is not
+            Raises a RuntimeError if it is not.
+
             Args:
                 directory_name: directory to write tree solution to
                 scenario_tree_solution_writer (optional): custom scenario solution writer function

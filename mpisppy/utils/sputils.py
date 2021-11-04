@@ -33,8 +33,8 @@ def spin_the_wheel(hub_dict, list_of_spoke_dict, comm_world=None):
             " See the example code below for a fix:\n"
     '''
     from mpisppy.spin_the_wheel import WheelSpinner
-    s = SpinTheWheel(hub_dict, list_of_spoke_dict)
-    s.spin(comm_world=comm_world)
+    ws = WheelSpinner(hub_dict, list_of_spoke_dict)
+    ws.spin(comm_world=comm_world)
     '''
     )
 
