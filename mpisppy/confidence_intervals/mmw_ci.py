@@ -18,7 +18,6 @@ global_rank = fullcomm.Get_rank()
 import mpisppy.utils.amalgomator as ama
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.utils.sputils as sputils
-import mpisppy.confidence_intervals.sample_tree as sample_tree
 import mpisppy.confidence_intervals.ciutils as ciutils
 
 def remove_None(d):
@@ -87,13 +86,11 @@ class MMWConfidenceIntervals():
             self.multistage = True
             self.numstages = len(options['branching_factors'])+1
         else:
-            raise RuntimeError(
-                "Only EF is supported. options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
+            raise RuntimeError("Only EF is currently supported. "
+                "Options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
         
         #Check if refmodel and args have all needed attributes
-        everything = ["scenario_names_creator",
-                 "scenario_creator",
-                 "kw_creator"]  # denouement can be missing.
+        everything = ["scenario_names_creator", "scenario_creator", "kw_creator"]
         if self.multistage:
             everything[0] = "sample_tree_scen_creator"
     

@@ -69,11 +69,6 @@ if __name__ == "__main__":
     #parses solver options string
     solver_options = option_string_to_dict(args.solver_options)
 
-#    if args.num_scens == None:
-#        print('\n')
-#        raise Exception("Please include number of scenes used to compute the candidate solutions xhat.")
-#        print('\n')
-
     # convert instance path to module name:
     modelpath = re.sub('/','.', args.instance)
     modelpath = re.sub(r'\.py','', modelpath)
