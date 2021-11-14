@@ -99,7 +99,7 @@ This is an advanced topic and rarely encountered.
 In some settings, particularly with small sub-problems, it is possible for
 ranks within spokes to become ``of of sync.''  The most common manifestation of this
 is that some ranks do not see the kill signal and sit in a busy-wait I/O loop
-until something external kills them; but it can also be the case that
+until something external kills them; but it can also be the case that Lagrangian
 bound spokes start operating on data from different hub iterations; they should notice
 this an emit a message if it happens.
 
