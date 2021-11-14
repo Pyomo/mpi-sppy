@@ -112,8 +112,6 @@ def main():
     if args.with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    mpisppy.cylinders.SPOKE_SLEEP_TIME = 0.1
-
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
