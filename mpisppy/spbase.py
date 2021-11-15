@@ -295,6 +295,7 @@ class SPBase:
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
             scenario._mpisppy_data.nonant_indices = _nonant_indices
+        self.nonant_length = len(_nonant_indices)
 
 
     def _attach_nlens(self):

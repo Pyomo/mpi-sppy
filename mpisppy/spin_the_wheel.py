@@ -102,7 +102,6 @@ class WheelSpinner:
             opt_class = spoke_dict["opt_class"]
             opt_kwargs = spoke_dict["opt_kwargs"]
             opt_dict = spoke_dict
-    
 
         # Create the appropriate opt object locally
         opt_kwargs["mpicomm"] = cylinder_comm

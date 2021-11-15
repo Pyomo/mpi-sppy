@@ -8,8 +8,6 @@ import time
 import os
 import math
 
-# for SLEEP_TIME
-import mpisppy.cylinders as cylinders
 import mpisppy.utils.sputils as sputils
 
 from mpi4py import MPI
@@ -24,7 +22,7 @@ class ConvergerSpokeType(enum.Enum):
 
 class Spoke(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         self.local_write_id = 0
         self.remote_write_id = 0
         self.local_length = 0  # Does NOT include the + 1
@@ -107,8 +105,8 @@ class Spoke(SPCommunicator):
         # Spokes can sometimes call this frequently in a tight loop,
         # causing the Allreduces to become out of sync
         diff = time.time() - self.last_call_to_got_kill_signal
-        if diff < cylinders.SPOKE_SLEEP_TIME:
-            time.sleep(cylinders.SPOKE_SLEEP_TIME - diff)
+        if diff < self.spoke_sleep_time:
+            time.sleep(self.spoke_sleep_time - diff)
         self.last_call_to_got_kill_signal = time.time()
         return self._got_kill_signal()
 
@@ -138,7 +136,7 @@ class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         if self.cylinder_rank == 0 and \
                 'trace_prefix' in spbase_object.options and \
                 spbase_object.options['trace_prefix'] is not None:
@@ -313,7 +311,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
     converger_spoke_char = 'I'
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         self.is_minimizing = self.opt.is_minimizing
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
