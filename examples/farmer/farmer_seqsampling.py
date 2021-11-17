@@ -1,9 +1,16 @@
 # Copyright 2020, 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Illustrate the use of sequential sampling. Most options are hard-wired.
+# Illustrate the use of sequential sampling for programmers.
+#
+# This is an atypical program in that it allows for a command line
+# argument to choose between BM (Bayraksan and Morton) and
+# BPL (Bayraksan and Pierre Louis) but provides all
+# the command line parameters for both (so either way,
+# many command line parameters will be ignored). 
 
 import sys
 import numpy as np
+import argparse
 import afarmer
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
@@ -75,6 +82,7 @@ def main(args):
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
+    refmodelname = "afarmer"
     scenario_creator = afarmer.scenario_creator
 
     scen_count = args.num_scens
@@ -99,40 +107,65 @@ def main(args):
     # simply called "options" by the SeqSampling constructor
     inneroptions = {"solvername": solver_name,
                     "solver_options": None,
-                    "sample_size_ratio": 1,
+                    "sample_size_ratio": args.sample_size_ratio,
                     "xhat_gen_options": xhat_gen_options,
-                    "ArRP": 1,
-                    "kf_xhat": 1,
+                    "ArRP": args.ArRP,
+                    "kf_xhat": args.kf_GS,
+                    "kf_xhat": args.kf_xhat,
                     "confidence_level": args.confidence_level,
                     }
-    
-    # Bayraksan and Morton
-    optionsBM = {'h': args.BM_h,
-                 'hprime': args.BM_hprime, 
-                 'eps': args.BM_eps, 
-                 'epsprime': args.BM_eps_prime, 
-                 "p": args.BM_p,
-                 "q": args.BM_q,
-                 "xhat_gen_options": xhat_gen_options,
-                 }
 
-    optionsBM.update(inneroptions)
+    if args.BM_vs_BPL == "BM":
+        # Bayraksan and Morton
+        optionsBM = {'h': args.BM_h,
+                     'hprime': args.BM_hprime, 
+                     'eps': args.BM_eps, 
+                     'epsprime': args.BM_eps_prime, 
+                     "p": args.BM_p,
+                     "q": args.BM_q,
+                     "xhat_gen_options": xhat_gen_options,
+                     }
 
-    refmodelname = "afarmer"
-    sampler = seqsampling.SeqSampling(refmodelname,
-                            xhat_generator_farmer,
-                            optionsBM,
-                            stochastic_sampling=False,
-                            stopping_criterion="BM",
-                            )
+        optionsBM.update(inneroptions)
+
+        sampler = seqsampling.SeqSampling(refmodelname,
+                                xhat_generator_farmer,
+                                optionsBM,
+                                stochastic_sampling=False,
+                                stopping_criterion="BM",
+                                )
+    else:  # must be BPL
+        optionsBPL = {'eps': args.BPL_eps, 
+                      "c0": args.BPL_c0,
+                      "n0min": args.BPL_n0min,
+                      "xhat_gen_options": xhat_gen_options,
+                      }
+
+        optionsBPL.update(inneroptions)
+        
+        ss = int(args.BPL_n0min) != 0
+        sampler = seqsampling.SeqSampling(refmodelname,
+                                xhat_generator_farmer,
+                                optionsBPL,
+                                stochastic_sampling=ss,
+                                stopping_criterion="BPL",
+                                )
+        
     xhat = sampler.run()
     return xhat
 
 def _parse_args():
     parser = baseparsers.make_EF2_parser("farmer_seqsampling", num_scens_reqd=True)
     parser = confidence_parsers.confidence_parser(parser)
+    parser = confidence_parsers.sequential_parser(parser)
     parser = confidence_parsers.BM_parser(parser)
+    parser = confidence_parsers.BPL_parser(parser)  # --help will show both BM and BPL
 
+    parser.add_argument("--BM-vs-BPL",
+                        help="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
+                        dest="BM_vs_BPL",
+                        type=str,
+                        default=None)
     parser.add_argument("--crops-mult",
                         help="There will be 3x this many crops (default 1)",
                         dest="crops_mult",
@@ -143,9 +176,15 @@ def _parse_args():
                         dest="xhat1_file",
                         type=str,
                         default=None)
-    results = parser.parse_args()
-    results = parser.parse_args()
-    return results
+    args = parser.parse_args()
+
+    if args.BM_vs_BPL is None:
+        raise argparse.ArgumentTypeError("--BM-vs_BPL must be given.")
+    if args.BM_vs_BPL != "BM" and args.BM_vs_BPL != "BPL":
+        raise argparse.ArgumentTypeError(f"--BM-vs_BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
+    
+    return args
+
 
 
 if __name__ == '__main__':
