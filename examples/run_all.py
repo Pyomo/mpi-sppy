@@ -215,6 +215,17 @@ do_one("farmer",
        "farmer_ama.py",
        3,
        f"--num-scens=10 --crops-multiplier=3 --farmer-with-integer --EF-solver-name={solver_name}")
+do_one("farmer",
+       "farmer_seqsampling.py",
+       1,
+       f"3 --crops-multiplier=1  --EF-solver-name={solver_name} "
+       "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
+
+do_one("farmer",
+       "farmer_seqsampling.py",
+       1,
+       f"3 --crops-multiplier=1  --EF-solver-name={solver_name} "
+       "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
@@ -337,7 +348,6 @@ if not nouc and egret_avail():
            "--lagrangian-iter0-mipgap=1e-7 --with-cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
            "--solver-name={}".format(solver_name))
-
 
 if len(badguys) > 0:
     print("\nBad Guys:")

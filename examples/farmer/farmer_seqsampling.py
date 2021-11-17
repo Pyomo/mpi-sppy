@@ -87,7 +87,7 @@ def main(args):
 
     scen_count = args.num_scens
     solver_name = args.EF_solver_name
-    crops_multiplier = args.crops_mult
+    crops_multiplier = args.crops_multiplier
     
     scenario_creator_kwargs = {
         "use_integer": False,
@@ -166,9 +166,9 @@ def _parse_args():
                         dest="BM_vs_BPL",
                         type=str,
                         default=None)
-    parser.add_argument("--crops-mult",
+    parser.add_argument("--crops-multiplier",
                         help="There will be 3x this many crops (default 1)",
-                        dest="crops_mult",
+                        dest="crops_multiplier",
                         type=int,
                         default=1)
     parser.add_argument("--xhat1-file",
