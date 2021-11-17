@@ -142,7 +142,7 @@ def gap_estimators(xhat_one,
                    scenario_denouement=None,
                    solvername=None, 
                    solver_options=None,
-                   verbose=True,
+                   verbose=False,
                    objective_gap=False
                    ):
     ''' Given a xhat, scenario names, a scenario creator and options, 

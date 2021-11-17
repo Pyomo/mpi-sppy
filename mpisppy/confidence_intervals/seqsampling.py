@@ -98,8 +98,7 @@ class SeqSampling():
                                     xhat.
 
         options (dict): multiple parameters, e.g.:
-                        - "solvername", str, the name of the solver we use 
-                            (default is gurobi)
+                        - "solvername", str, the name of the solver we use
                         - "solver_options", dict containing solver options 
                             (default is {}, an empty dict)
                         - "sample_size_ratio", float, the ratio (xhat sample size)/(gap estimators sample size)
@@ -350,6 +349,7 @@ class SeqSampling():
         xgo = self.xhat_gen_options.copy()
         xgo.pop("solvername", None)  # it will be given explicitly
         xgo.pop("solver_options", None)  # it will be given explicitly
+        xgo.pop("scenario_names", None)  # given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,

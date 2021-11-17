@@ -3,11 +3,14 @@
 # Illustrate the use of sequential sampling. Most options are hard-wired.
 
 import sys
+import numpy as np
 import afarmer
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
 import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.confidence_intervals.confidence_parsers as confidence_parsers
+from mpisppy.utils import baseparsers
 
 #============================
 def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None,
@@ -44,7 +47,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     num_scens = len(scenario_names)
     
     ama_options = { "EF-2stage": True,
-                    "EF_solver_name": solver_name,
+                    "EF_solver_name": solvername,
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
@@ -65,68 +68,18 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     
 
 
-def main():
-    # use sys.argv to get a few options
+def main(args):
+    """ Code for farmer sequential sampling (in a function for easier testing)
+    Args:
+        args (parseargs): the command line arguments object from parseargs
+    Returns:
+        results (dict): the solution, gap confidence interval and T 
+    """
     scenario_creator = afarmer.scenario_creator
 
-    crops_multiplier = int(sys.argv[1])
-    scen_count = int(sys.argv[2])
-    solver_name = sys.argv[3]
-    use_integer = False
-    
-    scenario_creator_kwargs = {
-        "use_integer": use_integer,
-        "crops_multiplier": crops_multiplier,
-    }
-
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
-
-    inneroptions = { "EF_solver_name": solver_name,
-                     "start_ups": False,
-                     "num_scens": 24,
-                     "EF-2stage": True}
-    options =  {"num_batches": 5,
-                "batch_size": 6,
-                "opt":inneroptions}
-    scenario_creator_kwargs = afarmer.kw_creator(options)
-    options['kwargs'] = scenario_creator_kwargs
-
-    xhat_gen_options = {"scenario_names": scenario_names,
-                        "solvername": solver_name,
-                        "solver_options": None,
-                        "use_integer": use_integer,
-                        "crops_multiplier": crops_multiplier,
-                        "start_seed": 0,
-                        }
-
-    # Bayraksun and Morton
-    optionsBM = {'h':1.75,
-                 'hprime':0.5, 
-                 'eps':0.2, 
-                 'epsprime':0.1, 
-                 "p":0.1,
-                 "q":1.2,
-                 "branching_factors": [scen_count],
-                 "xhat_gen_options": xhat_gen_options,
-                 }
-
-    refmodelname = "afarmer"
-    xhat = seqsampling.SeqSampling(refmodelname,
-                            xhat_generator_farmer,
-                            optionsBM,
-                            stochastic_sampling=False,
-                            stopping_criterion="BM",
-                            )
-    return xhat
-
-if __name__ == '__main__':
-    if len(sys.argv) != 4:
-        print("usage python farmer_seqsampling.py {crops_multiplier} {scen_count} {solver_name}")
-        print("e.g., python farmer_seqsampling.py 1 3 gurobi")
-        quit()
-    crops_multiplier = int(sys.argv[1])
-    scen_count = int(sys.argv[2])
-    solver_name = sys.argv[3]
+    scen_count = args.num_scens
+    solver_name = args.EF_solver_name
+    crops_multiplier = args.crops_mult
     
     scenario_creator_kwargs = {
         "use_integer": False,
@@ -135,10 +88,74 @@ if __name__ == '__main__':
 
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     
-    xhat1 = xhat_generator_farmer(scenario_names, solvername=solver_name, solver_options=None,
-                                  use_integer=False, crops_multiplier=crops_multiplier,
-                                  start_seed=None)
-    print(f"test {xhat1 =}")
-    xhat = main()
-    print(f"final {xhat =}")
+    xhat_gen_options = {"scenario_names": scenario_names,
+                        "solvername": solver_name,
+                        "solver_options": None,
+                        "use_integer": False,
+                        "crops_multiplier": crops_multiplier,
+                        "start_seed": 0,
+                        }
 
+    # simply called "options" by the SeqSampling constructor
+    inneroptions = {"solvername": solver_name,
+                    "solver_options": None,
+                    "sample_size_ratio": 1,
+                    "xhat_gen_options": xhat_gen_options,
+                    "ArRP": 1,
+                    "kf_xhat": 1,
+                    "confidence_level": args.confidence_level,
+                    }
+    
+    # Bayraksan and Morton
+    optionsBM = {'h': args.BM_h,
+                 'hprime': args.BM_hprime, 
+                 'eps': args.BM_eps, 
+                 'epsprime': args.BM_eps_prime, 
+                 "p": args.BM_p,
+                 "q": args.BM_q,
+                 "xhat_gen_options": xhat_gen_options,
+                 }
+
+    optionsBM.update(inneroptions)
+
+    refmodelname = "afarmer"
+    sampler = seqsampling.SeqSampling(refmodelname,
+                            xhat_generator_farmer,
+                            optionsBM,
+                            stochastic_sampling=False,
+                            stopping_criterion="BM",
+                            )
+    xhat = sampler.run()
+    return xhat
+
+def _parse_args():
+    parser = baseparsers.make_EF2_parser("farmer_seqsampling", num_scens_reqd=True)
+    parser = confidence_parsers.confidence_parser(parser)
+    parser = confidence_parsers.BM_parser(parser)
+
+    parser.add_argument("--crops-mult",
+                        help="There will be 3x this many crops (default 1)",
+                        dest="crops_mult",
+                        type=int,
+                        default=1)
+    parser.add_argument("--xhat1-file",
+                        help="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
+                        dest="xhat1_file",
+                        type=str,
+                        default=None)
+    results = parser.parse_args()
+    results = parser.parse_args()
+    return results
+
+
+if __name__ == '__main__':
+
+    args = _parse_args()
+    
+    results = main(args)
+    print(f"Final gap confidence interval results:", results)
+
+    if args.xhat1_file is not None:
+        print(f"Writing xhat1 to {args.xhat1_file}.npy")
+        root_nonants =np.fromiter((v for v in results["Candidate_solution"]["ROOT"]), float)
+        np.save(args.xhat1_file, root_nonants)

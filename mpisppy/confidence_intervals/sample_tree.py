@@ -199,7 +199,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
         Dict of values for the nonanticipative variable for every node.
         keys are node names and values are lists of nonant variables.
         
-    NOTE: The local_scenarios do not need to form a regular tree (unbalanced tree are authorized)
+    NOTE: The local_scenarios do not need to form a regular tree (unbalanced trees are authorized)
 
     """
     if xhat_one is None:
