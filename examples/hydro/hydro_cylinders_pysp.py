@@ -11,14 +11,6 @@ from mpisppy.utils.pysp_model import PySPModel
 
 import mpisppy.cylinders as cylinders
 
-# For this problem, the subproblems are
-# small and take no time to solve. The
-# default SPOKE_SLEEP_TIME of 0.1 *causes*
-# synchronization issues in this case, so
-# we reduce it so as not to dominate the
-# time spent for cylinder synchronization
-cylinders.SPOKE_SLEEP_TIME = 0.0001
-
 write_solution = True
 
 def _parse_args():
