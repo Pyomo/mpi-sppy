@@ -30,7 +30,6 @@ def remove_None(d):
     return d_copy
 
 
-
 class MMWConfidenceIntervals():
     """Takes a model and options as input. 
     Args:
