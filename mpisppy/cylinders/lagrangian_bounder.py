@@ -49,8 +49,9 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         if total == serial_number_sum:
             return bound
         elif self.cylinder_rank == 0:
-            print("WARNING: Lagrangian spokes out of snyc, consider changing the spoke_sleep_time option "
-                  "see the documentation for more information")
+            print("WARNING: Lagrangian spokes out of snyc, consider changing the spoke_sleep_time option; "
+                  "see the documentation for more information. "
+                  f"(The current value is {self.spoke_sleep_time})")
         return None
 
     def _set_weights_and_solve(self):
