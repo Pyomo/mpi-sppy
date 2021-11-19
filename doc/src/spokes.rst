@@ -107,7 +107,7 @@ This problem is normally avoided by default actions in lower level code (in `spc
 that insert a short sleep. To compute the sleep duration, it uses a heuristic based on the
 number of non-anticipative variables. It is also possible to explicitly set this sleep time.
 At the lowest levels, this is done by setting a value for "spoke_sleep_time" in the options
-dictionary passed to the ``SPCommunictor`` constructor. At a higher level, it is possible
+dictionary passed to the ``SPCommunicator`` constructor. At a higher level, it is possible
 to pass a `spoke_sleep_time` keyword argument to the vanilla hub and spoke constructors. This
 is illustrated in `hydro_cylinders.py` example (in the `hyrdo` example directory). You
 should probably pass the same value to all constructors.
