@@ -9,8 +9,8 @@ import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
 class CrossScenarioCutSpoke(spoke.Spoke):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
     def make_windows(self):
         nscen = len(self.opt.all_scenario_names)
