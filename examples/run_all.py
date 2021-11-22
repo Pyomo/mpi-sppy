@@ -277,7 +277,17 @@ time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
        "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-lagrangian --with-xhatshuffle "
        "--solver-name={}".format(solver_name))
+do_one("aircond",
+       "aircond_seqsampling.py",
+       1,
+       f"--branching-factors 3 2 --seed 1134 --solver-name={solver_name} "
+       "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
 
+do_one("aircond",
+       "aircond_seqsampling.py",
+       1,
+       f"--branching-factors 3 2 --seed 1134 --solver-name={solver_name} "
+       "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
 #=========MMW TESTS==========
 
