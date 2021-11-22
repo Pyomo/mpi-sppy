@@ -133,7 +133,7 @@ class SeqSampling():
                  options,
                  stochastic_sampling = False,
                  stopping_criterion = "BM",
-                 solving_type = "EF-2stage"):
+                 solving_type = "None"):
         
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel

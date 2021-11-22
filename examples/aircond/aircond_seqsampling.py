@@ -1,27 +1,23 @@
 # Copyright 2020, 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Illustrate the use of sequential sampling for programmers.
+# Illustrate the use of sequential sampling for programmers using aircond.
 #
-# This is an atypical program in that it allows for a command line
-# argument to choose between BM (Bayraksan and Morton) and
-# BPL (Bayraksan and Pierre Louis) but provides all
-# the command line parameters for both (so either way,
-# many command line parameters will be ignored). 
 
 import sys
 import numpy as np
 import argparse
-import afarmer
+import aaircond
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
-import mpisppy.confidence_intervals.seqsampling as seqsampling
+import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.confidence_parsers as confidence_parsers
 from mpisppy.utils import baseparsers
 
 #============================
-def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None,
-                          use_integer=False, crops_multiplier=1, start_seed=None):
+def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
+                           branching_factors=None, mudev = 0, sigmadev = 40,
+                           start_ups=None, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -34,10 +30,14 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
-    use_integer: boolean
-        indicates the integer farmer version
-    crops_multiplier: int
-        mulitplied by three to get the total number of crops
+    branching_factors: list, optional
+        Branching factors of the scenario 3. The default is [3,2,3] 
+        (a 4 stage model with 18 different scenarios)
+    mudev: float, optional
+        The average deviation of demand between two stages; The default is 0.
+    sigma_dev: float, optional
+        The standard deviation from mudev for the demand difference between
+        two stages. The default is 40.
     start_seed: int, optional
         The starting seed, used to create different sample scenario trees.
         The default is 0.
@@ -53,15 +53,19 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     '''
     num_scens = len(scenario_names)
     
-    ama_options = { "EF-2stage": True,
+    ama_options = { "EF-mstage": True,
                     "EF_solver_name": solvername,
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
+                    "branching_factors":branching_factors,
+                    "mudev":mudev,
+                    "start_ups":start_ups,
                     "start_seed":start_seed,
+                    "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("afarmer",
+    ama = amalgomator.from_module("mpisppy.tests.examples.aircond_submodels",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -72,35 +76,47 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
     return {'ROOT': xhat['ROOT']}
-    
+
 
 
 def main(args):
-    """ Code for farmer sequential sampling (in a function for easier testing)
+    """ Code for aircond sequential sampling (in a function for easier testing)
     Args:
         args (parseargs): the command line arguments object from parseargs
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
-    refmodelname = "afarmer"
-    scenario_creator = afarmer.scenario_creator
+    refmodelname = "aaircond"
+    scenario_creator = aaircond.scenario_creator
 
-    scen_count = args.num_scens
-    solver_name = args.EF_solver_name
-    crops_multiplier = args.crops_multiplier
+    BFs = args.branching_factors
+    num_scens = np.prod(BFs)
+    solver_name = args.solver_name
+    mudev = args.mudev
+    sigmadev = args.sigmadev
+    scenario_creator_kwargs = {"num_scens" : num_scens,
+                               "branching_factors": BFs,
+                               "mudev": mudev,
+                               "sigmadev": sigmadev,
+                               "start_ups": False,
+                               "start_seed": args.seed,
+                               }
     
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
+    scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
     
     xhat_gen_options = {"scenario_names": scenario_names,
                         "solvername": solver_name,
                         "solver_options": None,
-                        "use_integer": False,
-                        "crops_multiplier": crops_multiplier,
-                        "start_seed": 0,
+                        "branching_factors" : BFs,
+                        "mudev": mudev,
+                        "sigmadev": sigmadev,
+                        "start_ups": False,
+                        "start_seed": args.seed,
                         }
 
     # simply called "options" by the SeqSampling constructor
     inneroptions = {"solvername": solver_name,
+                    "branching_factors": BFs,
                     "solver_options": None,
                     "sample_size_ratio": args.sample_size_ratio,
                     "xhat_gen_options": xhat_gen_options,
@@ -123,12 +139,12 @@ def main(args):
 
         optionsBM.update(inneroptions)
 
-        sampler = seqsampling.SeqSampling(refmodelname,
-                                xhat_generator_farmer,
-                                optionsBM,
-                                stochastic_sampling=False,
-                                stopping_criterion="BM",
-                                )
+        sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
+                                          xhat_generator_aircond,
+                                          optionsBM,
+                                          stochastic_sampling=False,
+                                          stopping_criterion="BM",
+                                          )
     else:  # must be BPL
         optionsBPL = {'eps': args.BPL_eps, 
                       "c0": args.BPL_c0,
@@ -139,8 +155,8 @@ def main(args):
         optionsBPL.update(inneroptions)
         
         ss = int(args.BPL_n0min) != 0
-        sampler = seqsampling.SeqSampling(refmodelname,
-                                xhat_generator_farmer,
+        sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
+                                xhat_generator_aircond,
                                 optionsBPL,
                                 stochastic_sampling=ss,
                                 stopping_criterion="BPL",
@@ -150,22 +166,30 @@ def main(args):
     return xhat
 
 def _parse_args():
-    parser = baseparsers.make_EF2_parser("farmer_seqsampling", num_scens_reqd=True)
+    parser = baseparsers._basic_multistage("aircond_seqsampling")
     parser = confidence_parsers.confidence_parser(parser)
     parser = confidence_parsers.sequential_parser(parser)
     parser = confidence_parsers.BM_parser(parser)
     parser = confidence_parsers.BPL_parser(parser)  # --help will show both BM and BPL
+    parser = aaircond.inparser_adder(parser)
+    
+    parser.add_argument("--solver-name",
+                        help = "solver name (default gurobi)",
+                        dest="solver_name",
+                        type = str,
+                        default="gurobi")
+
+    parser.add_argument("--seed",
+                        help="Seed for random numbers (default is 1134)",
+                        dest="seed",
+                        type=int,
+                        default=1134)
 
     parser.add_argument("--BM-vs-BPL",
                         help="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
                         dest="BM_vs_BPL",
                         type=str,
                         default=None)
-    parser.add_argument("--crops-multiplier",
-                        help="There will be 3x this many crops (default 1)",
-                        dest="crops_multiplier",
-                        type=int,
-                        default=1)
     parser.add_argument("--xhat1-file",
                         help="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
                         dest="xhat1_file",
