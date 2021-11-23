@@ -128,6 +128,7 @@ def main(args):
                                 optionsBM,
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
+                                solving_type="EF-2stage",
                                 )
     else:  # must be BPL
         optionsBPL = {'eps': args.BPL_eps, 
@@ -144,6 +145,7 @@ def main(args):
                                 optionsBPL,
                                 stochastic_sampling=ss,
                                 stopping_criterion="BPL",
+                                solving_type="EF-2stage",
                                 )
         
     xhat = sampler.run()

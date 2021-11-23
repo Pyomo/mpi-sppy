@@ -24,5 +24,11 @@ Examples of use with the ``farmer`` problem and several options can be found in 
 
 For multi-stage, use `multi_seqsampling.py`.
 
-There is sample code for two-stage, sequential in ``examples.farmer.farmer_seqsampling.py`` and
+Examples
+--------
+
+There is sample code for two-stage, sequential sampling in ``examples.farmer.farmer_seqsampling.py`` and
 a bash scrip to test drive it is ``examples.farmer.farmer_sequential.bash``.
+
+There is sample code for multi-stage, sequential sampling in ``examples.aircond.aircond_seqsampling.py`` and
+a bash scrip to test drive it is ``examples.aircond.aircond_sequential.bash``.
