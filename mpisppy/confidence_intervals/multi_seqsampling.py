@@ -30,6 +30,7 @@ class IndepScens_SeqSampling(SeqSampling):
                  options,
                  stopping_criterion = "BM",
                  stochastic_sampling = False,
+                 solving_type="EF-mstage",
                  ):
         super().__init__(
                  refmodel,
@@ -37,7 +38,7 @@ class IndepScens_SeqSampling(SeqSampling):
                  options,
                  stochastic_sampling = stochastic_sampling,
                  stopping_criterion = stopping_criterion,
-                 solving_type = "EF-mstage")
+                 solving_type = solving_type)
         
         self.numstages = len(self.options['branching_factors'])+1
         self.batch_branching_factors = [1]*(self.numstages-1)
