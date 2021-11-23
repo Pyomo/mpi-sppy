@@ -120,6 +120,7 @@ class Test_confint_farmer(unittest.TestCase):
                                     optionsBM,
                                     stochastic_sampling=False,
                                     stopping_criterion="BM",
+                                    solving_type="EF-2stage",
                                     )
 
     @unittest.skipIf(not solver_available,
@@ -248,6 +249,7 @@ class Test_confint_farmer(unittest.TestCase):
                                             optionsBM,
                                             stochastic_sampling=False,
                                             stopping_criterion="BM",
+                                            solving_type="EF-2stage",
                                             )
             x = seq_pb.run(maxit=50)
             T = x['T']
