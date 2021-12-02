@@ -124,12 +124,14 @@ class Test_confint_aircond(unittest.TestCase):
                      "q":1.2,
                      "solvername":solvername,
                      "xhat_gen_options": xhat_gen_options,
+                     "branching_factors": BFs,
                      }
         seqsampling.SeqSampling(self.refmodelname,
                                 aircond.xhat_generator_aircond,
                                 optionsBM,
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
+                                solving_type="EF-mstage",
                                 )
 
         
@@ -154,6 +156,7 @@ class Test_confint_aircond(unittest.TestCase):
                                 optionsBM,
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
+                                solving_type="EF-mstage",
                                 )
 
 
@@ -290,6 +293,7 @@ class Test_confint_aircond(unittest.TestCase):
                                                           optionsBM,
                                                           stochastic_sampling=False,
                                                           stopping_criterion="BM",
+                                                          solving_type="EF-mstage",
                                                           )
         x = seq_pb.run(maxit=50)
         T = x['T']

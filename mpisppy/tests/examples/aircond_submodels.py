@@ -369,10 +369,11 @@ def kw_creator(options):
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
-        
+
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           branching_factors=[3,2,3], mudev = 0, sigmadev = 40, start_ups=None, start_seed = 0):
+                           branching_factors=None, mudev = 0, sigmadev = 40,
+                           start_ups=None, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -432,10 +433,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
     return {'ROOT': xhat['ROOT']}
-    
 
-    
-    
 
 if __name__ == "__main__":
     # This __main__ is just for developers to use for quick tests

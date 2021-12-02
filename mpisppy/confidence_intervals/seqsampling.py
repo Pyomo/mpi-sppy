@@ -98,15 +98,14 @@ class SeqSampling():
                                     xhat.
 
         options (dict): multiple parameters, e.g.:
-                        - "solvername", str, the name of the solver we use 
-                            (default is gurobi)
+                        - "solvername", str, the name of the solver we use
                         - "solver_options", dict containing solver options 
                             (default is {}, an empty dict)
                         - "sample_size_ratio", float, the ratio (xhat sample size)/(gap estimators sample size)
                             (default is 1)
                         - "xhat_gen_options" dict containing options passed to the xhat generator
                             (default is {}, an empty dict)
-                        - "ArRP", int, how much estimators should be pooled to compute G and s ?
+                        - "ArRP", int, how many estimators should be pooled to compute G and s ?
                             (default is 1, no pooling)
                         - "kf_Gs", int, resampling frequency to compute estimators
                             (default is 1, always resample completely)
@@ -134,7 +133,7 @@ class SeqSampling():
                  options,
                  stochastic_sampling = False,
                  stopping_criterion = "BM",
-                 solving_type = "EF-2stage"):
+                 solving_type = "None"):
         
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
@@ -350,6 +349,7 @@ class SeqSampling():
         xgo = self.xhat_gen_options.copy()
         xgo.pop("solvername", None)  # it will be given explicitly
         xgo.pop("solver_options", None)  # it will be given explicitly
+        xgo.pop("scenario_names", None)  # given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solvername=self.solvername,
                                    solver_options=self.solver_options,
@@ -411,7 +411,7 @@ class SeqSampling():
                 assert mk>= mk_m1, "Our sample size should be increasing"
                 if (k%self.kf_xhat==0):
                     #We use only new scenarios to compute xhat
-                    xhat_scenario_names = refmodel.scenario_names_creator(mult*nk,
+                    xhat_scenario_names = refmodel.scenario_names_creator(int(mult*nk),
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk
                 else:
@@ -421,11 +421,14 @@ class SeqSampling():
                     self.ScenCount+= mk-mk_m1
             
             #Computing xhat_k
-           
+            xgo = self.xhat_gen_options.copy()
+            xgo.pop("solvername", None)  # it will be given explicitly
+            xgo.pop("solver_options", None)  # it will be given explicitly
+            xgo.pop("scenario_names", None)  # given explicitly
             xhat_k = self.xhat_generator(xhat_scenario_names,
-                                        solvername=self.solvername,
-                                        solver_options=self.solver_options,
-                                        **self.xhat_gen_options)
+                                         solvername=self.solvername,
+                                         solver_options=self.solver_options,
+                                         **xgo)
             
             #Computing n_k and associated scenario names
             if self.multistage:
@@ -484,9 +487,7 @@ class SeqSampling():
         else:
             raise RuntimeError("Only BM and BPL criterion are supported yet.")
         CI=[0,upper_bound]
-        global_toc(f"G={Gk}")
-        global_toc(f"s={sk}")
-        global_toc(f"xhat has been computed with {nk*mult} observations.")
+        global_toc(f"G={Gk} sk={sk}; xhat has been computed with {nk*mult} observations.")
         return {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
 
 if __name__ == "__main__":
@@ -500,14 +501,14 @@ if __name__ == "__main__":
 
     # relative width
     optionsBM = {'h':0.2,
-               'hprime':0.015, 
-              'eps':0.5, 
-               'epsprime':0.4, 
-               "p":0.2,
-               "q":1.2,
-               "solvername":solvername,
-               "stopping": "BM"  # TBD use this and drop stopping_criterion from the constructor
-               }
+                 'hprime':0.015, 
+                 'eps':0.5, 
+                 'epsprime':0.4, 
+                 "p":0.2,
+                 "q":1.2,
+                 "solvername":solvername,
+                 "stopping": "BM"  # TBD use this and drop stopping_criterion from the constructor
+                 }
 
     # fixed width, fully sequential
     optionsFSP = {'eps': 50.0,
@@ -517,7 +518,7 @@ if __name__ == "__main__":
                   "crops_multiplier":3, # option for the farmer problem
                   "ArRP":2,  # this must be 1 for any multi-stage problems
                   "stopping": "BPL"
-}
+                  }
 
     # fixed width sequential with stochastic samples
     optionsSSP = {'eps': 1.0,

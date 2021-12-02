@@ -21,3 +21,14 @@ Examples of use with the ``farmer`` problem and several options can be found in 
 - fixed width with stochastic samples.
 
   The keys used in the options dictionaries are taken directly from the corresponding paper, perhaps abbreviated in an obvious way. For example, the key `eps` corresponds to epsilon in the papers. 
+
+For multi-stage, use `multi_seqsampling.py`.
+
+Examples
+--------
+
+There is sample code for two-stage, sequential sampling in ``examples.farmer.farmer_seqsampling.py`` and
+a bash scrip to test drive it is ``examples.farmer.farmer_sequential.bash``.
+
+There is sample code for multi-stage, sequential sampling in ``examples.aircond.aircond_seqsampling.py`` and
+a bash scrip to test drive it is ``examples.aircond.aircond_sequential.bash``.
