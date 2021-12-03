@@ -13,7 +13,7 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
+def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
                     starting_d=200,root_name="ROOT"):
     
     max_d = 400
@@ -42,7 +42,8 @@ def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev,
     
     return demands,nodenames
 
-def StageModel_creator(time, demand, last_stage=False, start_ups=None):
+def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
+    # create a single stage of an aircond model
     model = pyo.ConcreteModel()
     model.T = [time]
 
@@ -58,26 +59,27 @@ def StageModel_creator(time, demand, last_stage=False, start_ups=None):
     #Overtime Production Cost
     model.OvertimeProdCost = 3
 
+    model.max_T = 25 # this is for the start-up cost constraints, 
+    model.bigM = model.Capacity * model.max_T
+    
     model.start_ups = start_ups
 
     if model.start_ups:
         # Start-up Cost
-        model.StartUpCost = 300# what should this be?
+        model.StartUpCost = 300  # TBD: give the user easier control
 
         # Negative Inventory Cost (for start-up cost)
         model.NegInventoryCost = -5
-        model.max_T = 25 # this is for the start-up cost constraints, 
-        # assume model will be less than 25 stages
-        # maximum possible demand in a given stage
-        model.M = 200 * model.max_T
-
     
     #Variables
-    model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals)
+    model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
+                                bounds = (0, model.bigM))
     
-    model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals)
+    model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals,
+                                bounds = (0, model.bigM))
     
-    model.Inventory = pyo.Var(domain=pyo.NonNegativeReals)
+    model.Inventory = pyo.Var(domain=pyo.NonNegativeReals,
+                                bounds = (0, model.bigM))
 
     if model.start_ups:
         # start-up cost variable
@@ -91,7 +93,7 @@ def StageModel_creator(time, demand, last_stage=False, start_ups=None):
 
     if model.start_ups:
         model.RegStartUpConstraint = pyo.Constraint(
-            expr=model.M*model.StartUp >= model.RegularProd + model.OvertimeProd)
+            expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
         # for max function
         model.NegInventoryConstraint = pyo.ConstraintList()
         model.NegInventoryConstraint.add(model.StartUpAux >= model.InventoryCost*model.Inventory)
@@ -117,14 +119,14 @@ def StageModel_creator(time, demand, last_stage=False, start_ups=None):
 
 #Assume that demands has been drawn before
 def aircond_model_creator(demands, start_ups=None):
-
+    # create a single aircond model for the given demands
     model = pyo.ConcreteModel()
     num_stages = len(demands)
     model.T = range(1,num_stages+1) #Stages 1,2,...,T
     model.max_T = 25
     if model.T[-1] > model.max_T:
         raise RuntimeError(
-            'The number of stages exceeds the maximum expected for this model.')
+            f'The number of stages exceeds {model.max_T}')
     
     model.start_ups = start_ups
 
@@ -135,7 +137,7 @@ def aircond_model_creator(demands, start_ups=None):
     model.stage_models = {}
     for t in model.T:
         last_stage = (t==num_stages)
-        model.stage_models[t] = StageModel_creator(t, demands[t-1],
+        model.stage_models[t] = _StageModel_creator(t, demands[t-1],
             last_stage=last_stage, start_ups=model.start_ups)  
 
     #Constraints
@@ -239,7 +241,7 @@ def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sig
     if branching_factors is None:
         raise RuntimeError("scenario_creator for aircond needs branching_factors")
 
-    demands,nodenames = demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
+    demands,nodenames = _demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
     
     model = aircond_model_creator(demands, start_ups=start_ups)
     
@@ -248,7 +250,7 @@ def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sig
     
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
-    
+    model._mpisppy_probability = 1 / np.prod(branching_factors)
     return(model)
 
 
@@ -283,7 +285,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
             scenario_creator_kwargs[thing] = value
     
     #Finding demands for stages after t
-    future_demands,nodenames = demands_creator(sname, sample_branching_factors, 
+    future_demands,nodenames = _demands_creator(sname, sample_branching_factors, 
                                                start_seed = seed, 
                                                mudev = scenario_creator_kwargs['mudev'], 
                                                sigmadev = scenario_creator_kwargs['sigmadev'],
@@ -316,12 +318,12 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to aircond
     inparser.add_argument("--mu-dev",
-                          help="average deviation of demand between two periods",
+                          help="average deviation of demand between two periods (default 0)",
                           dest="mudev",
                           type=float,
                           default=0.)
     inparser.add_argument("--sigma-dev",
-                          help="average standard deviation of demands between two periods",
+                          help="average standard deviation of demands between two periods (default 40)",
                           dest="sigmadev",
                           type=float,
                           default=40.)
@@ -330,7 +332,13 @@ def inparser_adder(inparser):
                            dest="start_ups",
                            action="store_true"
                            )
+    inparser.add_argument("--start-seed",
+                          help="random number seed (default 1134)",
+                          dest="sigmadev",
+                          type=int,
+                          default=1134)
     inparser.set_defaults(start_ups=False)
+    return inparser
 
 
 #=========
@@ -354,7 +362,7 @@ def kw_creator(options):
     sigmadev = _kwarg("sigmadev", 40.)
     start_seed = _kwarg("start_seed", 1134)
     start_ups = _kwarg("start_ups", None)
-    kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
+    kwargs = {"num_scens" : options.get('num_scens', None),
               "branching_factors": BFs,
               "mudev": mudev,
               "sigmadev": sigmadev,
@@ -415,7 +423,6 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     "branching_factors":branching_factors,
-                    "branching_factors":branching_factors,
                     "mudev":mudev,
                     "start_ups":start_ups,
                     "start_seed":start_seed,
@@ -432,8 +439,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
-    return {'ROOT': xhat['ROOT']}
-
+    return xhat
 
 if __name__ == "__main__":
     # This __main__ is just for developers to use for quick tests
