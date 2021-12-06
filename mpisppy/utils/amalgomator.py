@@ -157,7 +157,7 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     Args:
         mname (str): the module name (module must have certain functions)
         options (dict): Amalgomator options or extra arguments to use 
-                        in addition with the commande line
+                        in addition with the command line
         extraargs (ArgumentParser) : extra arguments to specify in the command line, e.g. for MMW
         use_command_line (bool): should we take into account the command line to add options ?
                                  default is True
@@ -317,7 +317,7 @@ class Amalgomator():
                 raise RuntimeError("For a multistage problem, please provide branching_factors or all_nodenames")
         
     def run(self):
-        
+
         """ Top-level execution."""
         if self.is_EF:
             ef = sputils.create_EF(
@@ -326,6 +326,8 @@ class Amalgomator():
                 scenario_creator_kwargs=self.kwargs,
                 suppress_warnings=True,
             )
+
+            tee_ef_solves = self.options.get('tee_ef_solves',False)
             
             solvername = self.solvername
             solver = pyo.SolverFactory(solvername)
@@ -337,9 +339,9 @@ class Amalgomator():
                 global_toc("Starting EF solve")
             if 'persistent' in solvername:
                 solver.set_instance(ef, symbolic_solver_labels=True)
-                results = solver.solve(tee=False)
+                results = solver.solve(tee=tee_ef_solves)
             else:
-                results = solver.solve(ef, tee=False, symbolic_solver_labels=True,)
+                results = solver.solve(ef, tee=tee_ef_solves, symbolic_solver_labels=True,)
             if self.verbose:
                 global_toc("Completed EF solve")
 
