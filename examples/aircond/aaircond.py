@@ -1,20 +1,18 @@
-#for use with amalgomator mmw testing, so __main__ should be 2-stage for now,
-# and kw_creator also defaults to 2-stage
-#ReferenceModel for full set of scenarios for AirCond; June 2021
-# As of Oct 2021, aircond_submodels.py in the test directory has diverged
-# (it includes startups, but that needs to be handled with more elegance.)
+# Aircond example.
+# As of Oct 2021, aircond_submodels.py in the test directory has diverged.
 
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
+import argparse
 from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
+def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
                     starting_d=200,root_name="ROOT"):
     
     max_d = 400
@@ -43,14 +41,14 @@ def demands_creator(sname,branching_factors,start_seed, mudev, sigmadev,
     
     return demands,nodenames
 
-
-def StageModel_creator(time, demand, last_stage=False):
+def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
+    # create a single stage of an aircond model
     model = pyo.ConcreteModel()
     model.T = [time]
     #Parameters
     #Demand
     model.Demand = demand
-    #Inventoy Cost
+    #Inventory Cost
     model.InventoryCost = -0.8 if last_stage else 0.5
     #Regular Capacity
     model.Capacity = 200
@@ -59,34 +57,76 @@ def StageModel_creator(time, demand, last_stage=False):
     #Overtime Production Cost
     model.OvertimeProdCost = 3
 
+    model.max_T = 25 # this is for the start-up cost constraints, 
+    model.bigM = model.Capacity * model.max_T
+    
+    model.start_ups = start_ups
+
+    if model.start_ups:
+        # Start-up Cost
+        model.StartUpCost = 300  # TBD: give the user easier control
+
+        # Negative Inventory Cost (for start-up cost)
+        model.NegInventoryCost = -5
+
     
     #Variables
-    model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals)
+    model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
+                                bounds = (0, model.bigM))
     
-    model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals)
+    model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals,
+                                bounds = (0, model.bigM))
     
-    model.Inventory = pyo.Var(domain=pyo.NonNegativeReals)
+    model.Inventory = pyo.Var(domain=pyo.NonNegativeReals,
+                                bounds = (0, model.bigM))
+
+    if model.start_ups:
+        # start-up cost variable
+        model.StartUp = pyo.Var(within=pyo.Binary)
+        model.StartUpAux = pyo.Var(domain=pyo.NonNegativeReals)
     
     #Constraints
     def CapacityRule(m):
         return m.RegularProd<=m.Capacity
     model.MaximumCapacity = pyo.Constraint(rule=CapacityRule)
+
+    if model.start_ups:
+        model.RegStartUpConstraint = pyo.Constraint(
+            expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
+        # for max function
+        model.NegInventoryConstraint = pyo.ConstraintList()
+        model.NegInventoryConstraint.add(model.StartUpAux >= model.InventoryCost*model.Inventory)
+        model.NegInventoryConstraint.add(model.StartUpAux >= model.NegInventoryCost*model.Inventory)
     
     #Objective
     def stage_objective(m):
-        return m.RegularProdCost*m.RegularProd +\
-            m.OvertimeProdCost*m.OvertimeProd +\
+        if m.start_ups:
+            return m.StartUp * m.StartUpCost +\
+                m.RegularProdCost*m.RegularProd +\
+                m.OvertimeProdCost*m.OvertimeProd +\
+                m.StartUpAux
+                #np.max([m.InventoryCost*m.Inventory, m.NegInventoryCost*m.Inventory])                
+        else:
+            return m.RegularProdCost*m.RegularProd +\
+                m.OvertimeProdCost*m.OvertimeProd +\
                 m.InventoryCost*m.Inventory
     model.StageObjective = pyo.Objective(rule=stage_objective,sense=pyo.minimize)
     
     return model
 
 #Assume that demands has been drawn before
-def aircond_model_creator(demands):
+def aircond_model_creator(demands, start_ups=None):
+    # create a single aircond model for the given demands
     model = pyo.ConcreteModel()
     num_stages = len(demands)
     model.T = range(1,num_stages+1) #Stages 1,2,...,T
+    model.max_T = 25
+    if model.T[-1] > model.max_T:
+        raise RuntimeError(
+            f'The number of stages exceeds {model.max_T}')
     
+    model.start_ups = start_ups
+
     #Parameters
     model.BeginInventory = 100
     
@@ -94,17 +134,23 @@ def aircond_model_creator(demands):
     model.stage_models = {}
     for t in model.T:
         last_stage = (t==num_stages)
-        model.stage_models[t] = StageModel_creator(t, demands[t-1],last_stage)  
+        model.stage_models[t] = _StageModel_creator(t, demands[t-1],
+            last_stage=last_stage, start_ups=model.start_ups)  
 
     #Constraints
     
     def material_balance_rule(m,t):
         if t == 1:
-            return(m.BeginInventory+m.stage_models[t].RegularProd+m.stage_models[t].OvertimeProd-m.stage_models[t].Inventory == m.stage_models[t].Demand)
+            return(m.BeginInventory+m.stage_models[t].RegularProd +\
+                m.stage_models[t].OvertimeProd-m.stage_models[t].Inventory ==\
+                m.stage_models[t].Demand)
         else:
-            return(m.stage_models[t-1].Inventory+m.stage_models[t].RegularProd+m.stage_models[t].OvertimeProd-m.stage_models[t].Inventory == m.stage_models[t].Demand)
+            return(m.stage_models[t-1].Inventory +\
+                m.stage_models[t].RegularProd+m.stage_models[t].OvertimeProd -\
+                m.stage_models[t].Inventory ==\
+                m.stage_models[t].Demand)
     model.MaterialBalance = pyo.Constraint(model.T, rule=material_balance_rule)
-    
+
     #Objectives
     
     #Disactivating stage objectives
@@ -112,8 +158,16 @@ def aircond_model_creator(demands):
         model.stage_models[t].StageObjective.deactivate()
     
     def stage_cost(stage_m):
-        return  stage_m.RegularProdCost*stage_m.RegularProd +\
-            stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
+        if model.start_ups:
+            return stage_m.StartUp * stage_m.StartUpCost +\
+                stage_m.RegularProdCost*stage_m.RegularProd +\
+                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
+                stage_m.StartUpAux
+                #np.max([stage_m.InventoryCost*stage_m.Inventory, 
+                #   stage_m.NegInventoryCost*stage_m.Inventory])
+        else:
+            return stage_m.RegularProdCost*stage_m.RegularProd +\
+                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
                 stage_m.InventoryCost*stage_m.Inventory
     def total_cost_rule(m):
         return(sum(stage_cost(m.stage_models[t]) for t in m.T))
@@ -135,10 +189,10 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
 
         nonant_list=[model.stage_models[stage].RegularProd,
                      model.stage_models[stage].OvertimeProd]
-        """
+
         if model.start_ups:
             nonant_list.append(model.stage_models[stage].StartUp)
-        """
+
         if stage ==1:
             ndn="ROOT"
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
@@ -182,38 +236,20 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return(TreeNodes)
 
         
-def scenario_creator(sname, branching_factors, num_scens=None,
-                     mudev=0, sigmadev=40, start_seed=0):
-    scennum   = sputils.extract_num(sname)
-    BFs = branching_factors
-    # Find the right path and the associated seeds (one for each node) using scennum
-    prod = np.prod(BFs)
-    s = int(scennum % prod)
-    d = 200
-    demands = [d]
-    nodenames = ["ROOT"]
+def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
+    if branching_factors is None:
+        raise RuntimeError("scenario_creator for aircond needs branching_factors")
+
+    demands,nodenames = _demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
     
-    for bf in BFs:
-        assert prod%bf == 0
-        prod = prod//bf
-        nodenames.append(str(s//prod))
-        s = s%prod
-    
-    stagelist = [int(x) for x in nodenames[1:]]
-    for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],BFs))
-        d = min(400,max(0,d+aircondstream.normal(mudev,sigmadev)))
-        demands.append(d)
-    
-    model = aircond_model_creator(demands)
+    model = aircond_model_creator(demands, start_ups=start_ups)
     
     if num_scens is not None:
         model._mpisppy_probability = 1/num_scens
     
     #Constructing the nodes used by the scenario
-    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, BFs)
-
-    model._mpisppy_probability = 1 / np.prod(BFs)
+    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
+    model._mpisppy_probability = 1 / np.prod(branching_factors)
     return(model)
                 
 
@@ -232,6 +268,8 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
         scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
                                          by the arguments
     """
+    
+    start_ups = scenario_creator_kwargs["start_ups"]
     # Finding demands from stage 1 to t
     if given_scenario is None:
         if stage == 1:
@@ -247,7 +285,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
             scenario_creator_kwargs[thing] = value
     
     #Finding demands for stages after t
-    future_demands,nodenames = demands_creator(sname, sample_branching_factors, 
+    future_demands,nodenames = _demands_creator(sname, sample_branching_factors, 
                                                start_seed = seed, 
                                                mudev = scenario_creator_kwargs['mudev'], 
                                                sigmadev = scenario_creator_kwargs['sigmadev'],
@@ -256,7 +294,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     
     demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
     
-    model = aircond_model_creator(demands)
+    model = aircond_model_creator(demands, start_ups=start_ups)
     
     model._mpisppy_probability = 1/np.prod(sample_branching_factors)
     
@@ -278,7 +316,7 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgomator): add command options unique to farmer
+    # (only for Amalgomator): add command options unique to aircond
     inparser.add_argument("--mu-dev",
                           help="average deviation of demand between two periods (default 0)",
                           dest="mudev",
@@ -289,11 +327,17 @@ def inparser_adder(inparser):
                           dest="sigmadev",
                           type=float,
                           default=40.)
+    inparser.add_argument("--with-start-ups",
+                           help="Include start-up costs in model (this is a MIP)",
+                           dest="start_ups",
+                           action="store_true"
+                           )
     inparser.add_argument("--start-seed",
                           help="random number seed (default 1134)",
                           dest="sigmadev",
                           type=int,
                           default=1134)
+    inparser.set_defaults(start_ups=False)
     return inparser
 
 #=========
@@ -316,36 +360,41 @@ def kw_creator(options):
     mudev = _kwarg("mudev", 0.)
     sigmadev = _kwarg("sigmadev", 40.)
     start_seed = _kwarg("start_seed", 1134)
+    start_ups = _kwarg("start_ups", None)
     kwargs = {"num_scens" : options.get('num_scens', None),
               "branching_factors": BFs,
               "mudev": mudev,
               "sigmadev": sigmadev,
               "start_seed": start_seed,
+              "start_ups": start_ups,
               }
+    if kwargs["start_ups"] is None:
+        raise ValueError("kw_creator called, but no value given for start_ups")
     return kwargs
 
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
-        
+
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           BFs=None, mudev=0, sigmadev=40, start_seed=0):
+                           branching_factors=None, mudev = 0, sigmadev = 40,
+                           start_ups=None, start_seed = 0):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
         approximate problem associated with the scenarios.
     Parameters
     ----------
-    scenario_names: int
+    scenario_names: list of str
         Names of the scenario we use
     solvername: str, optional
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
-    BFs: list, optional
-        Branching factors of the scenario 3, e.g., [3,2,3] 
+    branching_factors: list, optional
+        Branching factors of the scenario 3. The default is [3,2,3] 
         (a 4 stage model with 18 different scenarios)
     mudev: float, optional
         The average deviation of demand between two stages; The default is 0.
@@ -372,8 +421,10 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
-                    "BFs":BFs,
+                    "branching_factors":branching_factors,
                     "mudev":mudev,
+                    "start_ups":start_ups,
+                    "start_seed":start_seed,
                     "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
@@ -381,6 +432,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
+    ama.verbose = False
     ama.run()
     
     # get the xhat
@@ -395,6 +447,7 @@ if __name__ == "__main__":
                     "EF_solver_name": "gurobi_direct",
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
+                    "start_ups": False,
                     "branching_factors":bfs,
                     "mudev":0,
                     "sigmadev":80,

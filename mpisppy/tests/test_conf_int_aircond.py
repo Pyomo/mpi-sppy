@@ -29,7 +29,7 @@ import mpisppy.confidence_intervals.ciutils as ciutils
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.1
+__version__ = 0.2
 
 solver_available, solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -207,7 +207,7 @@ class Test_confint_aircond(unittest.TestCase):
         branching_factors= base_options['opt']['branching_factors']
         full_xhat = self._make_full_xhat(branching_factors)
         obj = round_pos_sig(ev.evaluate(full_xhat),2)
-        self.assertEqual(obj, 3500.0)
+        self.assertEqual(obj, 880.0)  # rebaslined 5 Dec 2021
 
 
     @unittest.skipIf(not solver_available,
@@ -266,7 +266,7 @@ class Test_confint_aircond(unittest.TestCase):
         G = estim['G']
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
-        self.assertEqual((G,s), (7.51, 26.4))
+        self.assertEqual((G,s), (7.51, 40.9))  # rebaselined 5 Dec 2021
 
     
     @unittest.skipIf(not solver_available,
