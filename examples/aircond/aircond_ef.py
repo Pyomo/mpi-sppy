@@ -12,15 +12,17 @@ aircondstream = np.random.RandomState()
 #============================
 
 if __name__ == "__main__":
-    bfs = [4,3,2]
+    bfs = [4, 3, 2]
     num_scens = np.prod(bfs) #To check with a full tree
     ama_options = { "EF-mstage": True,
                     "EF_solver_name": "gurobi_direct",
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
-                    "BFs":bfs,
+                    "branching_factors":bfs,
                     "mudev":0,
-                    "sigmadev":80
+                    "sigmadev":80,
+                    "start_ups":False,
+                    "tee_ef_solves":False
                     }
     refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances
     #We use from_module to build easily an Amalgomator object
