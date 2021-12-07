@@ -10,7 +10,8 @@ WARNING:
 """
 import numpy as np
 import mpisppy.utils.amalgomator as amalgomator
-import aaircond
+
+import mpisppy.tests.examples.aircond as aircond
 
 def main():
     solution_files = {"first_stage_solution":"aircond_first_stage.csv",
