@@ -124,6 +124,7 @@ def main(args):
                     "kf_xhat": args.kf_GS,
                     "kf_xhat": args.kf_xhat,
                     "confidence_level": args.confidence_level,
+                    "start_ups": False,
                     }
 
     if args.BM_vs_BPL == "BM":
