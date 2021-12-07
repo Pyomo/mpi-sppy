@@ -102,7 +102,8 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     if model.start_ups:
         # start-up cost variable
         model.StartUp = pyo.Var(within=pyo.Binary)
-        model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)
+
+    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)
     
     #Constraints
     def CapacityRule(m):
