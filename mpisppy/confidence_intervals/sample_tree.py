@@ -241,7 +241,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 if __name__ == "__main__":
     branching_factors = [3,2,4,4]
     num_scens = np.prod(branching_factors)
-    mname = "mpisppy.tests.examples.aircond_submodels"
+    mname = "mpisppy.tests.examples.aircond"
     
     ama_options = { "EF-mstage": True,
                     "num_scens": num_scens,
