@@ -6,7 +6,7 @@
 import sys
 import numpy as np
 import argparse
-import aaircond
+import mpisppy.tests.examples.aircond as aircond
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
@@ -65,7 +65,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.aircond_submodels",
+    ama = amalgomator.from_module("mpisppy.tests.examples.aircond",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -86,8 +86,8 @@ def main(args):
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
-    refmodelname = "aaircond"
-    scenario_creator = aaircond.scenario_creator
+    refmodelname = "mpisppy.tests.examples.aircond"
+    scenario_creator = aircond.scenario_creator
 
     BFs = args.branching_factors
     num_scens = np.prod(BFs)
@@ -173,7 +173,7 @@ def _parse_args():
     parser = confidence_parsers.sequential_parser(parser)
     parser = confidence_parsers.BM_parser(parser)
     parser = confidence_parsers.BPL_parser(parser)  # --help will show both BM and BPL
-    parser = aaircond.inparser_adder(parser)
+    parser = aircond.inparser_adder(parser)
     
     parser.add_argument("--solver-name",
                         help = "solver name (default gurobi)",
@@ -197,6 +197,7 @@ def _parse_args():
                         dest="xhat1_file",
                         type=str,
                         default=None)
+
     args = parser.parse_args()
 
     if args.BM_vs_BPL is None:
@@ -211,7 +212,7 @@ def _parse_args():
 if __name__ == '__main__':
 
     args = _parse_args()
-    
+
     results = main(args)
     print(f"Final gap confidence interval results:", results)
 
