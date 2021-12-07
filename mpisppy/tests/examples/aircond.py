@@ -346,17 +346,18 @@ def inparser_adder(inparser):
                           dest="sigmadev",
                           type=float,
                           default=40.)
-    inparser.add_argument("--with-start-ups",
-                           help="Include start-up costs in model (this is a MIP)",
-                           dest="start_ups",
-                           action="store_true"
-                           )
+    inparser.add_argument("--start-ups",
+                          help="Include start-up costs in model (this is a MIP)",
+                          dest="start_ups",
+                          action="store_true"
+                          )
+    inparser.set_defaults(start_ups=False)    
     inparser.add_argument("--start-seed",
                           help="random number seed (default 1134)",
                           dest="start_seed",
                           type=int,
                           default=1134)
-    inparser.set_defaults(start_ups=False)
+
     return inparser
 
 
@@ -448,7 +449,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.aircond_submodels",
+    ama = amalgomator.from_module("mpisppy.tests.examples.aircond",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -507,7 +508,7 @@ if __name__ == "__main__":
                     "start_ups":start_ups,
                     "start_seed":0
                     }
-    refmodel = "mpisppy.tests.examples.aircond_submodels" # WARNING: Change this in SPInstances
+    refmodel = "mpisppy.tests.examples.aircond" # WARNING: Change this in SPInstances
     #We use from_module to build easily an Amalgomator object
     t0=time.time()
     ama = amalgomator.from_module(refmodel,
