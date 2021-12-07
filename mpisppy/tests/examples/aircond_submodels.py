@@ -86,8 +86,8 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
         # Start-up Cost
         model.StartUpCost = 300  # TBD: give the user easier control
 
-        # Negative Inventory Cost (for start-up cost)
-        model.NegInventoryCost = -5
+    # Negative Inventory Cost
+    model.NegInventoryCost = -5
     
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
@@ -96,17 +96,13 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals,
                                 bounds = (0, model.bigM))
 
-    if model.start_ups:
-        model.Inventory = pyo.Var(domain=pyo.Reals,
-                                  bounds = (-model.bigM, model.bigM))
-    else:
-        model.Inventory = pyo.Var(domain=pyo.NonNegativeReals,
-                                  bounds = (0, model.bigM))        
+    model.Inventory = pyo.Var(domain=pyo.Reals,
+                              bounds = (-model.bigM, model.bigM))
 
     if model.start_ups:
         # start-up cost variable
         model.StartUp = pyo.Var(within=pyo.Binary)
-        model.StartUpAux = pyo.Var(domain=pyo.NonNegativeReals)
+        model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)
     
     #Constraints
     def CapacityRule(m):
@@ -116,24 +112,21 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     if model.start_ups:
         model.RegStartUpConstraint = pyo.Constraint(
             expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
-        # for max function
-        model.NegInventoryConstraint = pyo.ConstraintList()
-        model.NegInventoryConstraint.add(model.StartUpAux >= model.InventoryCost*model.Inventory)
-        model.NegInventoryConstraint.add(model.StartUpAux >= model.NegInventoryCost*model.Inventory)
+
+    # for max function
+    model.NegInventoryConstraint = pyo.ConstraintList()
+    model.NegInventoryConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
+    model.NegInventoryConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
     
     #Objective
     def stage_objective(m):
-        if m.start_ups:
-            return m.StartUp * m.StartUpCost +\
-                m.RegularProdCost*m.RegularProd +\
+        expr =  m.RegularProdCost*m.RegularProd +\
                 m.OvertimeProdCost*m.OvertimeProd +\
-                m.StartUpAux
-                #np.max([m.InventoryCost*m.Inventory, m.NegInventoryCost*m.Inventory])                
-        else:
-            return m.RegularProdCost*m.RegularProd +\
-                m.OvertimeProdCost*m.OvertimeProd +\
-                m.InventoryCost*m.Inventory
+                m.InventoryAux        
 
+        if m.start_ups:
+            expr += m.StartUp * m.StartUpCost
+        return expr
 
     model.StageObjective = pyo.Objective(rule=stage_objective,sense=pyo.minimize)
     
@@ -187,7 +180,7 @@ def aircond_model_creator(demands, start_ups=None):
             return stage_m.StartUp * stage_m.StartUpCost +\
                 stage_m.RegularProdCost*stage_m.RegularProd +\
                 stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-                stage_m.StartUpAux
+                stage_m.InventoryAux
                 #np.max([stage_m.InventoryCost*stage_m.Inventory, 
                 #   stage_m.NegInventoryCost*stage_m.Inventory])
         else:
@@ -217,7 +210,7 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
         nonant_ef_suppl_list = [model.stage_models[stage].Inventory]
         if model.start_ups:
             nonant_ef_suppl_list.append(model.stage_models[stage].StartUp)
-            nonant_ef_suppl_list.append(model.stage_models[stage].StartUpAux)
+            nonant_ef_suppl_list.append(model.stage_models[stage].InventoryAux)
 
         if stage ==1:
             ndn="ROOT"
