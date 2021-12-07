@@ -1,0 +1,5 @@
+NOTE: aircond_submodels.py was moved to aircond.py (for consistency purposes) on 12/7/2021.
+
+Relatedly: aaircond.py was removed from ~/examples/aircond on 12/7/2021.
+
+
