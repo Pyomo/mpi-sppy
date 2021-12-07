@@ -1,7 +1,7 @@
 # Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # Code that is producing a xhat and a confidence interval using sequantial sampling 
-# This extension of SeqSampling works for multistage, using independant 
+# This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.
 
 import pyomo.environ as pyo
@@ -19,7 +19,7 @@ import mpisppy.utils.amalgomator as amalgomator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
-from mpisppy.tests.examples.aircond_submodels import xhat_generator_aircond
+from mpisppy.tests.examples.aircond import xhat_generator_aircond
 import mpisppy.confidence_intervals.sample_tree as sample_tree
 import mpisppy.confidence_intervals.ciutils as ciutils
 
@@ -91,7 +91,7 @@ class IndepScens_SeqSampling(SeqSampling):
         
         #Computing G_nk and s_k associated with xhat_1
         
-        Gk, sk = self.gap_estimators_with_independant_scenarios(xhat_k,
+        Gk, sk = self.gap_estimators_with_independent_scenarios(xhat_k,
                                                                 nk,
                                                                 estimator_scenario_names,
                                                                 scenario_denouement)
@@ -129,7 +129,7 @@ class IndepScens_SeqSampling(SeqSampling):
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
             
             
-            Gk, sk = self.gap_estimators_with_independant_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
+            Gk, sk = self.gap_estimators_with_independent_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
 
             if (k%10==0):
                 print(f"k={k}")
@@ -152,7 +152,7 @@ class IndepScens_SeqSampling(SeqSampling):
         global_toc(f"xhat has been computed with {nk*mult} observations.")
         return {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
     
-    def independant_scenario_creator(self, sname, **scenario_creator_kwargs):
+    def independent_scenario_creator(self, sname, **scenario_creator_kwargs):
                 bfs = [1]*(self.numstages-1)
                 snum = sputils.extract_num(sname)
                 scenario_creator = self.refmodel.scenario_creator
@@ -162,7 +162,7 @@ class IndepScens_SeqSampling(SeqSampling):
         kwargs.pop("start_seed")
         return kwargs
     
-    def gap_estimators_with_independant_scenarios(self, xhat_k, nk,
+    def gap_estimators_with_independent_scenarios(self, xhat_k, nk,
                                                   estimator_scenario_names, scenario_denouement):
         """ Sample a scenario tree: this is a subtree, but starting from stage 1.
         Args:
@@ -263,10 +263,10 @@ class IndepScens_SeqSampling(SeqSampling):
 if __name__ == "__main__":
     solvername = "cplex"
     #An example of sequential sampling for the aircond model
-    import mpisppy.tests.examples.aircond_submodels
+    import mpisppy.tests.examples.aircond
     bfs = [3,3,2]
     num_scens = np.prod(bfs)
-    scenario_names = mpisppy.tests.examples.aircond_submodels.scenario_names_creator(num_scens)
+    scenario_names = mpisppy.tests.examples.aircond.scenario_names_creator(num_scens)
     xhat_gen_options = {"scenario_names": scenario_names,
                         "solvername": solvername,
                         "solver_options": None,
@@ -295,7 +295,7 @@ if __name__ == "__main__":
                   "start_ups": False,
                   "branching_factors": bfs}
    
-    aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond_submodels",
+    aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond",
                                        xhat_generator_aircond, 
                                        optionsBM,
                                        stopping_criterion="BM"
