@@ -42,6 +42,24 @@ def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev,
     
     return demands,nodenames
 
+def general_rho_setter(scenario_instance, rho_scale_factor=1.0):
+
+    computed_rhos = []
+
+    for t in scenario_instance.T[:-1]:
+        computed_rhos.append((id(scenario_instance.stage_models[t].RegularProd),
+                              pyo.value(scenario_instance.stage_models[t].RegularProdCost) * rho_scale_factor))
+        computed_rhos.append((id(scenario_instance.stage_models[t].OvertimeProd),
+                              pyo.value(scenario_instance.stage_models[t].OvertimeProdCost) * rho_scale_factor))
+
+    return computed_rhos
+
+def dual_rho_setter(scenario_instance):
+    return general_rho_setter(scenario_instance, rho_scale_factor=0.0001)
+
+def primal_rho_setter(scenario_instance):
+    return general_rho_setter(scenario_instance, rho_scale_factor=0.01)
+
 def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     # create a single stage of an aircond model
     model = pyo.ConcreteModel()
@@ -77,9 +95,13 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     
     model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals,
                                 bounds = (0, model.bigM))
-    
-    model.Inventory = pyo.Var(domain=pyo.NonNegativeReals,
-                                bounds = (0, model.bigM))
+
+    if model.start_ups:
+        model.Inventory = pyo.Var(domain=pyo.Reals,
+                                  bounds = (-model.bigM, model.bigM))
+    else:
+        model.Inventory = pyo.Var(domain=pyo.NonNegativeReals,
+                                  bounds = (0, model.bigM))        
 
     if model.start_ups:
         # start-up cost variable
@@ -191,47 +213,50 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
 
         nonant_list=[model.stage_models[stage].RegularProd,
                      model.stage_models[stage].OvertimeProd]
+        
+        nonant_ef_suppl_list = [model.stage_models[stage].Inventory]
         if model.start_ups:
-            nonant_list.append(model.stage_models[stage].StartUp)
+            nonant_ef_suppl_list.append(model.stage_models[stage].StartUp)
+            nonant_ef_suppl_list.append(model.stage_models[stage].StartUpAux)
 
         if stage ==1:
             ndn="ROOT"
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0,
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=nonant_list,
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
+                                                        cond_prob=1.0,
+                                                        stage=stage,
+                                                        cost_expression=model.stage_models[stage].StageObjective,
+                                                        scen_name_list=None, # Not maintained
+                                                        nonant_list=nonant_list,
+                                                        scen_model=model,
+                                                        nonant_ef_suppl_list = nonant_ef_suppl_list
                                                        )
                              )
         elif stage <=starting_stage:
             parent_ndn = ndn
             ndn = parent_ndn+"_0" #Only one node per stage before starting stage
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0,
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=nonant_list,
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
-                                                       parent_name = parent_ndn
+                                                        cond_prob=1.0,
+                                                        stage=stage,
+                                                        cost_expression=model.stage_models[stage].StageObjective,
+                                                        scen_name_list=None, # Not maintained
+                                                        nonant_list=nonant_list,
+                                                        scen_model=model,
+                                                        nonant_ef_suppl_list = nonant_ef_suppl_list,
+                                                        parent_name = parent_ndn
                                                        )
                              )
         elif stage < max(model.T): #We don't add the leaf node
             parent_ndn = ndn
             ndn = parent_ndn+"_"+nodenames[stage-starting_stage]
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0/branching_factors[stage-starting_stage-1],
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=nonant_list,
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
-                                                       parent_name = parent_ndn
+                                                        cond_prob=1.0/branching_factors[stage-starting_stage-1],
+                                                        stage=stage,
+                                                        cost_expression=model.stage_models[stage].StageObjective,
+                                                        scen_name_list=None, # Not maintained
+                                                        nonant_list=nonant_list,
+                                                        scen_model=model,
+                                                        nonant_ef_suppl_list = nonant_ef_suppl_list,
+                                                        parent_name = parent_ndn
                                                        )
                              )
     return(TreeNodes)
@@ -334,7 +359,7 @@ def inparser_adder(inparser):
                            )
     inparser.add_argument("--start-seed",
                           help="random number seed (default 1134)",
-                          dest="sigmadev",
+                          dest="start_seed",
                           type=int,
                           default=1134)
     inparser.set_defaults(start_ups=False)
