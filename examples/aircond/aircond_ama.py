@@ -21,7 +21,7 @@ def main():
                    "cylinders": ['ph','xhatshuffle','lagrangian'],
                    "write_solution": solution_files
                    }
-    ama_options = amalgomator.Amalgomator_parser(options, aaircond.inparser_adder)
+    ama_options = amalgomator.Amalgomator_parser(options, aircond.inparser_adder)
     
     #Here, we need to change something specified by the command line
     #That's why we cannot use amalgomator.from_module
@@ -29,12 +29,12 @@ def main():
         raise RuntimeError("Do not use num_scens here, we want to solve the problem for the whole sample scenario tree")
     
     num_scens = np.prod(ama_options['branching_factors'])
-    scenario_names = aaircond.scenario_names_creator(num_scens,0)
+    scenario_names = aircond.scenario_names_creator(num_scens,0)
     
     ama =amalgomator.Amalgomator(ama_options, 
                                  scenario_names, 
-                                 aaircond.scenario_creator, 
-                                 aaircond.kw_creator)
+                                 aircond.scenario_creator, 
+                                 aircond.kw_creator)
     ama.run()
     if ama.on_hub:
         print("first_stage_solution=", ama.first_stage_solution)
