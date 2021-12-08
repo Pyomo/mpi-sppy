@@ -12,7 +12,8 @@ aircondstream = np.random.RandomState()
 #============================
 
 if __name__ == "__main__":
-    bfs = [10, 5]
+
+    bfs = [4, 3, 2]
     num_scens = np.prod(bfs) #To check with a full tree
     ama_options = { "EF-mstage": True,
                     "EF_solver_name": "gurobi_direct",
