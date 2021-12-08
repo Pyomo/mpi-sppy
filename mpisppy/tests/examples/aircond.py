@@ -126,7 +126,7 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
                 m.InventoryAux        
 
         if m.start_ups:
-            expr += m.StartUp * m.StartUpCost
+            expr += m.StartUpCost * m.StartUp 
         return expr
 
     model.StageObjective = pyo.Objective(rule=stage_objective,sense=pyo.minimize)
@@ -177,17 +177,13 @@ def aircond_model_creator(demands, start_ups=None):
         model.stage_models[t].StageObjective.deactivate()
     
     def stage_cost(stage_m):
-        if model.start_ups:
-            return stage_m.StartUp * stage_m.StartUpCost +\
-                stage_m.RegularProdCost*stage_m.RegularProd +\
-                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-                stage_m.InventoryAux
-                #np.max([stage_m.InventoryCost*stage_m.Inventory, 
-                #   stage_m.NegInventoryCost*stage_m.Inventory])
-        else:
-            return stage_m.RegularProdCost*stage_m.RegularProd +\
-                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-                stage_m.InventoryCost*stage_m.Inventory
+        expr = stage_m.RegularProdCost*stage_m.RegularProd +\
+               stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
+               stage_m.InventoryAux
+        if stage_m.start_ups:
+            expr += stage_m.StartUpCost * stage_m.StartUp
+        return expr
+    
     def total_cost_rule(m):
         return(sum(stage_cost(m.stage_models[t]) for t in m.T))
     model.TotalCostObjective = pyo.Objective(rule = total_cost_rule,
