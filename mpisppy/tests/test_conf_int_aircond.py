@@ -207,7 +207,7 @@ class Test_confint_aircond(unittest.TestCase):
         branching_factors= base_options['opt']['branching_factors']
         full_xhat = self._make_full_xhat(branching_factors)
         obj = round_pos_sig(ev.evaluate(full_xhat),2)
-        self.assertEqual(obj, 880.0)  # rebaslined 5 Dec 2021
+        self.assertEqual(obj, 890.0)  # rebaselined 5 Dec 2021
 
 
     @unittest.skipIf(not solver_available,
