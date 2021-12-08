@@ -266,7 +266,7 @@ class Test_confint_aircond(unittest.TestCase):
         G = estim['G']
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
-        self.assertEqual((G,s), (7.51, 40.9))  # rebaselined 5 Dec 2021
+        self.assertEqual((G,s), (7.51, 26.4))  # rebaselined 5 Dec 2021
 
     
     @unittest.skipIf(not solver_available,
