@@ -1,8 +1,9 @@
-# Aircond example.
-# As of Oct 2021, aircond_submodels.py in the test directory has diverged.
+#ReferenceModel for full set of scenarios for AirCond; June 2021
+
 
 import pyomo.environ as pyo
 import numpy as np
+import time
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgomator as amalgomator
@@ -41,10 +42,29 @@ def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev,
     
     return demands,nodenames
 
+def general_rho_setter(scenario_instance, rho_scale_factor=1.0):
+
+    computed_rhos = []
+
+    for t in scenario_instance.T[:-1]:
+        computed_rhos.append((id(scenario_instance.stage_models[t].RegularProd),
+                              pyo.value(scenario_instance.stage_models[t].RegularProdCost) * rho_scale_factor))
+        computed_rhos.append((id(scenario_instance.stage_models[t].OvertimeProd),
+                              pyo.value(scenario_instance.stage_models[t].OvertimeProdCost) * rho_scale_factor))
+
+    return computed_rhos
+
+def dual_rho_setter(scenario_instance):
+    return general_rho_setter(scenario_instance, rho_scale_factor=0.0001)
+
+def primal_rho_setter(scenario_instance):
+    return general_rho_setter(scenario_instance, rho_scale_factor=0.01)
+
 def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     # create a single stage of an aircond model
     model = pyo.ConcreteModel()
     model.T = [time]
+
     #Parameters
     #Demand
     model.Demand = demand
@@ -66,9 +86,8 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
         # Start-up Cost
         model.StartUpCost = 300  # TBD: give the user easier control
 
-        # Negative Inventory Cost (for start-up cost)
-        model.NegInventoryCost = -5
-
+    # Negative Inventory Cost
+    model.NegInventoryCost = -5
     
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
@@ -76,14 +95,15 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     
     model.OvertimeProd = pyo.Var(domain=pyo.NonNegativeReals,
                                 bounds = (0, model.bigM))
-    
-    model.Inventory = pyo.Var(domain=pyo.NonNegativeReals,
-                                bounds = (0, model.bigM))
+
+    model.Inventory = pyo.Var(domain=pyo.Reals,
+                              bounds = (-model.bigM, model.bigM))
 
     if model.start_ups:
         # start-up cost variable
         model.StartUp = pyo.Var(within=pyo.Binary)
-        model.StartUpAux = pyo.Var(domain=pyo.NonNegativeReals)
+
+    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)
     
     #Constraints
     def CapacityRule(m):
@@ -93,23 +113,22 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     if model.start_ups:
         model.RegStartUpConstraint = pyo.Constraint(
             expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
-        # for max function
-        model.NegInventoryConstraint = pyo.ConstraintList()
-        model.NegInventoryConstraint.add(model.StartUpAux >= model.InventoryCost*model.Inventory)
-        model.NegInventoryConstraint.add(model.StartUpAux >= model.NegInventoryCost*model.Inventory)
+
+    # for max function
+    model.NegInventoryConstraint = pyo.ConstraintList()
+    model.NegInventoryConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
+    model.NegInventoryConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
     
     #Objective
     def stage_objective(m):
+        expr =  m.RegularProdCost*m.RegularProd +\
+                m.OvertimeProdCost*m.OvertimeProd +\
+                m.InventoryAux        
+
         if m.start_ups:
-            return m.StartUp * m.StartUpCost +\
-                m.RegularProdCost*m.RegularProd +\
-                m.OvertimeProdCost*m.OvertimeProd +\
-                m.StartUpAux
-                #np.max([m.InventoryCost*m.Inventory, m.NegInventoryCost*m.Inventory])                
-        else:
-            return m.RegularProdCost*m.RegularProd +\
-                m.OvertimeProdCost*m.OvertimeProd +\
-                m.InventoryCost*m.Inventory
+            expr += m.StartUpCost * m.StartUp 
+        return expr
+
     model.StageObjective = pyo.Objective(rule=stage_objective,sense=pyo.minimize)
     
     return model
@@ -158,17 +177,13 @@ def aircond_model_creator(demands, start_ups=None):
         model.stage_models[t].StageObjective.deactivate()
     
     def stage_cost(stage_m):
-        if model.start_ups:
-            return stage_m.StartUp * stage_m.StartUpCost +\
-                stage_m.RegularProdCost*stage_m.RegularProd +\
-                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-                stage_m.StartUpAux
-                #np.max([stage_m.InventoryCost*stage_m.Inventory, 
-                #   stage_m.NegInventoryCost*stage_m.Inventory])
-        else:
-            return stage_m.RegularProdCost*stage_m.RegularProd +\
-                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-                stage_m.InventoryCost*stage_m.Inventory
+        expr = stage_m.RegularProdCost*stage_m.RegularProd +\
+               stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
+               stage_m.InventoryAux
+        if stage_m.start_ups:
+            expr += stage_m.StartUpCost * stage_m.StartUp
+        return expr
+    
     def total_cost_rule(m):
         return(sum(stage_cost(m.stage_models[t]) for t in m.T))
     model.TotalCostObjective = pyo.Objective(rule = total_cost_rule,
@@ -180,7 +195,6 @@ def aircond_model_creator(demands, start_ups=None):
     
     return model
 
-
 def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     #Create all nonleaf nodes used by the scenario
     #Compatible with sample scenario creation
@@ -189,48 +203,50 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
 
         nonant_list=[model.stage_models[stage].RegularProd,
                      model.stage_models[stage].OvertimeProd]
-
+        
+        nonant_ef_suppl_list = [model.stage_models[stage].Inventory]
         if model.start_ups:
-            nonant_list.append(model.stage_models[stage].StartUp)
+            nonant_ef_suppl_list.append(model.stage_models[stage].StartUp)
+            nonant_ef_suppl_list.append(model.stage_models[stage].InventoryAux)
 
         if stage ==1:
             ndn="ROOT"
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0,
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=nonant_list,
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
+                                                        cond_prob=1.0,
+                                                        stage=stage,
+                                                        cost_expression=model.stage_models[stage].StageObjective,
+                                                        scen_name_list=None, # Not maintained
+                                                        nonant_list=nonant_list,
+                                                        scen_model=model,
+                                                        nonant_ef_suppl_list = nonant_ef_suppl_list
                                                        )
                              )
         elif stage <=starting_stage:
             parent_ndn = ndn
             ndn = parent_ndn+"_0" #Only one node per stage before starting stage
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0,
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=nonant_list,
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
-                                                       parent_name = parent_ndn
+                                                        cond_prob=1.0,
+                                                        stage=stage,
+                                                        cost_expression=model.stage_models[stage].StageObjective,
+                                                        scen_name_list=None, # Not maintained
+                                                        nonant_list=nonant_list,
+                                                        scen_model=model,
+                                                        nonant_ef_suppl_list = nonant_ef_suppl_list,
+                                                        parent_name = parent_ndn
                                                        )
                              )
         elif stage < max(model.T): #We don't add the leaf node
             parent_ndn = ndn
             ndn = parent_ndn+"_"+nodenames[stage-starting_stage]
             TreeNodes.append(scenario_tree.ScenarioNode(name=ndn,
-                                                       cond_prob=1.0/branching_factors[stage-starting_stage-1],
-                                                       stage=stage,
-                                                       cost_expression=model.stage_models[stage].StageObjective,
-                                                       scen_name_list=None, # Not maintained
-                                                       nonant_list=nonant_list,
-                                                       scen_model=model,
-                                                       nonant_ef_suppl_list = [model.stage_models[stage].Inventory],
-                                                       parent_name = parent_ndn
+                                                        cond_prob=1.0/branching_factors[stage-starting_stage-1],
+                                                        stage=stage,
+                                                        cost_expression=model.stage_models[stage].StageObjective,
+                                                        scen_name_list=None, # Not maintained
+                                                        nonant_list=nonant_list,
+                                                        scen_model=model,
+                                                        nonant_ef_suppl_list = nonant_ef_suppl_list,
+                                                        parent_name = parent_ndn
                                                        )
                              )
     return(TreeNodes)
@@ -251,9 +267,8 @@ def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sig
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     model._mpisppy_probability = 1 / np.prod(branching_factors)
     return(model)
-                
 
-#=========
+
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
     """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
@@ -327,18 +342,20 @@ def inparser_adder(inparser):
                           dest="sigmadev",
                           type=float,
                           default=40.)
-    inparser.add_argument("--with-start-ups",
-                           help="Include start-up costs in model (this is a MIP)",
-                           dest="start_ups",
-                           action="store_true"
-                           )
+    inparser.add_argument("--start-ups",
+                          help="Include start-up costs in model (this is a MIP)",
+                          dest="start_ups",
+                          action="store_true"
+                          )
+    inparser.set_defaults(start_ups=False)    
     inparser.add_argument("--start-seed",
                           help="random number seed (default 1134)",
-                          dest="sigmadev",
+                          dest="start_seed",
                           type=int,
                           default=1134)
-    inparser.set_defaults(start_ups=False)
+
     return inparser
+
 
 #=========
 def kw_creator(options):
@@ -428,7 +445,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "sigmadev":sigmadev
                     }
     #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.aircond_submodels",
+    ama = amalgomator.from_module("mpisppy.tests.examples.aircond",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -441,25 +458,73 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     return xhat
 
 if __name__ == "__main__":
-    bfs = [3]
+    # This __main__ is just for developers to use for quick tests
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--solver-name',
+                        help="solver name (default 'gurobi_direct'",
+                        default='gurobi_direct')
+    parser.add_argument("--branching-factors",
+                        help="Spaces delimited branching factors (default 3 3)",
+                        dest="branching_factors",
+                        nargs="*",
+                        type=int,
+                        default=[10,10])
+    parser.add_argument("--with-start-ups",
+                        help="Toggles start-up costs in the aircond model",
+                        dest="start_ups",
+                        action="store_true")
+    parser.set_defaults(start_ups=False)
+    parser.add_argument("--save-xhat",
+                        help="Toggles file save",
+                        dest="save_xhat",
+                        action="store_true")
+    parser.set_defaults(save_xhat=False)
+
+
+    args=parser.parse_args()
+
+    solver_name=args.solver_name
+    start_ups=args.start_ups
+    bfs = args.branching_factors
+    save_xhat = args.save_xhat
+
+    if start_ups:
+        solver_options={"mipgap":0.015,'verbose':True,}
+    else:
+        solver_options=dict()
+
     num_scens = np.prod(bfs) #To check with a full tree
-    ama_options = { "EF-2stage": True,
-                    "EF_solver_name": "gurobi_direct",
+    ama_options = { "EF-mstage": True,
+                    "EF_solver_name": solver_name,
+                    "EF_solver_options":solver_options,
                     "num_scens": num_scens,
-                    "_mpisppy_probability": 1/num_scens,
-                    "start_ups": False,
                     "branching_factors":bfs,
                     "mudev":0,
-                    "sigmadev":80,
-                    "start":1
+                    "sigmadev":40,
+                    "start_ups":start_ups,
+                    "start_seed":0
                     }
-    refmodel = "aaircond" # WARNING: Change this in SPInstances
+    refmodel = "mpisppy.tests.examples.aircond" # WARNING: Change this in SPInstances
     #We use from_module to build easily an Amalgomator object
+    t0=time.time()
     ama = amalgomator.from_module(refmodel,
-                                  ama_options,use_command_line=False)
+                                  ama_options,
+                                  use_command_line=False)
     ama.run()
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
+    print('start ups costs: ', start_ups)
+    print('branching factors: ', bfs)
+    print('run time: ', time.time()-t0)
+    print(f"inner bound =", ama.best_inner_bound)
+    print(f"outer bound =", ama.best_outer_bound)
+    
+    xhat = sputils.nonant_cache_from_ef(ama.ef)
+    print('xhat_one = ', xhat['ROOT'])
 
-    sputils.ef_ROOT_nonants_npy_serializer(ama.ef, "aircond_root_nonants_temp.npy") 
+    if save_xhat:
+        bf_string = ''
+        for bf in bfs:
+            bf_string = bf_string + bf + '_'
+        np.savetxt('aircond_start_ups='+str(start_ups)+bf_string+'zhatstar.txt', xhat['ROOT'])
+   
+        
         

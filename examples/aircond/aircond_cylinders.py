@@ -7,8 +7,7 @@ from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.sputils import first_stage_nonant_npy_serializer
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
-###import mpisppy.tests.examples.aircond_submodels as aircond
-import aaircond as aircond
+import mpisppy.tests.examples.aircond as aircond
 
 write_solution = True
 
@@ -126,8 +125,10 @@ def _parse_args():
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
+    parser = baseparsers.lagranger_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
-    parser = baseparsers.mip_options(parser)    
+    parser = baseparsers.mip_options(parser)
+    parser = aircond.inparser_adder(parser)
     args = parser.parse_args()
     return args
 
@@ -152,12 +153,15 @@ def main():
 
     ScenCount = np.prod(BFs)
     #ScenCount = _get_num_leaves(BFs)
-    scenario_creator_kwargs = {"branching_factors": BFs}
+    scenario_creator_kwargs = {"branching_factors": BFs,
+                               "start_ups":args.start_ups}
+
     all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
     # print(all_scenario_names)
     scenario_creator = aircond.scenario_creator
     scenario_denouement = aircond.scenario_denouement
-    rho_setter = None
+    primal_rho_setter = aircond.primal_rho_setter
+    dual_rho_setter = aircond.dual_rho_setter
     
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
@@ -166,18 +170,17 @@ def main():
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=None,
-                              rho_setter = rho_setter,
+                              rho_setter = primal_rho_setter,
                               all_nodenames=all_nodenames)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter,
-                                              all_nodenames = all_nodenames)
+                                                    scenario_creator_kwargs=scenario_creator_kwargs,
+                                                    rho_setter = primal_rho_setter,
+                                                    all_nodenames = all_nodenames)
 
     # xhat specific bound spoke
-
     if with_xhatspecific:
         xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
                                                         xhat_scenario_dict,
@@ -190,7 +193,6 @@ def main():
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, 
                                                       all_nodenames=all_nodenames,
                                                       scenario_creator_kwargs=scenario_creator_kwargs)
-
     list_of_spoke_dict = list()
     if with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
@@ -206,6 +208,7 @@ def main():
         print("BestInnerBound={} and BestOuterBound={}".\
               format(wheel.BestInnerBound, wheel.BestOuterBound))
     
+        
     if write_solution:
         wheel.write_first_stage_solution('aircond_first_stage.csv')
         wheel.write_tree_solution('aircond_full_solution')

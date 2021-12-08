@@ -16,7 +16,7 @@ import mpi4py.MPI as mpi
 
 from mpisppy.tests.test_utils import get_solver, round_pos_sig
 import mpisppy.utils.sputils as sputils
-import mpisppy.tests.examples.aircond_submodels as aircond
+import mpisppy.tests.examples.aircond as aircond
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
@@ -40,7 +40,7 @@ class Test_confint_aircond(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.refmodelname ="mpisppy.tests.examples.aircond_submodels"  # amalgomator compatible
+        self.refmodelname ="mpisppy.tests.examples.aircond"  # amalgomator compatible
         # TBD: maybe this code should create the file
         self.xhatpath = "farmer_cyl_nonants.spy.npy"      
 
@@ -207,7 +207,7 @@ class Test_confint_aircond(unittest.TestCase):
         branching_factors= base_options['opt']['branching_factors']
         full_xhat = self._make_full_xhat(branching_factors)
         obj = round_pos_sig(ev.evaluate(full_xhat),2)
-        self.assertEqual(obj, 880.0)  # rebaslined 5 Dec 2021
+        self.assertEqual(obj, 890.0)  # rebaselined 5 Dec 2021
 
 
     @unittest.skipIf(not solver_available,
@@ -266,7 +266,7 @@ class Test_confint_aircond(unittest.TestCase):
         G = estim['G']
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
-        self.assertEqual((G,s), (7.51, 40.9))  # rebaselined 5 Dec 2021
+        self.assertEqual((G,s), (7.51, 26.4))  # rebaselined 5 Dec 2021
 
     
     @unittest.skipIf(not solver_available,
