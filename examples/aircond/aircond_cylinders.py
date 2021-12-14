@@ -17,8 +17,8 @@ write_solution = True
 def make_node_scenario_dict_balanced(BFs,leaf_nodes=True,start=1):
     """ creates a node-scenario dictionary for aircond problem
     Args: 
-        BFs(list): branching factors for each stage 
-        leaf_nodes (bool): include/disclue leaf nodes (default True)
+        BFs (list of ints): branching factors for each stage 
+        leaf_nodes (bool): include/exclude leaf nodes (default True)
         start (int): starting value for scenario number (default 1)
 
     Returns:
@@ -29,21 +29,20 @@ def make_node_scenario_dict_balanced(BFs,leaf_nodes=True,start=1):
     num_scens = np.prod(BFs)
     scenario_names = aircond.scenario_names_creator(num_scens, start)
     
-    stages = len(BFs)
+    num_stages = len(BFs)+1
     node_scenario_dict ={"ROOT": scenario_names[0]}
     
     for i in range(BFs[0]):
-        if i == 0:
-            node_scenario_dict[nodenames[i]] = scenario_names[i]
-        else: # 2
-            if stages >= 2:
-                for stage in range(2,stages+1+leaf_nodes):
-                    node_scenario_dict = _recursive_node_dict(node_scenario_dict,
-                     nodenames, scenario_names, BFs, stage)
-
+        node_scenario_dict[nodenames[i]] = scenario_names[i]
+        if num_stages >= 3:
+            for stage in range(2,num_stages+leaf_nodes):
+                node_scenario_dict = _recursive_node_dict(node_scenario_dict,
+                                                          nodenames,
+                                                          scenario_names,
+                                                          BFs,
+                                                          stage)
 
     return node_scenario_dict
-
 
 def _recursive_node_dict(current_dict, nodenames, scenario_names, BFs, stage):
     """ recursive call for make_node_scenario_dict for 3+ stage problems
@@ -80,7 +79,7 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
     """ creates a list of node names as in aircond example
     Args:
         BFs (list): branching factor for each stage
-        leaf_nodes (bool): if False, disclude leaf node names
+        leaf_nodes (bool): if False, exclude leaf node names
         root (bool): if False, no "ROOT_" string on non-root nodes
     
     Returns: 
@@ -89,7 +88,7 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
         1_BFs[1], ... , BFs[0]_BFs[1], ... , BFs[0]...BFs[-2]
     """
     if leaf_nodes == False:
-        BFs = BFs[:-1] # disclude leaf nodes
+        BFs = BFs[:-1] # exclude leaf nodes
 
     # Constructs all nodenames
     # 0, 1, 2, ..., BFs[0], 00, 01, ..., 0BFs[1], 10, 11, ... ,
