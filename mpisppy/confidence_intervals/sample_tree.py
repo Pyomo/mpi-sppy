@@ -76,7 +76,7 @@ class SampleSubtree():
         self._create_amalgomator()
 
                 
-    def sample_creator(self, sname, **scenario_creator_kwargs):
+    def _sample_creator(self, sname, **scenario_creator_kwargs):
         '''
         This method is similar to scenario_creator function, but for subtrees.
         Given a scenario names and kwargs, it creates a scenario from our subtree
@@ -113,7 +113,7 @@ class SampleSubtree():
         WARNING: sample_creator must be called before using for stages beyond 1
         '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
-        self.scenario_creator = self.sample_creator
+        self.scenario_creator = self._sample_creator
         
         ama_options = self.options.copy()
         ama_options['EF-mstage'] = len(self.original_branching_factors) > 1
@@ -143,7 +143,7 @@ class SampleSubtree():
         self.xhat_at_stage =[self.ef.ref_vars[(pseudo_root,i)].value for i in range(self.ef._nlens[pseudo_root])]
 
 
-def feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
+def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
                       solvername=None, solver_options=None):
     '''
     Given a scenario and a first-stage policy xhat_one, this method computes
@@ -210,7 +210,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
     #Special case if we only have one scenario
     if len(local_scenarios)==1:
         scen = list(local_scenarios.values())[0]
-        res = feasible_solution(mname, scen, xhat_one, branching_factors, seed, options,
+        res = _feasible_solution(mname, scen, xhat_one, branching_factors, seed, options,
                                 solvername=solvername,
                                 solver_options=solver_options)
         return res
@@ -239,6 +239,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 
 
 if __name__ == "__main__":
+    # This main program is provided to developers can run quick tests.
     branching_factors = [3,2,4,4]
     num_scens = np.prod(branching_factors)
     mname = "mpisppy.tests.examples.aircond"
@@ -260,7 +261,7 @@ if __name__ == "__main__":
     seed = sputils.number_of_nodes(branching_factors)
     options = dict() #We take default aircond options
     
-    xhats,seed = feasible_solution(mname, scenario, xhat_one, branching_factors, seed, options)
+    xhats,seed = _feasible_solution(mname, scenario, xhat_one, branching_factors, seed, options)
     print(xhats)
     
     #----------Find feasible solutions for every scenario ------------

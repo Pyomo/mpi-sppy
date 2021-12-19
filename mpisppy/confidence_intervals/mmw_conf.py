@@ -87,7 +87,6 @@ if __name__ == "__main__":
                "EF_solver_options": solver_options,
                "start_scen": args.start_scen}   #Are the scenario shifted by a start arg ?
 
-    #should we accept these as arguments?
     num_batches = args.num_batches
     batch_size = args.batch_size
 
