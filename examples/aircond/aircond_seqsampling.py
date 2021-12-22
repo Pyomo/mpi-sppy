@@ -1,6 +1,6 @@
 # Copyright 2020, 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Illustrate the use of sequential sampling for programmers using aircond.
+# Use the aircond model to illustrate how to use sequential sampling.
 #
 
 import sys
