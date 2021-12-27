@@ -52,7 +52,6 @@ import it.
 ? Should baseparser functions "register themselves" in a import-name-string: function
 map that is global to baseparsers (i.e. importable)?
 
-
 """
 import numpy as np
 import importlib
