@@ -14,6 +14,8 @@ aircondstream = np.random.RandomState()
 
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
 
+    if "start_seed" not in kwargs:
+        raise RuntimeError(f"start_seed not in kwargs; {kwargs =}")
     start_seed = kwargs["start_seed"]
     max_d = kwargs.get("max_d", 400)
     min_d = kwargs.get("min_d", 0)
@@ -268,9 +270,9 @@ def scenario_creator(sname, **kwargs):
         raise RuntimeError("scenario_creator for aircond needs branching_factors in kwargs")
     branching_factors = kwargs["branching_factors"]
 
-    demands,nodenames = _demands_creator(sname, start_seed, kwargs)
+    demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
     
-    model = aircond_model_creator(demands, start_seed, kwargs)
+    model = aircond_model_creator(demands, **kwargs)
     
     
     #Constructing the nodes used by the scenario
@@ -295,21 +297,21 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     """
     
     # Finding demands from stage 1 to t
+    starting_d = scenario_creator_kwargs.get("starting_d", 200)
     if given_scenario is None:
         if stage == 1:
-            past_demands = [200]
+            past_demands = [starting_d]
         else:
             raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
     else:
         past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
-    
+
+    kwargs = scenario_creator_kwargs.copy()
+    kwargs["start_seed"] = seed
+        
     #Finding demands for stages after t (note the dynamic seed)
     future_demands,nodenames = _demands_creator(sname, sample_branching_factors, 
-                                               start_seed = seed, 
-                                               mudev = scenario_creator_kwargs['mudev'], 
-                                               sigmadev = scenario_creator_kwargs['sigmadev'],
-                                               starting_d=past_demands[stage-1],
-                                               root_name='ROOT'+'_0'*(stage-1))
+                                                root_name='ROOT'+'_0'*(stage-1), **kwargs)
     
     demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
     

@@ -188,7 +188,8 @@ class IndepScens_SeqSampling(SeqSampling):
         ama = amalgomator.Amalgomator(options=ama_options, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
-                                      kw_creator=self.kw_creator_without_seed,
+                                      #kw_creator=self.kw_creator_without_seed,
+                                      kw_creator=self.refmodel.kw_creator,
                                       scenario_denouement=scenario_denouement)
         ama.run()
         #Optimal solution of the approximate problem

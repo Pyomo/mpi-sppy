@@ -123,6 +123,10 @@ class SampleSubtree():
             ama_options['EF_solver_options']= self.solver_options
         ama_options['num_scens'] = self.numscens
         ama_options['_mpisppy_probability'] = 1/self.numscens #Probably not used
+        # TBD: better options flow (Dec 2021)
+        if "branching_factors" not in ama_options:
+            if "kwargs" in ama_options:
+                ama_options["branching_factors"] = ama_options["kwargs"]["branching_factors"]
         
         scen_names = self.refmodel.scenario_names_creator(self.numscens,
                                                           start=self.seed)
