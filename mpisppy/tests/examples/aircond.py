@@ -1,6 +1,5 @@
 #ReferenceModel for full set of scenarios for AirCond; June 2021
 # Dec 2021; numerous enhancements by DLW; do not change defaults
-
 import pyomo.environ as pyo
 import numpy as np
 import time
@@ -13,24 +12,22 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-def _demands_creator(sname, start_seed, root_name="ROOT", **kwargs):
-    
+def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
+
+    start_seed = kwargs["start_seed"]
     max_d = kwargs.get("max_d", 400)
     min_d = kwargs.get("min_d", 0)
     mudev = kwargs.get("mudev", None)
     sigmadev = kwargs.get("sigmadev", None)
 
-    branching_factors = kwargs.get("branching_factors", None)
-    if branching_factors is None:
-        raise RuntimeError("scenario_creator for aircond needs branching_factors")
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
-    prod = np.prod(branching_factors)
+    prod = np.prod(sample_branching_factors)
     s = int(scennum % prod)
     d = kwargs.get("starting_d", 200)
     demands = [d]
     nodenames = [root_name]
-    for bf in branching_factors:
+    for bf in sample_branching_factors:
         assert prod%bf == 0
         prod = prod//bf
         nodenames.append(str(s//prod))
@@ -38,7 +35,7 @@ def _demands_creator(sname, start_seed, root_name="ROOT", **kwargs):
     
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],branching_factors))
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
         d = min(max_d,max(min_d,d+aircondstream.normal(mudev,sigmadev)))
         demands.append(d)
     
@@ -140,10 +137,12 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     return model
 
 #Assume that demands has been drawn before
-def aircond_model_creator(demands, start_seed, **kwargs):
+def aircond_model_creator(demands, **kwargs):
     # create a single aircond model for the given demands
     # branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
     # typing aids...
+    start_seed = kwargs["start_seed"]
+
     start_ups = kwargs.get("start_ups", False)
     
     model = pyo.ConcreteModel()
@@ -164,7 +163,7 @@ def aircond_model_creator(demands, start_seed, **kwargs):
     for t in model.T:
         last_stage = (t==num_stages)
         model.stage_models[t] = _StageModel_creator(t, demands[t-1],
-                                                    kwargs, last_stage=last_stage)  
+                                                    last_stage=last_stage, **kwargs)
 
     #Constraints
     
@@ -303,13 +302,8 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
             raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
     else:
         past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
-    optional_things = ['mudev','sigmadev','start_ups']
-    default_values = [0,40,False]
-    for thing,value in zip(optional_things,default_values):
-        if thing not in scenario_creator_kwargs:
-            scenario_creator_kwargs[thing] = value
     
-    #Finding demands for stages after t
+    #Finding demands for stages after t (note the dynamic seed)
     future_demands,nodenames = _demands_creator(sname, sample_branching_factors, 
                                                start_seed = seed, 
                                                mudev = scenario_creator_kwargs['mudev'], 
@@ -319,7 +313,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     
     demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
     
-    model = aircond_model_creator(demands, start_ups=start_ups)
+    model = aircond_model_creator(demands, **scenario_creator_kwargs)
     
     model._mpisppy_probability = 1/np.prod(sample_branching_factors)
     
