@@ -1,4 +1,6 @@
 #ReferenceModel for full set of scenarios for AirCond; June 2021
+# Dec 2021; numerous enhancements by DLW; do not change defaults
+# Dec 2021; for now, we are going to keep start_seed out of cb_data
 
 
 import pyomo.environ as pyo
@@ -13,19 +15,21 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 
-def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
-                    starting_d=200,root_name="ROOT"):
+def _demands_creator(sname, cb_data, start_seed, root_name="ROOT"):
     
-    max_d = 400
-    min_d = 0
+    max_d = cb_data.get("max_d", 400)
+    min_d = cb_data.get("min_d", 0)
+    mudev = cb_data.get("mudev", None)
+    sigmadev = cb_data.get("sigmadev", None)
 
+    branching_factors = cb_data.get("branching_factors", None)
     if branching_factors is None:
         raise RuntimeError("scenario_creator for aircond needs branching_factors")
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
     prod = np.prod(branching_factors)
     s = int(scennum % prod)
-    d = starting_d
+    d = cb_data.get("starting_d", 200)
     demands = [d]
     nodenames = [root_name]
     for bf in branching_factors:
@@ -60,34 +64,38 @@ def dual_rho_setter(scenario_instance):
 def primal_rho_setter(scenario_instance):
     return general_rho_setter(scenario_instance, rho_scale_factor=0.01)
 
-def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
-    # create a single stage of an aircond model
+def _StageModel_creator(time, demand, cb_data, last_stage=False):
+    # create a single stage of an aircond model; do not change defaults (Dec 2021)
+
     model = pyo.ConcreteModel()
     model.T = [time]
 
     #Parameters
     #Demand
     model.Demand = demand
-    #Inventory Cost
-    model.InventoryCost = -0.8 if last_stage else 0.5
+    #Inventory Cost: model.InventoryCost = -0.8 if last_stage else 0.5
+    if last_stage:
+        model.InventoryCost = cb_data.get("LastInventoryCost", -0.8)
+    else:
+        model.InventoryCost = cb_data.get("InventoryCost", 0.5)
     #Regular Capacity
-    model.Capacity = 200
+    model.Capacity = cb_data.get("Capacity", 200)
     #Regular Production Cost
-    model.RegularProdCost = 1
+    model.RegularProdCost = cb_data.get("RegularProdCost", 1)
     #Overtime Production Cost
-    model.OvertimeProdCost = 3
+    model.OvertimeProdCost = cb_data.get("OvertimeProdCost", 3)
 
     model.max_T = 25 # this is for the start-up cost constraints, 
     model.bigM = model.Capacity * model.max_T
     
-    model.start_ups = start_ups
+    model.start_ups = cb_data.get("start_ups", False)
 
     if model.start_ups:
         # Start-up Cost
-        model.StartUpCost = 300  # TBD: give the user easier control
+        model.StartUpCost = cb_data.get("StartUpCost", 300)
 
     # Negative Inventory Cost
-    model.NegInventoryCost = -5
+    model.NegInventoryCost = cb_data.get("NegInventoryCost", -5)
     
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
@@ -134,8 +142,12 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     return model
 
 #Assume that demands has been drawn before
-def aircond_model_creator(demands, start_ups=None):
+def aircond_model_creator(demands, cb_data, start_seed=0):
     # create a single aircond model for the given demands
+    # branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
+    # typing aids...
+    start_ups = cb_data.get("start_ups", False)
+    
     model = pyo.ConcreteModel()
     num_stages = len(demands)
     model.T = range(1,num_stages+1) #Stages 1,2,...,T
@@ -147,14 +159,14 @@ def aircond_model_creator(demands, start_ups=None):
     model.start_ups = start_ups
 
     #Parameters
-    model.BeginInventory = 100
+    model.BeginInventory = cb_data.get("BeginInventory", 100)
     
     #Creating stage models
     model.stage_models = {}
     for t in model.T:
         last_stage = (t==num_stages)
         model.stage_models[t] = _StageModel_creator(t, demands[t-1],
-            last_stage=last_stage, start_ups=model.start_ups)  
+                                                    cb_data, last_stage=last_stage)  
 
     #Constraints
     
@@ -252,16 +264,16 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return(TreeNodes)
 
         
-def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
-    if branching_factors is None:
-        raise RuntimeError("scenario_creator for aircond needs branching_factors")
+def scenario_creator(sname, cb_data, start_seed=0):
 
-    demands,nodenames = _demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
+    if "branching_factors" not in cb_data:
+        raise RuntimeError("scenario_creator for aircond needs branching_factors in cb_data")
+    branching_factors = cb_data["branching_factors"]
+
+    demands,nodenames = _demands_creator(sname, cb_data, start_seed)
     
-    model = aircond_model_creator(demands, start_ups=start_ups)
+    model = aircond_model_creator(demands, cb_data, start_seed)
     
-    if num_scens is not None:
-        model._mpisppy_probability = 1/num_scens
     
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
@@ -284,7 +296,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                                          by the arguments
     """
     
-    start_ups = scenario_creator_kwargs["start_ups"]
+    start_ups = scenario_creator_kwargs["cb_data"]["start_ups"]
     # Finding demands from stage 1 to t
     if given_scenario is None:
         if stage == 1:
@@ -359,34 +371,41 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
-
+    # TBD: re-write this function...
+    if "cb_data" in options:
+        kwargs = {"cb_data": options["cb_data"]}
+        return kwargs
+    
+    cb_data = dict()
+    
     def _kwarg(option_name, default = None, arg_name=None):
         # options trumps args
         retval = options.get(option_name)
         if retval is not None:
-            return retval
+            cb_data[option_name] = retval
+            return 
         args = options.get('args')
         aname = option_name if arg_name is None else arg_name
         retval = getattr(args, aname) if hasattr(args, aname) else None
         retval = default if retval is None else retval
-        return retval
+        cb_data[option_name] = retval
 
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
-    BFs = _kwarg("branching_factors")
-    mudev = _kwarg("mudev", 0.)
-    sigmadev = _kwarg("sigmadev", 40.)
-    start_seed = _kwarg("start_seed", 1134)
-    start_ups = _kwarg("start_ups", None)
-    kwargs = {"num_scens" : options.get('num_scens', None),
-              "branching_factors": BFs,
-              "mudev": mudev,
-              "sigmadev": sigmadev,
-              "start_seed": start_seed,
-              "start_ups": start_ups,
-              }
-    if kwargs["start_ups"] is None:
-        raise ValueError("kw_creator called, but no value given for start_ups")
+    _kwarg("branching_factors")
+    _kwarg("mudev", 0.)
+    _kwarg("sigmadev", 40.)
+    _kwarg("start_ups", None)
+                     
+    start_seed = options.get("start_seed", None)
+
+    kwargs = {"cb_data": cb_data, "start_seed": start_seed}
+                     
+    if cb_data["start_ups"] is None:
+        raise ValueError(f"kw_creator called, but no value given for start_ups, {options =}")
+    if start_seed is None:
+        raise ValueError(f"kw_creator called, but no value given for start_seed, {options =}")
+                     
     return kwargs
 
 

@@ -49,8 +49,10 @@ class Test_confint_aircond(unittest.TestCase):
                     "start_ups": False,
                     "branching_factors": [4, 3, 2],
                     "num_scens": 24,
+                    "start_seed": 0,
                     "EF-mstage": True}
-        Baseoptions =  {"num_batches": 5,
+        Baseoptions =  {"from_Baseoptions": True,
+                        "num_batches": 5,
                         "batch_size": 6,
                         "opt":options}
         scenario_creator_kwargs = aircond.kw_creator(options)
@@ -179,7 +181,7 @@ class Test_confint_aircond(unittest.TestCase):
         branching_factors= MMW_options['opt']['branching_factors']
         scen_count = np.prod(branching_factors)
         scenario_creator_kwargs = MMW_options['kwargs']
-        scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
+        ###scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         all_scenario_names = aircond.scenario_names_creator(scen_count)
         all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
         ev = Xhat_Eval(options,
