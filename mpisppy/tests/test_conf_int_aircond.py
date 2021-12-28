@@ -45,7 +45,10 @@ class Test_confint_aircond(unittest.TestCase):
         self.xhatpath = "farmer_cyl_nonants.spy.npy"      
 
     def _get_base_options(self):
-        options = { "EF_solver_name": solvername,
+        # Base option has batch options
+        # plus kwoptions to pass to kw_creator
+        # and kwargs, which is the result of that.
+        kwoptions = { "EF_solver_name": solvername,
                     "start_ups": False,
                     "branching_factors": [4, 3, 2],
                     "num_scens": 24,
@@ -54,8 +57,8 @@ class Test_confint_aircond(unittest.TestCase):
         Baseoptions =  {"from_Baseoptions": True,
                         "num_batches": 5,
                         "batch_size": 6,
-                        "opt":options}
-        scenario_creator_kwargs = aircond.kw_creator(options)
+                        "kwoptions":kwoptions}
+        scenario_creator_kwargs = aircond.kw_creator(kwoptions)
         Baseoptions['kwargs'] = scenario_creator_kwargs
         return Baseoptions
 
@@ -67,7 +70,7 @@ class Test_confint_aircond(unittest.TestCase):
                  "solvername": solvername,
                  "verbose": False,
                  "solver_options":None}
-        options.update(Baseoptions["opt"])
+        options.update(Baseoptions["kwoptions"])
         return options
 
     def _get_xhat_gen_options(self, BFs):
@@ -105,7 +108,7 @@ class Test_confint_aircond(unittest.TestCase):
         options = self._get_xhatEval_options()
         
         MMW_options = self._get_base_options()
-        branching_factors= MMW_options['opt']['branching_factors']
+        branching_factors= MMW_options['kwoptions']['branching_factors']
         scen_count = np.prod(branching_factors)
         scenario_creator_kwargs = MMW_options['kwargs']
         ###scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
@@ -122,7 +125,7 @@ class Test_confint_aircond(unittest.TestCase):
 
     def test_ama_creator(self):
         options = self._get_base_options()
-        ama_options = options['opt']
+        ama_options = options['kwoptions']
         ama_object = ama.from_module(self.refmodelname,
                                      options=ama_options,
                                      use_command_line=False)   
@@ -132,9 +135,9 @@ class Test_confint_aircond(unittest.TestCase):
         xhat = ciutils.read_xhat(self.xhat_path)
 
         MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
-                          options['opt'],
+                          options['kwoptions'],
                           xhat,
-                          options['num_batches'], batch_size = options["batch_size"], start = options['opt']['num_scens'])
+                          options['num_batches'], batch_size = options["batch_size"], start = options['kwoptions']['num_scens'])
 
     def test_seqsampling_creator(self):
         BFs = [4, 3, 2]
@@ -160,7 +163,7 @@ class Test_confint_aircond(unittest.TestCase):
         
     def test_indepscens_seqsampling_creator(self):
         options = self._get_base_options()
-        branching_factors= options['opt']['branching_factors']
+        branching_factors= options['kwoptions']['branching_factors']
         xhat_gen_options = self._get_xhat_gen_options(branching_factors)
         
         # We want a very small instance for testing on GitHub.
@@ -187,7 +190,7 @@ class Test_confint_aircond(unittest.TestCase):
                      "no solver is available")
     def test_ama_running(self):
         options = self._get_base_options()
-        ama_options = options['opt']
+        ama_options = options['kwoptions']
         ama_object = ama.from_module(self.refmodelname,
                                      ama_options, use_command_line=False)
         ama_object.run()
@@ -207,7 +210,7 @@ class Test_confint_aircond(unittest.TestCase):
         ev = self._eval_creator()
 
         base_options = self._get_base_options()
-        branching_factors= base_options['opt']['branching_factors']
+        branching_factors= base_options['kwoptions']['branching_factors']
         full_xhat = self._make_full_xhat(branching_factors)
         obj = round_pos_sig(ev.evaluate(full_xhat),2)
         self.assertEqual(obj, 1200.0)  # rebaselined 27 Dec 2021
@@ -217,7 +220,7 @@ class Test_confint_aircond(unittest.TestCase):
     def test_xhat_eval_evaluate_one(self):
         ev = self._eval_creator()
         options = self._get_base_options()
-        branching_factors= options['opt']['branching_factors']
+        branching_factors= options['kwoptions']['branching_factors']
         full_xhat = self._make_full_xhat(branching_factors)
 
         num_scens = np.prod(branching_factors)
@@ -236,11 +239,11 @@ class Test_confint_aircond(unittest.TestCase):
         options = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
         MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
-                                        options['opt'],
+                                        options['kwoptions'],
                                         xhat,
                                         options['num_batches'],
                                         batch_size = options["batch_size"],
-                                         start = options['opt']['num_scens'])
+                                         start = options['kwoptions']['num_scens'])
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
@@ -251,11 +254,11 @@ class Test_confint_aircond(unittest.TestCase):
                      "no solver is available")
     def test_gap_estimators(self):
         options = self._get_base_options()
-        branching_factors= options['opt']['branching_factors']
+        branching_factors= options['kwoptions']['branching_factors']
         scen_count = np.prod(branching_factors)
         scenario_names = aircond.scenario_names_creator(scen_count, start=1000)
         sample_options = {"seed": 0,
-                          "branching_factors": options['opt']['branching_factors']}
+                          "branching_factors": options['kwoptions']['branching_factors']}
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
                                        solving_type="EF-mstage",
@@ -274,7 +277,7 @@ class Test_confint_aircond(unittest.TestCase):
                      "no solver is available")
     def test_indepscens_seqsampling_running(self):
         options = self._get_base_options()
-        branching_factors= options['opt']['branching_factors']
+        branching_factors= options['kwoptions']['branching_factors']
         xhat_gen_options = self._get_xhat_gen_options(branching_factors)
         
         # We want a very small instance for testing on GitHub.
