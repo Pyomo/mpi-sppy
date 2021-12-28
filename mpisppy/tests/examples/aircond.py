@@ -27,6 +27,7 @@ parms = {"mudev": (float, 0.),
          "RegularProdCost": (float, 1.),
          "OvertimeProdCost": (float, 3.),
          "NegInventoryCost": (float, -5.),
+         "QuadShortCoeff": (float, 0)
 }
 
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
@@ -114,6 +115,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
 
     # Negative Inventory Cost
     model.NegInventoryCost = _kw("NegInventoryCost")
+    model.QuadShortCoeff = _kw("QuadShortCoeff")
     
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
@@ -129,9 +131,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
         # start-up cost variable
         model.StartUp = pyo.Var(within=pyo.Binary)
 
-    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)
-    
-    #Constraints
+    #Constraints (and some auxilliary variables)
     def CapacityRule(m):
         return m.RegularProd<=m.Capacity
     model.MaximumCapacity = pyo.Constraint(rule=CapacityRule)
@@ -140,16 +140,39 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
         model.RegStartUpConstraint = pyo.Constraint(
             expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
 
-    # for max function
-    model.NegInventoryConstraint = pyo.ConstraintList()
-    model.NegInventoryConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
-    model.NegInventoryConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
+    """
+    # for max function using only one Var and two constraints
+    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)  # to add to objective
+    
+    model.InventoryCostConstraint = pyo.ConstraintList()
+    model.InventoryCostConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
+    model.InventoryCostConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
+    """
+
+    # grab positive and negative parts of inventory
+    if not last_stage:
+        assert model.InventoryCost > 0, model.InventoryCost
+        assert model.NegInventoryCost < 0, model.NegInventoryCost
+        model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+        model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+        model.doleInventory = pyo.Constraint(expr=model.Inventory == model.posInventory - model.negInventory)
+        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.posInventory - model.NegInventoryCost*model.negInventory)
+    else:  # in the last stage we let the negative "cost" take care of both sides
+        assert model.InventoryCost < 0, f"last stage inven cost: {model.InventoryCost}"        
+        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.Inventory)
+
+    if model.QuadShortCoeff > 0 and not last_stage:
+        model.InvenCostExpr =  pyo.Expression(expr = model.LinInvenCostExpr +\
+                                              model.QuadShortCoeff * model.negInventory * model.negInventory)
+    else:
+        assert model.QuadShortCoeff >= 0, model.QuadShortCoeff
+        model.InvenCostExpr =  pyo.Expression(expr = model.LinInvenCostExpr)
     
     #Objective
     def stage_objective(m):
         expr =  m.RegularProdCost*m.RegularProd +\
                 m.OvertimeProdCost*m.OvertimeProd +\
-                m.InventoryAux        
+                m.InvenCostExpr
 
         if m.start_ups:
             expr += m.StartUpCost * m.StartUp 
@@ -211,7 +234,7 @@ def aircond_model_creator(demands, **kwargs):
     def stage_cost(stage_m):
         expr = stage_m.RegularProdCost*stage_m.RegularProd +\
                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-               stage_m.InventoryAux
+               stage_m.InvenCostExpr
         if stage_m.start_ups:
             expr += stage_m.StartUpCost * stage_m.StartUp
         return expr
@@ -239,7 +262,6 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
         nonant_ef_suppl_list = [model.stage_models[stage].Inventory]
         if model.start_ups:
             nonant_ef_suppl_list.append(model.stage_models[stage].StartUp)
-            nonant_ef_suppl_list.append(model.stage_models[stage].InventoryAux)
 
         if stage ==1:
             ndn="ROOT"
@@ -394,7 +416,8 @@ def inparser_adder(inparser):
     _doone("Capacity", helptext="Per period regular time capacity")
     _doone("RegularProdCost", helptext="Regular time producion cost")
     _doone("OvertimeProdCost", helptext="Overtime (or subcontractor) production cost")
-    _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative);")
+    _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative; not used in last stage)")
+    _doone("QuadShortCoeff", helptext="Coefficient for backorders squared (should be nonnegative; not used in last stage)")
     
     return inparser
 
