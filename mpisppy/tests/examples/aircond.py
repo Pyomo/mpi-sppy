@@ -11,6 +11,23 @@ from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
+# Do not change these defaults!
+parms = {"mudev": (float, 0.),
+         "sigmadev": (float, 40.),
+         "start_ups": (bool, False),
+         "StartUpCost": (float, 300.),
+         "start_seed": (int, 1134),
+         "min_d": (float, 0.),
+         "max_d": (float, 400.),
+         "starting_d": (float, 200.),
+         "BeginInventory": (float, 200.),
+         "InventoryCost": (float, 0.5),
+         "LastInventoryCost": (float, -0.8),
+         "Capacity": (float, 200.),
+         "RegularProdCost": (float, 1.),
+         "OvertimeProdCost": (float, 3.),
+         "NegInventoryCost": (float, -5.),
+}
 
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
 
@@ -61,9 +78,13 @@ def dual_rho_setter(scenario_instance):
 def primal_rho_setter(scenario_instance):
     return general_rho_setter(scenario_instance, rho_scale_factor=0.01)
 
+
 def _StageModel_creator(time, demand, last_stage, **kwargs):
     # create a single stage of an aircond model; do not change defaults (Dec 2021)
 
+    def _kw(pname):
+        return kwargs.get(pname, parms[pname][1])
+    
     model = pyo.ConcreteModel()
     model.T = [time]
 
@@ -72,27 +93,27 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     model.Demand = demand
     #Inventory Cost: model.InventoryCost = -0.8 if last_stage else 0.5
     if last_stage:
-        model.InventoryCost = kwargs.get("LastInventoryCost", -0.8)
+        model.InventoryCost = _kw("LastInventoryCost")
     else:
-        model.InventoryCost = kwargs.get("InventoryCost", 0.5)
+        model.InventoryCost = _kw("InventoryCost")
     #Regular Capacity
-    model.Capacity = kwargs.get("Capacity", 200)
+    model.Capacity = _kw("Capacity")
     #Regular Production Cost
-    model.RegularProdCost = kwargs.get("RegularProdCost", 1)
+    model.RegularProdCost = _kw("RegularProdCost")
     #Overtime Production Cost
-    model.OvertimeProdCost = kwargs.get("OvertimeProdCost", 3)
+    model.OvertimeProdCost = _kw("OvertimeProdCost")
 
     model.max_T = 25 # this is for the start-up cost constraints, 
     model.bigM = model.Capacity * model.max_T
     
-    model.start_ups = kwargs.get("start_ups", False)
+    model.start_ups = _kw("start_ups")
 
     if model.start_ups:
         # Start-up Cost
-        model.StartUpCost = kwargs.get("StartUpCost", 300)
+        model.StartUpCost = _kw("StartUpCost")
 
     # Negative Inventory Cost
-    model.NegInventoryCost = kwargs.get("NegInventoryCost", -5)
+    model.NegInventoryCost = _kw("NegInventoryCost")
     
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
@@ -145,7 +166,7 @@ def aircond_model_creator(demands, **kwargs):
     # typing aids...
     start_seed = kwargs["start_seed"]
 
-    start_ups = kwargs.get("start_ups", False)
+    start_ups = kwargs.get("start_ups", parms["start_ups"][1])
     
     model = pyo.ConcreteModel()
     num_stages = len(demands)
@@ -158,7 +179,7 @@ def aircond_model_creator(demands, **kwargs):
     model.start_ups = start_ups
 
     #Parameters
-    model.BeginInventory = kwargs.get("BeginInventory", 100)
+    model.BeginInventory = kwargs.get("BeginInventory", parms["BeginInventory"][1])
     
     #Creating stage models
     model.stage_models = {}
@@ -297,7 +318,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     """
     
     # Finding demands from stage 1 to t
-    starting_d = scenario_creator_kwargs.get("starting_d", 200)
+    starting_d = scenario_creator_kwargs.get("starting_d", parms["starting_d"][1])
     if given_scenario is None:
         if stage == 1:
             past_demands = [starting_d]
@@ -338,28 +359,43 @@ def scenario_names_creator(num_scens,start=None):
 #=========
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to aircond
-    inparser.add_argument("--mu-dev",
-                          help="average deviation of demand between two periods (default 0)",
-                          dest="mudev",
-                          type=float,
-                          default=0.)
-    inparser.add_argument("--sigma-dev",
-                          help="average standard deviation of demands between two periods (default 40)",
-                          dest="sigmadev",
-                          type=float,
-                          default=40.)
+    # Do not change the defaults.
+    def _doone(name, helptext, argname=None):
+        # The name should be the name in parms
+        # helptext should not include the default
+        aname = name.replace("_", "-") if argname is None else argname
+        h = f"{helptext} (default {parms[name][1]})"
+        inparser.add_argument(f"--{aname}",
+                              help=h,
+                              dest=name,
+                              type=parms[name][0],
+                              default=parms[name][1])
+
+
+    _doone("mudev", "average deviation of demand between two periods", argname="mu-dev")
+    _doone("sigmadev", "standard deviation of deviation of demand between two periods", argname="sigma-dev")
+
+    d = parms["start_ups"]
     inparser.add_argument("--start-ups",
-                          help="Include start-up costs in model (this is a MIP)",
+                          help="Include start-up costs in model, resulting in a MPI (default {d})",
                           dest="start_ups",
                           action="store_true"
                           )
-    inparser.set_defaults(start_ups=False)    
-    inparser.add_argument("--start-seed",
-                          help="random number seed (default 1134)",
-                          dest="start_seed",
-                          type=int,
-                          default=1134)
-
+    inparser.set_defaults(start_ups=d)
+    
+    _doone("StartUpCost", helptext="Cost if production in a period is non-zero and start-up is True")
+    _doone("start_seed", helptext="random number seed")
+    _doone("min_d", helptext="minimum demand in a period")
+    _doone("max_d", helptext="maximum demand in a period")
+    _doone("starting_d", helptext="period 0 demand")
+    _doone("InventoryCost", helptext="Inventory cost per period per item")
+    _doone("BeginInventory", helptext="Inital Inventory")
+    _doone("LastInventoryCost", helptext="Inventory `cost` (should be negative) in last period)")
+    _doone("Capacity", helptext="Per period regular time capacity")
+    _doone("RegularProdCost", helptext="Regular time producion cost")
+    _doone("OvertimeProdCost", helptext="Overtime (or subcontractor) production cost")
+    _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative);")
+    
     return inparser
 
 
@@ -386,10 +422,8 @@ def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
     _kwarg("branching_factors")
-    _kwarg("mudev", 0.)
-    _kwarg("sigmadev", 40.)
-    _kwarg("start_ups", None)
-    _kwarg("start_seed", None)                     
+    for idx, tpl in parms.items():
+        _kwarg(idx, tpl[1])
 
     if kwargs["start_ups"] is None:
         raise ValueError(f"kw_creator called, but no value given for start_ups, {options =}")
