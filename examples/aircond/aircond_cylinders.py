@@ -203,16 +203,18 @@ def main():
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
+    fname = 'aircond_cyl_nonants.npy'
     if wheel.global_rank == 0:
         print("BestInnerBound={} and BestOuterBound={}".\
               format(wheel.BestInnerBound, wheel.BestOuterBound))
         if write_solution:
-            wheel.write_first_stage_solution('aircond_first_stage.csv')
-            wheel.write_tree_solution('aircond_full_solution')
-            fname = 'aircond_cyl_nonants.npy'
-            wheel.write_first_stage_solution(fname,
+            print(f"Writing first stage solution to {fname}")
+    # all ranks need to participate because only the winner will write
+    if write_solution:
+        wheel.write_first_stage_solution('aircond_first_stage.csv')
+        wheel.write_tree_solution('aircond_full_solution')
+        wheel.write_first_stage_solution(fname,
                     first_stage_solution_writer=first_stage_nonant_npy_serializer)
-            print(f"Wrote first stage solution to {fname}")
 
 if __name__ == "__main__":
     main()

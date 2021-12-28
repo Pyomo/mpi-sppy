@@ -11,7 +11,7 @@ from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
-# Do not change these defaults!
+# Do not edit these defaults!
 parms = {"mudev": (float, 0.),
          "sigmadev": (float, 40.),
          "start_ups": (bool, False),
