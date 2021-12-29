@@ -162,18 +162,6 @@ def _basic_multistage(progname=None, num_scens_reqd=False):
                         type=int,
                         default=None)
         
-    if num_scens_reqd:
-        parser.add_argument(
-            "num_scens", help="Number of scenarios", type=int
-        )
-    else:
-        parser.add_argument(
-            "--num-scens",
-            help="Number of scenarios (default None)",
-            dest="num_scens",
-            type=int,
-            default=None,
-        )
     return parser
 
 
