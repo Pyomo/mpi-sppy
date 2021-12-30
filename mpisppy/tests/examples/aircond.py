@@ -1,6 +1,5 @@
 #ReferenceModel for full set of scenarios for AirCond; June 2021
-
-
+# Dec 2021; numerous enhancements by DLW; do not change defaults
 import pyomo.environ as pyo
 import numpy as np
 import time
@@ -12,23 +11,43 @@ from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
+# Do not edit these defaults!
+parms = {"mudev": (float, 0.),
+         "sigmadev": (float, 40.),
+         "start_ups": (bool, False),
+         "StartUpCost": (float, 300.),
+         "start_seed": (int, 1134),
+         "min_d": (float, 0.),
+         "max_d": (float, 400.),
+         "starting_d": (float, 200.),
+         "BeginInventory": (float, 200.),
+         "InventoryCost": (float, 0.5),
+         "LastInventoryCost": (float, -0.8),
+         "Capacity": (float, 200.),
+         "RegularProdCost": (float, 1.),
+         "OvertimeProdCost": (float, 3.),
+         "NegInventoryCost": (float, -5.),
+         "QuadShortCoeff": (float, 0)
+}
 
-def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev, 
-                    starting_d=200,root_name="ROOT"):
-    
-    max_d = 400
-    min_d = 0
+def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
 
-    if branching_factors is None:
-        raise RuntimeError("scenario_creator for aircond needs branching_factors")
+    if "start_seed" not in kwargs:
+        raise RuntimeError(f"start_seed not in kwargs; {kwargs =}")
+    start_seed = kwargs["start_seed"]
+    max_d = kwargs.get("max_d", 400)
+    min_d = kwargs.get("min_d", 0)
+    mudev = kwargs.get("mudev", None)
+    sigmadev = kwargs.get("sigmadev", None)
+
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
-    prod = np.prod(branching_factors)
+    prod = np.prod(sample_branching_factors)
     s = int(scennum % prod)
-    d = starting_d
+    d = kwargs.get("starting_d", 200)
     demands = [d]
     nodenames = [root_name]
-    for bf in branching_factors:
+    for bf in sample_branching_factors:
         assert prod%bf == 0
         prod = prod//bf
         nodenames.append(str(s//prod))
@@ -36,7 +55,7 @@ def _demands_creator(sname,branching_factors,start_seed, mudev, sigmadev,
     
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],branching_factors))
+        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
         d = min(max_d,max(min_d,d+aircondstream.normal(mudev,sigmadev)))
         demands.append(d)
     
@@ -60,34 +79,43 @@ def dual_rho_setter(scenario_instance):
 def primal_rho_setter(scenario_instance):
     return general_rho_setter(scenario_instance, rho_scale_factor=0.01)
 
-def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
-    # create a single stage of an aircond model
+
+def _StageModel_creator(time, demand, last_stage, **kwargs):
+    # create a single stage of an aircond model; do not change defaults (Dec 2021)
+
+    def _kw(pname):
+        return kwargs.get(pname, parms[pname][1])
+    
     model = pyo.ConcreteModel()
     model.T = [time]
 
     #Parameters
     #Demand
     model.Demand = demand
-    #Inventory Cost
-    model.InventoryCost = -0.8 if last_stage else 0.5
+    #Inventory Cost: model.InventoryCost = -0.8 if last_stage else 0.5
+    if last_stage:
+        model.InventoryCost = _kw("LastInventoryCost")
+    else:
+        model.InventoryCost = _kw("InventoryCost")
     #Regular Capacity
-    model.Capacity = 200
+    model.Capacity = _kw("Capacity")
     #Regular Production Cost
-    model.RegularProdCost = 1
+    model.RegularProdCost = _kw("RegularProdCost")
     #Overtime Production Cost
-    model.OvertimeProdCost = 3
+    model.OvertimeProdCost = _kw("OvertimeProdCost")
 
     model.max_T = 25 # this is for the start-up cost constraints, 
     model.bigM = model.Capacity * model.max_T
     
-    model.start_ups = start_ups
+    model.start_ups = _kw("start_ups")
 
     if model.start_ups:
         # Start-up Cost
-        model.StartUpCost = 300  # TBD: give the user easier control
+        model.StartUpCost = _kw("StartUpCost")
 
     # Negative Inventory Cost
-    model.NegInventoryCost = -5
+    model.NegInventoryCost = _kw("NegInventoryCost")
+    model.QuadShortCoeff = _kw("QuadShortCoeff")
     
     #Variables
     model.RegularProd = pyo.Var(domain=pyo.NonNegativeReals,
@@ -103,9 +131,7 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
         # start-up cost variable
         model.StartUp = pyo.Var(within=pyo.Binary)
 
-    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)
-    
-    #Constraints
+    #Constraints (and some auxilliary variables)
     def CapacityRule(m):
         return m.RegularProd<=m.Capacity
     model.MaximumCapacity = pyo.Constraint(rule=CapacityRule)
@@ -114,16 +140,39 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
         model.RegStartUpConstraint = pyo.Constraint(
             expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
 
-    # for max function
-    model.NegInventoryConstraint = pyo.ConstraintList()
-    model.NegInventoryConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
-    model.NegInventoryConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
+    """
+    # for max function using only one Var and two constraints
+    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)  # to add to objective
+    
+    model.InventoryCostConstraint = pyo.ConstraintList()
+    model.InventoryCostConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
+    model.InventoryCostConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
+    """
+
+    # grab positive and negative parts of inventory
+    if not last_stage:
+        assert model.InventoryCost > 0, model.InventoryCost
+        assert model.NegInventoryCost < 0, model.NegInventoryCost
+        model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+        model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+        model.doleInventory = pyo.Constraint(expr=model.Inventory == model.posInventory - model.negInventory)
+        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.posInventory - model.NegInventoryCost*model.negInventory)
+    else:  # in the last stage we let the negative "cost" take care of both sides
+        assert model.InventoryCost < 0, f"last stage inven cost: {model.InventoryCost}"        
+        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.Inventory)
+
+    if model.QuadShortCoeff > 0 and not last_stage:
+        model.InvenCostExpr =  pyo.Expression(expr = model.LinInvenCostExpr +\
+                                              model.QuadShortCoeff * model.negInventory * model.negInventory)
+    else:
+        assert model.QuadShortCoeff >= 0, model.QuadShortCoeff
+        model.InvenCostExpr =  pyo.Expression(expr = model.LinInvenCostExpr)
     
     #Objective
     def stage_objective(m):
         expr =  m.RegularProdCost*m.RegularProd +\
                 m.OvertimeProdCost*m.OvertimeProd +\
-                m.InventoryAux        
+                m.InvenCostExpr
 
         if m.start_ups:
             expr += m.StartUpCost * m.StartUp 
@@ -134,8 +183,14 @@ def _StageModel_creator(time, demand, last_stage=False, start_ups=None):
     return model
 
 #Assume that demands has been drawn before
-def aircond_model_creator(demands, start_ups=None):
+def aircond_model_creator(demands, **kwargs):
     # create a single aircond model for the given demands
+    # branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
+    # typing aids...
+    start_seed = kwargs["start_seed"]
+
+    start_ups = kwargs.get("start_ups", parms["start_ups"][1])
+    
     model = pyo.ConcreteModel()
     num_stages = len(demands)
     model.T = range(1,num_stages+1) #Stages 1,2,...,T
@@ -147,14 +202,14 @@ def aircond_model_creator(demands, start_ups=None):
     model.start_ups = start_ups
 
     #Parameters
-    model.BeginInventory = 100
+    model.BeginInventory = kwargs.get("BeginInventory", parms["BeginInventory"][1])
     
     #Creating stage models
     model.stage_models = {}
     for t in model.T:
         last_stage = (t==num_stages)
         model.stage_models[t] = _StageModel_creator(t, demands[t-1],
-            last_stage=last_stage, start_ups=model.start_ups)  
+                                                    last_stage=last_stage, **kwargs)
 
     #Constraints
     
@@ -179,7 +234,7 @@ def aircond_model_creator(demands, start_ups=None):
     def stage_cost(stage_m):
         expr = stage_m.RegularProdCost*stage_m.RegularProd +\
                stage_m.OvertimeProdCost*stage_m.OvertimeProd +\
-               stage_m.InventoryAux
+               stage_m.InvenCostExpr
         if stage_m.start_ups:
             expr += stage_m.StartUpCost * stage_m.StartUp
         return expr
@@ -207,7 +262,6 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
         nonant_ef_suppl_list = [model.stage_models[stage].Inventory]
         if model.start_ups:
             nonant_ef_suppl_list.append(model.stage_models[stage].StartUp)
-            nonant_ef_suppl_list.append(model.stage_models[stage].InventoryAux)
 
         if stage ==1:
             ndn="ROOT"
@@ -252,16 +306,17 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return(TreeNodes)
 
         
-def scenario_creator(sname, branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
-    if branching_factors is None:
-        raise RuntimeError("scenario_creator for aircond needs branching_factors")
+def scenario_creator(sname, **kwargs):
 
-    demands,nodenames = _demands_creator(sname, branching_factors, start_seed, mudev, sigmadev)
+    start_seed = kwargs['start_seed']
+    if "branching_factors" not in kwargs:
+        raise RuntimeError("scenario_creator for aircond needs branching_factors in kwargs")
+    branching_factors = kwargs["branching_factors"]
+
+    demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
     
-    model = aircond_model_creator(demands, start_ups=start_ups)
+    model = aircond_model_creator(demands, **kwargs)
     
-    if num_scens is not None:
-        model._mpisppy_probability = 1/num_scens
     
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
@@ -276,7 +331,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
         sname (string): scenario name to be created
         stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
         sample_branching_factors (list of ints): branching factors for the sample tree
-        seed (int): To allow randome sampling (for some problems, it might be scenario offset)
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
         given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
         scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
     Returns:
@@ -284,32 +339,26 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                                          by the arguments
     """
     
-    start_ups = scenario_creator_kwargs["start_ups"]
     # Finding demands from stage 1 to t
+    starting_d = scenario_creator_kwargs.get("starting_d", parms["starting_d"][1])
     if given_scenario is None:
         if stage == 1:
-            past_demands = [200]
+            past_demands = [starting_d]
         else:
             raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
     else:
         past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
-    optional_things = ['mudev','sigmadev','start_ups']
-    default_values = [0,40,False]
-    for thing,value in zip(optional_things,default_values):
-        if thing not in scenario_creator_kwargs:
-            scenario_creator_kwargs[thing] = value
-    
-    #Finding demands for stages after t
+
+    kwargs = scenario_creator_kwargs.copy()
+    kwargs["start_seed"] = seed
+        
+    #Finding demands for stages after t (note the dynamic seed)
     future_demands,nodenames = _demands_creator(sname, sample_branching_factors, 
-                                               start_seed = seed, 
-                                               mudev = scenario_creator_kwargs['mudev'], 
-                                               sigmadev = scenario_creator_kwargs['sigmadev'],
-                                               starting_d=past_demands[stage-1],
-                                               root_name='ROOT'+'_0'*(stage-1))
+                                                root_name='ROOT'+'_0'*(stage-1), **kwargs)
     
     demands = past_demands+future_demands[1:] #The demand at the starting stage is in both past and future demands
     
-    model = aircond_model_creator(demands, start_ups=start_ups)
+    model = aircond_model_creator(demands, **scenario_creator_kwargs)
     
     model._mpisppy_probability = 1/np.prod(sample_branching_factors)
     
@@ -332,61 +381,78 @@ def scenario_names_creator(num_scens,start=None):
 #=========
 def inparser_adder(inparser):
     # (only for Amalgomator): add command options unique to aircond
-    inparser.add_argument("--mu-dev",
-                          help="average deviation of demand between two periods (default 0)",
-                          dest="mudev",
-                          type=float,
-                          default=0.)
-    inparser.add_argument("--sigma-dev",
-                          help="average standard deviation of demands between two periods (default 40)",
-                          dest="sigmadev",
-                          type=float,
-                          default=40.)
+    # Do not change the defaults.
+    def _doone(name, helptext, argname=None):
+        # The name should be the name in parms
+        # helptext should not include the default
+        aname = name.replace("_", "-") if argname is None else argname
+        h = f"{helptext} (default {parms[name][1]})"
+        inparser.add_argument(f"--{aname}",
+                              help=h,
+                              dest=name,
+                              type=parms[name][0],
+                              default=parms[name][1])
+
+
+    _doone("mudev", "average deviation of demand between two periods", argname="mu-dev")
+    _doone("sigmadev", "standard deviation of deviation of demand between two periods", argname="sigma-dev")
+
+    d = parms["start_ups"]
     inparser.add_argument("--start-ups",
-                          help="Include start-up costs in model (this is a MIP)",
+                          help="Include start-up costs in model, resulting in a MPI (default {d})",
                           dest="start_ups",
                           action="store_true"
                           )
-    inparser.set_defaults(start_ups=False)    
-    inparser.add_argument("--start-seed",
-                          help="random number seed (default 1134)",
-                          dest="start_seed",
-                          type=int,
-                          default=1134)
-
+    inparser.set_defaults(start_ups=d)
+    
+    _doone("StartUpCost", helptext="Cost if production in a period is non-zero and start-up is True")
+    _doone("start_seed", helptext="random number seed")
+    _doone("min_d", helptext="minimum demand in a period")
+    _doone("max_d", helptext="maximum demand in a period")
+    _doone("starting_d", helptext="period 0 demand")
+    _doone("InventoryCost", helptext="Inventory cost per period per item")
+    _doone("BeginInventory", helptext="Inital Inventory")
+    _doone("LastInventoryCost", helptext="Inventory `cost` (should be negative) in last period)")
+    _doone("Capacity", helptext="Per period regular time capacity")
+    _doone("RegularProdCost", helptext="Regular time producion cost")
+    _doone("OvertimeProdCost", helptext="Overtime (or subcontractor) production cost")
+    _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative; not used in last stage)")
+    _doone("QuadShortCoeff", helptext="Coefficient for backorders squared (should be nonnegative; not used in last stage)")
+    
     return inparser
 
 
 #=========
 def kw_creator(options):
-
+    # TBD: re-write this function...
+    if "kwargs" in options:
+        return options["kwargs"]
+    
+    kwargs = dict()
+    
     def _kwarg(option_name, default = None, arg_name=None):
         # options trumps args
         retval = options.get(option_name)
         if retval is not None:
-            return retval
+            kwargs[option_name] = retval
+            return 
         args = options.get('args')
         aname = option_name if arg_name is None else arg_name
         retval = getattr(args, aname) if hasattr(args, aname) else None
         retval = default if retval is None else retval
-        return retval
+        kwargs[option_name] = retval
 
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
-    BFs = _kwarg("branching_factors")
-    mudev = _kwarg("mudev", 0.)
-    sigmadev = _kwarg("sigmadev", 40.)
-    start_seed = _kwarg("start_seed", 1134)
-    start_ups = _kwarg("start_ups", None)
-    kwargs = {"num_scens" : options.get('num_scens', None),
-              "branching_factors": BFs,
-              "mudev": mudev,
-              "sigmadev": sigmadev,
-              "start_seed": start_seed,
-              "start_ups": start_ups,
-              }
+    _kwarg("branching_factors")
+    for idx, tpl in parms.items():
+        _kwarg(idx, tpl[1])
+
     if kwargs["start_ups"] is None:
-        raise ValueError("kw_creator called, but no value given for start_ups")
+        raise ValueError(f"kw_creator called, but no value given for start_ups, {options =}")
+    if kwargs["start_seed"] is None:
+        raise ValueError(f"kw_creator called, but no value given for start_seed, {options =}")
+                     
     return kwargs
 
 

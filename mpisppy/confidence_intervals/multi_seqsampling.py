@@ -178,6 +178,8 @@ class IndepScens_SeqSampling(SeqSampling):
                  (TBD: drop this arg and just use the function in refmodel)
         Returns:
             Gk, Sk (float): mean and standard devation of the gap estimate
+        Note:
+            Seed management is mainly in the form of updates to SeedCount
 
         """
         ama_options = self.options.copy()
@@ -187,13 +189,14 @@ class IndepScens_SeqSampling(SeqSampling):
             ama_options['EF_solver_options']= self.solver_options
         ama_options['num_scens'] = nk
         ama_options['_mpisppy_probability'] = 1/nk #Probably not used
+        ama_options['start_seed'] = self.SeedCount
         
         pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
         ama_options['branching_factors'] = pseudo_branching_factors
         ama = amalgomator.Amalgomator(options=ama_options, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
-                                      kw_creator=self._kw_creator_without_seed,
+                                      kw_creator=self.refmodel.kw_creator,
                                       scenario_denouement=scenario_denouement)
         ama.run()
         #Optimal solution of the approximate problem

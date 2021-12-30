@@ -64,14 +64,16 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 descend_into=True,
                 active=True,
                 sort=True):
+            var_name = var.name
+            if bundling:
+                dot_index = var_name.find('.')
+                assert dot_index >= 0
+                var_name = var_name[(dot_index+1):]
             # should this be here?
             if not var.stale:
-                var_name = var.name
-                if bundling:
-                    dot_index = var_name.find('.')
-                    assert dot_index >= 0
-                    var_name = var_name[(dot_index+1):]
                 f.write(f"{var_name},{pyo.value(var)}\n")
+            else:
+                f.write(f"{var_name},{pyo.value(var)} (stale)\n")
         
 def write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, solution_file_name,
         first_stage_solution_writer=first_stage_nonant_writer):

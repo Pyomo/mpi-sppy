@@ -181,14 +181,15 @@ if __name__ == "__main__":
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
+        extensions=MinMaxAvg,
+        PH_converger=None,
+        rho_setter=None,
     )
     ph.options["PHIterLimit"] = 3
 
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     options["avgminmax_name"] =  "FirstStageCost"
-    conv, obj, bnd = ph.ph_main(extensions=MinMaxAvg,
-                                PH_converger=None,
-                                rho_setter=None)
+    conv, obj, bnd = ph.ph_main()
 
     
 

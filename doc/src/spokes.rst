@@ -72,8 +72,8 @@ solutions can be tried before receiving new x values from the hub.
 This spoke also supports multistage problems. It does not try every subproblem, but
 shuffles the scenarios and loops over the shuffled list.
 At each step, it takes the first-stage solution specified by a scenario, 
- and then uses the scenarios that follows in the shuffled loop to get the 
- values of the non-first-stage variables that were not fixed before.
+and then uses the scenarios that follows in the shuffled loop to get the 
+values of the non-first-stage variables that were not fixed before.
  
 slam_heuristic
 ^^^^^^^^^^^^^^
@@ -97,7 +97,7 @@ spoke_sleep_time
 
 This is an advanced topic and rarely encountered.
 In some settings, particularly with small sub-problems, it is possible for
-ranks within spokes to become ``of of sync.''  The most common manifestation of this
+ranks within spokes to become of of sync.  The most common manifestation of this
 is that some ranks do not see the kill signal and sit in a busy-wait I/O loop
 until something external kills them; but it can also be the case that Lagrangian
 bound spokes start operating on data from different hub iterations; they should notice
