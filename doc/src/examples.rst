@@ -470,3 +470,10 @@ UC
 This example uses the ``egret`` package for the underlying unit commitment model
 and reads PySP format data using the ``pyomo`` dataportal. Data files for a variety
 of numbers of scenarios are provided.
+
+sizes
+-----
+
+The sizes example (Jorjani et al, IJPR, 1999) is a two-stage problem with general integers in each stage. The file
+``sizes_cylinders.py`` is the usual cylinders driver. There are other examples in the directory, such
+as ``sizes_demo.py``, which provides an example of serial execution (no cylinders).
