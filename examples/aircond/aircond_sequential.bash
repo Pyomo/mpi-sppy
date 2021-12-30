@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SOLVERNAME="gurobi"
+SOLVERNAME="cplex"
 XHF="xhatsequential"
 CL="0.95"
 

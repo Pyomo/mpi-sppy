@@ -267,6 +267,7 @@ def inparser_adder(inparser):
 #=========
 def kw_creator(options):
     # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # options will be the full set of Amalgomator options
     kwargs = {"use_integer": options.get('use_integer', False),
               "crops_multiplier": options.get('crops_multiplier', 1),
               "num_scens" : options.get('num_scens', None),
