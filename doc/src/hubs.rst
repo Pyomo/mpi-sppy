@@ -66,16 +66,17 @@ gap between upper and lower bounds. It is also possible to terminate
 based on convergence within the hub; furthermore, convergence metrics within
 the hub can be helpful for tuning algorithms.
 
-Unfortunately, the word "converger" is also used to describe spokes that return bounds
-for the purpose of measuring overall convergence (as opposed to convergence within the hub
-algorithm.)
-
-..
-   The scenario decomposition methods (PH and APH) allow for user written
-   convergence metrics as plug-ins. A pattern that can be followed is shown
-   in the farmer example. The ``farmer_cylinders.py`` file can have::
+The scenario decomposition methods (PH and APH) allow for user written
+convergence metrics as plug-ins. A pattern that can be followed is shown
+in the farmer example. The ``farmer_cylinders.py`` file has::
 
    from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-   ...
-   xxxxxx
+
+and optionally passes ``NormRhoConverger`` to the hub constructor. Note that you can observe
+the behavior of the hub converger using the option ``--with-display-convergence-detail``.
+
+Unfortunately, the word "converger" is also used to describe spokes that return bounds
+for the purpose of measuring overall convergence (as opposed to convergence within the hub
+algorithm.)  This word is used fairly deep in the code to distinguish spokes
+that return bounds.
 

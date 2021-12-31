@@ -71,16 +71,17 @@ def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     return cylinder_dict
 
 def ph_hub(
-    args,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    ph_extensions=None,
-    rho_setter=None,
-    variable_probability=None,
-    all_nodenames=None,
-    spoke_sleep_time=None,
+        args,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        ph_extensions=None,
+        PH_converger=None,
+        rho_setter=None,
+        variable_probability=None,
+        all_nodenames=None,
+        spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     options = copy.deepcopy(shoptions)
@@ -110,6 +111,7 @@ def ph_hub(
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "extensions": ph_extensions,
+            "PH_converger": PH_converger,
             "all_nodenames": all_nodenames
         }
     }

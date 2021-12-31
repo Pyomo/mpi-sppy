@@ -37,7 +37,7 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
            converged?: True if converged, False otherwise
         """
         ## This will never do anything unless the norm rho updater is also used
-        if not hasattr(self.ph, "_mpisppy_norm_rho_update_inuse"\
+        if not hasattr(self.ph, "_mpisppy_norm_rho_update_inuse")\
                        or not self.ph._mpisppy_norm_rho_update_inuse:
             raise RuntimeError("NormRhoConverger can only be used if NormRhoUpdater is")
         

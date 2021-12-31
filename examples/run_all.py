@@ -154,6 +154,10 @@ def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
 
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
+do_one("farmer", "farmer_cylinders.py",  4,
+       "3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--use-norm-rho-converger --use-norm-rho-updater "
+       "--with-display-convergence-detail".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
