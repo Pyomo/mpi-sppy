@@ -40,7 +40,8 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
 
         self._set_options()
         self._prev_avg = None
-
+        self.ph._mpisppy_norm_rho_update_inuse = True  # allow NormRhoConverger
+        
     def _set_options(self):
         options = self.norm_rho_options
         for attr_name, opt_name in _attr_to_option_name_map.items():

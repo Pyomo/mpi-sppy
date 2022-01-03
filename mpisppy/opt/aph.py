@@ -75,7 +75,7 @@ class APH(ph_base.PHBase):
         scenario_creator_kwargs=None,
         extensions=None,
         extension_kwargs=None,
-        PH_converger=None,
+        ph_converger=None,
         rho_setter=None,
         variable_probability=None,
     ):
@@ -89,7 +89,7 @@ class APH(ph_base.PHBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             extensions=extensions,
             extension_kwargs=extension_kwargs,
-            PH_converger=PH_converger,
+            ph_converger=ph_converger,
             rho_setter=rho_setter,
             variable_probability=variable_probability,
         )
@@ -518,8 +518,8 @@ class APH(ph_base.PHBase):
         logging.debug('self.conv={} self.global_pusqnorm={} self.global_pwsqnorm={} self.global_pvsqnorm={} self.global_pzsqnorm={})'\
                       .format(self.conv, self.global_pusqnorm, self.global_pwsqnorm, self.global_pvsqnorm, self.global_pzsqnorm))
         # allow a PH converger, mainly for mpisspy to get xhat from a wheel conv
-        if hasattr(self, "PH_conobject") and self.PH_convobject is not None:
-            phc = self.PH_convobject(self, self.cylinder_rank, self.n_proc)
+        if hasattr(self, "ph_conobject") and self.ph_convobject is not None:
+            phc = self.ph_convobject(self, self.cylinder_rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
 
 
@@ -717,7 +717,7 @@ class APH(ph_base.PHBase):
         self.dispatch_frac = self.options["dispatch_frac"]\
                              if "dispatch_frac" in self.options else 1
 
-        have_converger = self.PH_converger is not None
+        have_converger = self.ph_converger is not None
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         ddetail = "display_convergence_detail" in self.options and\

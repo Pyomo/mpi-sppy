@@ -12,10 +12,7 @@ import numpy as np
 class NormRhoConverger(mpisppy.convergers.converger.Converger):
 
     def __init__(self, ph):
-        ## TODO: this will never do anything unless the norm rho updater is also used
-        ## TODO: the rho updater should leave a flag on the data block of the local subproblems to indicate
-        ##       its use and this converger should check for it.
-        if 'nrom_rho_converger_options' in ph.options and \
+        if 'norm_rho_converger_options' in ph.options and \
                 'verbose' in ph.options['norm_rho_converger_options'] and \
                 ph.options['norm_rho_converger_options']['verbose']:
             self._verbose = True
@@ -39,6 +36,11 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
         Returns:
            converged?: True if converged, False otherwise
         """
+        ## This will never do anything unless the norm rho updater is also used
+        if not hasattr(self.ph, "_mpisppy_norm_rho_update_inuse")\
+                       or not self.ph._mpisppy_norm_rho_update_inuse:
+            raise RuntimeError("NormRhoConverger can only be used if NormRhoUpdater is")
+        
         log_rho_norm = math.log(self._compute_rho_norm(self.ph))
 
         ret_val = log_rho_norm < self.ph.options['convthresh']
