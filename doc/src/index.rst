@@ -13,7 +13,7 @@ MPI is used.
    overview.rst
    scenario_creator.rst
    drivers.rst
-   amalgomator.rst
+   amalgaator.rst
    examples.rst
    hubs.rst
    spokes.rst

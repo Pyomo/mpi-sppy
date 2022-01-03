@@ -14,7 +14,7 @@ import argparse
 import afarmer
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgaator as amalgaator
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.confidence_parsers as confidence_parsers
 from mpisppy.utils import baseparsers
@@ -60,8 +60,8 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
                     "_mpisppy_probability": 1/num_scens,
                     "start_seed":start_seed,
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("afarmer",
+    #We use from_module to build easily an Amalgaator object
+    ama = amalgaator.from_module("afarmer",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names

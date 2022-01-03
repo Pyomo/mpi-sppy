@@ -11,7 +11,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
 import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.utils.amalgomator as ama
+import mpisppy.utils.amalgaator as ama
 import mpisppy.confidence_intervals.sample_tree as sample_tree
 
 fullcomm = mpi.COMM_WORLD
@@ -271,7 +271,7 @@ def gap_estimators(xhat_one,
         start += sputils.number_of_nodes(branching_factors)
         ama_object = samp_tree.ama
     else:
-        #We use amalgomator to do it
+        #We use amalgaator to do it
 
         ama_options = dict(scenario_creator_kwargs)
         ama_options['start'] = start

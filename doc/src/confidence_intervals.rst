@@ -66,19 +66,19 @@ Using stand alone ``mmw_conf.py``
 
 ``mmw_conf`` uses the ``MMWConfidenceIntervals`` class from ``mmw_ci`` in order to construct a confidence interval on the optimality gap of a particular candidate solution ``xhat`` of a model instance. 
 
-To use the stand along program a model compatible with ``Amalgomator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
+To use the stand along program a model compatible with ``Amalgaator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
 
 First, ensure that the model to be used is compatible with the
-``Amalgomator`` class. This requires the model to have each of the
+``Amalgaator`` class. This requires the model to have each of the
 following: a ``scenario_names_creator``, a ``scenario_creator``, an
 ``inparser_adder``, and a ``kw_creator``. See ``afarmer.py`` in
 ``examples`` for an example of an acceptable model. Note: the `options` dictionary
 passed to ``kw_creator`` will have the command line arguments object in `args`, which
-is not required (or used) by ``amalgomator`` but is used by confidence interval codes
+is not required (or used) by ``amalgaator`` but is used by confidence interval codes
 to be able to pass problem-specific args down without knowing what they are. 
 
-Once a model satisfies the requirement for amalgomator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
-``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgomator`` to solve the program, this can be done by adding the line
+Once a model satisfies the requirement for amalgaator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
+``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgaator`` to solve the program, this can be done by adding the line
 ``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``afarmer.py`` for an example of this).
 
 Once this is accomplished, on the command line, run

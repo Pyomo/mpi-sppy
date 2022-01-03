@@ -15,7 +15,7 @@ from mpisppy import global_toc
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgaator as amalgaator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
@@ -193,7 +193,7 @@ class IndepScens_SeqSampling(SeqSampling):
         
         pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
         ama_options['branching_factors'] = pseudo_branching_factors
-        ama = amalgomator.Amalgomator(options=ama_options, 
+        ama = amalgaator.Amalgaator(options=ama_options, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
                                       kw_creator=self.refmodel.kw_creator,
