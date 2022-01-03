@@ -7,7 +7,7 @@ import mpi4py.MPI as mpi
 import importlib
 
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy import global_toc
 
@@ -72,8 +72,8 @@ class SampleSubtree():
         self.solvername = solvername
         self.solver_options = solver_options
         
-        #Create an amalgomator object to solve the subtree problem
-        self._create_amalgomator()
+        #Create an amalgamator object to solve the subtree problem
+        self._create_amalgamator()
 
                 
     def _sample_creator(self, sname, **scenario_creator_kwargs):
@@ -106,9 +106,9 @@ class SampleSubtree():
                 node.nonant_vardata_list[i].fixed = True
         return s
         
-    def _create_amalgomator(self):
+    def _create_amalgamator(self):
         '''
-        This method attaches an Amalgomator object to a sample subtree.
+        This method attaches an Amalgamator object to a sample subtree.
         
         WARNING: sample_creator must be called before using for stages beyond 1
         '''
@@ -134,13 +134,13 @@ class SampleSubtree():
                                                           start=self.seed)
         denouement = self.refmodel.scenario_denouement if hasattr(self.refmodel, 'scenario_denouement') else None
         
-        self.ama = amalgomator.Amalgomator(ama_options, scen_names,
+        self.ama = amalgamator.Amalgamator(ama_options, scen_names,
                                            self.scenario_creator,
                                            self.refmodel.kw_creator,
                                            denouement,
                                            verbose = False)
     def run(self):
-        #Running the Amalgomator and attaching the result to the SampleSubtree object
+        #Running the Amalgamator and attaching the result to the SampleSubtree object
         #global_toc("Enter SampleSubTree run")
         self.ama.run()
         self.ef = self.ama.ef
@@ -255,8 +255,8 @@ if __name__ == "__main__":
                     "_mpisppy_probability": 1/num_scens,
                     "branching_factors":branching_factors,
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module(mname, ama_options,use_command_line=False)
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module(mname, ama_options,use_command_line=False)
     ama.run()
     
     # get the xhat

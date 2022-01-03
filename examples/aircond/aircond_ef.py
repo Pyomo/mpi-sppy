@@ -2,7 +2,7 @@
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 from mpisppy import global_toc
 
 # Use this random stream:
@@ -28,8 +28,8 @@ if __name__ == "__main__":
                     }
     refmodel = "mpisppy.tests.examples.aircond" # WARNING: Change this in SPInstances
 
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module(refmodel,
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module(refmodel,
                                   ama_options,use_command_line=False)
     ama.run()
     print(f"inner bound=", ama.best_inner_bound)

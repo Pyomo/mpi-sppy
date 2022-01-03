@@ -6,7 +6,7 @@ import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 import json
 
 # Use this random stream:
@@ -194,7 +194,7 @@ def scenario_creator(sname, num_scens=None):
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgomator): return the full list of num_scens scenario names
+    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
@@ -203,13 +203,13 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgomator): add command options unique to gbd
+    # (only for Amalgamator): add command options unique to gbd
     pass
 
 
 #=========
 def kw_creator(options):
-    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
               }
     return kwargs
@@ -249,8 +249,8 @@ def xhat_generator_gbd(scenario_names, solvername="gurobi", solver_options=None)
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.gbd.gbd",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.gbd.gbd",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -275,8 +275,8 @@ if __name__ == "__main__":
                     "num_scens": num_scens,
                     "_mpisppy_probability": None,
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.gbd.gbd",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.gbd.gbd",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names

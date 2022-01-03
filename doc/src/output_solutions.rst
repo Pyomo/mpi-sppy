@@ -60,9 +60,9 @@ which matches the argument name in the ``write_tree_solution`` function. The mos
 important thing to note is that these functions are passed a scenario model (a Pyomo model) that
 is populated with the solution for the given scenario.
 
-Amalgomator
+Amalgamator
 -----------
 
-To get solution output when using `Amalgomator`, you can supply a file name in
+To get solution output when using `Amalgamator`, you can supply a file name in
 ``options['write_solution']['first_stage_solution']`` and/or a directory name in
 ``options['write_solution']['tree_solution']``

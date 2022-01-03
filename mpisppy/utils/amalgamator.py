@@ -1,7 +1,7 @@
-# Amalgomator.py starting point; DLW March 2021
+# Amalgamator.py starting point; DLW March 2021
 # Copyright 2021 by D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# To test : python amalgomator.py --num-scens=10
+# To test : python amalgamator.py --num-scens=10
 
 """Takes a scenario list and a scenario creator (and options)
 as input and produces an outer bound on the objective function (solving the EF directly
@@ -138,7 +138,7 @@ def find_spokes(cylinders, is_multi=False):
     for c in cylinders:
         if not c in hubs_and_multi_compatibility:
             if c not in spokes_and_multi_compatibility:
-                raise RuntimeError(f"The cylinder {c} do not exist or cannot be called via amalgomator.")
+                raise RuntimeError(f"The cylinder {c} do not exist or cannot be called via amalgamator.")
             if is_multi and not spokes_and_multi_compatibility[c]:
                 raise RuntimeError(f"The spoke {c} does not work with multistage problems" )
             if c in default_unused_spokes:
@@ -155,14 +155,14 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     """ Try to get everything from one file (this will not always be possible).
     Args:
         mname (str): the module name (module must have certain functions)
-        options (dict): Amalgomator options or extra arguments to use 
+        options (dict): Amalgamator options or extra arguments to use 
                         in addition with the command line
         extraargs (ArgumentParser) : extra arguments to specify in the command line, e.g. for MMW
         use_command_line (bool): should we take into account the command line to add options ?
                                  default is True
                     
     Returns:
-        ama (Amalgomator): the instantiated object
+        ama (Amalgamator): the instantiated object
     
     """
     everything = ["scenario_names_creator",
@@ -181,14 +181,14 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     if not you_can_have_it_all:
         raise RuntimeError(f"Module {mname} not complete for from_module")
         
-    options = Amalgomator_parser(options, m.inparser_adder,
+    options = Amalgamator_parser(options, m.inparser_adder,
                                  extraargs=extraargs,
                                  use_command_line=use_command_line)
     options['_mpisppy_probability'] = 1/options['num_scens']
     start = options['start'] if(('start' in options)) else 0
     sn = m.scenario_names_creator(options['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
-    ama = Amalgomator(options,
+    ama = Amalgamator(options,
                       sn,
                       m.scenario_creator,
                       m.kw_creator,
@@ -197,10 +197,10 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                 
         
 #==========
-def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line=True):
-    """ Helper function for Amalgomator.  This gives us flexibility (e.g., get scen count)
+def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line=True):
+    """ Helper function for Amalgamator.  This gives us flexibility (e.g., get scen count)
     Args:
-        options (dict): Amalgomator control options
+        options (dict): Amalgamator control options
         inparser_adder (fct): returns updated ArgumentParser the problem
         extraargs (ArgumentParser) : extra arguments to specify in the command line, e.g. for MMW
         use_command_line (bool): should we take into account the command line to add options ?
@@ -263,7 +263,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
         if not (_bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in opt):
-            raise RuntimeError("EF_solver_name must be specified for the amalgomator." )
+            raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
         if not ('EF_solver_options' in opt):
             opt['EF_solver_options'] = {'mipgap': None}
         if not ('num_scens' in opt):
@@ -275,7 +275,7 @@ def Amalgomator_parser(options, inparser_adder, extraargs=None, use_command_line
     
 
 #========================================
-class Amalgomator():
+class Amalgamator():
     """Takes a scenario list and a scenario creator (and options)
     as input. The ides is to produce an outer bound on the objective function (solving the EF directly
     or by decomposition) and/or an x-hat with inner bound; however, what it does is controlled by
@@ -286,7 +286,7 @@ class Amalgomator():
     It may be an extenisble base class, but not abstract.
 
     Args:
-        options (dict): controls the amalgomation
+        options (dict): controls the amalgamation
         scenario_names (list of str) the full set of scenario names
         scenario_creator (fct): returns a concrete model with special things
         kw_creator (fct): takes an args object and returns scenario_creator kwargs

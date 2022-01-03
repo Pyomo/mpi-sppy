@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # parse args for mmw part of things
     parser = argparse.ArgumentParser()
     parser.add_argument('instance',
-                            help="name of model module, must be compatible with amalgomator")
+                            help="name of model module, must be compatible with amalgamator")
     parser.add_argument('xhatpath',
                             help="path to .npy file with feasible nonant solution xhat")
     parser.add_argument('solver_name',

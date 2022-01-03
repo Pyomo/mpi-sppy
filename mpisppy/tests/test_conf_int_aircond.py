@@ -20,7 +20,7 @@ import mpisppy.tests.examples.aircond as aircond
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
-import mpisppy.utils.amalgomator as ama
+import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
@@ -40,7 +40,7 @@ class Test_confint_aircond(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
-        self.refmodelname ="mpisppy.tests.examples.aircond"  # amalgomator compatible
+        self.refmodelname ="mpisppy.tests.examples.aircond"  # amalgamator compatible
         # TBD: maybe this code should create the file
         self.xhatpath = "farmer_cyl_nonants.spy.npy"      
 
