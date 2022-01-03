@@ -16,6 +16,10 @@ upper and lower bounds as computed by the spokes (``--rel-gap`` and
 ``--abs-gap`` in ``baseparsers.py``).  Most hubs can be terminated
 based on an iteration limit (``--max-iterations`` in ``baseparsers.py``).
 
+An additional gap-based termination option is supported by ``baseparser.py`` and
+``vanilla.py``: ``--max-stalled-iters`` that specifies how many iterations
+can pass without an improvement to the gap between upper and lower bounds.
+
 PH
 --
 

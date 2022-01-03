@@ -99,7 +99,8 @@ def ph_hub(
         "hub_class": hub_class,
         "hub_kwargs": {"options": {"spoke_sleep_time": spoke_sleep_time,
                                    "rel_gap": args.rel_gap,
-                                   "abs_gap": args.abs_gap}},
+                                   "abs_gap": args.abs_gap,
+                                   "max_stalled_iters": args.max_stalled_iters}},
         "opt_class": PH,
         "opt_kwargs": {
             "options": options,

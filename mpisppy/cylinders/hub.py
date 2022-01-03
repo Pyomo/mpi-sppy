@@ -27,15 +27,18 @@ class Hub(SPCommunicator):
         self.remote_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
         self.local_lengths = np.zeros(self.n_spokes, dtype=np.int64)
         self.remote_lengths = np.zeros(self.n_spokes, dtype=np.int64)
+        # ^^^ Does NOT include +1
         self.spokes = spokes  # List of dicts
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
-        # ^^^ Does NOT include +1
         # for logging
         self.print_init = True
         self.latest_ib_char = None
         self.latest_ob_char = None
         self.last_ib_idx = None
         self.last_ob_idx = None
+        # for termination based on stalling out
+        self.stalled_iter_cnt = 0
+        self.last_gap = float('inf')  # abs_gap tracker
 
     @abc.abstractmethod
     def setup_hub(self):
@@ -69,8 +72,9 @@ class Hub(SPCommunicator):
         self.latest_ib_char = None
         self.latest_ob_char = None
 
-    def compute_gap(self, compute_relative=True):
-        """ Compute the current absolute or relative gap, 
+        
+    def compute_gaps(self):
+        """ Compute the current absolute and relative gaps, 
             using the current self.BestInnerBound and self.BestOuterBound
         """
         if self.opt.is_minimizing:
@@ -90,11 +94,9 @@ class Hub(SPCommunicator):
             rel_gap = abs_gap / abs(self.BestOuterBound)
         else:
             rel_gap = float("inf")
-        if compute_relative:
-            return rel_gap
-        else:
-            return abs_gap
+        return abs_gap, rel_gap
 
+    
     def get_update_string(self):
         if self.latest_ib_char is None and \
                 self.latest_ob_char is None:
@@ -107,8 +109,7 @@ class Hub(SPCommunicator):
 
     def screen_trace(self):
         current_iteration = self.current_iteration()
-        rel_gap = self.compute_gap(compute_relative=True)
-        abs_gap = self.compute_gap(compute_relative=False)
+        abs_gap, rel_gap = self.compute_gaps()
         best_solution = self.BestInnerBound
         best_bound = self.BestOuterBound
         update_source = self.get_update_string()
@@ -121,20 +122,42 @@ class Hub(SPCommunicator):
         self.clear_latest_chars()
 
     def determine_termination(self):
+        # return True if termination is indicated, otherwise return False
+        
+        if not hasattr(self,"options") or self.options is None\
+           or ("rel_gap" not in self.options and "abs_gap" not in self.options\
+           and "max_stalled_iters" not in self.options):
+            return False  # Nothing to see here folks...
+        
+        # If we are still here, there is some option for termination
+        abs_gap, rel_gap = self.compute_gaps()
+        
         abs_gap_satisfied = False
         rel_gap_satisfied = False
-        if hasattr(self,"options") and self.options is not None:
-            if "rel_gap" in self.options:
-                rel_gap = self.compute_gap(compute_relative=True)
-                rel_gap_satisfied = rel_gap <= self.options["rel_gap"]
-            if "abs_gap" in self.options:
-                abs_gap = self.compute_gap(compute_relative=False)
-                abs_gap_satisfied = abs_gap <= self.options["abs_gap"]
+        max_stalled_satisfied = False
+
+        if "rel_gap" in self.options and rel_gap <= self.options["rel_gap"]:
+            rel_gap_satisfied = True 
+        if "abs_gap" in self.options and abs_gap <= self.options["abs_gap"]:
+            rel_gap_satisfied = True             
+
+        if "max_stalled_iters" in self.options:
+            if abs_gap < self.last_gap:  # liberal test (we could use an epsilon)
+                self.last_gap = abs_gap
+                self.stalled_iter_cnt = 0
+            else:
+                self.stalled_iter_cnt += 1
+                if self.stalled_iter_cnt >= self.options["max_stalled_iters"]:
+                    max_stalled_satisfied = True
+            
         if abs_gap_satisfied:
             global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
         if rel_gap_satisfied:
             global_toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%")
-        return abs_gap_satisfied or rel_gap_satisfied
+        if max_stalled_satisfied:
+            global_toc(f"Terminating based on max-stalled-iters {self.stalled_iter_cnt}")
+
+        return abs_gap_satisfied or rel_gap_satisfied or max_stalled_satisfied
 
     def hub_finalize(self):
         if self.has_outerbound_spokes:

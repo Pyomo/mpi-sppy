@@ -251,10 +251,16 @@ def two_sided_args(inparser):
                         default=0.05)
 
     parser.add_argument("--abs-gap",
-                        help="absolute termination gap (default 8)",
+                        help="absolute termination gap (default 0)",
                         dest="abs_gap",
                         type=float,
-                        default=8.)
+                        default=0.)
+    
+    parser.add_argument("--max-stalled-iters",
+                        help="maximum iterations with no reduction in gap (default 100)",
+                        dest="max_stalled_iters",
+                        type=int,
+                        default=100)
 
     return parser
 
