@@ -12,7 +12,7 @@ import numpy as np
 class NormRhoConverger(mpisppy.convergers.converger.Converger):
 
     def __init__(self, ph):
-        if 'nrom_rho_converger_options' in ph.options and \
+        if 'norm_rho_converger_options' in ph.options and \
                 'verbose' in ph.options['norm_rho_converger_options'] and \
                 ph.options['norm_rho_converger_options']['verbose']:
             self._verbose = True
