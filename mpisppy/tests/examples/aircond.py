@@ -5,7 +5,7 @@ import numpy as np
 import time
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgaator as amalgaator
+import mpisppy.utils.amalgamator as amalgamator
 import argparse
 from mpisppy import global_toc
 
@@ -371,7 +371,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgaator): return the full list of num_scens scenario names
+    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
@@ -380,7 +380,7 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgaator): add command options unique to aircond
+    # (only for Amalgamator): add command options unique to aircond
     # Do not change the defaults.
     def _doone(name, helptext, argname=None):
         # The name should be the name in parms
@@ -442,7 +442,7 @@ def kw_creator(options):
         retval = default if retval is None else retval
         kwargs[option_name] = retval
 
-    # (only for Amalgaator): linked to the scenario_creator and inparser_adder
+    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
     _kwarg("branching_factors")
     for idx, tpl in parms.items():
@@ -510,8 +510,8 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "start_seed":start_seed,
                     "sigmadev":sigmadev
                     }
-    #We use from_module to build easily an Amalgaator object
-    ama = amalgaator.from_module("mpisppy.tests.examples.aircond",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.aircond",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -571,9 +571,9 @@ if __name__ == "__main__":
                     "start_seed":0
                     }
     refmodel = "mpisppy.tests.examples.aircond" # WARNING: Change this in SPInstances
-    #We use from_module to build easily an Amalgaator object
+    #We use from_module to build easily an Amalgamator object
     t0=time.time()
-    ama = amalgaator.from_module(refmodel,
+    ama = amalgamator.from_module(refmodel,
                                   ama_options,
                                   use_command_line=False)
     ama.run()

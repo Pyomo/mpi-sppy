@@ -1,14 +1,14 @@
 # Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 """
-An example of using amalgaator with 3 cylinders and one extension 
+An example of using amalgamator with 3 cylinders and one extension 
 To execute this:
     mpiexec -np 3 python uc_ama.py --default-rho=1 --num-scens=3 --fixer-tol=1e-2
     
 WARNING:
     num-scens must be taken as a valid value, i.e. among (3,5,10,25,50,100)
 """
-import mpisppy.utils.amalgaator as amalgaator
+import mpisppy.utils.amalgamator as amalgamator
 from uc_funcs import id_fix_list_fct
 
 def main():
@@ -22,7 +22,7 @@ def main():
                    "id_fix_list_fct": id_fix_list_fct, #Needed for fixer, but not passed in baseparsers
                    "write_solution": solution_files
                    }
-    ama = amalgaator.from_module("uc_funcs", ama_options)
+    ama = amalgamator.from_module("uc_funcs", ama_options)
     ama.run()
     if ama.on_hub:
         print("first_stage_solution=", ama.first_stage_solution)

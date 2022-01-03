@@ -1,17 +1,17 @@
-.. _Amalgaator:
+.. _Amalgamator:
 
-Amalgaator
+Amalgamator
 ===========
 
-For simple problems that do not need extra specification, ``amalgaator.py``
+For simple problems that do not need extra specification, ``amalgamator.py``
 provides several drivers to solve a problem without writing a program
-that creates the cylinders one by one. ``amalgaator.from_module`` enables
+that creates the cylinders one by one. ``amalgamator.from_module`` enables
 a high-level user to create a hub-and-spoke architecture using the command 
 line, with only a few lines of code.
 
-The Amalgaator class
+The Amalgamator class
 -------------------------
-The ``Amalgaator`` class basically wraps up the creation and run of a simple
+The ``Amalgamator`` class basically wraps up the creation and run of a simple
 hub-and-spokes architecture.
 It creates hub and spokes dictionaries using vanilla,
 calls ``sputils.spin_the_wheel`` and finally writes 
@@ -19,11 +19,11 @@ the solution to a file or a directory.
 
 It takes as inputs scenario names, a scenario creator, options and
 a ``kw_creator`` function. ``kw_creator`` must be a function specific to your
-problem, taking the amalgaator options as an input, and giving as an output
+problem, taking the amalgamator options as an input, and giving as an output
 additional arguments for the ``scenario_creator``.
 
 The ``options`` argument is a dictionary that specifies information 
-about the problem, and dictates the way Amalgaator runs. 
+about the problem, and dictates the way Amalgamator runs. 
 It must contains the following attributes for use with cylinders:
 
 * A boolean ``2stage`` or ``mstage`` equal to True, indicating a 2-stage or 
@@ -43,21 +43,21 @@ It must contains the following attributes for use with cylinders:
   arguments
   
 .. Note::
-   Amalgaator does not work with everything. It only supports the cylinders and
+   Amalgamator does not work with everything. It only supports the cylinders and
    extensions that have a dedicated method in ``vanilla.py``.
 
 
-Create Amalgaator from a module and command line
+Create Amalgamator from a module and command line
 -------------------------------------------------
-Given an options dictionary as above, ``amalgaator.Amalgaator_parser``
+Given an options dictionary as above, ``amalgamator.Amalgamator_parser``
 calls the appropriate parsers from ``baseparsers.py`` and completes the options
 to add the necessary information for different modules.
 
-The method ``amalgaator.from_module`` uses the two utilities described above.
-It takes as input a module name, and calls ``amalgaator.Amalgaator_parser``
+The method ``amalgamator.from_module`` uses the two utilities described above.
+It takes as input a module name, and calls ``amalgamator.Amalgamator_parser``
 to get cylinder options and the number of scenarios from the command line.
 Then, it computes the scenario names, and finally creates and
-runs an Amalgaator object.
+runs an Amalgamator object.
 
 .. Note::
    The module must contains several methods:
@@ -66,12 +66,12 @@ runs an Amalgaator object.
    examples of these functions.
 
 The full options dictionary is passed through to ``kw_creator`` so keyword arguments for
-scenario creation can be placed in the almalgaator options dictionary.
+scenario creation can be placed in the almalgamator options dictionary.
    
-Amalgaator with EF
+Amalgamator with EF
 -------------------
 
-It is possible to use ``amalgaator.py`` to solve a problem by solving 
+It is possible to use ``amalgamator.py`` to solve a problem by solving 
 directly its extensive form (see the section :ref:`EF Directly`). The options
 must then include an attribute ``EF-2stage`` or ``EF-mstage`` set equal to 
 True. It uses the ``sputils.create_EF`` method.
@@ -79,21 +79,21 @@ True. It uses the ``sputils.create_EF`` method.
 Examples
 --------
 
-As intended, the examples of use of Amalgaator are quite short. The first
+As intended, the examples of use of Amalgamator are quite short. The first
 example, ``farmer_ama.py``, solves directly the EF. The model can be specified,
 e.g. by taking an integer version of it. This specification can be made via
 the command line, thanks to the ``inparser_adder`` method of ``farmer.py``.
 
-Another example uses amalgaator, this time to create a hub-and-spokes 
+Another example uses amalgamator, this time to create a hub-and-spokes 
 architecture. ``uc_ama.py`` creates a hub and 2 spokes. A notable feature of
 this example is the use of the ``fixer`` extension. This extension needs a 
 function "id_fix_list_fct" as a parameter. However, a function cannot be
 passed via the command line. "id_fix_list_fct" must thus be an attribute of 
-the options of ``amalgaator.from_module``.
+the options of ``amalgamator.from_module``.
 
-Finally, it is possible to use Amalgaator without calling 
-``amalgaator.from_module``. The example ``aircond_ama`` starts by
+Finally, it is possible to use Amalgamator without calling 
+``amalgamator.from_module``. The example ``aircond_ama`` starts by
 fetching informations from the command line via 
-``amalgaator.Aamgomator_parser``, and then modifies the options to get an
-appropriate number of scenarios before creating an Amalgaator object. 
+``amalgamator.Aamgomator_parser``, and then modifies the options to get an
+appropriate number of scenarios before creating an Amalgamator object. 
 

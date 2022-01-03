@@ -6,7 +6,7 @@ import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgaator as amalgaator
+import mpisppy.utils.amalgamator as amalgamator
 
 # Use this random stream:
 apl1pstream = np.random.RandomState()
@@ -174,7 +174,7 @@ def scenario_creator(sname, num_scens=None):
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgaator): return the full list of num_scens scenario names
+    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
@@ -183,13 +183,13 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgaator): add command options unique to apl1p
+    # (only for Amalgamator): add command options unique to apl1p
     pass
 
 
 #=========
 def kw_creator(options):
-    # (only for Amalgaator): linked to the scenario_creator and inparser_adder
+    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
               }
     return kwargs
@@ -229,8 +229,8 @@ def xhat_generator_apl1p(scenario_names, solvername="gurobi", solver_options=Non
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     }
-    #We use from_module to build easily an Amalgaator object
-    ama = amalgaator.from_module("mpisppy.tests.examples.apl1p",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.apl1p",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names

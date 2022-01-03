@@ -20,7 +20,7 @@ import mpisppy.tests.examples.afarmer as afarmer
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
-import mpisppy.utils.amalgaator as ama
+import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.ciutils as ciutils
@@ -41,7 +41,7 @@ class Test_confint_farmer(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.refmodelname ="mpisppy.tests.examples.farmer"
-        self.arefmodelname ="mpisppy.tests.examples.afarmer"  # amalgaator compatible
+        self.arefmodelname ="mpisppy.tests.examples.afarmer"  # amalgamator compatible
 
 
     def _get_base_options(self):
