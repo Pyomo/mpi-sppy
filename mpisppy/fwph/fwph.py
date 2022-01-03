@@ -61,7 +61,7 @@ class FWPH(mpisppy.phbase.PHBase):
         all_nodenames=None,
         mpicomm=None,
         scenario_creator_kwargs=None,
-        PH_converger=None,
+        ph_converger=None,
         rho_setter=None,
     ):
         super().__init__(
@@ -74,7 +74,7 @@ class FWPH(mpisppy.phbase.PHBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             extensions=None,
             extension_kwargs=None,
-            PH_converger=PH_converger,
+            ph_converger=ph_converger,
             rho_setter=rho_setter,
         )
 
@@ -134,8 +134,8 @@ class FWPH(mpisppy.phbase.PHBase):
         self._swap_nonant_vars()
         self._reenable_W()
 
-        if (self.PH_converger):
-            self.convobject = self.PH_converger(self, self.cylinder_rank, self.n_proc)
+        if (self.ph_converger):
+            self.convobject = self.ph_converger(self, self.cylinder_rank, self.n_proc)
 
         return best_bound
 
@@ -172,7 +172,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         print('FWPH converged to user-specified criteria')
                     break
                 self.spcomm.sync()
-            if (self.PH_converger):
+            if (self.ph_converger):
                 self.Compute_Xbar(self.options['verbose'])
                 diff = self.convobject.convergence_value()
                 if (self.convobject.is_converged()):

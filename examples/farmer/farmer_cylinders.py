@@ -62,9 +62,9 @@ def main():
         if not args.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
-            PH_converger = NormRhoConverger
+            ph_converger = NormRhoConverger
     else:
-        PH_converger = None
+        ph_converger = None
     
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
@@ -89,7 +89,7 @@ def main():
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=None,
-                                  PH_converger=PH_converger,
+                                  ph_converger=ph_converger,
                                   rho_setter = rho_setter)
 
     ## hack in adaptive rho

@@ -182,7 +182,7 @@ if __name__ == "__main__":
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
         extensions=MinMaxAvg,
-        PH_converger=None,
+        ph_converger=None,
         rho_setter=None,
     )
     ph.options["PHIterLimit"] = 3

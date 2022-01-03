@@ -77,7 +77,7 @@ def ph_hub(
         all_scenario_names,
         scenario_creator_kwargs=None,
         ph_extensions=None,
-        PH_converger=None,
+        ph_converger=None,
         rho_setter=None,
         variable_probability=None,
         all_nodenames=None,
@@ -111,7 +111,7 @@ def ph_hub(
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "extensions": ph_extensions,
-            "PH_converger": PH_converger,
+            "ph_converger": ph_converger,
             "all_nodenames": all_nodenames
         }
     }
