@@ -11,16 +11,30 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
 import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.utils.amalgomator as ama
+import mpisppy.utils.amalgamator as ama
 import mpisppy.confidence_intervals.sample_tree as sample_tree
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-def branching_factors_from_numscens(numscens,num_stages=2):
-    #For now, we do not create unbalanced trees. 
-    #If numscens cant be written as the product of a num_stages branching factors,
-    #We take numscens <-numscens+1
+def branching_factors_from_numscens(numscens,num_stages):
+    """ Create branching factors to be used for sampling a tree.
+    Since most use cases are balanced trees, for now, we do not create unbalanced trees. 
+    If numscens cannot be written as the product of a num_stages branching factors,
+    we take numscens <-numscens+1
+    
+    Parameters
+    -----------
+    numscens : int
+        Number of leaf nodes/scenarios.
+    num_stages: int
+        Number of stages in the tree
+
+    Returns
+    --------
+    branching_factors: list of int
+        The branching factors for approximately numscens
+    """
     if num_stages == 2:
         return None
     else:
@@ -33,7 +47,7 @@ def branching_factors_from_numscens(numscens,num_stages=2):
                 for k in range(num_stages-1):
                     branching_factors[k] = np.prod([fact_list[(num_stages-1)*i+k] for i in range(1+len(fact_list)//(num_stages-1)) if (num_stages-1)*i+k<len(fact_list)])
                 return branching_factors
-        raise RuntimeError("branching_factors_from_numscens is not working correctly. Did you take num_stages>=2 ?")
+        raise RuntimeError("branching_factors_from_numscens is not working correctly.")
 
 def scalable_branching_factors(numscens, ref_branching_factors):
     '''
@@ -55,8 +69,8 @@ def scalable_branching_factors(numscens, ref_branching_factors):
 
     Returns
     -------
-    new_branching_factors
-        DESCRIPTION.
+    new_branching_factors: list of int
+        The branching factors for approximately numscens that "looks like" the reference
 
     '''
     numstages = len(ref_branching_factors)+1
@@ -116,7 +130,7 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
     return(xhat)
 
 def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
-    #Correcting small negative of G due to numerical error while solving EF 
+    #Correcting small negative G due to numerical error while solving EF 
     if relative_error:
         if objfct is None:
             raise RuntimeError("We need a value of the objective function to remove numerically negative G")
@@ -257,7 +271,7 @@ def gap_estimators(xhat_one,
         start += sputils.number_of_nodes(branching_factors)
         ama_object = samp_tree.ama
     else:
-        #We use amalgomator to do it
+        #We use amalgamator to do it
 
         ama_options = dict(scenario_creator_kwargs)
         ama_options['start'] = start

@@ -34,6 +34,10 @@ def _parse_args():
                         help="Use the norm rho updater extension",
                         dest="use_norm_rho_updater",
                         action="store_true")
+    parser.add_argument("--use-norm-rho-converger",
+                        help="Use the norm rho converger",
+                        dest="use_norm_rho_converger",
+                        action="store_true")
     parser.add_argument("--run-async",
                         help="Run with async projective hedging instead of progressive hedging",
                         dest="run_async",
@@ -52,7 +56,15 @@ def main():
 
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
     if args.default_rho is None and rho_setter is None:
-        raise RuntimeError("No rho_setter so a default must be specified via --default-rho") 
+        raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
+
+    if args.use_norm_rho_converger:
+        if not args.use_norm_rho_updater:
+            raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+        else:
+            ph_converger = NormRhoConverger
+    else:
+        ph_converger = None
     
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
@@ -77,6 +89,7 @@ def main():
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=None,
+                                  ph_converger=ph_converger,
                                   rho_setter = rho_setter)
 
     ## hack in adaptive rho

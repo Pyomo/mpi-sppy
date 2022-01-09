@@ -16,6 +16,10 @@ upper and lower bounds as computed by the spokes (``--rel-gap`` and
 ``--abs-gap`` in ``baseparsers.py``).  Most hubs can be terminated
 based on an iteration limit (``--max-iterations`` in ``baseparsers.py``).
 
+An additional gap-based termination option is supported by ``baseparser.py`` and
+``vanilla.py``: ``--max-stalled-iters`` that specifies how many iterations
+can pass without an improvement to the gap between upper and lower bounds.
+
 PH
 --
 
@@ -56,3 +60,27 @@ APH
 
 The implementation of Asynchronous Projective Hedging is described in a
 forthcoming paper.
+
+Hub Convergers
+--------------
+
+Execution of mpi-sppy programs can be terminated based on a variety of criteria.
+The simplest is hub iteration count and the most common is probably relative
+gap between upper and lower bounds. It is also possible to terminate
+based on convergence within the hub; furthermore, convergence metrics within
+the hub can be helpful for tuning algorithms.
+
+The scenario decomposition methods (PH and APH) allow for optional
+metrics to be used as plug-ins. A pattern that can be followed is shown
+in the farmer example. The ``farmer_cylinders.py`` file has::
+
+   from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+
+and optionally passes ``NormRhoConverger`` to the hub constructor. Note that you can observe
+the behavior of the hub converger using the option ``--with-display-convergence-detail``.
+
+Unfortunately, the word "converger" is also used to describe spokes that return bounds
+for the purpose of measuring overall convergence (as opposed to convergence within the hub
+algorithm.)  This word is used fairly deep in the code to distinguish spokes
+that return bounds.
+

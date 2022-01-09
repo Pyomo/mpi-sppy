@@ -22,9 +22,9 @@ def evaluate_sample_trees(xhat_one,
         xhat_one : list or np.array of float (*not* a dict)
             A feasible and nonanticipative first stage solution.
         num_samples (int): number of trees to sample
-        ama_options (dict): options for the amalgomator
+        ama_options (dict): options for the amalgamator
         InitSeed (int): starting seed (but might be used for a scenario name offset)
-        model_modules: an imported module with the functions needed by, e.g., amalgomator
+        model_modules: an imported module with the functions needed by, e.g., amalgamator
     Returns:
         zhats (list as np.array): the objective functions
         seed (int): the updated seed or offset for scenario name sampling        
@@ -128,7 +128,7 @@ def _parser_setup():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('model_module_name',
-                        help="name of model module, must be compatible with amalgomator")
+                        help="name of model module, must be compatible with amalgamator")
     parser.add_argument('xhatpath',
                         help="path to .npy file with feasible nonant solution xhat")
     parser.add_argument("--solver-name",

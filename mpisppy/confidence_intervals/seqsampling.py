@@ -18,7 +18,7 @@ from mpisppy import global_toc
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
@@ -27,12 +27,13 @@ from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 def is_needed(options,needed_things,message=""):
     if not set(needed_things)<= set(options):
-        raise RuntimeError("Some options are missing from this list of needed options:\n"
+        raise RuntimeError("Some options are missing from this list of reqiored options:\n"
                            f"{needed_things}\n"
                            f"{message}")
         
 
 def add_options(options,optional_things,optional_default_settings):
+    # allow for defaults on options that Bayraksan et al establish 
     for i in range(len(optional_things)):
         ething = optional_things[i]
         if not ething in options :
@@ -72,8 +73,8 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.farmer",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.farmer",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -160,9 +161,9 @@ class SeqSampling():
             raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
             
         #Manage options
-        optional_things = ["ArRP","kf_Gs","kf_xhat","confidence_level"]
+        optional_options = ["ArRP","kf_Gs","kf_xhat","confidence_level"]
         optional_default_settings = [1,1,1,0.95]
-        add_options(options, optional_things, optional_default_settings)      
+        add_options(options, optional_options, optional_default_settings)      
         
         if self.stochastic_sampling :
                 add_options(options, ["n0min"], [50])
@@ -210,7 +211,7 @@ class SeqSampling():
         elif self.stopping_criterion == "BPL":
             self.stop_criterion = self.bpl_stopping_criterion
         else:
-            raise RuntimeError("Only BM and BPL criteria are supported yet")
+            raise RuntimeError("Only BM and BPL criteria are supported.")
             
         #Get the function computing sample size
         if self.stochastic_sampling:

@@ -1,9 +1,9 @@
 mpi-sppy
 ========
 
-Optimization under uncertainty for Pyomo models.
+Optimization under uncertainty for `Pyomo <https://pyomo.org>`_ models.
 
-Documentation is available at `readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>`_ and
+`Documentation is available at readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>`_ and
 a technical report is on `OOL <http://www.optimization-online.org/DB_HTML/2020/11/8088.html>`_
 
 Status for internal tests
@@ -39,6 +39,19 @@ installation that will work well. Note that even if there is
 an error message, mpi-sppy may still execute and return correct
 results. Per the comment below, the run-times may just be 
 unnecessarily inflated.
+
+Citing mpi-sppy
+^^^^^^^^^^^^^^^
+If you find mpi-sppy useful in your work, we kindly request that you cite the following `pre-print <http://www.optimization-online.org/DB_HTML/2020/11/8088.html>`_:
+
+::
+
+   @misc{knueven2020parallel,
+     title={A Parallel Hub-and-Spoke System for Large-Scale Scenario-Based Optimization Under Uncertainty},
+     author={Knueven, Bernard and Mildebrath, David and Muir, Christopher and Siirola, John D and Watson, Jean-Paul and Woodruff, David L},
+     year={2020}
+   }
+
 
 AN IMPORTANT NOTE FOR MPICH USERS ON HPC PLATFORMS
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -1,6 +1,7 @@
 #!/bin/bash
 
-SOLVERNAME="gurobi_persistent"
+#SOLVERNAME="gurobi_persistent"
+SOLVERNAME="cplex"
 
 # get an xhat
 # xhat output file name is hardwired

@@ -15,7 +15,7 @@ from mpisppy import global_toc
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-import mpisppy.utils.amalgomator as ama
+import mpisppy.utils.amalgamator as ama
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.utils.sputils as sputils
 import mpisppy.confidence_intervals.ciutils as ciutils
@@ -34,7 +34,7 @@ class MMWConfidenceIntervals():
     """Takes a model and options as input. 
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
-        options (dict): useful options to run amalgomator or xhat_eval, 
+        options (dict): useful options to run amalgamator or xhat_eval, 
                         including EF_solver_options and EF_solver_name
                         May include the options used to compute xhat
         xhat_one (dict): Non-anticipative first stage solution, computed before
@@ -218,7 +218,7 @@ class MMWConfidenceIntervals():
         
 if __name__ == "__main__":
 
-# This main function is for developers 
+# This main function is for developers to use for trying things out.
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
     refmodel = "mpisppy.tests.examples.farmer" #Change this path to use a different model

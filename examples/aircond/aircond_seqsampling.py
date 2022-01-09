@@ -1,6 +1,6 @@
 # Copyright 2020, 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Illustrate the use of sequential sampling for programmers using aircond.
+# Use the aircond model to illustrate how to use sequential sampling.
 #
 
 import sys
@@ -9,7 +9,7 @@ import argparse
 import mpisppy.tests.examples.aircond as aircond
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.confidence_parsers as confidence_parsers
 from mpisppy.utils import baseparsers
@@ -64,8 +64,8 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "start_seed":start_seed,
                     "sigmadev":sigmadev
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.aircond",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.aircond",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names

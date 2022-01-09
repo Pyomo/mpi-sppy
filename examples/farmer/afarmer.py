@@ -1,4 +1,4 @@
-# special for use with amalgomator
+# special for use with amalgamator
 # unlimited crops
 # ALL INDEXES ARE ZERO-BASED
 #  ___________________________________________________________________________
@@ -19,7 +19,7 @@ import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import argparse
-import mpisppy.utils.amalgomator as ama
+import mpisppy.utils.amalgamator as ama
 from mpisppy import global_toc
     
 fullcomm = mpi.COMM_WORLD
@@ -241,7 +241,7 @@ def pysp_instance_creation_callback(
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgomator): return the full list of num_scens scenario names
+    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
@@ -250,7 +250,7 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgomator): add command options unique to farmer
+    # (only for Amalgamator): add command options unique to farmer
     inparser.add_argument("--crops-multiplier",
                           help="number of crops will be three times this (default 1)",
                           dest="crops_multiplier",
@@ -266,7 +266,8 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
-    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
+    # options will be the full set of Amalgamator options
     kwargs = {"use_integer": options.get('use_integer', False),
               "crops_multiplier": options.get('crops_multiplier', 1),
               "num_scens" : options.get('num_scens', None),

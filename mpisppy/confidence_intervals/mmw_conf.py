@@ -19,7 +19,7 @@ if __name__ == "__main__":
     # parse args for mmw part of things
     parser = argparse.ArgumentParser()
     parser.add_argument('instance',
-                            help="name of model module, must be compatible with amalgomator")
+                            help="name of model module, must be compatible with amalgamator")
     parser.add_argument('xhatpath',
                             help="path to .npy file with feasible nonant solution xhat")
     parser.add_argument('solver_name',
@@ -87,7 +87,6 @@ if __name__ == "__main__":
                "EF_solver_options": solver_options,
                "start_scen": args.start_scen}   #Are the scenario shifted by a start arg ?
 
-    #should we accept these as arguments?
     num_batches = args.num_batches
     batch_size = args.batch_size
 

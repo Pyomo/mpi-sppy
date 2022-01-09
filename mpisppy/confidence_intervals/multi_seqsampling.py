@@ -1,6 +1,6 @@
 # Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Code that is producing a xhat and a confidence interval using sequantial sampling 
+# Code that is producing an xhat and a confidence interval using sequantial sampling 
 # This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.
 
@@ -15,7 +15,7 @@ from mpisppy import global_toc
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
@@ -44,8 +44,9 @@ class IndepScens_SeqSampling(SeqSampling):
         self.batch_branching_factors = [1]*(self.numstages-1)
         self.batch_size = 1
     
-    #TODO: Add a override specifier if it exists
-    def run(self,maxit=200):
+    #TODO: Add an override specifier if it exists
+    def run(self, maxit=200):
+        # Do everything as specified by the options (maxit is provided as a safety net).
         refmodel = self.refmodel
         mult = self.sample_size_ratio # used to set m_k= mult*n_k
         scenario_denouement = refmodel.scenario_denouement if hasattr(refmodel, "scenario_denouement") else None
@@ -91,7 +92,7 @@ class IndepScens_SeqSampling(SeqSampling):
         
         #Computing G_nk and s_k associated with xhat_1
         
-        Gk, sk = self.gap_estimators_with_independent_scenarios(xhat_k,
+        Gk, sk = self._gap_estimators_with_independent_scenarios(xhat_k,
                                                                 nk,
                                                                 estimator_scenario_names,
                                                                 scenario_denouement)
@@ -129,7 +130,7 @@ class IndepScens_SeqSampling(SeqSampling):
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
             
             
-            Gk, sk = self.gap_estimators_with_independent_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
+            Gk, sk = self._gap_estimators_with_independent_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
 
             if (k%10==0):
                 print(f"k={k}")
@@ -151,18 +152,22 @@ class IndepScens_SeqSampling(SeqSampling):
         global_toc(f"s={sk}")
         global_toc(f"xhat has been computed with {nk*mult} observations.")
         return {"T":T,"Candidate_solution":final_xhat,"CI":CI,}
-    
-    def independent_scenario_creator(self, sname, **scenario_creator_kwargs):
+
+    """
+    def _independent_scenario_creator(self, sname, **scenario_creator_kwargs):
                 bfs = [1]*(self.numstages-1)
                 snum = sputils.extract_num(sname)
                 scenario_creator = self.refmodel.scenario_creator
                 return scenario_creator(sname,start_seed=self.SeedCount+snum*(self.numstages-1),**scenario_creator_kwargs)
-    def kw_creator_without_seed(self,options):
+    """
+
+    def _kw_creator_without_seed(self,options):
         kwargs = self.refmodel.kw_creator(options)
         kwargs.pop("start_seed")
         return kwargs
-    
-    def gap_estimators_with_independent_scenarios(self, xhat_k, nk,
+
+
+    def _gap_estimators_with_independent_scenarios(self, xhat_k, nk,
                                                   estimator_scenario_names, scenario_denouement):
         """ Sample a scenario tree: this is a subtree, but starting from stage 1.
         Args:
@@ -173,6 +178,8 @@ class IndepScens_SeqSampling(SeqSampling):
                  (TBD: drop this arg and just use the function in refmodel)
         Returns:
             Gk, Sk (float): mean and standard devation of the gap estimate
+        Note:
+            Seed management is mainly in the form of updates to SeedCount
 
         """
         ama_options = self.options.copy()
@@ -182,13 +189,14 @@ class IndepScens_SeqSampling(SeqSampling):
             ama_options['EF_solver_options']= self.solver_options
         ama_options['num_scens'] = nk
         ama_options['_mpisppy_probability'] = 1/nk #Probably not used
+        ama_options['start_seed'] = self.SeedCount
         
         pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
         ama_options['branching_factors'] = pseudo_branching_factors
-        ama = amalgomator.Amalgomator(options=ama_options, 
+        ama = amalgamator.Amalgamator(options=ama_options, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
-                                      kw_creator=self.kw_creator_without_seed,
+                                      kw_creator=self.refmodel.kw_creator,
                                       scenario_denouement=scenario_denouement)
         ama.run()
         #Optimal solution of the approximate problem
@@ -261,6 +269,7 @@ class IndepScens_SeqSampling(SeqSampling):
     
 
 if __name__ == "__main__":
+    # For use by confidence interval develepors who need a quick test.
     solvername = "cplex"
     #An example of sequential sampling for the aircond model
     import mpisppy.tests.examples.aircond
