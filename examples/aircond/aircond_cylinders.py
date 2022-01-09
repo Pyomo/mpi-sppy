@@ -138,6 +138,9 @@ def main():
 
     BFs = args.branching_factors
 
+    if BFs is None:
+        raise RuntimeError("Branching factors must be specified")
+
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
 
