@@ -59,6 +59,24 @@ class SPOpt(SPBase):
                     self, **self.extension_kwargs
                 )
 
+    def _check_staleness(self, s):
+        # check for staleness in *scenario* s
+        for v in s._mpisppy_data.nonant_indices.values():
+            if (not v.fixed) and v.stale:
+                if self.is_zero_prob(s, v) and v._value is None:
+                    raise RuntimeError(
+                            f"Non-anticipative zero-probability variable {v.name} "
+                            f"on scenario {sn} reported as stale and has no value. "
+                             "Zero-probability variables must have a value (e.g., fixed).")
+                else:
+                    raise RuntimeError(
+                            f"Non-anticipative variable {v.name} on scenario {sn} "
+                             "reported as stale. This usually means this variable "
+                             "did not appear in any (active) constraints, and hence "
+                             "was not communicated to the subproblem solver. Please "
+                             "ensure all non-anticipative variables appear in some "
+                             "constraint.")
+        
 
     def solve_one(self, solver_options, k, s,
                   dtiming=False,
@@ -158,29 +176,6 @@ class SPOpt(SPBase):
             results = None
             solver_exception = e
 
-        # Look at the feasible scenarios. If we have any stale non-anticipative
-        # variables, complain. Otherwise the user will hit this issue later when
-        # we attempt to access the variables `value` attribute (see Issue #170).
-        if s._mpisppy_data.scenario_feasible:
-            for v in s._mpisppy_data.nonant_indices.values():
-                if (not v.fixed) and v.stale:
-                    if self.is_zero_prob(s, v) and v._value is None:
-                        raise RuntimeError(
-                                f"Non-anticipative zero-probability variable {v.name} "
-                                f"on scenario {sn} reported as stale and has no value. "
-                                 "Zero-probability variables must have a value (e.g., fixed).")
-                    else:
-                        raise RuntimeError(
-                                f"Non-anticipative variable {v.name} on scenario {sn} "
-                                 "reported as stale. This usually means this variable "
-                                 "did not appear in any (active) constraints, and hence "
-                                 "was not communicated to the subproblem solver. Please "
-                                 "ensure all non-anticipative variables appear in some "
-                                 "constraint.")
-            
-        if self.extensions is not None:
-            results = self.extobject.post_solve(s, results)
-
         pyomo_solve_time = time.time() - solve_start_time
         if (results is None) or (len(results.solution) == 0) or \
                 (results.solution(0).status == SolutionStatus.infeasible) or \
@@ -219,6 +214,18 @@ class SPOpt(SPBase):
             for sname in s._ef_scenario_names:
                  self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
                      = s._mpisppy_data.scenario_feasible
+                 if s._mpisppy_data.scenario_feasible:
+                     self._check_staleness(self.local_scenarios[sname])
+        else:  # not a bundle
+            if s._mpisppy_data.scenario_feasible:
+                self._check_staleness(s)                 
+        # (We just looked at the feasible scenario to find any stale non-anticipative
+        # variables. If we didn't, we will hit an issue later when
+        # we attempt to access the variables `value` attribute.)
+
+        if self.extensions is not None:
+            results = self.extobject.post_solve(s, results)
+
         return pyomo_solve_time
 
 
