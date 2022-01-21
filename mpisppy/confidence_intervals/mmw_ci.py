@@ -1,6 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
+# Not intended for use from the command line (see mmw_conf.py), but has a __main__ for testing.
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
 # or: python3 mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 --EF-solver-name cplex
 

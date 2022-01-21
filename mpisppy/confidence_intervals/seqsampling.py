@@ -231,11 +231,13 @@ class SeqSampling():
         self.SeedCount = 0
             
     def bm_stopping_criterion(self,G,s,nk):
-        # arguments defined in [bm2011]
+        # arguments defined in [bm2011]; return True to continue
+        print(f"{G =}, {s = }, {nk =}, {self.hprime =}, {self.epsprime =}")
+        xxx probably not hprime!!! (eps?) xxx no, wait, it is hprime
         return(G>self.hprime*s+self.epsprime)
     
     def bpl_stopping_criterion(self,G,s,nk):
-        # arguments defined in [bpl2012]
+        # arguments defined in [bpl2012]; return True to continue
         t = scipy.stats.t.ppf(self.confidence_level,nk-1)
         sample_error = t*s/np.sqrt(nk)
         inflation_factor = 1/np.sqrt(nk)

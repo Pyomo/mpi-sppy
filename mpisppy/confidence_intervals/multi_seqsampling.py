@@ -146,7 +146,7 @@ class IndepScens_SeqSampling(SeqSampling):
         elif self.stopping_criterion == "BPL":
             upper_bound = self.eps
         else:
-            raise RuntimeError("Only BM and BPL criterion are supported yet.")
+            raise RuntimeError("Only BM and BPL criterion are supported.")
         CI=[0,upper_bound]
         global_toc(f"G={Gk}")
         global_toc(f"s={sk}")

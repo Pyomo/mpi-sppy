@@ -1,5 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
 
+# Intended for use from the command line.
 # To test: (from confidence_intervals directory; assumes the npy file is in the farmer directory) 
 # python mmw_conf.py mpisppy/tests/examples/farmer.py ../../examples/farmer/farmer_root_nonants.npy gurobi --MMW-num-batches 3 --MMW-batch-size 3 --num-scens 3
 
