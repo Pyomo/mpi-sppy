@@ -3,9 +3,9 @@
 # Utility functions for mmw, sequantial sampling and sample trees
 
 import os
+import math
 import numpy as np
 import mpi4py.MPI as mpi
-from sympy import factorint
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
@@ -16,6 +16,39 @@ import mpisppy.confidence_intervals.sample_tree as sample_tree
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
+
+def _prime_factors(n):
+    """
+    Parameters
+    ----------
+    nin (int): postive integer to factor
+
+    Returns:
+    Returns a dictionary containing the prime factors of n as keys
+    and their respective multiplicities as values.
+    """
+    if n < 0:
+        raise ValueError(f"_prime_factors require positive input ({n})")
+    if n == 0:
+        return {0: 1}
+    elif n == 1:
+        return {}
+
+    retval = {}
+    # collect the 2's
+    while (n % 2 == 0):
+        retval[2] = retval.get(2, 0) + 1
+        n /= 2
+    # traverse the odds
+    i = 3
+    while i <= math.sqrt(n):
+        while n % i == 0:
+            retval[i] = retval.get(i, 0) + 1
+            n /= i
+        i += 2
+    if n > 2:
+        retval[n] = retval.get(n, 0) + 1
+    return retval
 
 def branching_factors_from_numscens(numscens,num_stages):
     """ Create branching factors to be used for sampling a tree.
@@ -40,7 +73,7 @@ def branching_factors_from_numscens(numscens,num_stages):
     else:
         for i in range(2**(num_stages-1)):
             n = numscens+i
-            prime_fact = factorint(n)
+            prime_fact = _prime_factors(n)
             if sum(prime_fact.values())>=num_stages-1: #Checking that we have enough factors
                 branching_factors = [0]*(num_stages-1)
                 fact_list = [factor for (factor,mult) in prime_fact.items() for i in range(mult) ]
