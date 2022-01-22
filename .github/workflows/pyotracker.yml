@@ -3,9 +3,14 @@
 name: pyomo tracker
 
 on:
-  schedule:
-    # min hr dayofmonth month dayofweek 
-    - cron: "14 3 * * *"
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+##on:
+##  schedule:
+##    # min hr dayofmonth month dayofweek 
+##    - cron: "14 3 * * *"
 
 defaults:
     run:
