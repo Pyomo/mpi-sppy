@@ -26,6 +26,5 @@ setup(
         'numpy>=1.19',
         'pyomo>=6.0',
         'scipy>=1.5',
-        'sympy>=1.8'
     ]
 )
