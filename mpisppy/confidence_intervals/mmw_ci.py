@@ -220,6 +220,7 @@ class MMWConfidenceIntervals():
 if __name__ == "__main__":
 
 # This main function is for developers to use for trying things out.
+# (not tested, so might not run...)
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
     
     refmodel = "mpisppy.tests.examples.farmer" #Change this path to use a different model

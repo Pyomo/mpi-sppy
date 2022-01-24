@@ -13,6 +13,24 @@ def confidence_parser(inparser):
     return parser
 
 
+def MMW_parser(inparser):
+    inparser.add_argument('xhatpath',
+                          help="path to .npy file with feasible nonant solution xhat")
+    
+    inparser.add_argument("--MMW-num-batches",
+                            help="number of batches used for MMW confidence interval (default 1)",
+                            dest="num_batches",
+                            type=int,
+                            default=1)
+    
+    inparser.add_argument("--MMW-batch-size",
+                            help="batch size used for MMW confidence interval (default None)",
+                            dest="batch_size",
+                            type=int,
+                            default=None) #None means take batch_size=num_scens
+    return inparser
+    
+
 def sequential_parser(inparser):
     parser = inparser
 
@@ -54,13 +72,13 @@ def BM_parser(inparser):
                         default=1.75)
 
     parser.add_argument("--BM-hprime",
-                        help="Controls tradeoff between width and sample size (default 0.5)",
+                        help="Controls tradeoff between width and sample size as well as termination (default 0.5)",
                         dest="BM_hprime",
                         type=float,
                         default=0.5)
     
     parser.add_argument("--BM-eps",
-                        help="Controls termination (default 0.2)",
+                        help="Related to eps-prime, which controls termination (default 0.2)",
                         dest="BM_eps",
                         type=float,
                         default=0.2)

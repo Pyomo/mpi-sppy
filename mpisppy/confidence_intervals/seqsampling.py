@@ -233,7 +233,6 @@ class SeqSampling():
     def bm_stopping_criterion(self,G,s,nk):
         # arguments defined in [bm2011]; return True to continue
         print(f"{G =}, {s = }, {nk =}, {self.hprime =}, {self.epsprime =}")
-        xxx probably not hprime!!! (eps?) xxx no, wait, it is hprime
         return(G>self.hprime*s+self.epsprime)
     
     def bpl_stopping_criterion(self,G,s,nk):

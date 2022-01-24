@@ -21,14 +21,14 @@ def _prime_factors(n):
     """
     Parameters
     ----------
-    nin (int): postive integer to factor
+    n (int): postive integer to factor
 
     Returns:
     Returns a dictionary containing the prime factors of n as keys
-    and their respective multiplicities as values.
+    and their respective multipliers as values.
     """
     if n < 0:
-        raise ValueError(f"_prime_factors require positive input ({n})")
+        raise ValueError(f"_prime_factors requires positive input ({n})")
     if n == 0:
         return {0: 1}
     elif n == 1:
