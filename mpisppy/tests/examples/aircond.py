@@ -321,6 +321,16 @@ def scenario_creator(sname, **kwargs):
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     model._mpisppy_probability = 1 / np.prod(branching_factors)
+    """
+    from mpi4py import MPI
+
+    comm = MPI.COMM_WORLD
+    rank = comm.Get_rank()
+    if rank == 0:
+        with open("phmodel.txt", "w") as fileh:
+            model.pprint(fileh)
+    quit()
+    """
     return(model)
 
 
@@ -397,7 +407,7 @@ def inparser_adder(inparser):
     _doone("mudev", "average deviation of demand between two periods", argname="mu-dev")
     _doone("sigmadev", "standard deviation of deviation of demand between two periods", argname="sigma-dev")
 
-    d = parms["start_ups"]
+    d = parms["start_ups"][1]
     inparser.add_argument("--start-ups",
                           help="Include start-up costs in model, resulting in a MPI (default {d})",
                           dest="start_ups",
@@ -441,7 +451,7 @@ def kw_creator(options):
         retval = getattr(args, aname) if hasattr(args, aname) else None
         retval = default if retval is None else retval
         kwargs[option_name] = retval
-
+            
     # (only for Amalgamator): linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
     _kwarg("branching_factors")
@@ -452,7 +462,7 @@ def kw_creator(options):
         raise ValueError(f"kw_creator called, but no value given for start_ups, {options =}")
     if kwargs["start_seed"] is None:
         raise ValueError(f"kw_creator called, but no value given for start_seed, {options =}")
-                     
+
     return kwargs
 
 
