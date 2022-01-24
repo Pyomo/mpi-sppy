@@ -323,7 +323,7 @@ class Test_confint_aircond(unittest.TestCase):
         z2 = round_pos_sig(zhatbar, 2)
         self.assertEqual(z2, 740.)
         e2 = round_pos_sig(eps_z, 2)
-        self.assertEqual(e2, 84.)
+        self.assertEqual(e2, 49.)
         #print(f"*** {z2 =} {e2 =}")
 
 if __name__ == '__main__':
