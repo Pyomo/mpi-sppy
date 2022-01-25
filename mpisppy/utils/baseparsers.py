@@ -426,7 +426,7 @@ def lagranger_args(inparser):
     parser.add_argument("--lagranger-rho-rescale-factors-json",
                         help="json file: rho rescale factors (default None)",
                         dest="lagranger_rho_rescale_factors_json",
-                        type=float,
+                        type=str,
                         default=None)
 
     return parser
