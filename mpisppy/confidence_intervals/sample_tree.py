@@ -98,8 +98,8 @@ class SampleSubtree():
         for k,ndn in enumerate(self.fixed_nodes):
             node = s._mpisppy_node_list[k]
             if len(self.xhats[k]) != nlens[ndn]:
-                raise RuntimeError("xhats does not have the size"
-                                   f"For stage {k+1}, xhats has {len(self.xhats[k])} nonant variables, but should have {nlens[ndn]} of them")
+                raise RuntimeError("xhats does not have the right size "
+                                   f"for stage {k+1}, xhats has {len(self.xhats[k])} nonant variables, but should have {nlens[ndn]} of them")
             for i in range(nlens[ndn]):
                 #node.nonant_vardata_list[i].fix(self.xhats[k][i])
                 node.nonant_vardata_list[i].value = self.xhats[k][i]

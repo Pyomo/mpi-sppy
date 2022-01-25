@@ -127,8 +127,16 @@ def _parse_args():
     parser = baseparsers.lagranger_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
     parser = baseparsers.mip_options(parser)
+    parser = baseparsers.aph_args(parser)    
     parser = aircond.inparser_adder(parser)
+    parser.add_argument("--run-async",
+                        help="Run with async projective hedging instead of progressive hedging",
+                        dest="run_async",
+                        action="store_true",
+                        default=False)    
+    
     args = parser.parse_args()
+
     return args
 
 def main():
@@ -136,6 +144,9 @@ def main():
     args = _parse_args()
 
     BFs = args.branching_factors
+
+    if BFs is None:
+        raise RuntimeError("Branching factors must be specified")
 
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
@@ -165,12 +176,20 @@ def main():
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
     
-    # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=None,
-                              rho_setter = primal_rho_setter,
-                              all_nodenames=all_nodenames)
+    if args.run_async:
+        # Vanilla APH hub
+        hub_dict = vanilla.aph_hub(*beans,
+                                   scenario_creator_kwargs=scenario_creator_kwargs,
+                                   ph_extensions=None,
+                                   rho_setter = None,
+                                   all_nodenames=all_nodenames)
+    else:
+        # Vanilla PH hub
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=None,
+                                  rho_setter = primal_rho_setter,
+                                  all_nodenames=all_nodenames)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
