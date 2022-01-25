@@ -18,7 +18,7 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement, \
                                                _rho_setter
 import mpisppy.tests.examples.farmer as farmer
-from mpisppy.tests.test_utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver, round_pos_sig
 
 __version__ = 0.6
 solver_available,solvername, persistent_available, persistentsolvername= get_solver()
