@@ -7,7 +7,8 @@ import time
 import mpisppy.cylinders.spoke
 
 class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
-
+    """Indepedent Lagrangian that takes x values as input and updates its own W.
+    """
     converger_spoke_char = 'A'
 
     def lagrangian_prep(self):
