@@ -153,6 +153,7 @@ def main():
 
     with_xhatspecific = args.with_xhatspecific
     with_lagrangian = args.with_lagrangian
+    with_lagranger = args.with_lagranger
     with_xhatshuffle = args.with_xhatshuffle
 
     # This is multi-stage, so we need to supply node names
@@ -198,6 +199,13 @@ def main():
                                                     rho_setter = primal_rho_setter,
                                                     all_nodenames = all_nodenames)
 
+    # Indepdent Lagranger bound spoke
+    if with_lagranger:
+        lagranger_spoke = vanilla.lagranger_spoke(*beans,
+                                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                                  rho_setter = primal_rho_setter,
+                                                  all_nodenames = all_nodenames)
+
     # xhat specific bound spoke
     if with_xhatspecific:
         xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
@@ -214,6 +222,8 @@ def main():
     list_of_spoke_dict = list()
     if with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
+    if with_lagranger:
+        list_of_spoke_dict.append(lagranger_spoke)
     if with_xhatspecific:
         list_of_spoke_dict.append(xhatspecific_spoke)
     if with_xhatshuffle:
