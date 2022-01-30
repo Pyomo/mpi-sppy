@@ -38,13 +38,13 @@ def _prime_factors(n):
     # collect the 2's
     while (n % 2 == 0):
         retval[2] = retval.get(2, 0) + 1
-        n /= 2
+        n //= 2
     # traverse the odds
     i = 3
     while i <= math.sqrt(n):
         while n % i == 0:
             retval[i] = retval.get(i, 0) + 1
-            n /= i
+            n //= i
         i += 2
     if n > 2:
         retval[n] = retval.get(n, 0) + 1
@@ -163,7 +163,15 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
     return(xhat)
 
 def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
-    #Correcting small negative G due to numerical error while solving EF 
+    """ Correcting small negative G due to numerical error while solving EF 
+    Args:
+        G (float): the gap estimate
+        relative_error (bool): indicates that objfct will be used for scaling
+        threshold (float): tolerance for small negatives that will just be zero
+        objfct (float): value used for relative error scaling
+    Returns:
+        G (float): G or zero if G is a small negative number
+    """
     if relative_error:
         if objfct is None:
             raise RuntimeError("We need a value of the objective function to remove numerically negative G")
@@ -384,14 +392,15 @@ def gap_estimators(xhat_one,
     global_estim = np.zeros(4)
     ev.mpicomm.Allreduce(local_estim, global_estim, op=mpi.SUM) 
     G,ssq, prob_sqnorm,obj_at_xhat = global_estim
-    if global_rank==0 and verbose:
-        print(f"G = {G}")
-    sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
-    s = np.sqrt(sample_var)
-    
     use_relative_error = (np.abs(zstar)>1)
     G = correcting_numeric(G,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
+    if global_rank==0 and verbose:
+        print(f"G = {G}")
+    numerator = (ssq - G**2)
+    sample_var = numerator/(1-prob_sqnorm) #Unbiased sample variance
+    s = np.sqrt(sample_var)
+    
     if objective_gap:
         if is_multi:
             return {"G":G,"s":s,"zhats": [zhat],"zstars":[zstar], "seed":start} 

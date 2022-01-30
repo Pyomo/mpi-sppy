@@ -392,6 +392,17 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(inparser):
     # (only for Amalgamator): add command options unique to aircond
     # Do not change the defaults.
+
+    # This may have already been added by base_parsers, but it specifies conflict resolution.
+    inparser.add_argument("--branching-factors",
+                        help="Spaces delimited branching factors (e.g., 2 2)",
+                        dest="branching_factors",
+                        nargs="*",
+                        type=int,
+                        default=None)
+        
+
+    
     def _doone(name, helptext, argname=None):
         # The name should be the name in parms
         # helptext should not include the default

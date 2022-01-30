@@ -7,7 +7,9 @@
 import re
 import sys
 import argparse
-from pyomo.common.fileutils import import_file
+import importlib
+
+#from pyomo.common.fileutils import import_file
 from mpisppy.utils.sputils import option_string_to_dict
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.confidence_intervals import mmw_ci
@@ -57,13 +59,16 @@ if __name__ == "__main__":
 
     # now get the extra args from the module
     mname = sys.argv[1]  # args.instance eventually
+    if mname == "--help" or mname == "-h":
+        raise ValueError("You must supply a module name, even to get help")
     try:
-        m = import_file(mname)
+        m = importlib.import_module(mname)
     except:
         try:
-            m = import_file(f"{mname}.py")
+            m = importlib.import_module(f"{mname}.py")
         except:
             raise RuntimeError(f"Could not import module: {mname}")
+        
     m.inparser_adder(parser)
     args = parser.parse_args()  
 
@@ -81,12 +86,17 @@ if __name__ == "__main__":
         args.batch_size = args.num_scens
 
     refmodel = modelpath #Change this path to use a different model
-    
+
+    EF2 = False
+    EFMS = not EF2
+    branching_factors = None if not EFMS else args.branching_factors
     options = {"args": args,  # in case of problem specific args
-               "EF-2stage": True,  # 2stage vs. mstage
+               "EF-2stage": EF2,  # 2stage vs. mstage
+               "EF-mstage": EFMS,
                "EF_solver_name": args.solver_name,
                "EF_solver_options": solver_options,
-               "start_scen": args.start_scen}   #Are the scenario shifted by a start arg ?
+               "branching_factors": branching_factors,
+               "start_scen": args.start_scen}   #Are the scenarios shifted by a start arg ?
 
     num_batches = args.num_batches
     batch_size = args.batch_size

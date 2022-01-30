@@ -124,7 +124,7 @@ class MMWConfidenceIntervals():
         #Some options are specific to 2-stage or multi-stage problems
         if self.multistage:
             sampling_branching_factors = ciutils.branching_factors_from_numscens(batch_size,self.numstages)
-            #TODO: Change this to get a more logical way to compute branching_factors
+            #TODO: Change this to get a better way to compute branching_factors
             batch_size = np.prod(sampling_branching_factors)
         else:
             sampling_BFs = None
