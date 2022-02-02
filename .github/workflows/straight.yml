@@ -35,5 +35,6 @@ jobs:
 
       - name: mpi tests
         run: |
+          cd mpisppy/tests
           python straight_tests.py
 
