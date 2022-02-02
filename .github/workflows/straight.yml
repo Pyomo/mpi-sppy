@@ -31,7 +31,6 @@ jobs:
 
       - name: setup the program
         run: |
-          python --version
           python setup.py develop
 
       - name: mpi tests
