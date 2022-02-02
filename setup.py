@@ -23,8 +23,8 @@ setup(
     author_email='dlwoodruff@ucdavis.edu',
     packages=packages,
     install_requires=[
-        'numpy>=1.19',
+        'numpy',
+        'scipy',
         'pyomo>=6.0',
-        'scipy>=1.5',
     ]
 )
