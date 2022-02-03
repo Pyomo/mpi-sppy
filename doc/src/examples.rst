@@ -351,7 +351,7 @@ previous methods:
     all_scenario_names = ["good", "average", "bad"]
     bounds = {name: -432000 for name in all_scenario_names}
     options = {
-        "master_solver": "cplex_persistent",
+        "root_solver": "cplex_persistent",
         "sp_solver": "cplex_persistent",
         "sp_solver_options" : {"threads" : 1},
         "valid_eta_lb": bounds,

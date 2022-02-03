@@ -33,7 +33,7 @@ parms = {"mudev": (float, 0.),
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
 
     if "start_seed" not in kwargs:
-        raise RuntimeError(f"start_seed not in kwargs; kwargs={kwargs}")
+        raise RuntimeError(f"start_seed not in kwargs={kwargs}")
     start_seed = kwargs["start_seed"]
     max_d = kwargs.get("max_d", 400)
     min_d = kwargs.get("min_d", 0)

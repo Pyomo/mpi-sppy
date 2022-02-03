@@ -39,7 +39,18 @@ hub and uses those to compute its own W values. It can modify the rho
 values (typically to use lower values). The modification is done
 in the form of scaling factors that are specified to be applied at a given
 iteration. The factors accumulate so if 0.5 is applied at iteration 1 and
-1.2 is applied at iteration 5, from iteration 5 onward, the factor will be 1.2.
+1.2 is applied at iteration 10, from iteration 10 onward, the factor will be 0.6. Here
+is a sample json file:
+
+::
+   
+   {
+    "1": "0.5",
+    "10": "1.2"
+   }
+
+
+
 
 Inner Bounds
 ------------
