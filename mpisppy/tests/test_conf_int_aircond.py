@@ -14,7 +14,7 @@ import importlib
 
 import mpi4py.MPI as mpi
 
-from mpisppy.tests.test_utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.utils.sputils as sputils
 import mpisppy.tests.examples.aircond as aircond
 
@@ -321,9 +321,9 @@ class Test_confint_aircond(unittest.TestCase):
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
 
         z2 = round_pos_sig(zhatbar, 2)
-        self.assertEqual(z2, 1400.)
+        self.assertEqual(z2, 740.)
         e2 = round_pos_sig(eps_z, 2)
-        self.assertEqual(e2, 84.)
+        self.assertEqual(e2, 49.)
         #print(f"*** {z2 =} {e2 =}")
 
 if __name__ == '__main__':

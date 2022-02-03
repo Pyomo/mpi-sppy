@@ -11,11 +11,6 @@ This thing basically wraps the functionality of the "standard" *_cylinder exampl
 
 It may be an extenisble base class, but not abstract.
 
-
-Wait. I guess I need a function that takes an argparse object and returns the kwargs dict for the
-scenario creator function and I need to be passed in a starting argparse object that
-has the needed stuff for the problem at hand.
-
 """
 
 """

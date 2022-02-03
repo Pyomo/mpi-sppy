@@ -14,7 +14,7 @@ import importlib
 
 import mpi4py.MPI as mpi
 
-from mpisppy.tests.test_utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer
 import mpisppy.tests.examples.afarmer as afarmer
 

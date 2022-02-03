@@ -67,6 +67,13 @@ runs an Amalgamator object.
 
 The full options dictionary is passed through to ``kw_creator`` so keyword arguments for
 scenario creation can be placed in the almalgamator options dictionary.
+
+Notes about ``inparser_adder``
+------------------------------
+
+The function adds arguments unique to the instance. Note that `--branching-factors` can be added
+by this function if ``base_parsers.py`` has been used because it allows for conflict resolution.
+
    
 Amalgamator with EF
 -------------------
