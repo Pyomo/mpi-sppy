@@ -47,3 +47,11 @@ added to scenarios numbers to get the scenario number. Note: to date,
 there is no code in the confidence interval code-base that rescales
 probabilities, so unlike the rest of `mpi-sppy`, present confidence
 interval code assumes equally likely scenarios.
+
+Note concerning multi-stage versus two-stage
+--------------------------------------------
+
+The ``zhat4xhat`` software  using multi-stage processing, so
+for two-stage files it add the ``--branching-factors`` option
+to the command line. For two stage problems, just give the number
+of scenarios for this option.
