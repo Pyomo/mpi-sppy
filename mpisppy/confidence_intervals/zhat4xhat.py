@@ -125,7 +125,8 @@ def run_samples(ama_options, args, model_module):
 def _parser_setup():
     # return the parser
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-    parser = argparse.ArgumentParser()
+    # NOTE: xhat4xhat requires branching factors even for two-stage (a single number in that case)
+    parser = argparse.ArgumentParser(prog="xhat4py", conflict_handler="resolve")
 
     parser.add_argument('model_module_name',
                         help="name of model module, must be compatible with amalgamator")
@@ -143,12 +144,18 @@ def _parser_setup():
     parser.add_argument("--solver-options",
                             help="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
                             default='')
-    
     parser.add_argument("--confidence-level",
                         help="one minus alpha (default 0.95)",
                         dest="confidence_level",
                         type=float,
                         default=0.95)
+    parser.add_argument("--branching-factors",
+                        help="Spaces delimited branching factors (e.g., 2 2)",
+                        dest="branching_factors",
+                        nargs="*",
+                        type=int,
+                        default=None)
+        
     return parser
 
 
