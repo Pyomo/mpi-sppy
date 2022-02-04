@@ -135,13 +135,6 @@ def _parser_setup():
                         help="solver name (default gurobi_direct)",
                         dest='solver_name',
                         default="gurobi_direct")
-    parser.add_argument("--branching-factors",
-                        help="Spaces delimited branching factors (default 10 10) for two "
-                        "stage, just enter one number",
-                        dest="branching_factors",
-                        nargs="*",
-                        type=int,
-                        default=[10,10])
     parser.add_argument("--num-samples",
                         help="Number of independent sample trees to construct",
                         dest="num_samples",
