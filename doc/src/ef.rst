@@ -26,8 +26,8 @@ class, but does not function as a hub.
 
 .. _sputils.create_EF:
 
-Other method: ``sputils.create_EF``
------------------------------------
+Other method: ``mpisppy.utils.sputils.create_EF``
+-------------------------------------------------
 
 The use of this function does not require the installation of ``mpi4py``. Its use
 is illustrated in ``examples.farmer.farmer_ef.py``. Here are the
