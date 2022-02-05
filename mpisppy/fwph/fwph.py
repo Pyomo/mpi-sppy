@@ -433,7 +433,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 mip.nonant_vars = mip._mpisppy_data.nonant_indices
                 leaf_vars = self._get_leaf_vars(mip)
                 mip.leaf_vars = { ('LEAF', ix): 
-                    leaf_vars[ix] for ix in range(len(leaf_vars))
+                    var for ix, var in enumerate(leaf_vars)
                 }
 
     def _check_for_multistage(self):
@@ -635,8 +635,8 @@ class FWPH(mpisppy.phbase.PHBase):
             Functions by returning the complement of the set of
             non-anticipative variables.
         '''
-        nonant_var_ids = [id(var) for node in scenario._mpisppy_node_list
-                                  for var  in node.nonant_vardata_list]
+        nonant_var_ids = {id(var) for node in scenario._mpisppy_node_list
+                                  for var  in node.nonant_vardata_list}
         return [var for var in scenario.component_data_objects(pyo.Var)
                          if id(var) not in nonant_var_ids]
 
