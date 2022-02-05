@@ -10,8 +10,8 @@ general-purpose solver." There are two closely related ways
 to do this in ``mpi-sppy``.
 
 
-Preferred method: ``mpisppy.opt.ef.EF``
----------------------------------------
+Preferred method: ``mpisppy.opt.ef.ExtensiveForm``
+--------------------------------------------------
 
 There is a class for the EF that roughly matches the "look and feel" of a hub
 class, but does not function as a hub.
