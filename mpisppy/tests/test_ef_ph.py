@@ -1,6 +1,5 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Provide some test for mpisppy.0
 # Author: David L. Woodruff (circa January 2019)
 """
 IMPORTANT:
@@ -21,7 +20,7 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
-from mpisppy.tests.test_utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver,round_pos_sig
 
 __version__ = 0.54
 
@@ -375,8 +374,8 @@ class Test_sizes(unittest.TestCase):
             
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    def test_lagrangian_bound(self):
-        """ Make sure the lagrangian bound is at least a bound
+    def test_xhatlooper_bound(self):
+        """ smoke test for the looper as an extension
         """
         from mpisppy.extensions.xhatlooper import XhatLooper
         options = self._copy_of_base_options()

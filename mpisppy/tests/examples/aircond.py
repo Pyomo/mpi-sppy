@@ -33,7 +33,7 @@ parms = {"mudev": (float, 0.),
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
 
     if "start_seed" not in kwargs:
-        raise RuntimeError(f"start_seed not in kwargs; {kwargs =}")
+        raise RuntimeError(f"start_seed not in kwargs={kwargs}")
     start_seed = kwargs["start_seed"]
     max_d = kwargs.get("max_d", 400)
     min_d = kwargs.get("min_d", 0)
@@ -459,9 +459,9 @@ def kw_creator(options):
         _kwarg(idx, tpl[1])
 
     if kwargs["start_ups"] is None:
-        raise ValueError(f"kw_creator called, but no value given for start_ups, {options =}")
+        raise ValueError(f"kw_creator called, but no value given for start_ups, options={options}")
     if kwargs["start_seed"] is None:
-        raise ValueError(f"kw_creator called, but no value given for start_seed, {options =}")
+        raise ValueError(f"kw_creator called, but no value given for start_seed, options={options}")
 
     return kwargs
 
