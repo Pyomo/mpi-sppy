@@ -206,8 +206,7 @@ def main():
                                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                                   rho_setter = primal_rho_setter,
                                                   all_nodenames = all_nodenames)
-
-    # FWPH bound spoke
+    # Indepdent FWPH bound spoke
     if with_fwph:
         fwph_spoke = vanilla.fwph_spoke(*beans,
                                         scenario_creator_kwargs=scenario_creator_kwargs,
