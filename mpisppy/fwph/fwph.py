@@ -90,7 +90,6 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def fw_prep(self):
         self.PH_Prep(attach_duals=True, attach_prox=False)
-        self._check_for_multistage()
         self.subproblem_creation(self.options['verbose'])
         self._output_header()
 
@@ -436,11 +435,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 mip.leaf_vars = { ('LEAF', ix): 
                     leaf_vars[ix] for ix in range(len(leaf_vars))
                 }
-
-    def _check_for_multistage(self):
-        if self.multistage:
-            global_toc('The FWPH algorithm only supports two-stage models at this time.'
-                    ' Proceeding anyway...', self.cylinder_rank == 0)
 
     def _check_initial_points(self):
         ''' If t_max (i.e. the inner iteration limit) is set to 1, then the
