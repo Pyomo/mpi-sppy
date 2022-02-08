@@ -64,7 +64,7 @@ This is the base class for PH and PH-like algorithms.
 spbase.py
 ^^^^^^^^^
 
-_`SPBase` is the base class for many algorithms.
+.. _`SPBase` is the base class for many algorithms.
 
 .. automodule:: mpisppy.spbase
    :members:
