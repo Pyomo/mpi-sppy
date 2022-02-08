@@ -39,7 +39,7 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
             ph.options['norm_rho_options'] if 'norm_rho_options' in ph.options else dict()
 
         self._set_options()
-        self._prev_avg = None
+        self._prev_avg = {}
         self.ph._mpisppy_norm_rho_update_inuse = True  # allow NormRhoConverger
         
     def _set_options(self):
@@ -48,8 +48,9 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
             setattr(self, attr_name, options[opt_name] if opt_name in options else _norm_rho_defaults[opt_name])
 
     def _snapshot_avg(self, ph):
-        scenario = ph.local_scenarios[ph.local_scenario_names[0]]
-        self._prev_avg = { ndn_i : xbar.value for ndn_i, xbar in scenario._mpisppy_model.xbars.items() }
+        for s in ph.local_scenarios.values():
+            for ndn_i, xbar in s._mpisppy_model.xbars.items():
+                self._prev_avg[ndn_i] = xbar.value
 
     def _compute_primal_residual_norm(self, ph):
 
@@ -96,10 +97,10 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
 
     def _compute_dual_residual_norm(self, ph):
         dual_resid = {}
-        s = ph.local_scenarios[ph.local_scenario_names[0]]
-        for ndn_i in s._mpisppy_data.nonant_indices:
-            dual_resid[ndn_i] = s._mpisppy_model.rho[ndn_i].value * \
-                                math.fabs( s._mpisppy_model.xbars[ndn_i].value - self._prev_avg[ndn_i] )
+        for s in ph.local_scenarios.values():
+            for ndn_i in s._mpisppy_data.nonant_indices:
+                dual_resid[ndn_i] = s._mpisppy_model.rho[ndn_i].value * \
+                        math.fabs( s._mpisppy_model.xbars[ndn_i].value - self._prev_avg[ndn_i] )
         return dual_resid
 
     def pre_iter0(self):
@@ -115,7 +116,7 @@ class NormRhoUpdater(mpisppy.extensions.extension.Extension):
         if self._stop_iter_rho_update is not None and \
                 (ph_iter > self._stop_iter_rho_update):
             return
-        if self._prev_avg is None:
+        if not self._prev_avg:
             self._snapshot_avg(ph)
         else:
             primal_residuals = self._compute_primal_residual_norm(ph)
