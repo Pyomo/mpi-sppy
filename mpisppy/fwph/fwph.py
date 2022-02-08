@@ -42,6 +42,7 @@ import numpy as np
 import pyomo.environ as pyo
 import time
 import re # For manipulating scenario names
+from mpisppy import global_toc
 
 from mpi4py import MPI
 from pyomo.repn.standard_repn import generate_standard_repn
@@ -89,7 +90,6 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def fw_prep(self):
         self.PH_Prep(attach_duals=True, attach_prox=False)
-        self._check_for_multistage()
         self.subproblem_creation(self.options['verbose'])
         self._output_header()
 
@@ -433,11 +433,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 mip.leaf_vars = { ('LEAF', ix):
                     var for ix, var in enumerate(self._get_leaf_vars(mip))
                 }
-
-    def _check_for_multistage(self):
-        if self.multistage:
-            raise RuntimeError('The FWPH algorithm only supports '
-                               'two-stage models at this time.')
 
     def _check_initial_points(self):
         ''' If t_max (i.e. the inner iteration limit) is set to 1, then the
