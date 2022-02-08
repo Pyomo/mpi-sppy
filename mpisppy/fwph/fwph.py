@@ -421,19 +421,17 @@ class FWPH(mpisppy.phbase.PHBase):
                         for (ndn,ix), nonant in mip._mpisppy_data.nonant_indices.items()}
                     EF.nonant_vars.update(nonant_dict)
                     # Leaf variables
-                    leaf_vars = self._get_leaf_vars(mip)
-                    leaf_var_dict = {(scenario_name, 'LEAF', ix): 
-                        leaf_vars[ix] for ix in range(len(leaf_vars))}
+                    leaf_var_dict = {(scenario_name, 'LEAF', ix):
+                        var for ix, var in enumerate(self._get_leaf_vars(mip))}
                     EF.leaf_vars.update(leaf_var_dict)
-                    EF.num_leaf_vars[scenario_name] = len(leaf_vars)
+                    EF.num_leaf_vars[scenario_name] = len(leaf_vars_dict)
                     # Reference variables are already attached: EF.ref_vars
                     # indexed by (node_name, index)
         else:
             for (name, mip) in self.local_scenarios.items():
                 mip.nonant_vars = mip._mpisppy_data.nonant_indices
-                leaf_vars = self._get_leaf_vars(mip)
-                mip.leaf_vars = { ('LEAF', ix): 
-                    leaf_vars[ix] for ix in range(len(leaf_vars))
+                mip.leaf_vars = { ('LEAF', ix):
+                    var for ix, var in enumerate(self._get_leaf_vars(mip))
                 }
 
     def _check_for_multistage(self):
@@ -629,16 +627,17 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _get_leaf_vars(self, scenario):
         ''' This method simply needs to take an input scenario
-            (pyo.ConcreteModel) and return a list of variable objects
+            (pyo.ConcreteModel) and yield the variable objects
             corresponding to the leaf node variables for that scenario.
 
             Functions by returning the complement of the set of
             non-anticipative variables.
         '''
-        nonant_var_ids = [id(var) for node in scenario._mpisppy_node_list
-                                  for var  in node.nonant_vardata_list]
-        return [var for var in scenario.component_data_objects(pyo.Var)
-                         if id(var) not in nonant_var_ids]
+        nonant_var_ids = {id(var) for node in scenario._mpisppy_node_list
+                                  for var  in node.nonant_vardata_list}
+        for var in scenario.component_data_objects(pyo.Var):
+            if id(var) not in nonant_var_ids:
+                yield var
 
     def _get_xbars(self, strip_bundle_names=False):
         ''' Return the xbar vector if rank = 0 and None, otherwise
@@ -861,13 +860,21 @@ class FWPH(mpisppy.phbase.PHBase):
                 'convergence, provide initial points, or increase '
                 'FW_iter_limit')
 
-        # 3. Check that the user did not specify the linearization of binary
+        # 3a. Check that the user did not specify the linearization of binary
         #    proximal terms (no binary variables allowed in FWPH QPs)
         if ('linearize_binary_proximal_terms' in self.options
             and self.options['linearize_binary_proximal_terms']):
             print('Warning: linearize_binary_proximal_terms cannot be used '
                   'with the FWPH algorithm. Ignoring...')
             self.options['linearize_binary_proximal_terms'] = False
+
+        # 3b. Check that the user did not specify the linearization of all
+        #    proximal terms (FWPH QPs should be QPs)
+        if ('linearize_proximal_terms' in self.options
+            and self.options['linearize_proximal_terms']):
+            print('Warning: linearize_proximal_terms cannot be used '
+                  'with the FWPH algorithm. Ignoring...')
+            self.options['linearize_proximal_terms'] = False
 
         # 4. Provide a time limit of inf if the user did not specify
         if ('time_limit' not in self.FW_options.keys()):
