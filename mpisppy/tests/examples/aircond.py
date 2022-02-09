@@ -1,5 +1,7 @@
 #ReferenceModel for full set of scenarios for AirCond; June 2021
 # Dec 2021; numerous enhancements by DLW; do not change defaults
+# Feb 2022: Changed all inventory cost coefficients to be positive numbers
+# exccept Last Inventory cost, which should be negative.
 import pyomo.environ as pyo
 import numpy as np
 import time
@@ -26,7 +28,7 @@ parms = {"mudev": (float, 0.),
          "Capacity": (float, 200.),
          "RegularProdCost": (float, 1.),
          "OvertimeProdCost": (float, 3.),
-         "NegInventoryCost": (float, -5.),
+         "NegInventoryCost": (float, 5.),
          "QuadShortCoeff": (float, 0)
 }
 
@@ -93,10 +95,8 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     #Demand
     model.Demand = demand
     #Inventory Cost: model.InventoryCost = -0.8 if last_stage else 0.5
-    if last_stage:
-        model.InventoryCost = _kw("LastInventoryCost")
-    else:
-        model.InventoryCost = _kw("InventoryCost")
+    model.InventoryCost = _kw("InventoryCost")
+    model.LastInventoryCost = _kw("LastInventoryCost")
     #Regular Capacity
     model.Capacity = _kw("Capacity")
     #Regular Production Cost
@@ -140,26 +140,21 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
         model.RegStartUpConstraint = pyo.Constraint(
             expr=model.bigM * model.StartUp >= model.RegularProd + model.OvertimeProd)
 
-    """
-    # for max function using only one Var and two constraints
-    model.InventoryAux = pyo.Var(domain=pyo.NonNegativeReals)  # to add to objective
-    
-    model.InventoryCostConstraint = pyo.ConstraintList()
-    model.InventoryCostConstraint.add(model.InventoryAux >= model.InventoryCost*model.Inventory)
-    model.InventoryCostConstraint.add(model.InventoryAux >= model.NegInventoryCost*model.Inventory)
-    """
-
     # grab positive and negative parts of inventory
+    assert model.InventoryCost > 0, model.InventoryCost
+    assert model.NegInventoryCost > 0, model.NegInventoryCost
+    model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+    model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+    model.doleInventory = pyo.Constraint(expr=model.Inventory == model.posInventory - model.negInventory)
+
+    # create the inventory cost expression
     if not last_stage:
-        assert model.InventoryCost > 0, model.InventoryCost
-        assert model.NegInventoryCost < 0, model.NegInventoryCost
-        model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
-        model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
-        model.doleInventory = pyo.Constraint(expr=model.Inventory == model.posInventory - model.negInventory)
-        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.posInventory - model.NegInventoryCost*model.negInventory)
-    else:  # in the last stage we let the negative "cost" take care of both sides
-        assert model.InventoryCost < 0, f"last stage inven cost: {model.InventoryCost}"        
-        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.Inventory)
+        model.LinInvenCostExpr = pyo.Expression(expr = model.InventoryCost*model.posInventory\
+                                                + model.NegInventoryCost*model.negInventory)
+    else:  
+        assert model.LastInventoryCost < 0, f"last stage inven cost: {model.LastInventoryCost}"        
+        model.LinInvenCostExpr = pyo.Expression(expr = model.LastInventoryCost*model.posInventory\
+                                                + model.NegInventoryCost*model.negInventory)
 
     if model.QuadShortCoeff > 0 and not last_stage:
         model.InvenCostExpr =  pyo.Expression(expr = model.LinInvenCostExpr +\
