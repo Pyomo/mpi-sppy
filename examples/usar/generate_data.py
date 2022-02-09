@@ -1,7 +1,7 @@
 import itertools
 import math
 import random
-from typing import Any, Dict, Generator, Iterable, TypeVar
+from typing import Any, Dict, Generator, Iterable, List, Tuple, TypeVar
 
 import numpy as np
 import scipy.stats
@@ -9,6 +9,26 @@ import scipy.stats
 RESCUE_PARTY_SIZE = scipy.stats.poisson(2)  # About household size distribution
 EMERGENCY_SUPPLIES_STOCK = scipy.stats.pareto(1)  # A power-law distribution
 MIN_SURVIVAL_MINUTES = 3 * 24 * 60  # Before supplies such as water are needed
+
+Coordinates = Tuple[float, float]
+
+
+def generate_coords(
+    num_depots: int, num_households: int, seed=None
+) -> Tuple[List[Coordinates], List[Coordinates]]:
+    for param in ("num_depots", "num_households"):
+        if eval(param) < 0:
+            raise ValueError(f"Give a nonnegative value for {param}")
+
+    random.seed(seed)
+
+    depot_coords = \
+        [(random.random(), random.random()) for _ in range(num_depots)]
+    household_coords = \
+        [(random.random(), random.random()) for _ in range(num_households)]
+
+    return depot_coords, household_coords
+
 
 V = TypeVar("V")
 
@@ -43,12 +63,8 @@ def generate_data(
         if eval(param) <= 0:
             raise ValueError(f"Give a positive value for {param}")
 
-    random.seed(seed)
-
-    depot_coords = \
-        [(random.random(), random.random()) for _ in range(num_depots)]
-    household_coords = \
-        [(random.random(), random.random()) for _ in range(num_households)]
+    depot_coords, household_coords = \
+        generate_coords(num_depots, num_households, seed)  # Sets seed
 
     def pairwise_times(coords1, coords2):
         for c1, c2 in itertools.product(coords1, coords2):
