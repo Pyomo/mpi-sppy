@@ -29,7 +29,7 @@ import mpisppy.confidence_intervals.ciutils as ciutils
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.2
+__version__ = 0.21
 
 solver_available, solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -195,7 +195,7 @@ class Test_confint_aircond(unittest.TestCase):
                                      ama_options, use_command_line=False)
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
-        self.assertEqual(obj, 810.)
+        self.assertEqual(obj, 970.)
 
 
     @unittest.skipIf(not solver_available,
@@ -213,7 +213,7 @@ class Test_confint_aircond(unittest.TestCase):
         branching_factors= base_options['kwoptions']['branching_factors']
         full_xhat = self._make_full_xhat(branching_factors)
         obj = round_pos_sig(ev.evaluate(full_xhat),2)
-        self.assertEqual(obj, 960.0)  # rebaselined 28 Dec 2021
+        self.assertEqual(obj, 1000.0)  # rebaselined feb 2022
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
@@ -231,7 +231,7 @@ class Test_confint_aircond(unittest.TestCase):
         k = all_scenario_names[0]
         obj = ev.evaluate_one(full_xhat,k,ev.local_scenarios[k])
         obj = round_pos_sig(obj,2)
-        self.assertEqual(obj, 990.0) # rebaselined 28 Dec 2021
+        self.assertEqual(obj, 1100.0) # rebaselined feb 2022
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
@@ -247,7 +247,7 @@ class Test_confint_aircond(unittest.TestCase):
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
-        self.assertEqual((s,bound), (28.0, 110.0))
+        self.assertEqual((s,bound), (33.0, 130.0))
 
    
     @unittest.skipIf(not solver_available,
@@ -270,7 +270,7 @@ class Test_confint_aircond(unittest.TestCase):
         G = estim['G']
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
-        self.assertEqual((G,s), (64.5, 31.8))  # rebaselined 28 Dec 2021 (see also 5 dec)
+        self.assertEqual((G,s), (69.6, 47.2))  # rebaselined Feb 2022
 
     
     @unittest.skipIf(not solver_available,
@@ -303,7 +303,7 @@ class Test_confint_aircond(unittest.TestCase):
         x = seq_pb.run(maxit=50)
         T = x['T']
         ub = round_pos_sig(x['CI'][1],2)
-        self.assertEqual((T,ub), (4, 67.0))
+        self.assertEqual((T,ub), (15, 180.0))
 
 
     @unittest.skipIf(not solver_available,
@@ -321,9 +321,9 @@ class Test_confint_aircond(unittest.TestCase):
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
 
         z2 = round_pos_sig(zhatbar, 2)
-        self.assertEqual(z2, 740.)
+        self.assertEqual(z2, 850.)
         e2 = round_pos_sig(eps_z, 2)
-        self.assertEqual(e2, 49.)
+        self.assertEqual(e2, 67.)
         #print(f"*** {z2 =} {e2 =}")
 
 if __name__ == '__main__':
