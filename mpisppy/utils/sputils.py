@@ -60,7 +60,7 @@ def first_stage_nonant_writer( file_name, scenario, bundling ):
 def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bundling ):
     with open(os.path.join(directory_name, scenario_name+'.csv'), 'w') as f:
         for var in scenario.component_data_objects(
-                ctype=pyo.Var,
+                ctype=(pyo.Var, pyo.Expression),
                 descend_into=True,
                 active=True,
                 sort=True):
