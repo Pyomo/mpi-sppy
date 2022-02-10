@@ -12,6 +12,12 @@ def new_parser() -> argparse.ArgumentParser:
         help="Positive number of scenarios (int) generated",
     )
 
+    parser.add_argument(
+        "--output_dir",
+        default=".",
+        help="Directory for output files (current directory by default)",
+    )
+
     generate_data = parser.add_argument_group(
         "generate_data arguments", "Arguments passed on to the data generator"
     )
