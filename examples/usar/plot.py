@@ -1,5 +1,7 @@
 import itertools
 from typing import (
+    Any,
+    Callable,
     Collection,
     Counter,
     DefaultDict,
@@ -18,8 +20,16 @@ from typing import (
     Union,
 )
 
+from matplotlib.colors import ListedColormap
+import matplotlib.pyplot as plt
+import numpy as np
 from pyomo.core.base.var import IndexedVar
 import pyomo.environ as pyo
+
+
+def default_colors(n: int) -> Callable[[int], Any]:
+    return ListedColormap(plt.cm.rainbow(np.linspace(0, 1, n)))
+
 
 V = TypeVar("V", bound=Hashable)
 
@@ -186,3 +196,41 @@ def assign_departures(scen_mod: pyo.ConcreteModel) -> List[List[Transition]]:
     ]
     walks = event_walks(enumerate(itertools.chain(team_starts, site_deps)))
     return [[(depot_deps + site_deps)[i] for i in walk] for walk in walks]
+
+
+def plot_walks(
+    scen_mod: pyo.ConcreteModel,
+    team_colors: Optional[Callable[[int], Any]] = None,
+) -> None:
+    team_walks = assign_departures(scen_mod)
+
+    if team_colors is None:
+        team_colors = default_colors(len(team_walks))
+
+    if len(scen_mod.depot_coords) > 0:
+        plt.scatter(*zip(*scen_mod.depot_coords), c="k", marker="s")
+    if len(scen_mod.site_coords) > 0:
+        plt.scatter(*zip(*scen_mod.site_coords), c="k", marker="o")
+
+    arrow_start_locs, arrow_directions, arrow_colors = [], [], []
+
+    for team, walk in enumerate(team_walks):
+        from_coords_map = scen_mod.depot_coords
+        for (_, fro), (t2, to) in walk:
+            if t2 < scen_mod.time_horizon:
+                to_coords = scen_mod.site_coords[to]
+                from_coords = from_coords_map[fro]
+                from_coords_map = scen_mod.site_coords
+                arrow_start_locs.append(from_coords)
+                arrow_directions.append(np.subtract(to_coords, from_coords))
+                arrow_colors.append(team_colors(team))
+
+    if len(arrow_start_locs) > 0:
+        plt.quiver(
+            *zip(*arrow_start_locs),
+            *zip(*arrow_directions),
+            angles="xy",
+            scale_units="xy",
+            scale=1,
+            color=arrow_colors,
+        )
