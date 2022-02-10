@@ -359,8 +359,9 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
             raise RuntimeError(f"Found infeasible solution which was feasible before - feasP={feasP}, E1={self.opt.E1}, E1_tolerance={self.opt.E1_tolerance}")
 
         obj = self.opt.Eobjective(verbose=False)
-
-        if not math.isclose(obj,self.best_inner_bound):
+        calculated_worse = obj > self.best_inner_bound if self.is_minimizing else self.best_inner_bound > obj
+        
+        if calculated_worse and not math.isclose(obj, self.best_inner_bound, rel_tol=1e-08, abs_tol=1e-12):
             if self.cylinder_rank == 0:
                 print(f"WARNING: {self.__class__.__name__} best inner bound is different "
                         f"from objective calculated in finalize")
