@@ -9,8 +9,6 @@ from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 import mpisppy.tests.examples.aircond as aircond
 
-write_solution = True
-
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
 
@@ -134,6 +132,11 @@ def _parse_args():
                         dest="run_async",
                         action="store_true",
                         default=False)    
+    parser.add_argument("--write-solution",
+                        help="Write various solution files (default False)",
+                        dest="write_solution",
+                        action="store_true",
+                        default=False)    
     
     args = parser.parse_args()
 
@@ -244,10 +247,10 @@ def main():
     if wheel.global_rank == 0:
         print("BestInnerBound={} and BestOuterBound={}".\
               format(wheel.BestInnerBound, wheel.BestOuterBound))
-        if write_solution:
+        if args.write_solution:
             print(f"Writing first stage solution to {fname}")
     # all ranks need to participate because only the winner will write
-    if write_solution:
+    if args.write_solution:
         wheel.write_first_stage_solution('aircond_first_stage.csv')
         wheel.write_tree_solution('aircond_full_solution')
         wheel.write_first_stage_solution(fname,
