@@ -6,6 +6,7 @@ import logging
 logger = logging.getLogger('mpisppy.scenario_tree')
 
 import pyomo.environ as pyo
+from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 
 def build_vardatalist(self, model, varlist=None):
     """
@@ -23,7 +24,7 @@ def build_vardatalist(self, model, varlist=None):
     if varlist is None:
         raise RuntimeError("varlist is None in scenario_tree.build_vardatalist")
         vardatalist = [v for v in model.component_data_objects(pyo.Var, active=True, sort=True)]
-    elif isinstance(varlist, pyo.Var):
+    elif isinstance(varlist, (pyo.Var, IndexedComponent_slice)):
         # user provided a variable, not a list of variables. Let's work with it anyway
         varlist = [varlist]
 
@@ -32,8 +33,10 @@ def build_vardatalist(self, model, varlist=None):
         # component data objects
         vardatalist = list()
         for v in varlist:
-            if v.is_indexed():
-                vardatalist.extend([v[i] for i in sorted(v.keys())])
+            if isinstance(v, IndexedComponent_slice):
+                vardatalist.extend(v.__iter__())
+            elif v.is_indexed():
+                vardatalist.extend((v[i] for i in sorted(v.keys())))
             else:
                 vardatalist.append(v)
     return vardatalist
