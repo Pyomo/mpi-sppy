@@ -36,7 +36,7 @@ def build_vardatalist(self, model, varlist=None):
             if isinstance(v, IndexedComponent_slice):
                 vardatalist.extend(v.__iter__())
             elif v.is_indexed():
-                vardatalist.extend(v.values())
+                vardatalist.extend((v[i] for i in sorted(v.keys())))
             else:
                 vardatalist.append(v)
     return vardatalist
