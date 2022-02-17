@@ -48,8 +48,8 @@ illustrates use of the utility function
 (``mpisppy.utils.sputils.attach_root_node``) that attaches the node
 list for you.
 
-Node list entries can be entered indididually, by adding and an entire
-variable with all of indexes, and/or by using wildcards. This is
+Node list entries can be entered indididually, by adding an entire
+variable implicitly including all index values, and/or by using wildcards. This is
 illustrated in the netdes example:
 
 ::
