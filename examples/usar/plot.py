@@ -234,3 +234,41 @@ def plot_walks(
             scale=1,
             color=arrow_colors,
         )
+
+
+def plot_gantt(
+    scen_mod: pyo.ConcreteModel,
+    team_colors: Optional[Callable[[int], Any]] = None,
+) -> None:
+    team_walks = assign_departures(scen_mod)
+
+    if team_colors is None:
+        team_colors = default_colors(len(team_walks))
+
+    starts, durations, are_travel, colors = [], [], [], []
+
+    for team, walk in enumerate(team_walks):
+        for (t1, _), (t2, to) in walk:
+            if t2 < scen_mod.time_horizon:
+                starts.extend([t1, t2])
+                durations.extend([t2 - t1, scen_mod.rescue_times[t2, to]])
+                are_travel.extend([True, False])
+                colors.extend([team_colors(team)] * 2)
+    idx = list(range(len(durations)))[::-1]
+
+    if len(starts) > 0:
+        plt.barh(idx, durations, left=starts)
+
+        plt.margins(0.0)
+
+        xl = plt.xlim()
+        bg_kwargs = {"width": xl[1] - xl[0], "left": xl[0], "height": 1.0}
+        idx_travel = [i for i, travel in zip(idx, are_travel) if travel]
+        idx_rescue = [i for i, travel in zip(idx, are_travel) if not travel]
+        plt.barh(idx_travel, **bg_kwargs, color="#eeeeee", label="Travel")
+        plt.barh(idx_rescue, **bg_kwargs, color="#ffffff", label="Rescue")
+        plt.legend()
+
+        plt.barh(idx, durations, height=0.7, left=starts, color=colors)
+
+    plt.yticks([])
