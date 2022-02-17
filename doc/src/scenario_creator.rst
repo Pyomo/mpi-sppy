@@ -55,12 +55,12 @@ illustrated in the netdes example:
 ::
    
    # Add all indexes of model.x
-   sputils.attach_root_node(model, model.FirstStageCost, [model.x])
+   sputils.attach_root_node(model, model.FirstStageCost, [model.x, ])
 
 ::
    
    # Add all index of model.x using wild cards
-   sputils.attach_root_node(model, model.FirstStageCost, model.x[:,:])
+   sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
 
 The scenario probability should be attached by `scenario_creator` as
 ``_mpisppy_probability``. However, if you don't attach it, the scenarios are
