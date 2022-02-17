@@ -24,7 +24,7 @@ def scenario_creator(scenario_name, path=None):
     model = build_scenario_model(path, scenario_ix)
 
     # now attach the one and only scenario tree node
-    sputils.attach_root_node(model, model.FirstStageCost, model.x[:,:])
+    sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
     
     return model
 

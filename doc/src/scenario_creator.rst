@@ -48,6 +48,20 @@ illustrates use of the utility function
 (``mpisppy.utils.sputils.attach_root_node``) that attaches the node
 list for you.
 
+Node list entries can be entered indididually, by adding an entire
+variable implicitly including all index values, and/or by using wildcards. This is
+illustrated in the netdes example:
+
+::
+   
+   # Add all indexes of model.x
+   sputils.attach_root_node(model, model.FirstStageCost, [model.x, ])
+
+::
+   
+   # Add all index of model.x using wild cards
+   sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
+
 The scenario probability should be attached by `scenario_creator` as
 ``_mpisppy_probability``. However, if you don't attach it, the scenarios are
 assumed to be equally likely.
