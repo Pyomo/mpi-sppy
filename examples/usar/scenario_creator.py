@@ -9,11 +9,15 @@ import mpisppy.scenario_tree
 def scenario_creator(
     name: str,
     data_dicts: Sequence[Dict],
+    **assigned_to_model,
 ) -> pyo.ConcreteModel:
     abstract = abstract_model()
 
     data_dict = data_dicts[int(name)]
     concrete = abstract.create_instance(data_dict)
+
+    for key, val in assigned_to_model.items():
+        setattr(concrete, key, val)
 
     concrete._mpisppy_node_list = [
         mpisppy.scenario_tree.ScenarioNode(
