@@ -14,7 +14,7 @@ Coordinates = Tuple[float, float]
 
 
 def generate_coords(
-    num_depots: int, num_households: int, seed=None
+    num_depots: int, num_households: int, seed=None, **kwargs
 ) -> Tuple[List[Coordinates], List[Coordinates]]:
     for param in ("num_depots", "num_households"):
         if eval(param) < 0:
