@@ -24,7 +24,7 @@ SCENARIO_NAME = "test"  # user's choice (needs to be in line with input data nam
 SCENARIO_VARIANT = "storage"  # user's choice
 EXCLUDE_COMPONENT_LIST = []  # ["electricity_storage"], []
 WRITE_SOLUTION = True
-SOLVE_EXTENSIVE_FORM = True
+SOLVE_EXTENSIVE_FORM = False
 
 # Scenario (tree) configuration ====================================================================
 NUMBER_OF_STAGES = 3  # Planning periods, e.g. 3 (representing planning periods 2025, 2035, 2045)
@@ -74,7 +74,7 @@ def _get_emprise_configuration():
     plot_folder_name = "plot"
     result_folder_name = "result/" + scenario_name_extended
     # json_file_name = "ef_solution.json"
-    cluster_working_directory = "/home/phaertel/emprise"
+    cluster_working_directory = "."  # "/export/home/dlwoodruff/Documents/DLWFORKS/mpi-sppy-1/examples/EMPRISE"  # "/home/phaertel/emprise"
 
     print("### Initializing EMPRISE framework for scenario setup '" + scenario_name_extended + "' ###")
     # --- Check whether running on local windows or other machine (HPCC)
