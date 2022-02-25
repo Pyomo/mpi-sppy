@@ -1,0 +1,2 @@
+type,subtype,depreciation,interest_rate,capex,opex_variable,opex_fixed
+LI_ION,,10::10::10::10,0.06::0.06::0.06::0.06,822.75::707.25::591.75::534.0,0.0::0.0::0.0::0.0,8.2275::7.0725::5.9175::5.34

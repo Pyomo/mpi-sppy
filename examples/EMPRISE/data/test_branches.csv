@@ -1,0 +1,3 @@
+node_from,node_to,capacity,expand,type,distance
+DEU1,FRA1,8.0,0,ac,100.0
+DEU1,POL1,5.0,0,ac,120.0
