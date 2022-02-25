@@ -185,7 +185,7 @@ def gap_estimators(xhat_one,
                    scenario_names=None,
                    sample_options=None,
                    ArRP=1,
-                   scenario_creator_kwargs={}, 
+                   options=None,   # feb 2022 was: scenario_creator_kwargs={}, 
                    scenario_denouement=None,
                    solvername=None, 
                    solver_options=None,
@@ -245,7 +245,9 @@ def gap_estimators(xhat_one,
     else:
         is_multi = (solving_type=="EF-mstage")
     
-    
+    m = importlib.import_module(mname)
+    ama.check_module_ama(m)
+    scenario_creator_kwargs=m.kw_creator(options)
         
     if is_multi:
         try:
@@ -271,7 +273,7 @@ def gap_estimators(xhat_one,
             tmp = gap_estimators(xhat_one, mname,
                                    solvername=solvername,
                                    scenario_names=scennames, ArRP=1,
-                                   scenario_creator_kwargs=scenario_creator_kwargs,
+                                   options=options, # was: scenario_creator_kwargs=scenario_creator_kwargs,
                                    scenario_denouement=scenario_denouement,
                                    solver_options=solver_options,
                                    solving_type=solving_type
@@ -306,7 +308,7 @@ def gap_estimators(xhat_one,
     else:
         #We use amalgamator to do it
 
-        ama_options = dict(scenario_creator_kwargs)
+        ama_options = options.copy() #  was (feb 2022) dict(scenario_creator_kwargs)
         ama_options['start'] = start
         ama_options['num_scens'] = len(scenario_names)
         ama_options['EF_solver_name'] = solvername
