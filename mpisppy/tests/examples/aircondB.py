@@ -185,6 +185,7 @@ def aircond_model_creator(demands, **kwargs):
     # create a single aircond model for the given demands
     # branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
     # typing aids...
+    # NOTE: start seed is not used here (noted Feb 2022)
     start_seed = kwargs["start_seed"]
 
     start_ups = kwargs.get("start_ups", parms["start_ups"][1])
@@ -305,22 +306,68 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
 
         
 def scenario_creator(sname, **kwargs):
-
+   """
+    NOTE: modified Feb/March 2022 to be able to return a bundle if the name
+    is Bundle_firstnum_lastnum (e.g. Bundle_14_28)
+    This returns a Pyomo model (either for scenario, or the EF of a bundle)
+    """
+    # NOTE: start seed is not used here (noted Feb 2022)
     start_seed = kwargs['start_seed']
     if "branching_factors" not in kwargs:
         raise RuntimeError("scenario_creator for aircond needs branching_factors in kwargs")
     branching_factors = kwargs["branching_factors"]
 
-    demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
-    
-    model = aircond_model_creator(demands, **kwargs)
-    
-    #Constructing the nodes used by the scenario
-    model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
-    model._mpisppy_probability = 1 / np.prod(branching_factors)
+    if "scen" in sname:
 
-    return(model)
+        demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
 
+        model = aircond_model_creator(demands, **kwargs)
+
+        #Constructing the nodes used by the scenario
+        model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
+        model._mpisppy_probability = 1 / np.prod(branching_factors)
+
+        return model 
+
+    elif "Bundle" in sname:
+        firstnum = int(scenario_name.split("_")[1])
+        lastnum = int(scenario_name.split("_")[2])
+        snames = [f"Scenario{i}" for i in range(firstnum, lastnum+1)]
+
+        if cb_data["unpickle_bundles_dir"] is not None:
+            fname = os.path.join(cb_data["unpickle_bundles_dir"], scenario_name+".pkl")
+            bundle = dill_unpickle(fname)
+            return bundle
+        
+        # if we are still here, we have to create the bundle (we did not load it)
+        # caution: cb_data as the overall N
+        # we need node names for the ef?
+        bundle = sputils.create_EF(snames, scenario_creator,
+                                   scenario_creator_kwargs=kwargs, EF_name=sname,
+                                   nonant_for_fixed_vars = False)
+        # It simplifies things if we assume that the bundles consume entire second stage nodes,
+        # then all we need is a root node and the only nonants that need to be reported are
+        # at the root node (otherwise, more coding is required here to figure out which nodes and Vars
+        # are shared with other bundles)
+        bunsize = (lastnum-firstnum+1)
+        if bunsize % branching_factors[0] != 0:
+            raise ValueError(f"Bundles must consume entire second stage nodes: bunsize={bunsize} "
+                             f"the first branching factor is {branching_factors[0]}")
+        N = np.prod(branching_factors)
+        numbuns = N / bunsize
+        nonantlist = [v for v in bundle.ref_vars.values() if v[0] =="ROOT"]
+        attach_root_node(bundle, 0, nonantlist)
+        # scenarios are equally likely so bundles are too
+        bundle._mpisppy_probability = 1/numbuns  
+        if cb_data["pickle_bundles_dir"] is not None:
+            fname = os.path.join(cb_data["pickle_bundles_dir"], scenario_name+".pkl")
+            dill_pickle(bundle, fname)
+        return bundle
+
+
+    else:
+        raise RuntimeError (f"Scenario name does not have scen or Bundle: {scenario_name}")
+        
 
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
