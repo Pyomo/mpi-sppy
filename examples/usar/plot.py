@@ -1,4 +1,5 @@
 import itertools
+import random
 from typing import (
     Any,
     Callable,
@@ -27,8 +28,10 @@ from pyomo.core.base.var import IndexedVar
 import pyomo.environ as pyo
 
 
-def default_colors(n: int) -> Callable[[int], Any]:
-    return ListedColormap(plt.cm.rainbow(np.linspace(0, 1, n)))
+def default_colors(n: int, seed=0) -> Callable[[int], Any]:
+    colors = list(plt.cm.rainbow(np.linspace(0, 1, n)))
+    random.Random(seed).shuffle(colors)
+    return ListedColormap(colors)
 
 
 V = TypeVar("V", bound=Hashable)
