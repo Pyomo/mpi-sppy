@@ -15,6 +15,8 @@ from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
 # import mpisppy.cylinders as cylinders
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 
 import emprise
 
