@@ -44,4 +44,7 @@ def check_args(args):
     if args.unpickle_bundles_dir is not None and not os.path.isdir(args.unpickle_bundles_dir):
         raise RuntimeError(f"Directory to load pickle files from not found: {args.unpickle_bundles_dir}")
 
-    
+def have_proper_bundles(args):
+    """ boolean to indicate we have pickled bundles"""
+    return hasattr(args, "pickle_bundles_dir") and args.pickle_bundles_dir is not None\
+       or hasattr(args, "unpickle_bundles_dir") and args.unpickle_bundles_dir is not None
