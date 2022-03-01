@@ -161,6 +161,17 @@ def _parse_args():
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
+
+    parser.add_argument("--use-norm-rho-updater",
+                        help="Use the norm rho updater extension",
+                        dest="use_norm_rho_updater",
+                        action="store_true")
+    parser.add_argument("--use-norm-rho-converger",
+                        help="Use the norm rho converger",
+                        dest="use_norm_rho_converger",
+                        action="store_true")
+
+    
     args = parser.parse_args()
     return args
 
@@ -170,6 +181,15 @@ def main():
     args = _parse_args()
     emprise_config = _get_emprise_configuration()
     # print(args)
+
+    if args.use_norm_rho_converger:
+    if not args.use_norm_rho_updater:
+        raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+    else:
+        ph_converger = NormRhoConverger
+else:
+    ph_converger = None
+
 
     # Multi-stage scenario tree
     # Example for 3 planning periods (e.g. 2025, 2035, 2045)
@@ -231,6 +251,11 @@ def main():
 
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=None, rho_setter=rho_setter, all_nodenames=all_nodenames, spoke_sleep_time=emprise_config["spoke_sleep_time"])
+
+    ## hack in adaptive rho
+    if args.use_norm_rho_updater:
+        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
