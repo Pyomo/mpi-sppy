@@ -183,12 +183,12 @@ def main():
     # print(args)
 
     if args.use_norm_rho_converger:
-    if not args.use_norm_rho_updater:
-        raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+        if not args.use_norm_rho_updater:
+            raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+        else:
+            ph_converger = NormRhoConverger
     else:
-        ph_converger = NormRhoConverger
-else:
-    ph_converger = None
+        ph_converger = None
 
 
     # Multi-stage scenario tree
