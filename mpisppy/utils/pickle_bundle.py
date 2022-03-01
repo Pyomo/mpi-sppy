@@ -1,6 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 # Utilities to support formation and use of "proper" bundles
 
+import os
 import dill  
 
 def dill_pickle(model, fname):
