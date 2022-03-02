@@ -4,13 +4,15 @@
 # Dec 2021; numerous enhancements by DLW; do not change defaults
 # Feb 2022: Changed all inventory cost coefficients to be positive numbers
 # exccept Last Inventory cost, which should be negative.
-import pyomo.environ as pyo
+import os
 import numpy as np
 import time
+import pyomo.environ as pyo
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.pickle_bundle as pickle_bundle
+from mpisppy.utils.sputils import attach_root_node
 import argparse
 from mpisppy import global_toc
 
@@ -311,6 +313,16 @@ def scenario_creator(sname, **kwargs):
     is Bundle_firstnum_lastnum (e.g. Bundle_14_28)
     This returns a Pyomo model (either for scenario, or the EF of a bundle)
     """
+    def _bunBFs(branching_factors, bunsize):
+        # return branching factors for the bundle's EF
+        assert len(branching_factors) > 1
+        beyond2size = np.prod(branching_factors[:1])
+        if beyond2size % bunsize != 0:
+            raise RuntimeError(f"Bundles must consume entire second stage nodes {beyond2size} {bunsize}")
+        bunBFs = [bunsize // beyond2size] + branching_factors[1:]  # branching factors in the bundle
+        return bunBFs
+
+    
     # NOTE: start seed is not used here (noted Feb 2022)
     start_seed = kwargs['start_seed']
     if "branching_factors" not in kwargs:
@@ -330,18 +342,20 @@ def scenario_creator(sname, **kwargs):
         return model 
 
     elif "Bundle" in sname:
-        firstnum = int(scenario_name.split("_")[1])
-        lastnum = int(scenario_name.split("_")[2])
-        snames = [f"Scenario{i}" for i in range(firstnum, lastnum+1)]
+        firstnum = int(sname.split("_")[1])
+        lastnum = int(sname.split("_")[2])
+        snames = [f"scen{i}" for i in range(firstnum, lastnum+1)]
 
         if kwargs.get("unpickle_bundles_dir") is not None:
             fname = os.path.join(cb_data["unpickle_bundles_dir"], scenario_name+".pkl")
             bundle = dill_unpickle(fname)
             return bundle
-        
+
         # if we are still here, we have to create the bundle (we did not load it)
+        bunkwargs = kwargs.copy()
+        bunkwargs["branching_factors"] = _bunBFs(branching_factors, len(snames))
         bundle = sputils.create_EF(snames, scenario_creator,
-                                   scenario_creator_kwargs=kwargs, EF_name=sname,
+                                   scenario_creator_kwargs=bunkwargs, EF_name=sname,
                                    nonant_for_fixed_vars = False)
         # It simplifies things if we assume that the bundles consume entire second stage nodes,
         # then all we need is a root node and the only nonants that need to be reported are
@@ -353,17 +367,17 @@ def scenario_creator(sname, **kwargs):
                              f"the first branching factor is {branching_factors[0]}")
         N = np.prod(branching_factors)
         numbuns = N / bunsize
-        nonantlist = [v for v in bundle.ref_vars.values() if v[0] =="ROOT"]
+        nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]
         attach_root_node(bundle, 0, nonantlist)
         # scenarios are equally likely so bundles are too
         bundle._mpisppy_probability = 1/numbuns
-        print(f'{kwargs["pickle_bundles_dir"] =}')
         if kwargs.get("pickle_bundles_dir") is not None:
-            fname = os.path.join(cb_data["pickle_bundles_dir"], scenario_name+".pkl")
-            dill_pickle(bundle, fname)
+            # note that sname is a bundle name
+            fname = os.path.join(kwargs["pickle_bundles_dir"], sname+".pkl")
+            pickle_bundle.dill_pickle(bundle, fname)
         return bundle
     else:
-        raise RuntimeError (f"Scenario name does not have scen or Bundle: {scenario_name}")
+        raise RuntimeError (f"Scenario name does not have scen or Bundle: {sname}")
         
 
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
