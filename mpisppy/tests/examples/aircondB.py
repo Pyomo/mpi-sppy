@@ -362,8 +362,6 @@ def scenario_creator(sname, **kwargs):
             fname = os.path.join(cb_data["pickle_bundles_dir"], scenario_name+".pkl")
             dill_pickle(bundle, fname)
         return bundle
-
-
     else:
         raise RuntimeError (f"Scenario name does not have scen or Bundle: {scenario_name}")
         
@@ -504,12 +502,14 @@ def kw_creator(options):
     args = options.get("args")
     kwargs["pickle_bundles_dir"] = args.pickle_bundles_dir
     kwargs["unpickle_bundles_dir"] = args.unpickle_bundles_dir
+
     return kwargs
 
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
+
 
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
@@ -576,6 +576,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
 
 if __name__ == "__main__":
     # This __main__ is just for developers to use for quick tests
+    # and is not maintained or tested, so might not work.
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver-name',
                         help="solver name (default 'gurobi_direct'",

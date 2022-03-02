@@ -1,6 +1,10 @@
 # This software is distributed under the 3-clause BSD License.
 # Utilities to support formation and use of "proper" bundles
 
+# NOTE: if/because we require the bundles to consume entire
+#       second stage tree nodes, the resulting problem is two stage.
+#  This adds complications when working with multi-stage problems.
+
 import os
 import dill  
 from mpisppy import global_toc
@@ -48,7 +52,7 @@ def check_args(args):
     assert(args.pickle_bundles_dir is None or args.unpickle_bundles_dir is None)
     if args.scenarios_per_bundle is None:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified")
-    if args.bundles_per_rank is not None:
+    if args.bundles_per_rank is not None and args.bundles_per_rank != 0:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
                            "and --bundles-per-rank cannot be")
     if args.pickle_bundles_dir is not None and not os.path.isdir(args.pickle_bundles_dir):

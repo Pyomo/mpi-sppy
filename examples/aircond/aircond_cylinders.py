@@ -156,6 +156,8 @@ def main():
         raise RuntimeError("Branching factors must be specified")
 
     proper_bundles = pickle_bundle.have_proper_bundles(args)
+    if proper_bundles:
+        pickle_bundle.check_args(args)
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
 
