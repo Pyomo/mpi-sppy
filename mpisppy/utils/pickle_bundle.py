@@ -5,6 +5,8 @@
 #       second stage tree nodes, the resulting problem is two stage.
 #  This adds complications when working with multi-stage problems.
 
+# BTW: ssn (not in this repo) uses this as of March 2022
+
 import os
 import dill  
 from mpisppy import global_toc

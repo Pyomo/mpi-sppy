@@ -316,8 +316,9 @@ def scenario_creator(sname, **kwargs):
     def _bunBFs(branching_factors, bunsize):
         # return branching factors for the bundle's EF
         assert len(branching_factors) > 1
-        beyond2size = np.prod(branching_factors[:1])
-        if beyond2size % bunsize != 0:
+        beyond2size = np.prod(branching_factors[1:])
+        print(f"{branching_factors =} {beyond2size =} {bunsize =}")
+        if bunsize % beyond2size!= 0:
             raise RuntimeError(f"Bundles must consume entire second stage nodes {beyond2size} {bunsize}")
         bunBFs = [bunsize // beyond2size] + branching_factors[1:]  # branching factors in the bundle
         return bunBFs
@@ -434,6 +435,7 @@ def scenario_names_creator(num_scens,start=None):
     return [f"scen{i}" for i in range(start,start+num_scens)]
         
 
+# TBD: this should be imported from regular aircond
 #=========
 def inparser_adder(inparser):
     # (only for Amalgamator): add command options unique to aircond
