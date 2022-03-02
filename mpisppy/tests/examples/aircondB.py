@@ -306,7 +306,7 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
 
         
 def scenario_creator(sname, **kwargs):
-   """
+    """
     NOTE: modified Feb/March 2022 to be able to return a bundle if the name
     is Bundle_firstnum_lastnum (e.g. Bundle_14_28)
     This returns a Pyomo model (either for scenario, or the EF of a bundle)
@@ -334,14 +334,12 @@ def scenario_creator(sname, **kwargs):
         lastnum = int(scenario_name.split("_")[2])
         snames = [f"Scenario{i}" for i in range(firstnum, lastnum+1)]
 
-        if cb_data["unpickle_bundles_dir"] is not None:
+        if kwargs.get("unpickle_bundles_dir") is not None:
             fname = os.path.join(cb_data["unpickle_bundles_dir"], scenario_name+".pkl")
             bundle = dill_unpickle(fname)
             return bundle
         
         # if we are still here, we have to create the bundle (we did not load it)
-        # caution: cb_data as the overall N
-        # we need node names for the ef?
         bundle = sputils.create_EF(snames, scenario_creator,
                                    scenario_creator_kwargs=kwargs, EF_name=sname,
                                    nonant_for_fixed_vars = False)
@@ -358,8 +356,9 @@ def scenario_creator(sname, **kwargs):
         nonantlist = [v for v in bundle.ref_vars.values() if v[0] =="ROOT"]
         attach_root_node(bundle, 0, nonantlist)
         # scenarios are equally likely so bundles are too
-        bundle._mpisppy_probability = 1/numbuns  
-        if cb_data["pickle_bundles_dir"] is not None:
+        bundle._mpisppy_probability = 1/numbuns
+        print(f'{kwargs["pickle_bundles_dir"] =}')
+        if kwargs.get("pickle_bundles_dir") is not None:
             fname = os.path.join(cb_data["pickle_bundles_dir"], scenario_name+".pkl")
             dill_pickle(bundle, fname)
         return bundle
@@ -464,6 +463,7 @@ def inparser_adder(inparser):
     _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative; not used in last stage)")
     _doone("QuadShortCoeff", helptext="Coefficient for backorders squared (should be nonnegative; not used in last stage)")
 
+    # special "proper" bundle arguments
     inparser = pickle_bundle.pickle_bundle_parser(inparser)
     
     return inparser
@@ -500,6 +500,10 @@ def kw_creator(options):
     if kwargs["start_seed"] is None:
         raise ValueError(f"kw_creator called, but no value given for start_seed, options={options}")
 
+    # proper bundle args are special
+    args = options.get("args")
+    kwargs["pickle_bundles_dir"] = args.pickle_bundles_dir
+    kwargs["unpickle_bundles_dir"] = args.unpickle_bundles_dir
     return kwargs
 
 
