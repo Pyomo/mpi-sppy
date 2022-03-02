@@ -1,5 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
-# NOTE: as of March 2022, consider aircondB.py as an alternative to aircond.py
 import sys
 import os
 import copy
@@ -9,9 +7,7 @@ from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.sputils import first_stage_nonant_npy_serializer
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
-from mpisppy.utils import pickle_bundle
-#import mpisppy.tests.examples.aircond as aircond
-import mpisppy.tests.examples.aircondB as aircond
+import mpisppy.tests.examples.aircond as aircond
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
@@ -140,7 +136,7 @@ def _parse_args():
                         help="Write various solution files (default False)",
                         dest="write_solution",
                         action="store_true",
-                        default=False)
+                        default=False)    
     
     args = parser.parse_args()
 
@@ -155,9 +151,6 @@ def main():
     if BFs is None:
         raise RuntimeError("Branching factors must be specified")
 
-    proper_bundles = pickle_bundle.have_proper_bundles(args)
-    if proper_bundles:
-        pickle_bundle.check_args(args)
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
 
@@ -178,13 +171,7 @@ def main():
     sc_options = {"args": args}
     scenario_creator_kwargs = aircond.kw_creator(sc_options)
 
-    if proper_bundles:
-        # All the scenarios will happen to be bundles, but mpisppy does not need to know that
-        bsize = int(args.scenarios_per_bundle)
-        numbuns = ScenCount // bsize
-        all_scenario_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
-    else:
-        all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
+    all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
     # print(all_scenario_names)
     scenario_creator = aircond.scenario_creator
     scenario_denouement = aircond.scenario_denouement
@@ -208,9 +195,6 @@ def main():
                                   ph_extensions=None,
                                   rho_setter = primal_rho_setter,
                                   all_nodenames=all_nodenames)
-    if proper_bundles:
-        # make double sure PH does not think it has bundles to deal with
-        hub_dict['opt_kwargs']["options"]["bundles_per_rank"] = 0
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
