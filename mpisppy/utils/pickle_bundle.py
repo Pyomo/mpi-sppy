@@ -36,11 +36,21 @@ def pickle_bundle_parser(parser):
                         dest='unpickle_bundles_dir',
                         type=str,
                         default=None)
+    parser.add_argument("--scenarios-per-bundle",
+                        help="Used for `proper` bundles only (default None)",
+                        dest="scenarios_per_bundle",
+                        type=int,
+                        default=None)
     return parser
 
 def check_args(args):
-    """ make sure the pickle bundle args make sense"""    
+    """ make sure the pickle bundle args make sense"""
     assert(args.pickle_bundles_dir is None or args.unpickle_bundles_dir is None)
+    if args.scenarios_per_bundle is None:
+        raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified")
+    if args.bundles_per_rank is not None:
+        raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
+                           "and --bundles-per-rank cannot be")
     if args.pickle_bundles_dir is not None and not os.path.isdir(args.pickle_bundles_dir):
         raise RuntimeError(f"Directory to pickle into not found: {args.pickle_bundles_dir}")
     if args.unpickle_bundles_dir is not None and not os.path.isdir(args.unpickle_bundles_dir):
