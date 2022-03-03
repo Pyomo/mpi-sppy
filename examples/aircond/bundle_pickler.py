@@ -3,7 +3,7 @@
 """
 python bundle_pickler.py --branching-factors 4 4 4 --pickle-bundles-dir="." --scenarios-per-bundle=16 --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory 50 --mu-dev 0 --sigma-dev 40 --start-seed 0 
 
-# It is entirely up to the user to make sure that the scenario count and scenarios per bundle match between creating the pickles and using them.
+# It is entirely up to the user to make sure that the scenario count and scenarios per bundle match between creating the pickles and using them (but the second set of args might not matter)
 # branching factors is 64 because there are a total of 64 scenarios when pickled; scenarios per bundle is 16 because that's what is was when pickled (the problem is now two-stage)
 mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --branching-factors 8 --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory 50 --rel-gap 0.01 --mu-dev 0 --sigma-dev 40 --max-solver-threads 2 --start-seed 0 --no-fwph --no-lagranger --start-ups --bundles-per-rank=0 --unpickle-bundles-dir="." --scenarios-per-bundle=4
 """
