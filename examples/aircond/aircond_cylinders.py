@@ -15,6 +15,7 @@ from mpisppy.utils import vanilla
 import mpisppy.tests.examples.aircond as aircond
 import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy.utils import pickle_bundle
+from mpisppy.utils import amalgamator
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
@@ -147,6 +148,12 @@ def _parse_args():
     # special "proper" bundle arguments
     parser = pickle_bundle.pickle_bundle_parser(parser)
 
+    parser.add_argument("--EF-directly",
+                        help="Solve the EF directly instead of using cylinders (default False)",
+                        dest="EF_directly",
+                        action="store_true",
+                        default=False)    
+
     args = parser.parse_args()
 
     return args
@@ -207,6 +214,24 @@ def main():
     # TBD: consider using aircond instead of refmodule and pare down aircondB.py
     scenario_denouement = refmodule.scenario_denouement
     
+    if args.EF_directly:
+        ama_options = {"args": args,
+                       "EF-mstage": not proper_bundles,
+                       "EF-2stage": proper_bundles,
+                       "EF_solver_name": args.solver_name,
+                       "branching_factors": args.branching_factors,
+                       "num_scens": ScenCount,  # is this needed?
+                       "_mpisppy_probability": 1/ScenCount,  # is this needed?
+                       "tee_ef_solves":False,
+                       }
+        ama = amalgamator.from_module(refmodule,
+                                      ama_options,use_command_line=False)
+        ama.run()
+        print(f"EF inner bound=", ama.best_inner_bound)
+        print(f"EF outer bound=", ama.best_outer_bound)
+        quit()
+
+    # if we are still here, we are running cylinders
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
     

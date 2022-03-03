@@ -50,6 +50,7 @@ map that is global to baseparsers (i.e. importable)?
 """
 import numpy as np
 import importlib
+import inspect
 import pyomo.environ as pyo
 import argparse
 import copy
@@ -150,6 +151,7 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     """ Try to get everything from one file (this will not always be possible).
     Args:
         mname (str): the module name (module must have certain functions)
+                     or you can pass in a module that has already been imported
         options (dict): Amalgamator options or extra arguments to use 
                         in addition with the command line
         extraargs (ArgumentParser) : extra arguments to specify in the command line, e.g. for MMW
@@ -166,7 +168,11 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                  "kw_creator"]  # start and denouement can be missing.
 
     assert(options is not None)
-    m = importlib.import_module(mname)
+
+    if inspect.ismodule(mname):
+        m = mname
+    else:
+        m = importlib.import_module(mname)
 
     you_can_have_it_all = True
     for ething in everything:
