@@ -69,7 +69,7 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     return demands,nodenames
 
 def general_rho_setter(scenario_instance, rho_scale_factor=1.0):
-
+    """ TBD: make this work with proper bundles, which are two stage problems when solved"""    
     computed_rhos = []
 
     for t in scenario_instance.T[:-1]:
@@ -317,7 +317,6 @@ def scenario_creator(sname, **kwargs):
         # return branching factors for the bundle's EF
         assert len(branching_factors) > 1
         beyond2size = np.prod(branching_factors[1:])
-        print(f"{branching_factors =} {beyond2size =} {bunsize =}")
         if bunsize % beyond2size!= 0:
             raise RuntimeError(f"Bundles must consume entire second stage nodes {beyond2size} {bunsize}")
         bunBFs = [bunsize // beyond2size] + branching_factors[1:]  # branching factors in the bundle
@@ -348,8 +347,8 @@ def scenario_creator(sname, **kwargs):
         snames = [f"scen{i}" for i in range(firstnum, lastnum+1)]
 
         if kwargs.get("unpickle_bundles_dir") is not None:
-            fname = os.path.join(cb_data["unpickle_bundles_dir"], scenario_name+".pkl")
-            bundle = dill_unpickle(fname)
+            fname = os.path.join(kwargs["unpickle_bundles_dir"], sname+".pkl")
+            bundle =  pickle_bundle.dill_unpickle(fname)
             return bundle
 
         # if we are still here, we have to create the bundle (we did not load it)
@@ -363,9 +362,6 @@ def scenario_creator(sname, **kwargs):
         # at the root node (otherwise, more coding is required here to figure out which nodes and Vars
         # are shared with other bundles)
         bunsize = (lastnum-firstnum+1)
-        if bunsize % branching_factors[0] != 0:
-            raise ValueError(f"Bundles must consume entire second stage nodes: bunsize={bunsize} "
-                             f"the first branching factor is {branching_factors[0]}")
         N = np.prod(branching_factors)
         numbuns = N / bunsize
         nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]

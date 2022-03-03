@@ -1,13 +1,20 @@
+# This software is distributed under the 3-clause BSD License.
+# NOTE: as of March 2022, consider aircondB.py as an alternative to aircond.py
+# Use bundle_pickler.py to create bundle pickles
+
 import sys
 import os
 import copy
 import numpy as np
 import itertools
+from mpisppy import global_toc
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.sputils import first_stage_nonant_npy_serializer
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 import mpisppy.tests.examples.aircond as aircond
+import mpisppy.tests.examples.aircondB as aircondB
+from mpisppy.utils import pickle_bundle
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
@@ -126,7 +133,7 @@ def _parse_args():
     parser = baseparsers.xhatspecific_args(parser)
     parser = baseparsers.mip_options(parser)
     parser = baseparsers.aph_args(parser)    
-    parser = aircond.inparser_adder(parser)
+    parser = aircond.inparser_adder(parser)  # not aircondB
     parser.add_argument("--run-async",
                         help="Run with async projective hedging instead of progressive hedging",
                         dest="run_async",
@@ -137,7 +144,9 @@ def _parse_args():
                         dest="write_solution",
                         action="store_true",
                         default=False)    
-    
+    # special "proper" bundle arguments
+    parser = pickle_bundle.pickle_bundle_parser(parser)
+
     args = parser.parse_args()
 
     return args
@@ -150,9 +159,14 @@ def main():
 
     if BFs is None:
         raise RuntimeError("Branching factors must be specified")
-
-    xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
-    all_nodenames = list(xhat_scenario_dict.keys())
+    proper_bundles = pickle_bundle.have_proper_bundles(args)
+    if proper_bundles:
+        pickle_bundle.check_args(args)
+        assert args.scenarios_per_bundle is not None
+        if args.pickle_bundles_dir is not None:
+            raise ValueError("Do not give a --pickle-bundles-dir to this program. "
+                             "This program only takes --unpickle-bundles-dir. "
+                             "Use bundle_pickler.py to create bundles.")
 
     with_xhatspecific = args.with_xhatspecific
     with_lagrangian = args.with_lagrangian
@@ -167,16 +181,31 @@ def main():
     # and node names must end in a serial number.
 
     ScenCount = np.prod(BFs)
-    #ScenCount = _get_num_leaves(BFs)
-    sc_options = {"args": args}
-    scenario_creator_kwargs = aircond.kw_creator(sc_options)
 
-    all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
-    # print(all_scenario_names)
-    scenario_creator = aircond.scenario_creator
-    scenario_denouement = aircond.scenario_denouement
-    primal_rho_setter = aircond.primal_rho_setter
-    dual_rho_setter = aircond.dual_rho_setter
+    if proper_bundles:
+        # All the scenarios will happen to be bundles, but mpisppy does not need to know that
+        bsize = int(args.scenarios_per_bundle)
+        numbuns = ScenCount // bsize
+        BFs = [numbuns]  # we effectively have a two-stage problem to solve with fewer, bigger scenarios
+        all_scenario_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
+        refmodule = aircondB
+        primal_rho_setter = None
+        dual_rho_setter = None
+        global_toc("WARNING: not using rho setters with proper bundles")
+        
+    else:
+        all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
+        refmodule = aircond
+        primal_rho_setter = refmodule.primal_rho_setter
+        dual_rho_setter = refmodule.dual_rho_setter
+
+    xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
+    all_nodenames = list(xhat_scenario_dict.keys())
+
+    scenario_creator_kwargs = refmodule.kw_creator({"args": args})
+    scenario_creator = refmodule.scenario_creator
+    # TBD: consider using aircond instead of refmodule and pare down aircondB.py
+    scenario_denouement = refmodule.scenario_denouement
     
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
