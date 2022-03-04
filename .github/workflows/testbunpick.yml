@@ -1,6 +1,6 @@
-# confint (pyomo released)
+# picked bundles (pyomo released)
 
-name: confidence intervals tests
+name: pickled bundles tests
 
 on:
   push:
@@ -33,14 +33,9 @@ jobs:
         run: |
           python setup.py develop
 
-      - name: run farmer tests
+      - name: run pickled bundles tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_conf_int_farmer.py 
+          python test_pickle_bundle.py 
 
-      - name: run aircond tests
-        timeout-minutes: 10
-        run: |
-          cd mpisppy/tests
-          python test_conf_int_aircond.py	  
