@@ -1,6 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 # NOTE: as of March 2022, consider aircondB.py as an alternative to aircond.py
 # Use bundle_pickler.py to create bundle pickles
+# NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
 
 import sys
 import os
@@ -187,13 +188,13 @@ def main():
     # Note that mpisppy does not have nodes at the leaves,
     # and node names must end in a serial number.
 
-    ScenCount = np.prod(BFs)
-
     if proper_bundles:
-        # All the scenarios will happen to be bundles, but mpisppy does not need to know that
+        # All the scenarios will happen to be bundles, but mpisppy does not need to know that.
+        # This code needs to know the correct scenarios per bundle and the number of
+        # bundles in --branching-factors (one element in the list).
         bsize = int(args.scenarios_per_bundle)
-        numbuns = ScenCount // bsize
-        BFs = [numbuns]  # we effectively have a two-stage problem to solve with fewer, bigger scenarios
+        assert len(BFs) == 1, "for proper bundles, --branching-factors should be the number of bundles"
+        numbuns = BFs[0]
         all_scenario_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
         refmodule = aircondB
         primal_rho_setter = None
@@ -201,6 +202,7 @@ def main():
         global_toc("WARNING: not using rho setters with proper bundles")
         
     else:
+        ScenCount = np.prod(BFs)
         all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
         refmodule = aircond
         primal_rho_setter = refmodule.primal_rho_setter
@@ -309,6 +311,7 @@ def main():
         wheel.write_tree_solution('aircond_full_solution')
         wheel.write_first_stage_solution(fname,
                     first_stage_solution_writer=first_stage_nonant_npy_serializer)
+        global_toc("Solutions written.")
 
 if __name__ == "__main__":
     main()

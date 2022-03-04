@@ -38,7 +38,9 @@ parms = {"mudev": (float, 0.),
 }
 
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
-
+    # create replicable pseudo random demand steps
+    # DLW on 3March2022: The seed and therefore the demand (directly) are determined by
+    # the node index so the pickle bundler needs to mess with the start_seed that is passed in here...
     if "start_seed" not in kwargs:
         raise RuntimeError(f"start_seed not in kwargs={kwargs}")
     start_seed = kwargs["start_seed"]
@@ -332,6 +334,7 @@ def scenario_creator(sname, **kwargs):
     if "scen" in sname:
 
         demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
+        print(f"{sname =}, {demands =}")
 
         model = aircond_model_creator(demands, **kwargs)
 
@@ -354,6 +357,8 @@ def scenario_creator(sname, **kwargs):
         # if we are still here, we have to create the bundle (we did not load it)
         bunkwargs = kwargs.copy()
         bunkwargs["branching_factors"] = _bunBFs(branching_factors, len(snames))
+        # The next line is needed, but eliminates comparison of pickle and non-pickle
+        bunkwargs["start_seed"] = start_seed+firstnum * len(branching_factors) # the usual block of seeds
         bundle = sputils.create_EF(snames, scenario_creator,
                                    scenario_creator_kwargs=bunkwargs, EF_name=sname,
                                    nonant_for_fixed_vars = False)
