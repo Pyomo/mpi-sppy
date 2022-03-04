@@ -334,7 +334,6 @@ def scenario_creator(sname, **kwargs):
     if "scen" in sname:
 
         demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
-        print(f"{sname =}, {demands =}")
 
         model = aircond_model_creator(demands, **kwargs)
 
