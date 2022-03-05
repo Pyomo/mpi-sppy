@@ -143,8 +143,8 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     # grab positive and negative parts of inventory
     assert model.InventoryCost > 0, model.InventoryCost
     assert model.NegInventoryCost > 0, model.NegInventoryCost
-    model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
-    model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+    model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0, bounds = (0, model.bigM))
+    model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0, bounds = (0, model.bigM))
     model.doleInventory = pyo.Constraint(expr=model.Inventory == model.posInventory - model.negInventory)
 
     # create the inventory cost expression

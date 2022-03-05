@@ -10,7 +10,7 @@ import numpy as np
 import itertools
 from mpisppy import global_toc
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils.sputils import first_stage_nonant_npy_serializer
+from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_string_to_dict
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 import mpisppy.tests.examples.aircond as aircond
@@ -153,7 +153,14 @@ def _parse_args():
                         help="Solve the EF directly instead of using cylinders (default False)",
                         dest="EF_directly",
                         action="store_true",
-                        default=False)    
+                        default=False)
+    # DLW March 2022: this should be in baseparsers and vanilla some day
+    parser.add_argument("--solver-options",
+                        help="Space separarated string with = for arguments (default None)",
+                        dest="solver_options",
+                        type=str,
+                        default=None)
+    
 
     args = parser.parse_args()
 
@@ -295,6 +302,19 @@ def main():
         list_of_spoke_dict.append(xhatspecific_spoke)
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+
+    # DLW (March 2022): This should be generalized
+    if args.solver_options is not None:
+        soptions = option_string_to_dict(args.solver_options)
+        hub_dict["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
+        hub_dict["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
+        if with_xhatspecific:
+            xhatspecific_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
+        if with_xhatshuffle:
+            xhatshuffle_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
+        for sd in list_of_spoke_dict:
+            sd["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
+            sd["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
