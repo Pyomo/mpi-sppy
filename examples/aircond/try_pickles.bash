@@ -22,8 +22,9 @@ OTC=5
 EC="--Capacity 200 --QuadShortCoeff $QSC  --BeginInventory $BI --mu-dev 0 --sigma-dev $SD --start-seed 0 --NegInventoryCost=$NC --OvertimeProdCost=$OTC"
 # --start-ups
 
+# There are no restrictions on the number of processors for the pickler and it could be given as many as the maxiumum number of cores (or threads?) that will be used in the next step.
 echo "^^^^^^^^^ Make pickle bundles"
-python bundle_pickler.py --branching-factors $BF1 $BF2 $BF3 --pickle-bundles-dir="." --scenarios-per-bundle=$SPB $EC
+mpiexec --oversubscribe -np 12 python -m mpi4py bundle_pickler.py --branching-factors $BF1 $BF2 $BF3 --pickle-bundles-dir="." --scenarios-per-bundle=$SPB $EC
 
 
 echo "***** Use pickle bundles"
@@ -33,5 +34,3 @@ mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterat
 
 ###python aircond_cylinders.py --help
 
-#echo "***** Cylinders with no bundles"
-#mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME}  --rel-gap 0.01  --max-solver-threads 2 --start-seed 0 --no-fwph --no-lagranger --bundles-per-rank=0  --write-solution --intra-hub-conv-thresh 0 --branching-factors $BF1 $BF2 $EC
