@@ -537,10 +537,10 @@ def option_string_to_dict(ostr):
     """
     def convert_value_string_to_number(s):
         try:
-            return float(s)
+            return int(s)
         except ValueError:
             try:
-                return int(s)
+                return float(s)
             except ValueError:
                 return s
 
