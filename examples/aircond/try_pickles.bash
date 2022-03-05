@@ -1,8 +1,8 @@
 #!/bin/bash
-# three stage version
+# four stage version
 
 # TBD: aircond uses start-seed (but seed is allowed as an arg that is ignored).
-# as of March 2, 2022 the cost and demand parameters in this example make it too easy for bundling
+
 
 SOLVERNAME="gurobi_persistent"
 
