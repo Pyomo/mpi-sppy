@@ -97,7 +97,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
 
 #Assume that demands has been drawn before
 def aircond_model_creator(demands, **kwargs):
-    return base_aircond.aircond_model_creator(demands, kwargs)
+    return base_aircond.aircond_model_creator(demands, **kwargs)
 
 def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
     return base_aircond.MakeNodesforScen(model,nodenames,branching_factors,starting_stage=starting_stage)
