@@ -17,6 +17,6 @@ def walks_writer(
 def gantt_writer(
     gantt_dir: str, scen_name: str, scen_mod: pyo.ConcreteModel, bundling: bool
 ) -> None:
-    plot_gantt(scen_mod)
+    plot_gantt(scen_mod, scen_name)
     plt.savefig(os.path.join(gantt_dir, scen_name + ".pdf"))
     plt.close()

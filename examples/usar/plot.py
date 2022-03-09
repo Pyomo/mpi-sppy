@@ -241,6 +241,7 @@ def plot_walks(
 
 def plot_gantt(
     scen_mod: pyo.ConcreteModel,
+    scen_name: str,
     team_colors: Optional[Callable[[int], Any]] = None,
 ) -> None:
     team_walks = assign_departures(scen_mod)
@@ -274,5 +275,6 @@ def plot_gantt(
 
         plt.barh(idx, durations, height=0.7, left=starts, color=colors)
 
+    plt.title("Scenario " + scen_name + " rescue schedule color-coded by team")
     plt.xlabel("Time step")
     plt.yticks([])
