@@ -203,6 +203,7 @@ def assign_departures(scen_mod: pyo.ConcreteModel) -> List[List[Transition]]:
 
 def plot_walks(
     scen_mod: pyo.ConcreteModel,
+    scen_name: str,
     team_colors: Optional[Callable[[int], Any]] = None,
 ) -> None:
     team_walks = assign_departures(scen_mod)
@@ -237,6 +238,8 @@ def plot_walks(
             scale=1,
             color=arrow_colors,
         )
+
+    plt.title("Scenario " + scen_name + " team movements color-coded by team")
 
 
 def plot_gantt(
