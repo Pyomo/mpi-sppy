@@ -274,4 +274,5 @@ def plot_gantt(
 
         plt.barh(idx, durations, height=0.7, left=starts, color=colors)
 
+    plt.xlabel("Time step")
     plt.yticks([])
