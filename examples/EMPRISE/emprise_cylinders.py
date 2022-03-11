@@ -15,6 +15,8 @@ from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
 # import mpisppy.cylinders as cylinders
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 
 import emprise
 
@@ -39,15 +41,6 @@ OPERATIONAL_UNCERTAINTY_PROBABILITY = [0.4, 0.6]  # needs to sum up to 1.0
 # Strategic uncertainty -> Investment (inv) configuration
 UNCERTAINTY_EMISSION_PRICE_SCENARIO = {1: [70.0, 100.0, 200.0], 2: [70.0, 70.0, 70.0]}  # EUR/tCO2eq
 STRATEGIC_UNCERTAINTY_PROBABILITY = [0.7, 0.3]
-
-# For this problem, the subproblems are
-# small and take no time to solve. The
-# default SPOKE_SLEEP_TIME of 0.01 *causes*
-# synchronization issues in this case, so
-# we reduce it so as not to dominate the
-# time spent for cylinder synchronization
-SPOKE_SLEEP_TIME = 0.0001
-
 
 def check_and_create_directory(directory):
     """Checks and creates the directory if it does not already exist"""
@@ -147,7 +140,7 @@ def _get_emprise_configuration():
         "path_plot_dir": path_plot_dir,
         "path_data_dir": path_data_dir,
         "exclude_component_list": EXCLUDE_COMPONENT_LIST,
-        "spoke_sleep_time": SPOKE_SLEEP_TIME,
+        "spoke_sleep_time": None, # do not set spoke sleep time here
         "write_solution": WRITE_SOLUTION,
         "solve_extensive_form": SOLVE_EXTENSIVE_FORM,
     }
@@ -161,6 +154,17 @@ def _parse_args():
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
+
+    parser.add_argument("--use-norm-rho-updater",
+                        help="Use the norm rho updater extension",
+                        dest="use_norm_rho_updater",
+                        action="store_true")
+    parser.add_argument("--use-norm-rho-converger",
+                        help="Use the norm rho converger",
+                        dest="use_norm_rho_converger",
+                        action="store_true")
+
+    
     args = parser.parse_args()
     return args
 
@@ -170,6 +174,15 @@ def main():
     args = _parse_args()
     emprise_config = _get_emprise_configuration()
     # print(args)
+
+    if args.use_norm_rho_converger:
+        if not args.use_norm_rho_updater:
+            raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+        else:
+            ph_converger = NormRhoConverger
+    else:
+        ph_converger = None
+
 
     # Multi-stage scenario tree
     # Example for 3 planning periods (e.g. 2025, 2035, 2045)
@@ -229,17 +242,22 @@ def main():
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
-    # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=None, rho_setter=rho_setter, all_nodenames=all_nodenames, spoke_sleep_time=emprise_config["spoke_sleep_time"])
+    # Vanilla PH hub # do not set spoke sleep time here (spoke_sleep_time=emprise_config["spoke_sleep_time"])
+    hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=None, rho_setter=rho_setter, all_nodenames=all_nodenames)
+
+    ## hack in adaptive rho
+    if args.use_norm_rho_updater:
+        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
-        lagrangian_spoke = vanilla.lagrangian_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs, rho_setter=rho_setter, all_nodenames=all_nodenames, spoke_sleep_time=emprise_config["spoke_sleep_time"])
+        lagrangian_spoke = vanilla.lagrangian_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs, rho_setter=rho_setter, all_nodenames=all_nodenames, )
 
     # xhat looper bound spoke
 
     if with_xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, all_nodenames=all_nodenames, scenario_creator_kwargs=scenario_creator_kwargs, spoke_sleep_time=emprise_config["spoke_sleep_time"])
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, all_nodenames=all_nodenames, scenario_creator_kwargs=scenario_creator_kwargs, )
 
     list_of_spoke_dict = list()
     if with_lagrangian:
@@ -260,7 +278,8 @@ def main():
         list_of_spoke_dict[i]["opt_kwargs"]["options"]["iter0_solver_options"]["solutiontype"] = 2
         list_of_spoke_dict[i]["opt_kwargs"]["options"]["iterk_solver_options"]["lpmethod"] = 4
         list_of_spoke_dict[i]["opt_kwargs"]["options"]["iterk_solver_options"]["solutiontype"] = 2
-
+    #CPLEX-specific feasibility tolerance for the xhatter (tighten wenn moeglich)
+    xhatshuffle_spoke["opt_kwargs"]["options"]["iterk_solver_options"]["EpRHS"] = 1e-2
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
