@@ -240,6 +240,8 @@ def plot_walks(
         )
 
     plt.title("Scenario " + scen_name + " team movements color-coded by team")
+    plt.xlabel("x-coordinate")
+    plt.ylabel("y-coordinate")
 
 
 def plot_gantt(
