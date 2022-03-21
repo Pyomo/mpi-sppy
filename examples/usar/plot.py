@@ -271,6 +271,17 @@ def plot_gantt(
         plt.margins(0.0)
 
         xl = plt.xlim()
+
+        ax_pos = plt.gca().get_position()
+        fig_w, fig_h = plt.gcf().get_size_inches()
+        ax_w, ax_h = ax_pos.width, ax_pos.height
+        avg_bar_w = fig_w * ax_w * np.mean(durations) / (xl[1] - xl[0])
+        new_fig_h = fig_h * (1 - ax_h) + avg_bar_w / 10 * len(durations)
+        plt.gcf().set_size_inches(fig_w, new_fig_h)
+        new_ax_ymin = fig_h * ax_pos.ymin / new_fig_h
+        new_ax_h = avg_bar_w / 10 * len(durations) / new_fig_h
+        plt.gca().set_position((ax_pos.xmin, new_ax_ymin, ax_w, new_ax_h))
+
         bg_kwargs = {"width": xl[1] - xl[0], "left": xl[0], "height": 1.0}
         idx_travel = [i for i, travel in zip(idx, are_travel) if travel]
         idx_rescue = [i for i, travel in zip(idx, are_travel) if not travel]
