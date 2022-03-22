@@ -159,7 +159,6 @@ def scenario_creator(sname, num_scens=None):
             cond_prob=1.0,
             stage=1,
             cost_expression=model.Total_Cost_Objective,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.CapacityGenerators], 
             scen_model=model,
         )

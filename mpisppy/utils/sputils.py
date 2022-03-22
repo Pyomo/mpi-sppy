@@ -808,7 +808,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
        attaches a list consisting of one scenario node to the model
     """
     model._mpisppy_node_list = [
-        scenario_tree.ScenarioNode("ROOT",1.0,1,firstobj, None, varlist, model,
+        scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list)
     ]
 

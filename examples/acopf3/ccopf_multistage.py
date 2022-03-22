@@ -219,7 +219,6 @@ def pysp2_callback(
                 cond_prob=enode.CondProb,
                 stage=stage,
                 cost_expression=inst.stage_models[stage].obj,
-                scen_name_list=enode.ScenarioList,
                 nonant_list=[inst.stage_models[stage].pg,
                              inst.stage_models[stage].qg],
                 scen_model=inst, parent_name=parent_name))
