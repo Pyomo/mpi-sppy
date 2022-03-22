@@ -150,7 +150,7 @@ def check_module_ama(module):
                  "kw_creator"]  # start and denouement can be missing.
     you_can_have_it_all = True
     for ething in everything:
-        if not hasattr(m, ething):
+        if not hasattr(module, ething):
             print(f"Module {mname} is missing {ething}")
             you_can_have_it_all = False
     if not you_can_have_it_all:
