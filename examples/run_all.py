@@ -267,6 +267,10 @@ do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatshuffle --with-lagrangian "
        "--solver-name={}".format(solver_name))
+do_one("hydro", "hydro_cylinders.py", 3,
+       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--default-rho=1 --with-xhatshuffle --with-lagrangian "
+       "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --with-xhatshuffle --with-lagrangian "
