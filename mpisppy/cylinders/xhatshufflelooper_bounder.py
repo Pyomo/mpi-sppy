@@ -93,10 +93,14 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
     def try_scenario_dict(self, xhat_scenario_dict):
         snamedict = xhat_scenario_dict
 
+        stage2EFsolvern = self.opt.options.get("stage2EFsolvern", None)
+        branching_factors = self.opt.options.get("branching_factors", None)  # for stage2ef
         obj = self.xhatter._try_one(snamedict,
-                            solver_options = self.solver_options,
-                            verbose=False,
-                            restore_nonants=False)
+                                    solver_options = self.solver_options,
+                                    verbose=False,
+                                    restore_nonants=False,
+                                    stage2EFsolvern=stage2EFsolvern,
+                                    branching_factors=branching_factors)
         def _vb(msg): 
             if self.verbose and self.opt.cylinder_rank == 0:
                 print ("(rank0) " + msg)
