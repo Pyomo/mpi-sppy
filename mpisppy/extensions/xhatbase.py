@@ -157,7 +157,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             local_2ndns = dict()  # dict of dicts (inner dicts are for FormEF)
             for k,s in self.opt.local_scenarios.items():
                 if hasattr(self, "EFs"):
-                    sputils.deact_ref_objs(s)  # create EF does this the first time
+                    sputils.deact_objs(s)  # create EF does this the first time
                 for node in s._mpisppy_node_list:
                     ndn = node.name
                     if len(re.findall("_", ndn)) == 1:
@@ -170,6 +170,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             # create an EF for each second stage node and solve with fixed nonant
             # TBD: factor out the EF creation!
             if not hasattr(self, "EFs"):
+                for k,s in self.opt.local_scenarios.items():
+                    sputils.stash_ref_objs(s)
                 self.EFs = dict()
             for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
                 if ndn2 not in self.EFs:  # this will only happen once
