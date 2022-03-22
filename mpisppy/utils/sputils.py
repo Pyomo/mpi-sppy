@@ -82,6 +82,7 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
 def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
+
 def get_objs(scenario_instance):
     """ return the list of objective functions for scenario_instance"""
     scenario_objs = scenario_instance.component_data_objects(pyo.Objective,
@@ -95,6 +96,35 @@ def get_objs(scenario_instance):
               "objectives. Selecting the first objective for "
                   "inclusion in the extensive form.")
     return scenario_objs
+
+
+def stash_ref_objs(scenario_instance):
+    """Stash a reference to active objs so
+        Reactivate_obj can use the reference to reactivate them/it later.
+    """
+    scenario_instance._mpisppy_data.obj_list = get_objs(scenario_instance)
+
+
+def deact_objs(scenario_instance):
+    """ Deactivate objs 
+    Args:
+        scenario_instance (Pyomo ConcreteModel): the scenario
+    Returns:
+        obj_list (list of Pyomo Objectives): the deactivated objs
+    """
+    obj_list = get_objs(scenario_instance)
+    for obj in obj_list:
+        obj.deactivate()
+    return obj_list
+
+
+def reactivate_objs(scenario_instance):
+    """ Reactivate ojbs stashed by stash_ref_objs """
+    if not hasattr(scenario_instance._mpisppy_data, "obj_list"):
+        raise RuntimeError("reactivate_objs called with prior call to stash_ref_objs")
+    for obj in scenario_instance._mpisppy_data.obj_list:
+        obj.activate()
+
 
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
@@ -154,9 +184,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
                 if (ndn, i) not in scenario_instance.ref_vars:
                     scenario_instance.ref_vars[(ndn, i)] = v
         # patch in EF_Obj        
-        scenario_objs = get_objs(scenario_instance)        
-        for obj_func in scenario_objs:
-            obj_func.deactivate()
+        scenario_objs = deact_objs(scenario_instance)        
         obj = scenario_objs[0]            
         sense = pyo.minimize if obj.is_minimizing() else pyo.maximize
         scenario_instance.EF_Obj = pyo.Objective(expr=obj.expr, sense=sense)
@@ -233,9 +261,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         EF_instance.add_component(sname, scenario_instance)
         EF_instance._ef_scenario_names.append(sname)
         # Now deactivate the scenario instance Objective
-        scenario_objs = get_objs(scenario_instance)
-        for obj_func in scenario_objs:
-            obj_func.deactivate()
+        scenario_objs = deact_objs(scenario_instance)
         obj_func = scenario_objs[0] # Select the first objective
         try:
             EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr

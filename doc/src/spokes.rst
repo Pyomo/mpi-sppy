@@ -85,6 +85,24 @@ shuffles the scenarios and loops over the shuffled list.
 At each step, it takes the first-stage solution specified by a scenario, 
 and then uses the scenarios that follows in the shuffled loop to get the 
 values of the non-first-stage variables that were not fixed before.
+
+stage2ef
+~~~~~~~~
+
+An option for ``xhatshufflelooper_bounder`` is under development 
+for multistage problems that creates an EF for each second stage nodes by
+fixing the first stage nonanticipative variables.  This code requires
+that the number of ranks allocated to the ``xhatshufflelooper_bounder``
+is an integer multiple of the number of second stage nodes. Here is a 
+hint about how to to use it in a driver:
+
+::
+
+    xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = solver_name
+    xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = emprise_config["branching_factors"]
+
+
+
  
 slam_heuristic
 ^^^^^^^^^^^^^^
@@ -121,4 +139,5 @@ At the lowest levels, this is done by setting a value for "spoke_sleep_time" in 
 dictionary passed to the ``SPCommunicator`` constructor. At a higher level, it is possible
 to pass a `spoke_sleep_time` keyword argument to the vanilla hub and spoke constructors. This
 is illustrated in `hydro_cylinders.py` example (in the `hyrdo` example directory). You
-should probably pass the same value to all constructors.
+should probably pass the same value to all constructors. The importance of setting
+the spoke sleep time is going down as we improve the code for setting this value automatically.
