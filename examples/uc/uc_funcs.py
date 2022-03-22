@@ -88,7 +88,6 @@ def pysp2_callback(scenario_name, scenario_count=None, path=None,
                                                           1.0,
                                                           1,
                                                           instance.StageCost["Stage_1"], #"Stage_1" hardcodes the commitments in all time periods
-                                                          None,
                                                           [instance.UnitOn],
                                                           instance,
                                                           [instance.UnitStart, instance.UnitStop, instance.StartupIndicator],
