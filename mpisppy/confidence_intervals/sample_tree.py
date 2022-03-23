@@ -85,12 +85,22 @@ class SampleSubtree():
         sample_tree_scen_creator function
         
         '''
+        # gymnastics because options get passed around through a variety of paths
+        if "seed" in scenario_creator_kwargs:
+            s_c_k = scenario_creator_kwargs.copy()
+            s_c_k.pop("seed", None)  # we want control over the seed here
+            if "cb_data" not in s_c_k:
+                raise RuntimeError(f"We had seed, but not cb_data in kwargs?? keys={s_c_k.keys()}")
+        else:
+            s_c_k = scenario_creator_kwargs
+            if "cb_data" not in s_c_k:
+                raise RuntimeError(f"We had no seed, and no cb_data in kwargs?? keys={s_c_k.keys()}")
         s = self.refmodel.sample_tree_scen_creator(sname,
                                                    given_scenario=self.root_scen,
                                                    stage=self.stage,
                                                    sample_branching_factors=self.sampling_branching_factors,
                                                    seed = self.seed,
-                                                   **scenario_creator_kwargs)
+                                                   **s_c_k)
         nlens = {node.name: len(node.nonant_vardata_list) 
                  for node in s._mpisppy_node_list}
         

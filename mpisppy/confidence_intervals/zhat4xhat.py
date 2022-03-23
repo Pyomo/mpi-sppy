@@ -100,6 +100,7 @@ def evaluate_sample_trees(xhat_one,
 def run_samples(ama_options, args, model_module):
     
     # TBD: This has evolved so there may be overlap between ama_options and args
+    #  (some codes assume that ama_options includes "args": args)
     
     # Read xhats from xhatpath
     xhat_one = ciutils.read_xhat(args.xhatpath)["ROOT"]
