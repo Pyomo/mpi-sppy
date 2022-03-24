@@ -1,9 +1,10 @@
+import argparse
 import itertools
 import os
 
 from generate_data import generate_coords, generate_data
 import mpisppy.opt.ef
-from parser import new_parser
+from parser import add_extensive_form_args, add_common_args
 from scenario_creator import scenario_creator
 from write_solutions import walks_writer, gantt_writer
 
@@ -34,7 +35,10 @@ def extensive_form(
 
 
 def main() -> None:
-    args = new_parser().parse_args()
+    parser = argparse.ArgumentParser()
+    add_extensive_form_args(parser)
+    add_common_args(parser)
+    args = parser.parse_args()
 
     ef = extensive_form(**vars(args))
 

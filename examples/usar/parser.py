@@ -1,9 +1,7 @@
 import argparse
 
 
-def new_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser()
-
+def add_extensive_form_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("solver_name", help="Optimization solver to use")
 
     parser.add_argument(
@@ -12,6 +10,8 @@ def new_parser() -> argparse.ArgumentParser:
         help="Positive number of scenarios (int) generated",
     )
 
+
+def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--output_dir",
         default=".",
@@ -67,5 +67,3 @@ def new_parser() -> argparse.ArgumentParser:
         type=int,
         help="Seed (int) for the random module",
     )
-
-    return parser
