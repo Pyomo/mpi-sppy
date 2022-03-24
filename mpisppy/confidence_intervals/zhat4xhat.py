@@ -126,7 +126,7 @@ def run_samples(ama_options, args, model_module):
 def _parser_setup():
     # return the parser
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="zhat4xhat", conflict_handler="resolve")
 
     parser.add_argument('model_module_name',
                         help="name of model module, must be compatible with amalgamator")
