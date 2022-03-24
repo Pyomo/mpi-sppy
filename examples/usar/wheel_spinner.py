@@ -1,5 +1,6 @@
 import argparse
 import itertools
+import os
 from typing import Iterable
 
 from generate_data import generate_coords, generate_data
@@ -8,6 +9,7 @@ from mpisppy.utils import baseparsers, vanilla
 from parser import add_wheel_spinner_args, add_common_args
 from scenario_creator import scenario_creator
 from scenario_denouement import scenario_denouement
+from write_solutions import walks_writer, gantt_writer
 
 SUPPORTED_SPOKES = (
     "fwph",
@@ -66,6 +68,10 @@ def main() -> None:
     ws = wheel_spinner(args.num_scens, args, spokes)
 
     ws.spin()
+
+    output_dir = args.output_dir
+    ws.write_tree_solution(os.path.join(output_dir, "walks"), walks_writer)
+    ws.write_tree_solution(os.path.join(output_dir, "gantts"), gantt_writer)
 
 
 if __name__ == "__main__":
