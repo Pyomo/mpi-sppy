@@ -11,6 +11,15 @@ def add_extensive_form_args(parser: argparse.ArgumentParser) -> None:
     )
 
 
+def add_wheel_spinner_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--run_async",
+        action="store_true",
+        default=False,
+        help="Run async projective hedging instead of progressive hedging",
+    )
+
+
 def add_common_args(parser: argparse.ArgumentParser) -> None:
     parser.add_argument(
         "--output_dir",
