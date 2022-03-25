@@ -4,6 +4,7 @@
 
 import os
 import math
+import importlib
 import numpy as np
 import mpi4py.MPI as mpi
 import pyomo.environ as pyo
@@ -218,7 +219,7 @@ def gap_estimators(xhat_one,
         of the scenario tree
     ArRP:int,optional
         Number of batches (we create a ArRP model). Default is 1 (one batch).
-    scenario_creator_kwargs: dict, optional
+    options: dict, optional
         Additional arguments for scenario_creator. Default is {}
     scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
