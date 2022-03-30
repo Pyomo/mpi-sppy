@@ -1,4 +1,6 @@
-name: straight (Pyomo released)
+# picked bundles (pyomo released)
+
+name: pickled bundles tests
 
 on:
   push:
@@ -18,23 +20,22 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: conda-incubator/setup-miniconda@v2
-      - uses: mpi4py/setup-mpi@v1
         with:
           activate-environment: test_env
           python-version: 3.8
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme cplex
-          pip install xpress numpy scipy dill
+          conda install mpi4py numpy setuptools 
+          pip install pyomo xpress cplex scipy sympy dill
 
       - name: setup the program
         run: |
           python setup.py develop
 
-      - name: mpi tests
+      - name: run pickled bundles tests
+        timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python straight_tests.py
+          python test_pickle_bundle.py 
 

@@ -72,8 +72,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            raise ValueError(f"Total probability of scenarios was {self.opt.E1}"+\
-                                 f"E1_tolerance = {self.opt.E1_tolerance}")
+            raise ValueError(f"Total probability of scenarios was {self.opt.E1} "+\
+                                 f"(E1_tolerance is {self.opt.E1_tolerance})")
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
             raise ValueError(f"Infeasibility detected; E_infeas={infeasP}")

@@ -20,7 +20,8 @@ the solution to a file or a directory.
 It takes as inputs scenario names, a scenario creator, options and
 a ``kw_creator`` function. ``kw_creator`` must be a function specific to your
 problem, taking the amalgamator options as an input, and giving as an output
-additional arguments for the ``scenario_creator``.
+additional arguments for the ``scenario_creator``. The amalgamator class
+is not flexible with respect to function names in the module.
 
 The ``options`` argument is a dictionary that specifies information 
 about the problem, and dictates the way Amalgamator runs. 

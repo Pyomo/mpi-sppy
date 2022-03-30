@@ -537,10 +537,10 @@ def option_string_to_dict(ostr):
     """
     def convert_value_string_to_number(s):
         try:
-            return float(s)
+            return int(s)
         except ValueError:
             try:
-                return int(s)
+                return float(s)
             except ValueError:
                 return s
 
@@ -673,7 +673,7 @@ class _TreeNode():
                                            child_leaf_dict, childname))
                 first += child_scens_num
             if last != scenlast:
-                print("Hello", numscens)
+                print("numscens, last, scenlast", numscens, last, scenlast)
                 raise RuntimeError(f"Tree node did not initialize correctly for node {name}")
 
 

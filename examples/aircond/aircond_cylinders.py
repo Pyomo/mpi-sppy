@@ -1,13 +1,22 @@
+# This software is distributed under the 3-clause BSD License.
+# NOTE: as of March 2022, consider aircondB.py as an alternative to aircond.py
+# Use bundle_pickler.py to create bundle pickles
+# NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
+
 import sys
 import os
 import copy
 import numpy as np
 import itertools
+from mpisppy import global_toc
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils.sputils import first_stage_nonant_npy_serializer
+from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_string_to_dict
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 import mpisppy.tests.examples.aircond as aircond
+import mpisppy.tests.examples.aircondB as aircondB
+from mpisppy.utils import pickle_bundle
+from mpisppy.utils import amalgamator
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
@@ -126,7 +135,7 @@ def _parse_args():
     parser = baseparsers.xhatspecific_args(parser)
     parser = baseparsers.mip_options(parser)
     parser = baseparsers.aph_args(parser)    
-    parser = aircond.inparser_adder(parser)
+    parser = aircond.inparser_adder(parser)  # not aircondB
     parser.add_argument("--run-async",
                         help="Run with async projective hedging instead of progressive hedging",
                         dest="run_async",
@@ -137,7 +146,22 @@ def _parse_args():
                         dest="write_solution",
                         action="store_true",
                         default=False)    
+    # special "proper" bundle arguments
+    parser = pickle_bundle.pickle_bundle_parser(parser)
+
+    parser.add_argument("--EF-directly",
+                        help="Solve the EF directly instead of using cylinders (default False)",
+                        dest="EF_directly",
+                        action="store_true",
+                        default=False)
+    # DLW March 2022: this should be in baseparsers and vanilla some day
+    parser.add_argument("--solver-options",
+                        help="Space separarated string with = for arguments (default None)",
+                        dest="solver_options",
+                        type=str,
+                        default=None)
     
+
     args = parser.parse_args()
 
     return args
@@ -150,9 +174,14 @@ def main():
 
     if BFs is None:
         raise RuntimeError("Branching factors must be specified")
-
-    xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
-    all_nodenames = list(xhat_scenario_dict.keys())
+    proper_bundles = pickle_bundle.have_proper_bundles(args)
+    if proper_bundles:
+        pickle_bundle.check_args(args)
+        assert args.scenarios_per_bundle is not None
+        if args.pickle_bundles_dir is not None:
+            raise ValueError("Do not give a --pickle-bundles-dir to this program. "
+                             "This program only takes --unpickle-bundles-dir. "
+                             "Use bundle_pickler.py to create bundles.")
 
     with_xhatspecific = args.with_xhatspecific
     with_lagrangian = args.with_lagrangian
@@ -166,18 +195,52 @@ def main():
     # Note that mpisppy does not have nodes at the leaves,
     # and node names must end in a serial number.
 
-    ScenCount = np.prod(BFs)
-    #ScenCount = _get_num_leaves(BFs)
-    sc_options = {"args": args}
-    scenario_creator_kwargs = aircond.kw_creator(sc_options)
+    if proper_bundles:
+        # All the scenarios will happen to be bundles, but mpisppy does not need to know that.
+        # This code needs to know the correct scenarios per bundle and the number of
+        # bundles in --branching-factors (one element in the list).
+        bsize = int(args.scenarios_per_bundle)
+        assert len(BFs) == 1, "for proper bundles, --branching-factors should be the number of bundles"
+        numbuns = BFs[0]
+        all_scenario_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
+        refmodule = aircondB
+        primal_rho_setter = None
+        dual_rho_setter = None
+        global_toc("WARNING: not using rho setters with proper bundles")
+        
+    else:
+        ScenCount = np.prod(BFs)
+        all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
+        refmodule = aircond
+        primal_rho_setter = refmodule.primal_rho_setter
+        dual_rho_setter = refmodule.dual_rho_setter
 
-    all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
-    # print(all_scenario_names)
-    scenario_creator = aircond.scenario_creator
-    scenario_denouement = aircond.scenario_denouement
-    primal_rho_setter = aircond.primal_rho_setter
-    dual_rho_setter = aircond.dual_rho_setter
+    xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
+    all_nodenames = list(xhat_scenario_dict.keys())
+
+    scenario_creator_kwargs = refmodule.kw_creator({"args": args})
+    scenario_creator = refmodule.scenario_creator
+    # TBD: consider using aircond instead of refmodule and pare down aircondB.py
+    scenario_denouement = refmodule.scenario_denouement
     
+    if args.EF_directly:
+        ama_options = {"args": args,
+                       "EF-mstage": not proper_bundles,
+                       "EF-2stage": proper_bundles,
+                       "EF_solver_name": args.solver_name,
+                       "branching_factors": args.branching_factors,
+                       "num_scens": ScenCount,  # is this needed?
+                       "_mpisppy_probability": 1/ScenCount,  # is this needed?
+                       "tee_ef_solves":False,
+                       }
+        ama = amalgamator.from_module(refmodule,
+                                      ama_options,use_command_line=False)
+        ama.run()
+        print(f"EF inner bound=", ama.best_inner_bound)
+        print(f"EF outer bound=", ama.best_outer_bound)
+        quit()
+
+    # if we are still here, we are running cylinders
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
     
@@ -240,6 +303,19 @@ def main():
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
+    # DLW (March 2022): This should be generalized
+    if args.solver_options is not None:
+        soptions = option_string_to_dict(args.solver_options)
+        hub_dict["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
+        hub_dict["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
+        if with_xhatspecific:
+            xhatspecific_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
+        if with_xhatshuffle:
+            xhatshuffle_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
+        for sd in list_of_spoke_dict:
+            sd["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
+            sd["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
+
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
@@ -255,6 +331,7 @@ def main():
         wheel.write_tree_solution('aircond_full_solution')
         wheel.write_first_stage_solution(fname,
                     first_stage_solution_writer=first_stage_nonant_npy_serializer)
+        global_toc("Solutions written.")
 
 if __name__ == "__main__":
     main()
