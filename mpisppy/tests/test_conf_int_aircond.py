@@ -263,14 +263,14 @@ class Test_confint_aircond(unittest.TestCase):
                                        self.refmodelname,
                                        solving_type="EF-mstage",
                                        sample_options=sample_options,
-                                       scenario_creator_kwargs = options['kwargs'],
+                                       options = options,
                                        solvername=solvername,
                                        scenario_names=scenario_names,
                                        )
         G = estim['G']
         s = estim['s']
         G,s = round_pos_sig(G,3),round_pos_sig(s,3)
-        self.assertEqual((G,s), (69.6, 56.4))  # rebaselined Feb 2022
+        self.assertEqual((G,s), (69.6, 53.8))  # rebaselined April 2022
 
     
     @unittest.skipIf(not solver_available,
