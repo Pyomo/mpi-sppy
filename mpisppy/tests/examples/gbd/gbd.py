@@ -180,7 +180,6 @@ def scenario_creator(sname, num_scens=None):
             cond_prob=1.0,
             stage=1,
             cost_expression=model.obj,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.x],
             scen_model=model,
         )

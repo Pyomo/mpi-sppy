@@ -152,7 +152,6 @@ class PySPModel:
                                             cond_prob=node.conditional_probability,
                                             stage=node._mpisppy_stage,
                                             cost_expression=node._mpisppy_cost_expression,
-                                            scen_name_list=None,
                                             nonant_list=node._mpisppy_nonant_list,
                                             scen_model=None,
                                             nonant_ef_suppl_list=node._mpisppy_nonant_ef_suppl_list,

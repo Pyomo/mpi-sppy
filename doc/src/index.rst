@@ -26,6 +26,7 @@ MPI is used.
    pysp.rst
    ef.rst
    secretmenu.rst
+   pickledbundles.rst
    contributors.rst
    api.rst
    refs.rst

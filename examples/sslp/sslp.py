@@ -28,7 +28,7 @@ def scenario_creator(scenario_name, data_dir=None):
     # now attach the one and only tree node (ROOT is a reserved word)
     model._mpisppy_node_list = [
         scenario_tree.ScenarioNode(
-            "ROOT", 1.0, 1, model.FirstStageCost, None, [model.FacilityOpen], model
+            "ROOT", 1.0, 1, model.FirstStageCost, [model.FacilityOpen], model
         )
     ]
     return model

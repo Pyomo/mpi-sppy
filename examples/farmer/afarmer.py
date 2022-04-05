@@ -86,7 +86,6 @@ def scenario_creator(
             cond_prob=1.0,
             stage=1,
             cost_expression=model.FirstStageCost,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.DevotedAcreage],
             scen_model=model,
         )
