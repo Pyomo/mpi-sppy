@@ -180,15 +180,8 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
         m = mname
     else:
         m = importlib.import_module(mname)
-
-    you_can_have_it_all = True
-    for ething in everything:
-        if not hasattr(m, ething):
-            print(f"Module {mname} is missing {ething}")
-            you_can_have_it_all = False
-    if not you_can_have_it_all:
-        raise RuntimeError(f"Module {mname} not complete for from_module")
-        
+    check_module_ama(m)
+    
     options = Amalgamator_parser(options, m.inparser_adder,
                                  extraargs=extraargs,
                                  use_command_line=use_command_line)

@@ -222,6 +222,7 @@ class Test_confint_farmer(unittest.TestCase):
         scenario_names = farmer.scenario_names_creator(50,start=1000)
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
+                                       options=self._get_base_options(),
                                        solvername=solvername,
                                        scenario_names=scenario_names,
                                        )
