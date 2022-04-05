@@ -376,14 +376,13 @@ class SeqSampling():
         #Computing G_nkand s_k associated with xhat_1
             
         self.options['num_scens'] = nk
-        scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
         scenario_denouement = refmodel.scenario_denouement if hasattr(refmodel, "scenario_denouement") else None
         estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
                                        solving_type=self.solving_type,
                                        scenario_names=estimator_scenario_names,
                                        sample_options=sample_options,
                                        ArRP=self.ArRP,
-                                       scenario_creator_kwargs=scenario_creator_kwargs,
+                                       options=self.options,
                                        scenario_denouement=scenario_denouement,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options)
