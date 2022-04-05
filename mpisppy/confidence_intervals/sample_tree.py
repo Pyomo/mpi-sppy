@@ -86,15 +86,10 @@ class SampleSubtree():
         
         '''
         # gymnastics because options get passed around through a variety of paths
+        s_c_k = scenario_creator_kwargs.copy()
         if "seed" in scenario_creator_kwargs:
-            s_c_k = scenario_creator_kwargs.copy()
             s_c_k.pop("seed", None)  # we want control over the seed here
-            if "cb_data" not in s_c_k:
-                raise RuntimeError(f"We had seed, but not cb_data in kwargs?? keys={s_c_k.keys()}")
-        else:
-            s_c_k = scenario_creator_kwargs
-            if "cb_data" not in s_c_k:
-                raise RuntimeError(f"We had no seed, and no cb_data in kwargs?? keys={s_c_k.keys()}")
+
         s = self.refmodel.sample_tree_scen_creator(sname,
                                                    given_scenario=self.root_scen,
                                                    stage=self.stage,
