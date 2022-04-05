@@ -48,7 +48,10 @@ def evaluate_sample_trees(xhat_one,
                      "verbose": False,
                      "solver_options":{}}
 
-    scenario_creator_kwargs = model_module.kw_creator(ama_options)
+    ### wrestling with options 5 April 2022 - TBD delete this comment
+    if 'seed' not in ama_options:
+        ama_options['seed'] = seed
+    ###scenario_creator_kwargs = model_module.kw_creator(ama_options)
     for j in range(num_samples): # number of sample trees to create
         samp_tree = sample_tree.SampleSubtree(mname,
                                               xhats = [],
@@ -56,7 +59,7 @@ def evaluate_sample_trees(xhat_one,
                                               starting_stage=1, 
                                               branching_factors=bfs,
                                               seed=seed, 
-                                              options=scenario_creator_kwargs,
+                                              options=ama_options,
                                               solvername=solvername,
                                               solver_options={})
         samp_tree.run()
