@@ -13,5 +13,4 @@
 SOLVER=gurobi_persistent
 export GRB_LICENSE_FILE=/home/dlwoodruff/software/gurobi950/licenses/c4/gurobi.lic
 
-
 mpiexec -np $SLURM_NTASKS python netdes_cylinders.py --solver-name=${SOLVER} --max-solver-threads=2 --default-rho=10000.0 --instance-name=network-10-20-L-01 --max-iterations=100 --rel-gap=0.01
