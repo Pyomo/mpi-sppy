@@ -456,13 +456,12 @@ class SeqSampling():
             
             #Computing G_k and s_k
             self.options['num_scens'] = nk
-            scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
             estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
                                            solving_type=self.solving_type,
                                            scenario_names=estimator_scenario_names,
                                            sample_options=sample_options,
                                            ArRP=self.ArRP,
-                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           options=self.options,
                                            scenario_denouement=scenario_denouement,
                                            solvername=self.solvername,
                                            solver_options=self.solver_options)
