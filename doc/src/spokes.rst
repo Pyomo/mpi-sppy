@@ -99,7 +99,7 @@ hint about how to to use it in a driver:
 ::
 
     xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = solver_name
-    xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = emprise_config["branching_factors"]
+    xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = branching_factors
 
 An example is shown in ``examples.hydro.hydro_cylinders.py`` (this particular example
 is intended to show the coding, not normal behavior. It is sort of an edge case:
