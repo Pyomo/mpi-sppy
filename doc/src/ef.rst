@@ -1,3 +1,5 @@
+.. _EF directly:
+
 EF Directly
 ===========
 
