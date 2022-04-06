@@ -187,6 +187,9 @@ builds a Pyomo model for that scenario appropriately:
         model._mpisppy_probability = 1.0 / 3
         return model
 
+.. testoutput::
+
+       [    0.00] Initializing mpi-sppy
 
 The ``scenario_creator`` accomplishes two important tasks
 
