@@ -33,13 +33,13 @@ WheelSpinner
 ------------
 
 While it is fairly straightforward to call a function to write
-solutions found by ``WheelSpinner`` (see the `Output Solutions`_
+solutions found by ``WheelSpinner`` (see the :ref:`Output Solutions`
 section), accessing the variables programmatically is more complicated
 because, in general, the scenarios are not all on the same MPI rank
 and not all ranks have access to the final version of the scenarios
 that they do have.  If you are not experienced writing programs that
 use MPI (and even if you are), you might want to use a solution writer
-(see the `Output Solutions`_ section). To get behavior from the
+(see the :ref:`Output Solutions` section). To get behavior from the
 solution writers that is customized for your application, you should
 supply your own `scenario_tree_solution_writer` function as an
 argument to the ``write_tree_solution`` function. See ``examples.uc.uc_funcs.py`` for

@@ -1,7 +1,7 @@
 .. _MMW Confidence Intervals:
 
-MMW confidence interval
-=======================
+MMW confidence interval:
+========================
 
 If we want to assess the quality of a given candidate solution ``xhat_one`` 
 (a first stage solution), we could try and evaluate the optimality gap, i.e. 
@@ -14,7 +14,7 @@ this gap.
 We will document two steps in the process : finding a candidate solution 
 ``xhat_one``, and evaluating it.
 
-Sequential sampling is also supported; see `Sequential Sampling Confidence Intervals`_
+Sequential sampling is also supported; see :ref:`Sequential Sampling Confidence Intervals`
 
 .. note :: At the time of this writing, the confidence interval
    software assumes that the scenarios are presented in random order

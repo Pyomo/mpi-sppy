@@ -28,7 +28,7 @@ can print the tree solution to a directory named `efsol` using
    ef.write_tree_solution("efsol")
 
 
-See `SPBase`_ in the API section for a description of the function signature.
+See :ref:`SPBase` in the API section for a description of the function signature.
 
 WheelSpinner
 ------------

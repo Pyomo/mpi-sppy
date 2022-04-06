@@ -85,12 +85,17 @@ class SampleSubtree():
         sample_tree_scen_creator function
         
         '''
+        # gymnastics because options get passed around through a variety of paths
+        s_c_k = scenario_creator_kwargs.copy()
+        if "seed" in scenario_creator_kwargs:
+            s_c_k.pop("seed", None)  # we want control over the seed here
+
         s = self.refmodel.sample_tree_scen_creator(sname,
                                                    given_scenario=self.root_scen,
                                                    stage=self.stage,
                                                    sample_branching_factors=self.sampling_branching_factors,
                                                    seed = self.seed,
-                                                   **scenario_creator_kwargs)
+                                                   **s_c_k)
         nlens = {node.name: len(node.nonant_vardata_list) 
                  for node in s._mpisppy_node_list}
         

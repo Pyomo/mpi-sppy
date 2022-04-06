@@ -48,7 +48,10 @@ def evaluate_sample_trees(xhat_one,
                      "verbose": False,
                      "solver_options":{}}
 
-    scenario_creator_kwargs = model_module.kw_creator(ama_options)
+    ### wrestling with options 5 April 2022 - TBD delete this comment
+    if 'seed' not in ama_options:
+        ama_options['seed'] = seed
+    ###scenario_creator_kwargs = model_module.kw_creator(ama_options)
     for j in range(num_samples): # number of sample trees to create
         samp_tree = sample_tree.SampleSubtree(mname,
                                               xhats = [],
@@ -56,7 +59,7 @@ def evaluate_sample_trees(xhat_one,
                                               starting_stage=1, 
                                               branching_factors=bfs,
                                               seed=seed, 
-                                              options=scenario_creator_kwargs,
+                                              options=ama_options,
                                               solvername=solvername,
                                               solver_options={})
         samp_tree.run()
@@ -100,6 +103,7 @@ def evaluate_sample_trees(xhat_one,
 def run_samples(ama_options, args, model_module):
     
     # TBD: This has evolved so there may be overlap between ama_options and args
+    #  (some codes assume that ama_options includes "args": args)
     
     # Read xhats from xhatpath
     xhat_one = ciutils.read_xhat(args.xhatpath)["ROOT"]
@@ -125,7 +129,7 @@ def run_samples(ama_options, args, model_module):
 def _parser_setup():
     # return the parser
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(prog="zhat4xhat", conflict_handler="resolve")
 
     parser.add_argument('model_module_name',
                         help="name of model module, must be compatible with amalgamator")

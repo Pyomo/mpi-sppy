@@ -143,7 +143,19 @@ def find_spokes(cylinders, is_multi=False):
     return spokes
 
 #==========
-
+def check_module_ama(module):
+    # Complain if the module lacks things needed.
+    everything = ["scenario_names_creator",
+                 "scenario_creator",
+                 "inparser_adder",
+                 "kw_creator"]  # start and denouement can be missing.
+    you_can_have_it_all = True
+    for ething in everything:
+        if not hasattr(module, ething):
+            print(f"Module {mname} is missing {ething}")
+            you_can_have_it_all = False
+    if not you_can_have_it_all:
+        raise RuntimeError(f"Module {mname} not complete for from_module")
 
 
 #==========
@@ -162,31 +174,19 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
         ama (Amalgamator): the instantiated object
     
     """
-    everything = ["scenario_names_creator",
-                 "scenario_creator",
-                 "inparser_adder",
-                 "kw_creator"]  # start and denouement can be missing.
-
     assert(options is not None)
 
     if inspect.ismodule(mname):
         m = mname
     else:
         m = importlib.import_module(mname)
-
-    you_can_have_it_all = True
-    for ething in everything:
-        if not hasattr(m, ething):
-            print(f"Module {mname} is missing {ething}")
-            you_can_have_it_all = False
-    if not you_can_have_it_all:
-        raise RuntimeError(f"Module {mname} not complete for from_module")
-        
+    check_module_ama(m)
+    
     options = Amalgamator_parser(options, m.inparser_adder,
                                  extraargs=extraargs,
                                  use_command_line=use_command_line)
     options['_mpisppy_probability'] = 1/options['num_scens']
-    start = options['start'] if(('start' in options)) else 0
+    start = options['start'] if 'start' in options else 0
     sn = m.scenario_names_creator(options['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
     ama = Amalgamator(options,

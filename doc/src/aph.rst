@@ -1,4 +1,4 @@
-.. _sec-aph::
+.. _sec-aph:
 
 APH
 ===
@@ -86,6 +86,7 @@ At each iteration, the software outputs a convergence metric that is
 .. math::
 
    \frac{||u||_{2}^{2}}{||w||_{2}^{2}} + \frac{||v||_{2}^{2}}{||z||_{2}^{2}}
+   
 where the norms are probability weighted.
 
 Dispatch

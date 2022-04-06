@@ -154,7 +154,7 @@ class MMWConfidenceIntervals():
                                            scenario_names=scenario_names,
                                            sample_options=gap_options,
                                            ArRP=1,
-                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           options=scenario_creator_kwargs,
                                            scenario_denouement=scenario_denouement,
                                            solvername=solvername,
                                            solver_options=solver_options,
