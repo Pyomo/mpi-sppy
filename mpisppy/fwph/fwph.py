@@ -44,7 +44,7 @@ import time
 import re # For manipulating scenario names
 from mpisppy import global_toc
 
-from mpi4py import MPI
+from mpisppy import MPI
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.core.expr.visitor import replace_expressions

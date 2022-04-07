@@ -2,7 +2,7 @@ import unittest
 import sys
 import os
 import parapint
-from mpi4py import MPI
+from mpisppy import MPI
 
 
 comm = MPI.COMM_WORLD

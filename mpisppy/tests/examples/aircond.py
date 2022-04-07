@@ -314,7 +314,7 @@ def scenario_creator(sname, **kwargs):
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     model._mpisppy_probability = 1 / np.prod(branching_factors)
     """
-    from mpi4py import MPI
+    from mpisppy import MPI
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()

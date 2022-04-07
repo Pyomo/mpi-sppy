@@ -13,7 +13,7 @@ import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy.utils import baseparsers
 from mpisppy.utils import pickle_bundle
 
-from mpi4py import MPI
+from mpisppy import MPI
 
 n_proc = MPI.COMM_WORLD.Get_size()
 my_rank = MPI.COMM_WORLD.Get_rank()

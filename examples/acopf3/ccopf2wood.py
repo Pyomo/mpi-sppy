@@ -25,7 +25,7 @@ import socket
 import sys
 import datetime as dt
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 comm_global = mpi.COMM_WORLD
 global_rank = comm_global.Get_rank()
 n_proc = comm_global.Get_size()

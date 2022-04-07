@@ -12,7 +12,7 @@ To avoid errors from Pyomo use,
 """
 import numpy as np
 import collections
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import time
 import cProfile
 import threading

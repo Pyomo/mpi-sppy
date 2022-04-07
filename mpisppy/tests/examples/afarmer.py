@@ -13,7 +13,7 @@
 #
 # special scalable farmer for stress-testing
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree

@@ -12,12 +12,8 @@ import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 
-try:
-    from mpi4py import MPI
-    haveMPI = True
-    global_rank = MPI.COMM_WORLD.Get_rank()
-except:
-    haveMPI = False
+from mpisppy import MPI, haveMPI
+global_rank = MPI.COMM_WORLD.Get_rank()
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy import tt_timer, global_toc
@@ -451,7 +447,7 @@ def write_ef_first_stage_solution(ef,
     NOTE:
         This utility is replicating WheelSpinner.write_first_stage_solution for EF
     """
-    if not haveMPI or (global_rank==0):
+    if global_rank==0:
         dirname = os.path.dirname(solution_file_name)
         if dirname != '':
             os.makedirs(os.path.dirname(solution_file_name), exist_ok=True)
@@ -472,7 +468,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
     NOTE:
         This utility is replicating WheelSpinner.write_tree_solution for EF
     """
-    if not haveMPI or (global_rank==0):
+    if global_rank==0:
         os.makedirs(solution_directory_name, exist_ok=True)
         for scenario_name, scenario in ef_scenarios(ef):
             scenario_tree_solution_writer(solution_directory_name,
@@ -608,7 +604,7 @@ def scens_to_ranks(scen_count, n_proc, rank, branching_factors = None):
 
     """
     if not haveMPI:
-        raise RuntimeError("scens_to_ranks called, but cannot import mpi4py")
+        raise RuntimeError("scens_to_ranks called, but cannot import mpisppy")
     if scen_count < n_proc:
         raise RuntimeError(
             "More MPI ranks (%d) supplied than needed given the number of scenarios (%d) "

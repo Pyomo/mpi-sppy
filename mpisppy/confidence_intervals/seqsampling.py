@@ -8,7 +8,7 @@
 # see also multi_seqsampling.py, which has a class derived from this class
 
 import pyomo.environ as pyo
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
 import numpy as np
 import scipy.stats

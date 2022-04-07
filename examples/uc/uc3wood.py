@@ -7,7 +7,7 @@ import datetime
 import logging
 import sys
 import os
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase

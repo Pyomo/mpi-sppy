@@ -3,7 +3,7 @@
 # dlw, Feb 2018. Code for closes scenario to xbar
 # TODO Apr. 2020 Eliminate old references to companiondriver
 import numpy as np
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import mpisppy.extensions.xhatbase
 import pyomo.environ as pyo
 

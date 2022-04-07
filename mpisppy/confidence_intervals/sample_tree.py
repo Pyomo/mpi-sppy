@@ -3,7 +3,7 @@
 #Code for sampling for multistage problem
 
 import numpy as np
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import importlib
 
 import mpisppy.utils.sputils as sputils
