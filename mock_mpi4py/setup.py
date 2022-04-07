@@ -14,6 +14,7 @@ setup(
     url='https://github.com/Pyomo/mpi-sppy',
     author='David Woodruff',
     author_email='dlwoodruff@ucdavis.edu',
+
     packages=['mpi4py'],   #  packages,
     install_requires=[]
 )
