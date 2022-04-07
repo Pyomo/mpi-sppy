@@ -12,7 +12,7 @@ import unittest
 import subprocess
 import importlib
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer

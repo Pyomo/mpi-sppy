@@ -8,7 +8,7 @@ import math
 import inspect
 
 import numpy as np
-from mpi4py import MPI
+from mpisppy import MPI
 
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition

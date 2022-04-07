@@ -6,7 +6,7 @@ import os
 import math
 import importlib
 import numpy as np
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils

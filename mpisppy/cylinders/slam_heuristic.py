@@ -8,7 +8,7 @@ import logging
 import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 import numpy as np
 

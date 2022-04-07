@@ -2,7 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 
 from pyomo.environ import value
-from mpisppy import haveMPI, global_toc, _mpi as MPI
+from mpisppy import haveMPI, global_toc, MPI
 
 from mpisppy.utils.sputils import (
         first_stage_nonant_writer,

@@ -7,7 +7,7 @@ import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import logging
 
 fullcomm = mpi.COMM_WORLD

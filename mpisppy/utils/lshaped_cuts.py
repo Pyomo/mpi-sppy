@@ -8,7 +8,7 @@ import pyomo.contrib.benders.benders_cuts as bc
 from mpisppy.spopt import set_instance_retry
 
 try:
-    from mpi4py import MPI
+    from mpisppy import MPI
 
     mpi4py_available = True
 except:

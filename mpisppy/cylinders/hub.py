@@ -6,7 +6,7 @@ import logging
 import time
 import mpisppy.log
 
-from mpi4py import MPI
+from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType

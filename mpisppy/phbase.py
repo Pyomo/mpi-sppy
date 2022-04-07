@@ -4,7 +4,7 @@ import time
 import logging
 
 import numpy as np
-import mpi4py.MPI as MPI
+import mpisppy.MPI as MPI
 
 import pyomo.environ as pyo
 

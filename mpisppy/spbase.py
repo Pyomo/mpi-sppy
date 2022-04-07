@@ -12,7 +12,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
 
-from mpi4py import MPI
+from mpisppy import MPI
 
 logger = logging.getLogger("SPBase")
 logger.setLevel(logging.WARN)

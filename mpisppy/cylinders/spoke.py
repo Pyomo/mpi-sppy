@@ -10,7 +10,7 @@ import math
 
 import mpisppy.utils.sputils as sputils
 
-from mpi4py import MPI
+from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
 
 

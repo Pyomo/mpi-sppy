@@ -7,8 +7,8 @@ import math
 import collections
 import time
 import logging
-import mpi4py
-import mpi4py.MPI as mpi
+import mpisppy
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus
 from mpisppy.utils.sputils import find_active_objective
