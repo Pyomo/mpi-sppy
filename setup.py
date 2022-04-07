@@ -25,6 +25,7 @@ setup(
     install_requires=[
         'numpy',
         'scipy',
-        'pyomo>=6.0',
+        'mpi4py>=3.0.3',
+        'pyomo>=6.2',
     ]
 )
