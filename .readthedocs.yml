@@ -8,8 +8,8 @@ version: 2
 sphinx:
   configuration: doc/src/conf.py
 
-python:
-  version: "3.8"
-  install:
-    - method: setuptools
-      path: .
+#python:
+#  version: "3.8"
+#  install:
+#    - method: setuptools
+#      path: .
