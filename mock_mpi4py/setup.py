@@ -4,13 +4,10 @@
 
 import os
 
-from setuptools import find_packages
-#import setuptools
+import setuptools  # this *is* necessary
 from distutils.core import setup
 
 os.chdir("mock_mpi4py")
-#packages = find_packages()
-#print(f"{packages =}")
 
 setup(
     name='mpi4py',
@@ -19,7 +16,6 @@ setup(
     url='https://github.com/Pyomo/mpi-sppy',
     author='David Woodruff',
     author_email='dlwoodruff@ucdavis.edu',
-
     packages=['mpi4py'],   #  packages,
     install_requires=[]
 )
