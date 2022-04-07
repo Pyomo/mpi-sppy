@@ -604,7 +604,7 @@ def scens_to_ranks(scen_count, n_proc, rank, branching_factors = None):
 
     """
     if not haveMPI:
-        raise RuntimeError("scens_to_ranks called, but cannot import mpisppy")
+        raise RuntimeError("scens_to_ranks called, but cannot import mpi4py")
     if scen_count < n_proc:
         raise RuntimeError(
             "More MPI ranks (%d) supplied than needed given the number of scenarios (%d) "
