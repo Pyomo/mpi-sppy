@@ -5,10 +5,10 @@
 version: 2
 
 # setup the environment
-build:
-  os: ubuntu-20.04
-  tools:
-    python: "3.8"
+#build:
+#  os: ubuntu-20.04
+#  tools:
+#    python: "3.8"
 
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
