@@ -16,8 +16,8 @@ sphinx:
 
 # Maybe important: setup.py for mpi-sppy uses find_packages,
 #  but mock_mpi4py does not so it should go second?
-Python:
-  version: "3.8"
+python:
+  version: 3.8
   install:
     - method: setuptools
       path: .
