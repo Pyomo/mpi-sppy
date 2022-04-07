@@ -4,15 +4,22 @@
 # Required
 version: 2
 
+# setup the environment
+build:
+  os: ubuntu-20.04
+  tools:
+    python: "3.8"
+
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: doc/src/conf.py
 
-python:
+# Maybe important: setup.py for mpi-sppy uses find_packages,
+#  but mock_mpi4py does not so it should go second?
+Python:
   version: "3.8"
   install:
     - method: setuptools
-      path: mock_mpi4py
-    - method: setuptools
       path: .
-
+    - method: setuptools
+      path: mock_mpi4py
