@@ -2,10 +2,10 @@
 
 # setup.py for the mock mpi4py; this should be run only under very special circumstances.
 
-from setuptools import find_packages
+#from setuptools import find_packages
 from distutils.core import setup
 
-packages = find_packages()
+#packages = find_packages()
 
 setup(
     name='mpi4py',
@@ -14,6 +14,6 @@ setup(
     url='https://github.com/Pyomo/mpi-sppy',
     author='David Woodruff',
     author_email='dlwoodruff@ucdavis.edu',
-    packages=packages,
+    packages=['mpi4py'],   #  packages,
     install_requires=[]
 )
