@@ -4,21 +4,13 @@
 # Required
 version: 2
 
-# Set the version of Python and other tools you might need
-build:
-  os: ubuntu-20.04
-  tools:
-    python: "3.9"
-    
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: doc/src/conf.py
 
-# Maybe important: setup.py for mpi-sppy uses find_packages,
-#  but mock_mpi4py does not so it should go second?
-Python:
+# we need mpi-sppy for automodule
+python:
+  version: 3.8
   install:
     - method: setuptools
       path: .
-    - method: setuptools
-      path: mock_mpi4py
