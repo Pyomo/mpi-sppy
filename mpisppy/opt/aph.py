@@ -751,7 +751,7 @@ class APH(ph_base.PHBase):
             logging.debug('phisum={} after step on {}'.format(phisum, self.cylinder_rank))
 
             # ORed checks for convergence
-            if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
+            if spcomm is not None and type(spcomm) is not mpi.Intracomm:
                 spcomm.sync_with_spokes()
                 logging.debug('post sync_with_spokes on rank {}'.format(self.cylinder_rank))
                 if spcomm.is_converged():
