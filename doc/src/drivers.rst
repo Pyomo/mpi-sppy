@@ -86,5 +86,5 @@ cannot count on it to detect spelling errors in options names.
 Contrasting ``_mpisppy_node_list`` and ``all_node_names``
 ---------------------------------------------------------
 
-Note that ``_mpisppy_node_list``that is attached to scenarios does not have the leaf nodes, but ``all_node_names``
+Note that ``_mpisppy_node_list`` that is attached to scenarios does not have the leaf nodes, but ``all_node_names``
 that is part of the hub dictionary does.
