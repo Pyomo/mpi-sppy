@@ -63,7 +63,7 @@ runs an Amalgamator object.
 .. Note::
    The module must contains several methods:
    ``scenario_creator``, ``scenario_names_creator``, ``inparser_adder`` and
-   ``kw_creator``. The files ``afarmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
+   ``kw_creator``. The files ``examples.farmer.afarmer.py``, ``mpisppy.tests.examples.aircond.py`` contain
    examples of these functions.
 
 The full options dictionary is passed through to ``kw_creator`` so keyword arguments for

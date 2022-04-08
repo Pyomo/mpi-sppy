@@ -10,7 +10,7 @@ Details
 To use a PySP model in `mpi-sppy`, the critical step is to instantiate
 a ``PySPModel`` object. The API for the class is:
 
-.. automodule:: mpisppy.utils.pysp_model
+.. automodule:: mpisppy.utils.pysp_model.pysp_model
    :members:
    :undoc-members:
    :show-inheritance:
