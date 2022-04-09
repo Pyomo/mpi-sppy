@@ -69,11 +69,11 @@ class SPOpt(SPBase):
                 if self.is_zero_prob(s, v) and v._value is None:
                     raise RuntimeError(
                             f"Non-anticipative zero-probability variable {v.name} "
-                            f"on scenario {sn} reported as stale and has no value. "
+                            f"on scenario {s.name} reported as stale and has no value. "
                              "Zero-probability variables must have a value (e.g., fixed).")
                 else:
                     raise RuntimeError(
-                            f"Non-anticipative variable {v.name} on scenario {sn} "
+                            f"Non-anticipative variable {v.name} on scenario {s.name} "
                              "reported as stale. This usually means this variable "
                              "did not appear in any (active) constraints, and hence "
                              "was not communicated to the subproblem solver. Please "
