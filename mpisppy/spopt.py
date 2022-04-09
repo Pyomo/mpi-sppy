@@ -363,7 +363,12 @@ class SPOpt(SPBase):
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
-            local_Ebounds.append(s._mpisppy_probability * s._mpisppy_data.outer_bound)
+            try:
+                eb = s._mpisppy_probability * float(s._mpisppy_data.outer_bound)
+            except:
+                print(f"eb calc failed for {s._mpisppy_probability} * {s._mpisppy_data.outer_bound}")
+                raise
+            local_Ebounds.append(eb)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\
