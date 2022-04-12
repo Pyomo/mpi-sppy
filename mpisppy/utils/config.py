@@ -47,7 +47,8 @@ import config (not baseparsers)
 parser = baseparsers.  --> config. (sort of)
 add_argument --> config.add_to_config
 
-Parse_args returns args for the sake of vanilla; but I want to make a clean break
+Parse_args returns args for the sake of vanilla (which will fail anyway... so vanilla needs to be updated); 
+I want to make a clean break.
 Every use of args gets replaced with  cfg = config.global_config in the main() function
 
 Here's the bummer: args.xxx_yyy becomes cfg["xxx-yyy"], but it's really not too bad 
@@ -171,8 +172,7 @@ def _basic_multistage(progname=None, num_scens_reqd=False):
 def branching_factors():
     global_config.declare("branching-factors", pyofig.ConfigValue(
                         description="Spaces delimited branching factors (e.g., 2 2)",
-                        nargs="*",
-                        domain=int,
+                        domain=pyofig.ListOf(int),
                         default=None)).declare_as_argument()
         
 
@@ -180,8 +180,8 @@ def make_multistage_parser(progname=None):
     raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")    
 
 def multistage():
-    parser = _basic_multistage(progname=None)
-    parser = _common_args(parser)
+    parser = branching_factors()
+    parser = popular_args()
     
 
 #### EF ####
@@ -406,7 +406,6 @@ def xhatshuffle_args():
     
     global_config.declare('add-reversed-shuffle', pyofig.ConfigValue(
                         description="using also the reversed shuffling (multistage only, default True)",
-                        dest = 'add_reversed_shuffle',
                           domain=bool,
                           default=False)).declare_as_argument()
     
@@ -483,11 +482,12 @@ def add_to_config(name, description, domain, default,
                   argparse=True,
                   complain=False):
     # add an arg to the global_config dict
-    if name in global_confict:
+    if name in global_config:
         if complain:
             print(f"Trying to add duplicate {name} to global_config.")
             # raise RuntimeError(f"Trying to add duplicate {name} to global_config.")
     else:
+        print(f"adding {name =}")
         c = global_config.declare(name, pyofig.ConfigValue(
             description = description,
             domain = domain,
