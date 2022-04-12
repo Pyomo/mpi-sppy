@@ -22,17 +22,46 @@ args = global_config.import_argparse(parser)
 
 If you want to add args, you need to call the add_to_config function
 
-If you want a required arg, pull it from argv. You can still attach it 
-to the global_config, but you will assign the value you read from argv.
-(TBD: actually, maybe import_argparse can cope with extra args??)
+If you want a required arg, you have to DYI:
+    parser = config.create_parser("tester")
+    parser.add_argument(
+            "num_scens", help="Number of scenarios", type=int,
+        )
+    args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
+    print(f"{args.num_scens =}")
+(Note: you can still attach it to global_config, but that is also DYI)
 
 """
+
+"""
+TBD:
+  Do a better job with solver options.
+
+"""
+
+""" Notes on conversion (delete this docstring by summer 2022)
+
+See hydro_cylinders_config.py compared to hydro_cylinders.py
+
+import config (not baseparsers)
+parser = baseparsers.  --> config. (sort of)
+add_argument --> config.add_to_config
+
+Parse_args returns args for the sake of vanilla; but I want to make a clean break
+Every use of args gets replaced with  cfg = config.global_config in the main() function
+
+Here's the bummer: args.xxx_yyy becomes cfg["xxx-yyy"], but it's really not too bad 
+"""
+
 import argparse
 import pyomo.common.config as pyofig
 
 global_config = pyofig.ConfigDict()
 
 def _common_args():
+    raise RuntimeError("_common_args is no longer used. See comments at top of config.py")
+
+def popular_args():
     global_config.declare("max-iterations", pyofig.ConfigValue(
                         description="ph max-iterations (default 1)",
                         domain=int,
@@ -123,30 +152,23 @@ def _common_args():
 
 
 def make_parser(progname=None, num_scens_reqd=False):
-    # make a parser for the program named progname
-    # NOTE: if you want abbreviations, override the arguments in your example
-    # do not add abbreviations here.
-    raise RuntimeError("make_parser needs work.")
-    parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
+    raise RuntimeError("make_parser is no longer used. See comments at top of config.py")
 
-    if num_scens_reqd:
-        global_config.declare(
-            "num_scens", description="Number of scenarios", domain=int
-        )
-    else:
+
+def num_scens_optional():
         global_config.declare(
             "num-scens", pyofig.ConfigValue(
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
             )).declare_as_argument()
-    parser = _common_args(parser)
     
 
 def _basic_multistage(progname=None, num_scens_reqd=False):
-    raise RuntimeError("_basic_multistage parser needs work.")
+    raise RuntimeError("_basic_multistage is no longer used. See comments at top of config.py")
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
+def branching_factors():
     global_config.declare("branching-factors", pyofig.ConfigValue(
                         description="Spaces delimited branching factors (e.g., 2 2)",
                         nargs="*",
@@ -155,37 +177,29 @@ def _basic_multistage(progname=None, num_scens_reqd=False):
         
 
 def make_multistage_parser(progname=None):
-    # make a parser for the program named progname
-    # NOTE: if you want abbreviations, override the arguments in your example
-    # do not add abbreviations here.
+    raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")    
+
+def multistage():
     parser = _basic_multistage(progname=None)
     parser = _common_args(parser)
     
 
 #### EF ####
 def make_EF2_parser(progname=None, num_scens_reqd=False):
-    # create a parser just for EF two-stage (does not call _common_args)
-    # NOTE: if you want abbreviations, override the arguments in your example
-    # do not add abbreviations here.
-    parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
-    raise RuntimeError("make_EF2_parser needs work.")
+    raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")    
 
-    if num_scens_reqd:
-        global_config.declare(
-            "num_scens", description="Number of scenarios", domain=int
-        )
-    else:
-        global_config.declare(
-            "num-scens", pyofig.ConfigValue(
+def EF2():
+    global_config.declare(
+        "num-scens", pyofig.ConfigValue(
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
-            )).declare_as_argument()
+        )).declare_as_argument()
         
     global_config.declare("EF-solver-name", pyofig.ConfigValue(
-                        description= "solver name (default gurobi)",
-                        domain = str,
-                        default="gurobi")).declare_as_argument()
+        description= "solver name (default gurobi)",
+        domain = str,
+        default="gurobi")).declare_as_argument()
 
 
     global_config.declare("EF-mipgap", pyofig.ConfigValue(
@@ -195,35 +209,26 @@ def make_EF2_parser(progname=None, num_scens_reqd=False):
     
 
 def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
-    # create a parser just for EF multi-stage (does not call _common_args)
-    # NOTE: if you want abbreviations, override the arguments in your example
-    # do not add abbreviations here.
-    raise RuntimeError("make_EF_multistage)parser needs work.")
-    
-    parser = _basic_multistage(progname=None)
-    
-    if num_scens_reqd:
-        global_config.declare(
-            "num_scens", description="Number of scenarios", domain=int
-        )
-    else:
-        global_config.declare(
-            "num-scens", pyofig.ConfigValue(
+    raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")        
+
+def EF_multistage():
+    global_config.declare(
+        "num-scens", pyofig.ConfigValue(
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
-            )).declare_as_argument()
+        )).declare_as_argument()
         
     global_config.declare("EF-solver-name", pyofig.ConfigValue(
-                        description= "solver name (default gurobi)",
-                        domain = str,
-                        default="gurobi")).declare_as_argument()
+        description= "solver name (default gurobi)",
+        domain = str,
+        default="gurobi")).declare_as_argument()
 
 
     global_config.declare("EF-mipgap", pyofig.ConfigValue(
-                        description="mip gap option for the solver if needed (default None)",
-                        domain=float,
-                        default=None)).declare_as_argument()
+        description="mip gap option for the solver if needed (default None)",
+        domain=float,
+        default=None)).declare_as_argument()
     
 ##### common additions to the command line #####
 
@@ -499,7 +504,7 @@ def create_parser(progname=None):
                                   
 if __name__ == "__main__":
     # a place for ad hoc testing by developers
-    _common_args() # populates global_config
+    popular_args() # populates global_config
     global_config.display()
     for i,j in global_config.items():
         print(i, j)
@@ -509,8 +514,13 @@ if __name__ == "__main__":
     print(f"{global_config['max-iterations'] =}")
 
     parser = create_parser("tester")
+    parser.add_argument(
+            "num_scens", help="Number of scenarios", type=int,
+        )
 
-    args=parser.parse_args(['--max-iterations', '99', '--solver-name', 'cplex'])
+    args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
+
+    print(f"{args.num_scens =}")
     
     args = global_config.import_argparse(args)
     
@@ -518,7 +528,6 @@ if __name__ == "__main__":
 
     #parser.parse_args(['--help'])
 
-    print(f"{len(global_config) =}")
 
 
 
