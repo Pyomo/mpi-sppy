@@ -32,10 +32,10 @@ def _parse_args():
     config.lagrangian_args()
     config.xhatspecific_args()
 
-    config.add_to_config(name ="--stage2EFsolvern",
+    config.add_to_config(name ="stage2EFsolvern",
                         description="Solver to use for xhatlooper stage2ef option (default None)",
                         domain = str,
-                        default=None)
+                         default=None)
 
     parser = config.create_parser("hydro")
     args = parser.parse_args()  # from the command line

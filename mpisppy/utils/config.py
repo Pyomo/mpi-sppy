@@ -478,6 +478,7 @@ def cross_scenario_cuts_args():
                           domain=float,
                           default=0.01)).declare_as_argument()
 
+#===============
 def add_to_config(name, description, domain, default,
                   argparse=True,
                   complain=False):
@@ -487,7 +488,6 @@ def add_to_config(name, description, domain, default,
             print(f"Trying to add duplicate {name} to global_config.")
             # raise RuntimeError(f"Trying to add duplicate {name} to global_config.")
     else:
-        print(f"adding {name =}")
         c = global_config.declare(name, pyofig.ConfigValue(
             description = description,
             domain = domain,
@@ -495,13 +495,15 @@ def add_to_config(name, description, domain, default,
     if argparse:
         c.declare_as_argument()
 
+#================
 def create_parser(progname=None):
     if len(global_config) == 0:
         raise RuntimeError("create parser called before global_config is populated")
     parser = argparse.ArgumentParser(progname, conflict_handler="resolve")
     global_config.initialize_argparse(parser)
     return parser
-                                  
+
+#=================
 if __name__ == "__main__":
     # a place for ad hoc testing by developers
     popular_args() # populates global_config
