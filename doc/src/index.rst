@@ -25,6 +25,7 @@ MPI is used.
    seqsamp.rst
    pysp.rst
    ef.rst
+   nompi4py.rst
    secretmenu.rst
    pickledbundles.rst
    contributors.rst
