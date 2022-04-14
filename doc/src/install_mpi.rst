@@ -34,7 +34,7 @@ no MPI?
 If you can't get MPI and mpi4py, some functionality is still
 available. In particular, it is possible to solve the EF
 directly. (See :ref:`no mpi4py` for a little more
-information.)However, most of the examples and most of the
+information.)  However, most of the examples and most of the
 documentation assumes you have mpi4py installed and running correctly.
 
 
