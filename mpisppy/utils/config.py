@@ -172,7 +172,7 @@ def _basic_multistage(progname=None, num_scens_reqd=False):
 def branching_factors():
     global_config.declare("branching-factors", pyofig.ConfigValue(
                         description="Spaces delimited branching factors (e.g., 2 2)",
-                        domain=pyofig.ListOf(int),
+                        domain=pyofig.ListOf(int, pyofig.PositiveInt),
                         default=None)).declare_as_argument()
         
 
