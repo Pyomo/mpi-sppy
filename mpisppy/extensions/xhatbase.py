@@ -191,7 +191,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     sputils.reactivate_objs(s)
                 # if you hit infeas, return None
                 if not pyo.check_optimal_termination(results):
-                   self.opt.restore_nonants()
+                   self.opt._restore_nonants()
                    return None
 
             if verbose and src_rank == self.cylinder_rank:
