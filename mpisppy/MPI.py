@@ -6,6 +6,7 @@ try:
 
 except ImportError:
     import numpy as _np
+    import copy as _cp
 
     UNDEFINED = -1
     SUM = _np.sum
@@ -24,9 +25,15 @@ except ImportError:
         @property
         def size(self):
             return 1
+
+        def allreduce(self, sendobj, op=SUM):
+            return _cp.deepcopy(sendobj)
     
         def barrier(self):
             pass
+
+        def bcast(self, data, root=0):
+            return data
     
         def gather(self, obj, root=0):
             if root != self.rank:
@@ -38,6 +45,9 @@ except ImportError:
             _set_data(sendbuf, recvbuf)
     
         def Barrier(self):
+            pass
+
+        def Bcast(self, data, root=0):
             pass
     
         def Get_rank(self):

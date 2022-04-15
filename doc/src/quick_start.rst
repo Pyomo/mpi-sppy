@@ -88,4 +88,4 @@ The quickest thing to do is to run one of the canned examples that
 comes with ``mpi-sppy``. They are in subdirectories of
 ``examples`` and sample commands can be obtained by looking at
 the code in ``examples.runall.py``. There is a table in the
-mpi-sppy paper that gives references for all of the examples.
+mpi-sppy paper that gives references for some of the examples.
