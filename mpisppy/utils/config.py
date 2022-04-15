@@ -1,3 +1,5 @@
+xxx change - to _
+
 # This software is distributed under the 3-clause BSD License.
 # Started 12 April by DLW
 # Replace baseparsers.py and enhance functionality.
@@ -35,7 +37,11 @@ If you want a required arg, you have to DYI:
 
 """
 TBD:
-  Do a better job with solver options.
+  - Do a better job with solver options.
+
+  - There is some discussion of name spaces, but I think for
+things coming off the command line, we can't *really* do that since
+there is just one command line.
 
 """
 
