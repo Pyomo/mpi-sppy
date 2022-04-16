@@ -156,7 +156,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             # TBD: factor this
             local_2ndns = dict()  # dict of dicts (inner dicts are for FormEF)
             for k,s in self.opt.local_scenarios.items():
-                if hasattr(self, "EFs"):
+                if hasattr(self, "_EFs"):
                     sputils.deact_objs(s)  # create EF does this the first time
                 for node in s._mpisppy_node_list:
                     ndn = node.name
@@ -169,23 +169,24 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 raise RuntimeError("stagecnt assumes regular scenario tree and standard _ node naming")
             # create an EF for each second stage node and solve with fixed nonant
             # TBD: factor out the EF creation!
-            if not hasattr(self, "EFs"):
+            if not hasattr(self, "_EFs"):
                 for k,s in self.opt.local_scenarios.items():
                     sputils.stash_ref_objs(s)
-                self.EFs = dict()
+                self._EFs = dict()
+                for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
+                    if ndn2 not in self._EFs:  # this will only happen once
+                        self._EFs[ndn2] = self.opt.FormEF(sdict, ndn2)  # spopt.py
+            # We have EFs so fix noants, solve, and etc.
             for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
-                if ndn2 not in self.EFs:  # this will only happen once
-                    self.EFs[ndn2] = self.opt.FormEF(sdict, ndn2)  # spopt.py
-                # fix noants
-                wxbarutils.fix_ef_ROOT_nonants(self.EFs[ndn2], xhats["ROOT"])
+                wxbarutils.fix_ef_ROOT_nonants(self._EFs[ndn2], xhats["ROOT"])
                 # solve EF
                 solver = pyo.SolverFactory(stage2EFsolvern)
                 if 'persistent' in stage2EFsolvern:
-                    solver.set_instance(self.EFs[ndn2], symbolic_solver_labels=True)
+                    solver.set_instance(self._EFs[ndn2], symbolic_solver_labels=True)
                     results = solver.solve(tee=Tee)
                 else:
-                    results = solver.solve(self.EFs[ndn2], tee=Tee, symbolic_solver_labels=True,)
-                    
+                    results = solver.solve(self._EFs[ndn2], tee=Tee, symbolic_solver_labels=True,)
+
                 # restore objectives so Ebojective will work
                 for s in sdict.values():
                     sputils.reactivate_objs(s)
@@ -193,7 +194,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 if not pyo.check_optimal_termination(results):
                    self.opt._restore_nonants()
                    return None
-
+               
+            # feasible xhat found, so finish up 2EF part and return
             if verbose and src_rank == self.cylinder_rank:
                 print("   Feasible xhat found:")
                 self.opt.local_scenarios[sname].pprint()
