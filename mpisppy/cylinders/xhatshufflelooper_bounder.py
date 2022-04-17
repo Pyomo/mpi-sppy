@@ -59,32 +59,12 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         xhatter.pre_iter0()  # for an extension
         self.opt._save_original_nonants()
 
-        """  >>> start delete dlw april 2022
-        teeme = False
-        if "tee-rank0-solves" in self.opt.options:
-            teeme = self.opt.options['tee-rank0-solves']
-
-        self.opt.solve_loop(
-            solver_options=self.solver_options,
-            dtiming=False,
-            gripe=True,
-            tee=teeme,
-            verbose=verbose
-        )
-        end delete <<<< """
-
         self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
 
         self.opt._update_E1()
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
             raise ValueError(f"Total probability of scenarios was {self.opt.E1} "+\
                                  f"(E1_tolerance is {self.opt.E1_tolerance})")
-        """  >>> start delete dlw april 2022
-        infeasP = self.opt.infeas_prob()
-        if infeasP != 0.:
-            raise ValueError(f"Infeasibility detected; E_infeas={infeasP}")
-        end delete <<<< """
-        
         ### end iter0 stuff (but note: no need for iter 0 solves in an xhatter)
 
         xhatter.post_iter0()
