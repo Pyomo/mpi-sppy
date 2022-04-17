@@ -8,11 +8,11 @@
 #SBATCH --ntasks=9
 #SBATCH --cpus-per-task=2
 #SBATCH --time=0-0:30:00
-#SBATCH --nodelist=c[4]
+#SBATCH --nodelist=c[3]
 
-
+conda activate mpisppy
 SOLVERNAME="gurobi_persistent"
-export GRB_LICENSE_FILE=/home/dlwoodruff/software/gurobi950/licenses/c4/gurobi.lic
+export GRB_LICENSE_FILE=/home/dlwoodruff/software/gurobi950/licenses/c3/gurobi.lic
 
 # TBD: aircond uses start-seed (but seed is allowed as an arg that is ignored).
 
