@@ -98,6 +98,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
 
     def try_scenario_dict(self, xhat_scenario_dict):
+        """ wrapper for _try_one"""
         snamedict = xhat_scenario_dict
 
         stage2EFsolvern = self.opt.options.get("stage2EFsolvern", None)
@@ -159,6 +160,12 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         xh_iter = 1
         while not self.got_kill_signal():
+            # When there is no iter0, the serial number must be checked.
+            # (unrelated: uncomment the next line to see the source of delay getting an xhat)
+            # print(f"in loop {self.get_serial_number() =}, {self.spoke_sleep_time =}")
+            if self.get_serial_number() == 0:
+                time.sleep(self.spoke_sleep_time)
+                continue
 
             if (xh_iter-1) % 100 == 0:
                 logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.global_rank}')
