@@ -1,5 +1,3 @@
-xxx change - to _
-
 # This software is distributed under the 3-clause BSD License.
 # Started 12 April by DLW
 # Replace baseparsers.py and enhance functionality.
@@ -11,6 +9,7 @@ xxx change - to _
 """ Notes 
 The default for all 'with' options is False
        (and we are dropping the `no` side that was in baseparsers.py)
+       (so we are also dropping the use of with_)
 
 Now you assemble the args you want and call the create_parser function,
    which returns an argparse object, E.g.:
@@ -57,7 +56,6 @@ Parse_args returns args for the sake of vanilla (which will fail anyway... so va
 I want to make a clean break.
 Every use of args gets replaced with  cfg = config.global_config in the main() function
 
-Here's the bummer: args.xxx_yyy becomes cfg["xxx-yyy"], but it's really not too bad 
 """
 
 import argparse
@@ -65,97 +63,128 @@ import pyomo.common.config as pyofig
 
 global_config = pyofig.ConfigDict()
 
+#===============
+def add_to_config(name, description, domain, default,
+                  argparse=True,
+                  complain=False,
+                  group=None):
+    """ Add an arg to the global_config dict.
+    Args:
+        name (str): the argument name, underscore seperated
+        description (str): free text description
+        argparse (bool): if True put on command ine
+        complain (bool): if True, output a message for a duplicate
+        group (str): argparse group name (optional; PRESENTLY NOT USED)
+    """
+    if name in global_config:
+        if complain:
+            print(f"Trying to add duplicate {name} to global_config.")
+            # raise RuntimeError(f"Trying to add duplicate {name} to global_config.")
+    else:
+        c = global_config.declare(name, pyofig.ConfigValue(
+            description = description,
+            domain = domain,
+            default = default))
+    if argparse:
+        c.declare_as_argument()
+        #argname = "--" + name.replace("_","-")
+        #if group is not None:
+        #    c.declare_as_argument(argname, group=group)
+        #else:
+        #    c.declare_as_argument(argname)
+
+
 def _common_args():
     raise RuntimeError("_common_args is no longer used. See comments at top of config.py")
 
 def popular_args():
-    global_config.declare("max-iterations", pyofig.ConfigValue(
-                        description="ph max-iterations (default 1)",
+    add_to_config("max_iterations", 
+                        description="ph max iiterations (default 1)",
                         domain=int,
-                        default=1)).declare_as_argument()
+                        default=1)
 
-    global_config.declare("solver-name", pyofig.ConfigValue(
+    add_to_config("solver_name", 
                         description= "solver name (default gurobi)",
                         domain = str,
-                        default="gurobi")).declare_as_argument().declare_as_argument()
+                        default="gurobi")
 
-    global_config.declare("seed", pyofig.ConfigValue(
+    add_to_config("seed", 
                         description="Seed for random numbers (default is 1134)",
                         domain=int,
-                        default=1134)).declare_as_argument()
+                        default=1134)
 
-    global_config.declare("default-rho", pyofig.ConfigValue(
+    add_to_config("default_rho", 
                         description="Global rho for PH (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("bundles-per-rank", pyofig.ConfigValue(
+    add_to_config("bundles_per_rank", 
                         description="bundles per rank (default 0 (no bundles))",
                         domain=int,
-                        default=0)).declare_as_argument()                
+                        default=0)                
 
-    global_config.declare('with-verbose', pyofig.ConfigValue(
+    add_to_config('verbose', 
                           description="verbose output",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare('with-display-progress', pyofig.ConfigValue(
+    add_to_config('display_progress', 
                           description="display progress at each iteration",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare('with-display-convergence-detail', pyofig.ConfigValue(
+    add_to_config('display_convergence_detail', 
                           description="display non-anticipative variable convergence statistics at each iteration",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("max-solver-threads", pyofig.ConfigValue(
+    add_to_config("max_solver_threads", 
                         description="Limit on threads per solver (default None)",
                         domain=int,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("intra-hub-conv-thresh", pyofig.ConfigValue(
+    add_to_config("intra_hub_conv_thresh", 
                         description="Within hub convergence threshold (default 1e-10)",
                         domain=float,
-                        default=1e-10)).declare_as_argument()
+                        default=1e-10)
 
-    global_config.declare("trace-prefix", pyofig.ConfigValue(
+    add_to_config("trace_prefix", 
                         description="Prefix for bound spoke trace files. If None "
                              "bound spoke trace files are not written.",
                         domain=str,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("with-tee-rank0-solves", pyofig.ConfigValue(
+    add_to_config("tee_rank0_solves", 
                           description="Some cylinders support tee of rank 0 solves."
-                          "(With multiple cylinder this could be confusing.)",
+                          "(With multiple cylinders this could be confusing.)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("auxilliary", pyofig.ConfigValue(
+    add_to_config("auxilliary", 
                         description="Free text for use by hackers (default '').",
                         domain=str,
-                        default='')).declare_as_argument()
+                        default='')
 
-    global_config.declare("linearize-binary-proximal-terms", pyofig.ConfigValue(
+    add_to_config("linearize_binary_proximal_terms", 
                           description="For PH, linearize the proximal terms for "
                           "all binary nonanticipative variables",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
 
-    global_config.declare("linearize-proximal-terms", pyofig.ConfigValue(
+    add_to_config("linearize_proximal_terms", 
                           description="For PH, linearize the proximal terms for "
                           "all nonanticipative variables",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
 
-    global_config.declare("proximal-linearization-tolerance", pyofig.ConfigValue(
+    add_to_config("proximal_linearization_tolerance", 
                         description="For PH, when linearizing proximal terms, "
                         "a cut will be added if the proximal term approximation "
                         "is looser than this value (default 1e-1)",
                         domain=float,
-                        default=1.e-1)).declare_as_argument()
+                        default=1.e-1)
 
 
 def make_parser(progname=None, num_scens_reqd=False):
@@ -163,12 +192,12 @@ def make_parser(progname=None, num_scens_reqd=False):
 
 
 def num_scens_optional():
-        global_config.declare(
-            "num-scens", pyofig.ConfigValue(
+        add_to_config(
+            "num_scens", 
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
-            )).declare_as_argument()
+            )
     
 
 def _basic_multistage(progname=None, num_scens_reqd=False):
@@ -176,10 +205,10 @@ def _basic_multistage(progname=None, num_scens_reqd=False):
     parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
 def branching_factors():
-    global_config.declare("branching-factors", pyofig.ConfigValue(
+    add_to_config("branching_factors", 
                         description="Spaces delimited branching factors (e.g., 2 2)",
                         domain=pyofig.ListOf(int, pyofig.PositiveInt),
-                        default=None)).declare_as_argument()
+                        default=None)
         
 
 def make_multistage_parser(progname=None):
@@ -195,230 +224,230 @@ def make_EF2_parser(progname=None, num_scens_reqd=False):
     raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")    
 
 def EF2():
-    global_config.declare(
-        "num-scens", pyofig.ConfigValue(
+    add_to_config(
+        "num_scens", 
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
-        )).declare_as_argument()
+        )
         
-    global_config.declare("EF-solver-name", pyofig.ConfigValue(
+    add_to_config("EF_solver_name", 
         description= "solver name (default gurobi)",
         domain = str,
-        default="gurobi")).declare_as_argument()
+        default="gurobi")
 
 
-    global_config.declare("EF-mipgap", pyofig.ConfigValue(
+    add_to_config("EF_mipgap", 
                         description="mip gap option for the solver if needed (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
     
 
 def make_EF_multistage_parser(progname=None, num_scens_reqd=False):
     raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")        
 
 def EF_multistage():
-    global_config.declare(
-        "num-scens", pyofig.ConfigValue(
+    add_to_config(
+        "num_scens", 
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
-        )).declare_as_argument()
+        )
         
-    global_config.declare("EF-solver-name", pyofig.ConfigValue(
+    add_to_config("EF_solver_name", 
         description= "solver name (default gurobi)",
         domain = str,
-        default="gurobi")).declare_as_argument()
+        default="gurobi")
 
 
-    global_config.declare("EF-mipgap", pyofig.ConfigValue(
+    add_to_config("EF_mipgap", 
         description="mip gap option for the solver if needed (default None)",
         domain=float,
-        default=None)).declare_as_argument()
+        default=None)
     
 ##### common additions to the command line #####
 
 def two_sided_args():
     # add commands to  and also return the result
     
-    global_config.declare("rel-gap", pyofig.ConfigValue(
+    add_to_config("rel_gap", 
                         description="relative termination gap (default 0.05)",
                         domain=float,
-                        default=0.05)).declare_as_argument()
+                        default=0.05)
 
-    global_config.declare("abs-gap", pyofig.ConfigValue(
+    add_to_config("abs_gap", 
                         description="absolute termination gap (default 0)",
                         domain=float,
-                        default=0.)).declare_as_argument()
+                        default=0.)
     
-    global_config.declare("max-stalled-iters", pyofig.ConfigValue(
+    add_to_config("max_stalled_iters", 
                         description="maximum iterations with no reduction in gap (default 100)",
                         domain=int,
-                        default=100)).declare_as_argument()
+                        default=100)
 
     
 
 def mip_options():
     
-    global_config.declare("iter0-mipgap", pyofig.ConfigValue(
+    add_to_config("iter0_mipgap", 
                         description="mip gap option for iteration 0 (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("iterk-mipgap", pyofig.ConfigValue(
+    add_to_config("iterk_mipgap", 
                         description="mip gap option non-zero iterations (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
     
 
 def aph_args():
     
-    global_config.declare('aph-gamma', pyofig.ConfigValue(
+    add_to_config('aph_gamma', 
                         description='Gamma parameter associated with asychronous projective hedging (default 1.0)',
                         domain=float,
-                        default=1.0)).declare_as_argument()
-    global_config.declare('aph-nu', pyofig.ConfigValue(
+                        default=1.0)
+    add_to_config('aph_nu', 
                         description='Nu parameter associated with asychronous projective hedging (default 1.0)',
                         domain=float,
-                        default=1.0)).declare_as_argument()
-    global_config.declare('aph-frac-needed', pyofig.ConfigValue(
+                        default=1.0)
+    add_to_config('aph_frac_needed', 
                         description='Fraction of sub-problems required before computing projective step (default 1.0)',
                         domain=float,
-                        default=1.0)).declare_as_argument()
-    global_config.declare('aph-dispatch-frac', pyofig.ConfigValue(
+                        default=1.0)
+    add_to_config('aph_dispatch_frac', 
                         description='Fraction of sub-problems to dispatch at each step of asychronous projective hedging (default 1.0)',
                         domain=float,
-                        default=1.0)).declare_as_argument()
-    global_config.declare('aph-sleep-seconds', pyofig.ConfigValue(
+                        default=1.0)
+    add_to_config('aph_sleep_seconds', 
                         description='Spin-lock sleep time for APH (default 0.01)',
                         domain=float,
-                        default=0.01)).declare_as_argument()    
+                        default=0.01)    
         
 
 def fixer_args():
     
-    global_config.declare('with-fixer', pyofig.ConfigValue(
+    add_to_config('fixer', 
                           description="have an integer fixer extension (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("fixer-tol", pyofig.ConfigValue(
+    add_to_config("fixer_tol", 
                         description="fixer bounds tolerance  (default 1e-4)",
                         domain=float,
-                        default=1e-2)).declare_as_argument()
+                        default=1e-2)
     
 
 
 def fwph_args():
     
-    global_config.declare('with-fwph', pyofig.ConfigValue(
+    add_to_config('fwph', 
                           description="have an fwph spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("fwph-iter-limit", pyofig.ConfigValue(
+    add_to_config("fwph_iter_limit", 
                         description="maximum fwph iterations (default 10)",
                         domain=int,
-                        default=10)).declare_as_argument()
+                        default=10)
 
-    global_config.declare("fwph-weight", pyofig.ConfigValue(
+    add_to_config("fwph_weight", 
                         description="fwph weight (default 0)",
                         domain=float,
-                        default=0.0)).declare_as_argument()
+                        default=0.0)
 
-    global_config.declare("fwph-conv-thresh", pyofig.ConfigValue(
+    add_to_config("fwph_conv_thresh", 
                         description="fwph convergence threshold  (default 1e-4)",
                         domain=float,
-                        default=1e-4)).declare_as_argument()
+                        default=1e-4)
 
-    global_config.declare("fwph-stop-check-tol", pyofig.ConfigValue(
+    add_to_config("fwph_stop_check_tol", 
                         description="fwph tolerance for Gamma^t (default 1e-4)",
                         domain=float,
-                        default=1e-4)).declare_as_argument()
+                        default=1e-4)
 
-    global_config.declare("fwph-mipgap", pyofig.ConfigValue(
+    add_to_config("fwph_mipgap", 
                         description="mip gap option FW subproblems iterations (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
     
 
 def lagrangian_args():
     
-    global_config.declare('with-lagrangian', pyofig.ConfigValue(
+    add_to_config('lagrangian', 
                           description="have a lagrangian spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("lagrangian-iter0-mipgap", pyofig.ConfigValue(
+    add_to_config("lagrangian_iter0_mipgap", 
                         description="lgr. iter0 solver option mipgap (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("lagrangian-iterk-mipgap", pyofig.ConfigValue(
+    add_to_config("lagrangian_iterk_mipgap", 
                         description="lgr. iterk solver option mipgap (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
     
 
 
 def lagranger_args():
     
-    global_config.declare('with-lagranger', pyofig.ConfigValue(
+    add_to_config('lagranger', 
                         description="have a special lagranger spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("lagranger-iter0-mipgap", pyofig.ConfigValue(
+    add_to_config("lagranger_iter0_mipgap", 
                         description="lagranger iter0 mipgap (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("lagranger-iterk-mipgap", pyofig.ConfigValue(
+    add_to_config("lagranger_iterk_mipgap", 
                         description="lagranger iterk mipgap (default None)",
                         domain=float,
-                        default=None)).declare_as_argument()
+                        default=None)
 
-    global_config.declare("lagranger-rho-rescale-factors-json", pyofig.ConfigValue(
+    add_to_config("lagranger_rho_rescale_factors_json", 
                         description="json file: rho rescale factors (default None)",
                         domain=str,
-                        default=None)).declare_as_argument()
+                        default=None)
 
     
 
 
 def xhatlooper_args():
     
-    global_config.declare('with-xhatlooper', pyofig.ConfigValue(
+    add_to_config('xhatlooper', 
                           description="have an xhatlooper spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("xhat-scen-limit", pyofig.ConfigValue(
+    add_to_config("xhat_scen_limit", 
                         description="scenario limit xhat looper to try (default 3)",
                         domain=int,
-                        default=3)).declare_as_argument()
+                        default=3)
 
     
 
 
 def xhatshuffle_args():
     
-    global_config.declare('with-xhatshuffle', pyofig.ConfigValue(
+    add_to_config('xhatshuffle', 
                           description="have an xhatshuffle spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
     
-    global_config.declare('add-reversed-shuffle', pyofig.ConfigValue(
+    add_to_config('add_reversed_shuffle', 
                         description="using also the reversed shuffling (multistage only, default True)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
     
-    global_config.declare('xhatshuffle-iter-step', pyofig.ConfigValue(
+    add_to_config('xhatshuffle_iter_step', 
                         description="step in shuffled list between 2 scenarios to try (default None)",
                         domain=int,
-                        default=None)).declare_as_argument()
+                        default=None)
 
     
 
@@ -426,10 +455,10 @@ def xhatshuffle_args():
 def xhatspecific_args():
     # we will not try to get the specification from the command line
     
-    global_config.declare('with-xhatspecific', pyofig.ConfigValue(
+    add_to_config('xhatspecific', 
                           description="have an xhatspecific spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
     
 
@@ -437,69 +466,53 @@ def xhatspecific_args():
 def xhatlshaped_args():
     # we will not try to get the specification from the command line
     
-    global_config.declare('with-xhatlshaped', pyofig.ConfigValue(
+    add_to_config('xhatlshaped', 
                           description="have an xhatlshaped spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
     
 
 def slamup_args():
     # we will not try to get the specification from the command line
     
-    global_config.declare('with-slamup', pyofig.ConfigValue(
+    add_to_config('slamup', 
                         description="have an slamup spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
     
 
 def slamdown_args():
     # we will not try to get the specification from the command line
     
-    global_config.declare('with-slamdown', pyofig.ConfigValue(
+    add_to_config('slamdown', 
                         description="have an slamdown spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
     
 
 def cross_scenario_cuts_args():
     # we will not try to get the specification from the command line
     
-    global_config.declare('with-cross-scenario-cuts', pyofig.ConfigValue(
+    add_to_config('cross_scenario_cuts', 
                           description="have a cross scenario cuts spoke (default)",
                           domain=bool,
-                          default=False)).declare_as_argument()
+                          default=False)
 
-    global_config.declare("cross-scenario-iter-cnt", pyofig.ConfigValue(
+    add_to_config("cross_scenario_iter_cnt", 
                           description="cross scen check bound improve iterations "
                           "(default 4)",
                           domain=int,
-                          default=4)).declare_as_argument()
+                          default=4)
 
-    global_config.declare("eta-bounds-mipgap", pyofig.ConfigValue(
+    add_to_config("eta_bounds_mipgap", 
                           description="mipgap for determining eta bounds for cross "
                           "scenario cuts (default 0.01)",
                           domain=float,
-                          default=0.01)).declare_as_argument()
+                          default=0.01)
 
-#===============
-def add_to_config(name, description, domain, default,
-                  argparse=True,
-                  complain=False):
-    # add an arg to the global_config dict
-    if name in global_config:
-        if complain:
-            print(f"Trying to add duplicate {name} to global_config.")
-            # raise RuntimeError(f"Trying to add duplicate {name} to global_config.")
-    else:
-        c = global_config.declare(name, pyofig.ConfigValue(
-            description = description,
-            domain = domain,
-            default = default))
-    if argparse:
-        c.declare_as_argument()
 
 #================
 def create_parser(progname=None):
@@ -519,7 +532,7 @@ if __name__ == "__main__":
     print(dir(global_config))
     print(global_config._all_slots)
     print(global_config._domain)
-    print(f"{global_config['max-iterations'] =}")
+    print(f"{global_config['max_iterations'] =}")
 
     parser = create_parser("tester")
     parser.add_argument(
