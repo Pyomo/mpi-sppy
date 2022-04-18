@@ -85,7 +85,7 @@ def get_objs(scenario_instance):
                     active=True, descend_into=True)
     scenario_objs = list(scenario_objs)
     if (len(scenario_objs) == 0):
-        raise RuntimeError("Scenario " + sname + " has no active "
+        raise RuntimeError(f"Scenario {scenario_instance.name} has no active "
                            "objective functions.")
     if (len(scenario_objs) > 1):
         print("WARNING: Scenario", sname, "has multiple active "
