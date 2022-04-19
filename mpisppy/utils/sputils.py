@@ -79,12 +79,12 @@ def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
 
-def get_objs(scenario_instance):
+def get_objs(scenario_instance, allow_none=False):
     """ return the list of objective functions for scenario_instance"""
     scenario_objs = scenario_instance.component_data_objects(pyo.Objective,
                     active=True, descend_into=True)
     scenario_objs = list(scenario_objs)
-    if (len(scenario_objs) == 0):
+    if (len(scenario_objs) == 0) and not allow_none:
         raise RuntimeError(f"Scenario {scenario_instance.name} has no active "
                            "objective functions.")
     if (len(scenario_objs) > 1):
@@ -107,8 +107,9 @@ def deact_objs(scenario_instance):
         scenario_instance (Pyomo ConcreteModel): the scenario
     Returns:
         obj_list (list of Pyomo Objectives): the deactivated objs
+    Note: If none are active, just do nothing
     """
-    obj_list = get_objs(scenario_instance)
+    obj_list = get_objs(scenario_instance, allow_none=True)
     for obj in obj_list:
         obj.deactivate()
     return obj_list
