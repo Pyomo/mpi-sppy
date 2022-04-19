@@ -121,10 +121,6 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
                     raise
-            # assemble xhat (which is a nonants dict) from xhats
-            for ndn in xhats:
-                for i in range(cistart[ndn], nlens[ndn]):
-                    xhats[ndn] = xhats[ndn]
         else:  # we are multi-stage with stage2ef
             # Form an ef for all local scenarios and then fix the first stage
             # vars based on the chosen scenario
