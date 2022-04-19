@@ -144,7 +144,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             # (unrelated: uncomment the next line to see the source of delay getting an xhat)
             # print(f"in loop {self.get_serial_number() =}, {self.spoke_sleep_time =}")
             if self.get_serial_number() == 0:
-                time.sleep(self.spoke_sleep_time)
                 continue
 
             if (xh_iter-1) % 100 == 0:
