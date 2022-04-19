@@ -4,7 +4,7 @@
 # To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
 # or: python3 mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 --EF-solver-name cplex
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import argparse
 import numpy as np
 import scipy.stats
@@ -154,7 +154,7 @@ class MMWConfidenceIntervals():
                                            scenario_names=scenario_names,
                                            sample_options=gap_options,
                                            ArRP=1,
-                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           options=scenario_creator_kwargs,
                                            scenario_denouement=scenario_denouement,
                                            solvername=solvername,
                                            solver_options=solver_options,

@@ -20,7 +20,8 @@ the solution to a file or a directory.
 It takes as inputs scenario names, a scenario creator, options and
 a ``kw_creator`` function. ``kw_creator`` must be a function specific to your
 problem, taking the amalgamator options as an input, and giving as an output
-additional arguments for the ``scenario_creator``.
+additional arguments for the ``scenario_creator``. The amalgamator class
+is not flexible with respect to function names in the module.
 
 The ``options`` argument is a dictionary that specifies information 
 about the problem, and dictates the way Amalgamator runs. 
@@ -62,7 +63,7 @@ runs an Amalgamator object.
 .. Note::
    The module must contains several methods:
    ``scenario_creator``, ``scenario_names_creator``, ``inparser_adder`` and
-   ``kw_creator``. The files ``afarmer.py``, ``aaircond.py`` and ``uc_funcs.py`` contain
+   ``kw_creator``. The files ``examples.farmer.afarmer.py``, ``mpisppy.tests.examples.aircond.py`` contain
    examples of these functions.
 
 The full options dictionary is passed through to ``kw_creator`` so keyword arguments for

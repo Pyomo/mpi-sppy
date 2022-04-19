@@ -13,15 +13,20 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         return self.got_kill_signal()
 
     def sync(self):
+        # The FWPH spoke can call "sync" before it
+        # even starts doing anything, so its possible
+        # to get here without any bound information
+        if not hasattr(self.opt, '_local_bound'):
+            return
         # Tell the hub about the most recent bound
         self.bound = self.opt._local_bound
 
     def finalize(self):
-        # The FWPH spoke calls "is_converged" before it
+        # The FWPH spoke can call "finalize" before it
         # even starts doing anything, so its possible
         # to get here without any bound information
         # if we terminated early
-        if not hasattr(self.opt, 'local_bound'):
+        if not hasattr(self.opt, '_local_bound'):
             return
         self.bound = self.opt._local_bound
         self.final_bound = self.opt._local_bound

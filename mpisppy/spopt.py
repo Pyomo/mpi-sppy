@@ -8,7 +8,7 @@ import math
 import inspect
 
 import numpy as np
-from mpi4py import MPI
+from mpisppy import MPI
 
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
@@ -69,16 +69,17 @@ class SPOpt(SPBase):
                 if self.is_zero_prob(s, v) and v._value is None:
                     raise RuntimeError(
                             f"Non-anticipative zero-probability variable {v.name} "
-                            f"on scenario {sn} reported as stale and has no value. "
+                            f"on scenario {s.name} reported as stale and has no value. "
                              "Zero-probability variables must have a value (e.g., fixed).")
                 else:
-                    raise RuntimeError(
-                            f"Non-anticipative variable {v.name} on scenario {sn} "
-                             "reported as stale. This usually means this variable "
-                             "did not appear in any (active) constraints, and hence "
-                             "was not communicated to the subproblem solver. Please "
-                             "ensure all non-anticipative variables appear in some "
-                             "constraint.")
+                    try:
+                        float(pyo.value(v))
+                    except:
+                        raise RuntimeError(
+                            f"Non-anticipative variable {v.name} on scenario {s.name} "
+                            "reported as stale. This usually means this variable "
+                            "did not appear in any (active) components, and hence "
+                            "was not communicated to the subproblem solver. ")
         
 
     def solve_one(self, solver_options, k, s,
@@ -362,7 +363,12 @@ class SPOpt(SPBase):
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
-            local_Ebounds.append(s._mpisppy_probability * s._mpisppy_data.outer_bound)
+            try:
+                eb = s._mpisppy_probability * float(s._mpisppy_data.outer_bound)
+            except:
+                print(f"eb calc failed for {s._mpisppy_probability} * {s._mpisppy_data.outer_bound}")
+                raise
+            local_Ebounds.append(eb)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\

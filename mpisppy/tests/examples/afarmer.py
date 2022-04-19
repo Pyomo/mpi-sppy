@@ -13,7 +13,7 @@
 #
 # special scalable farmer for stress-testing
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
@@ -86,7 +86,6 @@ def scenario_creator(
             cond_prob=1.0,
             stage=1,
             cost_expression=model.FirstStageCost,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.DevotedAcreage],
             scen_model=model,
         )

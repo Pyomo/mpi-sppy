@@ -32,30 +32,15 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         ### begin iter0 stuff
         xhatter.pre_iter0()
         self.opt._save_original_nonants()
+        
+        self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
 
-        teeme = False
-        if "tee-rank0-solves" in self.opt.options:
-            teeme = self.opt.options['tee-rank0-solves']
-
-        self.opt.solve_loop(
-            solver_options=self.opt.current_solver_options,
-            dtiming=False,
-            gripe=True,
-            tee=teeme,
-            verbose=verbose
-        )
-        self.opt._update_E1()  # Apologies for doing this after the solves...
+        self.opt._update_E1()
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
             if self.opt.cylinder_rank == 0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
-            quit()
-        infeasP = self.opt.infeas_prob()
-        if infeasP != 0.:
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()
         ### end iter0 stuff
 

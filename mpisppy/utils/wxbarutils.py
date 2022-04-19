@@ -32,8 +32,10 @@
             options dictionary.
 '''
 
-import pyomo.environ as pyo
 import os
+import numpy as np
+import pyomo.environ as pyo
+import mpisppy.utils.sputils as sputils
 
 ''' W utilities '''
 
@@ -361,3 +363,28 @@ def _check_xbar(xbar_val_dict, PHB):
     if (set2):
         print('Ignoring the following variables values provided in the '
               'input file: ' + ', '.join([v for v in set2]))
+
+
+def ROOT_xbar_npy_serializer(PHB, fname):
+    """ Write the root node xbar to be read by a numpy load.
+    Args:
+        PHB (PHBase object) -- Where the W values live
+        fname (str) -- name of file to which we write.
+
+    """
+    arbitrary_scen = PHB.local_scenarios[list(PHB.local_scenarios.keys())[0]]
+    root_nlen = arbitrary_scen._mpisppy_data.nlens["ROOT"]
+    root_xbar_list = [pyo.value(arbitrary_scen._mpisppy_model.xbars["ROOT", ix]) for ix in range(root_nlen)]
+    np.savetxt(fname, root_xbar_list)
+
+
+def fix_ef_ROOT_nonants(ef, root_nonants):
+    """ modify ef to have fixed values for the root nonants
+    Args:
+        ef (Pyomo ConcreteModel for an EF): the extensive form to modify
+        root_nonants(list): the nonant values for the root node nonants
+    """
+    varlist = [var for (ndn,i), var in ef.ref_vars.items() if ndn == "ROOT"]
+    assert len(varlist) == len(root_nonants)
+    for var, vval in zip(varlist, root_nonants):
+        var.fix(vval)

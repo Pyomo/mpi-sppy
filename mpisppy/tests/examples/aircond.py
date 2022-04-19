@@ -143,8 +143,8 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     # grab positive and negative parts of inventory
     assert model.InventoryCost > 0, model.InventoryCost
     assert model.NegInventoryCost > 0, model.NegInventoryCost
-    model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
-    model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0)
+    model.negInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0, bounds = (0, model.bigM))
+    model.posInventory = pyo.Var(domain=pyo.NonNegativeReals, initialize=0.0, bounds = (0, model.bigM))
     model.doleInventory = pyo.Constraint(expr=model.Inventory == model.posInventory - model.negInventory)
 
     # create the inventory cost expression
@@ -264,7 +264,6 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
                                                         cond_prob=1.0,
                                                         stage=stage,
                                                         cost_expression=model.stage_models[stage].StageObjective,
-                                                        scen_name_list=None, # Not maintained
                                                         nonant_list=nonant_list,
                                                         scen_model=model,
                                                         nonant_ef_suppl_list = nonant_ef_suppl_list
@@ -277,7 +276,6 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
                                                         cond_prob=1.0,
                                                         stage=stage,
                                                         cost_expression=model.stage_models[stage].StageObjective,
-                                                        scen_name_list=None, # Not maintained
                                                         nonant_list=nonant_list,
                                                         scen_model=model,
                                                         nonant_ef_suppl_list = nonant_ef_suppl_list,
@@ -291,7 +289,6 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
                                                         cond_prob=1.0/branching_factors[stage-starting_stage-1],
                                                         stage=stage,
                                                         cost_expression=model.stage_models[stage].StageObjective,
-                                                        scen_name_list=None, # Not maintained
                                                         nonant_list=nonant_list,
                                                         scen_model=model,
                                                         nonant_ef_suppl_list = nonant_ef_suppl_list,
@@ -317,7 +314,7 @@ def scenario_creator(sname, **kwargs):
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
     model._mpisppy_probability = 1 / np.prod(branching_factors)
     """
-    from mpi4py import MPI
+    from mpisppy import MPI
 
     comm = MPI.COMM_WORLD
     rank = comm.Get_rank()

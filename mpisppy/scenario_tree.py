@@ -53,8 +53,6 @@ class ScenarioNode:
       cond_prob (float): conditional probability
       stage (int): stage number (root is 1)
       cost_expression (pyo Expression or Var):  stage cost 
-      scen_name_list (str): OPTIONAL scenario names at the node
-         just for debugging and reporting; not really used as of Dec 31
       nonant_list (list of pyo Var, Vardata or slices): the Vars that
               require nonanticipativity at the node (might not be a list)
       scen_model (pyo concrete model): the (probably not 'a') concrete model
@@ -67,7 +65,7 @@ class ScenarioNode:
       nonant_vardata(list of vardata objects): vardatas to blend
       x_bar_list(list of floats): bound by index to nonant_vardata
     """
-    def __init__(self, name, cond_prob, stage, cost_expression, scen_name_list,
+    def __init__(self, name, cond_prob, stage, cost_expression,
                  nonant_list, scen_model, nonant_ef_suppl_list=None,
                  parent_name=None):
         """Initialize a ScenarioNode object. Assume most error detection is
@@ -96,12 +94,3 @@ class ScenarioNode:
                                                          self.nonant_ef_suppl_list)
         else:
             self.nonant_ef_suppl_vardata_list = []
-    @property
-    def scen_name_list(self):
-        """ DLW Jan 2019: I am thinking we will not have the nodes know this.
-        The scenarios will know what nodes they are in, and that might be enough.
-        This is a big changes from PySP 1.0; 2.0 relies on reduction to get x-bar
-        """
-        raise RuntimeError ("The scen name list for a node is not maintained.")
-            
-

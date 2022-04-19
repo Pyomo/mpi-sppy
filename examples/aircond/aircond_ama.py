@@ -25,7 +25,7 @@ def main():
     
     #Here, we need to change something specified by the command line
     #That's why we cannot use amalgamator.from_module
-    if ama_options['num_scens'] is not None:
+    if ama_options.get('num_scens', None) is not None:
         raise RuntimeError("Do not use num_scens here, we want to solve the problem for the whole sample scenario tree")
     
     num_scens = np.prod(ama_options['branching_factors'])

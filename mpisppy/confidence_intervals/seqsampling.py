@@ -8,7 +8,7 @@
 # see also multi_seqsampling.py, which has a class derived from this class
 
 import pyomo.environ as pyo
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
 import numpy as np
 import scipy.stats
@@ -376,14 +376,13 @@ class SeqSampling():
         #Computing G_nkand s_k associated with xhat_1
             
         self.options['num_scens'] = nk
-        scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
         scenario_denouement = refmodel.scenario_denouement if hasattr(refmodel, "scenario_denouement") else None
         estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
                                        solving_type=self.solving_type,
                                        scenario_names=estimator_scenario_names,
                                        sample_options=sample_options,
                                        ArRP=self.ArRP,
-                                       scenario_creator_kwargs=scenario_creator_kwargs,
+                                       options=self.options,
                                        scenario_denouement=scenario_denouement,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options)
@@ -457,13 +456,12 @@ class SeqSampling():
             
             #Computing G_k and s_k
             self.options['num_scens'] = nk
-            scenario_creator_kwargs = self.refmodel.kw_creator(self.options)
             estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
                                            solving_type=self.solving_type,
                                            scenario_names=estimator_scenario_names,
                                            sample_options=sample_options,
                                            ArRP=self.ArRP,
-                                           scenario_creator_kwargs=scenario_creator_kwargs,
+                                           options=self.options,
                                            scenario_denouement=scenario_denouement,
                                            solvername=self.solvername,
                                            solver_options=self.solver_options)

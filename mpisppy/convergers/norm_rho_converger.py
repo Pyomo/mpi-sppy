@@ -6,7 +6,7 @@
 import math
 import mpisppy.convergers.converger
 
-import mpi4py.MPI as MPI
+import mpisppy.MPI as MPI
 import numpy as np
 
 class NormRhoConverger(mpisppy.convergers.converger.Converger):

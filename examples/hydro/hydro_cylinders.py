@@ -29,6 +29,13 @@ def _parse_args():
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
+
+    parser.add_argument("--stage2EFsolvern",
+                        help="Solver to use for xhatlooper stage2ef option (default None)",
+                        dest="stage2EFsolvern",
+                        default=None)
+                        
+    
     args = parser.parse_args()
     return args
 
@@ -87,6 +94,10 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+
+    if args.stage2EFsolvern is not None:
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = args.stage2EFsolvern
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = args.branching_factors
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()

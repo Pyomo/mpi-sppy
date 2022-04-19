@@ -12,12 +12,8 @@ import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 
-try:
-    from mpi4py import MPI
-    haveMPI = True
-    global_rank = MPI.COMM_WORLD.Get_rank()
-except:
-    haveMPI = False
+from mpisppy import MPI, haveMPI
+global_rank = MPI.COMM_WORLD.Get_rank()
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy import tt_timer, global_toc
@@ -82,19 +78,50 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
 def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
-def get_objs(scenario_instance):
+
+def get_objs(scenario_instance, allow_none=False):
     """ return the list of objective functions for scenario_instance"""
     scenario_objs = scenario_instance.component_data_objects(pyo.Objective,
                     active=True, descend_into=True)
     scenario_objs = list(scenario_objs)
-    if (len(scenario_objs) == 0):
-        raise RuntimeError("Scenario " + sname + " has no active "
+    if (len(scenario_objs) == 0) and not allow_none:
+        raise RuntimeError(f"Scenario {scenario_instance.name} has no active "
                            "objective functions.")
     if (len(scenario_objs) > 1):
         print("WARNING: Scenario", sname, "has multiple active "
               "objectives. Selecting the first objective for "
                   "inclusion in the extensive form.")
     return scenario_objs
+
+
+def stash_ref_objs(scenario_instance):
+    """Stash a reference to active objs so
+        Reactivate_obj can use the reference to reactivate them/it later.
+    """
+    scenario_instance._mpisppy_data.obj_list = get_objs(scenario_instance)
+
+
+def deact_objs(scenario_instance):
+    """ Deactivate objs 
+    Args:
+        scenario_instance (Pyomo ConcreteModel): the scenario
+    Returns:
+        obj_list (list of Pyomo Objectives): the deactivated objs
+    Note: If none are active, just do nothing
+    """
+    obj_list = get_objs(scenario_instance, allow_none=True)
+    for obj in obj_list:
+        obj.deactivate()
+    return obj_list
+
+
+def reactivate_objs(scenario_instance):
+    """ Reactivate ojbs stashed by stash_ref_objs """
+    if not hasattr(scenario_instance._mpisppy_data, "obj_list"):
+        raise RuntimeError("reactivate_objs called with prior call to stash_ref_objs")
+    for obj in scenario_instance._mpisppy_data.obj_list:
+        obj.activate()
+
 
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
@@ -154,9 +181,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
                 if (ndn, i) not in scenario_instance.ref_vars:
                     scenario_instance.ref_vars[(ndn, i)] = v
         # patch in EF_Obj        
-        scenario_objs = get_objs(scenario_instance)        
-        for obj_func in scenario_objs:
-            obj_func.deactivate()
+        scenario_objs = deact_objs(scenario_instance)        
         obj = scenario_objs[0]            
         sense = pyo.minimize if obj.is_minimizing() else pyo.maximize
         scenario_instance.EF_Obj = pyo.Objective(expr=obj.expr, sense=sense)
@@ -233,9 +258,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         EF_instance.add_component(sname, scenario_instance)
         EF_instance._ef_scenario_names.append(sname)
         # Now deactivate the scenario instance Objective
-        scenario_objs = get_objs(scenario_instance)
-        for obj_func in scenario_objs:
-            obj_func.deactivate()
+        scenario_objs = deact_objs(scenario_instance)
         obj_func = scenario_objs[0] # Select the first objective
         try:
             EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
@@ -425,7 +448,7 @@ def write_ef_first_stage_solution(ef,
     NOTE:
         This utility is replicating WheelSpinner.write_first_stage_solution for EF
     """
-    if not haveMPI or (global_rank==0):
+    if global_rank==0:
         dirname = os.path.dirname(solution_file_name)
         if dirname != '':
             os.makedirs(os.path.dirname(solution_file_name), exist_ok=True)
@@ -446,7 +469,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
     NOTE:
         This utility is replicating WheelSpinner.write_tree_solution for EF
     """
-    if not haveMPI or (global_rank==0):
+    if global_rank==0:
         os.makedirs(solution_directory_name, exist_ok=True)
         for scenario_name, scenario in ef_scenarios(ef):
             scenario_tree_solution_writer(solution_directory_name,
@@ -537,10 +560,10 @@ def option_string_to_dict(ostr):
     """
     def convert_value_string_to_number(s):
         try:
-            return float(s)
+            return int(s)
         except ValueError:
             try:
-                return int(s)
+                return float(s)
             except ValueError:
                 return s
 
@@ -673,7 +696,7 @@ class _TreeNode():
                                            child_leaf_dict, childname))
                 first += child_scens_num
             if last != scenlast:
-                print("Hello", numscens)
+                print("numscens, last, scenlast", numscens, last, scenlast)
                 raise RuntimeError(f"Tree node did not initialize correctly for node {name}")
 
 
@@ -808,7 +831,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
        attaches a list consisting of one scenario node to the model
     """
     model._mpisppy_node_list = [
-        scenario_tree.ScenarioNode("ROOT",1.0,1,firstobj, None, varlist, model,
+        scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list)
     ]
 

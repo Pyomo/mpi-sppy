@@ -12,7 +12,7 @@ import unittest
 import subprocess
 import importlib
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer
@@ -222,6 +222,7 @@ class Test_confint_farmer(unittest.TestCase):
         scenario_names = farmer.scenario_names_creator(50,start=1000)
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
+                                       options=self._get_base_options(),
                                        solvername=solvername,
                                        scenario_names=scenario_names,
                                        )

@@ -3,7 +3,7 @@ import farmer
 import mpisppy.utils.sputils as sputils
 from mpisppy.opt import ef, sc
 import logging
-from mpi4py import MPI
+from mpisppy import MPI
 import sys
 
 

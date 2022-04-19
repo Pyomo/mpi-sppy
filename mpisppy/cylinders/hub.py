@@ -6,7 +6,7 @@ import logging
 import time
 import mpisppy.log
 
-from mpi4py import MPI
+from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
@@ -139,7 +139,7 @@ class Hub(SPCommunicator):
         if "rel_gap" in self.options and rel_gap <= self.options["rel_gap"]:
             rel_gap_satisfied = True 
         if "abs_gap" in self.options and abs_gap <= self.options["abs_gap"]:
-            rel_gap_satisfied = True             
+            abs_gap_satisfied = True             
 
         if "max_stalled_iters" in self.options:
             if abs_gap < self.last_gap:  # liberal test (we could use an epsilon)

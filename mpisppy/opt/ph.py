@@ -4,7 +4,7 @@
 
 import mpisppy.phbase
 import shutil
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):

@@ -59,26 +59,13 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         xhatter.pre_iter0()  # for an extension
         self.opt._save_original_nonants()
 
-        teeme = False
-        if "tee-rank0-solves" in self.opt.options:
-            teeme = self.opt.options['tee-rank0-solves']
+        self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
 
-        self.opt.solve_loop(
-            solver_options=self.solver_options,
-            dtiming=False,
-            gripe=True,
-            tee=teeme,
-            verbose=verbose
-        )
-        self.opt._update_E1()  # Apologies for doing this after the solves...
+        self.opt._update_E1()
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            raise ValueError(f"Total probability of scenarios was {self.opt.E1}"+\
-                                 f"E1_tolerance = {self.opt.E1_tolerance}")
-        infeasP = self.opt.infeas_prob()
-        if infeasP != 0.:
-            raise ValueError(f"Infeasibility detected; E_infeas={infeasP}")
-        
-        ### end iter0 stuff
+            raise ValueError(f"Total probability of scenarios was {self.opt.E1} "+\
+                                 f"(E1_tolerance is {self.opt.E1_tolerance})")
+        ### end iter0 stuff (but note: no need for iter 0 solves in an xhatter)
 
         xhatter.post_iter0()
  
@@ -91,12 +78,17 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
 
     def try_scenario_dict(self, xhat_scenario_dict):
+        """ wrapper for _try_one"""
         snamedict = xhat_scenario_dict
 
+        stage2EFsolvern = self.opt.options.get("stage2EFsolvern", None)
+        branching_factors = self.opt.options.get("branching_factors", None)  # for stage2ef
         obj = self.xhatter._try_one(snamedict,
-                            solver_options = self.solver_options,
-                            verbose=False,
-                            restore_nonants=False)
+                                    solver_options = self.solver_options,
+                                    verbose=False,
+                                    restore_nonants=False,
+                                    stage2EFsolvern=stage2EFsolvern,
+                                    branching_factors=branching_factors)
         def _vb(msg): 
             if self.verbose and self.opt.cylinder_rank == 0:
                 print ("(rank0) " + msg)
@@ -148,6 +140,11 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         xh_iter = 1
         while not self.got_kill_signal():
+            # When there is no iter0, the serial number must be checked.
+            # (unrelated: uncomment the next line to see the source of delay getting an xhat)
+            # print(f"in loop {self.get_serial_number() =}, {self.spoke_sleep_time =}")
+            if self.get_serial_number() == 0:
+                continue
 
             if (xh_iter-1) % 100 == 0:
                 logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.global_rank}')

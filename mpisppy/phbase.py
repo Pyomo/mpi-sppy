@@ -4,7 +4,7 @@ import time
 import logging
 
 import numpy as np
-import mpi4py.MPI as MPI
+import mpisppy.MPI as MPI
 
 import pyomo.environ as pyo
 
@@ -754,6 +754,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0()
 
+        if self.spcomm is not None:
+            self.spcomm.sync()
+
         if self.rho_setter is not None:
             if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
@@ -836,11 +839,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             # over the converger, such that
             # the spokes will always have the
             # latest data, even at termination
-            if self.spcomm is not None:
-                self.spcomm.sync()
-                if self.spcomm.is_converged():
-                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
-                    break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
@@ -868,6 +866,12 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             if have_extensions:
                 self.extobject.enditer()
+
+            if self.spcomm is not None:
+                self.spcomm.sync()
+                if self.spcomm.is_converged():
+                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
+                    break
 
             if dprogress and self.cylinder_rank == 0:
                 print("")

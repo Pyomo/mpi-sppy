@@ -7,7 +7,7 @@ import math
 import mpisppy.extensions.extension
 
 import numpy as np
-import mpi4py.MPI as MPI
+import mpisppy.MPI as MPI
 
 _norm_rho_defaults = { 'convergence_tolerance' : 1e-4,
                            'rho_decrease_multiplier' : 2.0,

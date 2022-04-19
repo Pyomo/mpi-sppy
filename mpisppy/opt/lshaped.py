@@ -8,7 +8,7 @@ import time
 import sys
 import mpisppy.spbase as spbase
 
-from mpi4py import MPI
+from mpisppy import MPI
 from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
 from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator

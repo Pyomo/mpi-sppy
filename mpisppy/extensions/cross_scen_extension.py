@@ -11,7 +11,7 @@ import sys
 import math
 import mpisppy.utils.sputils as sputils
 import numpy as np
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 class CrossScenarioExtension(Extension):
     def __init__(self, spbase_object):

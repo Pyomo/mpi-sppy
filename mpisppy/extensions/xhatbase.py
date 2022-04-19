@@ -1,10 +1,14 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
+
+import re
 import pyomo.environ as pyo
 
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
 
 import mpisppy.extensions.extension
+import mpisppy.utils.wxbarutils as wxbarutils
+import mpisppy.utils.sputils as sputils
 
 
 class XhatBase(mpisppy.extensions.extension.Extension):
@@ -31,7 +35,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
         
      #**********
-    def _try_one(self, snamedict, solver_options=None, verbose=False, restore_nonants=True):
+    def _try_one(self, snamedict, solver_options=None, verbose=False,
+                 restore_nonants=True, stage2EFsolvern=None, branching_factors=None):
         """ try the scenario named sname in self.opt.local_scenarios
        Args:
             snamedict (dict): key: scenario tree non-leaf name, val: scen name
@@ -41,6 +46,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             restore_nonants (bool): if True, restores the nonants to their original
                                     values in all scenarios. If False, leaves the
                                     nonants as they are in the tried scenario
+            stage2EFsolvern: use this for EFs based on second stage nodes for multi-stage
+            branching_factors (list): list of branching factors for stage2ef
        NOTE: The solve loop is with fixed nonants so W and rho do not
              matter to the optimization. When we want to check the obj
              value we need to drop them, but we don't need to re-optimize
@@ -48,9 +55,20 @@ class XhatBase(mpisppy.extensions.extension.Extension):
              fixed.
         Returns:
              obj (float or None): the expected value for sname as xhat or None
+        NOTE:
+             the stage2ef stuff is a little bit hacked-in
         """
         xhats = dict()  # to pass to _fix_nonants
         self.opt._save_nonants()  # (BTW: for all local scenarios)
+
+        # Special Tee option for xhat
+        sopt = solver_options
+        Tee=False
+        if solver_options is not None and "Tee" in solver_options:
+            sopt = dict(solver_options)
+            Tee = sopt["Tee"]
+            del sopt["Tee"]
+        
         # For now, we are going to treat two-stage as a special case
         if len(snamedict) == 1:
             sname = snamedict["ROOT"]  # also serves as an assert
@@ -66,7 +84,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                       .format(src_rank))
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
-        else:  # multi-stage
+        elif stage2EFsolvern is None:  # regular multi-stage
             # assemble parts and put it in xhats
             # send to ranks in the comm or receive ANY_SOURCE
             # (for closest do allreduce with loc operator) rank
@@ -103,20 +121,91 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                     print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
                           .format(ndn,src_rank))
                     raise
-            # assemble xhat (which is a nonants dict) from xhats
-            for ndn in xhats:
-                for i in range(cistart[ndn], nlens[ndn]):
-                    xhats[ndn] = xhats[ndn]
+        else:  # we are multi-stage with stage2ef
+            # Form an ef for all local scenarios and then fix the first stage
+            # vars based on the chosen scenario
+            # based strictly on the root node nonant.
+            sname = snamedict["ROOT"]  # also serves as an assert
+            if sname in self.opt.local_scenarios:
+                rnlen = self.opt.local_scenarios[sname]._mpisppy_data.nlens["ROOT"]
+                xhat = [self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache[i] for i in range(rnlen)]
+            else:
+                xhat = None
+            src_rank = self.scenario_name_to_rank["ROOT"][sname]
+            try:
+                xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
+            except:
+                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
+                      .format(src_rank))
+                print("root comm size={}".format(self.comms["ROOT"].size))
+                raise
+            # now form the EF for the appropriate number of second-stage scenario tree nodes
+            # Use the branching factors to figure out how many second-stage nodes.
+            stage2cnt = branching_factors[1]
+            rankcnt = self.n_proc
+            # The next assert is important.
+            assert stage2cnt % rankcnt== 0, "for stage2ef, ranks must be a multiple of stage2 nodes"            
+            nodes_per_rank = stage2cnt // rankcnt
+            # to keep the code easier to read, we will first collect the nodenames
+            # Important: we are assuming a standard node naming pattern using underscores.
+            # TBD: do something that would work with underscores *in* the stage branch name
+            # TBD: factor this
+            local_2ndns = dict()  # dict of dicts (inner dicts are for FormEF)
+            for k,s in self.opt.local_scenarios.items():
+                if hasattr(self, "_EFs"):
+                    sputils.deact_objs(s)  # create EF does this the first time
+                for node in s._mpisppy_node_list:
+                    ndn = node.name
+                    if len(re.findall("_", ndn)) == 1:
+                        if ndn not in local_2ndns:
+                            local_2ndns[ndn] = {k: s}
+                        local_2ndns[ndn][k] = s
+            if len(local_2ndns) != nodes_per_rank:
+                print("stage2ef failure: nodes_per_rank=",nodes_per_rank, "local_2ndns=",local_2ndns)
+                raise RuntimeError("stagecnt assumes regular scenario tree and standard _ node naming")
+            # create an EF for each second stage node and solve with fixed nonant
+            # TBD: factor out the EF creation!
+            if not hasattr(self, "_EFs"):
+                for k,s in self.opt.local_scenarios.items():
+                    sputils.stash_ref_objs(s)
+                self._EFs = dict()
+                for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
+                    if ndn2 not in self._EFs:  # this will only happen once
+                        self._EFs[ndn2] = self.opt.FormEF(sdict, ndn2)  # spopt.py
+            # We have EFs so fix noants, solve, and etc.
+            for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
+                wxbarutils.fix_ef_ROOT_nonants(self._EFs[ndn2], xhats["ROOT"])
+                # solve EF
+                solver = pyo.SolverFactory(stage2EFsolvern)
+                if 'persistent' in stage2EFsolvern:
+                    solver.set_instance(self._EFs[ndn2], symbolic_solver_labels=True)
+                    results = solver.solve(tee=Tee)
+                else:
+                    results = solver.solve(self._EFs[ndn2], tee=Tee, symbolic_solver_labels=True,)
+
+                # restore objectives so Ebojective will work
+                for s in sdict.values():
+                    sputils.reactivate_objs(s)
+                # if you hit infeas, return None
+                if not pyo.check_optimal_termination(results):
+                   self.opt._restore_nonants()
+                   return None
+               
+            # feasible xhat found, so finish up 2EF part and return
+            if verbose and src_rank == self.cylinder_rank:
+                print("   Feasible xhat found:")
+                self.opt.local_scenarios[sname].pprint()
+            # get the global obj
+            obj = self.opt.Eobjective(verbose=verbose)
+            if restore_nonants:
+                self.opt._restore_nonants()
+            return obj
+
+        # end of multi-stage with stage2ef
+
+        # Code from here down executes for 2-stage and regular multi-stage
         # The save is done above
         self.opt._fix_nonants(xhats)  # (BTW: for all local scenarios)
-
-        # Special Tee option for xhat
-        sopt = solver_options
-        Tee=False
-        if solver_options is not None and "Tee" in solver_options:
-            sopt = dict(solver_options)
-            Tee = sopt["Tee"]
-            del sopt["Tee"]
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
         self.opt.solve_loop(solver_options=sopt,
