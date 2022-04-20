@@ -10,6 +10,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import argparse
 from mpisppy import global_toc
+from mpisppy.utils import config
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
@@ -426,6 +427,8 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
+    """ Use the options passed in and/or global options to 
+    create the key word aguents for the creator fucntion(s)"""
     # TBD: re-write this function...
     if "kwargs" in options:
         return options["kwargs"]
@@ -437,14 +440,15 @@ def kw_creator(options):
         retval = options.get(option_name)
         if retval is not None:
             kwargs[option_name] = retval
-            return 
-        args = options.get('args')
+            return
+        # if not in the options, see if it is availalbe globally
+        cfg = config.global_config  # typint aid
         aname = option_name if arg_name is None else arg_name
-        retval = getattr(args, aname) if hasattr(args, aname) else None
+        retval = getattr(cfg, aname) if hasattr(cfg, aname) else None
         retval = default if retval is None else retval
         kwargs[option_name] = retval
             
-    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
+    # Linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
     _kwarg("branching_factors")
     for idx, tpl in parms.items():
