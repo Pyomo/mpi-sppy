@@ -11,8 +11,8 @@ import itertools
 from mpisppy import global_toc
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_string_to_dict
-from mpisppy.utils import baseparsers
-from mpisppy.utils import vanilla
+from mpisppy.utils import config
+import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.aircond as aircond
 import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy.utils import pickle_bundle
@@ -125,69 +125,67 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
     return nodenames
     
 def _parse_args():
-    parser = baseparsers.make_multistage_parser()
-    parser = baseparsers.two_sided_args(parser)
-    parser = baseparsers.xhatlooper_args(parser)
-    parser = baseparsers.xhatshuffle_args(parser)
-    parser = baseparsers.fwph_args(parser)
-    parser = baseparsers.lagrangian_args(parser)
-    parser = baseparsers.lagranger_args(parser)
-    parser = baseparsers.xhatspecific_args(parser)
-    parser = baseparsers.mip_options(parser)
-    parser = baseparsers.aph_args(parser)    
-    parser = aircond.inparser_adder(parser)  # not aircondB
-    parser.add_argument("--run-async",
-                        help="Run with async projective hedging instead of progressive hedging",
-                        dest="run_async",
-                        action="store_true",
-                        default=False)    
-    parser.add_argument("--write-solution",
-                        help="Write various solution files (default False)",
-                        dest="write_solution",
-                        action="store_true",
-                        default=False)    
+    config.multistage()
+    config.two_sided_args()
+    config.xhatlooper_args()
+    config.xhatshuffle_args()
+    config.fwph_args()
+    config.lagrangian_args()
+    config.lagranger_args()
+    config.xhatspecific_args()
+    config.mip_options()
+    config.aph_args()    
+    aircond.inparser_adder()  # not aircondB
+    config.add_to_config("run_async",
+                         description="Run with async projective hedging instead of progressive hedging",
+                         domain=bool,
+                         default=False)    
+    config.add_to_config("write_solution",
+                         description="Write various solution files (default False)",
+                         domain=bool,
+                         default=False)    
     # special "proper" bundle arguments
-    parser = pickle_bundle.pickle_bundle_parser(parser)
+    parser = pickle_bundle.pickle_bundle_parser()
 
-    parser.add_argument("--EF-directly",
-                        help="Solve the EF directly instead of using cylinders (default False)",
-                        dest="EF_directly",
-                        action="store_true",
-                        default=False)
+    config.add_to_config("EF_directly",
+                         description="Solve the EF directly instead of using cylinders (default False)",
+                         domain=bool,
+                         default=False)
     # DLW March 2022: this should be in baseparsers and vanilla some day
-    parser.add_argument("--solver-options",
-                        help="Space separarated string with = for arguments (default None)",
-                        dest="solver_options",
-                        type=str,
-                        default=None)
-    
+    config.add_to_config("solver_options",
+                         description="Space separarated string with = for arguments (default None)",
+                         domain=str,
+                         default=None)
 
-    args = parser.parse_args()
+    parser = config.create_parser("aircond")
+    args = parser.parse_args()  # from the command line
+    args = config.global_config.import_argparse(args)
 
     return args
 
 def main():
+    cfg = config.global_config  # typing aid
 
-    args = _parse_args()
+    cmdargs = _parse_args()
 
-    BFs = args.branching_factors
+    BFs = cfg.branching_factors
 
     if BFs is None:
         raise RuntimeError("Branching factors must be specified")
-    proper_bundles = pickle_bundle.have_proper_bundles(args)
+    proper_bundles = pickle_bundle.have_proper_bundles(cmdargs)
     if proper_bundles:
-        pickle_bundle.check_args(args)
-        assert args.scenarios_per_bundle is not None
-        if args.pickle_bundles_dir is not None:
+        pickle_bundle.check_args(cmdargs)
+        assert cfg.scenarios_per_bundle is not None
+        if cfg.pickle_bundles_dir is not None:
             raise ValueError("Do not give a --pickle-bundles-dir to this program. "
                              "This program only takes --unpickle-bundles-dir. "
                              "Use bundle_pickler.py to create bundles.")
 
-    with_xhatspecific = args.with_xhatspecific
-    with_lagrangian = args.with_lagrangian
-    with_lagranger = args.with_lagranger
-    with_fwph = args.with_fwph
-    with_xhatshuffle = args.with_xhatshuffle
+    with_xhatspecific = cfg.xhatspecific
+    with_lagrangian = cfg.lagrangian
+    with_lagranger = cfg.lagranger
+    with_fwph = cfg.fwph
+    with_xhatshuffle = cfg.xhatshuffle
 
     # This is multi-stage, so we need to supply node names
     #all_nodenames = ["ROOT"] # all trees must have this node
@@ -199,7 +197,7 @@ def main():
         # All the scenarios will happen to be bundles, but mpisppy does not need to know that.
         # This code needs to know the correct scenarios per bundle and the number of
         # bundles in --branching-factors (one element in the list).
-        bsize = int(args.scenarios_per_bundle)
+        bsize = int(cfg.scenarios_per_bundle)
         assert len(BFs) == 1, "for proper bundles, --branching-factors should be the number of bundles"
         numbuns = BFs[0]
         all_scenario_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
@@ -218,17 +216,17 @@ def main():
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
 
-    scenario_creator_kwargs = refmodule.kw_creator({"args": args})
+    scenario_creator_kwargs = refmodule.kw_creator()  # take everything from config
     scenario_creator = refmodule.scenario_creator
     # TBD: consider using aircond instead of refmodule and pare down aircondB.py
     scenario_denouement = refmodule.scenario_denouement
     
-    if args.EF_directly:
+    if cfg.EF_directly:
         ama_options = {"args": args,
                        "EF-mstage": not proper_bundles,
                        "EF-2stage": proper_bundles,
-                       "EF_solver_name": args.solver_name,
-                       "branching_factors": args.branching_factors,
+                       "EF_solver_name": cfg.solver_name,
+                       "branching_factors": cfg.branching_factors,
                        "num_scens": ScenCount,  # is this needed?
                        "_mpisppy_probability": 1/ScenCount,  # is this needed?
                        "tee_ef_solves":False,
@@ -242,9 +240,9 @@ def main():
 
     # if we are still here, we are running cylinders
     # Things needed for vanilla cylinders
-    beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
+    beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
     
-    if args.run_async:
+    if cfg.run_async:
         # Vanilla APH hub
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
@@ -304,8 +302,8 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
     # DLW (March 2022): This should be generalized
-    if args.solver_options is not None:
-        soptions = option_string_to_dict(args.solver_options)
+    if cfg.solver_options is not None:
+        soptions = option_string_to_dict(cfg.solver_options)
         hub_dict["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
         hub_dict["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
         if with_xhatspecific:
@@ -323,10 +321,10 @@ def main():
     if wheel.global_rank == 0:
         print("BestInnerBound={} and BestOuterBound={}".\
               format(wheel.BestInnerBound, wheel.BestOuterBound))
-        if args.write_solution:
+        if cfg.write_solution:
             print(f"Writing first stage solution to {fname}")
     # all ranks need to participate because only the winner will write
-    if args.write_solution:
+    if cfg.write_solution:
         wheel.write_first_stage_solution('aircond_first_stage.csv')
         wheel.write_tree_solution('aircond_full_solution')
         wheel.write_first_stage_solution(fname,

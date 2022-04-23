@@ -10,6 +10,7 @@
 import os
 import dill  
 from mpisppy import global_toc
+from mpisppy.utils import config
 
 def dill_pickle(model, fname):
     """ serialize model using dill to file name"""
@@ -29,25 +30,21 @@ def dill_unpickle(fname):
     return m
 
 
-def pickle_bundle_parser(parser):
+def pickle_bundle_parser():
     """ Add command line options for creation and use of "proper" bundles"""
-    parser.add_argument('--pickle-bundles-dir',
-                        help="Write bundles to a dill pickle files in this dir (default None)",
-                        dest='pickle_bundles_dir',
-                        type=str,
+    config.add_to_config('pickle_bundles_dir',
+                        description="Write bundles to a dill pickle files in this dir (default None)",
+                        domain=str,
                         default=None)
     
-    parser.add_argument('--unpickle-bundles-dir',
-                        help="Read bundles from a dill pickle files in this dir; (default None)",
-                        dest='unpickle_bundles_dir',
-                        type=str,
+    config.add_to_config('unpickle_bundles_dir',
+                        description="Read bundles from a dill pickle files in this dir; (default None)",
+                        domain=str,
                         default=None)
-    parser.add_argument("--scenarios-per-bundle",
-                        help="Used for `proper` bundles only (default None)",
-                        dest="scenarios_per_bundle",
-                        type=int,
+    config.add_to_config("scenarios_per_bundle",
+                        description="Used for `proper` bundles only (default None)",
+                        domain=int,
                         default=None)
-    return parser
 
 def check_args(args):
     """ make sure the pickle bundle args make sense"""
