@@ -141,6 +141,7 @@ def _parser_setup():
                          default=10)
     config.add_to_config("solver_options",
                          description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
+                         domain=str,
                          default='')
     
     config.add_to_config("confidence_level",
@@ -185,6 +186,5 @@ if __name__ == "__main__":
     
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
-    global_config._args = args  # To make it generally available
 
     zhatbar, eps_z = _main_body(args, model_module)

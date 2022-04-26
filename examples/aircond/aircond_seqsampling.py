@@ -79,27 +79,27 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
 
 
 
-def main(args):
+def main():
     """ Code for aircond sequential sampling (in a function for easier testing)
-    Args:
-        args (parseargs): the command line arguments object from parseargs
+    Uses the global config data.
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
     refmodelname = "mpisppy.tests.examples.aircond"
     scenario_creator = aircond.scenario_creator
 
-    BFs = args.branching_factors
+    cfg = config.global_config
+    BFs = cfg.branching_factors
     num_scens = np.prod(BFs)
-    solver_name = args.solver_name
-    mu_dev = args.mu_dev
-    sigma_dev = args.sigma_dev
+    solver_name = cfg.solver_name
+    mu_dev = cfg.mu_dev
+    sigma_dev = cfg.sigma_dev
     scenario_creator_kwargs = {"num_scens" : num_scens,
                                "branching_factors": BFs,
                                "mu_dev": mu_dev,
                                "sigma_dev": sigma_dev,
                                "start_ups": False,
-                               "start_seed": args.seed,
+                               "start_seed": cfg.seed,
                                }
     
     scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
@@ -111,30 +111,30 @@ def main(args):
                         "mu_dev": mu_dev,
                         "sigma_dev": sigma_dev,
                         "start_ups": False,
-                        "start_seed": args.seed,
+                        "start_seed": cfg.seed,
                         }
 
     # simply called "options" by the SeqSampling constructor
     inneroptions = {"solvername": solver_name,
                     "branching_factors": BFs,
                     "solver_options": None,
-                    "sample_size_ratio": args.sample_size_ratio,
+                    "sample_size_ratio": cfg.sample_size_ratio,
                     "xhat_gen_options": xhat_gen_options,
-                    "ArRP": args.ArRP,
-                    "kf_xhat": args.kf_GS,
-                    "kf_xhat": args.kf_xhat,
-                    "confidence_level": args.confidence_level,
+                    "ArRP": cfg.ArRP,
+                    "kf_xhat": cfg.kf_GS,
+                    "kf_xhat": cfg.kf_xhat,
+                    "confidence_level": cfg.confidence_level,
                     "start_ups": False,
                     }
 
-    if args.BM_vs_BPL == "BM":
+    if cfg.BM_vs_BPL == "BM":
         # Bayraksan and Morton
-        optionsBM = {'h': args.BM_h,
-                     'hprime': args.BM_hprime, 
-                     'eps': args.BM_eps, 
-                     'epsprime': args.BM_eps_prime, 
-                     "p": args.BM_p,
-                     "q": args.BM_q,
+        optionsBM = {'h': cfg.BM_h,
+                     'hprime': cfg.BM_hprime, 
+                     'eps': cfg.BM_eps, 
+                     'epsprime': cfg.BM_eps_prime, 
+                     "p": cfg.BM_p,
+                     "q": cfg.BM_q,
                      "xhat_gen_options": xhat_gen_options,
                      }
 
@@ -148,15 +148,15 @@ def main(args):
                                           solving_type="EF-mstage",
                                           )
     else:  # must be BPL
-        optionsBPL = {'eps': args.BPL_eps, 
-                      "c0": args.BPL_c0,
-                      "n0min": args.BPL_n0min,
+        optionsBPL = {'eps': cfg.BPL_eps, 
+                      "c0": cfg.BPL_c0,
+                      "n0min": cfg.BPL_n0min,
                       "xhat_gen_options": xhat_gen_options,
                       }
 
         optionsBPL.update(inneroptions)
         
-        ss = int(args.BPL_n0min) != 0
+        ss = int(cfg.BPL_n0min) != 0
         sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
                                 xhat_generator_aircond,
                                 optionsBPL,
@@ -168,7 +168,7 @@ def main(args):
     xhat = sampler.run()
     return xhat
 
-def _parse_args():
+def _setup_args():
     config.multistage()
     conf_config.confidence_config()
     conf_config.sequential_config()
@@ -196,28 +196,29 @@ def _parse_args():
                         domain=str,
                         default=None)
 
-    parser = config.create_parser("aircond")
+    parser = config.create_parser("aircond_seqsampling")
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
-    config._args = args
 
-    if args.BM_vs_BPL is None:
-        raise argparse.ArgumentTypeError("--BM-vs-BPL must be given.")
-    if args.BM_vs_BPL != "BM" and args.BM_vs_BPL != "BPL":
-        raise argparse.ArgumentTypeError(f"--BM-vs-BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
+    cfg = config.global_config    
+    if cfg.BM_vs_BPL is None:
+        raise RuntimeError("--BM-vs-BPL must be given.")
+    if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
+        raise RuntimeError(f"--BM-vs-BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
     
-    return args
+    args
 
 
 
 if __name__ == '__main__':
 
-    args = _parse_args()
+    _setup_args()
 
-    results = main(args)
+    results = main()
     print(f"Final gap confidence interval results:", results)
 
-    if args.xhat1_file is not None:
-        print(f"Writing xhat1 to {args.xhat1_file}.npy")
+    cfg = config.global_config    
+    if cfg.xhat1_file is not None:
+        print(f"Writing xhat1 to {cfg.xhat1_file}.npy")
         root_nonants =np.fromiter((v for v in results["Candidate_solution"]["ROOT"]), float)
-        np.save(args.xhat1_file, root_nonants)
+        np.save(cfg.xhat1_file, root_nonants)

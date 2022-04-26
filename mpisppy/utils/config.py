@@ -23,19 +23,16 @@ E.g.
 args = parser.parse_args()
 args = global_config.import_argparse(parser)
 
-The next line is optional, but idiomatic:
-global_config._args = args 
-
 If you want to add args, you need to call the add_to_config function
 
-If you want a required arg, you have to DYI:
+If you want a required arg, you have to DIY:
     parser = config.create_parser("tester")
     parser.add_argument(
             "num_scens", help="Number of scenarios", type=int,
         )
     args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
     print(f"{args.num_scens =}")
-(Note: you can still attach it to global_config, but that is also DYI)
+(Note: you can still attach it to global_config, but that is also DIY)
 
 """
 
