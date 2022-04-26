@@ -7,7 +7,9 @@
 # TBD: reorganize some of this.
 
 """ Notes 
-The default for all 'with' options is False
+It is idiomatic to attach the args to the global_config object as _args when available.
+
+The default for all 'with' options is False and we are dropping the with_
        (and we are dropping the `no` side that was in baseparsers.py)
        (so we are also dropping the use of with_)
 
@@ -20,6 +22,9 @@ you need to call global_config.import_argparse
 E.g.
 args = parser.parse_args()
 args = global_config.import_argparse(parser)
+
+The next line is optional, but idiomatic:
+global_config._args = args 
 
 If you want to add args, you need to call the add_to_config function
 
@@ -78,20 +83,20 @@ def add_to_config(name, description, domain, default,
     """
     if name in global_config:
         if complain:
-            print(f"Trying to add duplicate {name} to global_config.")
+            print(f"Duplicate {name} will not be added to global_config.")
             # raise RuntimeError(f"Trying to add duplicate {name} to global_config.")
     else:
         c = global_config.declare(name, pyofig.ConfigValue(
             description = description,
             domain = domain,
             default = default))
-    if argparse:
-        c.declare_as_argument()
-        #argname = "--" + name.replace("_","-")
-        #if group is not None:
-        #    c.declare_as_argument(argname, group=group)
-        #else:
-        #    c.declare_as_argument(argname)
+        if argparse:
+            c.declare_as_argument()
+            #argname = "--" + name.replace("_","-")
+            #if group is not None:
+            #    c.declare_as_argument(argname, group=group)
+            #else:
+            #    c.declare_as_argument(argname)
 
 
 def _common_args():

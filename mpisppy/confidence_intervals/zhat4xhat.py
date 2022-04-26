@@ -5,6 +5,7 @@ import argparse
 import importlib
 import numpy as np
 import scipy.stats
+from mpisppy.utils import config
 from mpisppy.confidence_intervals import sample_tree
 from mpisppy.utils import sputils
 from mpisppy.confidence_intervals import ciutils
@@ -127,40 +128,25 @@ def run_samples(ama_options, args, model_module):
     return zhatbar, eps_z
 
 def _parser_setup():
-    # return the parser
+    # return the parser and set up the config object
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-    parser = argparse.ArgumentParser(prog="zhat4xhat", conflict_handler="resolve")
-
-    parser.add_argument('model_module_name',
-                        help="name of model module, must be compatible with amalgamator")
-    parser.add_argument('xhatpath',
-                        help="path to .npy file with feasible nonant solution xhat")
-    parser.add_argument("--solver-name",
-                        help="solver name (default gurobi_direct)",
-                        dest='solver_name',
-                        default="gurobi_direct")
-    parser.add_argument("--branching-factors",
-                        help="Spaces delimited branching factors (default 10 10) for two "
-                        "stage, just enter one number",
-                        dest="branching_factors",
-                        nargs="*",
-                        type=int,
-                        default=[10,10])
-    parser.add_argument("--num-samples",
-                        help="Number of independent sample trees to construct",
-                        dest="num_samples",
-                        type=int,
-                        default=10)
-    parser.add_argument("--solver-options",
-                            help="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
-                            default='')
+    config.add_to_config("solver_name",
+                         description="solver name (default gurobi_direct)",
+                         domain=str,
+                         default="gurobi_direct")
+    config.branching_factors()
+    config.add_to_config("num_samples",
+                         description="Number of independent sample trees to construct",
+                         domain=int,
+                         default=10)
+    config.add_to_config("solver_options",
+                         description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
+                         default='')
     
-    parser.add_argument("--confidence-level",
-                        help="one minus alpha (default 0.95)",
-                        dest="confidence_level",
-                        type=float,
-                        default=0.95)
-    return parser
+    config.add_to_config("confidence_level",
+                         description="one minus alpha (default 0.95)",
+                         domain=float,
+                         default=0.95)
 
 
 def _main_body(args, model_module):
@@ -184,6 +170,8 @@ def _main_body(args, model_module):
 if __name__ == "__main__":
 
     parser = _parser_setup()
+    parser.add_argument('model_module_name',
+                        help="name of model module, must be compatible with amalgamator")
     
     # now get the extra args from the module
     mname = sys.argv[1]  # args.model_module_name eventually
@@ -194,6 +182,9 @@ if __name__ == "__main__":
     except:
         raise RuntimeError(f"Could not import module: {mname}")
     model_module.inparser_adder(parser)
-    args = parser.parse_args()  
+    
+    args = parser.parse_args()  # from the command line
+    args = config.global_config.import_argparse(args)
+    global_config._args = args  # To make it generally available
 
     zhatbar, eps_z = _main_body(args, model_module)

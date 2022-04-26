@@ -11,12 +11,12 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
-import mpisppy.confidence_intervals.confidence_parsers as confidence_parsers
-from mpisppy.utils import baseparsers
+import mpisppy.confidence_intervals.confidence_config as conf_config
+from mpisppy.utils import config
 
 #============================
 def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           branching_factors=None, mudev = 0, sigmadev = 40,
+                           branching_factors=None, mu_dev = 0, sigma_dev = 40,
                            start_ups=None, start_seed = 0):
     '''
     For sequential sampling.
@@ -33,10 +33,10 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     branching_factors: list, optional
         Branching factors of the scenario 3. The default is [3,2,3] 
         (a 4 stage model with 18 different scenarios)
-    mudev: float, optional
+    mu_dev: float, optional
         The average deviation of demand between two stages; The default is 0.
     sigma_dev: float, optional
-        The standard deviation from mudev for the demand difference between
+        The standard deviation from mu_dev for the demand difference between
         two stages. The default is 40.
     start_seed: int, optional
         The starting seed, used to create different sample scenario trees.
@@ -59,10 +59,10 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     "branching_factors":branching_factors,
-                    "mudev":mudev,
+                    "mu_dev":mu_dev,
                     "start_ups":start_ups,
                     "start_seed":start_seed,
-                    "sigmadev":sigmadev
+                    "sigma_dev":sigma_dev
                     }
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("mpisppy.tests.examples.aircond",
@@ -92,12 +92,12 @@ def main(args):
     BFs = args.branching_factors
     num_scens = np.prod(BFs)
     solver_name = args.solver_name
-    mudev = args.mudev
-    sigmadev = args.sigmadev
+    mu_dev = args.mu_dev
+    sigma_dev = args.sigma_dev
     scenario_creator_kwargs = {"num_scens" : num_scens,
                                "branching_factors": BFs,
-                               "mudev": mudev,
-                               "sigmadev": sigmadev,
+                               "mu_dev": mu_dev,
+                               "sigma_dev": sigma_dev,
                                "start_ups": False,
                                "start_seed": args.seed,
                                }
@@ -108,8 +108,8 @@ def main(args):
                         "solvername": solver_name,
                         "solver_options": None,
                         "branching_factors" : BFs,
-                        "mudev": mudev,
-                        "sigmadev": sigmadev,
+                        "mu_dev": mu_dev,
+                        "sigma_dev": sigma_dev,
                         "start_ups": False,
                         "start_seed": args.seed,
                         }
@@ -169,42 +169,42 @@ def main(args):
     return xhat
 
 def _parse_args():
-    parser = baseparsers._basic_multistage("aircond_seqsampling")
-    parser = confidence_parsers.confidence_parser(parser)
-    parser = confidence_parsers.sequential_parser(parser)
-    parser = confidence_parsers.BM_parser(parser)
-    parser = confidence_parsers.BPL_parser(parser)  # --help will show both BM and BPL
-    parser = aircond.inparser_adder(parser)
-    
-    parser.add_argument("--solver-name",
-                        help = "solver name (default gurobi)",
-                        dest="solver_name",
-                        type = str,
-                        default="gurobi")
+    config.multistage()
+    conf_config.confidence_config()
+    conf_config.sequential_config()
+    conf_config.BM_config()
+    conf_config.BPL_config()  # --help will show both BM and BPL
 
-    parser.add_argument("--seed",
-                        help="Seed for random numbers (default is 1134)",
-                        dest="seed",
-                        type=int,
+    aircond.inparser_adder()
+    
+    config.add_to_config("solver_name",
+                         description = "solver name (e.g. gurobi)",
+                         domain = str,
+                         default=None)
+
+    config.add_to_config("seed",
+                        description="Seed for random numbers (default is 1134)",
+                        domain=int,
                         default=1134)
 
-    parser.add_argument("--BM-vs-BPL",
-                        help="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
-                        dest="BM_vs_BPL",
-                        type=str,
+    config.add_to_config("BM_vs_BPL",
+                        description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
+                        domain=str,
                         default=None)
-    parser.add_argument("--xhat1-file",
-                        help="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
-                        dest="xhat1_file",
-                        type=str,
+    config.add_to_config("xhat1_file",
+                        description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
+                        domain=str,
                         default=None)
 
-    args = parser.parse_args()
+    parser = config.create_parser("aircond")
+    args = parser.parse_args()  # from the command line
+    args = config.global_config.import_argparse(args)
+    config._args = args
 
     if args.BM_vs_BPL is None:
-        raise argparse.ArgumentTypeError("--BM-vs_BPL must be given.")
+        raise argparse.ArgumentTypeError("--BM-vs-BPL must be given.")
     if args.BM_vs_BPL != "BM" and args.BM_vs_BPL != "BPL":
-        raise argparse.ArgumentTypeError(f"--BM-vs_BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
+        raise argparse.ArgumentTypeError(f"--BM-vs-BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
     
     return args
 
