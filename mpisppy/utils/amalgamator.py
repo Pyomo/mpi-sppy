@@ -1,5 +1,4 @@
 # Amalgamator.py starting point; DLW March 2021
-# Copyright 2021 by D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # To test : python amalgamator.py --num-scens=10
 
@@ -30,23 +29,6 @@ you must keep up to date this file, especially the following dicts:
     - spokes_and_multi_compatibility
     - extensions_classes
 
-[NOTE: argparse can be passed a command list and can generate a command list that can be passed]
-
-
-Things that will be needed to support this:
-  - mapping from cylinder name to class?
-  - mapping from extension name to class?
-  = The same kind of mapping to the baseparser functions
-  = Support in baseparsers for "all" cylinders and extensions with a mapping to the function
- ==== we can't keep hanging at the termination barrier!
-
-*mapping*: I think the cylinder "name" and extension "name" should just be the module
-name to import in string from (e.g., "mpisppy.opt.ph") and then use importlib to 
-import it.
-
-? Should baseparser functions "register themselves" in a import-name-string: function
-map that is global to baseparsers (i.e. importable)?
-
 """
 import numpy as np
 import importlib
@@ -57,7 +39,7 @@ import copy
 
 from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.baseparsers as baseparsers
+from mpisppy.utils import config
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import vanilla
 from mpisppy import global_toc
@@ -91,29 +73,20 @@ extensions_classes = {'fixer':Fixer,
                       }
 
 #==========
-#Parsing utiities
+# Utilities to interact with config
 
 def _bool_option(options, oname):
     return oname in options and options[oname]
 
-def _basic_parse_args(progname = None, is_multi=False,  num_scens_reqd=False):
-    if is_multi:
-        parser = baseparsers.make_multistage_parser(progname= progname)
-    else:
-        parser = baseparsers.make_parser(progname=progname, 
-                                         num_scens_reqd=num_scens_reqd)
-        
-    return parser
 
-def add_parser(inparser, parser_choice=None):
-    if (parser_choice is None):
-        return inparser
-    else:
-        parser_name = parser_choice+"_args"
-        adder = getattr(baseparsers,parser_name,lambda x:x)
-        parser = adder(inparser)
-        return parser
-    
+def add_options(parser_choice=None):
+    #  parser_choice is a string referring to the component (e.g., "slamdown")
+    assert parser_choice is not None
+
+    parser_name = parser_choice+"_args"
+    adder = getattr(config, parser_name)
+    adder()
+
 
 #==========
 #Cylinder name checks
@@ -210,49 +183,52 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
         options (dict): a dict containing the options, both parsed values and pre-set options
     """
 
-    opt = {**options}
+    options_dict = {**options}
+    cfg = config.global_config
     
     if use_command_line:
-        num_scens_reqd=_bool_option(options, "num_scens_reqd")
         if _bool_option(options, "EF-2stage"):
-            parser = baseparsers.make_EF2_parser(num_scens_reqd=num_scens_reqd)
+            config.EF2()
         elif _bool_option(options, "EF-mstage"):
-            parser = baseparsers.make_EF_multistage_parser(num_scens_reqd=num_scens_reqd)
-            
+            config.EF_multistage()
         else:
             if _bool_option(options, "2stage"):
-                parser = _basic_parse_args(is_multi=False, num_scens_reqd=num_scens_reqd)
+                config.popular_args()
             elif _bool_option(options, "mstage"):
-                parser = _basic_parse_args(is_multi=True, num_scens_reqd=num_scens_reqd)
+                config.multistage()
             else:
                 raise RuntimeError("The problem type (2stage or mstage) must be specified")
-            parser = baseparsers.two_sided_args(parser)
-            parser = baseparsers.mip_options(parser)
+            config.two_sided_args()
+            config.mip_options()
                 
             #Adding cylinders
             if not "cylinders" in options:
                 raise RuntimeError("A cylinder list must be specified")
             
             for cylinder in options['cylinders']:
-                #NOTE: This returns an error if the cylinder has no parser in baseparsers.py
-                parser = add_parser(parser,cylinder)
+                #NOTE: This returns an error if the cylinder xxxx has not xxxx_args in config.py
+                parser = add_options(cylinder)
             
             #Adding extensions
             if "extensions" in options:
                 for extension in options['extensions']:
-                    parser = add_parser(parser,extension)
+                    parser = add_options(extension)
     
-        # call inparser last (so it can delete args if it needs to)
-        inparser_adder(parser)
+        inparser_adder()
         
         if extraargs is not None:
-            parser = argparse.ArgumentParser(parents = [parser,extraargs],
-                                             conflict_handler='resolve')
+            raise RuntimeError("TBD: add extraargs support to amalgamator")
+            ##parser = argparse.ArgumentParser(parents = [parser,extraargs],
+            ##                                 conflict_handler='resolve')
         
-        args = parser.parse_args()
-    
-        opt.update(vars(args)) #Changes made via the command line overwrite what is in options 
-                
+        prg = options.get("program_name")
+        parser = config.create_parser(prg)
+        if _bool_option(options, "num_scens_reqd"):
+            parser.add_argument("num_scens", help="Number of scenarios", type=int)
+
+        #Changes made via the command line overwrite what is in options             
+        ### options_dict.update(vars(cfg)) ???
+        xxxx
         if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
             if ('EF_solver_options' in opt):
                 opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
@@ -446,7 +422,8 @@ if __name__ == "__main__":
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
                    "cylinders": ['ph','cross_scenario_cuts'],
-                   "extensions": ['cross_scenario_cuts']
+                   "extensions": ['cross_scenario_cuts'],
+                   "program_name": "amalgamator test main",
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
@@ -456,7 +433,7 @@ if __name__ == "__main__":
     # wish list: allow for integer relaxation using the Pyomo inplace transformation
     """ Issues:
     0. What do we want to put in ama_options and what do we want to discover
-       by looking at data? I am inclined to put things in the data and maybe
+       by looking at data? I am inclined to put things in the options and maybe
        check against data. Here are the things:
        - 2-stage versus multi-stage [SOLVED: put it in ama_options]
        - MIP versus continuous only

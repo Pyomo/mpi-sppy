@@ -14,7 +14,7 @@ from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_stri
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.aircond as aircond
-import mpisppy.tests.examples.aircondB as aircondB
+import mpisppy.tests.examples.aircondB as aircondB  # TBD: drop aircondB
 from mpisppy.utils import pickle_bundle
 from mpisppy.utils import amalgamator
 

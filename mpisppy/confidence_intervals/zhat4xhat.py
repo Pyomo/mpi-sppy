@@ -49,10 +49,9 @@ def evaluate_sample_trees(xhat_one,
                      "verbose": False,
                      "solver_options":{}}
 
-    ### wrestling with options 5 April 2022 - TBD delete this comment
     if 'seed' not in ama_options:
         ama_options['seed'] = seed
-    ###scenario_creator_kwargs = model_module.kw_creator(ama_options)
+
     for j in range(num_samples): # number of sample trees to create
         samp_tree = sample_tree.SampleSubtree(mname,
                                               xhats = [],
@@ -101,21 +100,19 @@ def evaluate_sample_trees(xhat_one,
 
     return np.array(zhats), seed
 
-def run_samples(ama_options, args, model_module):
-    
-    # TBD: This has evolved so there may be overlap between ama_options and args
-    #  (some codes assume that ama_options includes "args": args)
-    
+def run_samples(ama_options, model_module):
+    # the "main" for zhat4xhat    
+    cfg = config.global_config
     # Read xhats from xhatpath
-    xhat_one = ciutils.read_xhat(args.xhatpath)["ROOT"]
+    xhat_one = ciutils.read_xhat(cfg.xhatpath)["ROOT"]
 
-    num_samples = args.num_samples
+    num_samples = cfg.num_samples
 
     zhats,seed = evaluate_sample_trees(xhat_one, num_samples,
                                        ama_options, InitSeed=0,
                                        model_module=model_module)
 
-    confidence_level = args.confidence_level
+    confidence_level = cfg.confidence_level
     zhatbar = np.mean(zhats)
     s_zhat = np.std(np.array(zhats))
     t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
@@ -128,7 +125,7 @@ def run_samples(ama_options, args, model_module):
     return zhatbar, eps_z
 
 def _parser_setup():
-    # return the parser and set up the config object
+    # set up the config object and return the parser (before parsing)
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
     config.add_to_config("solver_name",
                          description="solver name (default gurobi_direct)",
@@ -149,23 +146,26 @@ def _parser_setup():
                          domain=float,
                          default=0.95)
 
+    parser = config.create_parser("aircond_seqsampling")
+    return parser
 
-def _main_body(args, model_module):
+def _main_body(model_module):
     # body of main, pulled out for testing
     solver_options = option_string_to_dict(args.solver_options)
 
-    bfs = args.branching_factors
-    solver_name = args.solver_name
-    num_samples = args.num_samples
+    cfg = config.global_config    
+    bfs = cfg.branching_factors
+    solver_name = cfg.solver_name
+    num_samples = cfg.num_samples
 
     ama_options = {"EF-mstage": True,
                    "EF_solver_name": solver_name,
                    "EF_solver_options": solver_options,
                    "branching_factors": bfs,
-                   "args": args,
+                   "args": args,  xxxxxxx
                    }
 
-    return run_samples(ama_options, args, model_module)
+    return run_samples(ama_options, model_module)
 
 
 if __name__ == "__main__":
@@ -187,4 +187,4 @@ if __name__ == "__main__":
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
 
-    zhatbar, eps_z = _main_body(args, model_module)
+    zhatbar, eps_z = _main_body(model_module)

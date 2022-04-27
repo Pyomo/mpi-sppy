@@ -206,9 +206,6 @@ def _setup_args():
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
         raise RuntimeError(f"--BM-vs-BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
     
-    args
-
-
 
 if __name__ == '__main__':
 

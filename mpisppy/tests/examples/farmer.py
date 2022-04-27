@@ -17,6 +17,7 @@ import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
+from mpisppy.utils import config
 
 # Use this random stream:
 farmerstream = np.random.RandomState()
@@ -241,19 +242,17 @@ def scenario_names_creator(num_scens,start=None):
 
 
 #=========
-def inparser_adder(inparser):
-    # (only for Amalgamator): add command options unique to farmer
-    inparser.add_argument("--crops-multiplier",
-                          help="number of crops will be three times this (default 1)",
-                          dest="crops_multiplier",
-                          type=int,
-                          default=1)
+def inparser_adder():
+    # add options unique to farmer
+    config.add_to_config("crops_multiplier",
+                         description="number of crops will be three times this (default 1)",
+                         domain=int,
+                         default=1)
     
-    inparser.add_argument("--farmer-with-integers",
-                          help="make the version that has integers (default False)",
-                          dest="use_integer",
-                          action="store_true",)
-    inparser.set_defaults(use_integer=False)
+    config.add_to_config("farmer_with_integers",
+                         description="make the version that has integers (default False)",
+                         domain=bool,
+                         default=False)
 
 
 #=========

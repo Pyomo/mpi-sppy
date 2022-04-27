@@ -5,6 +5,7 @@
 # by all code.
 # NOTE: at first I am just copying directly from baseparsers.py
 # TBD: reorganize some of this.
+# NOTE: the xxxx_args() naming convention is used by amalgamator.py
 
 """ Notes 
 It is idiomatic to attach the args to the global_config object as _args when available.
@@ -101,7 +102,7 @@ def _common_args():
 
 def popular_args():
     add_to_config("max_iterations", 
-                        description="ph max iiterations (default 1)",
+                        description="hub max iiterations (default 1)",
                         domain=int,
                         default=1)
 
@@ -167,6 +168,7 @@ def popular_args():
                         domain=str,
                         default='')
 
+def ph_args():
     add_to_config("linearize_binary_proximal_terms", 
                           description="For PH, linearize the proximal terms for "
                           "all binary nonanticipative variables",
@@ -187,7 +189,7 @@ def popular_args():
                         "is looser than this value (default 1e-1)",
                         domain=float,
                         default=1.e-1)
-
+    
 
 def make_parser(progname=None, num_scens_reqd=False):
     raise RuntimeError("make_parser is no longer used. See comments at top of config.py")
