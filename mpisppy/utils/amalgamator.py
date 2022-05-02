@@ -1,6 +1,6 @@
 # Amalgamator.py starting point; DLW March 2021
 # This software is distributed under the 3-clause BSD License.
-# To test : python amalgamator.py --num-scens=10
+# To test : python amalgamator.py 10 --solver-name=cplex --default-rho=1
 
 """Takes a scenario list and a scenario creator (and options)
 as input and produces an outer bound on the objective function (solving the EF directly
@@ -30,6 +30,9 @@ you must keep up to date this file, especially the following dicts:
     - extensions_classes
 
 """
+"""
+  TBD: when num-scens is required on the command line, should it be positional?
+"""
 import numpy as np
 import importlib
 import inspect
@@ -41,7 +44,7 @@ from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import vanilla
+import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import global_toc
 
 from mpisppy.extensions.fixer import Fixer
@@ -183,6 +186,7 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
         options (dict): a dict containing the options, both parsed values and pre-set options
     """
 
+    # TBD: should we copy?
     options_dict = {**options}
     cfg = config.global_config
     
@@ -224,32 +228,42 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
         prg = options.get("program_name")
         parser = config.create_parser(prg)
         if _bool_option(options, "num_scens_reqd"):
-            parser.add_argument("num_scens", help="Number of scenarios", type=int)
+            parser.add_argument("num_scens",
+                                help="Number of scenarios (default 0)",
+                                default=0,
+                                type=int)
 
-        #Changes made via the command line overwrite what is in options             
-        ### options_dict.update(vars(cfg)) ???
-        print("xxxTBD in amalgamator.py xxxx")
-        xxx deal with options 
-        if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
-            if ('EF_solver_options' in opt):
-                opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
+        args = parser.parse_args()  # from the command line
+        args = cfg.import_argparse(args)  # copy to cfg
+
+        #Changes made via the command line overwrite what is in options
+        # options_dict.update(vars(dict(cfg)))
+        for key,val in cfg.items():
+            options_dict[key] = val
+        if _bool_option(options, "num_scens_reqd"):
+            options_dict["num_scens"] = args.num_scens  # NOTE: not in config
+            
+        # deal with proliferation of solver options specifications
+        if _bool_option(options_dict, "EF-2stage") or _bool_option(options_dict, "EF-mstage"): 
+            if ('EF_solver_options' in options_dict):
+                options_dict["EF_solver_options"]["mipgap"] = options_dict["EF_mipgap"]
             else:
-                opt["EF_solver_options"] = {"mipgap": opt["EF_mipgap"]}
+                options_dict["EF_solver_options"] = {"mipgap": options_dict["EF_mipgap"]}
     
     else:
-        #Checking if options has all the options we need 
-        if not (_bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")):
+        #Checking if options_dict has all the options we need 
+        if not (_bool_option(options_dict, "EF-2stage") or _bool_option(options_dict, "EF-mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
-        if not ('EF_solver_name' in opt):
+        if not ('EF_solver_name' in options_dict):
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
-        if not ('EF_solver_options' in opt):
+        if not ('EF_solver_options' in options_dict):
             opt['EF_solver_options'] = {'mipgap': None}
-        if not ('num_scens' in opt):
+        if not ('num_scens' in options_dict):
             raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
-        if _bool_option(options, 'EF-mstage') and 'branching_factors' not in options:
-            raise RuntimeError("For a multistage problem, otpions must have a 'branching_factors' attribute with branching factors")
+        if _bool_option(options_dict, 'EF-mstage') and 'branching_factors' not in options_dict:
+            raise RuntimeError("For a multistage problem, options must have a 'branching_factors' attribute with branching factors")
 
-    return opt
+    return options_dict
     
 
 #========================================
@@ -267,7 +281,7 @@ class Amalgamator():
         options (dict): controls the amalgamation
         scenario_names (list of str) the full set of scenario names
         scenario_creator (fct): returns a concrete model with special things
-        kw_creator (fct): takes an args object and returns scenario_creator kwargs
+        kw_creator (fct): takes an options dict and returns scenario_creator kwargs
         scenario_denouement (fct): (optional) called at conclusion
     """
 
@@ -346,21 +360,21 @@ class Amalgamator():
                                                    self.options['write_solution']['tree_solution'])
             
             self.xhats = sputils.nonant_cache_from_ef(ef)
-            self.local_xhats = self.xhats #Every scenario is local for EF
+            self.local_xhats = self.xhats  # Every scenario is local for EF
             self.first_stage_solution = {"ROOT": self.xhats["ROOT"]}
 
         else:
             self.ef = None
-            args = argparse.Namespace(**self.options)
-            
+            cfg = config.global_config
+
             #Create a hub dict
             hub_name = find_hub(self.options['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
-            beans = {"args":args,
-                           "scenario_creator": self.scenario_creator,
-                           "scenario_denouement": self.scenario_denouement,
-                           "all_scenario_names": self.scenario_names,
-                           "scenario_creator_kwargs": self.kwargs}
+            beans = {"cfg": cfg,
+                     "scenario_creator": self.scenario_creator,
+                     "scenario_denouement": self.scenario_denouement,
+                     "all_scenario_names": self.scenario_names,
+                     "scenario_creator_kwargs": self.kwargs}
             if self.is_multi:
                 beans["all_nodenames"] = self.options["all_nodenames"]
             hub_dict = hub_creator(**beans)
@@ -369,14 +383,13 @@ class Amalgamator():
             if 'extensions' in self.options:
                 for extension in self.options['extensions']:
                     extension_creator = getattr(vanilla, 'add_'+extension)
-                    hub_dict = extension_creator(hub_dict,
-                                                 args)
+                    hub_dict = extension_creator(hub_dict, cfg)
             
             #Create spoke dicts
             potential_spokes = find_spokes(self.options['cylinders'],
                                            self.is_multi)
             #We only use the spokes with an associated command line arg set to True
-            spokes = [spoke for spoke in potential_spokes if self.options['with_'+spoke]]
+            spokes = [spoke for spoke in potential_spokes if self.options[spoke]]
             list_of_spoke_dict = list()
             for spoke in spokes:
                 spoke_creator = getattr(vanilla, spoke+'_spoke')
@@ -422,9 +435,10 @@ if __name__ == "__main__":
     import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     ama_options = {"2stage": True,   # 2stage vs. mstage
-                   "cylinders": ['ph','cross_scenario_cuts'],
-                   "extensions": ['cross_scenario_cuts'],
+                   "cylinders": ['ph'],
+                   "extensions": [],
                    "program_name": "amalgamator test main",
+                   "num_scens_reqd": True,
                    }
     ama = from_module("mpisppy.tests.examples.farmer", ama_options)
     ama.run()
@@ -440,3 +454,10 @@ if __name__ == "__main__":
        - MIP versus continuous only
        - linear/quadratic versus non-linear
     """
+    # these options need to be tested
+    ama_options = {"2stage": True,   # 2stage vs. mstage
+                   "cylinders": ['ph','cross_scenario_cuts'],
+                   "extensions": ['cross_scenario_cuts'],
+                   "program_name": "amalgamator test main",
+                   "num_scens_reqd": True,
+                   }
