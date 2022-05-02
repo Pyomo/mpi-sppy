@@ -206,7 +206,7 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
                 raise RuntimeError("A cylinder list must be specified")
             
             for cylinder in options['cylinders']:
-                #NOTE: This returns an error if the cylinder xxxx has not xxxx_args in config.py
+                #NOTE: This returns an error if the cylinder xxxx has no xxxx_args in config.py
                 parser = add_options(cylinder)
             
             #Adding extensions
@@ -228,7 +228,8 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
 
         #Changes made via the command line overwrite what is in options             
         ### options_dict.update(vars(cfg)) ???
-        xxxx
+        print("xxxTBD in amalgamator.py xxxx")
+        xxx deal with options 
         if _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage"): 
             if ('EF_solver_options' in opt):
                 opt["EF_solver_options"]["mipgap"] = opt["EF_mipgap"]
