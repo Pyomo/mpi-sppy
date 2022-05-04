@@ -14,6 +14,7 @@ from distutils.core import setup
 
 packages = find_packages()
 
+# intentionally leaving out mpi4py to help readthedocs
 setup(
     name='mpi-sppy',
     version='0.9.1.dev0',
@@ -23,7 +24,8 @@ setup(
     author_email='dlwoodruff@ucdavis.edu',
     packages=packages,
     install_requires=[
-        'numpy>=1.19',
-        'pyomo>=6.0'
+        'numpy',
+        'scipy',
+        'pyomo>=6.2',
     ]
 )

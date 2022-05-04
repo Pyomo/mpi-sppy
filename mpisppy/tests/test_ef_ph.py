@@ -1,6 +1,5 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Provide some test for mpisppy.0
 # Author: David L. Woodruff (circa January 2019)
 """
 IMPORTANT:
@@ -21,7 +20,7 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
-from mpisppy.tests.test_utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver,round_pos_sig
 
 __version__ = 0.54
 
@@ -375,8 +374,8 @@ class Test_sizes(unittest.TestCase):
             
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    def test_lagrangian_bound(self):
-        """ Make sure the lagrangian bound is at least a bound
+    def test_xhatlooper_bound(self):
+        """ smoke test for the looper as an extension
         """
         from mpisppy.extensions.xhatlooper import XhatLooper
         options = self._copy_of_base_options()
@@ -456,14 +455,12 @@ class Test_hydro(unittest.TestCase):
     def setUp(self):
         self.options = self._copy_of_base_options()
         # branching factor (3 stages is hard-wired)
-        self.BFs = self.options["branching_factors"]
-        self.ScenCount = self.BFs[0] * self.BFs[1]
+        self.branching_factors = self.options["branching_factors"]
+        self.ScenCount = self.branching_factors[0] * self.branching_factors[1]
         self.all_scenario_names = list()
         for sn in range(self.ScenCount):
             self.all_scenario_names.append("Scen"+str(sn+1))
-        self.all_nodenames = ["ROOT"] # all trees must have this node
-        for b in range(self.BFs[0]):
-            self.all_nodenames.append("ROOT_"+str(b))
+        self.all_nodenames = sputils.create_nodenames_from_branching_factors(self.branching_factors)
         # end hardwire
 
     def test_ph_constructor(self):
@@ -475,14 +472,14 @@ class Test_hydro(unittest.TestCase):
             hydro.scenario_creator,
             hydro.scenario_denouement,
             all_nodenames=self.all_nodenames,
-            scenario_creator_kwargs={"branching_factors": self.BFs},
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
 
     def test_ef_constructor(self):
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
-            scenario_creator_kwargs={"branching_factors": self.BFs},
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
 
     @unittest.skipIf(not solver_available,
@@ -493,7 +490,7 @@ class Test_hydro(unittest.TestCase):
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
-            scenario_creator_kwargs={"branching_factors": self.BFs},
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
         if '_persistent' in options["solvername"]:
             solver.set_instance(ef)
@@ -514,7 +511,7 @@ class Test_hydro(unittest.TestCase):
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
-            scenario_creator_kwargs={"branching_factors": self.BFs},
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
         if '_persistent' in options["solvername"]:
             solver.set_instance(ef)
@@ -532,7 +529,7 @@ class Test_hydro(unittest.TestCase):
             hydro.scenario_creator,
             hydro.scenario_denouement,
             all_nodenames=self.all_nodenames,
-            scenario_creator_kwargs={"branching_factors": self.BFs},
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
         conv, obj, tbound = ph.ph_main()
 
@@ -564,7 +561,7 @@ class Test_hydro(unittest.TestCase):
             hydro.scenario_creator,
             hydro.scenario_denouement,
             all_nodenames=self.all_nodenames,
-            scenario_creator_kwargs={"branching_factors": self.BFs},
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
             extensions = XhatSpecific
         )
         conv, obj, tbound = ph.ph_main()

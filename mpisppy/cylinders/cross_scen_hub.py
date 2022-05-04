@@ -17,10 +17,7 @@ class CrossScenarioHub(PHHub):
         idx = self.cut_gen_spoke_index
         self.all_nonants_and_etas = np.zeros(self.local_lengths[idx - 1] + 1)
 
-        arb_scen = self.opt.local_scenarios[self.opt.local_scenario_names[0]]
-        # get an arbitrary scenario for the 
-        # number of nonant variables
-        self.nonant_len = len(arb_scen._mpisppy_data.nonant_indices)
+        self.nonant_len = self.opt.nonant_length
 
         # save the best bounds so far
         self.best_inner_bound = inf

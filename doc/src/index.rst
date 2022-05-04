@@ -13,14 +13,21 @@ MPI is used.
    overview.rst
    scenario_creator.rst
    drivers.rst
+   amalgamator.rst
    examples.rst
    hubs.rst
    spokes.rst
+   output_solutions.rst
+   access_solutions.rst
    extensions.rst
+   zhat.rst
    confidence_intervals.rst
+   seqsamp.rst
    pysp.rst
    ef.rst
+   nompi4py.rst
    secretmenu.rst
+   pickledbundles.rst
    contributors.rst
    api.rst
    refs.rst

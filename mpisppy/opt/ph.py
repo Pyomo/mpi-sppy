@@ -4,7 +4,7 @@
 
 import mpisppy.phbase
 import shutil
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
@@ -113,7 +113,7 @@ if __name__ == "__main__":
                                      "csvname": "looper.csv"}
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
             extensions=XhatLooper,
-            PH_converger=FractionalConverger,
+            ph_converger=FractionalConverger,
             rho_setter=None)
     conv, obj, bnd = ph.ph_main()
     print ("Quitting Early.")
@@ -123,7 +123,7 @@ if __name__ == "__main__":
     # now test whatever is new
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
             extensions=Diagnoser, 
-            PH_converger=None,
+            ph_converger=None,
             rho_setter=None)
     ph.options["PHIterLimit"] = 3
 
@@ -140,7 +140,7 @@ if __name__ == "__main__":
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
             extensions=MinMaxAvg,
-            PH_converger=None,
+            ph_converger=None,
             rho_setter=None)
     ph.options["avgminmax_name"] =  "FirstStageCost"
     ph.options["PHIterLimit"] = 3

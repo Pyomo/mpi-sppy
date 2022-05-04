@@ -1,23 +1,14 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # APH
-"""
-TBD: dlw june 2020 look at this code in phbase:
-            if spcomm is not None: 
-                spcomm.sync_with_spokes()
-                if spcomm.is_converged():
-                    break    
-
-"""
-
 
 import numpy as np
 import math
 import collections
 import time
 import logging
-import mpi4py
-import mpi4py.MPI as mpi
+import mpisppy
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus
 from mpisppy.utils.sputils import find_active_objective
@@ -32,6 +23,7 @@ logging.basicConfig(level=logging.CRITICAL, # level=logging.CRITICAL, DEBUG
             format='(%(threadName)-10s) %(message)s',
             )
 
+EPSILON = 1e-5  # for, e.g., fractions of ranks
 
 """
 Delete this comment block; dlw May 2019
@@ -49,7 +41,7 @@ Note: we deviate from the paper's notation in the use of i and k
 k is often used as the "key" (i.e., scenario name) for the local scenarios)
 """
 
-class APH(ph_base.PHBase):  # ??????
+class APH(ph_base.PHBase):
     """
     Args:
         options (dict): PH options
@@ -83,7 +75,7 @@ class APH(ph_base.PHBase):  # ??????
         scenario_creator_kwargs=None,
         extensions=None,
         extension_kwargs=None,
-        PH_converger=None,
+        ph_converger=None,
         rho_setter=None,
         variable_probability=None,
     ):
@@ -97,7 +89,7 @@ class APH(ph_base.PHBase):  # ??????
             scenario_creator_kwargs=scenario_creator_kwargs,
             extensions=extensions,
             extension_kwargs=extension_kwargs,
-            PH_converger=PH_converger,
+            ph_converger=ph_converger,
             rho_setter=rho_setter,
             variable_probability=variable_probability,
         )
@@ -119,12 +111,14 @@ class APH(ph_base.PHBase):  # ??????
         self.APHgamma = 1 if "APHgamma" not in options\
                         else options["APHgamma"]
         assert(self.APHgamma > 0)
+        self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
+        self.round_robin_dispatch = options.get("round_robin_dispatch", False)
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
         self.nu = 1 # might be changed dynamically by an extension
         if "APHnu" in options:
             self.nu = options["APHnu"]
         assert 0 < self.nu and self.nu < 2
-        self.dispatchrecord = dict()   # for local subproblems
+        self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
 
     #============================
     def setup_Lens(self):
@@ -218,29 +212,40 @@ class APH(ph_base.PHBase):  # ??????
 
         verbose = self.options["verbose"]
         # See if we have enough xbars to proceed (need not be perfect)
-        xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         self.synchronizer._unsafe_get_global_data("FirstReduce",
                                                   self.node_concats)
         self.synchronizer._unsafe_get_global_data("SecondReduce",
                                                   self.node_concats)
         # last_phi_tau_update_time
+        # (the last time this side-gig did the calculations)
+        # We are going to see how many rank's xbars have been computed
+        # since then. If enough (determined by frac_needed), the do the calcs.
+        # The six is because the reduced data (e.g. phi) are in the first 6.
         lptut =  np.max(self.node_concats["SecondReduce"]["ROOT"][6:])
-        logging.debug('enter side gig, last phi update={}'.format(lptut))
+
+        logging.debug('   +++ debug enter listener_side_gig on cylinder_rank {} last phi update {}'\
+              .format(self.cylinder_rank, lptut))
+
+        xbarin = 0 # count ranks (close enough to be a proxy for scenarios)
         for cr in range(self.n_proc):
-            backdist = self.n_proc - cr
-            logging.debug('*side_gig* cr {} on rank {} time {}'.\
-                format(cr, self.cylinder_rank,
-                    self.node_concats["FirstReduce"]["ROOT"][-backdist]))
+            backdist = self.n_proc - cr  # how far back into the vector
+            ##logging.debug('      *side_gig* cr {} on rank {} time {}'.\
+            ##    format(cr, self.cylinder_rank,
+            ##        self.node_concats["FirstReduce"]["ROOT"][-backdist]))
             if  self.node_concats["FirstReduce"]["ROOT"][-backdist] \
-                >= lptut:
+                > lptut:
                 xbarin += 1
-        if xbarin/self.n_proc < self.options["async_frac_needed"]:
-            logging.debug('   not enough on rank {}'.format(self.cylinder_rank))
+
+        fracin = xbarin/self.n_proc + EPSILON
+        if  fracin < self.options["async_frac_needed"]:
             # We have not really "done" the side gig.
+            logging.debug('  ^ debug not good to go listener_side_gig on cylinder_rank {}; xbarin={}; fracin={}'\
+                  .format(self.cylinder_rank, xbarin, fracin))
             return
 
         # If we are still here, we have enough to do the calculations
-        logging.debug('   good to go on rank {}'.format(self.cylinder_rank))
+        logging.debug('^^^ debug good to go  listener_side_gig on cylinder_rank {}; xbarin={}'\
+              .format(self.cylinder_rank, xbarin))
         if verbose and self.cylinder_rank == 0:
             print ("(%d)" % xbarin)
             
@@ -264,15 +269,14 @@ class APH(ph_base.PHBase):  # ??????
         # we get here because we could not compute it until the averages were.
         # vk is just going to be ybar directly
         if not hasattr(self, "uk"):
-            self.uk = {} # indexed by sname and nonant index [sname][(ndn,i)]
+            # indexed by sname and nonant index [sname][(ndn,i)]
+            self.uk = {sname: dict() for sname in self.local_scenarios.keys()} 
         self.local_pusqnorm = 0  # local summand for probability weighted sqnorm
         self.local_pvsqnorm = 0
         new_tau_summand = 0  # for this rank
         for sname,s in self.local_scenarios.items():
             scen_usqnorm = 0.0
             scen_vsqnorm = 0.0
-            if sname not in self.uk:
-                self.uk[sname] = {}
             nlens = s._mpisppy_data.nlens        
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 self.uk[sname][(ndn,i)] = xvar._value \
@@ -304,6 +308,7 @@ class APH(ph_base.PHBase):  # ??????
         self.phi_summand = self.compute_phis_summand()
 
         # prepare for the reduction that will take place after this side-gig
+        # (this is where the 6 comes from)
         self.local_concats["SecondReduce"]["ROOT"][0] = self.tau_summand
         self.local_concats["SecondReduce"]["ROOT"][1] = self.phi_summand
         self.local_concats["SecondReduce"]["ROOT"][2] = self.local_pusqnorm
@@ -367,11 +372,8 @@ class APH(ph_base.PHBase):  # ??????
             self.node_concats["SecondReduce"]["ROOT"]\
                 = np.zeros(mylen, dtype='d')
         else: # concats are here, just zero them out. 
-            """ delete this comment block after sept 2020:
-            DLW Aug 2020: why zero?
-            We zero them so we can use an accumulator in the next loop and
-              that seems to be OK.
-            """
+            # We zero them so we can use an accumulator in the next loop and
+            # that seems to be OK.
             nodenames = []
             for k,s in self.local_scenarios.items():
                 nlens = s._mpisppy_data.nlens        
@@ -516,8 +518,8 @@ class APH(ph_base.PHBase):  # ??????
         logging.debug('self.conv={} self.global_pusqnorm={} self.global_pwsqnorm={} self.global_pvsqnorm={} self.global_pzsqnorm={})'\
                       .format(self.conv, self.global_pusqnorm, self.global_pwsqnorm, self.global_pvsqnorm, self.global_pzsqnorm))
         # allow a PH converger, mainly for mpisspy to get xhat from a wheel conv
-        if hasattr(self, "PH_conobject") and self.PH_convobject is not None:
-            phc = self.PH_convobject(self, self.cylinder_rank, self.n_proc)
+        if hasattr(self, "ph_conobject") and self.ph_convobject is not None:
+            phc = self.ph_convobject(self, self.cylinder_rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
 
 
@@ -577,75 +579,69 @@ class APH(ph_base.PHBase):  # ??????
         #==========
         def _vb(msg): 
             if verbose and self.cylinder_rank == 0:
-                print ("(rank0) " + msg)
+                print ("(cylinder rank {}) {}".format(self.cylinder_rank, msg))
         _vb("Entering solve_loop function.")
 
 
-        #==========
-        def _best_phis():
-            # for dispatch based on phi
-            # note that when there is no bundling, scenarios are subproblems
-            # {k: v for k, v in sorted(x.items(), key=lambda item: item[1])}
-            if use_scenarios_not_subproblems:
-                s_source = self.local_scenarios
+        if use_scenarios_not_subproblems:
+            s_source = self.local_scenarios
+            phidict = self.phis
+        else:
+            s_source = self.local_subproblems
+            if not self.bundling:
                 phidict = self.phis
             else:
-                s_source = self.local_subproblems
-                if not self.bundling:
-                    phidict = self.phis
-                else:
-                    phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
-            # dict(sorted(phidict.items(), key=lambda item: item[1]))
-            sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
-
-            return s_source, sortedbyphi
+                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+        # dict(sorted(phidict.items(), key=lambda item: item[1]))
+        # sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 
 
         #========
         def _dispatch_list(scnt):
-            # Return the entire source dict and list of scnt (subproblems,phi) 
+            # Return the list of scnt (subproblems,phi) 
             # pairs for dispatch.
-            retval = list()  # the list to return
-            s_source, sortedbyphi = _best_phis()
-            i = 0
-            for k,p in sortedbyphi.items():
-                if p < 0:
-                    retval.append((k,p))
+            # There is an option to allow for round-robin for research purposes.
+            # NOTE: intermediate lists are created to help with verification.
+            # reminder: dispatchrecord is sname:[(iter,phi)...]
+            if self.round_robin_dispatch:
+                # TBD: check this sort
+                sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
+                                                     key=lambda item: item[1][-1])}
+                _vb("  sortedbyI={}.format(sortedbyI)")
+                # There is presumably a pythonic way to do this...
+                retval = list()
+                i = 0
+                for k,v in sortedbyI.items():
+                    retval.append((k, phidict[k]))  # sname, phi
                     i += 1
                     if i >= scnt:
-                        logging.debug("Dispatch list w/neg phi after {}/{} (frac needed={})".\
-                                      format(i, len(sortedbyphi), dispatch_frac))
-                        return s_source, retval
-
-            # If we are still here, there were not enough w/negative phi values.
-            if i == 0 and self.nu == 1.0 and self._PHIter > 1:
-                print(f"WARNING: no negative phi on rank {self.cylinder_rank}"
-                      f" at iteration {self._PHIter}")
-            # Use phi as  tie-breaker (sort by the most recent dispatch tuple)
-            sortedbyI = {k: v for k, v in sorted(self.dispatchrecord.items(), 
-                                                 key=lambda item: item[1][-1])}
-            for k,t in sortedbyI.items():
-                if k in retval:
-                    continue
-                retval.append((k, sortedbyphi[k]))  # sname, phi
-                i += 1
-                if i >= scnt:
-                    logging.debug("Dispatch list complete after {}/{} (frac needed={})".\
-                                  format(i, len(sortedbyphi), dispatch_frac))
-                    break
-            return s_source, retval
+                        return retval
+                raise RuntimeError(f"bad scnt={scnt} in _dispatch_list;"
+                                   f" len(sortedbyI)={len(sortedbyI)}")
+            else:
+                # Not doing round robin
+                # k is sname
+                tosort = [(k, -max(self.dispatchrecord[k][-1][0], self.shelf_life-1), phidict[k])\
+                          for k in self.dispatchrecord.keys()]
+                sortedlist = sorted(tosort, key=lambda element: (element[1], element[2]))
+                retval = [(sortedlist[k][0], sortedlist[k][2]) for k in range(scnt)]
+                # TBD: See if there were enough w/negative phi values and warn.
+                # TBD: see if shelf-life is hitting and warn
+                return retval
 
 
-        # body of fct starts hare
+        # body of APH_solve_loop fct starts hare
         logging.debug("  early APH solve_loop for rank={}".format(self.cylinder_rank))
 
-        scnt = max(1, len(self.dispatchrecord) * dispatch_frac)
-        s_source, dlist = _dispatch_list(scnt)
-        for dguy in dlist:
+        scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
+        dispatch_list = _dispatch_list(scnt)
+        _vb("dispatch list before dispath: {}".format(dispatch_list))
+        for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
             s = s_source[k]
             self.dispatchrecord[k].append((self._PHIter, p))
+            _vb("dispatch k={}; phi={}".format(k, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.cylinder_rank, k, p))
             pyomo_solve_time = self.solve_one(solver_options, k, s,
@@ -664,7 +660,7 @@ class APH(ph_base.PHBase):  # ??????
                       (np.min(all_pyomo_solve_times),
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
-        return dlist
+        return dispatch_list
 
     #========
     def _print_conv_detail(self):
@@ -721,7 +717,7 @@ class APH(ph_base.PHBase):  # ??????
         self.dispatch_frac = self.options["dispatch_frac"]\
                              if "dispatch_frac" in self.options else 1
 
-        have_converger = self.PH_converger is not None
+        have_converger = self.ph_converger is not None
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         ddetail = "display_convergence_detail" in self.options and\
@@ -745,7 +741,7 @@ class APH(ph_base.PHBase):  # ??????
             self.Compute_Averages(verbose)
             logging.debug('post Compute_Averages on rank {}'.format(self.cylinder_rank))
             if self.global_tau <= 0:
-                logging.debug('***tau is 0 on rank {}'.format(self.cylinder_rank))
+                logging.critical('***tau is 0 on rank {}'.format(self.cylinder_rank))
 
             # Apr 2019 dlw: If you want the convergence crit. to be up to date,
             # do this as a listener side-gig and add another reduction.
@@ -755,7 +751,7 @@ class APH(ph_base.PHBase):  # ??????
             logging.debug('phisum={} after step on {}'.format(phisum, self.cylinder_rank))
 
             # ORed checks for convergence
-            if spcomm is not None and type(spcomm) is not mpi4py.MPI.Intracomm:
+            if spcomm is not None and type(spcomm) is not mpi.Intracomm:
                 spcomm.sync_with_spokes()
                 logging.debug('post sync_with_spokes on rank {}'.format(self.cylinder_rank))
                 if spcomm.is_converged():
@@ -778,6 +774,8 @@ class APH(ph_base.PHBase):  # ??????
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....
             # Aug2020 ... at least you would get dispatch
+            # Oct 2021: still need full dispatch in iter 1 (as well as iter 0)
+            # TBD: ? restructure so iter 1 can have partial dispatch
             if self._PHIter == 1:
                 savefrac = self.dispatch_frac
                 self.dispatch_frac = 1   # to get a decent w for everyone
@@ -833,6 +831,7 @@ class APH(ph_base.PHBase):  # ??????
         """
         # Prep needs to be before iter 0 for bundling
         # (It could be split up)
+        logging.debug('enter aph main on cylinder_rank {}'.format(self.cylinder_rank))
         self.PH_Prep(attach_duals=False, attach_prox=False)
 
         # Begin APH-specific Prep

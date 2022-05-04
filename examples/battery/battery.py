@@ -79,7 +79,7 @@ def scenario_creator(
 
     model._mpisppy_node_list = [
         stree.ScenarioNode(name='ROOT', cond_prob=1., stage=1,
-            cost_expression=model.first_stage_cost, scen_name_list=None, 
+            cost_expression=model.first_stage_cost,
             nonant_list=[model.y], scen_model=model)
     ]
 

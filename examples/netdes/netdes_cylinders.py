@@ -5,8 +5,7 @@ import os
 import copy
 import netdes
 
-import mpisppy.utils.sputils as sputils
-
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
@@ -96,9 +95,9 @@ def main():
     if with_slamup:
         slamup_spoke = vanilla.slamup_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
-    # cross scenario cut spoke
+    # cross scenario cuts spoke
     if with_cross_scenario_cuts:
-        cross_scenario_cut_spoke = vanilla.cross_scenario_cut_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
     if with_fwph:
@@ -112,13 +111,14 @@ def main():
     if with_slamup:
         list_of_spoke_dict.append(slamup_spoke)
     if with_cross_scenario_cuts:
-        list_of_spoke_dict.append(cross_scenario_cut_spoke)
+        list_of_spoke_dict.append(cross_scenario_cuts_spoke)
 
-    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
 
     if write_solution:
-        sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'netdes_build.csv')
-        sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'netdes_full_solution')
+        wheel.write_first_stage_solution('netdes_build.csv')
+        wheel.write_tree_solution('netdes_full_solution')
 
 
 if __name__ == "__main__":

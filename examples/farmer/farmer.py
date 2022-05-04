@@ -74,7 +74,6 @@ def scenario_creator(
             cond_prob=1.0,
             stage=1,
             cost_expression=model.FirstStageCost,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.DevotedAcreage],
             scen_model=model,
         )
@@ -221,6 +220,7 @@ def pysp_instance_creation_callback(
                                                sense=sense)
 
     return model
+
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):

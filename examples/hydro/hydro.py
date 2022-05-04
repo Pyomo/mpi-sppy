@@ -157,7 +157,6 @@ def MakeAllScenarioTreeNodes(model, bf):
                                                   1.0,
                                                   1,
                                                   model.StageCost[1],
-                                                  None,
                                                   [model.Pgt[1],
                                                    model.Pgh[1],
                                                    model.PDns[1],
@@ -169,7 +168,6 @@ def MakeAllScenarioTreeNodes(model, bf):
                                                    1.0/bf,
                                                    2,
                                                    model.StageCost[2],
-                                                   None,
                                                   [model.Pgt[2],
                                                    model.Pgh[2],
                                                    model.PDns[2],
@@ -191,7 +189,6 @@ def MakeNodesforScen(model, BFs, scennum):
                                          1.0,
                                          1,
                                          model.StageCost[1],
-                                         None,
                                          [model.Pgt[1],
                                           model.Pgh[1],
                                           model.PDns[1],
@@ -201,7 +198,6 @@ def MakeNodesforScen(model, BFs, scennum):
                                          1.0/BFs[0],
                                          2,
                                          model.StageCost[2],
-                                         None,
                                          [model.Pgt[2],
                                           model.Pgh[2],
                                           model.PDns[2],
@@ -267,12 +263,7 @@ if __name__ == "__main__":
     # end hardwire
 
     # This is multi-stage, so we need to supply node names
-    all_nodenames = ["ROOT"] # all trees must have this node
-    # The rest is a naming convention invented for this problem.
-    # Note that mpisppy does not have nodes at the leaves,
-    # and node names must end in a serial number.
-    for b in range(BFs[0]):
-        all_nodenames.append("ROOT_"+str(b))
+    all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 
     # **** ef ****
     solver = pyo.SolverFactory(options["solvername"])

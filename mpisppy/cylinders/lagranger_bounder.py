@@ -4,10 +4,12 @@
 # updates its own W.
 
 import time
+import json
 import mpisppy.cylinders.spoke
 
 class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
-
+    """Indepedent Lagrangian that takes x values as input and updates its own W.
+    """
     converger_spoke_char = 'A'
 
     def lagrangian_prep(self):
@@ -19,9 +21,9 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         self.opt._create_solvers()
         if "lagranger_rho_rescale_factors_json" in self.opt.options and\
             self.opt.options["lagranger_rho_rescale_factors_json"] is not None:
-            with open(args.lagranger_rho_rescale_factors_json, "r") as fin:
+            with open(self.opt.options["lagranger_rho_rescale_factors_json"], "r") as fin:
                 din = json.load(fin)
-            self.rho_rescale_factors = {int(i): din[i] for i in din}
+            self.rho_rescale_factors = {int(i): float(din[i]) for i in din}
         else:
             self.rho_rescale_factors = None
         # side-effect is needed: create the nonant_cache
@@ -32,7 +34,7 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         # see if rho should be rescaled
         if self.rho_rescale_factors is not None\
            and iternum in self.rho_rescale_factors:
-            _rescale_rho(self.rho_rescale_factors[iternum])
+            self._rescale_rho(self.rho_rescale_factors[iternum])
         teeme = False
         if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == 0:
             teeme = self.opt.options['tee-rank0-solves']
@@ -49,10 +51,10 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         return self.opt.Ebound(verbose)
 
 
-    def _rescale_rho(rf):
+    def _rescale_rho(self,rf):
         # IMPORTANT: the scalings accumulate.
         # E.g., 0.5 then 2.0 gets you back where you started.
-        for (sname, scenario) in self.local_scenarios.items():
+        for (sname, scenario) in self.opt.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                 scenario._mpisppy_model.rho[ndn_i] *= rf
         

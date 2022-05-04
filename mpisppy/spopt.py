@@ -1,13 +1,14 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # base class for hub and for spoke strata
+
 import logging
 import time
 import math
 import inspect
 
 import numpy as np
-from mpi4py import MPI
+from mpisppy import MPI
 
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
@@ -58,6 +59,28 @@ class SPOpt(SPBase):
                     self, **self.extension_kwargs
                 )
 
+    def _check_staleness(self, s):
+        # check for staleness in *scenario* s
+        # Look at the feasible scenarios. If we have any stale non-anticipative
+        # variables, complain. Otherwise the user will hit this issue later when
+        # we attempt to access the variables `value` attribute (see Issue #170).
+        for v in s._mpisppy_data.nonant_indices.values():
+            if (not v.fixed) and v.stale:
+                if self.is_zero_prob(s, v) and v._value is None:
+                    raise RuntimeError(
+                            f"Non-anticipative zero-probability variable {v.name} "
+                            f"on scenario {s.name} reported as stale and has no value. "
+                             "Zero-probability variables must have a value (e.g., fixed).")
+                else:
+                    try:
+                        float(pyo.value(v))
+                    except:
+                        raise RuntimeError(
+                            f"Non-anticipative variable {v.name} on scenario {s.name} "
+                            "reported as stale. This usually means this variable "
+                            "did not appear in any (active) components, and hence "
+                            "was not communicated to the subproblem solver. ")
+        
 
     def solve_one(self, solver_options, k, s,
                   dtiming=False,
@@ -157,9 +180,6 @@ class SPOpt(SPBase):
             results = None
             solver_exception = e
 
-        if self.extensions is not None:
-            results = self.extobject.post_solve(s, results)
-
         pyomo_solve_time = time.time() - solve_start_time
         if (results is None) or (len(results.solution) == 0) or \
                 (results.solution(0).status == SolutionStatus.infeasible) or \
@@ -198,6 +218,15 @@ class SPOpt(SPBase):
             for sname in s._ef_scenario_names:
                  self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
                      = s._mpisppy_data.scenario_feasible
+                 if s._mpisppy_data.scenario_feasible:
+                     self._check_staleness(self.local_scenarios[sname])
+        else:  # not a bundle
+            if s._mpisppy_data.scenario_feasible:
+                self._check_staleness(s)                 
+
+        if self.extensions is not None:
+            results = self.extobject.post_solve(s, results)
+
         return pyomo_solve_time
 
 
@@ -334,7 +363,12 @@ class SPOpt(SPBase):
         local_Ebounds = []
         for k,s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
-            local_Ebounds.append(s._mpisppy_probability * s._mpisppy_data.outer_bound)
+            try:
+                eb = s._mpisppy_probability * float(s._mpisppy_data.outer_bound)
+            except:
+                print(f"eb calc failed for {s._mpisppy_probability} * {s._mpisppy_data.outer_bound}")
+                raise
+            local_Ebounds.append(eb)
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Bound Scenario {}, prob={}, bound={}"\
@@ -491,7 +525,7 @@ class SPOpt(SPBase):
 
 
     def _put_nonant_cache(self, cache):
-        """ Put the value in the cache for noants *for all local scenarios*
+        """ Put the value in the cache for nonants *for all local scenarios*
         Args:
             cache (np vector) to receive the nonant's for all local scenarios
 
@@ -554,6 +588,50 @@ class SPOpt(SPBase):
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
+                        
+    def _fix_root_nonants(self,root_cache):
+        """ Fix the 1st stage Vars subject to non-anticipativity at given values.
+            Loop over the scenarios to restore, but loop over subproblems
+            to alert persistent solvers.
+            Useful for multistage to find feasible solutions with a given scenario.
+        Args:
+            root_cache (numpy vector): values at which to fix
+        WARNING: 
+            We are counting on Pyomo indices not to change order between
+            when the cache_list is created and used.
+        NOTE:
+            You probably want to call _save_nonants right before calling this
+        """
+        for k,s in self.local_scenarios.items():
+
+            persistent_solver = None
+            if (sputils.is_persistent(s._solver_plugin)):
+                persistent_solver = s._solver_plugin
+
+            nlens = s._mpisppy_data.nlens
+            
+            rootnode = None
+            for node in s._mpisppy_node_list:
+                if node.name == 'ROOT':
+                    rootnode = node
+                    break
+                
+            if rootnode is None:
+                raise RuntimeError("Could not find a 'ROOT' node in scen {}"\
+                                   .format(k))
+            if root_cache is None:
+                raise RuntimeError("Empty root cache for scen={}".format(k))
+            if len(root_cache) != nlens['ROOT']:
+                raise RuntimeError("Needed {} nonant Vars for 'ROOT', got {}"\
+                                   .format(nlens['ROOT'], len(root_cache)))
+            
+            for i in range(nlens['ROOT']): 
+                this_vardata = node.nonant_vardata_list[i]
+                this_vardata._value = root_cache[i]
+                this_vardata.fix()
+                if persistent_solver is not None:
+                    persistent_solver.update_var(this_vardata)
+                        
 
 
     def _restore_nonants(self):

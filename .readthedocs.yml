@@ -7,3 +7,10 @@ version: 2
 # Build documentation in the docs/ directory with Sphinx
 sphinx:
   configuration: doc/src/conf.py
+
+# we need mpi-sppy for automodule
+python:
+  version: 3.8
+  install:
+    - method: setuptools
+      path: .

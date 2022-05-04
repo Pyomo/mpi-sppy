@@ -8,7 +8,7 @@ import datetime
 import logging
 import sys
 import os
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
@@ -25,7 +25,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.log import setup_logger
 
 # the problem
@@ -209,11 +209,10 @@ if __name__ == "__main__":
 
     list_of_spoke_dict = (fw_spoke, lagrangian_spoke, ub_spoke)
 
-    spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
-    # there are ways to get the answer sooner
-    if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
-            print("BestInnerBound={} and BestOuterBound={}".\
-                  format(spcomm.BestInnerBound, spcomm.BestOuterBound))
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
+
+    if wheel.global_rank == 0:  # we are the reporting hub rank
+        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
     print("End time={} for global rank={}".\
           format(datetime.datetime.now(), global_rank))

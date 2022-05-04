@@ -1,7 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 from pyomo.repn.standard_repn import generate_standard_repn
-from mpi4py import MPI
+from mpisppy import MPI
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 
 import numpy as np
@@ -9,8 +9,8 @@ import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
 class CrossScenarioCutSpoke(spoke.Spoke):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm)
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
     def make_windows(self):
         nscen = len(self.opt.all_scenario_names)

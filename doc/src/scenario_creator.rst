@@ -19,8 +19,10 @@ non-leaf tree node objects that are constructed by calling
 `scenario_tree.ScenarioNode` which is not very hard for two stage
 problems, because there is only one non-leaf node and it must be
 called "ROOT".  If there are other scenario tree nodes, their names,
-although strings, must either be a unique integer or end in a unique
-integer (e.g. "1" or "Node1", etc.) The node constructor takes as
+although strings, must indicates their position in the tree, 
+like "ROOT_3_0_1". A given non-root node, which is the child number `k` of
+a node with name `parentname`, should be named `parentname_k`.
+The node constructor takes as
 arguments:
 
 * name,
@@ -46,6 +48,20 @@ illustrates use of the utility function
 (``mpisppy.utils.sputils.attach_root_node``) that attaches the node
 list for you.
 
+Node list entries can be entered indididually, by adding an entire
+variable implicitly including all index values, and/or by using wildcards. This is
+illustrated in the netdes example:
+
+::
+   
+   # Add all indexes of model.x
+   sputils.attach_root_node(model, model.FirstStageCost, [model.x, ])
+
+::
+   
+   # Add all index of model.x using wild cards
+   sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
+
 The scenario probability should be attached by `scenario_creator` as
 ``_mpisppy_probability``. However, if you don't attach it, the scenarios are
 assumed to be equally likely.
@@ -57,4 +73,7 @@ The function ``attach_root_node`` takes an optional argument ``nonant_ef_suppl_l
 multipliers by algorithms such as PH, but will be given non-anticipativity
 constraints when an EF is formed, either to solve the EF or when bundles are
 formed. For some problems, with the appropriate solver, adding redundant nonanticipativity constraints
-for auxilliary variables the bundle/EF will result in a (much) smaller pre-solved model.
+for auxilliary variables to the bundle/EF will result in a (much) smaller pre-solved model.
+
+
+

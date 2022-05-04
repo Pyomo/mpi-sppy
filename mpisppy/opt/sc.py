@@ -5,7 +5,7 @@ import parapint
 from typing import List, Callable, Dict, Optional, Tuple, Any, Union
 from pyomo.core.base.block import _BlockData
 from pyomo.core.base.var import _GeneralVarData
-from mpi4py import MPI
+from mpisppy import MPI
 from mpisppy.utils.sputils import find_active_objective
 
 

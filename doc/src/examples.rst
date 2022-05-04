@@ -351,7 +351,7 @@ previous methods:
     all_scenario_names = ["good", "average", "bad"]
     bounds = {name: -432000 for name in all_scenario_names}
     options = {
-        "master_solver": "cplex_persistent",
+        "root_solver": "cplex_persistent",
         "sp_solver": "cplex_persistent",
         "sp_solver_options" : {"threads" : 1},
         "valid_eta_lb": bounds,
@@ -392,3 +392,88 @@ previous methods:
 
 We see that, for this toy example, the L-shaped method has converged to the
 optimal solution within just 10 iterations.
+
+
+aircond
+-------
+
+This is fairly complicated example because it is multi-stage and the
+model itself offers a lot of flexibility.  The aircond example is
+unusual in that the model file, ``aircond.py``, lives in
+``mpisppy.tests.examples`` directory. Scripts and bash files that use
+it live in ``examples.aircond``.  A good place to start is the
+``aircond_cylinders.py`` file that starts with some functions that
+support the main program. The main program makes use of the command
+line parsers provided with the library supplemented by arguments
+provided by the aircond reference model using the line
+
+::
+
+  parser = aircond.inparsers_adder(parser)
+
+
+ The ``args`` obtained by the parser are passed directly to the vanilla hub
+ and spoke creator which knows how to use the arguments from the ``baseparsers``.
+ The arguments unique to aircond are processed by the ``create_kwargs`` function
+ in the reference model file.
+
+ A simple example that uses a few of the options is shown in ``aircond_zhat.bash``, which
+ also calls the ``xhat4xhat`` program to estimate confidence intervals for the solution
+ obtained.
+
+ 
+ hydro
+ -----
+
+Hydro is a three stage example that was originally coded in PySP and we make extensive use
+of the PySP files. Unlike farmer and aircond where the scenario data are created from distributions,
+for this problem the scenario data are provided in files.
+
+Using PySPModel
+^^^^^^^^^^^^^^^
+In the file ``hydro_cylinders_pysp.py`` the lines
+
+::
+
+   from mpisppy.utils.pysp_model import PySPModel
+   ...
+   hydro = PySPModel("./PySP/models/", "./PySP/nodedata/")
+
+cause an object called ``hydro`` to be created that has the methods needed by vanilla and the hub and
+spoke creators as can be seen in the ``main`` function of ``hydro_cylinders_pysp.py``.
+
+
+Not using PySPModel
+^^^^^^^^^^^^^^^^^^^
+
+In the file ``hydro_cylinders.py`` the file ``hydro.py`` is imported because it provides the functions
+needed by vanilla hub and spoke creators.
+
+
+netdes
+------
+
+This is a very challenging network design problem, which has many instances each defined by a data file.
+For this problem, cross scenario cuts are helpful
+so the use of that spoke is illustrated in ``netdes_cylinders.py``.  
+
+sslp
+----
+
+This is a classic problem from Ntaimo and Sen with data in PySP format
+so the driver code (e.g., ``sslp_cylinders.py`` that makes use of ``sslp.py``) is somewhat similar to the
+hydro example except sslp is simpler because it is just two stages.
+
+UC
+--
+
+This example uses the ``egret`` package for the underlying unit commitment model
+and reads PySP format data using the ``pyomo`` dataportal. Data files for a variety
+of numbers of scenarios are provided.
+
+sizes
+-----
+
+The sizes example (Jorjani et al, IJPR, 1999) is a two-stage problem with general integers in each stage. The file
+``sizes_cylinders.py`` is the usual cylinders driver. There are other examples in the directory, such
+as ``sizes_demo.py``, which provides an example of serial execution (no cylinders).

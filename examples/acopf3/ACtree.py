@@ -71,19 +71,19 @@ class ACTree():
         assert(len(retlist) == self.NumStages)
         return retlist
 
-    def All_Nonleaf_Nodenames(self):
-        """ Return a list of all non-leaf node names"""
+    def All_Nodenames(self):
+        """ Return a list of all node names"""
         # there is a arithmetic way, but I will use the general tree way
         def _progenynames(node):
             # return my name and progeny names if they are not leaves
             retval = [node.Name]
-            if node.stage < self.NumStages - 1: # avoid leaves
+            if node.stage < self.NumStages: # include leaves
                 for kid in node.kids:
                     retval += _progenynames(kid)
             return retval
             
-        allnonleaf = _progenynames(self.rootnode)
-        return allnonleaf
+        allnames = _progenynames(self.rootnode)
+        return allnames
         
             
 class TreeNode():
@@ -127,7 +127,7 @@ class TreeNode():
                     removals.append((line, mo))
                     self.LinesUp.append(line)
                 else:
-                    mo += TreeInfo.StageDurations[stage-1]
+                    mo += TreeInfo.StageDurations[self.stage-1]
                     self.FailedLines[ell] = (line, mo)
             for r in removals:
                 self.FailedLines.remove(r)

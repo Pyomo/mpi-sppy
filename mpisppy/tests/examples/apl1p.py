@@ -1,11 +1,12 @@
 #ReferenceModel for full set of scenarios for APL1P; May 2021
-
+#We use costs from Bailey, Jensen and Morton, Response Surface Analysis of Two-Stage Stochastic Linear Programming with Recourse
+#(costs are 10x higher than in the original [Infanger 1992] paper)
 
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgomator as amalgomator
+import mpisppy.utils.amalgamator as amalgamator
 
 # Use this random stream:
 apl1pstream = np.random.RandomState()
@@ -49,7 +50,7 @@ def APL1P_model_creator(seed):
     
     
     # Investment, aka Capacity costs
-    invest = np.array([.4,.25])
+    invest = np.array([4.,2.5])
     def investment_init(m,g):
         return(invest[g-1])
 
@@ -57,7 +58,7 @@ def APL1P_model_creator(seed):
                              initialize=investment_init)
     
     # Operating Cost
-    op_cost = np.array([[.43,.2,.05],[.87,.4,.1]])
+    op_cost = np.array([[4.3,2.0,0.5],[8.7,4.0,1.0]])
     def operatingcost_init(m,g,dl):
         return(op_cost[g-1,dl-1])
     
@@ -68,7 +69,7 @@ def APL1P_model_creator(seed):
     demand_outcome = [900,1000,1100,1200]
     demand_prob = [.15,.45,.25,.15]
     demand_cumprob = np.cumsum(demand_prob)
-    assert(max(demand_cumprob == 1.0))
+    assert(max(demand_cumprob) == 1.0)
     def demand_init(m,dl):
         rd = random_array[2+dl]
         i = np.searchsorted(demand_cumprob,rd)
@@ -78,7 +79,7 @@ def APL1P_model_creator(seed):
                          initialize=demand_init)
     
     # Cost of unserved demand
-    unserved_cost =1.0
+    unserved_cost =10.0
     model.CostUnservedDemand = pyo.Param(model.DL, within=pyo.NonNegativeReals,
                                      initialize=unserved_cost)
     
@@ -158,7 +159,6 @@ def scenario_creator(sname, num_scens=None):
             cond_prob=1.0,
             stage=1,
             cost_expression=model.Total_Cost_Objective,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.CapacityGenerators], 
             scen_model=model,
         )
@@ -173,7 +173,7 @@ def scenario_creator(sname, num_scens=None):
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgomator): return the full list of num_scens scenario names
+    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
@@ -182,13 +182,13 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgomator): add command options unique to apl1p
+    # (only for Amalgamator): add command options unique to apl1p
     pass
 
 
 #=========
 def kw_creator(options):
-    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
+    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
     kwargs = {"num_scens" : options['num_scens'] if 'num_scens' in options else None,
               }
     return kwargs
@@ -228,8 +228,8 @@ def xhat_generator_apl1p(scenario_names, solvername="gurobi", solver_options=Non
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     }
-    #We use from_module to build easily an Amalgomator object
-    ama = amalgomator.from_module("mpisppy.tests.examples.apl1p",
+    #We use from_module to build easily an Amalgamator object
+    ama = amalgamator.from_module("mpisppy.tests.examples.apl1p",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names

@@ -8,11 +8,9 @@ import time
 import os
 import math
 
-# for SLEEP_TIME
-import mpisppy.cylinders as cylinders
 import mpisppy.utils.sputils as sputils
 
-from mpi4py import MPI
+from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
 
 
@@ -24,7 +22,7 @@ class ConvergerSpokeType(enum.Enum):
 
 class Spoke(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         self.local_write_id = 0
         self.remote_write_id = 0
         self.local_length = 0  # Does NOT include the + 1
@@ -107,8 +105,8 @@ class Spoke(SPCommunicator):
         # Spokes can sometimes call this frequently in a tight loop,
         # causing the Allreduces to become out of sync
         diff = time.time() - self.last_call_to_got_kill_signal
-        if diff < cylinders.SPOKE_SLEEP_TIME:
-            time.sleep(cylinders.SPOKE_SLEEP_TIME - diff)
+        if diff < self.spoke_sleep_time:
+            time.sleep(self.spoke_sleep_time - diff)
         self.last_call_to_got_kill_signal = time.time()
         return self._got_kill_signal()
 
@@ -138,7 +136,7 @@ class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         if self.cylinder_rank == 0 and \
                 'trace_prefix' in spbase_object.options and \
                 spbase_object.options['trace_prefix'] is not None:
@@ -313,7 +311,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
     converger_spoke_char = 'I'
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=None)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         self.is_minimizing = self.opt.is_minimizing
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
@@ -361,8 +359,9 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
             raise RuntimeError(f"Found infeasible solution which was feasible before - feasP={feasP}, E1={self.opt.E1}, E1_tolerance={self.opt.E1_tolerance}")
 
         obj = self.opt.Eobjective(verbose=False)
-
-        if not math.isclose(obj,self.best_inner_bound):
+        calculated_worse = obj > self.best_inner_bound if self.is_minimizing else self.best_inner_bound > obj
+        
+        if calculated_worse and not math.isclose(obj, self.best_inner_bound, rel_tol=1e-08, abs_tol=1e-12):
             if self.cylinder_rank == 0:
                 print(f"WARNING: {self.__class__.__name__} best inner bound is different "
                         f"from objective calculated in finalize")

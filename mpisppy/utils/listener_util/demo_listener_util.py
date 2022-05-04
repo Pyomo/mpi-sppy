@@ -9,7 +9,7 @@
 import sys
 import collections
 import numpy as np
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import time
 import datetime as dt
 import threading

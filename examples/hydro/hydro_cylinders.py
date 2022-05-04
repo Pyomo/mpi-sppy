@@ -6,6 +6,7 @@ import hydro
 
 import mpisppy.utils.sputils as sputils
 
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
 
@@ -13,11 +14,11 @@ import mpisppy.cylinders as cylinders
 
 # For this problem, the subproblems are
 # small and take no time to solve. The
-# default SPOKE_SLEEP_TIME of 0.1 *causes*
+# default SPOKE_SLEEP_TIME of 0.01 *causes*
 # synchronization issues in this case, so
 # we reduce it so as not to dominate the
 # time spent for cylinder synchronization
-cylinders.SPOKE_SLEEP_TIME = 0.0001
+SPOKE_SLEEP_TIME = 0.0001
 
 write_solution = True
 
@@ -28,6 +29,13 @@ def _parse_args():
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.lagrangian_args(parser)
     parser = baseparsers.xhatspecific_args(parser)
+
+    parser.add_argument("--stage2EFsolvern",
+                        help="Solver to use for xhatlooper stage2ef option (default None)",
+                        dest="stage2EFsolvern",
+                        default=None)
+                        
+    
     args = parser.parse_args()
     return args
 
@@ -36,20 +44,15 @@ def main():
 
     args = _parse_args()
 
-    BFs = [int(bf) for bf in args.BFs.split(',')]
+    BFs = args.branching_factors
     if len(BFs) != 2:
         raise RuntimeError("Hydro is a three stage problem, so it needs 2 BFs")
 
-    with_xhatspecific = args.with_xhatspecific
+    with_xhatshuffle = args.with_xhatshuffle
     with_lagrangian = args.with_lagrangian
 
     # This is multi-stage, so we need to supply node names
-    all_nodenames = ["ROOT"] # all trees must have this node
-    # The rest is a naming convention invented for this problem.
-    # Note that mpisppy does not have nodes at the leaves,
-    # and node names must end in a serial number.
-    for b in range(BFs[0]):
-        all_nodenames.append("ROOT_"+str(b))
+    all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 
     ScenCount = BFs[0] * BFs[1]
     scenario_creator_kwargs = {"branching_factors": BFs}
@@ -65,47 +68,46 @@ def main():
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=None,
-                              rho_setter = rho_setter)
-    hub_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    hub_dict["opt_kwargs"]["options"]["branching_factors"] = BFs
+                              rho_setter = rho_setter,
+                              all_nodenames = all_nodenames,
+                              spoke_sleep_time = SPOKE_SLEEP_TIME)
 
     # Standard Lagrangian bound spoke
     if with_lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter)
-        lagrangian_spoke["opt_kwargs"]["all_nodenames"] = all_nodenames
-        lagrangian_spoke["opt_kwargs"]["options"]["branching_factors"] = BFs
+               scenario_creator_kwargs=scenario_creator_kwargs,
+               rho_setter = rho_setter,
+               all_nodenames = all_nodenames,
+               spoke_sleep_time = SPOKE_SLEEP_TIME)
+
 
     # xhat looper bound spoke
-    xhat_scenario_dict = {"ROOT": "Scen1",
-                          "ROOT_0": "Scen1",
-                          "ROOT_1": "Scen4",
-                          "ROOT_2": "Scen7"}
     
-    if with_xhatspecific:
-        xhatspecific_spoke = vanilla.xhatspecific_spoke(*beans,
-                                                        xhat_scenario_dict,
-                                                        all_nodenames,
-                                                        BFs,
-                                                        scenario_creator_kwargs=scenario_creator_kwargs)
+    if with_xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
+                all_nodenames=all_nodenames,
+                scenario_creator_kwargs=scenario_creator_kwargs,
+                spoke_sleep_time = SPOKE_SLEEP_TIME)
 
     list_of_spoke_dict = list()
     if with_lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if with_xhatspecific:
-        list_of_spoke_dict.append(xhatspecific_spoke)
+    if with_xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+    if args.stage2EFsolvern is not None:
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = args.stage2EFsolvern
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = args.branching_factors
 
-    if "hub_class" in opt_dict:  # we are a hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
-            print("BestInnerBound={} and BestOuterBound={}".\
-                  format(spcomm.BestInnerBound, spcomm.BestOuterBound))
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
+
+    if wheel.global_rank == 0:  # we are the reporting hub rank
+        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
     
     if write_solution:
-        sputils.write_spin_the_wheel_first_stage_solution(spcomm, opt_dict, 'hydro_first_stage.csv')
-        sputils.write_spin_the_wheel_tree_solution(spcomm, opt_dict, 'hydro_full_solution')
+        wheel.write_first_stage_solution('hydro_first_stage.csv')
+        wheel.write_tree_solution('hydro_full_solution')
 
 if __name__ == "__main__":
     main()

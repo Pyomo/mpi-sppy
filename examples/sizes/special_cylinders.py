@@ -5,7 +5,7 @@ import sys
 import copy
 import special_sizes as sizes
 
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.utils import baseparsers
 from mpisppy.utils import vanilla
@@ -99,7 +99,7 @@ def main():
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    spin_the_wheel(hub_dict, list_of_spoke_dict)
+    WheelSpinner(hub_dict, list_of_spoke_dict).spin()
 
 
 if __name__ == "__main__":

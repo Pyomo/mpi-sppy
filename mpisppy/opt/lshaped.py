@@ -8,7 +8,7 @@ import time
 import sys
 import mpisppy.spbase as spbase
 
-from mpi4py import MPI
+from mpisppy import MPI
 from pyomo.core.plugins.transform.discrete_vars import RelaxIntegerVars
 from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
@@ -652,6 +652,7 @@ class LShapedMethod(spbase.SPBase):
                         f"Final Objective: {m.obj.expr():7.2f}"
                     )
                     self.first_stage_solution_available = True
+                    self.tree_solution_available = True
                     break
                 if verbose and self.iter == max_iter - 1:
                     print("WARNING MAX ITERATION LIMIT REACHED !!! ")

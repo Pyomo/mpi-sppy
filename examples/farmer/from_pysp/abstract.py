@@ -29,9 +29,9 @@ except:
     sys.exit()
 
 pref = os.path.join("..","PySP","abstract")
-farmer = PySPModel(scenario_creator=os.path.join(pref,"ReferenceModel.py"),
-                   tree_model=os.path.join(pref,"ScenarioStructure.dat"),
-                   scenarios_dir=pref)
+farmer = PySPModel(model=os.path.join(pref,"ReferenceModel.py"),
+                   scenario_tree=os.path.join(pref,"ScenarioStructure.dat"),
+                   data_dir=pref)
 
 phoptions = {'defaultPHrho': 1.0,
              'solvername':solver_name,
@@ -62,3 +62,4 @@ else:
     solver.solve(ef, tee=True, symbolic_solver_labels=True,)
 
 print(f"EF objective: {pyo.value(ef.EF_Obj)}")
+farmer.close()

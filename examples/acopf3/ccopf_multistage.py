@@ -19,7 +19,7 @@ import scipy
 import socket
 import numpy as np
 import datetime as dt
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 
 import pyomo.environ as pyo
 
@@ -219,7 +219,6 @@ def pysp2_callback(
                 cond_prob=enode.CondProb,
                 stage=stage,
                 cost_expression=inst.stage_models[stage].obj,
-                scen_name_list=enode.ScenarioList,
                 nonant_list=[inst.stage_models[stage].pg,
                              inst.stage_models[stage].qg],
                 scen_model=inst, parent_name=parent_name))
@@ -285,7 +284,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 if __name__ == "__main__":
     # as of April 27, 2020 __main__ has been updated only for EF
     print("EF only")
-    import mpi4py.MPI as mpi
+    import mpisppy.MPI as mpi
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
     solvername = "cplex"

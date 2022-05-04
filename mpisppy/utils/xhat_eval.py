@@ -11,7 +11,7 @@ import math
 
 import mpisppy.log
 import mpisppy.phbase
-from mpi4py import MPI
+from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
 
@@ -61,12 +61,21 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self.verbose = self.options['verbose']
         self.current_solver_options = self.options['iter0_solver_options'] if 'iter0_solver_options' in self.options else (
                                         self.options['solver_options'] if 'solver_options' in self.options else dict() )
+
         
+        #TODO: CHANGE THIS AFTER UPDATE
+        self.PH_extensions = None
+
+        self._subproblems_solvers_created = False
+
+        
+
+    def _lazy_create_solvers(self):
+        if self._subproblems_solvers_created:
+            return
         self.subproblem_creation(self.verbose)
         self._create_solvers()
-
-
-    
+        self._subproblems_solvers_created = True
 
 
     #======================================================================
@@ -78,13 +87,14 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
                   compute_val_at_nonant=False):
+        self._lazy_create_solvers()
         pyomo_solve_time = super().solve_one(solver_options, k, s,
-                                             dtiming=False,
-                                             gripe=False,
-                                             tee=False,
-                                             verbose=False,
-                                             disable_pyomo_signal_handling=False,
-                                             update_objective=True)
+                                             dtiming=dtiming,
+                                             gripe=gripe,
+                                             tee=tee,
+                                             verbose=verbose,
+                                             disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+                                             update_objective=update_objective)
         if compute_val_at_nonant:
                 if self.bundling:
                     objfct = self.saved_objs[k]
@@ -132,6 +142,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         NOTE: set_objective takes care of W and prox changes.
         """
+        self._lazy_create_solvers()
         def _vb(msg): 
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
@@ -194,6 +205,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 If fct is R-->R, returns a float.
                 If fct is R-->R^p with p>1, returns a np.array of length p
         """
+        self._lazy_create_solvers()
         if fct is None:
             return super().Eobjective(verbose=verbose)
         
@@ -221,7 +233,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         """ Evaluate xhat for one scenario.
 
         Args:
-            nonant_cache(numpy vector): special numpy vector with nonant values (see ph)
+            nonant_cache(numpy vector): special numpy vector with nonant values (see spopt)
             scenario_name(str): TODO
         
 
@@ -229,6 +241,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or None): Expected value (or None if infeasible)
 
         """
+        self._lazy_create_solvers()
         self._fix_nonants(nonant_cache)
         if not hasattr(self, "objs_dict"):
             self.objs_dict = {}
@@ -253,7 +266,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             and a given function fct across all scenarios.
 
         Args:
-            nonant_cache(numpy vector): special numpy vector with nonant values (see spopt)
+            nonant_cache(ndn dict of numpy vector): special numpy vector with nonant values (see spopt)
             fct (function, optional):
                 A function R-->R^p, such as x|-->(x,x^2,x^3). Default is None
                 If fct is None, evaluate returns the exepected value.
@@ -262,6 +275,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Eobj (float or numpy.array): Expected value
 
         """
+        self._lazy_create_solvers()
         self._fix_nonants(nonant_cache)
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
@@ -278,6 +292,49 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         
         return Eobj
     
+    
+    
+    def fix_nonants_upto_stage(self,t,cache):
+        """ Fix the Vars subject to non-anticipativity at given values for stages 1 to t.
+            Loop over the scenarios to restore, but loop over subproblems
+            to alert persistent solvers.
+        Args:
+            cache (ndn dict of list or numpy vector): values at which to fix
+        WARNING: 
+            We are counting on Pyomo indices not to change order between
+            when the cache_list is created and used.
+        NOTE:
+            You probably want to call _save_nonants right before calling this
+        """
+        self._lazy_create_solvers()
+        for k,s in self.local_scenarios.items():
+
+            persistent_solver = None
+            if (sputils.is_persistent(s._solver_plugin)):
+                persistent_solver = s._solver_plugin
+
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                if node.stage<=t:
+                    ndn = node.name
+                    if ndn not in cache:
+                        raise RuntimeError("Could not find {} in {}"\
+                                           .format(ndn, cache))
+                    if cache[ndn] is None:
+                        raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
+                    if len(cache[ndn]) != nlens[ndn]:
+                        raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
+                                           .format(nlens[ndn], ndn, len(cache[ndn])))
+                    for i in range(nlens[ndn]): 
+                        this_vardata = node.nonant_vardata_list[i]
+                        this_vardata._value = cache[ndn][i]
+                        this_vardata.fix()
+                        if persistent_solver is not None:
+                            persistent_solver.update_var(this_vardata)
+        
+    
+    
+        
     #======================================================================
     def _fix_nonants_at_value(self):
         """ Fix the Vars subject to non-anticipativity at their current values.
@@ -324,6 +381,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             xhatobjective (float or None): the objective function
                 or None if one could not be obtained.
         """
+        self._lazy_create_solvers()
 
         if fix_nonants:
             self._fix_nonants_at_value()
@@ -343,72 +401,5 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
 
 if __name__ == "__main__":
-    #==============================
-    # hardwired by dlw for debugging (this main is like MMW, but strange)
-    import mpisppy.tests.examples.farmer as refmodel
-    import mpisppy.utils.amalgomator as ama
-    
-    # do the right term of MMW (9) using the first scenarios
-    ama_options = {"EF-2stage": True}   # 2stage vs. mstage
-    ama_object = ama.from_module("mpisppy.tests.examples.farmer", ama_options)
-    ama_object.run()
-    print(f"inner bound=", ama_object.best_inner_bound)
-    # This the right term of LHS of MMW (9)
-    print(f"outer bound=", ama_object.best_outer_bound)
-
-    
-    ############### now get an xhat using different scenarios
-    # (use use the ama args to get problem parameters)
-    ScenCount = ama_object.options['num_scens']
-    scenario_creator = refmodel.scenario_creator
-    scenario_denouement = refmodel.scenario_denouement
-    crops_multiplier = ama_object.options['crops_multiplier']
-    solvername = ama_object.options['EF_solver_name']
-
-    scenario_creator_kwargs = {
-        "use_integer": False,
-        "crops_multiplier": crops_multiplier,
-        "num_scens": ScenCount
-    }
-
-    # different scenarios for xhat
-    scenario_names = ['Scenario' + str(i) for i in range(ScenCount, 2*ScenCount)]
-
-    ef = sputils.create_EF(
-        scenario_names,
-        scenario_creator,
-        scenario_creator_kwargs=scenario_creator_kwargs,
-    )
-
-    solver = pyo.SolverFactory(solvername)
-    if 'persistent' in solvername:
-        solver.set_instance(ef, symbolic_solver_labels=True)
-        solver.solve(tee=False)
-    else:
-        solver.solve(ef, tee=False, symbolic_solver_labels=True,)
-
-    print(f"Xhat in-sample objective: {pyo.value(ef.EF_Obj)}")
-    
-
-    ########### get the nonants (the xhat)
-    # NOTE: we probably should do an assert or two to make sure Vars match
-    nonant_cache = sputils.nonant_cache_from_ef(ef)
-
-    # Create the eval object for the left term of the LHS of (9) in MMW
-    # but we are back to using the first scenarios
-    MMW_scenario_names = ['scen' + str(i) for i in range(ScenCount)]
-
-    # The options need to be re-done (and phase needs to be split up)
-    options = {"iter0_solver_options": None,
-             "iterk_solver_options": None,
-             "solvername": solvername,
-             "verbose": False}
-    # TBD: set solver options
-    ev = Xhat_Eval(options,
-                   MMW_scenario_names,
-                   scenario_creator,
-                   scenario_denouement,
-                   )
-    obj_at_xhat = ev.evaluate(nonant_cache)
-    print(f"Expected value at xhat={obj_at_xhat}")  # Left term of LHS of (9)
-
+    print("For an example of the use of Xhat_Eval see, e.g., zhat4xhat.py, "
+          "which is in the confidence_intervals directory.")

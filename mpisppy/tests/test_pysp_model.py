@@ -25,6 +25,9 @@ class Test_sizes_abstract(unittest.TestCase):
                                      'SIZES3', 'ScenarioStructure.dat')
                                     )
 
+    def tearDown(self):
+        self.pysp_sizes3.close()
+
     def test_ph_constructor(self):
         pysp_sizes = self.pysp_sizes3
         options = _get_ph_base_options()

@@ -4,7 +4,7 @@ import time
 import logging
 
 import numpy as np
-import mpi4py.MPI as MPI
+import mpisppy.MPI as MPI
 
 import pyomo.environ as pyo
 
@@ -73,7 +73,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 PH extension object.
             extension_kwargs (dict, optional):
                 Keyword arguments to pass to the extensions.
-            PH_converger (object, optional):
+            ph_converger (object, optional):
                 PH converger object.
             rho_setter (callable, optional):
                 Function to set rho values throughout the PH algorithm.
@@ -92,7 +92,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         scenario_creator_kwargs=None,
         extensions=None,
         extension_kwargs=None,
-        PH_converger=None,
+        ph_converger=None,
         rho_setter=None,
         variable_probability=None,
     ):
@@ -116,7 +116,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         # self.options (from super) will archive the original options.
         self.options = options
         self.options_check()
-        self.PH_converger = PH_converger
+        self.ph_converger = ph_converger
         self.rho_setter = rho_setter
 
         self.iter0_solver_options = options["iter0_solver_options"]
@@ -698,7 +698,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]        
         have_extensions = self.extensions is not None
-        have_converger = self.PH_converger is not None
+        have_converger = self.ph_converger is not None
 
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
@@ -754,6 +754,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0()
 
+        if self.spcomm is not None:
+            self.spcomm.sync()
+
         if self.rho_setter is not None:
             if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
@@ -763,7 +766,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         converged = False
         if have_converger:
             # Call the constructor of the converger object
-            self.convobject = self.PH_converger(self)
+            self.convobject = self.ph_converger(self)
         #global_toc('Rank: {} - Before iter loop'.format(self.cylinder_rank), True)
         self.conv = None
 
@@ -804,7 +807,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         verbose = self.options["verbose"]
         have_extensions = self.extensions is not None
-        have_converger = self.PH_converger is not None
+        have_converger = self.ph_converger is not None
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
@@ -836,11 +839,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             # over the converger, such that
             # the spokes will always have the
             # latest data, even at termination
-            if self.spcomm is not None:
-                self.spcomm.sync()
-                if self.spcomm.is_converged():
-                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
-                    break    
             if have_converger:
                 if self.convobject.is_converged():
                     converged = True
@@ -868,6 +866,12 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             if have_extensions:
                 self.extobject.enditer()
+
+            if self.spcomm is not None:
+                self.spcomm.sync()
+                if self.spcomm.is_converged():
+                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
+                    break
 
             if dprogress and self.cylinder_rank == 0:
                 print("")

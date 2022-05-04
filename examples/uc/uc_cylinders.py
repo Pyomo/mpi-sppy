@@ -11,6 +11,7 @@ import json
 import uc_funcs as uc
 
 import mpisppy.utils.sputils as sputils
+from mpisppy.spin_the_wheel import WheelSpinner
 
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
@@ -25,6 +26,7 @@ from ptdf_ext import PTDFExtension
 def _parse_args():
     parser = baseparsers.make_parser("uc_cylinders")
     parser = baseparsers.two_sided_args(parser)
+    parser = baseparsers.aph_args(parser)        
     parser = baseparsers.fixer_args(parser)
     parser = baseparsers.fwph_args(parser)
     parser = baseparsers.lagrangian_args(parser)
@@ -55,6 +57,11 @@ def _parse_args():
                         action='store_true',
                         dest='add_contingency_constraints',
                         default=False)
+    parser.add_argument("--run-aph",
+                        help="Run with async projective hedging instead of progressive hedging",
+                        dest="run_aph",
+                        action="store_true",
+                        default=False)        
     args = parser.parse_args()
     return args
 
@@ -95,12 +102,17 @@ def main():
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
     ### start ph spoke ###
-    # Start with Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=MultiExtension,
-                              rho_setter = rho_setter)
-
+    if args.run_aph:
+        hub_dict = vanilla.aph_hub(*beans,
+                                   scenario_creator_kwargs=scenario_creator_kwargs,
+                                   ph_extensions=MultiExtension,
+                                   rho_setter = rho_setter)
+    else:
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=MultiExtension,
+                                  rho_setter = rho_setter)
+        
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper, PTDFExtension]
     if with_fixer:
@@ -170,7 +182,6 @@ def main():
         cross_scenario_cut_spoke = vanilla.cross_scenario_cut_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
         cross_scenario_cut_spoke["opt_kwargs"]["extensions"] = PTDFExtension
 
-
     list_of_spoke_dict = list()
     if with_fwph:
         list_of_spoke_dict.append(fw_spoke)
@@ -181,13 +192,16 @@ def main():
     if with_xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if with_cross_scenario_cuts:
-        list_of_spoke_dict.append(cross_scenario_cut_spoke)
+        list_of_spoke_dict.append(cross_scenario_cuts_spoke)
 
-    spcomm, opt_dict = sputils.spin_the_wheel(hub_dict, list_of_spoke_dict)
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
 
     if args.solution_dir is not None:
-        sputils.write_spin_the_wheel_tree_solution(
-                spcomm, opt_dict, args.solution_dir, uc.scenario_tree_solution_writer )
+        wheel.write_tree_solution(args.solution_dir, uc.scenario_tree_solution_writer)
+
+    wheel.write_first_stage_solution('uc_cyl_nonants.npy',
+            first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
 
 
 if __name__ == "__main__":

@@ -78,7 +78,6 @@ def scenario_creator(
             cond_prob=1.0,
             stage=1,
             cost_expression=model.FirstStageCost,
-            scen_name_list=None, # Deprecated?
             nonant_list=[model.DevotedAcreage],
             scen_model=model,
         )
@@ -233,7 +232,7 @@ def pysp_instance_creation_callback(
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgomator): return the full list of num_scens scenario names
+    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
@@ -243,7 +242,7 @@ def scenario_names_creator(num_scens,start=None):
 
 #=========
 def inparser_adder(inparser):
-    # (only for Amalgomator): add command options unique to farmer
+    # (only for Amalgamator): add command options unique to farmer
     inparser.add_argument("--crops-multiplier",
                           help="number of crops will be three times this (default 1)",
                           dest="crops_multiplier",
@@ -259,10 +258,10 @@ def inparser_adder(inparser):
 
 #=========
 def kw_creator(options):
-    # (only for Amalgomator): linked to the scenario_creator and inparser_adder
-    kwargs = {"use_integer": options['use_integer'] if 'use_integer' in options else False,
-              "crops_multiplier": options['crops_multiplier'] if 'crops_multiplier' in options else 1,
-              "num_scens" : options['num_scens'] if 'num_scens' in options else None,
+    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
+    kwargs = {"use_integer": options.get('use_integer', False),
+              "crops_multiplier": options.get('crops_multiplier', 1),
+              "num_scens" : options.get('num_scens', None),
               }
     return kwargs
 

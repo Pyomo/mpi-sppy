@@ -11,7 +11,7 @@ from mpisppy.opt.ph import PH
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
-from mpisppy.utils.sputils import spin_the_wheel
+from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # the problem
@@ -25,7 +25,7 @@ import socket
 import sys
 import datetime as dt
 
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 comm_global = mpi.COMM_WORLD
 global_rank = comm_global.Get_rank()
 n_proc = comm_global.Get_size()
@@ -110,7 +110,7 @@ def main():
     all_scenario_names=["Scenario_"+str(i)\
                         for i in range(1,len(scenario_creator_kwargs["etree"].\
                                              rootnode.ScenarioList)+1)]
-    all_nodenames = scenario_creator_kwargs["etree"].All_Nonleaf_Nodenames()
+    all_nodenames = scenario_creator_kwargs["etree"].All_Nodenames()
 
     options = dict()
     if scenario_creator_kwargs["convex_relaxation"]:
@@ -206,17 +206,18 @@ def main():
     }
     
     list_of_spoke_dict = [ub2]
-    spcomm, opt_dict = spin_the_wheel(hub_dict, list_of_spoke_dict)
-    if "hub_class" in opt_dict:  # we are hub rank
-        if spcomm.opt.cylinder_rank == 0:  # we are the reporting hub rank
-            ph_end_time = dt.datetime.now()
-            IB = spcomm.BestInnerBound
-            OB = spcomm.BestOuterBound
-            print("BestInnerBound={} and BestOuterBound={}".\
-                  format(IB, OB))
-            with open(appfile, "a") as f:
-                f.write(", "+str(IB)+", "+str(OB)+", "+str(spcomm.opt._PHIter))
-                f.write(", "+str((ph_end_time - start_time).total_seconds()))
+    wheel_spinner = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel_spinner.spin()
+    spcomm = wheel_spinner.spcomm
+    if wheel_spinner.global_rank == 0:
+        ph_end_time = dt.datetime.now()
+        IB = wheel_spinner.BestInnerBound
+        OB = wheel_spinner.BestOuterBound
+        print("BestInnerBound={} and BestOuterBound={}".\
+              format(IB, OB))
+        with open(appfile, "a") as f:
+            f.write(", "+str(IB)+", "+str(OB)+", "+str(spcomm.opt._PHIter))
+            f.write(", "+str((ph_end_time - start_time).total_seconds()))
 
                 
 if __name__=='__main__':

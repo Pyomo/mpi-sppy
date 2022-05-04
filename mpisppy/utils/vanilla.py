@@ -1,3 +1,4 @@
+# If possible, use cfg_vanilla and config.py instead of this and baseparsers.py.
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 """ Plain versions of dictionaries that can be modified for each example
@@ -14,6 +15,7 @@ from mpisppy.opt.aph import APH
 from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.fwph.fwph import FWPH
 from mpisppy.utils.xhat_eval import Xhat_Eval
+import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
@@ -26,6 +28,9 @@ from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
+from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 def _hasit(args, argname):
     return hasattr(args, argname) and getattr(args, argname) is not None
@@ -55,16 +60,31 @@ def shared_options(args):
         shoptions["bundles_per_rank"] = args.bundles_per_rank
     return shoptions
 
+def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
+    cylinder_dict = copy.deepcopy(cylinder_dict)
+    if branching_factors is not None:
+        if hasattr(cylinder_dict["opt_kwargs"], "options"):
+            cylinder_dict["opt_kwargs"]["options"]["branching_factors"] = branching_factors
+        if all_nodenames is None:
+            all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
+    if all_nodenames is not None:
+        print("Hello, surprise !!")
+        cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
+    print("Hello,",cylinder_dict)
+    return cylinder_dict
 
 def ph_hub(
-    args,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    ph_extensions=None,
-    rho_setter=None,
-    variable_probability=None,
+        args,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        ph_extensions=None,
+        ph_converger=None,
+        rho_setter=None,
+        variable_probability=None,
+        all_nodenames=None,
+        spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     options = copy.deepcopy(shoptions)
@@ -81,8 +101,10 @@ def ph_hub(
 
     hub_dict = {
         "hub_class": hub_class,
-        "hub_kwargs": {"options": {"rel_gap": args.rel_gap,
-                                   "abs_gap": args.abs_gap}},
+        "hub_kwargs": {"options": {"spoke_sleep_time": spoke_sleep_time,
+                                   "rel_gap": args.rel_gap,
+                                   "abs_gap": args.abs_gap,
+                                   "max_stalled_iters": args.max_stalled_iters}},
         "opt_class": PH,
         "opt_kwargs": {
             "options": options,
@@ -93,8 +115,11 @@ def ph_hub(
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "extensions": ph_extensions,
+            "ph_converger": ph_converger,
+            "all_nodenames": all_nodenames
         }
     }
+    
     return hub_dict
 
 
@@ -107,6 +132,8 @@ def aph_hub(
     ph_extensions=None,
     rho_setter=None,
     variable_probability=None,
+    all_nodenames=None,
+    spoke_sleep_time=None,
 ):
     hub_dict = ph_hub(args,
                       scenario_creator,
@@ -115,7 +142,9 @@ def aph_hub(
                       scenario_creator_kwargs=scenario_creator_kwargs,
                       ph_extensions=ph_extensions,
                       rho_setter=rho_setter,
-                      variable_probability=variable_probability)
+                      variable_probability=variable_probability,
+                      all_nodenames = all_nodenames,
+                      spoke_sleep_time = spoke_sleep_time)
 
     hub_dict['hub_class'] = APHHub
     hub_dict['opt_class'] = APH    
@@ -129,12 +158,53 @@ def aph_hub(
     return hub_dict
 
 
+def extension_adder(hub_dict,ext_class):
+    if "extensions" not in hub_dict["opt_kwargs"] or \
+        hub_dict["opt_kwargs"]["extensions"] is None:
+        hub_dict["opt_kwargs"]["extensions"] = ext_class
+    elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
+        if not ext_class in  hub_dict["opt_kwargs"]["ext_classes"]:
+            hub_dict["opt_kwargs"]["ext_classes"].append(ext_class)
+    elif hub_dict["opt_kwargs"]["extensions"] != ext_class: 
+        #ext_class is the second extension
+        if not "extensions_kwargs" in hub_dict["opt_kwargs"]:
+            hub_dict["opt_kwargs"]["extension_kwargs"] = {
+                "ext_classes": [hub_dict["opt_kwargs"]["extensions"],
+                                                 ext_class]}
+        else:
+            hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"] = \
+                [hub_dict["opt_kwargs"]["extensions"],
+                                                 ext_class]
+        hub_dict["opt_kwargs"]["extensions"] = MultiExtension
+    return hub_dict
+    
+
+def add_fixer(hub_dict,
+              args,
+              ):
+    hub_dict = extension_adder(hub_dict,Fixer)
+    hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":False,
+                                              "boundtol": args.fixer_tol,
+                                              "id_fix_list_fct": args.id_fix_list_fct}
+    return hub_dict
+
+def add_cross_scenario_cuts(hub_dict,
+                            args,
+                            ):
+    #WARNING: Do not use without a cross_scenario_cuts spoke
+    hub_dict = extension_adder(hub_dict, CrossScenarioExtension)
+    hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
+            = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}
+    return hub_dict
+
 def fwph_spoke(
     args,
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    all_nodenames=None,
+    spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
 
@@ -157,7 +227,7 @@ def fwph_spoke(
     }
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": FWPH,
         "opt_kwargs": {
             "PH_options": shoptions,  # be sure convthresh is zero for fwph
@@ -165,9 +235,11 @@ def fwph_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement,
+            "all_nodenames": all_nodenames            
         },
     }
+    
     return fw_dict
 
 
@@ -178,11 +250,13 @@ def lagrangian_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     rho_setter=None,
+    all_nodenames=None,
+    spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     lagrangian_spoke = {
         "spoke_class": LagrangianOuterBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": PHBase,
         "opt_kwargs": {
             "options": shoptions,
@@ -190,7 +264,8 @@ def lagrangian_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,            
-            "rho_setter": rho_setter
+            "rho_setter": rho_setter,
+            "all_nodenames": all_nodenames
 
         }
     }
@@ -200,6 +275,7 @@ def lagrangian_spoke(
     if args.lagrangian_iterk_mipgap is not None:
         lagrangian_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
             ["mipgap"] = args.lagrangian_iterk_mipgap
+    
     return lagrangian_spoke
 
 
@@ -210,12 +286,14 @@ def lagranger_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
-    rho_setter=None
+    rho_setter=None,
+    all_nodenames = None,
+    spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     lagranger_spoke = {
         "spoke_class": LagrangerOuterBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": PHBase,
         "opt_kwargs": {
             "options": shoptions,
@@ -223,7 +301,8 @@ def lagranger_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,            
-            "rho_setter": rho_setter
+            "rho_setter": rho_setter,
+            "all_nodenames": all_nodenames
         }
     }
     if args.lagranger_iter0_mipgap is not None:
@@ -236,7 +315,7 @@ def lagranger_spoke(
         lagranger_spoke["opt_kwargs"]["options"]\
             ["lagranger_rho_rescale_factors_json"]\
             = args.lagranger_rho_rescale_factors_json
-        
+    
     return lagranger_spoke
 
         
@@ -246,6 +325,7 @@ def xhatlooper_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    spoke_sleep_time=None,
 ):
     
     shoptions = shared_options(args)
@@ -259,7 +339,7 @@ def xhatlooper_spoke(
     }
     xhatlooper_dict = {
         "spoke_class": XhatLooperInnerBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -277,7 +357,9 @@ def xhatshuffle_spoke(
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
+    all_nodenames=None,
     scenario_creator_kwargs=None,
+    spoke_sleep_time=None,
 ):
 
     shoptions = shared_options(args)
@@ -288,18 +370,25 @@ def xhatshuffle_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
+    if _hasit(args,"add_reversed_shuffle"):
+        xhat_options["xhat_looper_options"]["reverse"] = args.add_reversed_shuffle
+    if _hasit(args,"add_reversed_shuffle"):
+        xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = args.xhatshuffle_iter_step
+    
     xhatlooper_dict = {
         "spoke_class": XhatShuffleInnerBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement                        
+            "scenario_denouement": scenario_denouement,   
+            "all_nodenames": all_nodenames                    
         },
     }
+
     return xhatlooper_dict
 
 
@@ -310,8 +399,8 @@ def xhatspecific_spoke(
     all_scenario_names,
     scenario_dict,
     all_nodenames=None,
-    BFs=None,
     scenario_creator_kwargs=None,
+    spoke_sleep_time=None,
 ):
     
     shoptions = shared_options(args)
@@ -321,13 +410,11 @@ def xhatspecific_spoke(
         "xhat_scenario_dict": scenario_dict,
         "csvname": "specific.csv",
     }
-    if BFs:
-        xhat_options["branching_factors"] = BFs
 
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatspecific_dict = {
         "spoke_class": XhatSpecificInnerBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -335,9 +422,10 @@ def xhatspecific_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames,
+            "all_nodenames": all_nodenames
         },
     }
+
     return xhatspecific_dict
 
 def xhatlshaped_spoke(
@@ -346,6 +434,7 @@ def xhatlshaped_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    spoke_sleep_time=None,
 ):
     
     shoptions = shared_options(args)
@@ -354,7 +443,7 @@ def xhatlshaped_spoke(
 
     xhatlshaped_dict = {
         "spoke_class": XhatLShapedInnerBound,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -372,6 +461,7 @@ def slamup_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    spoke_sleep_time=None,
 ):
 
     shoptions = shared_options(args)
@@ -379,7 +469,7 @@ def slamup_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
         "spoke_class": SlamUpHeuristic,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -397,6 +487,7 @@ def slamdown_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    spoke_sleep_time=None,
 ):
 
     shoptions = shared_options(args)
@@ -404,7 +495,7 @@ def slamdown_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
         "spoke_class": SlamDownHeuristic,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -416,12 +507,14 @@ def slamdown_spoke(
     }
     return xhatlooper_dict
 
-def cross_scenario_cut_spoke(
+def cross_scenario_cuts_spoke(
     args,
     scenario_creator,
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    all_nodenames=None,
+    spoke_sleep_time=None,
 ):
 
     if _hasit(args, "max_solver_threads"):
@@ -439,15 +532,18 @@ def cross_scenario_cut_spoke(
                  }
     cut_spoke = {
         "spoke_class": CrossScenarioCutSpoke,
-        "spoke_kwargs": dict(),
+        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": LShapedMethod,
         "opt_kwargs": {
             "options": ls_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement,
+            "all_nodenames": all_nodenames
             },
         }
 
     return cut_spoke
+
+        

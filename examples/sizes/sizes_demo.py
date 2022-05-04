@@ -36,6 +36,7 @@ if __name__ == "__main__":
     options["verbose"] = False
     options["display_timing"] = True
     options["display_progress"] = True
+    options["linearize_proximal_terms"] = True
     # one way to set up sub-problem solver options
     options["iter0_solver_options"] = {"mipgap": 0.01}
     # another way
@@ -180,14 +181,15 @@ if __name__ == "__main__":
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
+        extensions=MinMaxAvg,
+        ph_converger=None,
+        rho_setter=None,
     )
     ph.options["PHIterLimit"] = 3
 
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     options["avgminmax_name"] =  "FirstStageCost"
-    conv, obj, bnd = ph.ph_main(extensions=MinMaxAvg,
-                                PH_converger=None,
-                                rho_setter=None)
+    conv, obj, bnd = ph.ph_main()
 
     
 

@@ -4,6 +4,7 @@ import sys
 import hydro
 import pyomo.environ as pyo
 from mpisppy.opt.ef import ExtensiveForm
+import mpisppy.utils.sputils as sputils
 
 options = {"solver": sys.argv[1]}
 num_scenarios = 9
@@ -11,12 +12,7 @@ BFs = [3, 3]
 all_scenario_names = [f"Scen{i+1}" for i in range(num_scenarios)]
 
 # This is multi-stage, so we need to supply node names
-all_nodenames = ["ROOT"] # all trees must have this node
-# The rest is a naming convention invented for this problem.
-# Note that mpisppy does not have nodes at the leaves,
-# and node names must end in a serial number.
-for b in range(BFs[0]):
-    all_nodenames.append("ROOT_"+str(b))
+all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 
 options["branching_factors"] = BFs
 ef = ExtensiveForm(

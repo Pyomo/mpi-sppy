@@ -7,12 +7,12 @@ import time
 import logging
 import weakref
 import numpy as np
+import re
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-
-from mpi4py import MPI
-
 from mpisppy import global_toc
+
+from mpisppy import MPI
 
 logger = logging.getLogger("SPBase")
 logger.setLevel(logging.WARN)
@@ -26,7 +26,7 @@ class SPBase:
             all_scenario_names (list): all scenario names
             scenario_creator (fct): returns a concrete model with special things
             scenario_denouement (fct): for post processing and reporting
-            all_nodenames (list): all non-leaf node names; can be None for 2 Stage
+            all_nodenames (list): all node names (including leaves); can be None for 2 Stage
             mpicomm (MPI comm): if not given, use the global fullcomm
             scenario_creator_kwargs (dict): kwargs passed directly to
                 scenario_creator.
@@ -71,6 +71,7 @@ class SPBase:
             self.all_nodenames = ["ROOT"]
         elif "ROOT" in all_nodenames:
             self.all_nodenames = all_nodenames
+            self._check_nodenames()
         else:
             raise RuntimeError("'ROOT' must be in the list of node names")
         self.variable_probability = variable_probability
@@ -90,11 +91,6 @@ class SPBase:
         if self.n_proc > len(self.all_scenario_names):
             raise RuntimeError("More ranks than scenarios")
 
-        # Call various initialization methods
-        if "branching_factors" in self.options:
-            self.branching_factors = self.options["branching_factors"]
-        else:
-            self.branching_factors = [len(self.all_scenario_names)]
         self._calculate_scenario_ranks()
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
             self._assign_bundles()
@@ -174,6 +170,12 @@ class SPBase:
             if val != int(max_val[0]):
                 raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
                         f"variables between scenarios {val} vs. max {max_val[0]}")
+                
+    def _check_nodenames(self):
+        for ndn in self.all_nodenames:
+            if ndn != 'ROOT' and sputils.parent_ndn(ndn) not in self.all_nodenames:
+                raise RuntimeError(f"all_nodenames is inconsistent:"
+                                   f"The node {sputils.parent_ndn(ndn)}, parent of {ndn}, is missing.")
 
 
     def _calculate_scenario_ranks(self):
@@ -198,11 +200,12 @@ class SPBase:
                List of index names owned by the local rank
 
         """
-        tree = sputils._ScenTree(self.branching_factors, self.all_scenario_names)
+        tree = sputils._ScenTree(self.all_nodenames, self.all_scenario_names)
 
         self.scenario_names_to_rank, self._rank_slices, self._scenario_slices =\
                 tree.scen_names_to_ranks(self.n_proc)
         self._scenario_tree = tree
+        self.nonleaves = {node.name : node for node in tree.nonleaves}
 
         # list of scenario names owned locally
         self.local_scenario_names = [
@@ -265,7 +268,14 @@ class SPBase:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
             self.local_scenarios[sname] = s
-            if "display_timing" in self.options and self.options["display_timing"]:
+            if self.multistage:
+                #Checking that the scenario can have an associated leaf node in all_nodenames
+                stmax = np.argmax([nd.stage for nd in s._mpisppy_node_list])
+                if(s._mpisppy_node_list[stmax].name)+'_0' not in self.all_nodenames:
+                    raise RuntimeError("The leaf node associated with this scenario is not on all_nodenames"
+                        f"Its last non-leaf node {s._mpisppy_node_list[stmax].name} has no first child {s._mpisppy_node_list[stmax].name+'_0'}")
+            
+            if self.options.get("display_timing", False):
                 instance_creation_time = time.time() - instance_creation_start_time
                 all_instance_creation_times = self.mpicomm.gather(
                     instance_creation_time, root=0
@@ -285,8 +295,9 @@ class SPBase:
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
             scenario._mpisppy_data.nonant_indices = _nonant_indices
+        self.nonant_length = len(_nonant_indices)
 
-            
+
     def _attach_nlens(self):
         for (sname, scenario) in self.local_scenarios.items():
             # Things need to be by node so we can bind to the
@@ -335,7 +346,8 @@ class SPBase:
             if nodename == "ROOT":
                 self.comms["ROOT"] = self.mpicomm
             elif nodename in nonleafnodes:
-                nodenumber = sputils.extract_num(nodename)
+                #The position in all_nodenames is an integer unique id.
+                nodenumber = self.all_nodenames.index(nodename)
                 # IMPORTANT: See note in sputils._ScenTree.scen_names_to_ranks. Need to keep
                 #            this split aligned with self.scenario_names_to_rank
                 self.comms[nodename] = self.mpicomm.Split(color=nodenumber, key=self.cylinder_rank)
@@ -347,14 +359,16 @@ class SPBase:
             scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
             for sname, rank in scenario_names_to_comm_rank.items():
                 if sname in self.local_scenarios:
-                    assert rank == comm.Get_rank()
-
+                    if rank != comm.Get_rank():
+                        raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
+                        
         ## ensure we've set things up correctly for all local scenarios
         for sname in self.local_scenarios:
             for nodename, comm in self.comms.items():
                 scenario_names_to_comm_rank = self.scenario_names_to_rank[nodename]
                 if sname in scenario_names_to_comm_rank:
-                    assert comm.Get_rank() == scenario_names_to_comm_rank[sname]
+                    if comm.Get_rank() != scenario_names_to_comm_rank[sname]:
+                        raise RuntimeError(f"For the node {nodename}, the scenario {sname} has the rank {rank} from scenario_names_to_rank and {comm.Get_rank()} from its comm.")
 
 
     def _compute_unconditional_node_probabilities(self):
@@ -423,7 +437,10 @@ class SPBase:
             return False
         _mpisppy_data = scenario_model._mpisppy_data
         ndn, i = _mpisppy_data.varid_to_nonant_index[id(var)]
-        return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+        if isinstance(_mpisppy_data.prob_coeff[ndn], np.ndarray):
+            return float(_mpisppy_data.prob_coeff[ndn][i]) == 0.
+        else:
+            return False
 
     def _check_variable_probabilities_sum(self, verbose):
 
@@ -472,19 +489,14 @@ class SPBase:
                                            " which are not 1")
                     checked_nodes.append(ndn)
 
-    def _look_before_leap(self, scen, addlist):
-        """ utility to check before attaching something to the user's model
-        """
-        for attr in addlist:
-            if hasattr(scen, attr):
-                raise RuntimeError("Model already has `internal' attribute" + attr)
 
     def _look_and_leap(self):
         for (sname, scenario) in self.local_scenarios.items():
-            self._look_before_leap( scenario, ['_mpisppy_data', '_mpisppy_model' ] )
 
-            scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
-            scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+            if not hasattr(scenario, "_mpisppy_data"):
+                scenario._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
+            if not hasattr(scenario, "_mpisppy_model"):
+                scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
             if hasattr(scenario, "PySP_prob"):
                 raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
@@ -592,7 +604,8 @@ class SPBase:
 
     def write_first_stage_solution(self, file_name,
             first_stage_solution_writer=sputils.first_stage_nonant_writer):
-        """ Writes the first-stage solution, if this object reports one available
+        """ Writes the first-stage solution, if this object reports one available.
+
             Args:
                 file_name: path of file to write first stage solution to
                 first_stage_solution_writer (optional): custom first stage solution writer function
@@ -610,7 +623,8 @@ class SPBase:
     def write_tree_solution(self, directory_name,
             scenario_tree_solution_writer=sputils.scenario_tree_solution_writer):
         """ Writes the tree solution, if this object reports one available.
-            Raises a RuntimeError if it is not
+            Raises a RuntimeError if it is not.
+
             Args:
                 directory_name: directory to write tree solution to
                 scenario_tree_solution_writer (optional): custom scenario solution writer function

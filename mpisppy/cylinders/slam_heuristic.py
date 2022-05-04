@@ -8,7 +8,7 @@ import logging
 import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
-import mpi4py.MPI as mpi
+import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 import numpy as np
 
@@ -50,6 +50,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
         self.verbose = verbose
 
         self.opt._update_E1()
+        self.opt._lazy_create_solvers()
 
     def extract_local_candidate_soln(self):
         num_scen = len(self.opt.local_scenarios)
