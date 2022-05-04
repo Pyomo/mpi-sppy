@@ -153,7 +153,7 @@ class SPOpt(SPBase):
                            np.max(all_set_objective_times)))
 
         if self.extensions is not None:
-            self.extobject.pre_solve(s)
+            results = self.extobject.pre_solve(s)
 
         solve_start_time = time.time()
         if (solver_options):
