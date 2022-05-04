@@ -16,7 +16,7 @@ import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer
-import mpisppy.tests.examples.afarmer as afarmer
+import mpisppy.tests.examples.farmer as farmer
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
@@ -41,7 +41,7 @@ class Test_confint_farmer(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.refmodelname ="mpisppy.tests.examples.farmer"
-        self.arefmodelname ="mpisppy.tests.examples.afarmer"  # amalgamator compatible
+        self.arefmodelname ="mpisppy.tests.examples.farmer"  # amalgamator compatible
 
 
     def _get_base_options(self):
@@ -263,7 +263,7 @@ class Test_confint_farmer(unittest.TestCase):
     def test_zhat4xhat(self):
         cmdline = [self.arefmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
         parser = zhat4xhat._parser_setup()
-        afarmer.inparser_adder(parser)
+        farmer.inparser_adder(parser)
         args = parser.parse_args(cmdline)
         model_module = importlib.import_module(self.arefmodelname)
         zhatbar, eps_z = zhat4xhat._main_body(args, model_module)

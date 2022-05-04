@@ -11,7 +11,7 @@
 import sys
 import numpy as np
 import argparse
-import afarmer
+import farmer
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
@@ -61,7 +61,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
                     "start_seed":start_seed,
                     }
     #We use from_module to build easily an Amalgamator object
-    ama = amalgamator.from_module("afarmer",
+    ama = amalgamator.from_module("farmer",
                                   ama_options,use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
@@ -82,8 +82,8 @@ def main(args):
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
-    refmodelname = "afarmer"
-    scenario_creator = afarmer.scenario_creator
+    refmodelname = "farmer"
+    scenario_creator = farmer.scenario_creator
 
     scen_count = args.num_scens
     solver_name = args.EF_solver_name
