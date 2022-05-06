@@ -17,7 +17,7 @@ packages = find_packages()
 # intentionally leaving out mpi4py to help readthedocs
 setup(
     name='mpi-sppy',
-    version='0.9.1.dev0',
+    version='0.10',
     description="mpi-sppy",
     url='https://github.com/Pyomo/mpi-sppy',
     author='David Woodruff',
