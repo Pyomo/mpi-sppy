@@ -5,7 +5,7 @@
 
 import re
 import sys
-import argparse
+from mpisppy.utils import config
 from pyomo.common.fileutils import import_file
 from mpisppy.utils.sputils import option_string_to_dict
 from mpisppy.confidence_intervals import ciutils
@@ -16,7 +16,8 @@ from mpisppy import global_toc
 
 if __name__ == "__main__":
 
-    # parse args for mmw part of things
+    # args for mmw part of things
+    xxxxx
     parser = argparse.ArgumentParser()
     parser.add_argument('instance',
                             help="name of model module, must be compatible with amalgamator")
@@ -63,7 +64,7 @@ if __name__ == "__main__":
             m = import_file(f"{mname}.py")
         except:
             raise RuntimeError(f"Could not import module: {mname}")
-    m.inparser_adder(parser)
+    m.inparser_adder()
     args = parser.parse_args()  
 
     #parses solver options string

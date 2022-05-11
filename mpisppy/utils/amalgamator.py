@@ -8,11 +8,6 @@ or by decomposition). This same object should also be able to return an x-hat.
 
 This thing basically wraps the functionality of the "standard" *_cylinder examples.
 
-It may be an extenisble base class, but not abstract.
-
-"""
-
-"""
 Input options:
 2-stage or multistage
 EF or not
@@ -225,6 +220,7 @@ def Amalgamator_parser(options, inparser_adder, extraargs_fct=None, use_command_
         
         prg = options.get("program_name")
         parser = config.create_parser(prg)
+        # positional args are special when using the pyomo config package
         if _bool_option(options, "num_scens_reqd"):
             parser.add_argument("num_scens",
                                 help="Number of scenarios (default 0)",

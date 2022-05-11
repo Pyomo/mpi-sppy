@@ -10,4 +10,4 @@ mpiexec -np 4 python -m mpi4py farmer_cylinders.py  3 --bundles-per-rank=0 --max
 
 
 # evaluate the zhat for the xhat computed above
-python -m mpisppy.confidence_intervals.mmw_conf afarmer farmer_cyl_nonants.npy ${SOLVERNAME} --MMW-num-batches 5 --MMW-batch-size 10 --confidence-level 0.9 --start-scen 10
+python -m mpisppy.confidence_intervals.mmw_conf farmer farmer_cyl_nonants.npy ${SOLVERNAME} --MMW-num-batches 5 --MMW-batch-size 10 --confidence-level 0.9 --start-scen 10
