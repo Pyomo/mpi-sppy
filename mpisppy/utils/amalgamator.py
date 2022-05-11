@@ -135,14 +135,14 @@ def check_module_ama(module):
 
 
 #==========
-def from_module(mname, options, extraargs=None, use_command_line=True):
+def from_module(mname, options, extraargs_fct=None, use_command_line=True):
     """ Try to get everything from one file (this will not always be possible).
     Args:
         mname (str): the module name (module must have certain functions)
                      or you can pass in a module that has already been imported
         options (dict): Amalgamator options or extra arguments to use 
                         in addition with the command line
-        extraargs (ArgumentParser) : extra arguments to specify in the command line, e.g. for MMW
+        extraargs_fct (fct) : a function to add extra arguments, e.g. for MMW
         use_command_line (bool): should we take into account the command line to add options ?
                                  default is True
                     
@@ -159,7 +159,7 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
     check_module_ama(m)
     
     options = Amalgamator_parser(options, m.inparser_adder,
-                                 extraargs=extraargs,
+                                 extraargs_fct=extraargs_fct,
                                  use_command_line=use_command_line)
     options['_mpisppy_probability'] = 1/options['num_scens']
     start = options['start'] if 'start' in options else 0
@@ -174,12 +174,12 @@ def from_module(mname, options, extraargs=None, use_command_line=True):
                 
         
 #==========
-def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line=True):
+def Amalgamator_parser(options, inparser_adder, extraargs_fct=None, use_command_line=True):
     """ Helper function for Amalgamator.  This gives us flexibility (e.g., get scen count)
     Args:
         options (dict): Amalgamator control options
         inparser_adder (fct): returns updated ArgumentParser the problem
-        extraargs (ArgumentParser) : extra arguments to specify in the command line, e.g. for MMW
+        extraargs_fct (fct) : a function to add extra arguments, e.g. for MMW
         use_command_line (bool): should we take into account the command line to add options ?
                                  default is True
     Returns;
@@ -210,7 +210,7 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
                 raise RuntimeError("A cylinder list must be specified")
             
             for cylinder in options['cylinders']:
-                #NOTE: This returns an error if the cylinder xxxx has no xxxx_args in config.py
+                #NOTE: This returns an error if the cylinder yyyy has no yyyy_args in config.py
                 parser = add_options(cylinder)
             
             #Adding extensions
@@ -220,10 +220,8 @@ def Amalgamator_parser(options, inparser_adder, extraargs=None, use_command_line
     
         inparser_adder()
         
-        if extraargs is not None:
-            raise RuntimeError("TBD: add extraargs support to amalgamator")
-            ##parser = argparse.ArgumentParser(parents = [parser,extraargs],
-            ##                                 conflict_handler='resolve')
+        if extraargs_fct is not None:
+            extraargs_fct()
         
         prg = options.get("program_name")
         parser = config.create_parser(prg)
