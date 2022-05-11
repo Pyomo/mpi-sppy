@@ -189,7 +189,6 @@ def ph_args():
                         "is looser than this value (default 1e-1)",
                         domain=float,
                         default=1.e-1)
-    
 
 def make_parser(progname=None, num_scens_reqd=False):
     raise RuntimeError("make_parser is no longer used. See comments at top of config.py")
