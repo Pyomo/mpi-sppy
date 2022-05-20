@@ -126,7 +126,7 @@ def run_samples(ama_options, model_module):
     return zhatbar, eps_z
 
 def _parser_setup():
-    # set up the config object and return the parser (before parsing)
+    # set up the config object
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
     config.add_to_config("solver_name",
                          description="solver name (default gurobi_direct)",
@@ -152,8 +152,6 @@ def _parser_setup():
                          domain=float,
                          default=0.95)
 
-    parser = config.create_parser("aircond_seqsampling")
-    return parser
 
 def _main_body(model_module):
     # body of main, pulled out for testing
@@ -175,9 +173,7 @@ def _main_body(model_module):
 
 if __name__ == "__main__":
 
-    parser = _parser_setup()
-    parser.add_argument('model_module_name',
-                        help="name of model module, must be compatible with amalgamator")
+    _parser_setup()
     
     # now get the extra args from the module
     mname = sys.argv[1]  # args.model_module_name eventually
@@ -199,10 +195,9 @@ if __name__ == "__main__":
                          domain=str,
                          default='',
                          argparse=False)
-
+    config.global_config.model_module_name = mname
     
     args = parser.parse_args()  # from the command line
-    config.global_config.model_module_name = mname
     args = config.global_config.import_argparse(args)
 
     zhatbar, eps_z = _main_body(model_module)

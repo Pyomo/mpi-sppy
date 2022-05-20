@@ -17,46 +17,41 @@ from mpisppy import global_toc
 if __name__ == "__main__":
 
     # args for mmw part of things
-    xxxxx
-    parser = argparse.ArgumentParser()
-    parser.add_argument('instance',
-                            help="name of model module, must be compatible with amalgamator")
-    parser.add_argument('xhatpath',
-                            help="path to .npy file with feasible nonant solution xhat")
-    parser.add_argument('solver_name',
-                            help="name of solver to be used",
-                            default='gurobi_persistent')
-    parser.add_argument('--confidence-level', 
-                            help="defines confidence interval size (default 0.95)", 
-                            dest="confidence_level", 
-                            type = float,
-                            default=None) #None will set alpha = 0.95 and tell user
-    parser.add_argument('--with-objective-gap',
-                        help="option to return gap around objective value (default False)",
-                        dest="objective_gap",
-                        action='store_true')
-    parser.set_defaults(objective_gap=False)
-    parser.add_argument('--start-scen',
-                            help="starting scenario number,( maybe should match what was used to solve xhat), default 0",
-                            dest='start_scen',
-                            type=int,
-                            default=0)
-    parser.add_argument("--MMW-num-batches",
-                            help="number of batches used for MMW confidence interval (default 2)",
-                            dest="num_batches",
-                            type=int,
-                            default=2)
-    parser.add_argument("--MMW-batch-size",
-                            help="batch size used for MMW confidence interval, if None then batch_size = num_scens (default to None)",
-                            dest="batch_size",
-                            type=int,
-                            default=None) #None means take batch_size=num_scens
-    parser.add_argument("--solver-options",
-                            help="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
-                            default='')
+    config.add_to_config('xhatpath',
+                         domain=str,
+                         description="path to .npy file with feasible nonant solution xhat",
+                         default=".")
+    config.add_to_config('solver_name',
+                         description="name of solver to be used",
+                         domain=str,
+                         default='')
+    config.add_to_config('confidence_level', 
+                         description="defines confidence interval size (default 0.95)", 
+                         domain=float,
+                         default=None) #None will set alpha = 0.95 and tell user
+    config.add_to_config('with_objective_gap',
+                         description="option to return gap around objective value (default False)",
+                         domain=bool,
+                         default=False)
+    config.add_to_config('start_scen',
+                         description="starting scenario number (perhpas to avoid scenarios used to get solve xhat) default 0",
+                         domain=int,
+                         default=0)
+    config.add_to_config("MMW_num_batches",
+                         description="number of batches used for MMW confidence interval (default 2)",
+                         domain=int,
+                         default=2)
+    config.add_to_config("MMW_batch_size",
+                         description="batch size used for MMW confidence interval, if None then batch_size = num_scens (default to None)",
+                         domain=int,
+                         default=None) #None means take batch_size=num_scens
+    config.add_to_config("solver_options",
+                         description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
+                         domain=str,
+                         default='')
 
     # now get the extra args from the module
-    mname = sys.argv[1]  # args.instance eventually
+    mname = sys.argv[1]  # will be assigned to the model_module_name config arg
     try:
         m = import_file(mname)
     except:
@@ -64,39 +59,57 @@ if __name__ == "__main__":
             m = import_file(f"{mname}.py")
         except:
             raise RuntimeError(f"Could not import module: {mname}")
-    m.inparser_adder()
-    args = parser.parse_args()  
 
+
+    m.inparser_adder()
+
+    parser = config.create_parser("zhat4xhat")
+    # the module name is very special because it has to be plucked from argv
+
+    parser.add_argument(
+            "model_module_name", help="amalgamator compatible module (often read from argv)", type=str,
+        )
+    config.add_to_config("model_module_name",
+                         description="amalgamator compatible module",
+                         domain=str,
+                         default='',
+                         argparse=False)
+    
+    args = parser.parse_args()  # from the command line
+    config.global_config.model_module_name = mname
+    args = config.global_config.import_argparse(args)
+    
+    cfg = config.global_config
+    
     #parses solver options string
-    solver_options = option_string_to_dict(args.solver_options)
+    solver_options = option_string_to_dict(cfg.solver_options)
 
     # convert instance path to module name:
-    modelpath = re.sub('/','.', args.instance)
+    modelpath = re.sub('/','.', cfg.model_module_name)
     modelpath = re.sub(r'\.py','', modelpath)
 
     # Read xhats from xhatpath
-    xhat = ciutils.read_xhat(args.xhatpath)
+    xhat = ciutils.read_xhat(cfg.xhatpath)
 
-    if args.batch_size == None:
-        args.batch_size = args.num_scens
+    if cfg.batch_size == None:
+        cfg.batch_size = cfg.num_scens
 
     refmodel = modelpath #Change this path to use a different model
     
-    options = {"args": args,  # in case of problem specific args
-               "EF-2stage": True,  # 2stage vs. mstage
-               "EF_solver_name": args.solver_name,
+    options = {"EF-2stage": True,  # 2stage vs. mstage
+               "EF_solver_name": cfg.solver_name,
                "EF_solver_options": solver_options,
-               "start_scen": args.start_scen}   #Are the scenario shifted by a start arg ?
+               "start_scen": cfg.start_scen}   #Are the scenario shifted by a start arg ?
 
-    num_batches = args.num_batches
-    batch_size = args.batch_size
+    num_batches = cfg.num_batches
+    batch_size = cfg.batch_size
 
-    mmw = mmw_ci.MMWConfidenceIntervals(refmodel, options, xhat, num_batches, batch_size=batch_size, start = args.start_scen,
+    mmw = mmw_ci.MMWConfidenceIntervals(refmodel, options, xhat, num_batches, batch_size=batch_size, start = cfg.start_scen,
                        verbose=True)
 
-    cl = float(args.confidence_level)
+    cl = float(cfg.confidence_level)
 
-    r = mmw.run(confidence_level=cl, objective_gap = args.objective_gap)
+    r = mmw.run(confidence_level=cl, objective_gap = cfg.objective_gap)
 
     global_toc(r)
     
