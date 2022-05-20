@@ -35,7 +35,8 @@ def evaluate_sample_trees(xhat_one,
     used to approximate E_{xi_2} phi(x_1, xi_2) for confidence interval coverage experiments
     note: ama_options will include the command line args as 'args'
     '''
-    mname = ama_options["args"].model_module_name
+    cfg = config.global_config
+    mname = cfg.model_module_name
     seed = InitSeed
     zhats = list()
     bfs = ama_options["branching_factors"]
@@ -141,6 +142,11 @@ def _parser_setup():
                          domain=str,
                          default='')
     
+    config.add_to_config("xhatpath",
+                         description="path to npy file with xhat",
+                         domain=str,
+                         default='')
+    
     config.add_to_config("confidence_level",
                          description="one minus alpha (default 0.95)",
                          domain=float,
@@ -151,9 +157,9 @@ def _parser_setup():
 
 def _main_body(model_module):
     # body of main, pulled out for testing
-    solver_options = option_string_to_dict(args.solver_options)
 
-    cfg = config.global_config    
+    cfg = config.global_config
+    solver_options = option_string_to_dict(cfg.solver_options)
     bfs = cfg.branching_factors
     solver_name = cfg.solver_name
     num_samples = cfg.num_samples
@@ -162,7 +168,6 @@ def _main_body(model_module):
                    "EF_solver_name": solver_name,
                    "EF_solver_options": solver_options,
                    "branching_factors": bfs,
-                   "args": args,  xxxxxxx
                    }
 
     return run_samples(ama_options, model_module)
@@ -177,14 +182,27 @@ if __name__ == "__main__":
     # now get the extra args from the module
     mname = sys.argv[1]  # args.model_module_name eventually
     if mname[-3:] == ".py":
-        raise ValueError(f"Module name should end in .py ({mname})")
+        raise ValueError(f"Module name should not end in .py ({mname})")
     try:
         model_module = importlib.import_module(mname)
     except:
         raise RuntimeError(f"Could not import module: {mname}")
-    model_module.inparser_adder(parser)
+    model_module.inparser_adder()
+    
+    parser = config.create_parser("zhat4xhat")
+    # the module name is very special because it has to be plucked from argv
+    parser.add_argument(
+            "model_module_name", help="amalgamator compatible module (often read from argv)", type=str,
+        )
+    config.add_to_config("model_module_name",
+                         description="amalgamator compatible module",
+                         domain=str,
+                         default='',
+                         argparse=False)
+
     
     args = parser.parse_args()  # from the command line
+    config.global_config.model_module_name = mname
     args = config.global_config.import_argparse(args)
 
     zhatbar, eps_z = _main_body(model_module)

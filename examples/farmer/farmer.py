@@ -24,7 +24,7 @@ farmerstream = np.random.RandomState()
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
-    num_scens=None
+        num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example.
     
@@ -42,6 +42,7 @@ def scenario_creator(
         num_scens (int, optional):
             Number of scenarios. We use it to compute _mpisppy_probability. 
             Default is None.
+        seedoffent (int): used by confidence interval code
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex then
@@ -56,7 +57,7 @@ def scenario_creator(
     # reproducible when used with multiple threads.
     # NOTE: if you want to do replicates, you will need to pass a seed
     # as a kwarg to scenario_creator then use seed+scennum as the seed argument.
-    farmerstream.seed(scennum)
+    farmerstream.seed(scennum+seedoffset)
 
     # Check for minimization vs. maximization
     if sense not in [pyo.minimize, pyo.maximize]:
@@ -264,6 +265,29 @@ def kw_creator(options):
               "num_scens" : options.get('num_scens', None),
               }
     return kwargs
+
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+        (this function supports zhat and confidence interval code)
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Since this is a two-stage problem, we don't have to do much.
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
+
+
 # end functions not needed by farmer_cylinders
 
 
