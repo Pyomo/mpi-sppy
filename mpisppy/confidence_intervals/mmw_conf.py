@@ -13,7 +13,6 @@ from mpisppy.confidence_intervals import mmw_ci
 from mpisppy import global_toc
 
 
-
 if __name__ == "__main__":
 
     # args for mmw part of things
