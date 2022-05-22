@@ -174,7 +174,7 @@ def _main_body(model_module):
 if __name__ == "__main__":
 
     _parser_setup()
-    
+    print(f"{sys.argv =}")
     # now get the extra args from the module
     mname = sys.argv[1]  # args.model_module_name eventually
     if mname[-3:] == ".py":

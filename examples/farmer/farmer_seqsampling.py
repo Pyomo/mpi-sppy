@@ -16,8 +16,9 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.seqsampling as seqsampling
-import mpisppy.confidence_intervals.confidence_parsers as confidence_parsers
-from mpisppy.utils import baseparsers
+import mpisppy.confidence_intervals.confidence_config as confidence_config
+from mpisppy.utils import config
+
 
 #============================
 def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None,
@@ -75,19 +76,20 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     
 
 
-def main(args):
+def main():
     """ Code for farmer sequential sampling (in a function for easier testing)
     Args:
         args (parseargs): the command line arguments object from parseargs
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
+    cfg = config.global_config
     refmodelname = "farmer"
     scenario_creator = farmer.scenario_creator
 
-    scen_count = args.num_scens
-    solver_name = args.EF_solver_name
-    crops_multiplier = args.crops_multiplier
+    scen_count = cfg.num_scens
+    solver_name = cfg.EF_solver_name
+    crops_multiplier = cfg.crops_multiplier
     
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     
@@ -102,22 +104,22 @@ def main(args):
     # simply called "options" by the SeqSampling constructor
     inneroptions = {"solvername": solver_name,
                     "solver_options": None,
-                    "sample_size_ratio": args.sample_size_ratio,
+                    "sample_size_ratio": cfg.sample_size_ratio,
                     "xhat_gen_options": xhat_gen_options,
-                    "ArRP": args.ArRP,
-                    "kf_xhat": args.kf_GS,
-                    "kf_xhat": args.kf_xhat,
-                    "confidence_level": args.confidence_level,
+                    "ArRP": cfg.ArRP,
+                    "kf_xhat": cfg.kf_GS,
+                    "kf_xhat": cfg.kf_xhat,
+                    "confidence_level": cfg.confidence_level,
                     }
 
-    if args.BM_vs_BPL == "BM":
+    if cfg.BM_vs_BPL == "BM":
         # Bayraksan and Morton
-        optionsBM = {'h': args.BM_h,
-                     'hprime': args.BM_hprime, 
-                     'eps': args.BM_eps, 
-                     'epsprime': args.BM_eps_prime, 
-                     "p": args.BM_p,
-                     "q": args.BM_q,
+        optionsBM = {'h': cfg.BM_h,
+                     'hprime': cfg.BM_hprime, 
+                     'eps': cfg.BM_eps, 
+                     'epsprime': cfg.BM_eps_prime, 
+                     "p": cfg.BM_p,
+                     "q": cfg.BM_q,
                      "xhat_gen_options": xhat_gen_options,
                      }
 
@@ -131,15 +133,15 @@ def main(args):
                                 solving_type="EF-2stage",
                                 )
     else:  # must be BPL
-        optionsBPL = {'eps': args.BPL_eps, 
-                      "c0": args.BPL_c0,
-                      "n0min": args.BPL_n0min,
+        optionsBPL = {'eps': cfg.BPL_eps, 
+                      "c0": cfg.BPL_c0,
+                      "n0min": cfg.BPL_n0min,
                       "xhat_gen_options": xhat_gen_options,
                       }
 
         optionsBPL.update(inneroptions)
         
-        ss = int(args.BPL_n0min) != 0
+        ss = int(cfg.BPL_n0min) != 0
         sampler = seqsampling.SeqSampling(refmodelname,
                                 xhat_generator_farmer,
                                 optionsBPL,
@@ -152,33 +154,49 @@ def main(args):
     return xhat
 
 def _parse_args():
-    parser = baseparsers.make_EF2_parser("farmer_seqsampling", num_scens_reqd=True)
-    parser = confidence_parsers.confidence_parser(parser)
-    parser = confidence_parsers.sequential_parser(parser)
-    parser = confidence_parsers.BM_parser(parser)
-    parser = confidence_parsers.BPL_parser(parser)  # --help will show both BM and BPL
+    farmer.inparser_adder()
+    config.EF2()
+    confidence_config.confidence_config()
+    confidence_config.sequential_config()
+    confidence_config.BM_config()
+    confidence_config.BPL_config()  # --help will show both BM and BPL
 
-    parser.add_argument("--BM-vs-BPL",
-                        help="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
-                        dest="BM_vs_BPL",
-                        type=str,
+    config.add_to_config("BM_vs_BPL",
+                        description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
+                        domain=str,
                         default=None)
-    parser.add_argument("--crops-multiplier",
-                        help="There will be 3x this many crops (default 1)",
-                        dest="crops_multiplier",
-                        type=int,
-                        default=1)
-    parser.add_argument("--xhat1-file",
-                        help="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
-                        dest="xhat1_file",
-                        type=str,
+    config.add_to_config("crops_mult",
+                         description="There will be 3x this many crops (default 1)",
+                         domain=int,
+                         default=1)                
+    config.add_to_config("xhat1_file",
+                        description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
+                        domain=str,
                         default=None)
-    args = parser.parse_args()
+    # note that num_scens is special until Pyomo config supports positionals
+    config.add_to_config("num_scens",
+                         description="Number of Scenarios (required, positional)",
+                         domain=int,
+                         default=-1,
+                         argparse=False)   # special
 
-    if args.BM_vs_BPL is None:
-        raise argparse.ArgumentTypeError("--BM-vs_BPL must be given.")
-    if args.BM_vs_BPL != "BM" and args.BM_vs_BPL != "BPL":
-        raise argparse.ArgumentTypeError(f"--BM-vs_BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
+    parser = config.create_parser("farmer_seqsampling")
+    # more special treatment of num_scens
+    parser.add_argument(
+        "num_scens", help="Number of scenarios", type=int
+    )
+    
+    args = parser.parse_args()  # from the command line
+    args = config.global_config.import_argparse(args)
+
+    # final special treatment of num_scens
+    config.global_config.num_scens = args.num_scens
+    cfg = config.global_config
+
+    if cfg.BM_vs_BPL is None:
+        raise RuntimeError("--BM-vs_BPL must be given.")
+    if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
+        raise RuntimeError(f"--BM-vs_BPL must be BM or BPL (you gave {cfg.BM_vs_BMPL})")
     
     return args
 
@@ -186,12 +204,13 @@ def _parse_args():
 
 if __name__ == '__main__':
 
-    args = _parse_args()
+    _parse_args()
+    cfg = config.global_config
     
-    results = main(args)
+    results = main()
     print(f"Final gap confidence interval results:", results)
 
-    if args.xhat1_file is not None:
-        print(f"Writing xhat1 to {args.xhat1_file}.npy")
+    if cfg.xhat1_file is not None:
+        print(f"Writing xhat1 to {cfg.xhat1_file}.npy")
         root_nonants =np.fromiter((v for v in results["Candidate_solution"]["ROOT"]), float)
-        np.save(args.xhat1_file, root_nonants)
+        np.save(cfg.xhat1_file, root_nonants)
