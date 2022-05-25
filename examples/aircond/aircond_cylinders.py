@@ -126,6 +126,7 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
     
 def _parse_args():
     config.multistage()
+    config.ph_args()
     config.two_sided_args()
     config.xhatlooper_args()
     config.xhatshuffle_args()

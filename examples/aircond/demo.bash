@@ -3,6 +3,7 @@
 # TBD: aircond uses start-seed (but seed is allowed as an arg that is ignored).
 
 SOLVERNAME="gurobi_persistent"
+SOLVERNAME="cplex"
 
 # get an xhat 
 # xhat output file name is hardwired
