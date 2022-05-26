@@ -14,7 +14,7 @@ from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_stri
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.aircond as aircond
-import mpisppy.tests.examples.aircondB as aircondB  # TBD: drop aircondB
+import mpisppy.tests.examples.aircondB as aircondB  # pickle bundle version
 from mpisppy.utils import pickle_bundle
 from mpisppy.utils import amalgamator
 
@@ -223,8 +223,7 @@ def main():
     scenario_denouement = refmodule.scenario_denouement
     
     if cfg.EF_directly:
-        ama_options = {"args": args,
-                       "EF-mstage": not proper_bundles,
+        ama_options = {"EF-mstage": not proper_bundles,
                        "EF-2stage": proper_bundles,
                        "EF_solver_name": cfg.solver_name,
                        "branching_factors": cfg.branching_factors,

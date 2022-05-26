@@ -13,6 +13,7 @@ let SC=BF1*BF2*BF3
 
 BI=50
 
+# this command can run under mpi for speed-up (see try_picles.bash)
 python bundle_pickler.py --branching-factors "$BF1 $BF2 $BF3" --pickle-bundles-dir="." --scenarios-per-bundle=$SPB --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory $BI --mu-dev 0 --sigma-dev 40 --start-seed 0 
 
 # It is entirely up to the user to make sure that the scenario count and scenarios per bundle match between creating the pickles and using them.
