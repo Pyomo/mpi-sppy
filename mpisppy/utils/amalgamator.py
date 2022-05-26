@@ -250,8 +250,8 @@ def Amalgamator_parser(options, inparser_adder, extraargs_fct=None, use_command_
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in options_dict):
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
-        if not ('EF_solver_options' in options_dict):
-            opt['EF_solver_options'] = {'mipgap': None}
+        ###if not ('EF_solver_options' in options_dict):
+            ###options_dict['EF_solver_options'] = {'mipgap': None}
         if not ('num_scens' in options_dict):
             raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
         if _bool_option(options_dict, 'EF-mstage') and 'branching_factors' not in options_dict:
