@@ -1,0 +1,13 @@
+(Summer 2022) Conversion to Pyomo config will cause disruption for many users.
+
+See examples such as xxxxx (farmer is OK, too, but it is slightly complicated by
+the use of a positional argument on the command line).
+
+0. baseparsers should be replaced by config
+1. vanilla should be replaced by vanilla_cfg
+2. Command line arguments using "with" have had the "with_" removed
+   and the default is now False!
+
+Send an email to DLWoodruff@UCDavis.edu if you want help converting.
+
+Release yyyy was done right before this change.
