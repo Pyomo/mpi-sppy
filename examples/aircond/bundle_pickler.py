@@ -46,7 +46,7 @@ def main():
 
     ScenCount = np.prod(BFs)
 
-    kwargs = aircondB.kw_creator(options=None)
+    kwargs = aircondB.kw_creator()
 
     bsize = int(cfg.scenarios_per_bundle)
     numbuns = ScenCount // bsize
