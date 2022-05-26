@@ -10,7 +10,7 @@ import copy
 import numpy as np
 import itertools
 import mpisppy.tests.examples.aircondB as aircondB
-from mpisppy.utils import baseparsers
+from mpisppy.utils import config
 from mpisppy.utils import pickle_bundle
 
 from mpisppy import MPI
@@ -22,31 +22,33 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 # according to naming convention for this problem
 
 def _parse_args():
-    parser = baseparsers._basic_multistage()
-    parser = pickle_bundle.pickle_bundle_parser(parser)
-    parser = aircondB.inparser_adder(parser)
-    args = parser.parse_args()
+    config.multistage()
+    pickle_bundle.pickle_bundle_parser()
+    aircondB.inparser_adder()
+    parser = config.create_parser("bundle_pickler for aircond")
+    args = parser.parse_args()  # from the command line
+    args = config.global_config.import_argparse(args)
 
     return args
 
 def main():
 
-    args = _parse_args()
-    assert args.pickle_bundles_dir is not None
-    assert args.scenarios_per_bundle is not None
-    assert args.unpickle_bundles_dir is None
+    _parse_args()
+    cfg = config.global_config  # typing aid
+    assert cfg.pickle_bundles_dir is not None
+    assert cfg.scenarios_per_bundle is not None
+    assert cfg.unpickle_bundles_dir is None
 
-    BFs = args.branching_factors
+    BFs = cfg.branching_factors
 
     if BFs is None:
         raise RuntimeError("Branching factors must be specified")
 
     ScenCount = np.prod(BFs)
 
-    sc_options = {"args": args}
-    kwargs = aircondB.kw_creator(sc_options)
+    kwargs = aircondB.kw_creator(options=None)
 
-    bsize = int(args.scenarios_per_bundle)
+    bsize = int(cfg.scenarios_per_bundle)
     numbuns = ScenCount // bsize
     # we won't actually use all names
     all_bundle_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]

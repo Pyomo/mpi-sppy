@@ -14,7 +14,7 @@ import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.pickle_bundle as pickle_bundle
 import mpisppy.tests.examples.aircond as base_aircond
 from mpisppy.utils.sputils import attach_root_node
-import argparse
+from mpisppy.utils import config
 from mpisppy import global_toc
 
 # Use this random stream:
@@ -48,8 +48,8 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     start_seed = kwargs["start_seed"]
     max_d = kwargs.get("max_d", 400)
     min_d = kwargs.get("min_d", 0)
-    mudev = kwargs.get("mudev", None)
-    sigmadev = kwargs.get("sigmadev", None)
+    mu_dev = kwargs.get("mu_dev", None)
+    sigma_dev = kwargs.get("sigma_dev", None)
 
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
@@ -67,7 +67,7 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
         aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
-        d = min(max_d,max(min_d,d+aircondstream.normal(mudev,sigmadev)))
+        d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev, sigma_dev)))
         demands.append(d)
     
     return demands,nodenames
@@ -191,22 +191,19 @@ def scenario_names_creator(num_scens,start=None):
         
 
 #=========
-def inparser_adder(inparser):
-    inparser = base_aircond.inparser_adder(inparser)
+def inparser_adder():
+    base_aircond.inparser_adder()
     # special "proper" bundle arguments
-    inparser = pickle_bundle.pickle_bundle_parser(inparser)
+    pickle_bundle.pickle_bundle_parser()
     
-    return inparser
-
 
 #=========
-def kw_creator(options):
+def kw_creator(options=None):
     kwargs = base_aircond.kw_creator(options)
 
     # proper bundle args are special
-    args = options.get("args")
-    kwargs["pickle_bundles_dir"] = args.pickle_bundles_dir
-    kwargs["unpickle_bundles_dir"] = args.unpickle_bundles_dir
+    kwargs["pickle_bundles_dir"] = config.global_config.pickle_bundles_dir
+    kwargs["unpickle_bundles_dir"] = config.global_config.unpickle_bundles_dir
 
     return kwargs
 
