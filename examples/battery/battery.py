@@ -30,9 +30,9 @@ def scenario_creator(
         lam (float):
             Value of the dual variable for the chance constraint.
     """
-    if 'solar_filename' is None:
+    if solar_filename is None:
         raise ValueError("kwarg `solar_filename` is required")
-    if 'lam' is None:
+    if lam is None:
         raise RuntimeError("kwarg `lam` is required")
 
     data = getData(solar_filename)
