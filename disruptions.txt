@@ -6,7 +6,11 @@ the use of a positional argument on the command line).
 0. baseparsers should be replaced by config
 1. vanilla should be replaced by vanilla_cfg
 2. Command line arguments using "with" have had the "with_" removed
-   and the default is now False!
+   and the default is now False! (So you need, e.g. --xhatshuffle and --lagrangian)
+3. For multi-stage problems using --branching-factors on the command line, the
+branching factor list needs to be in quotes.
+4. zhat4xhat (and some other confidence interval code) needs --xhatpath before the
+name of the npy file.
 
 Send an email to DLWoodruff@UCDavis.edu if you want help converting.
 
