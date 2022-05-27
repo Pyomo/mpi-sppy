@@ -9,6 +9,7 @@ the use of a positional argument on the command line).
 
 2. Command line arguments using "with" have had the "with_" removed
    and the default is now False! (So you need, e.g. --xhatshuffle and --lagrangian)
+   There are no longer no_ options in config.py
 
 3. If you are using vanilla, the first element of beans should be cfg rather than args, where
     cfg = config.global_config

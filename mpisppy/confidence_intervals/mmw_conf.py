@@ -28,7 +28,7 @@ if __name__ == "__main__":
                          description="defines confidence interval size (default 0.95)", 
                          domain=float,
                          default=None) #None will set alpha = 0.95 and tell user
-    config.add_to_config('with_objective_gap',
+    config.add_to_config('objective_gap',
                          description="option to return gap around objective value (default False)",
                          domain=bool,
                          default=False)
@@ -90,8 +90,8 @@ if __name__ == "__main__":
     # Read xhats from xhatpath
     xhat = ciutils.read_xhat(cfg.xhatpath)
 
-    if cfg.batch_size == None:
-        cfg.batch_size = cfg.num_scens
+    if cfg.MMW_batch_size == None:
+        cfg.MMW_batch_size = cfg.num_scens
 
     refmodel = modelpath #Change this path to use a different model
     
@@ -100,8 +100,8 @@ if __name__ == "__main__":
                "EF_solver_options": solver_options,
                "start_scen": cfg.start_scen}   #Are the scenario shifted by a start arg ?
 
-    num_batches = cfg.num_batches
-    batch_size = cfg.batch_size
+    num_batches = cfg.MMW_num_batches
+    batch_size = cfg.MMW_batch_size
 
     mmw = mmw_ci.MMWConfidenceIntervals(refmodel, options, xhat, num_batches, batch_size=batch_size, start = cfg.start_scen,
                        verbose=True)
