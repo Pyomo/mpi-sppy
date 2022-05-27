@@ -1,17 +1,24 @@
 (Summer 2022) Conversion to Pyomo config will cause disruption for many users.
 
-See examples such as xxxxx (farmer is OK, too, but it is slightly complicated by
+See examples such as netdes (farmer is OK, too, but it is slightly complicated by
 the use of a positional argument on the command line).
 
 0. baseparsers should be replaced by config
+
 1. vanilla should be replaced by vanilla_cfg
+
 2. Command line arguments using "with" have had the "with_" removed
    and the default is now False! (So you need, e.g. --xhatshuffle and --lagrangian)
-3. For multi-stage problems using --branching-factors on the command line, the
-branching factor list needs to be in quotes.
-4. zhat4xhat (and some other confidence interval code) needs --xhatpath before the
-name of the npy file.
+
+3. If you are using vanilla, the first element of beans should be cfg rather than args, where
+    cfg = config.global_config
+
+4. For multi-stage problems using --branching-factors on the command line, the
+   branching factor list needs to be in quotes.
+
+5. zhat4xhat (and some other confidence interval code) needs --xhatpath on the command
+   line before the name of the npy file.
 
 Send an email to DLWoodruff@UCDavis.edu if you want help converting.
 
-Release yyyy was done right before this change.
+BTW: a release was done right before this change.
