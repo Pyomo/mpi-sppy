@@ -10,15 +10,16 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
-
 def _parse_args():
     config.popular_args()
-    config.num_scens_required()  # but not positional: you need --num-scens
+    config.num_scens_optional() 
     config.ph_args()
     config.add_to_config("instance_name",
-                        description="sslp instance name (e.g., sslp_15_45_10)",
-                        domain=str,
-                        default=None)                
+                         description="sslp instance name (e.g., sslp_15_45_10)",
+                         domain=str,
+                         default=None,
+                         argparse_args = {"required": True})
+
     config.two_sided_args()
     config.fixer_args()
     config.xhatlooper_args()
