@@ -188,6 +188,7 @@ time_one("FarmerLinProx", "farmer", "farmer_cylinders.py", 3,
        "--display-progress --rel-gap=0.0 --abs-gap=0.0 "
        "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
        "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+
 do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
 do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 
@@ -230,28 +231,28 @@ do_one("farmer",
        f"3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
-print("keep working...")
-quit()
-
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
        "--solver-name={} --rel-gap=0.0 --default-rho=1 "
-       "--no-fwph --max-solver-threads=2".format(solver_name))
+       "--slamup --lagrangian --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
+
 # sizes is slow for xpress so try linearizing the proximal term.
 do_one("sizes",
        "sizes_cylinders.py",
        3,
        "--linearize-proximal-terms "
        "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
-       "--default-rho=1 "
+       "--default-rho=1 --lagrangian --xhatshuffle "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-       "--solver-name={} --no-fwph".format(solver_name))
+       "--solver-name={}".format(solver_name))
+
 do_one("sizes",
        "sizes_cylinders.py",
        4,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
-       "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
+       "--default-rho=1 --lagrangian --xhatshuffle --fwph "
+       "--solver-name={} --display-progress".format(solver_name))
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
 
 do_one("sslp",
@@ -259,38 +260,43 @@ do_one("sslp",
        4,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
        "--max-iterations=5 --default-rho=1 "
+       "--lagrangian --xhatshuffle --fwph "
        "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
 
 do_one("hydro", "hydro_cylinders.py", 3,
-       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
-       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'3 3\' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
+
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={}".format(solver_name))
+
 do_one("hydro", "hydro_ef.py", 1, solver_name)
+print("keep working...")
+quit()
 
 do_one("aircond", "aircond_cylinders.py", 6,
-       "--branching-factors 4 3 2 --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors '4 3 2' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatspecific --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("aircond", "aircond_ama.py", 3,
-       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors '3 3' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
-       "--branching-factors 3 3 --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors '3 3' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("aircond",
        "aircond_seqsampling.py",
        1,
-       f"--branching-factors 3 2 --seed 1134 --solver-name={solver_name} "
+       f"--branching-factors '3 2' --seed 1134 --solver-name={solver_name} "
        "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
 
 do_one("aircond",
