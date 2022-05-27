@@ -70,14 +70,14 @@ global_config = pyofig.ConfigDict()
 def add_to_config(name, description, domain, default,
                   argparse=True,
                   complain=False,
-                  group=None):
+                  argparse_args=None):
     """ Add an arg to the global_config dict.
     Args:
         name (str): the argument name, underscore seperated
         description (str): free text description
         argparse (bool): if True put on command ine
         complain (bool): if True, output a message for a duplicate
-        group (str): argparse group name (optional; PRESENTLY NOT USED)
+        argparse_args (dict): args to pass to argpars (option; e.g. required, or group)
     """
     if name in global_config:
         if complain:
@@ -89,12 +89,10 @@ def add_to_config(name, description, domain, default,
             domain = domain,
             default = default))
         if argparse:
-            c.declare_as_argument()
-            #argname = "--" + name.replace("_","-")
-            #if group is not None:
-            #    c.declare_as_argument(argname, group=group)
-            #else:
-            #    c.declare_as_argument(argname)
+            if argparse_args is not None:
+                c.declare_as_argument(**argparse_args)
+            else:
+                c.declare_as_argument()
 
 
 def _common_args():
@@ -195,12 +193,22 @@ def make_parser(progname=None, num_scens_reqd=False):
 
 
 def num_scens_optional():
-        add_to_config(
-            "num_scens", 
-            description="Number of scenarios (default None)",
-            domain=int,
-            default=None,
-            )
+    add_to_config(
+        "num_scens", 
+        description="Number of scenarios (default None)",
+        domain=int,
+        default=None,
+    )
+    
+def num_scens_required():
+    # required, but not postional
+    add_to_config(
+        "num_scens", 
+        description="Number of scenarios (default None)",
+        domain=int,
+        default=None,
+        argparse_args = {"required": True}
+    )
     
 
 def _basic_multistage(progname=None, num_scens_reqd=False):
