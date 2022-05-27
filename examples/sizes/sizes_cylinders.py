@@ -20,7 +20,7 @@ def _parse_args():
     config.lagrangian_args()
     config.xhatlooper_args()
     config.xhatshuffle_args()
-    parser = config.create_parser("netdes")
+    parser = config.create_parser("sizes")
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
 
