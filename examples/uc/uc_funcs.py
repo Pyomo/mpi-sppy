@@ -10,6 +10,7 @@ import os
 from pyomo.dataportal import DataPortal
 
 import mpisppy.scenario_tree as scenario_tree
+from mpisppy.utils import config
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
@@ -275,13 +276,12 @@ def scenario_names_creator(scnt,start=0):
     return [F"Scenario{i+1}" for i in range(start,scnt+start)]
 
 #=========
-def inparser_adder(inparser):
+def inparser_adder():
     # (only for Amalgamator): add command options unique to uc
     # we don't need to add any command for the uc problem
-    inparser.add_argument("--UC-count-for-path",
-                          help="Mainly for confidence intervals to give a prefix for the directory provides the scenario data but will be overridden if scen_count is greater (default 0)",
-                          dest="UC_count_for_path",
-                          type=int,
+    config.add_to_config("UC_count_for_path",
+                         description="Mainly for confidence intervals to give a prefix for the directory providing the scenario data but will be overridden if scen_count is greater (default 0)",
+                          domain=int,
                           default=0)
     return()
 
