@@ -26,6 +26,7 @@ def _parse_args():
     config.xhatlooper_args()
     config.fwph_args()
     config.lagrangian_args()
+    config.lagranger_args()
     config.xhatshuffle_args()
     config.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
@@ -128,6 +129,12 @@ def main():
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
 
+    # Special Lagranger bound spoke
+    if cfg.lagranger:
+        lagranger_spoke = vanilla.lagranger_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = rho_setter)
+
     # xhat looper bound spoke
     if cfg.xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -141,6 +148,8 @@ def main():
         list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
+    if cfg.lagranger:
+        list_of_spoke_dict.append(lagranger_spoke)
     if cfg.xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:
