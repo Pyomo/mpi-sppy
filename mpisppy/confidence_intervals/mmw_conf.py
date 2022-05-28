@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     m.inparser_adder()
 
-    parser = config.create_parser("zhat4xhat")
+    parser = config.create_parser("mmw_conf")
     # the module name is very special because it has to be plucked from argv
 
     parser.add_argument(

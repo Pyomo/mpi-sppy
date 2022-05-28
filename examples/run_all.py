@@ -125,11 +125,11 @@ def time_one(ID, dirname, progname, np, argstring):
     timelistdf.to_csv(listfname, index=False)
 time_one.ID_check = list()
     
-def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
+def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
+    # assume that the dirname matches the module name
     
     os.chdir(dirname)
     # solve ef, save .npy file (file name hardcoded in progname at the moment)
-    runefstring = "python {} --EF-solver-name {} {}".format(progname, solver_name, efargstring)
     code = os.system("echo {} && {}".format(runefstring, runefstring))
 
     if code!=0:
@@ -139,8 +139,8 @@ def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
             badguys[dirname].append(runefstring)
     # run mmw, remove .npy file
     else:
-        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} {} {} {}".\
-                    format(progname, npyfile, solver_name, mmwargstring)
+        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} --solver-name {} {}".\
+                    format(dirname, npyfile, solver_name, mmwargstring)
         code = os.system("echo {} && {}".format(runstring, runstring))
         if code != 0:
             if dirname not in badguys:
@@ -151,7 +151,7 @@ def do_one_mmw(dirname, progname, npyfile, efargstring, mmwargstring):
         os.remove(npyfile)
 
     os.chdir("..")
-
+"""
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
@@ -278,36 +278,36 @@ do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--solver-name={}".format(solver_name))
 
 do_one("hydro", "hydro_ef.py", 1, solver_name)
-print("keep working...")
-quit()
 
 do_one("aircond", "aircond_cylinders.py", 6,
-       "--branching-factors '4 3 2' --bundles-per-rank=0 --max-iterations=100 "
-       "--default-rho=1 --xhatspecific --lagrangian --xhatshuffle "
+       "--branching-factors \'4 3 2\' --bundles-per-rank=0 --max-iterations=100 "
+       "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("aircond", "aircond_ama.py", 3,
-       "--branching-factors '3 3' --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'3 3\' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
-       "--branching-factors '3 3' --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'3 3\' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
-do_one("aircond",
-       "aircond_seqsampling.py",
-       1,
-       f"--branching-factors '3 2' --seed 1134 --solver-name={solver_name} "
-       "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
 
 do_one("aircond",
        "aircond_seqsampling.py",
        1,
-       f"--branching-factors 3 2 --seed 1134 --solver-name={solver_name} "
+       f"--branching-factors \'3 2\' --seed 1134 --solver-name={solver_name} "
+       "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
+do_one("aircond",
+       "aircond_seqsampling.py",
+       1,
+       f"--branching-factors \'3 2\' --seed 1134 --solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
+"""
 
 #=========MMW TESTS==========
-
-do_one_mmw("farmer", "afarmer.py", "farmer_cyl_nonants.npy", "--num-scens=3", "--confidence-level 0.95 --MMW-batch-size=3 --objective-gap")
+do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", "--num-scens=3 --confidence-level 0.95 --MMW-batch-size=3 --objective-gap")
+print("keep working...")
+quit()
 
 #============================
 
