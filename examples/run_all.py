@@ -302,12 +302,10 @@ do_one("aircond",
        1,
        f"--branching-factors \'3 2\' --seed 1134 --solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
-"""
 
 #=========MMW TESTS==========
 do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", "--num-scens=3 --confidence-level 0.95 --MMW-batch-size=3 --objective-gap")
-print("keep working...")
-quit()
+
 
 #============================
 
@@ -321,17 +319,20 @@ do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 do_one("sizes",
        "special_cylinders.py",
-       4,
+       3,
+       "--lagrangian --xhatshuffle "
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
        "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
-
     
+"""
 
 if not nouc and egret_avail():
     print("\nSlow runs ahead...\n")
     # 3-scenario UC
     do_one("uc", "uc_ef.py", 1, solver_name+" 3")
+    print("keep working...(then go back and do MMW)")
+    quit()
     do_one("uc", "uc_lshaped.py", 2,
            "--bundles-per-rank=0 --max-iterations=5 "
            "--default-rho=1 --num-scens=3 "
