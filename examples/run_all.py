@@ -348,6 +348,7 @@ if not nouc and egret_avail():
            "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
            "--ph-mipgaps-json=phmipgaps.json "
            "--solver-name={}".format(solver_name))    
+    # as of May 2022, this one works well, but outputs some crazy messages
     do_one("uc", "uc_ama.py", 3,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 "

@@ -72,6 +72,8 @@ def add_to_config(name, description, domain, default,
     Args:
         name (str): the argument name, underscore seperated
         description (str): free text description
+        domain (type): see pyomo config docs
+        default (domain): value before argparse
         argparse (bool): if True put on command ine
         complain (bool): if True, output a message for a duplicate
         argparse_args (dict): args to pass to argpars (option; e.g. required, or group)
@@ -91,6 +93,26 @@ def add_to_config(name, description, domain, default,
             else:
                 c.declare_as_argument()
 
+
+#===============
+def add_and_assign(name, description, domain, default, value, complain=False):
+    """ Add an arg to the global_config dict and assign it a value
+    Args:
+        name (str): the argument name, underscore seperated
+        description (str): free text description
+        domain (type): see pyomo config docs
+        default (domain): probably unused, but here to avoid cut-and-paste errors
+        value (domain): the value to assign
+        complain (bool): if True, output a message for a duplicate
+    """
+    if name in global_config:
+        if complain:
+            print(f"Duplicate {name} will not be added to global_config by add_and_assign {value}.")
+            # raise RuntimeError(f"Trying to add duplicate {name} to global_config.")
+    else:
+        add_to_config(name, description, domain, default, argparse=False)
+        global_config[name] = value
+        
 
 def _common_args():
     raise RuntimeError("_common_args is no longer used. See comments at top of config.py")
