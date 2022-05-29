@@ -26,7 +26,9 @@ args = global_config.import_argparse(parser)
 
 If you want to add args, you need to call the add_to_config function
 
-If you want a required arg, you have to DIY:
+If you want a required arg see num_scens_required() in this file.
+
+If you want a positional arg, you have to DIY:
     parser = config.create_parser("tester")
     parser.add_argument(
             "num_scens", help="Number of scenarios", type=int,
@@ -34,6 +36,15 @@ If you want a required arg, you have to DIY:
     args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
     print(f"{args.num_scens =}")
 (Note: you can still attach it to global_config, but that is also DIY)
+
+    config.add_to_config("num_scens",
+                         description="Number of Scenarios (required, positional)",
+                         domain=int,
+                         default=-1,
+                         argparse=False)   # special
+    # final special treatment of num_scens
+    config.global_config.num_scens = args.num_scens
+
 
 """
 
@@ -44,20 +55,6 @@ TBD:
   - There is some discussion of name spaces, but I think for
 things coming off the command line, we can't *really* do that since
 there is just one command line.
-
-"""
-
-""" Notes on conversion (delete this docstring by summer 2022)
-
-See hydro_cylinders_config.py compared to hydro_cylinders.py
-
-import config (not baseparsers)
-parser = baseparsers.  --> config. (sort of)
-add_argument --> config.add_to_config
-
-Parse_args returns args for the sake of vanilla (which will fail anyway... so vanilla needs to be updated); 
-I want to make a clean break.
-Every use of args gets replaced with  cfg = config.global_config in the main() function
 
 """
 

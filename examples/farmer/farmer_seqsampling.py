@@ -154,6 +154,7 @@ def main():
     return xhat
 
 def _parse_args():
+    config.num_scens_required()
     farmer.inparser_adder()
     config.EF2()
     confidence_config.confidence_config()

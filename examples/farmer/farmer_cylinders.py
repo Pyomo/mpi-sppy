@@ -19,6 +19,7 @@ write_solution = True
 
 def _parse_args():
     # parse and update global config
+    config.num_scens_required()
     config.popular_args()
     config.two_sided_args()
     config.ph_args()    
@@ -48,24 +49,10 @@ def _parse_args():
                          description="Use the norm rho converger",
                          domain=bool,
                          default=False)
-    # note that num_scens is special until Pyomo config supports positionals
-    config.add_to_config("num_scens",
-                         description="Number of Scenarios (required, positional)",
-                         domain=int,
-                         default=-1,
-                         argparse=False)   # special
     
     parser = config.create_parser("farmer_cylinders")
-    # more special treatment of num_scens
-    parser.add_argument(
-        "num_scens", help="Number of scenarios", type=int
-    )
-    
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
-
-    # final special treatment of num_scens
-    config.global_config.num_scens = args.num_scens
 
     
 def main():

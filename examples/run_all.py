@@ -156,15 +156,15 @@ do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py",  4,
-       "3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --xhatshuffle --fwph "
        "--display-convergence-detail".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
-       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        "--xhatlshaped --max-solver-threads=1".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
-       "3 --bundles-per-rank=0 --max-iterations=50 "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --lagranger --xhatlooper".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
@@ -180,11 +180,11 @@ do_one("farmer", "farmer_cylinders.py", 2,
        "--default-rho=1 "
        "--solver-name={} --xhatshuffle".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
-       "3 --bundles-per-rank=0 --max-iterations=1 "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=1 "
        "--default-rho=1 --tee-rank0-solves "
        "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 time_one("FarmerLinProx", "farmer", "farmer_cylinders.py", 3,
-       "3 --default-rho=1.0 --max-iterations=50 "
+       "--num-scens 3 --default-rho=1.0 --max-iterations=50 "
        "--display-progress --rel-gap=0.0 --abs-gap=0.0 "
        "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
        "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
@@ -195,24 +195,24 @@ do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 do_one("farmer",
        "farmer_cylinders.py",
        2,
-       f"3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer",
        "farmer_cylinders.py",
        2,
-       f"3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer",
        "farmer_cylinders.py",
        2,
-       f"30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
+       f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
 
 do_one("farmer",
        "farmer_cylinders.py", 4,
-       f"3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
+       f"--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
 
 do_one("farmer",
        "farmer_cylinders.py",
        2,
-       f"30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
+       f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
 
 do_one("farmer",
        "farmer_ama.py",
@@ -222,13 +222,13 @@ do_one("farmer",
 do_one("farmer",
        "farmer_seqsampling.py",
        1,
-       f"3 --crops-multiplier=1  --EF-solver-name={solver_name} "
+       f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
 
 do_one("farmer",
        "farmer_seqsampling.py",
        1,
-       f"3 --crops-multiplier=1  --EF-solver-name={solver_name} "
+       f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
 do_one("netdes", "netdes_cylinders.py", 5,

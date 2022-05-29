@@ -1,7 +1,6 @@
 (Summer 2022) Conversion to Pyomo config will cause disruption for many users.
 
-See examples such as netdes (farmer is OK, too, but it is slightly complicated by
-the use of a positional argument on the command line).
+See examples such as farmer.
 
 0. baseparsers should be replaced by config
 
@@ -23,3 +22,10 @@ the use of a positional argument on the command line).
 Send an email to DLWoodruff@UCDavis.edu if you want help converting.
 
 BTW: a release was done right before this change.
+
+========
+Documentation notes:
+
+In vanilla examples we have stopped using positional arguments for
+the number of scenarios (e.g., in Farmer and UC). Instead --num-scens
+is required.
