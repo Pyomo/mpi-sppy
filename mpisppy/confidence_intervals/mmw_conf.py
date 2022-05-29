@@ -61,6 +61,11 @@ if __name__ == "__main__":
 
 
     m.inparser_adder()
+    # the inprser_adder might want num_scens, but mmw contols the number of scenarios
+    try:
+        del config.global_config["num_scens"] 
+    except:
+        pass
 
     parser = config.create_parser("mmw_conf")
     # the module name is very special because it has to be plucked from argv
