@@ -246,6 +246,7 @@ def scenario_names_creator(num_scens,start=None):
 #=========
 def inparser_adder():
     # add options unique to farmer
+    config.num_scens_required()
     config.add_to_config("crops_multiplier",
                          description="number of crops will be three times this (default 1)",
                          domain=int,

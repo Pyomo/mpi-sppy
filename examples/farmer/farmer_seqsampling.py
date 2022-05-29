@@ -174,24 +174,11 @@ def _parse_args():
                         description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
                         domain=str,
                         default=None)
-    # note that num_scens is special until Pyomo config supports positionals
-    config.add_to_config("num_scens",
-                         description="Number of Scenarios (required, positional)",
-                         domain=int,
-                         default=-1,
-                         argparse=False)   # special
 
     parser = config.create_parser("farmer_seqsampling")
-    # more special treatment of num_scens
-    parser.add_argument(
-        "num_scens", help="Number of scenarios", type=int
-    )
-    
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
 
-    # final special treatment of num_scens
-    config.global_config.num_scens = args.num_scens
     cfg = config.global_config
 
     if cfg.BM_vs_BPL is None:

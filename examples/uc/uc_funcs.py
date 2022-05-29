@@ -278,7 +278,7 @@ def scenario_names_creator(scnt,start=0):
 #=========
 def inparser_adder():
     # (only for Amalgamator): add command options unique to uc
-    # we don't need to add any command for the uc problem
+    config.num_scens_required()
     config.add_to_config("UC_count_for_path",
                          description="Mainly for confidence intervals to give a prefix for the directory providing the scenario data but will be overridden if scen_count is greater (default 0)",
                           domain=int,

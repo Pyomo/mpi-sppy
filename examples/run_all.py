@@ -168,15 +168,15 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "--default-rho=1 "
        "--solver-name={} --lagranger --xhatlooper".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
-       "6 --bundles-per-rank=2 --max-iterations=50 "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 4,
-       "6 --bundles-per-rank=2 --max-iterations=50 "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--fwph-stop-check-tol 0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 2,
-       "6 --bundles-per-rank=2 --max-iterations=50 "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --xhatshuffle".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 3,
@@ -279,7 +279,8 @@ do_one("hydro", "hydro_cylinders_pysp.py", 3,
 
 do_one("hydro", "hydro_ef.py", 1, solver_name)
 
-do_one("aircond", "aircond_cylinders.py", 6,
+# the next might hang with 6 ranks
+do_one("aircond", "aircond_cylinders.py", 3,
        "--branching-factors \'4 3 2\' --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
@@ -350,7 +351,7 @@ if not nouc and egret_avail():
     do_one("uc", "uc_ama.py", 3,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 "
-           "--fixer-tol=1e-2 --lagrangian --xhatshuffle "
+           "--fixer-tol=1e-2 --lagranger --xhatshuffle "
            "--solver-name={}".format(solver_name))
     
     # 10-scenario UC
