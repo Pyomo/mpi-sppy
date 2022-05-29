@@ -387,4 +387,3 @@ if len(badguys) > 0:
             print("    {}".format(c))
 else:
     print("\nAll OK.")
-print("...( go back and do MMW and uc_ama num-scens)")
