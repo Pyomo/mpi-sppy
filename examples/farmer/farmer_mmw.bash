@@ -10,4 +10,4 @@ mpiexec -np 3 python -m mpi4py farmer_cylinders.py  --num-scens 3 --lagrangian -
 
 echo "starting mmw"
 
-python -m mpisppy.confidence_intervals.mmw_conf afarmer --xhat-path farmer_cyl_nonants.npy --solver-name ${SOLVERNAME} --MMW-num-batches 5 --MMW-batch-size 10 --confidence-level 0.9 --start-scen 10
+python -m mpisppy.confidence_intervals.mmw_conf farmer --xhatpath farmer_cyl_nonants.npy --solver-name ${SOLVERNAME} --MMW-num-batches 5 --MMW-batch-size 10 --confidence-level 0.9 --start-scen 10

@@ -304,7 +304,7 @@ do_one("aircond",
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
 #=========MMW TESTS==========
-do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", "--num-scens=3 --confidence-level 0.95 --MMW-batch-size=3 --objective-gap")
+do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", "--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --objective-gap --start-scen 4")
 
 
 #============================
