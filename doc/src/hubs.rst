@@ -9,16 +9,19 @@ and modification provided in the form of :ref:`Extensions`.  Many of
 the algorithms can be run in stand-alone mode (not as a hub with
 spokes), which is briefly described in :ref:`Drivers`.  Most hubs have
 an internal convergence metric, but the threshold option
-(``--intra-hub-conv-thresh`` in ``baseparsers.py`` or ``"convthresh"``
+(``--intra-hub-conv-thresh`` on the command line, ``intra_hub_conv_thresh``
+in ``global_config``, or ``"convthresh"``
 in ``PHoptions``) is often set to a negative number so internal
 convergence is ignored in favor of the threshhold on the gap between
-upper and lower bounds as computed by the spokes (``--rel-gap`` and
-``--abs-gap`` in ``baseparsers.py``).  Most hubs can be terminated
-based on an iteration limit (``--max-iterations`` in ``baseparsers.py``).
+upper and lower bounds as computed by the spokes (``rel_gap`` and
+``abs_gap`` in ``global_config``).  Most hubs can be terminated
+based on an iteration limit (``max_iterations`` in ``global_config``).
 
-An additional gap-based termination option is supported by ``baseparser.py`` and
-``vanilla.py``: ``--max-stalled-iters`` that specifies how many iterations
-can pass without an improvement to the gap between upper and lower bounds.
+An additional gap-based termination option is supported by
+``global_config`` and ``cfg_vanilla.py``: ``max_stalled_iters``
+(``--max-stalled-iters`` on the command line) that specifies how many
+iterations can pass without an improvement to the gap between upper
+and lower bounds.
 
 PH
 --
@@ -34,11 +37,11 @@ Linearize proximal terms
 
 The proximal term can be approximated linearly using the PHoption
 `linearize_proximal_terms` (which is included as
-``--linearize-proximal-terms`` in ``baseparsers.py``). If this option
-is specified, then the option `proximal_linearization_tolerance`
-(which is ``--proximal-linearization-tolerance`` in
-``baseparsers.py``) is a parameter.  A cut will be added if the
-proximal term approximation is looser than this value (default 1e-1).
+``--linearize-proximal-terms``). If this option is specified, then the
+option `proximal_linearization_tolerance` (which is
+``--proximal-linearization-tolerance`` on the command) is a parameter.
+A cut will be added if the proximal term approximation is looser than
+this value (default 1e-1).
 
 
 If only the binary terms should be 

@@ -51,7 +51,7 @@ It must contains the following attributes for use with cylinders:
 Create Amalgamator from a module and command line
 -------------------------------------------------
 Given an options dictionary as above, ``amalgamator.Amalgamator_parser``
-calls the appropriate parsers from ``baseparsers.py`` and completes the options
+creates the ``global_options`` and calls the appropriate parsers 
 to add the necessary information for different modules.
 
 The method ``amalgamator.from_module`` uses the two utilities described above.
@@ -72,8 +72,8 @@ scenario creation can be placed in the almalgamator options dictionary.
 Notes about ``inparser_adder``
 ------------------------------
 
-The function adds arguments unique to the instance. Note that `--branching-factors` can be added
-by this function if ``base_parsers.py`` has been used because it allows for conflict resolution.
+The function adds config arguments unique to the instance. Note that `--branching-factors` can be added
+even if something else added it, because the config.add functions bypass duplicates.
 
    
 Amalgamator with EF

@@ -403,17 +403,11 @@ unusual in that the model file, ``aircond.py``, lives in
 ``mpisppy.tests.examples`` directory. Scripts and bash files that use
 it live in ``examples.aircond``.  A good place to start is the
 ``aircond_cylinders.py`` file that starts with some functions that
-support the main program. The main program makes use of the command
-line parsers provided with the library supplemented by arguments
-provided by the aircond reference model using the line
+support the main program. The main program makes use of the 
+``global_config`` object that creates a parser and gets arguments.
 
-::
-
-  parser = aircond.inparsers_adder(parser)
-
-
- The ``args`` obtained by the parser are passed directly to the vanilla hub
- and spoke creator which knows how to use the arguments from the ``baseparsers``.
+ The configuration data obtained by the parser are passed directly to the vanilla hub
+ and spoke creator which knows how to use the arguments from the ``global_config`` object.
  The arguments unique to aircond are processed by the ``create_kwargs`` function
  in the reference model file.
 

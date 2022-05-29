@@ -1,7 +1,7 @@
 Secret Menu Items
 =================
 
-There are many options that are not exposed in ``mpisppy.utils.baseparsers.py`` and we list
+There are many options that are not exposed in ``mpisppy.utils.config.py`` and we list
 a few of them here.
 
 

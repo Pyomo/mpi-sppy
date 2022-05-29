@@ -18,15 +18,12 @@ Assuming not EF:
 The object will then call the appropriate baseparsers functions to set up
 the args and assemble the objects needed for spin-the-wheel, which it will call.
 
-WARNING: When updating baseparsers and vanilla to add new cylinders/extensions,
+WARNING: When updating config and vanilla to add new cylinders/extensions,
 you must keep up to date this file, especially the following dicts:
     - hubs_and_multi_compatibility
     - spokes_and_multi_compatibility
     - extensions_classes
 
-"""
-"""
-  TBD: when num-scens is required on the command line, should it be positional?
 """
 import numpy as np
 import importlib
@@ -65,8 +62,8 @@ default_unused_spokes = ['xhatlooper', 'xhatspecific']
 
 extensions_classes = {'fixer':Fixer,
                       #NOTE: Before adding other extensions classes there, create:
-                      #         - a parser for it in baseparsers.py
-                      #         - a function add_EXTNAME in vanila.py
+                      #         - a function for it in config.py
+                      #         - a function add_EXTNAME in vanila.py (or cfg_vanilla)
                       
                       }
 
@@ -79,6 +76,7 @@ def _bool_option(options, oname):
 
 def add_options(parser_choice=None):
     #  parser_choice is a string referring to the component (e.g., "slamdown")
+    # (note: by "parser" we mean "config")
     assert parser_choice is not None
 
     parser_name = parser_choice+"_args"
