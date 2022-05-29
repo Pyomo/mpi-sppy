@@ -36,14 +36,14 @@ def main():
 
     # Need default_rho for FWPH, without you get 
     # uninitialized numeric value error
-    if cfg.with_fwph and cfg.default_rho is None:
+    if cfg.fwph and cfg.default_rho is None:
         print("Must specify a default_rho if using FWPH")
         quit()
 
     num_scen = cfg.num_scens
     crops_mult = cfg.crops_mult
-    with_fwph = cfg.with_fwph
-    with_xhatlshaped = cfg.with_xhatlshaped
+    fwph = cfg.fwph
+    xhatlshaped = cfg.xhatlshaped
 
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
@@ -88,21 +88,21 @@ def main():
     }
 
     # FWPH spoke
-    if with_fwph:
+    if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # xhat looper bound spoke -- any scenario will do for
     # lshaped (they're all the same)
     xhat_scenario_dict = {"ROOT": all_scenario_names[0]}
     
-    if with_xhatlshaped:
+    if xhatlshaped:
         xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
 
     list_of_spoke_dict = list()
-    if with_fwph:
+    if fwph:
         list_of_spoke_dict.append(fw_spoke)
-    if with_xhatlshaped:
+    if xhatlshaped:
         list_of_spoke_dict.append(xhatlshaped_spoke)
 
     WheelSpinner(hub_dict, list_of_spoke_dict).spin()
