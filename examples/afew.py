@@ -42,21 +42,22 @@ def do_one(dirname, progname, np, argstring):
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 --with-display-convergence-detail "
-       "--solver-name={} --no-fwph --use-norm-rho-updater".format(solver_name))
+       "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
-       "--no-fwph --max-solver-threads=1".format(solver_name))
+       " --xhatshuffle --lagrangian --max-solver-threads=1".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",
        4,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
+       " --xhatshuffle --lagrangian --fwph "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--bundles-per-rank=0 --max-iterations=100 "
-       "--default-rho=1 --with-xhatshuffle --with-lagrangian "
+       "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={}".format(solver_name))
 
 if len(badguys) > 0:
