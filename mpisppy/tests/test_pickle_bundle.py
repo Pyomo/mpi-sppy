@@ -37,7 +37,7 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 badguys = list()
 
 #*****************************************************************************
-class Test_pickel_bundles(unittest.TestCase):
+class Test_pickle_bundles(unittest.TestCase):
     """ Test the pickle bundle code using aircond."""
 
     @classmethod
@@ -84,7 +84,7 @@ class Test_pickel_bundles(unittest.TestCase):
             raise RuntimeError(f"pickler part of test run failed with code {ret}")
         
         cmdstr = f"python aircond_cylinders.py --branching-factors=\"{self.BPF}\" --unpickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC} "+\
-                 f"--default-rho=1 --no-fwph --no-lagranger --no-lagrangian --no-xhatshuffle --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solvername}"
+                 f"--default-rho=1 --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solvername}"
         ret = os.system(cmdstr)
         if ret != 0:
             raise RuntimeError(f"cylinders part of test run failed with code {ret}")
