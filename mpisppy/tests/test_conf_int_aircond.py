@@ -25,11 +25,9 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.ciutils as ciutils
+from mpisppy.utils import config
 
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
-
-__version__ = 0.21
+__version__ = 0.3
 
 solver_available, solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -80,8 +78,8 @@ class Test_confint_aircond(unittest.TestCase):
                             "solvername": solvername,
                             "solver_options": None,
                             "branching_factors": BFs,
-                            "mudev": 0,
-                            "sigmadev": 40,
+                            "mu_dev": 0,
+                            "sigma_dev": 40,
                             "start_ups": False,
                             "start_seed": 0,
                             }
@@ -311,16 +309,19 @@ class Test_confint_aircond(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_zhat4xhat(self):
-        cmdline = [self.refmodelname, self.xhat_path, "--solver-name",
-                   solvername, "--branching-factors",  "4" ]   # mainly using defaults
-        parser = zhat4xhat._parser_setup()
-        aircond.inparser_adder(parser)
-        args = parser.parse_args(cmdline)
-        # I couldnt't figure out how to get the branching factors parsed from this list, so
-        args.branching_factors = [4, 3, 2]
-                      
+        cmdline = ["--xhatpath", self.xhat_path, "--solver-name",
+                   solvername, "--branching-factors",  "4 3 2" ]   # mainly using defaults
+        zhat4xhat._parser_setup()
+        aircond.inparser_adder()
+        parser = config.create_parser("aircond_xhat4xhat_test")
+        args = parser.parse_args(cmdline) 
+        args = config.global_config.import_argparse(args)
+
+        # this is pulled out of argv in the main of zhat4xhat
+        config.add_and_assign("model_module_name", "model module", str, None, self.refmodelname, complain=True)
+
         model_module = importlib.import_module(self.refmodelname)
-        zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
+        zhatbar, eps_z = zhat4xhat._main_body(model_module)  # main_body usese global_config
 
         z2 = round_pos_sig(zhatbar, 2)
         self.assertEqual(z2, 850.)

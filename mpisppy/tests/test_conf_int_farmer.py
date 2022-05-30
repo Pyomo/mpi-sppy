@@ -16,7 +16,6 @@ import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer
-import mpisppy.tests.examples.farmer as farmer
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
 import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
@@ -24,11 +23,12 @@ import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.ciutils as ciutils
+from mpisppy.utils import config
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.3
+__version__ = 0.4
 
 solver_available, solvername, persistent_available, persistentsolvername= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -207,17 +207,6 @@ class Test_confint_farmer(unittest.TestCase):
    
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    def test_mmwci_main(self):
-        current_dir = os.getcwd()
-        os.chdir(os.path.join(module_dir,"..","confidence_intervals"))
-        runstring = "python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 " +\
-                    "--EF-solver-name="+solvername
-        res = str(subprocess.check_output(runstring, shell=True))
-        os.chdir(current_dir)
-        self.assertIn("1050.77",res)
-    
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")
     def test_gap_estimators(self):
         scenario_names = farmer.scenario_names_creator(50,start=1000)
         estim = ciutils.gap_estimators(self.xhat,
@@ -261,12 +250,24 @@ class Test_confint_farmer(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_zhat4xhat(self):
-        cmdline = [self.arefmodelname, self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
-        parser = zhat4xhat._parser_setup()
-        farmer.inparser_adder(parser)
-        args = parser.parse_args(cmdline)
+        cmdline = ["--xhatpath", self.xhat_path, "--solver-name", solvername, "--branching-factors", "5"]  # mainly defaults
+        zhat4xhat._parser_setup()
+        farmer.inparser_adder()
+        # the inprser_adder might want num_scens, but zhat4xhat contols the number of scenarios
+        try:
+            del config.global_config["num_scens"] 
+        except:
+            pass
+
+        parser = config.create_parser("farmer_xhat4xhat_test")
+        args = parser.parse_args(cmdline) 
+        args = config.global_config.import_argparse(args)
+
+        # this is pulled out of argv in the main of zhat4xhat
+        config.add_and_assign("model_module_name", "model module", str, None, self.arefmodelname, complain=True)
+
         model_module = importlib.import_module(self.arefmodelname)
-        zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
+        zhatbar, eps_z = zhat4xhat._main_body(model_module)
 
         z2 = round_pos_sig(-zhatbar, 2)
         self.assertEqual(z2, 130000.)

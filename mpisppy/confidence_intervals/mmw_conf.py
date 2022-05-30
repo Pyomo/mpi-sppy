@@ -96,7 +96,7 @@ if __name__ == "__main__":
     xhat = ciutils.read_xhat(cfg.xhatpath)
 
     if cfg.MMW_batch_size == None:
-        cfg.MMW_batch_size = cfg.num_scens
+        raise RuntimeError("mmw_conf requires MMW_batch_size")
 
     refmodel = modelpath #Change this path to use a different model
     

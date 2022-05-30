@@ -42,7 +42,7 @@ def scenario_creator(
         num_scens (int, optional):
             Number of scenarios. We use it to compute _mpisppy_probability. 
             Default is None.
-        seedoffent (int): used by confidence interval code
+        seedoffset (int): used by confidence interval code
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex then

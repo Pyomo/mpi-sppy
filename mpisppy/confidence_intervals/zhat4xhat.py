@@ -183,8 +183,13 @@ if __name__ == "__main__":
     except:
         raise RuntimeError(f"Could not import module: {mname}")
     model_module.inparser_adder()
+    # the inprser_adder might want num_scens, but zhat4xhat contols the number of scenarios
+    try:
+        del config.global_config["num_scens"] 
+    except:
+        pass
     
-    parser = config.create_parser("zhat4xhat")
+    parser = config.create_parser("zhat4zhat")
     # the module name is very special because it has to be plucked from argv
     parser.add_argument(
             "model_module_name", help="amalgamator compatible module (often read from argv)", type=str,
