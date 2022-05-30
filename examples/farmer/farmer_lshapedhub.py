@@ -24,7 +24,7 @@ def _parse_args():
                          domain=int,
                          default=1)                
 
-    parser = config.create_parser("farmer_cylinders")
+    parser = config.create_parser("farmer_lshaped")
     
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)

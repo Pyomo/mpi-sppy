@@ -43,10 +43,10 @@ do_one("farmer", "farmer_cylinders.py", 3,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 --display-convergence-detail "
        "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
-do_one("farmer", "farmer_lshapedhub.py", 3,
+do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
-       " --xhatshuffle --lagrangian --max-solver-threads=1".format(solver_name))
+       " --xhatlshaped --max-solver-threads=1".format(solver_name))
 do_one("sizes",
        "sizes_cylinders.py",
        4,
