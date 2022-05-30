@@ -41,7 +41,7 @@ def do_one(dirname, progname, np, argstring):
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 --with-display-convergence-detail "
+       "--default-rho=1 --display-convergence-detail "
        "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "3 --bundles-per-rank=0 --max-iterations=50 "
@@ -53,7 +53,7 @@ do_one("sizes",
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
        " --xhatshuffle --lagrangian --fwph "
-       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+       "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
 
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--bundles-per-rank=0 --max-iterations=100 "
