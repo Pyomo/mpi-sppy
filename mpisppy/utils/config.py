@@ -562,17 +562,15 @@ if __name__ == "__main__":
     print(dir(global_config))
     print(global_config._all_slots)
     print(global_config._domain)
-    print(f"{global_config['max_iterations'] =}")
+    print(f"max_iterations {global_config['max_iterations']}")
 
     parser = create_parser("tester")
     parser.add_argument(
             "num_scens", help="Number of scenarios", type=int,
         )
 
-    args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
+    args=parser.parse_args(['--max-iterations', '99', '--solver-name', 'cplex'])
 
-    print(f"{args.num_scens =}")
-    
     args = global_config.import_argparse(args)
     
     global_config.display()    
