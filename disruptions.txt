@@ -1,6 +1,9 @@
 (Summer 2022) Conversion to Pyomo config will cause disruption for many users.
 
-See examples such as farmer.
+See examples such as farmer.  There is a bash script called
+sed_config_help.bash that uses sed to do most of the things listed
+here for py, but after you run it, some edits are still needed.
+Also, you will have to edit slurm and bash scripts by hand.
 
 0. baseparsers should be replaced by config
 

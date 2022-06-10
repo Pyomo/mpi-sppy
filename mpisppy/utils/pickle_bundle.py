@@ -46,20 +46,20 @@ def pickle_bundle_parser():
                         domain=int,
                         default=None)
 
-def check_args(args):
+def check_args(cfg):
     """ make sure the pickle bundle args make sense"""
-    assert(args.pickle_bundles_dir is None or args.unpickle_bundles_dir is None)
-    if args.scenarios_per_bundle is None:
+    assert(cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None)
+    if cfg.scenarios_per_bundle is None:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified")
-    if args.bundles_per_rank is not None and args.bundles_per_rank != 0:
+    if cfg.get("bundles_per_rank") is not None:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
                            "and --bundles-per-rank cannot be")
-    if args.pickle_bundles_dir is not None and not os.path.isdir(args.pickle_bundles_dir):
-        raise RuntimeError(f"Directory to pickle into not found: {args.pickle_bundles_dir}")
-    if args.unpickle_bundles_dir is not None and not os.path.isdir(args.unpickle_bundles_dir):
-        raise RuntimeError(f"Directory to load pickle files from not found: {args.unpickle_bundles_dir}")
+    if cfg.pickle_bundles_dir is not None and not os.path.isdir(cfg.pickle_bundles_dir):
+        raise RuntimeError(f"Directory to pickle into not found: {cfg.pickle_bundles_dir}")
+    if cfg.unpickle_bundles_dir is not None and not os.path.isdir(cfg.unpickle_bundles_dir):
+        raise RuntimeError(f"Directory to load pickle files from not found: {cfg.unpickle_bundles_dir}")
 
-def have_proper_bundles(args):
+def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
-    return (hasattr(args, "pickle_bundles_dir") and args.pickle_bundles_dir is not None)\
-       or (hasattr(args, "unpickle_bundles_dir") and args.unpickle_bundles_dir is not None)
+    return (hasattr(args, "pickle_bundles_dir") and cfg.pickle_bundles_dir is not None)\
+       or (hasattr(args, "unpickle_bundles_dir") and cfg.unpickle_bundles_dir is not None)

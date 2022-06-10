@@ -14,7 +14,7 @@ from mpisppy import global_toc
 
 
 if __name__ == "__main__":
-
+    global_toc("Start mmw_conf")
     # args for mmw part of things
     config.add_to_config('xhatpath',
                          domain=str,
