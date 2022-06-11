@@ -61,5 +61,5 @@ def check_args(cfg):
 
 def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
-    return (hasattr(args, "pickle_bundles_dir") and cfg.pickle_bundles_dir is not None)\
-       or (hasattr(args, "unpickle_bundles_dir") and cfg.unpickle_bundles_dir is not None)
+    return (hasattr(cfg, "pickle_bundles_dir") and cfg.pickle_bundles_dir is not None)\
+       or (hasattr(cfg, "unpickle_bundles_dir") and cfg.unpickle_bundles_dir is not None)
