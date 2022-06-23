@@ -550,8 +550,8 @@ class Config(pyofig.ConfigDict):
     def parse_command_line(self, progname=None):
         if len(self) == 0:
             raise RuntimeError("create parser called before Config is populated")
-        parser = argparse.ArgumentParser(progname, conflict_handler="resolve")
-        parser.parse_args()
+        parser = self.create_parser(progname)
+        args = parser.parse_args()
         args = self.import_argparse(args)
         return args
              
@@ -568,7 +568,7 @@ if __name__ == "__main__":
     print(config._domain)
     print(f"max_iterations {config['max_iterations']}")
 
-    # most codes do not use create_parser
+    # most codes do not use create_parser; they use parse_command_line instead
     parser = config.create_parser("tester")
     parser.add_argument(
             "num_scens", help="Number of scenarios", type=int,
