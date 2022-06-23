@@ -18,47 +18,47 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 write_solution = True
 
 def _parse_args():
-    # parse and update global config
-    config.num_scens_required()
-    config.popular_args()
-    config.two_sided_args()
-    config.ph_args()    
-    config.aph_args()    
-    config.xhatlooper_args()
-    config.fwph_args()
-    config.lagrangian_args()
-    config.lagranger_args()
-    config.xhatshuffle_args()
-    config.add_to_config("crops_mult",
+    # create a config object and parse
+    cfg = config.Config()
+    
+    cfg.num_scens_required()
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.ph_args()    
+    cfg.aph_args()    
+    cfg.xhatlooper_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.lagranger_args()
+    cfg.xhatshuffle_args()
+    cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
                          default=1)                
-    config.add_to_config("use_norm_rho_updater",
+    cfg.add_to_config("use_norm_rho_updater",
                          description="Use the norm rho updater extension",
                          domain=bool,
                          default=False)
-    config.add_to_config("use-norm-rho-converger",
+    cfg.add_to_config("use-norm-rho-converger",
                          description="Use the norm rho converger",
                          domain=bool,
                          default=False)
-    config.add_to_config("run_async",
+    cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)
-    config.add_to_config("use_norm_rho_converger",
+    cfg.add_to_config("use_norm_rho_converger",
                          description="Use the norm rho converger",
                          domain=bool,
                          default=False)
-    
-    parser = config.create_parser("farmer_cylinders")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+
+    cfg.parse_command_line("farmer_cylinders")
+    return cfg
 
     
 def main():
     
-    _parse_args()
-    cfg = config.global_config
+    cfg = _parse_args()
 
     num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
