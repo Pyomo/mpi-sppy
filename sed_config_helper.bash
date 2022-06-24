@@ -36,8 +36,8 @@ sed -i "s/action ='store_true'/domain=bool,\n            default=False/g" ${2}
 sed -i '/parser\.set_defaults/d' ${2}
 
 # The config setup functions do not take arguments
-sed -i "/cfg/s/(parser)/()/g" ${2}
-sed -i "/cfg/s/(inparser)/()/g" ${2}
+sed -i "/cfg/s/(parser)/(cfg)/g" ${2}
+sed -i "/cfg/s/(inparser)/(cfg)/g" ${2}
 
 # use cfg in beans
 sed -i '/bean/s/args/cfg/g' ${2}

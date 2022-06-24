@@ -226,9 +226,8 @@ class Config(pyofig.ConfigDict):
 
     def _basic_multistage(self, progname=None, num_scens_reqd=False):
         raise RuntimeError("_basic_multistage is no longer used. See comments at top of config.py")
-        parser = argparse.ArgumentParser(prog=progname, conflict_handler="resolve")
 
-    def branching_factors(self):
+    def add_branching_factors(self):
         self.add_to_config("branching_factors", 
                             description="Spaces delimited branching factors (e.g., 2 2)",
                             domain=pyofig.ListOf(int, pyofig.PositiveInt),
@@ -239,8 +238,8 @@ class Config(pyofig.ConfigDict):
         raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")    
 
     def multistage(self):
-        parser = branching_factors()
-        parser = popular_args()
+        self.branching_factors()
+        self.popular_args()
 
 
     #### EF ####
@@ -540,6 +539,7 @@ class Config(pyofig.ConfigDict):
 
     #================
     def create_parser(self,progname=None):
+        # seldom used
         if len(self) == 0:
             raise RuntimeError("create parser called before Config is populated")
         parser = argparse.ArgumentParser(progname, conflict_handler="resolve")
@@ -548,6 +548,7 @@ class Config(pyofig.ConfigDict):
 
     #================
     def parse_command_line(self, progname=None):
+        # often used, but the return value less so
         if len(self) == 0:
             raise RuntimeError("create parser called before Config is populated")
         parser = self.create_parser(progname)
