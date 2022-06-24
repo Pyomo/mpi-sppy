@@ -14,25 +14,24 @@ from mpisppy.opt.lshaped import LShapedMethod
 
 
 def _parse_args():
-    config.num_scens_required()
-    config.popular_args()
-    config.two_sided_args()
-    config.fwph_args()
-    config.xhatlshaped_args()
-    config.add_to_config("crops_mult",
+    # create a Config object and parse into it
+    cfg = config.Config()
+    cfg.num_scens_required()
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.fwph_args()
+    cfg.xhatlshaped_args()
+    cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
                          default=1)                
 
-    parser = config.create_parser("farmer_lshaped")
-    
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg.parse_command_line("farmer_cylinders")
+    return cfg
 
 
 def main():
-    _parse_args()
-    cfg = config.global_config
+    dfg = _parse_args()
 
     # Need default_rho for FWPH, without you get 
     # uninitialized numeric value error
