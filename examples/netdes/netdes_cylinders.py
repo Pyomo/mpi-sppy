@@ -13,28 +13,26 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 write_solution = True
 
 def _parse_args():
-    config.num_scens_optional()
-    config.popular_args()
-    config.two_sided_args()
-    config.xhatlooper_args()
-    config.ph_args()
-    config.fwph_args()
-    config.lagrangian_args()
-    config.xhatshuffle_args()
-    config.slamup_args()
-    config.cross_scenario_cuts_args()
-    config.add_to_config("instance_name",
+    cfg.num_scens_optional()
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.xhatlooper_args()
+    cfg.ph_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.xhatshuffle_args()
+    cfg.slamup_args()
+    cfg.cross_scenario_cuts_args()
+    cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
                         domain=str,
                         default=None)                
-    parser = config.create_parser("netdes")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
-
+    cfg.parse_command_line("netdes_cylinders")
+    return cfg
     
 def main():
-    _parse_args()
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
+
     inst = cfg.instance_name
     num_scen = int(inst.split("-")[-3])
     if cfg.num_scens is not None and cfg.num_scens != num_scen:

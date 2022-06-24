@@ -4,31 +4,31 @@ import sys
 import copy
 import sizes
 
+from mpisppy.utils import config
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.extensions.fixer import Fixer
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
 def _parse_args():
-    config.popular_args()
-    config.num_scens_required()  # but not positional: you need --num-scens
-    config.ph_args()
-    config.two_sided_args()
-    config.mip_options()
-    config.fixer_args()
-    config.fwph_args()
-    config.lagrangian_args()
-    config.xhatlooper_args()
-    config.xhatshuffle_args()
-    parser = config.create_parser("sizes")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg = config.Config()
+    
+    cfg.popular_args()
+    cfg.num_scens_required()  # but not positional: you need --num-scens
+    cfg.ph_args()
+    cfg.two_sided_args()
+    cfg.mip_options()
+    cfg.fixer_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.xhatlooper_args()
+    cfg.xhatshuffle_args()
 
+    cfg.parse_command_line("sizes_cylinders")
+    return cfg
 
 def main():
     
-    _parse_args()
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
 
     num_scen = cfg.num_scens
 

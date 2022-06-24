@@ -24,27 +24,27 @@ SPOKE_SLEEP_TIME = 0.0001
 write_solution = True
 
 def _parse_args():
-    # update config.global_config
-    config.multistage()
-    config.ph_args()
-    config.two_sided_args()
-    config.xhatlooper_args()
-    config.xhatshuffle_args()
-    config.lagrangian_args()
-    config.xhatspecific_args()
+    # create a Config object, get values for it, and return it
+    cfg = config.Config()
+    cfg.multistage()
+    cfg.ph_args()
+    cfg.two_sided_args()
+    cfg.xhatlooper_args()
+    cfg.xhatshuffle_args()
+    cfg.lagrangian_args()
+    cfg.xhatspecific_args()
 
-    config.add_to_config(name ="stage2EFsolvern",
+    cfg.add_to_config(name ="stage2EFsolvern",
                          description="Solver to use for xhatlooper stage2ef option (default None)",
                          domain = str,
                          default=None)
 
-    parser = config.create_parser("hydro")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg.parse_command_line("farmer_cylinders")
+    return cfg
 
 
 def main():
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
 
     _parse_args()  # updates cfg
 

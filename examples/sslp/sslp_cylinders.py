@@ -11,29 +11,28 @@ from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
 def _parse_args():
-    config.popular_args()
-    config.num_scens_optional() 
-    config.ph_args()
-    config.add_to_config("instance_name",
+    cfg = config.Config()
+    cfg.popular_args()
+    cfg.num_scens_optional() 
+    cfg.ph_args()
+    cfg.add_to_config("instance_name",
                          description="sslp instance name (e.g., sslp_15_45_10)",
                          domain=str,
                          default=None,
                          argparse_args = {"required": True})
 
-    config.two_sided_args()
-    config.fixer_args()
-    config.xhatlooper_args()
-    config.fwph_args()
-    config.lagrangian_args()
-    config.xhatshuffle_args()
-    parser = config.create_parser("sizes")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg.two_sided_args()
+    cfg.fixer_args()
+    cfg.xhatlooper_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.xhatshuffle_args()
+    cfg.parse_command_line("sslp_cylinders")
+    return cfg
 
 
 def main():
-    _parse_args()
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
 
     inst = cfg.instance_name
     num_scen = int(inst.split("_")[-1])
