@@ -5,7 +5,6 @@ import argparse
 import importlib
 import numpy as np
 import scipy.stats
-from mpisppy.utils import config
 from mpisppy.confidence_intervals import sample_tree
 from mpisppy.utils import sputils
 from mpisppy.confidence_intervals import ciutils
