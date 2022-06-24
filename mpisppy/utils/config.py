@@ -238,7 +238,7 @@ class Config(pyofig.ConfigDict):
         raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")    
 
     def multistage(self):
-        self.branching_factors()
+        self.add_branching_factors()
         self.popular_args()
 
 

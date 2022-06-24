@@ -10,7 +10,6 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import argparse
 from mpisppy import global_toc
-from mpisppy.utils import config
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
@@ -382,14 +381,15 @@ def scenario_names_creator(num_scens,start=None):
         
 
 #=========
-def inparser_adder():
+def inparser_adder(cfg):
     # Add command options unique to aircond
     # Do not change the defaults.
+    # cfg is a Config object
     def _doone(name, helptext, argname=None):
         # The name should be the name in parms
         # helptext should not include the default
         h = f"{helptext} (default {parms[name][1]})"
-        config.add_to_config(name,
+        cfg.add_to_config(name,
                              description=h,
                              domain=parms[name][0],
                              default=parms[name][1],
@@ -414,10 +414,12 @@ def inparser_adder():
     
 
 #=========
-def kw_creator(optionsin=None):
-    """ Use the options passed in and/or global options to 
-    create the key word aguents for the creator fucntion(s)"""
-    # TBD: re-write this function...
+def kw_creator(cfg, optionsin=None):
+    """ Use the options passed in and/or cfg to 
+    create the key word arguments for the creator fucntion(s)
+    args:
+        cfg (Config object): probably has parsed values
+        optionsin (dict): programmatic options"""
     # use an empty dict instead of None
     options = optionsin if optionsin is not None else dict()
     if "kwargs" in options:
@@ -432,7 +434,6 @@ def kw_creator(optionsin=None):
             kwargs[option_name] = retval
             return
         # if not in the options, see if it is availalbe globally
-        cfg = config.global_config  # typint aid
         aname = option_name if arg_name is None else arg_name
         retval = getattr(cfg, aname) if hasattr(cfg, aname) else None
         retval = default if retval is None else retval

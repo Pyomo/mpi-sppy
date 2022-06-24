@@ -125,47 +125,47 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
     return nodenames
     
 def _parse_args():
-    config.multistage()
-    config.ph_args()
-    config.two_sided_args()
-    config.xhatlooper_args()
-    config.xhatshuffle_args()
-    config.fwph_args()
-    config.lagrangian_args()
-    config.lagranger_args()
-    config.xhatspecific_args()
-    config.mip_options()
-    config.aph_args()    
-    aircond.inparser_adder()  # not aircondB
-    config.add_to_config("run_async",
+    # create and return a Config object with values from the command line
+    cfg = config.Config()
+    
+    cfg.multistage()
+    cfg.ph_args()
+    cfg.two_sided_args()
+    cfg.xhatlooper_args()
+    cfg.xhatshuffle_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.lagranger_args()
+    cfg.xhatspecific_args()
+    cfg.mip_options()
+    cfg.aph_args()    
+    aircond.inparser_adder(cfg)  # not aircondB
+    cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)    
-    config.add_to_config("write_solution",
+    cfg.add_to_config("write_solution",
                          description="Write various solution files (default False)",
                          domain=bool,
                          default=False)    
     # special "proper" bundle arguments
-    parser = pickle_bundle.pickle_bundle_parser()
+    parser = pickle_bundle.pickle_bundle_parser(cfg)
 
-    config.add_to_config("EF_directly",
+    cfg.add_to_config("EF_directly",
                          description="Solve the EF directly instead of using cylinders (default False)",
                          domain=bool,
                          default=False)
     # DLW March 2022: this should be in baseparsers and vanilla some day
-    config.add_to_config("solver_options",
+    cfg.add_to_config("solver_options",
                          description="Space separarated string with = for arguments (default None)",
                          domain=str,
                          default=None)
 
-    parser = config.create_parser("aircond")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
-
-    return args
+    cfg.parse_command_line("aircond_cylinders")
+    return cfg
 
 def main():
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
 
     cmdargs = _parse_args()
 
@@ -217,7 +217,7 @@ def main():
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())
 
-    scenario_creator_kwargs = refmodule.kw_creator()  # take everything from config
+    scenario_creator_kwargs = refmodule.kw_creator(cfg)  # take everything from config
     scenario_creator = refmodule.scenario_creator
     # TBD: consider using aircond instead of refmodule and pare down aircondB.py
     scenario_denouement = refmodule.scenario_denouement
