@@ -259,11 +259,11 @@ def inparser_adder(cfg):
 
 
 #=========
-def kw_creator(options):
-    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
-    kwargs = {"use_integer": options.get('use_integer', False),
-              "crops_multiplier": options.get('crops_multiplier', 1),
-              "num_scens" : options.get('num_scens', None),
+def kw_creator(cfg):
+    # (for Amalgamator): linked to the scenario_creator and inparser_adder
+    kwargs = {"use_integer": cfg.get('use_integer', False),
+              "crops_multiplier": cfg.get('crops_multiplier', 1),
+              "num_scens" : cfg.get('num_scens', None),
               }
     return kwargs
 

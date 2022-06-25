@@ -150,7 +150,8 @@ def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
         ama (Amalgamator): the instantiated object
     
     """
-    assert isinstance(cfg, config.Config)
+    if not isinstance(cfg, config.Config):
+        raise RuntimeError(f"amalgamator from_model bad cfg type={type(cfg)}; should be Config")
 
     if inspect.ismodule(mname):
         m = mname
@@ -161,7 +162,7 @@ def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
     cfg = Amalgamator_parser(cfg, m.inparser_adder,
                                  extraargs_fct=extraargs_fct,
                                  use_command_line=use_command_line)
-    cfg['_mpisppy_probability'] = 1/cfg['num_scens']
+    cfg.add_and_assign('_mpisppy_probability', description="Uniform prob.", domain=float, default=None, value= 1/cfg['num_scens'])
     start = cfg['start'] if 'start' in cfg else 0
     sn = m.scenario_names_creator(cfg['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
@@ -393,12 +394,11 @@ class Amalgamator():
                 #NOTE: We do not get bounds on every rank, only on hub
                 #      This should change if we want to use cylinders for MMW
                 
-            
-            if 'write_solution' in self.cfg:
-                if 'first_stage_solution' in self.cfg['write_solution']:
-                    ws.write_first_stage_solution(self.cfg['write_solution']['first_stage_solution'])
-                if 'tree_solution' in self.cfg['write_solution']:
-                    ws.write_tree_solution(self.cfg['write_solution']['tree_solution'])
+            # prior to June 2022, the wite options were a two-level dictionary; now flattened
+            if 'first_stage_solution_csv' in self.cfg:
+                ws.write_first_stage_solution(self.cfg['first_stage_solution_csv'])
+            if 'tree_solution_csv' in self.cfg:
+                ws.write_tree_solution(self.cfg['tree_solution_csv'])
             
             if self.on_hub: #we are on a hub rank
                 a_sname = self.opt.local_scenario_names[0]

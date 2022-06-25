@@ -108,6 +108,15 @@ class Config(pyofig.ConfigDict):
             self[name] = value
 
 
+    #===============
+    def get(self, name, ifmissing=None):
+        """ replcate the behavior of dict get"""
+        if name in self:
+            return self[name]
+        else:
+            return ifmissing
+
+
     def _common_args(self):
         raise RuntimeError("_common_args is no longer used. See comments at top of config.py")
 
