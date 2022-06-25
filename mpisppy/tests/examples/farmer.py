@@ -244,18 +244,18 @@ def scenario_names_creator(num_scens,start=None):
 
 
 #=========
-def inparser_adder():
+def inparser_adder(cfg):
     # add options unique to farmer
-    config.num_scens_required()
-    config.add_to_config("crops_multiplier",
-                         description="number of crops will be three times this (default 1)",
-                         domain=int,
-                         default=1)
+    cfg.num_scens_required()
+    cfg.add_to_config("crops_multiplier",
+                      description="number of crops will be three times this (default 1)",
+                      domain=int,
+                      default=1)
     
-    config.add_to_config("farmer_with_integers",
-                         description="make the version that has integers (default False)",
-                         domain=bool,
-                         default=False)
+    cfg.add_to_config("farmer_with_integers",
+                      description="make the version that has integers (default False)",
+                      domain=bool,
+                      default=False)
 
 
 #=========

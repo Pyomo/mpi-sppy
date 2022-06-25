@@ -25,12 +25,19 @@ you must keep up to date this file, especially the following dicts:
     - extensions_classes
 
 """
+"""
+Changes summer 2022: Each Amalgamagor object has a
+Config object **** that it might modify (mainly add) *****
+It no longer has options, just a cfg.
+You might want to copy your cfg before passing it in.
+"""
 import numpy as np
 import importlib
 import inspect
 import pyomo.environ as pyo
 import argparse
 import copy
+import pyomo.common.config as pyofig
 
 from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -70,17 +77,17 @@ extensions_classes = {'fixer':Fixer,
 #==========
 # Utilities to interact with config
 
-def _bool_option(options, oname):
-    return oname in options and options[oname]
+def _bool_option(cfg, oname):
+    return oname in cfg and cfg[oname]
 
 
-def add_options(parser_choice=None):
+def add_options(cfg, parser_choice=None):
     #  parser_choice is a string referring to the component (e.g., "slamdown")
     # (note: by "parser" we mean "config")
     assert parser_choice is not None
 
     parser_name = parser_choice+"_args"
-    adder = getattr(config, parser_name)
+    adder = getattr(cfg, parser_name)
     adder()
 
 
@@ -128,37 +135,37 @@ def check_module_ama(module):
 
 
 #==========
-def from_module(mname, options, extraargs_fct=None, use_command_line=True):
+def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
     """ Try to get everything from one file (this will not always be possible).
     Args:
         mname (str): the module name (module must have certain functions)
                      or you can pass in a module that has already been imported
-        options (dict): Amalgamator options or extra arguments to use 
+        cfg (Config): Amalgamator options or extra arguments to use 
                         in addition with the command line
         extraargs_fct (fct) : a function to add extra arguments, e.g. for MMW
-        use_command_line (bool): should we take into account the command line to add options ?
+        use_command_line (bool): should we take into account the command line to populate cfg ?
                                  default is True
                     
     Returns:
         ama (Amalgamator): the instantiated object
     
     """
-    assert(options is not None)
+    assert isinstance(cfg, config.Config)
 
     if inspect.ismodule(mname):
         m = mname
     else:
         m = importlib.import_module(mname)
     check_module_ama(m)
-    
-    options = Amalgamator_parser(options, m.inparser_adder,
+
+    cfg = Amalgamator_parser(cfg, m.inparser_adder,
                                  extraargs_fct=extraargs_fct,
                                  use_command_line=use_command_line)
-    options['_mpisppy_probability'] = 1/options['num_scens']
-    start = options['start'] if 'start' in options else 0
-    sn = m.scenario_names_creator(options['num_scens'], start=start)
+    cfg['_mpisppy_probability'] = 1/cfg['num_scens']
+    start = cfg['start'] if 'start' in cfg else 0
+    sn = m.scenario_names_creator(cfg['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
-    ama = Amalgamator(options,
+    ama = Amalgamator(cfg,
                       sn,
                       m.scenario_creator,
                       m.kw_creator,
@@ -167,95 +174,77 @@ def from_module(mname, options, extraargs_fct=None, use_command_line=True):
                 
         
 #==========
-def Amalgamator_parser(options, inparser_adder, extraargs_fct=None, use_command_line=True):
-    """ Helper function for Amalgamator.  This gives us flexibility (e.g., get scen count)
+def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line=True):
+    """ Helper function for Amalgamator.
     Args:
-        options (dict): Amalgamator control options
+        cfg (Config): Amalgamator control options, etc; might be added to or changed
         inparser_adder (fct): returns updated ArgumentParser the problem
         extraargs_fct (fct) : a function to add extra arguments, e.g. for MMW
         use_command_line (bool): should we take into account the command line to add options ?
                                  default is True
     Returns;
-        options (dict): a dict containing the options, both parsed values and pre-set options
+        cfg (Cofig): the modifed cfg object containing the options, both parsed values and pre-set options
     """
 
     # TBD: should we copy?
-    options_dict = {**options}
-    cfg = config.global_config
     
     if use_command_line:
-        if _bool_option(options, "EF-2stage"):
-            config.EF2()
-        elif _bool_option(options, "EF-mstage"):
-            config.EF_multistage()
+        if _bool_option(cfg, "EF-2stage"):
+            cfg.EF2()
+        elif _bool_option(cfg, "EF-mstage"):
+            cfg.EF_multistage()
         else:
-            if _bool_option(options, "2stage"):
-                config.popular_args()
-            elif _bool_option(options, "mstage"):
-                config.multistage()
+            if _bool_option(cfg, "2stage"):
+                cfg.popular_args()
+            elif _bool_option(cfg, "mstage"):
+                cfg.multistage()
             else:
                 raise RuntimeError("The problem type (2stage or mstage) must be specified")
-            config.two_sided_args()
-            config.mip_options()
+            cfg.two_sided_args()
+            cfg.mip_options()
                 
             #Adding cylinders
-            if not "cylinders" in options:
+            if not "cylinders" in cfg:
                 raise RuntimeError("A cylinder list must be specified")
             
-            for cylinder in options['cylinders']:
+            for cylinder in cfg['cylinders']:
                 #NOTE: This returns an error if the cylinder yyyy has no yyyy_args in config.py
-                parser = add_options(cylinder)
+                add_options(cfg, cylinder)
             
             #Adding extensions
-            if "extensions" in options:
-                for extension in options['extensions']:
-                    parser = add_options(extension)
+            if "extensions" in cfg:
+                for extension in cfg['extensions']:
+                    add_options(cfg, extension)
     
-        inparser_adder()
+        inparser_adder(cfg)
         
         if extraargs_fct is not None:
             extraargs_fct()
         
-        prg = options.get("program_name")
-        parser = config.create_parser(prg)
-        # positional args are special when using the pyomo config package
-        if _bool_option(options, "num_scens_reqd"):
-            parser.add_argument("num_scens",
-                                help="Number of scenarios (default 0)",
-                                default=0,
-                                type=int)
+        prg = cfg.get("program_name")
+        cfg.parse_command_line(prg)
 
-        args = parser.parse_args()  # from the command line
-        args = cfg.import_argparse(args)  # copy to cfg
-
-        #Changes made via the command line overwrite what is in options
-        # options_dict.update(vars(dict(cfg)))
-        for key,val in cfg.items():
-            options_dict[key] = val
-        if _bool_option(options, "num_scens_reqd"):
-            options_dict["num_scens"] = args.num_scens  # NOTE: not in config
-            
+        """
+        print("Amalgamator needs work for solver options!!")
         # deal with proliferation of solver options specifications
         if _bool_option(options_dict, "EF-2stage") or _bool_option(options_dict, "EF-mstage"): 
             if ('EF_solver_options' in options_dict):
                 options_dict["EF_solver_options"]["mipgap"] = options_dict["EF_mipgap"]
             else:
                 options_dict["EF_solver_options"] = {"mipgap": options_dict["EF_mipgap"]}
-    
+        """
     else:
-        #Checking if options_dict has all the options we need 
-        if not (_bool_option(options_dict, "EF-2stage") or _bool_option(options_dict, "EF-mstage")):
+        #Checking if cfg has all the options we need 
+        if not (_bool_option(cfg, "EF-2stage") or _bool_option(cfg, "EF-mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
-        if not ('EF_solver_name' in options_dict):
+        if not ('EF_solver_name' in cfg):
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
-        ###if not ('EF_solver_options' in options_dict):
-            ###options_dict['EF_solver_options'] = {'mipgap': None}
-        if not ('num_scens' in options_dict):
-            raise RuntimeWarning("options should have a number of scenarios to compute a xhat")
-        if _bool_option(options_dict, 'EF-mstage') and 'branching_factors' not in options_dict:
-            raise RuntimeError("For a multistage problem, options must have a 'branching_factors' attribute with branching factors")
+        if not ('num_scens' in cfg):
+            raise RuntimeWarning("cfg should have a number of scenarios to compute a xhat")
+        if _bool_option(cfg, 'EF-mstage') and 'branching_factors' not in cfg:
+            raise RuntimeError("For a multistage problem, cfg must have a 'branching_factors' attribute with branching factors")
 
-    return options_dict
+    return cfg
     
 
 #========================================
@@ -270,32 +259,32 @@ class Amalgamator():
     It may be an extenisble base class, but not abstract.
 
     Args:
-        options (dict): controls the amalgamation
+        cfg (Config): controls the amalgamation and may be added to or changed
         scenario_names (list of str) the full set of scenario names
         scenario_creator (fct): returns a concrete model with special things
         kw_creator (fct): takes an options dict and returns scenario_creator kwargs
         scenario_denouement (fct): (optional) called at conclusion
     """
 
-    def __init__(self, options,
+    def __init__(self, cfg,
                  scenario_names, scenario_creator, kw_creator, 
                  scenario_denouement=None, verbose=True):
-        self.options = options
+        self.cfg = cfg
         self.scenario_names = scenario_names
         self.scenario_creator = scenario_creator
         self.scenario_denouement = scenario_denouement
         self.kw_creator = kw_creator
-        self.kwargs = self.kw_creator(self.options)
+        self.kwargs = self.kw_creator(self.cfg)
         self.verbose = verbose
-        self.is_EF = _bool_option(options, "EF-2stage") or _bool_option(options, "EF-mstage")
+        self.is_EF = _bool_option(cfg, "EF-2stage") or _bool_option(cfg, "EF-mstage")
         if self.is_EF:
-            self.solvername = options.get('EF_solver_name', None)
-            self.solver_options = options['EF_solver_options'] \
-                if ('EF_solver_options' in options) else {}
-        self.is_multi = _bool_option(options, "EF-mstage") or _bool_option(options, "mstage")
-        if self.is_multi and not "all_nodenames" in options:
-            if "branching_factors" in options:
-                self.options["all_nodenames"] = sputils.create_nodenames_from_branching_factors(options["branching_factors"])
+            self.solvername = cfg.get('EF_solver_name', None)
+            self.solver_options = cfg['EF_solver_options'] \
+                if ('EF_solver_options' in cfg) else {}
+        self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
+        if self.is_multi and not "all_nodenames" in cfg:
+            if "branching_factors" in cfg:
+                self.cfg["all_nodenames"] = sputils.create_nodenames_from_branching_factors(cfg["branching_factors"])
             else:
                 raise RuntimeError("For a multistage problem, please provide branching_factors or all_nodenames")
         
@@ -310,7 +299,7 @@ class Amalgamator():
                 suppress_warnings=True,
             )
 
-            tee_ef_solves = self.options.get('tee_ef_solves',False)
+            tee_ef_solves = self.cfg.get('tee_ef_solves',False)
             
             solvername = self.solvername
             solver = pyo.SolverFactory(solvername)
@@ -343,13 +332,13 @@ class Amalgamator():
                 self.best_outer_bound = results.Problem[0]['Lower bound']
             self.ef = ef
             
-            if 'write_solution' in self.options:
-                if 'first_stage_solution' in self.options['write_solution']:
+            if 'write_solution' in self.cfg:
+                if 'first_stage_solution' in self.cfg['write_solution']:
                     sputils.write_ef_first_stage_solution(self.ef,
-                                                          self.options['write_solution']['first_stage_solution'])
-                if 'tree_solution' in self.options['write_solution']:
+                                                          self.cfg['write_solution']['first_stage_solution'])
+                if 'tree_solution' in self.cfg['write_solution']:
                     sputils.write_ef_tree_solution(self.ef,
-                                                   self.options['write_solution']['tree_solution'])
+                                                   self.cfg['write_solution']['tree_solution'])
             
             self.xhats = sputils.nonant_cache_from_ef(ef)
             self.local_xhats = self.xhats  # Every scenario is local for EF
@@ -357,10 +346,9 @@ class Amalgamator():
 
         else:
             self.ef = None
-            cfg = config.global_config
 
             #Create a hub dict
-            hub_name = find_hub(self.options['cylinders'], self.is_multi)
+            hub_name = find_hub(self.cfg['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
             beans = {"cfg": cfg,
                      "scenario_creator": self.scenario_creator,
@@ -368,26 +356,26 @@ class Amalgamator():
                      "all_scenario_names": self.scenario_names,
                      "scenario_creator_kwargs": self.kwargs}
             if self.is_multi:
-                beans["all_nodenames"] = self.options["all_nodenames"]
+                beans["all_nodenames"] = self.cfg["all_nodenames"]
             hub_dict = hub_creator(**beans)
             
             #Add extensions
-            if 'extensions' in self.options:
-                for extension in self.options['extensions']:
+            if 'extensions' in self.cfg:
+                for extension in self.cfg['extensions']:
                     extension_creator = getattr(vanilla, 'add_'+extension)
                     hub_dict = extension_creator(hub_dict, cfg)
             
             #Create spoke dicts
-            potential_spokes = find_spokes(self.options['cylinders'],
+            potential_spokes = find_spokes(self.cfg['cylinders'],
                                            self.is_multi)
             #We only use the spokes with an associated command line arg set to True
-            spokes = [spoke for spoke in potential_spokes if self.options[spoke]]
+            spokes = [spoke for spoke in potential_spokes if self.cfg[spoke]]
             list_of_spoke_dict = list()
             for spoke in spokes:
                 spoke_creator = getattr(vanilla, spoke+'_spoke')
                 spoke_beans = copy.deepcopy(beans)
                 if spoke == "xhatspecific":
-                    spoke_beans["scenario_dict"] = self.options["scenario_dict"]
+                    spoke_beans["scenario_dict"] = self.cfg["scenario_dict"]
                 spoke_dict = spoke_creator(**spoke_beans)
                 list_of_spoke_dict.append(spoke_dict)
                 
@@ -406,11 +394,11 @@ class Amalgamator():
                 #      This should change if we want to use cylinders for MMW
                 
             
-            if 'write_solution' in self.options:
-                if 'first_stage_solution' in self.options['write_solution']:
-                    ws.write_first_stage_solution(self.options['write_solution']['first_stage_solution'])
-                if 'tree_solution' in self.options['write_solution']:
-                    ws.write_tree_solution(self.options['write_solution']['tree_solution'])
+            if 'write_solution' in self.cfg:
+                if 'first_stage_solution' in self.cfg['write_solution']:
+                    ws.write_first_stage_solution(self.cfg['write_solution']['first_stage_solution'])
+                if 'tree_solution' in self.cfg['write_solution']:
+                    ws.write_tree_solution(self.cfg['write_solution']['tree_solution'])
             
             if self.on_hub: #we are on a hub rank
                 a_sname = self.opt.local_scenario_names[0]
@@ -423,16 +411,24 @@ class Amalgamator():
 
 
 if __name__ == "__main__":
-    # Our example is farmer
+    # For use by developers doing ad hoc testing, our example is farmer
     import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
+    """
     ama_options = {"2stage": True,   # 2stage vs. mstage
                    "cylinders": ['ph'],
                    "extensions": [],
                    "program_name": "amalgamator test main",
                    "num_scens_reqd": True,
                    }
-    ama = from_module("mpisppy.tests.examples.farmer", ama_options)
+    """
+    cfg = config.Config()
+    cfg.add_and_assign("2stage", description="2stage vsus mstage", domain=bool, default=None, value=True)
+    cfg.add_and_assign("cylinders", description="list of cylinders", domain=pyofig.ListOf(str), default=None, value=["ph"])
+    cfg.add_and_assign("extensions", description="list of extensions", domain=pyofig.ListOf(str), default=None, value= [])
+    # num_scens_reqd has been deprecated
+
+    ama = from_module("mpisppy.tests.examples.farmer", cfg)
     ama.run()
     # print(f"inner bound=", ama.best_inner_bound)
     # print(f"outer bound=", ama.best_outer_bound)
