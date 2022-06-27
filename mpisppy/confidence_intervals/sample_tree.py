@@ -5,7 +5,6 @@
 import numpy as np
 import mpisppy.MPI as mpi
 import importlib
-import copy
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
@@ -115,14 +114,15 @@ class SampleSubtree():
     def _create_amalgamator(self):
         '''
         This method attaches an Amalgamator object to a sample subtree.
+        Changes to self.cfg will be ephemeral.
         
         WARNING: sample_creator must be called before using for stages beyond 1
         '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
         self.scenario_creator = self._sample_creator
 
-        print("\n HEY xxxx you don't need a deepcopy in sample_tree.py; see Pyomo config docs\n")
-        cfg = copy.deepcopy(self.cfg)
+        ###cfg = copy.deepcopy(self.cfg)
+        cfg = self.cfg()   # ephemeral
         cfg.quick_assign('EF-mstage', domain=str, value=len(self.original_branching_factors) > 1)
         cfg.quick_assign('EF-2stage', domain=str, value=len(self.original_branching_factors) <= 1)
         cfg.quick_assign('EF_solver_name', domain=str, value=self.solvername)

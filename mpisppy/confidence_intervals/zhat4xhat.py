@@ -11,10 +11,9 @@ from mpisppy.confidence_intervals import ciutils
 from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.utils.sputils import option_string_to_dict
 
-
 def evaluate_sample_trees(xhat_one, 
                           num_samples,
-                          ama_options,  
+                          cfg,
                           InitSeed=0,  
                           model_module = None):
     """ Create and evaluate multiple sampled trees.
@@ -22,7 +21,7 @@ def evaluate_sample_trees(xhat_one,
         xhat_one : list or np.array of float (*not* a dict)
             A feasible and nonanticipative first stage solution.
         num_samples (int): number of trees to sample
-        ama_options (dict): options for the amalgamator
+        cfg (Config): options for/from the amalgamator
         InitSeed (int): starting seed (but might be used for a scenario name offset)
         model_modules: an imported module with the functions needed by, e.g., amalgamator
     Returns:
@@ -32,15 +31,13 @@ def evaluate_sample_trees(xhat_one,
     ''' creates batch_size sample trees with first-stage solution xhat_one
     using SampleSubtree class from sample_tree
     used to approximate E_{xi_2} phi(x_1, xi_2) for confidence interval coverage experiments
-    note: ama_options will include the command line args as 'args'
     '''
-    cfg = config.global_config
     mname = cfg.model_module_name
     seed = InitSeed
     zhats = list()
-    bfs = ama_options["branching_factors"]
+    bfs = cfg["branching_factors"]
     scenario_count = np.prod(bfs)
-    solvername = ama_options["EF_solver_name"]
+    solvername = cfg["EF_solver_name"]
     #sampling_bfs = ciutils.scalable_BFs(batch_size, bfs) # use for variance?
     xhat_eval_options = {"iter0_solver_options": None,
                      "iterk_solver_options": None,
@@ -49,8 +46,8 @@ def evaluate_sample_trees(xhat_one,
                      "verbose": False,
                      "solver_options":{}}
 
-    if 'seed' not in ama_options:
-        ama_options['seed'] = seed
+    if 'seed' not in cfg:
+        cfg['seed'] = seed
 
     for j in range(num_samples): # number of sample trees to create
         samp_tree = sample_tree.SampleSubtree(mname,
@@ -59,13 +56,12 @@ def evaluate_sample_trees(xhat_one,
                                               starting_stage=1, 
                                               branching_factors=bfs,
                                               seed=seed, 
-                                              options=ama_options,
+                                              cfg=cfg,
                                               solvername=solvername,
                                               solver_options={})
         samp_tree.run()
         ama_object = samp_tree.ama
-        ama_options = ama_object.options
-        ama_options['verbose'] = False
+        cfg = ama_object.cfg
         scenario_creator_kwargs = ama_object.kwargs
         if len(samp_tree.ef._ef_scenario_names)>1:
             local_scenarios = {sname: getattr(samp_tree.ef, sname)
@@ -100,7 +96,7 @@ def evaluate_sample_trees(xhat_one,
 
     return np.array(zhats), seed
 
-def run_samples(ama_options, model_module):
+def run_samples(cfg, model_module):
     # the "main" for zhat4xhat    
     cfg = config.global_config
     # Read xhats from xhatpath
@@ -109,7 +105,7 @@ def run_samples(ama_options, model_module):
     num_samples = cfg.num_samples
 
     zhats,seed = evaluate_sample_trees(xhat_one, num_samples,
-                                       ama_options, InitSeed=0,
+                                       cfg, InitSeed=0,
                                        model_module=model_module)
 
     confidence_level = cfg.confidence_level
