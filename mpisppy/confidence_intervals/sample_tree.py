@@ -5,6 +5,7 @@
 import numpy as np
 import mpisppy.MPI as mpi
 import importlib
+import copy
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
@@ -44,8 +45,8 @@ class SampleSubtree():
         branching_factors[i] is the branching factor for stage i+2
     seed : int
         Seed to create scenarios.
-    options : dict
-        Arguments passed to the scenario creator.
+    cfg : Config
+       To create scenario creator arguments.
     solvername : str, optional
         Solver name. The default is None.
     solver_options : dict, optional
@@ -53,7 +54,7 @@ class SampleSubtree():
 
     '''
     def __init__(self, mname, xhats, root_scen, starting_stage, branching_factors,
-                 seed, options, solvername=None, solver_options=None):
+                 seed, cfg, solvername=None, solver_options=None):
 
         self.refmodel = importlib.import_module(mname)
         #Checking that refmodel has all the needed attributes
@@ -68,7 +69,7 @@ class SampleSubtree():
         self.original_branching_factors = branching_factors
         self.numscens = np.prod(self.sampling_branching_factors)
         self.seed = seed
-        self.options = options
+        self.cfg = cfg
         self.solvername = solvername
         self.solver_options = solver_options
         
@@ -119,27 +120,31 @@ class SampleSubtree():
         '''
         self.fixed_nodes = ["ROOT"+"_0"*i for i in range(self.stage-1)]
         self.scenario_creator = self._sample_creator
-        
-        ama_options = self.options.copy()
-        ama_options['EF-mstage'] = len(self.original_branching_factors) > 1
-        ama_options['EF-2stage'] = len(self.original_branching_factors) <= 1
-        ama_options['EF_solver_name']= self.solvername
+
+        print("\n HEY xxxx you don't need a deepcopy in sample_tree.py; see Pyomo config docs\n")
+        cfg = copy.deepcopy(self.cfg)
+        cfg.quick_assign('EF-mstage', domain=str, value=len(self.original_branching_factors) > 1)
+        cfg.quick_assign('EF-2stage', domain=str, value=len(self.original_branching_factors) <= 1)
+        cfg.quick_assign('EF_solver_name', domain=str, value=self.solvername)
         if self.solver_options is not None:
-            ama_options['EF_solver_options']= self.solver_options
-        ama_options['num_scens'] = self.numscens
-        if "start_seed" not in ama_options:
-            ama_options["start_seed"] = self.seed
-        ama_options['_mpisppy_probability'] = 1/self.numscens #Probably not used
-        # TBD: better options flow (Dec 2021)
-        if "branching_factors" not in ama_options:
+            print("\n HEY: solver options are not properly passed in sample_tree yet xxxxx")
+            ### cfg['EF_solver_options']= self.solver_options
+        cfg.quick_assign('num_scens', domain=int, value=self.numscens)
+        if "start_seed" not in cfg:
+            cfg.add_and_assign("start_seed", description="first seed", domain=int, default=None, value=self.seed)
+        #### cfg['_mpisppy_probability'] = 1/self.numscens #Probably not used
+        # TBD: better options flow (Dec 2021; working on it June 2022)
+        if "branching_factors" not in cfg:
+            raise RuntimeError("branching_factors is not in cfg")
+            """
             if "kwargs" in ama_options:
                 ama_options["branching_factors"] = ama_options["kwargs"]["branching_factors"]
-        
+            """
         scen_names = self.refmodel.scenario_names_creator(self.numscens,
                                                           start=self.seed)
         denouement = self.refmodel.scenario_denouement if hasattr(self.refmodel, 'scenario_denouement') else None
         
-        self.ama = amalgamator.Amalgamator(ama_options, scen_names,
+        self.ama = amalgamator.Amalgamator(cfg, scen_names,
                                            self.scenario_creator,
                                            self.refmodel.kw_creator,
                                            denouement,
@@ -154,13 +159,14 @@ class SampleSubtree():
         self.xhat_at_stage =[self.ef.ref_vars[(pseudo_root,i)].value for i in range(self.ef._nlens[pseudo_root])]
 
 
-def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
-                      solvername=None, solver_options=None):
+def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,cfg,
+                       solvername=None, solver_options=None):
     '''
     Given a scenario and a first-stage policy xhat_one, this method computes
     non-anticipative feasible policies for the following stages.
 
     '''
+    assert solvername is not None
     if xhat_one is None:
         raise RuntimeError("Xhat_one can't be None for now")
     ciutils.is_sorted(scenario._mpisppy_node_list)
@@ -170,7 +176,7 @@ def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
     for t in range(2,num_stages): #We do not compute xhat for the final stage
     
         subtree = SampleSubtree(mname, xhats, scenario, 
-                                t, branching_factors, seed, options,
+                                t, branching_factors, seed, cfg,
                                 solvername, solver_options)
         subtree.run()
         xhats.append(subtree.xhat_at_stage)
@@ -178,7 +184,7 @@ def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,options,
     xhat_dict = {ndn:xhat for (ndn,xhat) in zip(nodenames,xhats)}
     return xhat_dict,seed
 
-def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, options,
+def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, cfg,
                        solvername=None, solver_options=None):
     """
     This methods takes a scenario tree (represented by a scenario list) as an input, 
@@ -201,8 +207,8 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
         branching_factors[i] is the branching factor for stage i+2.
     seed : int
         Starting seed to create scenarios.
-    options : dict
-        Arguments passed to the scenario creator (TBD: change this comment).
+    cfg : Config
+        Parameters
 
     Returns
     -------
@@ -221,7 +227,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
     #Special case if we only have one scenario
     if len(local_scenarios)==1:
         scen = list(local_scenarios.values())[0]
-        res = _feasible_solution(mname, scen, xhat_one, branching_factors, seed, options,
+        res = _feasible_solution(mname, scen, xhat_one, branching_factors, seed, cfg,
                                 solvername=solvername,
                                 solver_options=solver_options)
         return res
@@ -235,7 +241,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
                scen_xhats.append(xhats[node.name])
             else:
                subtree = SampleSubtree(mname, scen_xhats, s, 
-                                       node.stage, branching_factors, seed, options,
+                                       node.stage, branching_factors, seed, cfg,
                                        solvername, solver_options)
                subtree.run()
                xhat = subtree.xhat_at_stage
@@ -251,17 +257,29 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
 
 if __name__ == "__main__":
     # This main program is provided to developers can run quick tests.
+    import pyomo.common.config as pyofig
+    from mpisppy.utils import config
+    
     branching_factors = [3,2,4,4]
     num_scens = np.prod(branching_factors)
+    solver_name = "cplex"
     mname = "mpisppy.tests.examples.aircond"
-    
+
     ama_options = { "EF-mstage": True,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
                     "branching_factors":branching_factors,
                     }
+
+    
+    cfg = config.Config()
+    cfg.add_and_assign("EF_mstage", description="EF mstage (vs 2stage)", domain=bool, default=None, value=True)
+    cfg.add_and_assign("num_scens", description="total scenarios", domain=int, default=None, value=num_scens)
+    cfg.add_and_assign("_mpisppy_probability", description="unif prob", domain=float, default=None, value=1./num_scens)
+    cfg.add_and_assign("branching_factors", description="list of cylinders", domain=pyofig.ListOf(int), default=None, value=branching_factors)
+    cfg.add_and_assign("EF_solver_name", description="EF Solver", domain=str, default=None, value=solver_name)
     #We use from_module to build easily an Amalgamator object
-    ama = amalgamator.from_module(mname, ama_options,use_command_line=False)
+    ama = amalgamator.from_module(mname, cfg, use_command_line=False)
     ama.run()
     
     # get the xhat
@@ -270,9 +288,8 @@ if __name__ == "__main__":
     #----------Find a feasible solution for a single scenario-------------
     scenario = ama.ef.scen0
     seed = sputils.number_of_nodes(branching_factors)
-    options = dict() #We take default aircond options
     
-    xhats,seed = _feasible_solution(mname, scenario, xhat_one, branching_factors, seed, options)
+    xhats,seed = _feasible_solution(mname, scenario, xhat_one, branching_factors, seed, cfg, solvername=solver_name)
     print(xhats)
     
     #----------Find feasible solutions for every scenario ------------
@@ -286,9 +303,8 @@ if __name__ == "__main__":
         demands = [s.stage_models[t].Demand for t in s.T]
         #print(f"{demands =}")
     seed = sputils.number_of_nodes(branching_factors)
-    options = dict() #We take default aircond options
     
-    xhats,seed = walking_tree_xhats(mname,scenarios,xhat_one,branching_factors,seed,options,)
+    xhats,seed = walking_tree_xhats(mname,scenarios,xhat_one,branching_factors,seed,cfg,solvername=solver_name)
     print(xhats)
     
 

@@ -14,7 +14,7 @@ Also, you will have to edit slurm and bash scripts by hand.
    There are no longer no_ options in config.py
 
 3. If you are using vanilla, the first element of beans should be cfg rather than args, where
-    cfg = config.global_config
+    cfg is of type Config
 
 4. For multi-stage problems using --branching-factors on the command line, the
    branching factor list needs to be in quotes.

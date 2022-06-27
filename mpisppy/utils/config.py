@@ -109,6 +109,33 @@ class Config(pyofig.ConfigDict):
 
 
     #===============
+    def dict_assign(self, name, description, domain, default, value):
+        """ mimic dict assignment
+        Args:
+            name (str): the argument name, underscore separated
+            description (str): free text description
+            domain (type): see pyomo config docs
+            default (domain): probably unused, but here to avoid cut-and-paste errors
+            value (domain): the value to assign
+        """
+        if name not in self:
+            self.add_and_assign(name, description, domain, default, value)
+        else:
+            self[name] = value
+
+        
+    #===============
+    def quick_assign(self, name, domain, value):
+        """ mimic dict assignment with fewer args
+        Args:
+            name (str): the argument name, underscore separated
+            domain (type): see pyomo config docs
+            value (domain): the value to assign
+        """
+        self.dict_assign(name, f"field for {name}", domain, None, value)
+
+
+    #===============
     def get(self, name, ifmissing=None):
         """ replcate the behavior of dict get"""
         if name in self:

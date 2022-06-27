@@ -38,10 +38,10 @@ import pyomo.environ as pyo
 import argparse
 import copy
 import pyomo.common.config as pyofig
+from mpisppy.utils import config
 
 from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import global_toc
@@ -236,7 +236,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
         """
     else:
         #Checking if cfg has all the options we need 
-        if not (_bool_option(cfg, "EF-2stage") or _bool_option(cfg, "EF-mstage")):
+        if not (_bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
         if not ('EF_solver_name' in cfg):
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
@@ -277,15 +277,17 @@ class Amalgamator():
         self.kw_creator = kw_creator
         self.kwargs = self.kw_creator(self.cfg)
         self.verbose = verbose
-        self.is_EF = _bool_option(cfg, "EF-2stage") or _bool_option(cfg, "EF-mstage")
+        self.is_EF = _bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")
         if self.is_EF:
             self.solvername = cfg.get('EF_solver_name', None)
+            print("\n xxxx solver options needs work in amalgamator\n")
             self.solver_options = cfg['EF_solver_options'] \
                 if ('EF_solver_options' in cfg) else {}
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
         if self.is_multi and not "all_nodenames" in cfg:
             if "branching_factors" in cfg:
-                self.cfg["all_nodenames"] = sputils.create_nodenames_from_branching_factors(cfg["branching_factors"])
+                ndnms = sputils.create_nodenames_from_branching_factors(cfg["branching_factors"])
+                self.cfg.quick_assign("all_nodenames", domain=pyofig.ListOf(str), value=ndnms)
             else:
                 raise RuntimeError("For a multistage problem, please provide branching_factors or all_nodenames")
         
