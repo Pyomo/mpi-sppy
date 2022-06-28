@@ -10,6 +10,7 @@ from mpisppy.utils import sputils
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.utils.sputils import option_string_to_dict
+from mpisppy.utils import config
 
 def evaluate_sample_trees(xhat_one, 
                           num_samples,
@@ -32,6 +33,7 @@ def evaluate_sample_trees(xhat_one,
     using SampleSubtree class from sample_tree
     used to approximate E_{xi_2} phi(x_1, xi_2) for confidence interval coverage experiments
     '''
+    cfg = cfg()  # so the seed can be ephemeral
     mname = cfg.model_module_name
     seed = InitSeed
     zhats = list()
@@ -46,8 +48,7 @@ def evaluate_sample_trees(xhat_one,
                      "verbose": False,
                      "solver_options":{}}
 
-    if 'seed' not in cfg:
-        cfg['seed'] = seed
+    cfg.dict_assign('seed', 'seed', int, None, seed)
 
     for j in range(num_samples): # number of sample trees to create
         samp_tree = sample_tree.SampleSubtree(mname,
@@ -74,7 +75,7 @@ def evaluate_sample_trees(xhat_one,
                                                      xhat_one,
                                                      bfs,
                                                      seed,
-                                                     ama_options,
+                                                     cfg,
                                                      solvername=solvername,
                                                      solver_options=None)
         # for Xhat_Eval
@@ -97,8 +98,8 @@ def evaluate_sample_trees(xhat_one,
     return np.array(zhats), seed
 
 def run_samples(cfg, model_module):
-    # the "main" for zhat4xhat    
-    cfg = config.global_config
+    # Does all the work for zhat4xhat    
+
     # Read xhats from xhatpath
     xhat_one = ciutils.read_xhat(cfg.xhatpath)["ROOT"]
 
@@ -121,54 +122,49 @@ def run_samples(cfg, model_module):
     return zhatbar, eps_z
 
 def _parser_setup():
-    # set up the config object
+    # set up the config object and return it, but don't parse
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-    config.add_to_config("solver_name",
+    cfg = config.Config()
+    cfg.add_to_config("EF_solver_name",
                          description="solver name (default gurobi_direct)",
                          domain=str,
                          default="gurobi_direct")
-    config.branching_factors()
-    config.add_to_config("num_samples",
+    cfg.add_branching_factors()
+    cfg.add_to_config("num_samples",
                          description="Number of independent sample trees to construct",
                          domain=int,
                          default=10)
-    config.add_to_config("solver_options",
+    cfg.add_to_config("solver_options",
                          description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
                          domain=str,
                          default='')
     
-    config.add_to_config("xhatpath",
+    cfg.add_to_config("xhatpath",
                          description="path to npy file with xhat",
                          domain=str,
                          default='')
     
-    config.add_to_config("confidence_level",
+    cfg.add_to_config("confidence_level",
                          description="one minus alpha (default 0.95)",
                          domain=float,
                          default=0.95)
+    return cfg
 
 
-def _main_body(model_module):
+def _main_body(model_module, cfg):
     # body of main, pulled out for testing
 
-    cfg = config.global_config
-    solver_options = option_string_to_dict(cfg.solver_options)
-    bfs = cfg.branching_factors
-    solver_name = cfg.solver_name
-    num_samples = cfg.num_samples
+    cfg = cfg()  # make a copy because of EF-mstage
+    #  needs to be lower down: solver_options = option_string_to_dict(cfg.solver_options)
 
-    ama_options = {"EF-mstage": True,
-                   "EF_solver_name": solver_name,
-                   "EF_solver_options": solver_options,
-                   "branching_factors": bfs,
-                   }
+    cfg.quick_assign("EF_mstage", domain=bool, value=True)
 
-    return run_samples(ama_options, model_module)
+    return run_samples(cfg, model_module)
 
 
 if __name__ == "__main__":
 
-    _parser_setup()
+    cfg = _parser_setup()
     # now get the extra args from the module
     mname = sys.argv[1]  # args.model_module_name eventually
     if mname[-3:] == ".py":
@@ -177,26 +173,27 @@ if __name__ == "__main__":
         model_module = importlib.import_module(mname)
     except:
         raise RuntimeError(f"Could not import module: {mname}")
-    model_module.inparser_adder()
-    # the inprser_adder might want num_scens, but zhat4xhat contols the number of scenarios
+    model_module.inparser_adder(cfg)
+    # TBD xxxx the inprser_adder might want num_scens, but zhat4xhat contols the number of scenarios
+    # see if this works:
     try:
-        del config.global_config["num_scens"] 
+        del cfg.num_scens
     except:
         pass
     
-    parser = config.create_parser("zhat4zhat")
+    parser = cfg.create_parser("zhat4zhat")
     # the module name is very special because it has to be plucked from argv
     parser.add_argument(
             "model_module_name", help="amalgamator compatible module (often read from argv)", type=str,
         )
-    config.add_to_config("model_module_name",
+    cfg.add_to_config("model_module_name",
                          description="amalgamator compatible module",
                          domain=str,
                          default='',
                          argparse=False)
-    config.global_config.model_module_name = mname
+    cfg.model_module_name = mname
     
     args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    args = cfg.import_argparse(args)
 
-    zhatbar, eps_z = _main_body(model_module)
+    zhatbar, eps_z = _main_body(model_module, cfg)

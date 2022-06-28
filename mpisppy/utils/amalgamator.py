@@ -190,9 +190,9 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
     # TBD: should we copy?
     
     if use_command_line:
-        if _bool_option(cfg, "EF-2stage"):
+        if _bool_option(cfg, "EF_2stage"):
             cfg.EF2()
-        elif _bool_option(cfg, "EF-mstage"):
+        elif _bool_option(cfg, "EF_mstage"):
             cfg.EF_multistage()
         else:
             if _bool_option(cfg, "2stage"):
