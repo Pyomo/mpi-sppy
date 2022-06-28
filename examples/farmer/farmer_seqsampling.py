@@ -17,7 +17,6 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.confidence_config as confidence_config
-from mpisppy.utils import config
 
 
 #============================

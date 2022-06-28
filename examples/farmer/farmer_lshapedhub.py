@@ -31,7 +31,7 @@ def _parse_args():
 
 
 def main():
-    dfg = _parse_args()
+    cfg = _parse_args()
 
     # Need default_rho for FWPH, without you get 
     # uninitialized numeric value error
