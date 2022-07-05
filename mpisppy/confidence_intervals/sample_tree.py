@@ -127,8 +127,7 @@ class SampleSubtree():
         cfg.quick_assign('EF-2stage', domain=str, value=len(self.original_branching_factors) <= 1)
         cfg.quick_assign('EF_solver_name', domain=str, value=self.solvername)
         if self.solver_options is not None:
-            print("\n HEY: solver options are not properly passed in sample_tree yet xxxxx")
-            ### cfg['EF_solver_options']= self.solver_options
+            cfg.add_and_assign("solver_options", "solver options dict", dict, None, self.solver_options)
         cfg.quick_assign('num_scens', domain=int, value=self.numscens)
         if "start_seed" not in cfg:
             cfg.add_and_assign("start_seed", description="first seed", domain=int, default=None, value=self.seed)

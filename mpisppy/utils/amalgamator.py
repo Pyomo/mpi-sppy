@@ -227,7 +227,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
 
         """
         print("Amalgamator needs work for solver options!!")
-        # deal with proliferation of solver options specifications
+        # TBD: deal with proliferation of solver options specifications
         if _bool_option(options_dict, "EF-2stage") or _bool_option(options_dict, "EF-mstage"): 
             if ('EF_solver_options' in options_dict):
                 options_dict["EF_solver_options"]["mipgap"] = options_dict["EF_mipgap"]
@@ -280,7 +280,6 @@ class Amalgamator():
         self.is_EF = _bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")
         if self.is_EF:
             self.solvername = cfg.get('EF_solver_name', None)
-            print("\n xxxx solver options needs work in amalgamator\n")
             self.solver_options = cfg['EF_solver_options'] \
                 if ('EF_solver_options' in cfg) else {}
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")

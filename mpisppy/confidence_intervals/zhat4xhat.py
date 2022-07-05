@@ -155,8 +155,9 @@ def _main_body(model_module, cfg):
     # body of main, pulled out for testing
 
     cfg = cfg()  # make a copy because of EF-mstage
-    #  needs to be lower down: solver_options = option_string_to_dict(cfg.solver_options)
-
+    solver_options_dict = option_string_to_dict(cfg.solver_options)
+    cfg.add_and_assign("EF_solver_options", "solver options dict", dict, None, solver_options_dict)
+    
     cfg.quick_assign("EF_mstage", domain=bool, value=True)
 
     return run_samples(cfg, model_module)
