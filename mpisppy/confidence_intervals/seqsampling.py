@@ -14,6 +14,7 @@ import numpy as np
 import scipy.stats
 import importlib
 from mpisppy import global_toc
+from mpisppy.utils import config
     
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -32,12 +33,12 @@ def is_needed(options,needed_things,message=""):
                            f"{message}")
         
 
-def add_options(options,optional_things,optional_default_settings):
+def add_options(cfg, optional_things):
     # allow for defaults on options that Bayraksan et al establish 
-    for i in range(len(optional_things)):
-        ething = optional_things[i]
-        if not ething in options :
-            options[ething]=optional_default_settings[i]
+    for i,v  in optional_things.items():
+        if not i in cfg:
+            print(f"{type(v) =}")
+            cfg.quick_assign(i, float, v)
 
 def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None, crops_multiplier=1):
     ''' For developer testing: Given scenario names and
@@ -65,17 +66,17 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     '''
     num_scens = len(scenario_names)
     
-    ama_options = { "EF-2stage": True,
-                    "EF_solver_name": solvername,
-                    "EF_solver_options": solver_options,
-                    "use_integer": False,
-                    "crops_multiplier": crops_multiplier,
-                    "num_scens": num_scens,
-                    "_mpisppy_probability": 1/num_scens,
-                    }
+    cfg = config.Config()
+    cfg.quick_assign("EF_2stage", bool, True)
+    cfg.quick_assign("EF_solver_name", str, solvername)
+    cfg.quick_assign("EF_solver_options", dict, solver_options)
+    cfg.quick_assign("num_scens", int, num_scens)
+    cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+    cfg.quick_assign("start_seed", int, start_seed)
+
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("mpisppy.tests.examples.farmer",
-                                  ama_options,use_command_line=False)
+                                  cfg, use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
@@ -98,7 +99,7 @@ class SeqSampling():
                                     as input and returns a first stage policy 
                                     xhat.
 
-        options (dict): multiple parameters, e.g.:
+        cfg (Config): multiple parameters, e.g.:
                         - "solvername", str, the name of the solver we use
                         - "solver_options", dict containing solver options 
                             (default is {}, an empty dict)
@@ -131,22 +132,24 @@ class SeqSampling():
     def __init__(self,
                  refmodel,
                  xhat_generator,
-                 options,
+                 cfg,
                  stochastic_sampling = False,
                  stopping_criterion = "BM",
                  solving_type = "None"):
         
+        if not isinstance(cfg, config.Config):
+            raise RuntimeError(f"SeqSampling bad cfg type={type(cfg)}; should be Config")
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
         self.xhat_generator = xhat_generator
-        self.options = options
+        self.cfg = cfg
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
         self.solving_type = solving_type
-        self.solvername = options.get("solvername", None)
-        self.solver_options = options["solver_options"] if "solver_options" in options else None
-        self.sample_size_ratio = options["sample_size_ratio"] if "sample_size_ration" in options else 1
-        self.xhat_gen_options = options["xhat_gen_options"] if "xhat_gen_options" in options else {}
+        self.solvername = cfg.get("solvername", None)
+        self.solver_options = cfg.get("solver_options", None)
+        self.sample_size_ratio = cfg.get("sample_size_ratio", 1)
+        self.xhat_gen_options = cfg.get("xhat_gen_options", {})
         
         #Check if refmodel has all needed attributes
         everything = ["scenario_names_creator",
@@ -161,9 +164,11 @@ class SeqSampling():
             raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
             
         #Manage options
-        optional_options = ["ArRP","kf_Gs","kf_xhat","confidence_level"]
-        optional_default_settings = [1,1,1,0.95]
-        add_options(options, optional_options, optional_default_settings)      
+        optional_options = {"ArRP": 1,
+                            "kf_Gs": 1,
+                            "kf_xhat": 1,
+                            "confidence_level": 0.95}
+        add_options(cfg, optional_options)
         
         if self.stochastic_sampling :
                 add_options(options, ["n0min"], [50])
@@ -171,24 +176,22 @@ class SeqSampling():
                 
         if self.stopping_criterion == "BM":
             needed_things = ["epsprime","hprime","eps","h","p"]
-            is_needed(options, needed_things)
-            optional_things = ["q"]
-            optional_default_settings = [None]
-            add_options(options, optional_things, optional_default_settings)
+            is_needed(cfg, needed_things)
+            optional_things = {"q": None}
+            add_options(cfg, optional_things)
         elif self.stopping_criterion == "BPL":
-            is_needed(options, ["eps"])
+            is_needed(cfg, ["eps"])
             if not self.stochastic_sampling :
-                optional_things = ["c0","c1","growth_function"]
-                optional_default_settings = [50,2,(lambda x : x-1)]
-                add_options(options, optional_things, optional_default_settings)
+                optional_things = {"c0":50, "c1":2, "growth_function":(lambda x : x-1)}
+                add_options(cfg, optional_things)
         else:
             raise RuntimeError("Only BM and BPL criteria are supported at this time.")
-        for oname in options:
-            setattr(self, oname, options[oname]) #Set every option as an attribute
+        for oname in cfg:
+            setattr(self, oname, cfg[oname]) #Set every option as an attribute
         
         #Check the solving_type, and find if the problem is multistage
-        two_stage_types = ['EF-2stage']
-        multistage_types = ['EF-mstage']
+        two_stage_types = ['EF_2stage']
+        multistage_types = ['EF_mstage']
         if self.solving_type in two_stage_types:
             self.multistage = False
         elif self.solving_type in multistage_types:
@@ -201,8 +204,8 @@ class SeqSampling():
         #Check the multistage options
         if self.multistage:
             needed_things = ["branching_factors"]
-            is_needed(options, needed_things)
-            if options['kf_Gs'] != 1 or options['kf_xhat'] != 1:
+            is_needed(cfg, needed_things)
+            if cfg['kf_Gs'] != 1 or cfg['kf_xhat'] != 1:
                 raise RuntimeError("Resampling frequencies must be set equal to one for multistage.")
         
         #Get the stopping criterion
@@ -347,6 +350,7 @@ class SeqSampling():
             xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
             self.ScenCount+=mk
 
+        xxxxx
         xgo = self.xhat_gen_options.copy()
         xgo.pop("solvername", None)  # it will be given explicitly
         xgo.pop("solver_options", None)  # it will be given explicitly
@@ -382,7 +386,7 @@ class SeqSampling():
                                        scenario_names=estimator_scenario_names,
                                        sample_options=sample_options,
                                        ArRP=self.ArRP,
-                                       options=self.options,
+                                       cfg=xxx,
                                        scenario_denouement=scenario_denouement,
                                        solvername=self.solvername,
                                        solver_options=self.solver_options)
@@ -496,37 +500,37 @@ if __name__ == "__main__":
     refmodel = "mpisppy.tests.examples.farmer"
     farmer_opt_dict = {"crops_multiplier":3}
     
-    # create three options dictionaries, then use one of them
+    # create three options configurations, then use one of them
 
     # relative width
-    optionsBM = {'h':0.2,
-                 'hprime':0.015, 
-                 'eps':0.5, 
-                 'epsprime':0.4, 
-                 "p":0.2,
-                 "q":1.2,
-                 "solvername":solvername,
-                 "stopping": "BM"  # TBD use this and drop stopping_criterion from the constructor
-                 }
+    optionsBM = config.Config()
+    optionsBM.quick_assign('h', float, 0.2)
+    optionsBM.quick_assign('hprime', float, 0.015,)
+    optionsBM.quick_assign('eps', float, 0.5,)
+    optionsBM.quick_assign('epsprime', float, 0.4,)
+    optionsBM.quick_assign("p", float, 0.2)
+    optionsBM.quick_assign("q", float, 1.2)
+    optionsBM.quick_assign("solvername", str, solvername)
+    optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
+    optionsBM.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
 
     # fixed width, fully sequential
-    optionsFSP = {'eps': 50.0,
-                  'solvername': solvername,
-                  "c0":50,  # starting sample size
-                  "xhat_gen_options":farmer_opt_dict,
-                  "crops_multiplier":3, # option for the farmer problem
-                  "ArRP":2,  # this must be 1 for any multi-stage problems
-                  "stopping": "BPL"
-                  }
+    optionsFSP = config.Config()
+    optionsFSP.quick_assign('eps', float,  50.0)
+    optionsFSP.quick_assign('solvername', str,  solvername)
+    optionsFSP.quick_assign("c0", int, 50)  # starting sample size)
+    optionsFSP.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
+    optionsFSP.quick_assign("ArRP", float, 2)  # this must be 1 for any multi-stage problems
+    optionsFSP.quick_assign("stopping", str, "BPL")
+    optionsFSP.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
 
     # fixed width sequential with stochastic samples
-    optionsSSP = {'eps': 1.0,
-                  'solvername': solvername,    
-                  "n0min":200,   # only for stochastic sampling
-                  "stopping": "BPL",
-                  #"xhat_gen_options": farmer_opt_dict,
-                  #"crops_multiplier": 3,
-                  }
+    optionsSSP = config.Config()
+    optionsSSP.quick_assign('eps', float,  1.0)
+    optionsSSP.quick_assign('solvername', str,  solvername)
+    optionsSSP.quick_assign("n0min", int, 200)   # only for stochastic sampling
+    optionsSSP.quick_assign("stopping", str, "BPL")
+    optionsSSP.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
 
     # change the options argument and stopping criterion
     our_pb = SeqSampling(refmodel,

@@ -186,7 +186,7 @@ def gap_estimators(xhat_one,
                    scenario_names=None,
                    sample_options=None,
                    ArRP=1,
-                   options=None,   # feb 2022 was: scenario_creator_kwargs={}, 
+                   cfg=None,   # was: options; before that: scenario_creator_kwargs={}
                    scenario_denouement=None,
                    solvername=None, 
                    solver_options=None,
@@ -219,7 +219,7 @@ def gap_estimators(xhat_one,
         of the scenario tree
     ArRP:int,optional
         Number of batches (we create a ArRP model). Default is 1 (one batch).
-    options: dict, optional
+    cfg: Config, not really optional
         Additional arguments for scenario_creator. Default is {}
     scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
@@ -248,7 +248,7 @@ def gap_estimators(xhat_one,
     
     m = importlib.import_module(mname)
     ama.check_module_ama(m)
-    scenario_creator_kwargs=m.kw_creator(options)
+    scenario_creator_kwargs=m.kw_creator(cfg)
         
     if is_multi:
         try:
@@ -274,7 +274,7 @@ def gap_estimators(xhat_one,
             tmp = gap_estimators(xhat_one, mname,
                                    solvername=solvername,
                                    scenario_names=scennames, ArRP=1,
-                                   options=options, # was: scenario_creator_kwargs=scenario_creator_kwargs,
+                                   cfg=cfg,
                                    scenario_denouement=scenario_denouement,
                                    solver_options=solver_options,
                                    solving_type=solving_type
@@ -300,7 +300,7 @@ def gap_estimators(xhat_one,
                                               starting_stage=1, 
                                               branching_factors=branching_factors,
                                               seed=start, 
-                                              options=scenario_creator_kwargs,
+                                              cfg=cfg,
                                               solvername=solvername,
                                               solver_options=solver_options)
         samp_tree.run()
@@ -308,14 +308,16 @@ def gap_estimators(xhat_one,
         ama_object = samp_tree.ama
     else:
         #We use amalgamator to do it
-
-        ama_options = options.copy() #  was (feb 2022) dict(scenario_creator_kwargs)
-        ama_options['start'] = start
-        ama_options['num_scens'] = len(scenario_names)
-        ama_options['EF_solver_name'] = solvername
-        ama_options['EF_solver_options'] = solver_options
-        ama_options[solving_type] = True
-        ama_object = ama.from_module(mname, ama_options,use_command_line=False)
+        num_scens = len(scenario_names)
+        ama_cfg = cfg()
+        ama_cfg.quick_assign(solving_type, bool, True)
+        ama_cfg.quick_assign("EF_solver_name", str, solvername)
+        ama_cfg.quick_assign("EF_solver_options", dict, solver_options)
+        ama_cfg.quick_assign("num_scens", int, num_scens)
+        ama_cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+        ama_cfg.quick_assign("start", int, seed)
+        print("\n HEY!!! search everywhere for start vs start_seed (ciutils.py)")
+        ama_object = ama.from_module(mname, ama_cfg, use_command_line=False)
         ama_object.scenario_names = scenario_names
         ama_object.verbose = False
         ama_object.run()

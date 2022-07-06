@@ -13,6 +13,7 @@ import numpy as np
 import argparse
 import farmer
 import pyomo.environ as pyo
+from mpisppy.utils import config
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.seqsampling as seqsampling
@@ -52,17 +53,17 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
 
     '''
     num_scens = len(scenario_names)
+
+    cfg = config.Config()
+    cfg.quick_assign("EF_2stage", bool, True)
+    cfg.quick_assign("EF_solver_name", str, solvername)
+    cfg.quick_assign("EF_solver_options", dict, solver_options)
+    cfg.quick_assign("num_scens", int, num_scens)
+    cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+    cfg.quick_assign("start_seed", int, start_seed)
     
-    ama_options = { "EF-2stage": True,
-                    "EF_solver_name": solvername,
-                    "EF_solver_options": solver_options,
-                    "num_scens": num_scens,
-                    "_mpisppy_probability": 1/num_scens,
-                    "start_seed":start_seed,
-                    }
     #We use from_module to build easily an Amalgamator object
-    ama = amalgamator.from_module("farmer",
-                                  ama_options,use_command_line=False)
+    ama = amalgamator.from_module("farmer", cfg, use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.verbose = False
@@ -75,14 +76,13 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     
 
 
-def main():
+def main(cfg):
     """ Code for farmer sequential sampling (in a function for easier testing)
     Args:
         args (parseargs): the command line arguments object from parseargs
     Returns:
         results (dict): the solution, gap confidence interval and T 
     """
-    cfg = config.global_config
     refmodelname = "farmer"
     scenario_creator = farmer.scenario_creator
 
@@ -153,48 +153,76 @@ def main():
     return xhat
 
 def _parse_args():
-    config.num_scens_required()
-    farmer.inparser_adder()
-    config.EF2()
-    confidence_config.confidence_config()
-    confidence_config.sequential_config()
-    confidence_config.BM_config()
-    confidence_config.BPL_config()  # --help will show both BM and BPL
+    # create a config object and parse
+    cfg = config.Config()
+    
+    cfg.num_scens_required()
 
-    config.add_to_config("BM_vs_BPL",
+    farmer.inparser_adder(cfg)
+    cfg.EF2()
+    confidence_config.confidence_config(cfg)
+    confidence_config.sequential_config(cfg)
+    confidence_config.BM_config(cfg)
+    confidence_config.BPL_config(cfg)  # --help will show both BM and BPL
+
+    cfg.add_to_config("BM_vs_BPL",
                         description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
                         domain=str,
                         default=None)
-    config.add_to_config("crops_mult",
+    cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
                          default=1)                
-    config.add_to_config("xhat1_file",
+    cfg.add_to_config("xhat1_file",
                         description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
                         domain=str,
                         default=None)
 
-    parser = config.create_parser("farmer_seqsampling")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.ph_args()    
+    cfg.aph_args()    
+    cfg.xhatlooper_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.lagranger_args()
+    cfg.xhatshuffle_args()
+    cfg.add_to_config("crops_mult",
+                         description="There will be 3x this many crops (default 1)",
+                         domain=int,
+                         default=1)                
+    cfg.add_to_config("use_norm_rho_updater",
+                         description="Use the norm rho updater extension",
+                         domain=bool,
+                         default=False)
+    cfg.add_to_config("use-norm-rho-converger",
+                         description="Use the norm rho converger",
+                         domain=bool,
+                         default=False)
+    cfg.add_to_config("run_async",
+                         description="Run with async projective hedging instead of progressive hedging",
+                         domain=bool,
+                         default=False)
+    cfg.add_to_config("use_norm_rho_converger",
+                         description="Use the norm rho converger",
+                         domain=bool,
+                         default=False)
 
-    cfg = config.global_config
+    cfg.parse_command_line("farmer_sequential")
 
     if cfg.BM_vs_BPL is None:
         raise RuntimeError("--BM-vs_BPL must be given.")
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
         raise RuntimeError(f"--BM-vs_BPL must be BM or BPL (you gave {cfg.BM_vs_BMPL})")
     
-    return args
-
+    return cfg
 
 
 if __name__ == '__main__':
 
-    _parse_args()
-    cfg = config.global_config
+    cfg = _parse_args()
     
-    results = main()
+    results = main(cfg)
     print(f"Final gap confidence interval results:", results)
 
     if cfg.xhat1_file is not None:
