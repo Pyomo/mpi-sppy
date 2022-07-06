@@ -182,7 +182,7 @@ def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
 
 def gap_estimators(xhat_one,
                    mname, 
-                   solving_type="EF-2stage",
+                   solving_type="EF_2stage",
                    scenario_names=None,
                    sample_options=None,
                    ArRP=1,
@@ -208,8 +208,8 @@ def gap_estimators(xhat_one,
     mname: str
         Name of the reference model, e.g. 'mpisppy.tests.examples.farmer'.
     solving_type: str, optional
-        The way we solve the approximate problem. Can be "EF-2stage" (default)
-        or "EF-mstage".
+        The way we solve the approximate problem. Can be "EF_2stage" (default)
+        or "EF_mstage".
     scenario_names: list, optional
         List of scenario names used to compute G_n and s_n. Default is None
         Must be specified for 2 stage, but can be missing for multistage
@@ -241,10 +241,10 @@ def gap_estimators(xhat_one,
 
     '''
     global_toc("Enter gap_estimators")
-    if solving_type not in ["EF-2stage","EF-mstage"]:
+    if solving_type not in ["EF_2stage","EF_mstage"]:
         raise RuntimeError("Only EF solve for the approximate problem is supported yet.")
     else:
-        is_multi = (solving_type=="EF-mstage")
+        is_multi = (solving_type=="EF_mstage")
     
     m = importlib.import_module(mname)
     ama.check_module_ama(m)
