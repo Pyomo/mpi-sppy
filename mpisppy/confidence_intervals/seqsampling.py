@@ -28,7 +28,7 @@ from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 def is_needed(options,needed_things,message=""):
     if not set(needed_things)<= set(options):
-        raise RuntimeError("Some options are missing from this list of reqiored options:\n"
+        raise RuntimeError("Some options are missing from this list of required options:\n"
                            f"{needed_things}\n"
                            f"{message}")
         
@@ -413,7 +413,7 @@ class SeqSampling():
             
             #Computing m_k and associated scenario names
             if self.multistage:
-                xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+                xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, lcfg['branching_factors'])
                 mk = np.prod(xhat_branching_factors)
                 self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
                 xhat_scenario_names = refmodel.scenario_names_creator(mk)
@@ -446,7 +446,7 @@ class SeqSampling():
             if self.multistage:
                 self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
                 
-                gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])
+                gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, lcfg['branching_factors'])
                 nk = np.prod(gap_branching_factors)
                 estimator_scenario_names = refmodel.scenario_names_creator(nk)
                 sample_options = {'branching_factors':gap_branching_factors, 'seed':self.SeedCount}
@@ -467,13 +467,13 @@ class SeqSampling():
             
             
             #Computing G_k and s_k
-            self.options['num_scens'] = nk
+            lcfg['num_scens'] = nk
             estim = ciutils.gap_estimators(xhat_k, self.refmodelname,
                                            solving_type=self.solving_type,
                                            scenario_names=estimator_scenario_names,
                                            sample_options=sample_options,
                                            ArRP=self.ArRP,
-                                           cfg=xxxx,
+                                           cfg=lcfg,
                                            scenario_denouement=scenario_denouement,
                                            solvername=self.solvername,
                                            solver_options=self.solver_options)
