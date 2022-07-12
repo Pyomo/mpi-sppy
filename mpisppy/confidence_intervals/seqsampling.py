@@ -115,7 +115,7 @@ class SeqSampling():
                             (default is {}, an empty dict)
                         - "sample_size_ratio", float, the ratio (xhat sample size)/(gap estimators sample size)
                             (default is 1)
-                        - "xhat_gen_options" dict containing options passed to the xhat generator
+                        - "xhat_gen_kwargs" dict containing options passed to the xhat generator
                             (default is {}, an empty dict)
                         - "ArRP", int, how many estimators should be pooled to compute G and s ?
                             (default is 1, no pooling)
@@ -159,7 +159,7 @@ class SeqSampling():
         self.solvername = cfg.get("solvername", None)
         self.solver_options = cfg.get("solver_options", None)
         self.sample_size_ratio = cfg.get("sample_size_ratio", 1)
-        self.xhat_gen_options = cfg.get("xhat_gen_options", {})
+        self.xhat_gen_kwargs = cfg.get("xhat_gen_kwargs", {})
         
         #Check if refmodel has all needed attributes
         everything = ["scenario_names_creator",
@@ -350,7 +350,7 @@ class SeqSampling():
         if self.multistage:
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
             mk = np.prod(xhat_branching_factors)
-            self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+            self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
             
         else:
@@ -358,7 +358,7 @@ class SeqSampling():
             xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
             self.ScenCount+=mk
 
-        xgo = self.xhat_gen_options.copy()
+        xgo = self.xhat_gen_kwargs.copy()
         xgo.pop("solvername", None)  # it will be given explicitly
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # given explicitly
@@ -415,7 +415,7 @@ class SeqSampling():
             if self.multistage:
                 xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, lcfg['branching_factors'])
                 mk = np.prod(xhat_branching_factors)
-                self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+                self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
                 xhat_scenario_names = refmodel.scenario_names_creator(mk)
             
             else:
@@ -433,7 +433,7 @@ class SeqSampling():
                     self.ScenCount+= mk-mk_m1
             
             #Computing xhat_k
-            xgo = self.xhat_gen_options.copy()
+            xgo = self.xhat_gen_kwargs.copy()
             xgo.pop("solvername", None)  # it will be given explicitly
             xgo.pop("solver_options", None)  # it will be given explicitly
             xgo.pop("scenario_names", None)  # given explicitly
@@ -520,7 +520,7 @@ if __name__ == "__main__":
     optionsBM.quick_assign("q", float, 1.2)
     optionsBM.quick_assign("solvername", str, solvername)
     optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
-    optionsBM.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
+    optionsBM.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsBM.quick_assign("solving_type", str, "EF_2stage")
 
     # fixed width, fully sequential
@@ -528,10 +528,10 @@ if __name__ == "__main__":
     optionsFSP.quick_assign('eps', float,  50.0)
     optionsFSP.quick_assign('solvername', str,  solvername)
     optionsFSP.quick_assign("c0", int, 50)  # starting sample size)
-    optionsFSP.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
+    optionsFSP.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsFSP.quick_assign("ArRP", int, 2)  # this must be 1 for any multi-stage problems
     optionsFSP.quick_assign("stopping", str, "BPL")
-    optionsFSP.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
+    optionsFSP.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsFSP.quick_assign("solving_type", str, "EF_2stage")
 
     # fixed width sequential with stochastic samples
@@ -540,7 +540,7 @@ if __name__ == "__main__":
     optionsSSP.quick_assign('solvername', str,  solvername)
     optionsSSP.quick_assign("n0min", int, 200)   # only for stochastic sampling
     optionsSSP.quick_assign("stopping", str, "BPL")
-    optionsSSP.quick_assign("xhat_gen_options", dict, farmer_opt_dict)
+    optionsSSP.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsSSP.quick_assign("solving_type", str, "EF_2stage")
 
     # change the options argument and stopping criterion
