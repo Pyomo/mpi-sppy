@@ -252,7 +252,7 @@ class SeqSampling():
             
     def bm_stopping_criterion(self,G,s,nk):
         # arguments defined in [bm2011]
-        return(G>self.BM_hprime*s+self.BM_epsprime)
+        return(G>self.BM_hprime*s+self.BM_eps_prime)
     
     def bpl_stopping_criterion(self,G,s,nk):
         # arguments defined in [bpl2012]
@@ -463,7 +463,7 @@ class SeqSampling():
             else:
                 nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
                 assert nk>= nk_m1, "Our sample size should be increasing"
-                if (k%self.kf_Gs==0):
+                if (k%self.kf_GS==0):
                     #We use only new scenarios to compute gap estimators
                     estimator_scenario_names = refmodel.scenario_names_creator(nk,
                                                                                start=self.ScenCount)
@@ -502,9 +502,9 @@ class SeqSampling():
         T = k
         final_xhat=xhat_k
         if self.stopping_criterion == "BM":
-            upper_bound=self.h*sk+self.eps
+            upper_bound=self.BM_h*sk+self.BM_eps
         elif self.stopping_criterion == "BPL":
-            upper_bound = self.eps
+            upper_bound = self.BPL_eps
         else:
             raise RuntimeError("Only BM and BPL criterion are supported yet.")
         CI=[0,upper_bound]
@@ -522,12 +522,12 @@ if __name__ == "__main__":
 
     # relative width
     optionsBM = config.Config()
-    optionsBM.quick_assign('h', float, 0.2)
-    optionsBM.quick_assign('hprime', float, 0.015,)
-    optionsBM.quick_assign('eps', float, 0.5,)
-    optionsBM.quick_assign('epsprime', float, 0.4,)
-    optionsBM.quick_assign("p", float, 0.2)
-    optionsBM.quick_assign("q", float, 1.2)
+    optionsBM.quick_assign('BM_h', float, 0.2)
+    optionsBM.quick_assign('BM_hprime', float, 0.015,)
+    optionsBM.quick_assign('BM_eps', float, 0.5,)
+    optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
+    optionsBM.quick_assign("BM_p", float, 0.2)
+    optionsBM.quick_assign("BM_q", float, 1.2)
     optionsBM.quick_assign("solvername", str, solvername)
     optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
     optionsBM.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
