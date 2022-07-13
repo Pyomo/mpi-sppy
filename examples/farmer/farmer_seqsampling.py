@@ -57,6 +57,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     cfg = config.Config()
     cfg.quick_assign("EF_2stage", bool, True)
     cfg.quick_assign("EF_solver_name", str, solvername)
+    #cfg.quick_assign("solvername", str, solvername)  # amalgamator wants this
     cfg.quick_assign("EF_solver_options", dict, solver_options)
     cfg.quick_assign("num_scens", int, num_scens)
     cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
@@ -87,6 +88,7 @@ def main(cfg):
     scenario_creator = farmer.scenario_creator
 
     scen_count = cfg.num_scens
+    assert cfg.EF_solver_name is not None
     solver_name = cfg.EF_solver_name
     crops_multiplier = cfg.crops_multiplier
     

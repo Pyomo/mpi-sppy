@@ -162,8 +162,11 @@ class SeqSampling():
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
         self.solving_type = solving_type
-        self.solvername = cfg.get("solvername", None)
-        self.solver_options = cfg.get("solver_options", None)
+        self.solvername = cfg.get("solvername")
+        if self.solvername is None:   # TBD: solver heirarchy
+            self.solvername = cfg.get("EF_solver_name")
+        assert self.solvername is not None
+        self.solver_options = cfg.get("solver_options", None)  # TBD
         self.sample_size_ratio = cfg.get("sample_size_ratio", 1)
         self.xhat_gen_kwargs = cfg.get("xhat_gen_kwargs", {})
         
@@ -365,6 +368,7 @@ class SeqSampling():
             self.ScenCount+=mk
 
         xgo = self.xhat_gen_kwargs.copy()
+        print("TBD: track down seqsampling solver choice options")
         xgo.pop("solvername", None)  # it will be given explicitly
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # given explicitly
