@@ -92,37 +92,19 @@ def main(cfg):
     
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     
-    xhat_gen_options = {"scenario_names": scenario_names,
-                        "solvername": solver_name,
-                        "solver_options": None,
-                        "use_integer": False,
-                        "crops_multiplier": crops_multiplier,
-                        "start_seed": 0,
-                        }
+    xhat_gen_kwargs = {"scenario_names": scenario_names,
+                       "solvername": solver_name,
+                       "solver_options": None,
+                       "use_integer": False,
+                       "crops_multiplier": crops_multiplier,
+                       "start_seed": 0,
+    }
 
-    # simply called "options" by the SeqSampling constructor
-    inneroptions = {"solvername": solver_name,
-                    "solver_options": None,
-                    "sample_size_ratio": cfg.sample_size_ratio,
-                    "xhat_gen_options": xhat_gen_options,
-                    "ArRP": cfg.ArRP,
-                    "kf_xhat": cfg.kf_GS,
-                    "kf_xhat": cfg.kf_xhat,
-                    "confidence_level": cfg.confidence_level,
-                    }
-
+    # Note that as of July 2022, we are not using conditional args so cfg has everything
     if cfg.BM_vs_BPL == "BM":
         # Bayraksan and Morton
-        optionsBM = {'h': cfg.BM_h,
-                     'hprime': cfg.BM_hprime, 
-                     'eps': cfg.BM_eps, 
-                     'epsprime': cfg.BM_eps_prime, 
-                     "p": cfg.BM_p,
-                     "q": cfg.BM_q,
-                     "xhat_gen_options": xhat_gen_options,
-                     }
-
-        optionsBM.update(inneroptions)
+        optionsBM = cfg()  # we probably could just use cfg
+        optionsBM.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
 
         sampler = seqsampling.SeqSampling(refmodelname,
                                 xhat_generator_farmer,
@@ -132,13 +114,8 @@ def main(cfg):
                                 solving_type="EF-2stage",
                                 )
     else:  # must be BPL
-        optionsBPL = {'eps': cfg.BPL_eps, 
-                      "c0": cfg.BPL_c0,
-                      "n0min": cfg.BPL_n0min,
-                      "xhat_gen_options": xhat_gen_options,
-                      }
-
-        optionsBPL.update(inneroptions)
+        optionsBPL = cfg() # we probably could just use cfg
+        optionsBPL.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
         
         ss = int(cfg.BPL_n0min) != 0
         sampler = seqsampling.SeqSampling(refmodelname,

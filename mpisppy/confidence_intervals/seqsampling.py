@@ -26,10 +26,16 @@ from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
 
-def is_needed(options,needed_things,message=""):
-    if not set(needed_things)<= set(options):
+def is_needed(cfg, needed_things, message=""):
+    absent = list()
+    for i in needed_things:
+        if i not in cfg:
+            absent.append(i)
+            print(f"{i =}, {hasattr(cfg,i) =}")
+    if len(absent) > 0:
         raise RuntimeError("Some options are missing from this list of required options:\n"
                            f"{needed_things}\n"
+                           f"missing: {absent}\n"
                            f"{message}")
         
 
@@ -185,12 +191,12 @@ class SeqSampling():
                 
                 
         if self.stopping_criterion == "BM":
-            needed_things = ["epsprime","hprime","eps","h","p"]
+            needed_things = ["BM_eps_prime","BM_hprime","BM_eps","BM_h","BM_p"]
             is_needed(cfg, needed_things)
             optional_things = {"q": None}
             add_options(cfg, optional_things)
         elif self.stopping_criterion == "BPL":
-            is_needed(cfg, ["eps"])
+            is_needed(cfg, ["BPL_eps"])
             if not self.stochastic_sampling :
                 # The Pyomo config object cannot take a function directly
                 optional_things = {"c0":50, "c1":2, "functions_dict": {"growth_function":(lambda x : x-1)}}

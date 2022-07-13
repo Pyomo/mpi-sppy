@@ -16,8 +16,7 @@ write_solution = True
 
 def main():
 
-    hydro_cylinders._parse_args()  # we will ignore the branching factors
-    cfg = config.global_config  # typing aid
+    cfg = hydro_cylinders._parse_args()  # we will ignore the branching factors
 
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
