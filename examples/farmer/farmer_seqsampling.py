@@ -99,31 +99,26 @@ def main(cfg):
                        "crops_multiplier": crops_multiplier,
                        "start_seed": 0,
     }
+    cfg.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
 
     # Note that as of July 2022, we are not using conditional args so cfg has everything
     if cfg.BM_vs_BPL == "BM":
-        # Bayraksan and Morton
-        optionsBM = cfg()  # we probably could just use cfg
-        optionsBM.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
 
         sampler = seqsampling.SeqSampling(refmodelname,
                                 xhat_generator_farmer,
-                                optionsBM,
+                                cfg,
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
-                                solving_type="EF-2stage",
+                                solving_type="EF_2stage",
                                 )
     else:  # must be BPL
-        optionsBPL = cfg() # we probably could just use cfg
-        optionsBPL.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
-        
         ss = int(cfg.BPL_n0min) != 0
         sampler = seqsampling.SeqSampling(refmodelname,
                                 xhat_generator_farmer,
-                                optionsBPL,
+                                cfg,
                                 stochastic_sampling=ss,
                                 stopping_criterion="BPL",
-                                solving_type="EF-2stage",
+                                solving_type="EF_2stage",
                                 )
         
     xhat = sampler.run()

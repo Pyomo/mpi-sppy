@@ -178,14 +178,16 @@ class SeqSampling():
                 you_can_have_it_all = False
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for seqsampling")
-            
+
+        """ delete this on or after July 14, 2022
         #Manage options
         optional_options = {"ArRP": 1,
                             "kf_Gs": 1,
                             "kf_xhat": 1,
                             "confidence_level": 0.95}
         add_options(cfg, optional_options)
-        
+        """        
+
         if self.stochastic_sampling :
                 add_options(options, ["n0min"], [50])
                 
@@ -193,18 +195,16 @@ class SeqSampling():
         if self.stopping_criterion == "BM":
             needed_things = ["BM_eps_prime","BM_hprime","BM_eps","BM_h","BM_p"]
             is_needed(cfg, needed_things)
-            optional_things = {"q": None}
-            add_options(cfg, optional_things)
         elif self.stopping_criterion == "BPL":
             is_needed(cfg, ["BPL_eps"])
             if not self.stochastic_sampling :
                 # The Pyomo config object cannot take a function directly
-                optional_things = {"c0":50, "c1":2, "functions_dict": {"growth_function":(lambda x : x-1)}}
+                optional_things = {"BPL_c1":2, "functions_dict": {"growth_function":(lambda x : x-1)}}
                 add_options(cfg, optional_things)
         else:
             raise RuntimeError("Only BM and BPL criteria are supported at this time.")
         for oname in cfg:
-            setattr(self, oname, cfg[oname]) #Set every option as an attribute
+            setattr(self, oname, cfg[oname]) # Set every option as an attribute
         
         #Check the solving_type, and find if the problem is multistage
         two_stage_types = ['EF_2stage']
@@ -249,21 +249,21 @@ class SeqSampling():
             
     def bm_stopping_criterion(self,G,s,nk):
         # arguments defined in [bm2011]
-        return(G>self.hprime*s+self.epsprime)
+        return(G>self.BM_hprime*s+self.BM_epsprime)
     
     def bpl_stopping_criterion(self,G,s,nk):
         # arguments defined in [bpl2012]
         t = scipy.stats.t.ppf(self.confidence_level,nk-1)
         sample_error = t*s/np.sqrt(nk)
         inflation_factor = 1/np.sqrt(nk)
-        return(G+sample_error+inflation_factor>self.eps)
+        return(G+sample_error+inflation_factor>self.BM_eps)
     
     def bm_sampsize(self,k,G,s,nk_m1, r=2):
         # arguments defined in [bm2011]
-        h = self.h
-        hprime = self.hprime
-        p = self.p
-        q = self.q
+        h = self.BM_h
+        hprime = self.BM_hprime
+        p = self.BM_p
+        q = self.BM_q
         confidence_level = self.confidence_level
         if q is None :
             # Computing n_k as in (5) of [Bayraksan and Morton, 2009]
@@ -294,16 +294,16 @@ class SeqSampling():
     
     def bpl_fsp_sampsize(self,k,G,s,nk_m1):
         # arguments defined in [bpl2012]
-        return(int(np.ceil(self.c0+self.c1*self.functions_dict["growth_function"](k))))
+        return(int(np.ceil(self.BPL_c0+self.BPL_c1*self.functions_dict["growth_function"](k))))
         
     def stochastic_sampsize(self,k,G,s,nk_m1):
         # arguments defined in [bpl2012]
         if (k==1):
             #Initialization
-            return(int(np.ceil(max(self.n0min,np.log(1/self.eps)))))
+            return(int(np.ceil(max(self.BPL_n0min,np.log(1/self.BPL_eps)))))
         #§5 of [Bayraksan and Pierre-Louis] : solving a 2nd degree equation in sqrt(n)
         t = scipy.stats.t.ppf(self.confidence_level,nk_m1-1)
-        a = - self.eps
+        a = - self.BPL_eps
         b = 1+t*s
         c = nk_m1*G
         maxroot = -(np.sqrt(b**2-4*a*c)+b)/(2*a)
@@ -340,12 +340,12 @@ class SeqSampling():
             #Finding a constant used to compute nk
             r = 2 #TODO : we could add flexibility here
             j = np.arange(1,1000)
-            if self.q is None:
-                s = sum(np.power(j,-self.p*np.log(j)))
+            if self.BM_q is None:
+                s = sum(np.power(j,-self.BM_p*np.log(j)))
             else:
-                if self.q<1:
+                if self.BM_q<1:
                     raise RuntimeError("Parameter q should be greater than 1.")
-                s = sum(np.exp(-self.p*np.power(j,2*self.q/r)))
+                s = sum(np.exp(-self.BM_p*np.power(j,2*self.BM_q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
                 
         lower_bound_k = self.sample_size(k, None, None, None)
