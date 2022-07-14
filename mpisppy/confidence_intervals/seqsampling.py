@@ -22,6 +22,7 @@ global_rank = fullcomm.Get_rank()
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
+import mpisppy.confidence_intervals.confidence_config as confidence_config
 from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
@@ -522,6 +523,8 @@ if __name__ == "__main__":
 
     # relative width
     optionsBM = config.Config()
+    confidence_config.confidence_config(optionsBM)
+    confidence_config.sequential_config(optionsBM)
     optionsBM.quick_assign('BM_h', float, 0.2)
     optionsBM.quick_assign('BM_hprime', float, 0.015,)
     optionsBM.quick_assign('BM_eps', float, 0.5,)
@@ -556,9 +559,9 @@ if __name__ == "__main__":
     # change the options argument and stopping criterion
     our_pb = SeqSampling(refmodel,
                           xhat_generator_farmer,
-                          optionsFSP,
+                          optionsBM,
                           stochastic_sampling=False,  # maybe this should move to the options dict?
-                          stopping_criterion="BPL",
+                          stopping_criterion="BM",
                           )
     res = our_pb.run()
 
