@@ -260,7 +260,7 @@ class SeqSampling():
         t = scipy.stats.t.ppf(self.confidence_level,nk-1)
         sample_error = t*s/np.sqrt(nk)
         inflation_factor = 1/np.sqrt(nk)
-        return(G+sample_error+inflation_factor>self.BM_eps)
+        return(G+sample_error+inflation_factor>self.BPL_eps)
     
     def bm_sampsize(self,k,G,s,nk_m1, r=2):
         # arguments defined in [bm2011]
@@ -538,30 +538,36 @@ if __name__ == "__main__":
 
     # fixed width, fully sequential
     optionsFSP = config.Config()
-    optionsFSP.quick_assign('eps', float,  50.0)
-    optionsFSP.quick_assign('solvername', str,  solvername)
-    optionsFSP.quick_assign("c0", int, 50)  # starting sample size)
+    confidence_config.confidence_config(optionsFSP)
+    confidence_config.sequential_config(optionsFSP)
+    optionsFSP.quick_assign('BPL_eps', float,  50.0)
+    optionsFSP.quick_assign('BPL_solvername', str,  solvername)
+    optionsFSP.quick_assign("BPL_c0", int, 50)  # starting sample size)
     optionsFSP.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsFSP.quick_assign("ArRP", int, 2)  # this must be 1 for any multi-stage problems
     optionsFSP.quick_assign("stopping", str, "BPL")
     optionsFSP.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsFSP.quick_assign("solving_type", str, "EF_2stage")
+    optionsFSP.quick_assign("solvername", str, solvername)
 
     # fixed width sequential with stochastic samples
     optionsSSP = config.Config()
-    optionsSSP.quick_assign('eps', float,  1.0)
+    confidence_config.confidence_config(optionsFSP)
+    confidence_config.sequential_config(optionsFSP)
+    optionsSSP.quick_assign('BPL_eps', float,  1.0)
     optionsSSP.quick_assign('solvername', str,  solvername)
-    optionsSSP.quick_assign("n0min", int, 200)   # only for stochastic sampling
+    optionsSSP.quick_assign("BPL_n0min", int, 200)   # only for stochastic sampling
     optionsSSP.quick_assign("stopping", str, "BPL")
     optionsSSP.quick_assign("xhat_gen_kwargs", dict, farmer_opt_dict)
     optionsSSP.quick_assign("solving_type", str, "EF_2stage")
+    optionsSSP.quick_assign("solvername", str, solvername)
 
     # change the options argument and stopping criterion
     our_pb = SeqSampling(refmodel,
                           xhat_generator_farmer,
-                          optionsBM,
+                          optionsFSP,
                           stochastic_sampling=False,  # maybe this should move to the options dict?
-                          stopping_criterion="BM",
+                          stopping_criterion="BPL",
                           )
     res = our_pb.run()
 
