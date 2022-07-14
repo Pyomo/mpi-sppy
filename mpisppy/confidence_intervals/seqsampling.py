@@ -551,7 +551,7 @@ if __name__ == "__main__":
     optionsFSP.quick_assign("solvername", str, solvername)
 
     # fixed width sequential with stochastic samples
-    optionsSSP = config.Config()
+    optionsSSP = optionsFSP()  # safe copy
     confidence_config.confidence_config(optionsFSP)
     confidence_config.sequential_config(optionsFSP)
     optionsSSP.quick_assign('BPL_eps', float,  1.0)
@@ -565,7 +565,7 @@ if __name__ == "__main__":
     # change the options argument and stopping criterion
     our_pb = SeqSampling(refmodel,
                           xhat_generator_farmer,
-                          optionsFSP,
+                          optionsSSP,
                           stochastic_sampling=False,  # maybe this should move to the options dict?
                           stopping_criterion="BPL",
                           )
