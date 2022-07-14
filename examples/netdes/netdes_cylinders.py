@@ -13,6 +13,7 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 write_solution = True
 
 def _parse_args():
+    cfg = config.Config()
     cfg.num_scens_optional()
     cfg.popular_args()
     cfg.two_sided_args()
