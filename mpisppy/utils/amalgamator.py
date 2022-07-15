@@ -352,7 +352,7 @@ class Amalgamator():
             #Create a hub dict
             hub_name = find_hub(self.cfg['cylinders'], self.is_multi)
             hub_creator = getattr(vanilla, hub_name+'_hub')
-            beans = {"cfg": cfg,
+            beans = {"cfg": self.cfg,
                      "scenario_creator": self.scenario_creator,
                      "scenario_denouement": self.scenario_denouement,
                      "all_scenario_names": self.scenario_names,
