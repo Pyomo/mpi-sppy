@@ -8,6 +8,7 @@ import numpy as np
 import argparse
 import mpisppy.tests.examples.aircond as aircond
 import pyomo.environ as pyo
+import pyomo.common.config as pyofig
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
@@ -53,20 +54,22 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     '''
     num_scens = len(scenario_names)
     
-    ama_options = { "EF-mstage": True,
-                    "EF_solver_name": solvername,
-                    "EF_solver_options": solver_options,
-                    "num_scens": num_scens,
-                    "_mpisppy_probability": 1/num_scens,
-                    "branching_factors":branching_factors,
-                    "mu_dev":mu_dev,
-                    "start_ups":start_ups,
-                    "start_seed":start_seed,
-                    "sigma_dev":sigma_dev
-                    }
+    cfg = config.Config()
+    cfg.quick_assign("EF_mstage", bool, True)
+    cfg.quick_assign("EF_solver_name", str, solvername)
+    #cfg.quick_assign("solvername", str, solvername)  # amalgamator wants this
+    cfg.quick_assign("EF_solver_options", dict, solver_options)
+    cfg.quick_assign("num_scens", int, num_scens)
+    cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+    cfg.quick_assign("start_seed", int, start_seed)
+    cfg.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=branching_factors)
+    cfg.quick_assign("mu_dev", float, mu_dev)
+    cfg.quick_assign("sigma_dev", float, sigma_dev)
+    cfg.quick_assign("start_ups", bool, start_ups)
+
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("mpisppy.tests.examples.aircond",
-                                  ama_options,use_command_line=False)
+                                  cfg, use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.verbose = False
@@ -78,8 +81,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     return {'ROOT': xhat['ROOT']}
 
 
-
-def main():
+def main(cfg):
     """ Code for aircond sequential sampling (in a function for easier testing)
     Uses the global config data.
     Returns:
@@ -88,133 +90,100 @@ def main():
     refmodelname = "mpisppy.tests.examples.aircond"
     scenario_creator = aircond.scenario_creator
 
-    cfg = config.global_config
     BFs = cfg.branching_factors
     num_scens = np.prod(BFs)
-    solver_name = cfg.solver_name
-    mu_dev = cfg.mu_dev
-    sigma_dev = cfg.sigma_dev
+
     scenario_creator_kwargs = {"num_scens" : num_scens,
                                "branching_factors": BFs,
-                               "mu_dev": mu_dev,
-                               "sigma_dev": sigma_dev,
-                               "start_ups": False,
+                               "mu_dev": cfg.mu_dev,
+                               "sigma_dev": cfg.sigma_dev,
+                               "start_ups": cfg.start_ups,
                                "start_seed": cfg.seed,
                                }
     
     scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
     
-    xhat_gen_options = {"scenario_names": scenario_names,
-                        "solvername": solver_name,
+    xhat_gen_kwargs = {"scenario_names": scenario_names,
+                        "solvername": cfg.solver_name,
                         "solver_options": None,
                         "branching_factors" : BFs,
-                        "mu_dev": mu_dev,
-                        "sigma_dev": sigma_dev,
+                        "mu_dev": cfg.mu_dev,
+                        "sigma_dev": cfg.sigma_dev,
                         "start_ups": False,
                         "start_seed": cfg.seed,
                         }
 
-    # simply called "options" by the SeqSampling constructor
-    inneroptions = {"solvername": solver_name,
-                    "branching_factors": BFs,
-                    "solver_options": None,
-                    "sample_size_ratio": cfg.sample_size_ratio,
-                    "xhat_gen_options": xhat_gen_options,
-                    "ArRP": cfg.ArRP,
-                    "kf_xhat": cfg.kf_GS,
-                    "kf_xhat": cfg.kf_xhat,
-                    "confidence_level": cfg.confidence_level,
-                    "start_ups": False,
-                    }
+    cfg.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
 
     if cfg.BM_vs_BPL == "BM":
         # Bayraksan and Morton
-        optionsBM = {'h': cfg.BM_h,
-                     'hprime': cfg.BM_hprime, 
-                     'eps': cfg.BM_eps, 
-                     'epsprime': cfg.BM_eps_prime, 
-                     "p": cfg.BM_p,
-                     "q": cfg.BM_q,
-                     "xhat_gen_options": xhat_gen_options,
-                     }
-
-        optionsBM.update(inneroptions)
 
         sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
                                           xhat_generator_aircond,
-                                          optionsBM,
+                                          cfg,
                                           stochastic_sampling=False,
                                           stopping_criterion="BM",
-                                          solving_type="EF-mstage",
+                                          solving_type="EF_mstage",
                                           )
     else:  # must be BPL
-        optionsBPL = {'eps': cfg.BPL_eps, 
-                      "c0": cfg.BPL_c0,
-                      "n0min": cfg.BPL_n0min,
-                      "xhat_gen_options": xhat_gen_options,
-                      }
-
-        optionsBPL.update(inneroptions)
-        
         ss = int(cfg.BPL_n0min) != 0
         sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
                                 xhat_generator_aircond,
-                                optionsBPL,
+                                cfg,
                                 stochastic_sampling=ss,
                                 stopping_criterion="BPL",
-                                solving_type="EF-mstage",
+                                solving_type="EF_mstage",
                                 )
         
     xhat = sampler.run()
     return xhat
 
-def _setup_args():
-    config.multistage()
-    conf_config.confidence_config()
-    conf_config.sequential_config()
-    conf_config.BM_config()
-    conf_config.BPL_config()  # --help will show both BM and BPL
+def _parse_args():
+    # create a Config object and parse into it
+    cfg = config.Config()
+    cfg.multistage()
+    conf_config.confidence_config(cfg)
+    conf_config.sequential_config(cfg)
+    conf_config.BM_config(cfg)
+    conf_config.BPL_config(cfg)  # --help will show both BM and BPL
 
-    aircond.inparser_adder()
+    aircond.inparser_adder(cfg)
     
-    config.add_to_config("solver_name",
-                         description = "solver name (e.g. gurobi)",
-                         domain = str,
-                         default=None)
+    cfg.add_to_config("solver_name",
+                      description = "solver name (e.g. gurobi)",
+                      domain = str,
+                      default=None)
 
-    config.add_to_config("seed",
-                        description="Seed for random numbers (default is 1134)",
-                        domain=int,
-                        default=1134)
+    cfg.add_to_config("seed",
+                      description="Seed for random numbers (default is 1134)",
+                      domain=int,
+                      default=1134)
 
-    config.add_to_config("BM_vs_BPL",
-                        description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
-                        domain=str,
-                        default=None)
-    config.add_to_config("xhat1_file",
-                        description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
-                        domain=str,
-                        default=None)
+    cfg.add_to_config("BM_vs_BPL",
+                      description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
+                      domain=str,
+                      default=None)
+    cfg.add_to_config("xhat1_file",
+                      description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
+                      domain=str,
+                      default=None)
 
-    parser = config.create_parser("aircond_seqsampling")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
-
-    cfg = config.global_config    
+    cfg.parse_command_line("farmer_sequential")
+    
     if cfg.BM_vs_BPL is None:
         raise RuntimeError("--BM-vs-BPL must be given.")
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
         raise RuntimeError(f"--BM-vs-BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
-    
+
+    return cfg
 
 if __name__ == '__main__':
 
-    _setup_args()
+    cfg = _parse_args()
 
-    results = main()
+    results = main(cfg)
     print(f"Final gap confidence interval results:", results)
 
-    cfg = config.global_config    
     if cfg.xhat1_file is not None:
         print(f"Writing xhat1 to {cfg.xhat1_file}.npy")
         root_nonants =np.fromiter((v for v in results["Candidate_solution"]["ROOT"]), float)

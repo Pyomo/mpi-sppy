@@ -166,6 +166,8 @@ class SeqSampling():
         self.solvername = cfg.get("solvername")
         if self.solvername is None:   # TBD: solver heirarchy
             self.solvername = cfg.get("EF_solver_name")
+        if self.solvername is None:   # TBD: solver heirarchy
+            self.solvername = cfg.get("solver_name")
         assert self.solvername is not None
         self.solver_options = cfg.get("solver_options", None)  # TBD
         self.sample_size_ratio = cfg.get("sample_size_ratio", 1)
@@ -226,8 +228,13 @@ class SeqSampling():
         if self.multistage:
             needed_things = ["branching_factors"]
             is_needed(cfg, needed_things)
-            if cfg['kf_Gs'] != 1 or cfg['kf_xhat'] != 1:
-                raise RuntimeError("Resampling frequencies must be set equal to one for multistage.")
+            # check resampling frequencies
+            if not hasattr(cfg, 'kf_Gs') or cfg['kf_Gs'] != 1:
+                print("kf_Gs must be 1 for multi-stage, so assigning 1")
+                cfg.quick_assign("kf_Gs", int, 1)
+            if not hasattr(cfg, 'kf_xhat') or cfg['kf_xhat'] != 1:
+                print("kf_Gs must be 1 for multi-stage, so assigning 1")
+                cfg.quick_assign("kf_xhat", int, 1)
         
         #Get the stopping criterion
         if self.stopping_criterion == "BM":

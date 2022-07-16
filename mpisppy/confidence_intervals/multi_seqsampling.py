@@ -27,7 +27,7 @@ class IndepScens_SeqSampling(SeqSampling):
     def __init__(self,
                  refmodel,
                  xhat_generator,
-                 options,
+                 cfg,
                  stopping_criterion = "BM",
                  stochastic_sampling = False,
                  solving_type="EF-mstage",
@@ -35,12 +35,12 @@ class IndepScens_SeqSampling(SeqSampling):
         super().__init__(
                  refmodel,
                  xhat_generator,
-                 options,
+                 cfg,
                  stochastic_sampling = stochastic_sampling,
                  stopping_criterion = stopping_criterion,
                  solving_type = solving_type)
         
-        self.numstages = len(self.options['branching_factors'])+1
+        self.numstages = len(self.cfg['branching_factors'])+1
         self.batch_branching_factors = [1]*(self.numstages-1)
         self.batch_size = 1
     
@@ -58,12 +58,12 @@ class IndepScens_SeqSampling(SeqSampling):
             #Finding a constant used to compute nk
             r = 2 #TODO : we could add flexibility here
             j = np.arange(1,1000)
-            if self.q is None:
-                s = sum(np.power(j,-self.p*np.log(j)))
+            if self.BM_q is None:
+                s = sum(np.power(j,-self.BM_p*np.log(j)))
             else:
-                if self.q<1:
-                    raise RuntimeError("Parameter q should be greater than 1.")
-                s = sum(np.exp(-self.p*np.power(j,2*self.q/r)))
+                if self.BM_q<1:
+                    raise RuntimeError("Parameter BM_q should be greater than 1.")
+                s = sum(np.exp(-self.BM_p*np.power(j,2*self.BM_q/r)))
             self.c = max(1,2*np.log(s/(np.sqrt(2*np.pi)*(1-self.confidence_level))))
         
         lower_bound_k = self.sample_size(k, None, None, None)
@@ -71,7 +71,7 @@ class IndepScens_SeqSampling(SeqSampling):
         #Computing xhat_1.
         
         #We use sample_size_ratio*n_k observations to compute xhat_k
-        xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+        xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
         mk = np.prod(xhat_branching_factors)
         self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
@@ -87,7 +87,7 @@ class IndepScens_SeqSampling(SeqSampling):
         #----------------------------Step 1 -------------------------------------#
         #Computing n_1 and associated scenario names
         
-        nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
+        nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
         estimator_scenario_names = refmodel.scenario_names_creator(nk)
         
         #Computing G_nk and s_k associated with xhat_1
@@ -108,7 +108,7 @@ class IndepScens_SeqSampling(SeqSampling):
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
             
             #Computing m_k and associated scenario names
-            xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.options['branching_factors'])
+            xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
             mk = np.prod(xhat_branching_factors)
             self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
@@ -125,7 +125,7 @@ class IndepScens_SeqSampling(SeqSampling):
             #Computing n_k and associated scenario names
             self.SeedCount += sputils.number_of_nodes(xhat_branching_factors)
             
-            nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.options['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
+            nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
             nk += self.batch_size - nk%self.batch_size
             estimator_scenario_names = refmodel.scenario_names_creator(nk)
             
@@ -161,8 +161,8 @@ class IndepScens_SeqSampling(SeqSampling):
                 return scenario_creator(sname,start_seed=self.SeedCount+snum*(self.numstages-1),**scenario_creator_kwargs)
     """
 
-    def _kw_creator_without_seed(self,options):
-        kwargs = self.refmodel.kw_creator(options)
+    def _kw_creator_without_seed(self, cfg):
+        kwargs = self.refmodel.kw_creator(cfg)
         kwargs.pop("start_seed")
         return kwargs
 
@@ -182,18 +182,17 @@ class IndepScens_SeqSampling(SeqSampling):
             Seed management is mainly in the form of updates to SeedCount
 
         """
-        ama_options = self.options.copy()
-        ama_options['EF-mstage'] =True
-        ama_options['EF_solver_name']= self.solvername
-        if self.solver_options is not None:
-            ama_options['EF_solver_options']= self.solver_options
-        ama_options['num_scens'] = nk
-        ama_options['_mpisppy_probability'] = 1/nk #Probably not used
-        ama_options['start_seed'] = self.SeedCount
+        cfg = config.Config()
+        cfg.quick_assign("EF_mstage", bool, True)
+        cfg.quick_assign("EF_solver_name", str, solvername)
+        cfg.quick_assign("EF_solver_options", dict, self.solver_options)
+        cfg.quick_assign("num_scens", int, nk)
+        cfg.quick_assign("_mpisppy_probability", float, 1/nk)
+        cfg.quick_assign("start_seed", int, self.SeedCount)        
         
         pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
         ama_options['branching_factors'] = pseudo_branching_factors
-        ama = amalgamator.Amalgamator(options=ama_options, 
+        ama = amalgamator.Amalgamator(cfg, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
                                       kw_creator=self.refmodel.kw_creator,

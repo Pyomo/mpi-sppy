@@ -275,7 +275,7 @@ if __name__ == "__main__":
     cfg.add_and_assign("EF_mstage", description="EF mstage (vs 2stage)", domain=bool, default=None, value=True)
     cfg.add_and_assign("num_scens", description="total scenarios", domain=int, default=None, value=num_scens)
     cfg.add_and_assign("_mpisppy_probability", description="unif prob", domain=float, default=None, value=1./num_scens)
-    cfg.add_and_assign("branching_factors", description="list of cylinders", domain=pyofig.ListOf(int), default=None, value=branching_factors)
+    cfg.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=branching_factors)
     cfg.add_and_assign("EF_solver_name", description="EF Solver", domain=str, default=None, value=solver_name)
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module(mname, cfg, use_command_line=False)
