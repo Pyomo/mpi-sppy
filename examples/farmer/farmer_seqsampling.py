@@ -143,10 +143,6 @@ def _parse_args():
                         description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
                         domain=str,
                         default=None)
-    cfg.add_to_config("crops_mult",
-                         description="There will be 3x this many crops (default 1)",
-                         domain=int,
-                         default=1)                
     cfg.add_to_config("xhat1_file",
                         description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
                         domain=str,
@@ -161,10 +157,6 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
-    cfg.add_to_config("crops_mult",
-                         description="There will be 3x this many crops (default 1)",
-                         domain=int,
-                         default=1)                
     cfg.add_to_config("use_norm_rho_updater",
                          description="Use the norm rho updater extension",
                          domain=bool,
