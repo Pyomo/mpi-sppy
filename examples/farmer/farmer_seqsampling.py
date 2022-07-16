@@ -140,13 +140,13 @@ def _parse_args():
     confidence_config.BPL_config(cfg)  # --help will show both BM and BPL
 
     cfg.add_to_config("BM_vs_BPL",
-                        description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
-                        domain=str,
-                        default=None)
+                      description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
+                      domain=str,
+                      default=None)
     cfg.add_to_config("xhat1_file",
-                        description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
-                        domain=str,
-                        default=None)
+                      description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
+                      domain=str,
+                      default=None)
 
     cfg.popular_args()
     cfg.two_sided_args()
