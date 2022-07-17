@@ -54,7 +54,7 @@ def main(cfg):
         # Bayraksan and Morton
 
         sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
-                                          xhat_generator_aircond,
+                                          aircond.xhat_generator_aircond,
                                           cfg,
                                           stochastic_sampling=False,
                                           stopping_criterion="BM",
@@ -63,7 +63,7 @@ def main(cfg):
     else:  # must be BPL
         ss = int(cfg.BPL_n0min) != 0
         sampler = multi_seqsampling.IndepScens_SeqSampling(refmodelname,
-                                xhat_generator_aircond,
+                                aircond.xhat_generator_aircond,
                                 cfg,
                                 stochastic_sampling=ss,
                                 stopping_criterion="BPL",
@@ -115,6 +115,7 @@ def _parse_args():
 if __name__ == '__main__':
 
     cfg = _parse_args()
+    cfg.quick_assign("EF_mstage", bool, True)
 
     results = main(cfg)
     print(f"Final gap confidence interval results:", results)

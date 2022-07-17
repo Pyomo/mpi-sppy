@@ -145,9 +145,9 @@ class IndepScens_SeqSampling(SeqSampling):
         T = k
         final_xhat=xhat_k
         if self.stopping_criterion == "BM":
-            upper_bound=self.h*sk+self.eps
+            upper_bound=self.BM_h*sk+self.BM_eps
         elif self.stopping_criterion == "BPL":
-            upper_bound = self.eps
+            upper_bound = self.BPL_eps
         else:
             raise RuntimeError("Only BM and BPL criterion are supported yet.")
         CI=[0,upper_bound]
@@ -187,7 +187,7 @@ class IndepScens_SeqSampling(SeqSampling):
         """
         cfg = config.Config()
         cfg.quick_assign("EF_mstage", bool, True)
-        cfg.quick_assign("EF_solver_name", str, solvername)
+        cfg.quick_assign("EF_solver_name", str, self.solvername)
         cfg.quick_assign("EF_solver_options", dict, self.solver_options)
         cfg.quick_assign("num_scens", int, nk)
         cfg.quick_assign("_mpisppy_probability", float, 1/nk)
