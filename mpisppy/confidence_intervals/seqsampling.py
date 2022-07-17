@@ -257,6 +257,10 @@ class SeqSampling():
         #To be sure to always use new scenarios, we set a ScenCount that is 
         #telling us how many scenarios has been used so far
         self.ScenCount = 0
+        
+        #If we are running a multistage problem, we also need a seed count
+        self.SeedCount = 0
+            
             
     def bm_stopping_criterion(self,G,s,nk):
         # arguments defined in [bm2011]

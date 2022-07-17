@@ -5,8 +5,11 @@
 # scenarios instead of a single scenario tree.
 
 import pyomo.environ as pyo
+import pyomo.common.config as pyofig
 import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
+import mpisppy.confidence_intervals.confidence_config as confidence_config
+from mpisppy.utils import config
 import numpy as np
 import scipy.stats
 import importlib
@@ -73,10 +76,10 @@ class IndepScens_SeqSampling(SeqSampling):
         #We use sample_size_ratio*n_k observations to compute xhat_k
         xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
         mk = np.prod(xhat_branching_factors)
-        self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+        self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
 
-        xgo = self.xhat_gen_options.copy()
+        xgo = self.xhat_gen_kwargs.copy()
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # it will be given explicitly
         xhat_k = self.xhat_generator(xhat_scenario_names,
@@ -110,12 +113,12 @@ class IndepScens_SeqSampling(SeqSampling):
             #Computing m_k and associated scenario names
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
             mk = np.prod(xhat_branching_factors)
-            self.xhat_gen_options['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
+            self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
             xhat_scenario_names = refmodel.scenario_names_creator(mk)
             
             #Computing xhat_k
            
-            xgo = self.xhat_gen_options.copy()
+            xgo = self.xhat_gen_kwargs.copy()
             xgo.pop("solver_options", None)  # it will be given explicitly
             xgo.pop("scenario_names", None)  # it will be given explicitly
             xhat_k = self.xhat_generator(xhat_scenario_names,
@@ -191,7 +194,7 @@ class IndepScens_SeqSampling(SeqSampling):
         cfg.quick_assign("start_seed", int, self.SeedCount)        
         
         pseudo_branching_factors = [nk]+[1]*(self.numstages-2)
-        ama_options['branching_factors'] = pseudo_branching_factors
+        cfg.quick_assign('branching_factors', pyofig.ListOf(int), pseudo_branching_factors)
         ama = amalgamator.Amalgamator(cfg, 
                                       scenario_names=estimator_scenario_names,
                                       scenario_creator=self.refmodel.scenario_creator,
@@ -208,9 +211,9 @@ class IndepScens_SeqSampling(SeqSampling):
         xhats,start = sample_tree.walking_tree_xhats(self.refmodelname,
                                                     local_scenarios,
                                                     xhat_k['ROOT'],
-                                                    self.options['branching_factors'],
+                                                    self.cfg['branching_factors'],  # psuedo
                                                     self.SeedCount,
-                                                    self.options,  # not scenario_creator_kwargs,
+                                                     self.cfg,
                                                     solvername=self.solvername,
                                                     solver_options=self.solver_options)
         
@@ -275,33 +278,52 @@ if __name__ == "__main__":
     bfs = [3,3,2]
     num_scens = np.prod(bfs)
     scenario_names = mpisppy.tests.examples.aircond.scenario_names_creator(num_scens)
-    xhat_gen_options = {"scenario_names": scenario_names,
+    xhat_gen_kwargs = {"scenario_names": scenario_names,
                         "solvername": solvername,
                         "solver_options": None,
                         "branching_factors": bfs,
-                        "mudev": 0,
-                        "sigmadev": 40,
+                        "mu_dev": 0,
+                        "sigma_dev": 40,
                         "start_ups": False,
                         "start_seed": 0,
                         }
 
-    optionsBM =  {'h':0.55,
-                 'hprime':0.5, 
-                 'eps':0.5, 
-                 'epsprime':0.4, 
-                 "p":0.2,
-                 "q":1.2,
-                 "solvername": solvername,
-                 "xhat_gen_options": xhat_gen_options,
-                  "start_ups": False,
-                 "branching_factors": bfs}
-   
-    optionsFSP = {'eps': 15.0,
-                  'solvername': solvername,
-                  "c0":50,
-                  "xhat_gen_options": xhat_gen_options,
-                  "start_ups": False,
-                  "branching_factors": bfs}
+    # create two configs, then use one of them
+    optionsBM = config.Config()
+    confidence_config.confidence_config(optionsBM)
+    confidence_config.sequential_config(optionsBM)
+    optionsBM.quick_assign('BM_h', float, 0.55)
+    optionsBM.quick_assign('BM_hprime', float, 0.5,)
+    optionsBM.quick_assign('BM_eps', float, 0.5,)
+    optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
+    optionsBM.quick_assign("BM_p", float, 0.2)
+    optionsBM.quick_assign("BM_q", float, 1.2)
+    optionsBM.quick_assign("solvername", str, solvername)
+    optionsBM.quick_assign("solver_name", str, solvername)
+    optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
+    optionsBM.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
+    optionsBM.quick_assign("solving_type", str, "EF_mstage")
+    optionsBM.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=bfs)
+    optionsBM.quick_assign("start_ups", bool, False)
+    optionsBM.quick_assign("EF_mstage", bool, True)
+    ##optionsBM.quick_assign("cylinders", pyofig.ListOf(str), ['ph'])
+       
+    # fixed width, fully sequential
+    optionsFSP = config.Config()
+    confidence_config.confidence_config(optionsFSP)
+    confidence_config.sequential_config(optionsFSP)
+    optionsFSP.quick_assign('BPL_eps', float,  15.0)
+    optionsFSP.quick_assign("BPL_c0", int, 50)  # starting sample size)
+    optionsFSP.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
+    optionsFSP.quick_assign("ArRP", int, 2)  # this must be 1 for any multi-stage problems
+    optionsFSP.quick_assign("stopping", str, "BPL")
+    optionsFSP.quick_assign("solving_type", str, "EF_mstage")
+    optionsFSP.quick_assign("solvername", str, solvername)
+    optionsFSP.quick_assign("solver_name", str, solvername)
+    optionsFSP.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=bfs)
+    optionsFSP.quick_assign("start_ups", bool, False)
+    optionsBM.quick_assign("EF_mstage", bool, True)
+    ##optionsFSP.quick_assign("cylinders", pyofig.ListOf(str), ['ph'])
    
     aircondpb = IndepScens_SeqSampling("mpisppy.tests.examples.aircond",
                                        xhat_generator_aircond, 

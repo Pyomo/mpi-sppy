@@ -3,7 +3,7 @@
 """
 An example of using amalgamator with 3 cylinders for a multistage problem
 To execute this:
-    mpiexec -np 3 python aircond_ama.py --default-rho=1 --branching-factors "3 3" --lagrangian --xhatshuffle
+    mpiexec -np 3 python aircond_ama.py --default-rho=1 --branching-factors "3 3" --lagrangian --xhatshuffle --solver-name=cplex
     
 WARNING:
     do not use the num-scens argument on the command line

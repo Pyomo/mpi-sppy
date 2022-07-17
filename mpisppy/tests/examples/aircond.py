@@ -10,6 +10,8 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import argparse
 from mpisppy import global_toc
+from mpisppy.utils import config
+import pyomo.common.config as pyofig
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
@@ -496,20 +498,22 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     '''
     num_scens = len(scenario_names)
     
-    ama_options = { "EF-mstage": True,
-                    "EF_solver_name": solvername,
-                    "EF_solver_options": solver_options,
-                    "num_scens": num_scens,
-                    "_mpisppy_probability": 1/num_scens,
-                    "branching_factors":branching_factors,
-                    "mu_dev":mu_dev,
-                    "start_ups":start_ups,
-                    "start_seed":start_seed,
-                    "sigma_dev":sigma_dev
-                    }
+    cfg = config.Config()
+    cfg.quick_assign("EF_mstage", bool, True)
+    cfg.quick_assign("EF_solver_name", str, solvername)
+    #cfg.quick_assign("solvername", str, solvername)  # amalgamator wants this
+    cfg.quick_assign("EF_solver_options", dict, solver_options)
+    cfg.quick_assign("num_scens", int, num_scens)
+    cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+    cfg.quick_assign("start_seed", int, start_seed)
+    cfg.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=branching_factors)
+    cfg.quick_assign("mu_dev", float, mu_dev)
+    cfg.quick_assign("sigma_dev", float, sigma_dev)
+    cfg.quick_assign("start_ups", bool, start_ups)
+
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("mpisppy.tests.examples.aircond",
-                                  ama_options,use_command_line=False)
+                                  cfg, use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.verbose = False
@@ -519,6 +523,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
     return xhat
+
 
 if __name__ == "__main__":
     # This __main__ is just for developers to use for quick tests
