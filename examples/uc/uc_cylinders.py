@@ -22,44 +22,43 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 def _parse_args():
-    config.popular_args()
-    config.num_scens_required() 
-    config.ph_args()
-    config.two_sided_args()
-    config.aph_args()        
-    config.fixer_args()
-    config.fwph_args()
-    config.lagrangian_args()
-    config.xhatlooper_args()
-    config.xhatshuffle_args()
-    config.cross_scenario_cuts_args()
-    config.add_to_config("ph_mipgaps_json",
+    cfg = config.Config()
+    cfg.popular_args()
+    cfg.num_scens_required() 
+    cfg.ph_args()
+    cfg.two_sided_args()
+    cfg.aph_args()        
+    cfg.fixer_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.xhatlooper_args()
+    cfg.xhatshuffle_args()
+    cfg.cross_scenario_cuts_args()
+    cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
                          default=None)
-    config.add_to_config("solution_dir",
+    cfg.add_to_config("solution_dir",
                          description="writes a tree solution to the provided directory"
                                       " (default None)",
                          domain=str,
                          default=None)
-    config.add_to_config("xhat_closest_tree",
+    cfg.add_to_config("xhat_closest_tree",
                          description="Uses XhatClosest to compute a tree solution after"
                                      " PH termination (default False)",
                          domain=bool,
                          default=False)
-    config.add_to_config("run_aph",
+    cfg.add_to_config("run_aph",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)        
-    parser = config.create_parser("UC_cylinders")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg.parse_command_line("uc_cylinders")
+    return cfg
 
 
 def main():
     
-    _parse_args()
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
 
     num_scen = cfg.num_scens
 
