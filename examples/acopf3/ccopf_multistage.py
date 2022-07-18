@@ -115,7 +115,6 @@ def pysp2_callback(
         _egret_md (egret tuple with dict as [1]) egret model data
 
     """
-    print("Debug: convex_relaxation=",convex_relaxation)
     # pull the number off the end of the scenario name
     scen_num = sputils.extract_num(scenario_name)
 

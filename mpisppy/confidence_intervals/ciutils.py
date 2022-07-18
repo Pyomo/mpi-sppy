@@ -242,6 +242,7 @@ def gap_estimators(xhat_one,
     '''
     global_toc("Enter gap_estimators")
     if solving_type not in ["EF_2stage","EF_mstage"]:
+        print(f"solving type=", solving_type)
         raise RuntimeError("Only EF solve for the approximate problem is supported yet.")
     else:
         is_multi = (solving_type=="EF_mstage")

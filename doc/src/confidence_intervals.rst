@@ -54,15 +54,15 @@ The first step in computing a confidence interval is creating a ``MMWConfidenceI
 that takes as an argument an ``xhat_one`` and options.
 This object has a ``run`` method that returns a gap estimator and a confidence interval on the gap.
 
-Example
--------
+Examples
+--------
 
-An example of use with the ``farmer`` problem, can be found in the main of ``mmwci.py``.
+There are example scrips for sequential sampling in both ``farmer`` and ``aircond``.
 
 Using stand alone ``mmw_conf.py``
 ---------------------------------
 
-(Currently for use with 2-stage problem only; for multi-stage problems, instantiate an ``MMWConfidenceItervals`` object directly)
+(The stand-alone module is currently for use with 2-stage problem only; for multi-stage problems, instantiate an ``MMWConfidenceItervals`` object directly)
 
 ``mmw_conf`` uses the ``MMWConfidenceIntervals`` class from ``mmw_ci`` in order to construct a confidence interval on the optimality gap of a particular candidate solution ``xhat`` of a model instance. 
 

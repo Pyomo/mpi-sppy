@@ -34,7 +34,7 @@ class MMWConfidenceIntervals():
     """Takes a model and options as input. 
     Args:
         refmodel (str): path of the model we use (e.g. farmer, uc)
-        options (dict): useful options to run amalgamator or xhat_eval, 
+        cfg (Config): useful options to run amalgamator or xhat_eval, 
                         including EF_solver_options and EF_solver_name
                         May include the options used to compute xhat
         xhat_one (dict): Non-anticipative first stage solution, computed before
@@ -46,7 +46,7 @@ class MMWConfidenceIntervals():
                 If start is None, then start=options[num_scens]+options[start] is used
     
     Note:
-        Options can include the following things:
+        cfg can include the following things:
             -The type of our solving. for now, MMWci only support EF, so it must
             have an attribute 'EF-2stage' or 'EF-mstage' set equal to True
             - Solver-related options ('EF_solver_name' and 'EF_solver_options')
@@ -55,7 +55,7 @@ class MMWConfidenceIntervals():
     """
     def __init__(self,
                  refmodel,
-                 options,
+                 cfg,
                  xhat_one,
                  num_batches,
                  batch_size=None,
@@ -64,7 +64,7 @@ class MMWConfidenceIntervals():
                  ):
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
-        self.options = options
+        self.cfg = cfg
         self.xhat_one = xhat_one
         self.num_batches = num_batches
         self.batch_size = batch_size
@@ -76,17 +76,17 @@ class MMWConfidenceIntervals():
         self.start = start
             
         #Type of our problem
-        if ama._bool_option(options, "EF-2stage"):
-            self.type = "EF-2stage"
+        if ama._bool_option(cfg, "EF_2stage"):
+            self.type = "EF_2stage"
             self.multistage = False
             self.numstages = 2
-        elif ama._bool_option(options, "EF-mstage"):
-            self.type = "EF-mstage"
+        elif ama._bool_option(cfg, "EF_mstage"):
+            self.type = "EF_mstage"
             self.multistage = True
-            self.numstages = len(options['branching_factors'])+1
+            self.numstages = len(cfg['branching_factors'])+1
         else:
-            raise RuntimeError("Only EF is currently supported. "
-                "Options should get an attribute 'EF-2stage' or 'EF-mstage' set to True")
+            raise RuntimeError("Only EF is currently supported; "
+                "cfg should have an attribute 'EF-2stage' or 'EF-mstage' set to True")
         
         #Check if refmodel and args have all needed attributes
         everything = ["scenario_names_creator", "scenario_creator", "kw_creator"]
@@ -101,7 +101,7 @@ class MMWConfidenceIntervals():
         if not you_can_have_it_all:
             raise RuntimeError(f"Module {refmodel} not complete for MMW")
         
-        if "EF_solver_name" not in self.options:
+        if "EF_solver_name" not in self.cfg:
             raise RuntimeError("EF_solver_name not in Argument list for MMW")
 
     def run(self, confidence_level=0.95, objective_gap=False):
@@ -118,7 +118,7 @@ class MMWConfidenceIntervals():
         #Introducing batches otpions
         num_batches = self.num_batches
         batch_size = self.batch_size
-        sample_options = self.options
+        sample_cfg = self.cfg()  # ephemeral changes
         
         #Some options are specific to 2-stage or multi-stage problems
         if self.multistage:
@@ -129,14 +129,14 @@ class MMWConfidenceIntervals():
             sampling_BFs = None
             if batch_size == 0:
                 raise RuntimeError("batch size can't be zero for two stage problems")
-        sample_options['num_scens'] = batch_size
-        sample_options['_mpisppy_probability'] = 1/batch_size
-        scenario_creator_kwargs=self.refmodel.kw_creator(sample_options)
+        sample_cfg.quick_assign('num_scens', int, batch_size)
+        sample_cfg.quick_assign('_mpisppy_probability', float, 1/batch_size)
+        scenario_creator_kwargs=self.refmodel.kw_creator(sample_cfg)
         sample_scen_creator = self.refmodel.scenario_creator
         
         #Solver settings
-        solvername = self.options['EF_solver_name']
-        solver_options = self.options['EF_solver_options'] if 'EF_solver_options' in self.options else None
+        solvername = self.cfg['EF_solver_name']
+        solver_options = self.cfg.get('EF_solver_options')
         solver_options = remove_None(solver_options)
             
         #Now we compute for each batch the whole Gn term from MMW (9)
@@ -154,7 +154,7 @@ class MMWConfidenceIntervals():
                                            scenario_names=scenario_names,
                                            sample_options=gap_options,
                                            ArRP=1,
-                                           options=scenario_creator_kwargs,
+                                           cfg=sample_cfg,
                                            scenario_denouement=scenario_denouement,
                                            solvername=solvername,
                                            solver_options=solver_options,

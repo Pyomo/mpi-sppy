@@ -15,36 +15,37 @@ from mpisppy import global_toc
 
 if __name__ == "__main__":
     global_toc("Start mmw_conf")
+    cfg = config.Config()
     # args for mmw part of things
-    config.add_to_config('xhatpath',
+    cfg.add_to_config('xhatpath',
                          domain=str,
                          description="path to .npy file with feasible nonant solution xhat",
                          default=".")
-    config.add_to_config('solver_name',
+    cfg.add_to_config('EF_solver_name',
                          description="name of solver to be used",
                          domain=str,
                          default='')
-    config.add_to_config('confidence_level', 
+    cfg.add_to_config('confidence_level', 
                          description="defines confidence interval size (default 0.95)", 
                          domain=float,
                          default=None) #None will set alpha = 0.95 and tell user
-    config.add_to_config('objective_gap',
+    cfg.add_to_config('objective_gap',
                          description="option to return gap around objective value (default False)",
                          domain=bool,
                          default=False)
-    config.add_to_config('start_scen',
+    cfg.add_to_config('start_scen',
                          description="starting scenario number (perhpas to avoid scenarios used to get solve xhat) default 0",
                          domain=int,
                          default=0)
-    config.add_to_config("MMW_num_batches",
+    cfg.add_to_config("MMW_num_batches",
                          description="number of batches used for MMW confidence interval (default 2)",
                          domain=int,
                          default=2)
-    config.add_to_config("MMW_batch_size",
+    cfg.add_to_config("MMW_batch_size",
                          description="batch size used for MMW confidence interval, if None then batch_size = num_scens (default to None)",
                          domain=int,
                          default=None) #None means take batch_size=num_scens
-    config.add_to_config("solver_options",
+    cfg.add_to_config("solver_options",
                          description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
                          domain=str,
                          default='')
@@ -60,30 +61,29 @@ if __name__ == "__main__":
             raise RuntimeError(f"Could not import module: {mname}")
 
 
-    m.inparser_adder()
+    m.inparser_adder(cfg)
     # the inprser_adder might want num_scens, but mmw contols the number of scenarios
     try:
-        del config.global_config["num_scens"] 
+        del cfg["num_scens"] 
     except:
         pass
 
-    parser = config.create_parser("mmw_conf")
+    parser = cfg.create_parser("mmw_conf")
     # the module name is very special because it has to be plucked from argv
 
     parser.add_argument(
             "model_module_name", help="amalgamator compatible module (often read from argv)", type=str,
         )
-    config.add_to_config("model_module_name",
+    cfg.add_to_config("model_module_name",
                          description="amalgamator compatible module",
                          domain=str,
                          default='',
                          argparse=False)
+
+    cfg.model_module_name = mname
     
     args = parser.parse_args()  # from the command line
-    config.global_config.model_module_name = mname
-    args = config.global_config.import_argparse(args)
-    
-    cfg = config.global_config
+    args = cfg.import_argparse(args)
     
     #parses solver options string
     solver_options = option_string_to_dict(cfg.solver_options)
@@ -99,16 +99,13 @@ if __name__ == "__main__":
         raise RuntimeError("mmw_conf requires MMW_batch_size")
 
     refmodel = modelpath #Change this path to use a different model
-    
-    options = {"EF-2stage": True,  # 2stage vs. mstage
-               "EF_solver_name": cfg.solver_name,
-               "EF_solver_options": solver_options,
-               "start_scen": cfg.start_scen}   #Are the scenario shifted by a start arg ?
+
+    cfg.quick_assign("EF_2stage", bool, True)  # all this script supports for now
 
     num_batches = cfg.MMW_num_batches
     batch_size = cfg.MMW_batch_size
 
-    mmw = mmw_ci.MMWConfidenceIntervals(refmodel, options, xhat, num_batches, batch_size=batch_size, start = cfg.start_scen,
+    mmw = mmw_ci.MMWConfidenceIntervals(refmodel, cfg, xhat, num_batches, batch_size=batch_size, start = cfg.start_scen,
                        verbose=True)
 
     cl = float(cfg.confidence_level)
