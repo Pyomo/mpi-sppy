@@ -225,6 +225,7 @@ class Test_confint_farmer(unittest.TestCase):
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
+    @unittest.skipIf(True, "too big for community solvers")
     def test_seqsampling_running(self):
         #We need a very small instance for testing on GitHub.
         optionsBM = config.Config()
