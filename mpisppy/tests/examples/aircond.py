@@ -47,6 +47,7 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
     prod = np.prod(sample_branching_factors)
+    assert prod is not None, "sample_branching_factors is None in _demands_creator"
     s = int(scennum % prod)
     d = kwargs.get("starting_d", 200)
     demands = [d]
@@ -497,7 +498,8 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
 
     '''
     num_scens = len(scenario_names)
-    
+    assert branching_factors is not None, "branching factors must be supplied to xhat_generator_aircond"
+
     cfg = config.Config()
     cfg.quick_assign("EF_mstage", bool, True)
     cfg.quick_assign("EF_solver_name", str, solvername)

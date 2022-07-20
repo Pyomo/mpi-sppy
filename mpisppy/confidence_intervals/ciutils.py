@@ -342,7 +342,7 @@ def gap_estimators(xhat_one,
                                                     xhat_one['ROOT'],
                                                     branching_factors,
                                                     start,
-                                                    scenario_creator_kwargs,
+                                                    cfg,
                                                     solvername=solvername,
                                                     solver_options=solver_options)
         

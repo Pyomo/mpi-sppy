@@ -82,6 +82,7 @@ class IndepScens_SeqSampling(SeqSampling):
         xgo = self.xhat_gen_kwargs.copy()
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # it will be given explicitly
+        xgo["branching_factors"] = xhat_branching_factors
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solver_options=self.solver_options,
                                    **xgo)
