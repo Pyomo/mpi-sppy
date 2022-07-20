@@ -52,7 +52,7 @@ def check_args(cfg):
     assert(cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None)
     if cfg.scenarios_per_bundle is None:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified")
-    if cfg.get("bundles_per_rank") is not None:
+    if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank != 0:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
                            "and --bundles-per-rank cannot be")
     if cfg.pickle_bundles_dir is not None and not os.path.isdir(cfg.pickle_bundles_dir):

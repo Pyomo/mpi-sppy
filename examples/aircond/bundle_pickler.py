@@ -22,12 +22,11 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 # according to naming convention for this problem
 
 def _parse_args():
-    config.multistage()
-    pickle_bundle.pickle_bundle_parser()
+    cfg = config.Config()
+    cfg.multistage()
+    pickle_bundle.pickle_bundle_parser(cfg)
     aircondB.inparser_adder(cfg)
-    parser = config.create_parser("bundle_pickler for aircond")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg.parse_command_line("bundle_pickler for aircond")
 
     return cfg
 
@@ -45,7 +44,7 @@ def main():
 
     ScenCount = np.prod(BFs)
 
-    kwargs = aircondB.kw_creator()
+    kwargs = aircondB.kw_creator(cfg)
 
     bsize = int(cfg.scenarios_per_bundle)
     numbuns = ScenCount // bsize

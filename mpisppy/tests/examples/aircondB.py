@@ -20,8 +20,8 @@ from mpisppy import global_toc
 # Use this random stream:
 aircondstream = np.random.RandomState()
 # Do not edit these defaults!
-parms = {"mudev": (float, 0.),
-         "sigmadev": (float, 40.),
+parms = {"mu_dev": (float, 0.),
+         "sigma_dev": (float, 40.),
          "start_ups": (bool, False),
          "StartUpCost": (float, 300.),
          "start_seed": (int, 1134),
@@ -67,7 +67,7 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
         aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
-        d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev, sigma_dev)))
+        d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev,sigma_dev)))
         demands.append(d)
     
     return demands,nodenames
@@ -191,10 +191,10 @@ def scenario_names_creator(num_scens,start=None):
         
 
 #=========
-def inparser_adder():
-    base_aircond.inparser_adder()
+def inparser_adder(cfg):
+    base_aircond.inparser_adder(cfg)
     # special "proper" bundle arguments
-    pickle_bundle.pickle_bundle_parser()
+    pickle_bundle.pickle_bundle_parser(cfg)
     
 
 #=========
@@ -202,8 +202,8 @@ def kw_creator(options=None):
     kwargs = base_aircond.kw_creator(options)
 
     # proper bundle args are special
-    kwargs["pickle_bundles_dir"] = config.global_config.pickle_bundles_dir
-    kwargs["unpickle_bundles_dir"] = config.global_config.unpickle_bundles_dir
+    kwargs["pickle_bundles_dir"] = options.pickle_bundles_dir
+    kwargs["unpickle_bundles_dir"] = options.unpickle_bundles_dir
 
     return kwargs
 
