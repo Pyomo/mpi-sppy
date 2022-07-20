@@ -6,7 +6,7 @@ import pyomo.environ as pyo
 from math import log10, floor
 
 def get_solver():
-    solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
+    solvers = [n+e for e in ('_persistent', '') for n in ("xpress","cplex","gurobi")]
     
     for solvername in solvers:
         try:
