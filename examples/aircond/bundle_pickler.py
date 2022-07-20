@@ -24,17 +24,16 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 def _parse_args():
     config.multistage()
     pickle_bundle.pickle_bundle_parser()
-    aircondB.inparser_adder()
+    aircondB.inparser_adder(cfg)
     parser = config.create_parser("bundle_pickler for aircond")
     args = parser.parse_args()  # from the command line
     args = config.global_config.import_argparse(args)
 
-    return args
+    return cfg
 
 def main():
 
-    _parse_args()
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
     assert cfg.pickle_bundles_dir is not None
     assert cfg.scenarios_per_bundle is not None
     assert cfg.unpickle_bundles_dir is None
