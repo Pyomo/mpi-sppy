@@ -14,28 +14,31 @@ The default for all 'with' options is False and we are dropping the with_
 
 Now you assemble the args you want and call the create_parser function,
    which returns an argparse object, E.g.:
-parser = config.create_parser("myprog")
+parser = cfg.create_parser("myprog")
+although most program use
+cfg.parse_command_line("program_name")
+which create the parser and does the parsing.
 
 If you want to add args, you need to call the add_to_config function
 
 If you want a required arg see num_scens_required() in this file.
 
 If you want a positional arg, you have to DIY:
-    parser = config.create_parser("tester")
+    parser = cfg.create_parser("tester")
     parser.add_argument(
             "num_scens", help="Number of scenarios", type=int,
         )
     args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
     print(f"{args.num_scens =}")
-(Note: you can still attach it to global_config, but that is also DIY)
+(Note: you can still attach it to a Config object, but that is also DIY)
 
-    config.add_to_config("num_scens",
+    cfg.add_to_config("num_scens",
                          description="Number of Scenarios (required, positional)",
                          domain=int,
                          default=-1,
                          argparse=False)   # special
     # final special treatment of num_scens
-    config.global_config.num_scens = args.num_scens
+    cfg.num_scens = args.num_scens
 
 
 """

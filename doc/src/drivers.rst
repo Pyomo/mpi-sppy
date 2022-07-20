@@ -20,13 +20,13 @@ The ``utils`` directory has utilities that set up command line options
 and create dictionaries used to create hubs and spokes. The main shared utilities
 are
 
-* ``config.py`` that creates the global_config object and command line options.
+* ``config.py`` that creates a Pyomo Config object and command line options.
 * ``cfg_vanilla.py`` (was ``vanilla.py``) that creates dictionaries used for hub and spoke
   creation. These dictionaries are ultimately fed to
   ``sputils.spin_the_wheel``.
 
 The constructors for the vanilla spokes take arguments that vary slightly depending
-on the spoke, but all want the global configuration,
+on the spoke, but all want a configuration object,
 followed by ``scenario_creator`` function, a ``scenario_denoument`` function
 (that can be ``None``), a list of scenario names as ``all_scenario_names``,
 and ``scenario_creator_kwargs``. Other arguments can be seen in the file ``mpisppy.utils.vanilla.py``
@@ -81,6 +81,11 @@ keys in options dictionaries in ``mpi-sppy``. This has the advantage
 that new spokes and extensions can simply look for any options that
 they like. The disadvantage is that developers who use ``mpi-sppy``
 cannot count on it to detect spelling errors in options names.
+
+In contrast, ``Config`` objects will check spelling if you assign to
+an existing option, but functions like ``quick_assign`` are more popular and
+this function does will create a new option if the option does not
+exist.
 
 
 Contrasting ``_mpisppy_node_list`` and ``all_node_names``

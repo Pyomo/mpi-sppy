@@ -23,7 +23,7 @@ problem, taking the amalgamator options as an input, and giving as an output
 additional arguments for the ``scenario_creator``. The amalgamator class
 is not flexible with respect to function names in the module.
 
-The ``options`` argument is a dictionary that specifies information 
+The ``cfg`` argument is a ``Config`` class object that specifies information 
 about the problem, and dictates the way Amalgamator runs. 
 It must contains the following attributes for use with cylinders:
 
@@ -49,10 +49,10 @@ It must contains the following attributes for use with cylinders:
 
 
 Create Amalgamator from a module and command line
--------------------------------------------------
-Given an options dictionary as above, ``amalgamator.Amalgamator_parser``
-creates the ``global_options`` and calls the appropriate parsers 
-to add the necessary information for different modules.
+------------------------------------------------- Given an options
+``Config`` object (typically called `cfg`) as above,
+``amalgamator.Amalgamator_parser`` creates calls the appropriate
+functions to add the necessary information for different modules.
 
 The method ``amalgamator.from_module`` uses the two utilities described above.
 It takes as input a module name, and calls ``amalgamator.Amalgamator_parser``

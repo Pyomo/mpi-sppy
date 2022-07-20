@@ -13,20 +13,19 @@ from mpisppy.opt.lshaped import LShapedMethod
 
 
 def _parse_args():
-    config.popular_args()
-    config.num_scens_required() 
-    config.ph_args()
-    config.two_sided_args()
-    config.fwph_args()
-    config.xhatlshaped_args()
-    parser = config.create_parser("UC_lshaped")
-    args = parser.parse_args()  # from the command line
-    args = config.global_config.import_argparse(args)
+    cfg = config.Config()
+    cfg.popular_args()
+    cfg.num_scens_required() 
+    cfg.ph_args()
+    cfg.two_sided_args()
+    cfg.fwph_args()
+    cfg.xhatlshaped_args()
+    cfg.parse_command_line("uc_lshaped")
+    return cfg
 
 
 def main():
-    _parse_args()
-    cfg = config.global_config  # typing aid
+    cfg = _parse_args()
 
     # Need default_rho for FWPH, without you get 
     # uninitialized numeric value error
