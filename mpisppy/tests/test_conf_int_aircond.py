@@ -301,8 +301,10 @@ class Test_confint_aircond(unittest.TestCase):
         optionsBM.quick_assign("solvername", str, solvername)
         optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
         optionsBM.quick_assign("solving_type", str, "EF_mstage")
+        optionsBM.quick_assign("EF_mstage", bool, True)   # TBD: we should not need both
         optionsBM.quick_assign("start_seed", str, 0)
         optionsBM.quick_assign("branching_factors", pyofig.ListOf(int), [4, 3, 2])
+        optionsBM.quick_assign("xhat_gen_kwargs", dict, xhat_gen_options)
 
         seq_pb = multi_seqsampling.IndepScens_SeqSampling(self.refmodelname,
                                                           aircond.xhat_generator_aircond,

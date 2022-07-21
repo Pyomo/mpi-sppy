@@ -218,7 +218,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
     NOTE: The local_scenarios do not need to form a regular tree (unbalanced trees are authorized)
 
     """
-    assert xhat_one is None, "Xhat_one can't be None for now"
+    assert xhat_one is not None, "Xhat_one can't be None for now"
         
     xhats = {'ROOT':xhat_one}
     

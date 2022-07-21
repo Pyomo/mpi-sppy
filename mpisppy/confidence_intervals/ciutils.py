@@ -337,6 +337,7 @@ def gap_estimators(xhat_one,
             local_scenarios = {sname:getattr(samp_tree.ef,sname) for sname in samp_tree.ef._ef_scenario_names}
         else:
             local_scenarios = {samp_tree.ef._ef_scenario_names[0]:samp_tree.ef}
+            
         xhats,start = sample_tree.walking_tree_xhats(mname,
                                                     local_scenarios,
                                                     xhat_one['ROOT'],

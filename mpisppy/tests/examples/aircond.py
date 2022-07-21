@@ -461,7 +461,7 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 #============================
-def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
+def xhat_generator_aircond(scenario_names, solvername=None, solver_options=None,
                            branching_factors=None, mu_dev = 0, sigma_dev = 40,
                            start_ups=None, start_seed = 0):
     '''
@@ -472,8 +472,8 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     ----------
     scenario_names: list of str
         Names of the scenario we use
-    solvername: str, optional
-        Name of the solver used. The default is "gurobi"
+    solvername: str
+        Name of the solver used.
     solver_options: dict, optional
         Solving options. The default is None.
     branching_factors: list, optional
@@ -499,7 +499,8 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     '''
     num_scens = len(scenario_names)
     assert branching_factors is not None, "branching factors must be supplied to xhat_generator_aircond"
-
+    assert solvername is not None, "solvername must be supplied to xhat_generator_aircond"
+    
     cfg = config.Config()
     cfg.quick_assign("EF_mstage", bool, True)
     cfg.quick_assign("EF_solver_name", str, solvername)
@@ -531,8 +532,8 @@ if __name__ == "__main__":
     # This __main__ is just for developers to use for quick tests
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver-name',
-                        help="solver name (default 'gurobi_direct'",
-                        default='gurobi_direct')
+                        help="solver name",
+                        default=None)
     parser.add_argument("--branching-factors",
                         help="Spaces delimited branching factors (default 3 3)",
                         dest="branching_factors",

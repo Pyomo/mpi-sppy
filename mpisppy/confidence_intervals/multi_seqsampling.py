@@ -42,7 +42,6 @@ class IndepScens_SeqSampling(SeqSampling):
                  stochastic_sampling = stochastic_sampling,
                  stopping_criterion = stopping_criterion,
                  solving_type = solving_type)
-        
         self.numstages = len(self.cfg['branching_factors'])+1
         self.batch_branching_factors = [1]*(self.numstages-1)
         self.batch_size = 1
@@ -80,6 +79,7 @@ class IndepScens_SeqSampling(SeqSampling):
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
 
         xgo = self.xhat_gen_kwargs.copy()
+        xgo["solvername"] = self.cfg.solvername
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # it will be given explicitly
         xgo["branching_factors"] = xhat_branching_factors

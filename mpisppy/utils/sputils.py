@@ -956,8 +956,25 @@ def number_of_nodes(branching_factors):
     return node_idx(last_node_stage_num, branching_factors)
     
 
-
-          
+def solver_name_from_list(cfg, idx, alt_list):
+    """ Find a solver name to assign to cfg[idx]; if you can't find anything, do nothing.
+    Args:
+        cfg (Config): the Pyomo Config object to update
+        idx (str): the index for the solver name
+        alt_list (list of str): alternative names to try, in order
+    Returns:
+        updated cfg
+    """
+    if cfg.get(idx) is None:  # if not None, we are done
+        for i in alt_list:
+            if cfg.get(i) is not None:
+                cfg.add_and_assign(name=idx,
+                                   description="solver name obtained as {i}",
+                                   domain=str,
+                                   default=None,
+                                   value=cfg.get(i))
+                break
+    return cfg
 
 if __name__ == "__main__":
     branching_factors = [2,2,2,3]
