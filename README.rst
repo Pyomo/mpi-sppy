@@ -6,6 +6,18 @@ Optimization under uncertainty for `Pyomo <https://pyomo.org>`_ models.
 `Documentation is available at readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>`_ and
 a technical report is on `OOL <http://www.optimization-online.org/DB_HTML/2020/11/8088.html>`_
 
+NOTICE
+^^^^^^
+
+There was a disruptive change on August 11, 2022 concerning how
+options are accessed. See the file ``disruptions.txt`` for more
+information. The most recent release was done before the change so
+installation using pip is not yet affected. If you are a new user,
+this will not affect you, regardless of how you install. If you are an
+existing user, you should consider the disruption before updating to
+the latest mpi-sppy code on github. The documentation on readthedocs
+probably refers to the newest version.
+
 Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 

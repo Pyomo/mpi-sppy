@@ -1,0 +1,37 @@
+(Summer 2022) Conversion to Pyomo config will cause disruption for many users.
+
+Note: a  release was done just before this change so you can revert to the
+last release if you don't have time to deal with the disruption.
+
+See examples such as farmer.  There is a bash script called
+sed_config_help.bash that uses sed to do most of the things listed
+here for py, but after you run it, some edits are still needed.
+Also, you will have to edit slurm and bash scripts by hand.
+
+0. baseparsers should be replaced by config
+
+1. vanilla should be replaced by vanilla_cfg
+
+2. Command line arguments using "with" have had the "with_" removed
+   and the default is now False! (So you need, e.g. --xhatshuffle and --lagrangian)
+   There are no longer no_ options in config.py
+
+3. If you are using vanilla, the first element of beans should be cfg rather than args, where
+    cfg is of type Config
+
+4. For multi-stage problems using --branching-factors on the command line, the
+   branching factor list needs to be in quotes.
+
+5. zhat4xhat (and some other confidence interval code) needs --xhatpath on the command
+   line before the name of the npy file.
+
+Send an email to DLWoodruff@UCDavis.edu if you want help converting.
+
+BTW: a release was done right before this change.
+
+========
+Documentation notes:
+
+In vanilla examples we have stopped using positional arguments for
+the number of scenarios (e.g., in Farmer and UC). Instead --num-scens
+is required.

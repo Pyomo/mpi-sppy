@@ -6,7 +6,6 @@
     IDIOM: we feel free to have unused dictionary entries."""
 
 import copy
-from mpisppy.utils import config
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
@@ -32,9 +31,9 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
-def _hasit(argname):
-    # aside: config.global_config functions as a dict or object
-    return config.global_config.get(argname) is not None and config.global_config[argname] is not None
+def _hasit(cfg, argname):
+    # aside: Config objects act like a dict or an object TBD: so why the and?
+    return cfg.get(argname) is not None and cfg[argname] is not None
 
 def shared_options(cfg):
     shoptions = {
@@ -50,12 +49,12 @@ def shared_options(cfg):
         "tee-rank0-solves": cfg.tee_rank0_solves,
         "trace_prefix" : cfg.trace_prefix,
     }
-    if _hasit("max_solver_threads"):
+    if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
         shoptions["iterk_solver_options"]["threads"] = cfg.max_solver_threads
-    if _hasit("iter0_mipgap"):
+    if _hasit(cfg, "iter0_mipgap"):
         shoptions["iter0_solver_options"]["mipgap"] = cfg.iter0_mipgap
-    if _hasit("iterk_mipgap"):
+    if _hasit(cfg, "iterk_mipgap"):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
     return shoptions
 
@@ -93,7 +92,7 @@ def ph_hub(
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
 
-    if _hasit("cross_scenario_cuts") and cfg.cross_scenario_cuts:
+    if _hasit(cfg, "cross_scenario_cuts") and cfg.cross_scenario_cuts:
         hub_class = CrossScenarioHub
     else:
         hub_class = PHHub
@@ -207,10 +206,10 @@ def fwph_spoke(
     shoptions = shared_options(cfg)
 
     mip_solver_options, qp_solver_options = dict(), dict()
-    if _hasit("max_solver_threads"):
+    if _hasit(cfg, "max_solver_threads"):
         mip_solver_options["threads"] = cfg.max_solver_threads
         qp_solver_options["threads"] = cfg.max_solver_threads
-    if _hasit("fwph_mipgap"):
+    if _hasit(cfg, "fwph_mipgap"):
         mip_solver_options["mipgap"] = cfg.fwph_mipgap
 
     fw_options = {
@@ -368,9 +367,9 @@ def xhatshuffle_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
-    if _hasit("add_reversed_shuffle"):
+    if _hasit(cfg, "add_reversed_shuffle"):
         xhat_options["xhat_looper_options"]["reverse"] = cfg.add_reversed_shuffle
-    if _hasit("add_reversed_shuffle"):
+    if _hasit(cfg, "add_reversed_shuffle"):
         xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
     
     xhatlooper_dict = {
@@ -515,12 +514,12 @@ def cross_scenario_cuts_spoke(
     spoke_sleep_time=None,
 ):
 
-    if _hasit("max_solver_threads"):
+    if _hasit(cfg, "max_solver_threads"):
         sp_solver_options = {"threads":cfg.max_solver_threads}
     else:
         sp_solver_options = dict() 
 
-    if _hasit("eta_bounds_mipgap"):
+    if _hasit(cfg, "eta_bounds_mipgap"):
         sp_solver_options["mipgap"] = cfg.eta_bounds_mipgap
 
     ls_options = { "root_solver" : cfg.solver_name,

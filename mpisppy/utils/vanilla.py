@@ -1,3 +1,4 @@
+There is a disruptive change, see mpi-sppy/disruptions.txt
 # If possible, use cfg_vanilla and config.py instead of this and baseparsers.py.
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.

@@ -9,14 +9,16 @@ WARNING:
     num-scens must be specified !
 """
 import mpisppy.utils.amalgamator as amalgamator
+from mpisppy.utils import config
 
 def main():
-    solution_files = {"first_stage_solution":"farmer_first_stage.csv",
-                      }
-    ama_options = {"EF-2stage": True,   # We are solving directly the EF
-                   "write_solution":solution_files}
+
+    cfg = config.Config()
+    cfg.add_and_assign("EF_2stage", description="EF 2stage vsus mstage", domain=bool, default=None, value=True)
+    cfg.add_and_assign("first_stage_solution_csv", description="where to write soln", domain=str, default=None, value="farmer_first_stage.csv")
+    
     #The module can be a local file
-    ama = amalgamator.from_module("afarmer", ama_options)
+    ama = amalgamator.from_module("farmer", cfg)
     ama.run()
     print("first_stage_solution=", ama.first_stage_solution)
     print("inner bound=", ama.best_inner_bound)

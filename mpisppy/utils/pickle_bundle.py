@@ -29,40 +29,38 @@ def dill_unpickle(fname):
     return m
 
 
-def pickle_bundle_parser(parser):
-    """ Add command line options for creation and use of "proper" bundles"""
-    parser.add_argument('--pickle-bundles-dir',
-                        help="Write bundles to a dill pickle files in this dir (default None)",
-                        dest='pickle_bundles_dir',
-                        type=str,
+def pickle_bundle_parser(cfg):
+    """ Add command line options for creation and use of "proper" bundles
+    args:
+        cfg (Config): the Config object to which we add"""
+    cfg.add_to_config('pickle_bundles_dir',
+                        description="Write bundles to a dill pickle files in this dir (default None)",
+                        domain=str,
                         default=None)
     
-    parser.add_argument('--unpickle-bundles-dir',
-                        help="Read bundles from a dill pickle files in this dir; (default None)",
-                        dest='unpickle_bundles_dir',
-                        type=str,
+    cfg.add_to_config('unpickle_bundles_dir',
+                        description="Read bundles from a dill pickle files in this dir; (default None)",
+                        domain=str,
                         default=None)
-    parser.add_argument("--scenarios-per-bundle",
-                        help="Used for `proper` bundles only (default None)",
-                        dest="scenarios_per_bundle",
-                        type=int,
+    cfg.add_to_config("scenarios_per_bundle",
+                        description="Used for `proper` bundles only (default None)",
+                        domain=int,
                         default=None)
-    return parser
 
-def check_args(args):
+def check_args(cfg):
     """ make sure the pickle bundle args make sense"""
-    assert(args.pickle_bundles_dir is None or args.unpickle_bundles_dir is None)
-    if args.scenarios_per_bundle is None:
+    assert(cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None)
+    if cfg.scenarios_per_bundle is None:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified")
-    if args.bundles_per_rank is not None and args.bundles_per_rank != 0:
+    if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank != 0:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
                            "and --bundles-per-rank cannot be")
-    if args.pickle_bundles_dir is not None and not os.path.isdir(args.pickle_bundles_dir):
-        raise RuntimeError(f"Directory to pickle into not found: {args.pickle_bundles_dir}")
-    if args.unpickle_bundles_dir is not None and not os.path.isdir(args.unpickle_bundles_dir):
-        raise RuntimeError(f"Directory to load pickle files from not found: {args.unpickle_bundles_dir}")
+    if cfg.pickle_bundles_dir is not None and not os.path.isdir(cfg.pickle_bundles_dir):
+        raise RuntimeError(f"Directory to pickle into not found: {cfg.pickle_bundles_dir}")
+    if cfg.unpickle_bundles_dir is not None and not os.path.isdir(cfg.unpickle_bundles_dir):
+        raise RuntimeError(f"Directory to load pickle files from not found: {cfg.unpickle_bundles_dir}")
 
-def have_proper_bundles(args):
+def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
-    return (hasattr(args, "pickle_bundles_dir") and args.pickle_bundles_dir is not None)\
-       or (hasattr(args, "unpickle_bundles_dir") and args.unpickle_bundles_dir is not None)
+    return (hasattr(cfg, "pickle_bundles_dir") and cfg.pickle_bundles_dir is not None)\
+       or (hasattr(cfg, "unpickle_bundles_dir") and cfg.unpickle_bundles_dir is not None)

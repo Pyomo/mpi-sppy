@@ -37,7 +37,7 @@ module_dir = os.path.dirname(os.path.abspath(__file__))
 badguys = list()
 
 #*****************************************************************************
-class Test_pickel_bundles(unittest.TestCase):
+class Test_pickle_bundles(unittest.TestCase):
     """ Test the pickle bundle code using aircond."""
 
     @classmethod
@@ -51,7 +51,7 @@ class Test_pickel_bundles(unittest.TestCase):
         self.SPB = self.BF2 * self.BF3  # implies bundle count
         self.SC = self.BF1 * self.BF2 * self.BF3
         self.BPF = self.BF1  # bundle count (by design)
-        self.BF_str = f"--branching-factors {self.BF1} {self.BF2} {self.BF3}"
+        self.BF_str = f"--branching-factors \"{self.BF1} {self.BF2} {self.BF3}\""
 
         self.BI=150
         self.NC=1
@@ -83,8 +83,8 @@ class Test_pickel_bundles(unittest.TestCase):
         if ret != 0:
             raise RuntimeError(f"pickler part of test run failed with code {ret}")
         
-        cmdstr = f"python aircond_cylinders.py --branching-factors={self.BPF} --unpickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC} "+\
-                 f"--default-rho=1 --no-fwph --no-lagranger --no-lagrangian --no-xhatshuffle --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solvername}"
+        cmdstr = f"python aircond_cylinders.py --branching-factors=\"{self.BPF}\" --unpickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC} "+\
+                 f"--default-rho=1 --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solvername}"
         ret = os.system(cmdstr)
         if ret != 0:
             raise RuntimeError(f"cylinders part of test run failed with code {ret}")

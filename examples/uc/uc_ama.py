@@ -10,16 +10,19 @@ WARNING:
 """
 import mpisppy.utils.amalgamator as amalgamator
 from uc_funcs import id_fix_list_fct
+from mpisppy.utils import config
 
 def main():
     solution_files = {"first_stage_solution":"uc_first_stage.csv",
                       #"tree_solution":"uc_ama_full_solution" 
                       #It takes too long to right the full solution
                       }
+    config.add_and_assign("id_fix_list_fct", "fct used by fixer extension", 
+                                        domain=None, default=None,
+                                        value = id_fix_list_fct)
     ama_options = {"2stage": True,   # 2stage vs. mstage
                    "cylinders": ['ph','xhatshuffle','lagranger'],
                    "extensions": ['fixer'],
-                   "id_fix_list_fct": id_fix_list_fct, #Needed for fixer, but not passed in baseparsers
                    "write_solution": solution_files
                    }
     ama = amalgamator.from_module("uc_funcs", ama_options)
