@@ -1,5 +1,8 @@
 (Summer 2022) Conversion to Pyomo config will cause disruption for many users.
 
+Note: a  release was done just before this change so you can revert to the
+last release if you don't have time to deal with the disruption.
+
 See examples such as farmer.  There is a bash script called
 sed_config_help.bash that uses sed to do most of the things listed
 here for py, but after you run it, some edits are still needed.
