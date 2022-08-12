@@ -86,7 +86,8 @@ class SPBase:
         self.n_proc = self.mpicomm.Get_size()
         self.global_rank = MPI.COMM_WORLD.Get_rank()
 
-        global_toc("Initializing SPBase")
+        if not options.get("no_toc", False):
+            global_toc("Initializing SPBase")
 
         if self.n_proc > len(self.all_scenario_names):
             raise RuntimeError("More ranks than scenarios")
