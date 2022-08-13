@@ -86,6 +86,7 @@ class SPBase:
         self.n_proc = self.mpicomm.Get_size()
         self.global_rank = MPI.COMM_WORLD.Get_rank()
 
+
         if options.get("toc", True):
             global_toc("Initializing SPBase")
 
