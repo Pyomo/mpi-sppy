@@ -22,7 +22,7 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.xhatshuffle_args()
-    cfg.slamup_args()
+    cfg.slammax_args()
     cfg.cross_scenario_cuts_args()
     cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
@@ -45,7 +45,7 @@ def main():
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
-    slamup = cfg.slamup
+    slammax = cfg.slammax
     cross_scenario_cuts = cfg.cross_scenario_cuts
 
     if cfg.default_rho is None:
@@ -94,8 +94,8 @@ def main():
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # slam up bound spoke
-    if slamup:
-        slamup_spoke = vanilla.slamup_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+    if slammax:
+        slammax_spoke = vanilla.slammax_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # cross scenario cuts spoke
     if cross_scenario_cuts:
@@ -110,8 +110,8 @@ def main():
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
-    if slamup:
-        list_of_spoke_dict.append(slamup_spoke)
+    if slammax:
+        list_of_spoke_dict.append(slammax_spoke)
     if cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cuts_spoke)
 

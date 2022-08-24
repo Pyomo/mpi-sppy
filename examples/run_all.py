@@ -234,7 +234,7 @@ do_one("farmer",
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
        "--solver-name={} --rel-gap=0.0 --default-rho=1 "
-       "--slamup --lagrangian --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
+       "--slammax --lagrangian --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
 
 # sizes is slow for xpress so try linearizing the proximal term.
 do_one("sizes",

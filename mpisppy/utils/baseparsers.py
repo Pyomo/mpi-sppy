@@ -508,33 +508,33 @@ def xhatlshaped_args(inparser):
 
     return parser
 
-def slamup_args(inparser):
+def slammax_args(inparser):
     # we will not try to get the specification from the command line
     parser = inparser
-    parser.add_argument('--with-slamup',
-                        help="have an slamup spoke (default)",
-                        dest='with_slamup',
+    parser.add_argument('--with-slammax',
+                        help="have an slammax spoke (default)",
+                        dest='with_slammax',
                         action='store_true')
-    parser.add_argument('--no-slamup',
-                        help="do not have an slamup spoke",
-                        dest='with_slamup',
+    parser.add_argument('--no-slammax',
+                        help="do not have an slammax spoke",
+                        dest='with_slammax',
                         action='store_false')
-    parser.set_defaults(with_slamup=True)
+    parser.set_defaults(with_slammax=True)
 
     return parser
 
-def slamdown_args(inparser):
+def slammin_args(inparser):
     # we will not try to get the specification from the command line
     parser = inparser
-    parser.add_argument('--with-slamdown',
-                        help="have an slamdown spoke (default)",
-                        dest='with_slamdown',
+    parser.add_argument('--with-slammin',
+                        help="have an slammin spoke (default)",
+                        dest='with_slammin',
                         action='store_true')
-    parser.add_argument('--no-slamdown',
-                        help="do not have an slamdown spoke",
-                        dest='with_slamdown',
+    parser.add_argument('--no-slammin',
+                        help="do not have an slammin spoke",
+                        dest='with_slammin',
                         action='store_false')
-    parser.set_defaults(with_slamdown=True)
+    parser.set_defaults(with_slammin=True)
 
     return parser
 
