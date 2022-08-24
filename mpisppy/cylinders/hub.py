@@ -346,6 +346,7 @@ class Hub(SPCommunicator):
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
+        self.cylinder_comm.barrier()
         self.local_write_ids[spoke_strata_rank - 1] += 1
         values[-1] = self.local_write_ids[spoke_strata_rank - 1]
         window = self.windows[spoke_strata_rank - 1]
@@ -366,13 +367,20 @@ class Hub(SPCommunicator):
                 f"Hub trying to get buffer of length {expected_length} "
                 f"from spoke, but provided buffer has length {len(values)}."
             )
+        self.cylinder_comm.barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
         window.Unlock(spoke_num)
 
-        if values[-1] > self.remote_write_ids[spoke_num - 1]:
-            self.remote_write_ids[spoke_num - 1] = values[-1]
+        new_id = values[-1]
+        sum_ids = self.cylinder_comm.allreduce(new_id)
+
+        if new_id != sum_ids / self.cylinder_comm.Get_size():
+            return False
+
+        if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
+            self.remote_write_ids[spoke_num - 1] = new_id
             return True
         return False
 

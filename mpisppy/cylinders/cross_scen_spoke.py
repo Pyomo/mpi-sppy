@@ -40,8 +40,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ''' returns True if a kill signal was received,
             and refreshes the array and _locals'''
         self._new_locals = self.spoke_from_hub(self._locals)
-        kill = (self._locals[-1] == -1)
-        return kill
+        return self.remote_write_id == -1 
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
