@@ -346,13 +346,14 @@ class Hub(SPCommunicator):
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
-        self.cylinder_comm.barrier()
+        self.cylinder_comm.Barrier()
         self.local_write_ids[spoke_strata_rank - 1] += 1
         values[-1] = self.local_write_ids[spoke_strata_rank - 1]
         window = self.windows[spoke_strata_rank - 1]
         window.Lock(self.strata_rank)
         window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
         window.Unlock(self.strata_rank)
+        self.cylinder_comm.Barrier()
 
     def hub_from_spoke(self, values, spoke_num):
         """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
@@ -367,16 +368,20 @@ class Hub(SPCommunicator):
                 f"Hub trying to get buffer of length {expected_length} "
                 f"from spoke, but provided buffer has length {len(values)}."
             )
-        self.cylinder_comm.barrier()
+        self.cylinder_comm.Barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
         window.Unlock(spoke_num)
 
-        new_id = values[-1]
-        sum_ids = self.cylinder_comm.allreduce(new_id)
+        new_id = int(values[-1])
+        local_val = np.array((new_id,), 'i')
+        sum_ids = np.zeros(1, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (sum_ids, MPI.INT),
+                                     op=MPI.SUM)
 
-        if new_id != sum_ids / self.cylinder_comm.Get_size():
+        if new_id != sum_ids[0] / self.cylinder_comm.size:
             return False
 
         if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):

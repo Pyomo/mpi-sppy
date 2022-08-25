@@ -73,14 +73,14 @@ class Spoke(SPCommunicator):
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
-        self.cylinder_comm.barrier()
+        self.cylinder_comm.Barrier()
         self.local_write_id += 1
         values[-1] = self.local_write_id
         window = self.windows[self.strata_rank - 1]
         window.Lock(self.strata_rank)
         window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
         window.Unlock(self.strata_rank)
-        self.cylinder_comm.barrier()
+        self.cylinder_comm.Barrier()
 
     def spoke_from_hub(self, values):
         """
@@ -91,16 +91,20 @@ class Spoke(SPCommunicator):
                 f"Spoke trying to get buffer of length {expected_length} "
                 f"from hub, but provided buffer has length {len(values)}."
             )
-        self.cylinder_comm.barrier()
+        self.cylinder_comm.Barrier()
         window = self.windows[self.strata_rank - 1]
         window.Lock(0)
         window.Get((values, len(values), MPI.DOUBLE), 0)
         window.Unlock(0)
 
-        new_id = values[-1]
-        sum_ids = self.cylinder_comm.allreduce(new_id)
+        new_id = int(values[-1])
+        local_val = np.array((new_id,), 'i')
+        sum_ids = np.zeros(1, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (sum_ids, MPI.INT),
+                                     op=MPI.SUM)
 
-        if new_id != sum_ids / self.cylinder_comm.Get_size():
+        if new_id != sum_ids[0] / self.cylinder_comm.size:
             #print(f"{self.opt.spcomm.__class__.__name__} {self.cylinder_rank} ids disagree, id: {new_id}")
             return False
         #print(f"{self.opt.spcomm.__class__.__name__} {self.cylinder_rank} ids agree, id: {new_id}")
@@ -114,13 +118,6 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        # Spokes can sometimes call this frequently in a tight loop,
-        # causing the Allreduces to become out of sync
-        #diff = time.time() - self.last_call_to_got_kill_signal
-        #if diff < self.spoke_sleep_time:
-        #    time.sleep(self.spoke_sleep_time - diff)
-        #self.last_call_to_got_kill_signal = time.time()
-
         return self._got_kill_signal() 
 
     @abc.abstractmethod
@@ -134,7 +131,7 @@ class Spoke(SPCommunicator):
         pass
 
     def get_serial_number(self):
-        return int(self.remote_write_id)
+        return self.remote_write_id
 
     @abc.abstractmethod
     def _got_kill_signal(self):
