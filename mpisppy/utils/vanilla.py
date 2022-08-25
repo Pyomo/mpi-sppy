@@ -24,7 +24,7 @@ from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
-from mpisppy.cylinders.slam_heuristic import SlamUpHeuristic, SlamDownHeuristic
+from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.hub import PHHub
@@ -454,7 +454,7 @@ def xhatlshaped_spoke(
     }
     return xhatlshaped_dict
 
-def slamup_spoke(
+def slammax_spoke(
     args,
     scenario_creator,
     scenario_denouement,
@@ -467,7 +467,7 @@ def slamup_spoke(
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
-        "spoke_class": SlamUpHeuristic,
+        "spoke_class": SlamMaxHeuristic,
         "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
@@ -480,7 +480,7 @@ def slamup_spoke(
     }
     return xhatlooper_dict
 
-def slamdown_spoke(
+def slammin_spoke(
     args,
     scenario_creator,
     scenario_denouement,
@@ -493,7 +493,7 @@ def slamdown_spoke(
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
-        "spoke_class": SlamDownHeuristic,
+        "spoke_class": SlamMinHeuristic,
         "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
