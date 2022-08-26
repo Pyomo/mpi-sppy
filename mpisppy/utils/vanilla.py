@@ -83,7 +83,6 @@ def ph_hub(
         rho_setter=None,
         variable_probability=None,
         all_nodenames=None,
-        spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     options = copy.deepcopy(shoptions)
@@ -100,8 +99,7 @@ def ph_hub(
 
     hub_dict = {
         "hub_class": hub_class,
-        "hub_kwargs": {"options": {"spoke_sleep_time": spoke_sleep_time,
-                                   "rel_gap": args.rel_gap,
+        "hub_kwargs": {"options": {"rel_gap": args.rel_gap,
                                    "abs_gap": args.abs_gap,
                                    "max_stalled_iters": args.max_stalled_iters}},
         "opt_class": PH,
@@ -132,7 +130,6 @@ def aph_hub(
     rho_setter=None,
     variable_probability=None,
     all_nodenames=None,
-    spoke_sleep_time=None,
 ):
     hub_dict = ph_hub(args,
                       scenario_creator,
@@ -143,7 +140,7 @@ def aph_hub(
                       rho_setter=rho_setter,
                       variable_probability=variable_probability,
                       all_nodenames = all_nodenames,
-                      spoke_sleep_time = spoke_sleep_time)
+                     )
 
     hub_dict['hub_class'] = APHHub
     hub_dict['opt_class'] = APH    
@@ -203,7 +200,6 @@ def fwph_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     all_nodenames=None,
-    spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
 
@@ -226,7 +222,6 @@ def fwph_spoke(
     }
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": FWPH,
         "opt_kwargs": {
             "PH_options": shoptions,  # be sure convthresh is zero for fwph
@@ -250,12 +245,10 @@ def lagrangian_spoke(
     scenario_creator_kwargs=None,
     rho_setter=None,
     all_nodenames=None,
-    spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     lagrangian_spoke = {
         "spoke_class": LagrangianOuterBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": PHBase,
         "opt_kwargs": {
             "options": shoptions,
@@ -287,12 +280,10 @@ def lagranger_spoke(
     scenario_creator_kwargs=None,
     rho_setter=None,
     all_nodenames = None,
-    spoke_sleep_time=None,
 ):
     shoptions = shared_options(args)
     lagranger_spoke = {
         "spoke_class": LagrangerOuterBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": PHBase,
         "opt_kwargs": {
             "options": shoptions,
@@ -324,7 +315,6 @@ def xhatlooper_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
-    spoke_sleep_time=None,
 ):
     
     shoptions = shared_options(args)
@@ -338,7 +328,6 @@ def xhatlooper_spoke(
     }
     xhatlooper_dict = {
         "spoke_class": XhatLooperInnerBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -358,7 +347,6 @@ def xhatshuffle_spoke(
     all_scenario_names,
     all_nodenames=None,
     scenario_creator_kwargs=None,
-    spoke_sleep_time=None,
 ):
 
     shoptions = shared_options(args)
@@ -376,7 +364,6 @@ def xhatshuffle_spoke(
     
     xhatlooper_dict = {
         "spoke_class": XhatShuffleInnerBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -399,7 +386,6 @@ def xhatspecific_spoke(
     scenario_dict,
     all_nodenames=None,
     scenario_creator_kwargs=None,
-    spoke_sleep_time=None,
 ):
     
     shoptions = shared_options(args)
@@ -413,7 +399,6 @@ def xhatspecific_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatspecific_dict = {
         "spoke_class": XhatSpecificInnerBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -433,7 +418,6 @@ def xhatlshaped_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
-    spoke_sleep_time=None,
 ):
     
     shoptions = shared_options(args)
@@ -442,7 +426,6 @@ def xhatlshaped_spoke(
 
     xhatlshaped_dict = {
         "spoke_class": XhatLShapedInnerBound,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -460,7 +443,6 @@ def slamup_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
-    spoke_sleep_time=None,
 ):
 
     shoptions = shared_options(args)
@@ -468,7 +450,6 @@ def slamup_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
         "spoke_class": SlamUpHeuristic,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -486,7 +467,6 @@ def slamdown_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
-    spoke_sleep_time=None,
 ):
 
     shoptions = shared_options(args)
@@ -494,7 +474,6 @@ def slamdown_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
         "spoke_class": SlamDownHeuristic,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
             "options": xhat_options,
@@ -513,7 +492,6 @@ def cross_scenario_cuts_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     all_nodenames=None,
-    spoke_sleep_time=None,
 ):
 
     if _hasit(args, "max_solver_threads"):
@@ -531,7 +509,6 @@ def cross_scenario_cuts_spoke(
                  }
     cut_spoke = {
         "spoke_class": CrossScenarioCutSpoke,
-        "spoke_kwargs": {"options":{"spoke_sleep_time":spoke_sleep_time}},
         "opt_class": LShapedMethod,
         "opt_kwargs": {
             "options": ls_options,

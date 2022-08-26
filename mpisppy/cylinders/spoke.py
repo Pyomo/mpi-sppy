@@ -104,10 +104,10 @@ class Spoke(SPCommunicator):
                                      (sum_ids, MPI.INT),
                                      op=MPI.SUM)
 
+        # NOTE: we only proceed if all the ranks agree
+        #       on the ID
         if new_id != sum_ids[0] / self.cylinder_comm.size:
-            #print(f"{self.opt.spcomm.__class__.__name__} {self.cylinder_rank} ids disagree, id: {new_id}")
             return False
-        #print(f"{self.opt.spcomm.__class__.__name__} {self.cylinder_rank} ids agree, id: {new_id}")
 
         if (new_id > self.remote_write_id) or (new_id < 0):
             self.remote_write_id = new_id

@@ -13,14 +13,6 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 import mpisppy.cylinders as cylinders
 
-# For this problem, the subproblems are
-# small and take no time to solve. The
-# default SPOKE_SLEEP_TIME of 0.01 *causes*
-# synchronization issues in this case, so
-# we reduce it so as not to dominate the
-# time spent for cylinder synchronization
-SPOKE_SLEEP_TIME = 0.0001
-
 write_solution = True
 
 def _parse_args():
@@ -74,7 +66,7 @@ def main():
                               ph_extensions=None,
                               rho_setter = rho_setter,
                               all_nodenames = all_nodenames,
-                              spoke_sleep_time = SPOKE_SLEEP_TIME)
+                             )
 
     # Standard Lagrangian bound spoke
     if lagrangian:
@@ -82,7 +74,7 @@ def main():
                                                     scenario_creator_kwargs=scenario_creator_kwargs,
                                                     rho_setter = rho_setter,
                                                     all_nodenames = all_nodenames,
-                                                    spoke_sleep_time = SPOKE_SLEEP_TIME)
+                                                   )
 
 
     # xhat looper bound spoke
@@ -91,7 +83,7 @@ def main():
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       all_nodenames=all_nodenames,
                                                       scenario_creator_kwargs=scenario_creator_kwargs,
-                                                      spoke_sleep_time = SPOKE_SLEEP_TIME)
+                                                     )
 
     list_of_spoke_dict = list()
     if lagrangian:

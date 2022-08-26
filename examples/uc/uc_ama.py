@@ -11,21 +11,23 @@ WARNING:
 import mpisppy.utils.amalgamator as amalgamator
 from uc_funcs import id_fix_list_fct
 from mpisppy.utils import config
+import pyomo.common.config as pyofig
 
 def main():
     solution_files = {"first_stage_solution":"uc_first_stage.csv",
                       #"tree_solution":"uc_ama_full_solution" 
                       #It takes too long to right the full solution
                       }
-    config.add_and_assign("id_fix_list_fct", "fct used by fixer extension", 
+    cfg = config.Config()
+    cfg.add_and_assign("id_fix_list_fct", "fct used by fixer extension", 
                                         domain=None, default=None,
                                         value = id_fix_list_fct)
-    ama_options = {"2stage": True,   # 2stage vs. mstage
-                   "cylinders": ['ph','xhatshuffle','lagranger'],
-                   "extensions": ['fixer'],
-                   "write_solution": solution_files
-                   }
-    ama = amalgamator.from_module("uc_funcs", ama_options)
+    cfg.add_and_assign("2stage", description="2stage vsus mstage", domain=bool, default=None, value=True)
+    cfg.add_and_assign("cylinders", description="list of cylinders", domain=pyofig.ListOf(str), default=None, value=['ph','xhatshuffle','lagranger'])
+    cfg.add_and_assign("extensions", description="list of extensions", domain=pyofig.ListOf(str), default=None, value= ['fixer'])
+    cfg.add_and_assign("write_solution", description="list of extensions", domain=None, default=None, value=solution_files)
+
+    ama = amalgamator.from_module("uc_funcs", cfg)
     ama.run()
     if ama.on_hub:
         print("first_stage_solution=", ama.first_stage_solution)
