@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme cplex
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex
           pip install xpress
 
       - name: setup the program
