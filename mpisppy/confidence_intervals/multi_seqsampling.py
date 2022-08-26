@@ -79,7 +79,10 @@ class IndepScens_SeqSampling(SeqSampling):
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
 
         xgo = self.xhat_gen_kwargs.copy()
-        xgo["solvername"] = self.cfg.solver_name
+        try:
+            xgo["solvername"] = self.cfg.solvername
+        except AttributeError:
+            xgo["solvername"] = self.cfg.solver_name
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # it will be given explicitly
         xgo["branching_factors"] = xhat_branching_factors

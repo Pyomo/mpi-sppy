@@ -44,7 +44,7 @@ jobs:
       - name: Test run_all nouc 
         run: |
           cd examples
-          python run_all.py xpress_persistent --oversubscribe nouc
+          python run_all.py xpress_persistent "" nouc
 
       - name: Test docs
         run: |

@@ -386,5 +386,6 @@ if len(badguys) > 0:
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))
+    sys.exit(1)
 else:
     print("\nAll OK.")
