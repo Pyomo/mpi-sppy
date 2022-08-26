@@ -448,7 +448,9 @@ def slammax_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict = {
         "spoke_class": SlamMaxHeuristic,
-        "opt_kwargs": { "options": xhat_options,
+        "opt_class": Xhat_Eval,
+        "opt_kwargs": {
+            "options": xhat_options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
