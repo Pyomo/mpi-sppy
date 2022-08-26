@@ -41,6 +41,11 @@ jobs:
           cd examples
           python afew.py xpress_persistent 
 
+      - name: Test run_all nouc 
+        run: |
+          cd examples
+          python run_all.py xpress_persistent --oversubscribe nouc
+
       - name: Test docs
         run: |
           cd ./doc/src/
