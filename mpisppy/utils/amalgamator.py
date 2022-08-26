@@ -61,8 +61,8 @@ spokes_and_multi_compatibility = {'fwph':False,
                                   'xhatshuffle':True,
                                   'xhatspecific':True,
                                   'xhatlshaped':False,
-                                  'slamup':False,
-                                  'slamdown':False,
+                                  'slammax':False,
+                                  'slammin':False,
                                   'cross_scenario_cuts':False}
 
 default_unused_spokes = ['xhatlooper', 'xhatspecific']
@@ -82,7 +82,7 @@ def _bool_option(cfg, oname):
 
 
 def add_options(cfg, parser_choice=None):
-    #  parser_choice is a string referring to the component (e.g., "slamdown")
+    #  parser_choice is a string referring to the component (e.g., "slammin")
     # (note: by "parser" we mean "config")
     assert parser_choice is not None
 

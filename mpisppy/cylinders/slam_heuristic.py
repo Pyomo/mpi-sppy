@@ -23,6 +23,8 @@ logger = logging.getLogger("mpisppy.cylinders.slam_heuristic")
 
 class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
+    converger_spoke_char = 'S'
+
     @property
     @abc.abstractmethod
     def numpy_op(self):
@@ -102,9 +104,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 
             slam_iter += 1
 
-class SlamUpHeuristic(_SlamHeuristic):
-
-    converger_spoke_char = 'U'
+class SlamMaxHeuristic(_SlamHeuristic):
 
     @property
     def numpy_op(self):
@@ -114,9 +114,7 @@ class SlamUpHeuristic(_SlamHeuristic):
     def mpi_op(self):
         return mpi.MAX
 
-class SlamDownHeuristic(_SlamHeuristic):
-
-    converger_spoke_char = 'D'
+class SlamMinHeuristic(_SlamHeuristic):
 
     @property
     def numpy_op(self):

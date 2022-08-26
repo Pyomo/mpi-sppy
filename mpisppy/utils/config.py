@@ -535,21 +535,21 @@ class Config(pyofig.ConfigDict):
 
 
 
-    def slamup_args(self):
+    def slammax_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('slamup', 
-                            description="have an slamup spoke (default)",
+        self.add_to_config('slammax', 
+                            description="have an slammax spoke (default)",
                               domain=bool,
                               default=False)
 
 
 
-    def slamdown_args(self):
+    def slammin_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('slamdown', 
-                            description="have an slamdown spoke (default)",
+        self.add_to_config('slammin', 
+                            description="have an slammin spoke (default)",
                               domain=bool,
                               default=False)
 
