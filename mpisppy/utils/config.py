@@ -388,8 +388,7 @@ class Config(pyofig.ConfigDict):
 
     def fixer_args(self):
 
-        self.add_to_config('fixer', 
-                              description="have an integer fixer extension (default)",
+        self.add_to_config('fixer',                               description="have an integer fixer extension",
                               domain=bool,
                               default=False)
 
@@ -403,7 +402,7 @@ class Config(pyofig.ConfigDict):
     def fwph_args(self):
 
         self.add_to_config('fwph', 
-                              description="have an fwph spoke (default)",
+                              description="have an fwph spoke",
                               domain=bool,
                               default=False)
 
@@ -437,7 +436,7 @@ class Config(pyofig.ConfigDict):
     def lagrangian_args(self):
 
         self.add_to_config('lagrangian', 
-                              description="have a lagrangian spoke (default)",
+                              description="have a lagrangian spoke",
                               domain=bool,
                               default=False)
 
@@ -457,7 +456,7 @@ class Config(pyofig.ConfigDict):
     def lagranger_args(self):
 
         self.add_to_config('lagranger', 
-                            description="have a special lagranger spoke (default)",
+                            description="have a special lagranger spoke",
                               domain=bool,
                               default=False)
 
@@ -482,7 +481,7 @@ class Config(pyofig.ConfigDict):
     def xhatlooper_args(self):
 
         self.add_to_config('xhatlooper', 
-                              description="have an xhatlooper spoke (default)",
+                              description="have an xhatlooper spoke",
                               domain=bool,
                               default=False)
 
@@ -497,7 +496,7 @@ class Config(pyofig.ConfigDict):
     def xhatshuffle_args(self):
 
         self.add_to_config('xhatshuffle', 
-                              description="have an xhatshuffle spoke (default)",
+                              description="have an xhatshuffle spoke",
                               domain=bool,
                               default=False)
 
@@ -518,7 +517,7 @@ class Config(pyofig.ConfigDict):
         # we will not try to get the specification from the command line
 
         self.add_to_config('xhatspecific', 
-                              description="have an xhatspecific spoke (default)",
+                              description="have an xhatspecific spoke",
                               domain=bool,
                               default=False)
 
@@ -529,7 +528,7 @@ class Config(pyofig.ConfigDict):
         # we will not try to get the specification from the command line
 
         self.add_to_config('xhatlshaped', 
-                              description="have an xhatlshaped spoke (default)",
+                              description="have an xhatlshaped spoke",
                               domain=bool,
                               default=False)
 
@@ -539,7 +538,7 @@ class Config(pyofig.ConfigDict):
         # we will not try to get the specification from the command line
 
         self.add_to_config('slammax', 
-                            description="have an slammax spoke (default)",
+                            description="have a slammax spoke",
                               domain=bool,
                               default=False)
 
@@ -549,7 +548,7 @@ class Config(pyofig.ConfigDict):
         # we will not try to get the specification from the command line
 
         self.add_to_config('slammin', 
-                            description="have an slammin spoke (default)",
+                            description="have a slammin spoke",
                               domain=bool,
                               default=False)
 
@@ -559,7 +558,7 @@ class Config(pyofig.ConfigDict):
         # we will not try to get the specification from the command line
 
         self.add_to_config('cross_scenario_cuts', 
-                              description="have a cross scenario cuts spoke (default)",
+                              description="have a cross scenario cuts spoke",
                               domain=bool,
                               default=False)
 
