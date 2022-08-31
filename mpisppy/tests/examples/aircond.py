@@ -398,6 +398,7 @@ def inparser_adder(cfg):
                              default=parms[name][1],
                              argparse=True)
 
+    cfg.add_to_config("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None)
     _doone("mu_dev", "average deviation of demand between two periods", argname="mu-dev")
     _doone("sigma_dev", "standard deviation of deviation of demand between two periods", argname="sigma-dev")
     _doone("start_ups", "Include start-up costs in model, resulting in a MPI (default {d})")
