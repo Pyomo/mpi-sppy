@@ -365,7 +365,7 @@ class Amalgamator():
             if 'extensions' in self.cfg:
                 for extension in self.cfg['extensions']:
                     extension_creator = getattr(vanilla, 'add_'+extension)
-                    hub_dict = extension_creator(hub_dict, cfg)
+                    hub_dict = extension_creator(hub_dict, self.cfg)
             
             #Create spoke dicts
             potential_spokes = find_spokes(self.cfg['cylinders'],

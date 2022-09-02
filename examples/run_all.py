@@ -139,8 +139,8 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
             badguys[dirname].append(runefstring)
     # run mmw, remove .npy file
     else:
-        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} --solver-name {} {}".\
-                    format(dirname, npyfile, solver_name, mmwargstring)
+        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} {}".\
+                    format(dirname, npyfile, mmwargstring)
         code = os.system("echo {} && {}".format(runstring, runstring))
         if code != 0:
             if dirname not in badguys:
@@ -150,7 +150,6 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
         
         os.remove(npyfile)
     os.chdir("..")
-
 
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
@@ -261,6 +260,7 @@ do_one("sslp",
        "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
        "--max-iterations=5 --default-rho=1 "
        "--lagrangian --xhatshuffle --fwph "
+       "--linearize-proximal-terms "
        "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
 
 do_one("hydro", "hydro_cylinders.py", 3,
@@ -306,7 +306,7 @@ do_one("aircond",
 
 #=========MMW TESTS==========
 # do_one_mmw is special
-do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", "--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --objective-gap --start-scen 4 --EF-solver-name={solver_name}")
+do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", f"--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --objective-gap --start-scen 4 --EF-solver-name={solver_name}")
 
 
 #============================
@@ -386,5 +386,6 @@ if len(badguys) > 0:
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))
+    sys.exit(1)
 else:
     print("\nAll OK.")

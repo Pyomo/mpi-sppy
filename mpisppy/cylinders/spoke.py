@@ -73,6 +73,7 @@ class Spoke(SPCommunicator):
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
+        self.cylinder_comm.Barrier()
         self.local_write_id += 1
         values[-1] = self.local_write_id
         window = self.windows[self.strata_rank - 1]
@@ -89,13 +90,26 @@ class Spoke(SPCommunicator):
                 f"Spoke trying to get buffer of length {expected_length} "
                 f"from hub, but provided buffer has length {len(values)}."
             )
+        self.cylinder_comm.Barrier()
         window = self.windows[self.strata_rank - 1]
         window.Lock(0)
         window.Get((values, len(values), MPI.DOUBLE), 0)
         window.Unlock(0)
 
-        if values[-1] > self.remote_write_id:
-            self.remote_write_id = values[-1]
+        new_id = int(values[-1])
+        local_val = np.array((new_id,), 'i')
+        sum_ids = np.zeros(1, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (sum_ids, MPI.INT),
+                                     op=MPI.SUM)
+
+        # NOTE: we only proceed if all the ranks agree
+        #       on the ID
+        if new_id != sum_ids[0] / self.cylinder_comm.size:
+            return False
+
+        if (new_id > self.remote_write_id) or (new_id < 0):
+            self.remote_write_id = new_id
             return True
         return False
 
@@ -103,13 +117,7 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        # Spokes can sometimes call this frequently in a tight loop,
-        # causing the Allreduces to become out of sync
-        diff = time.time() - self.last_call_to_got_kill_signal
-        if diff < self.spoke_sleep_time:
-            time.sleep(self.spoke_sleep_time - diff)
-        self.last_call_to_got_kill_signal = time.time()
-        return self._got_kill_signal()
+        return self._got_kill_signal() 
 
     @abc.abstractmethod
     def main(self):
@@ -121,9 +129,8 @@ class Spoke(SPCommunicator):
         """
         pass
 
-    @abc.abstractmethod
     def get_serial_number(self):
-        pass
+        return self.remote_write_id
 
     @abc.abstractmethod
     def _got_kill_signal(self):
@@ -173,14 +180,10 @@ class _BoundSpoke(Spoke):
         self._bound[0] = value
         self.spoke_to_hub(self._bound)
 
-    def get_serial_number(self):
-        return int(self._kill_sig[-1])
-
     def _got_kill_signal(self):
         """Looks for the kill signal and returns True if sent"""
         self.spoke_from_hub(self._kill_sig)
-        kill = self._kill_sig[-1] == -1
-        return kill
+        return self.remote_write_id == -1
 
     def _append_trace(self, value):
         if self.cylinder_rank != 0 or self.trace_filen is None:
@@ -217,15 +220,11 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         self._bound = np.zeros(1 + 1)
         self._new_locals = False
 
-    def get_serial_number(self):
-        return int(self._locals[-1])
-
     def _got_kill_signal(self):
         """ returns True if a kill signal was received, 
             and refreshes the array and _locals"""
         self._new_locals = self.spoke_from_hub(self._locals)
-        kill = self._locals[-1] == -1
-        return kill
+        return self.remote_write_id == -1
 
 
 class InnerBoundSpoke(_BoundSpoke):
