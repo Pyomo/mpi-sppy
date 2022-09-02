@@ -346,6 +346,7 @@ class Hub(SPCommunicator):
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
+        # this is so the spoke ranks all get the same write_id at approximately the same time
         self.cylinder_comm.Barrier()
         self.local_write_ids[spoke_strata_rank - 1] += 1
         values[-1] = self.local_write_ids[spoke_strata_rank - 1]
@@ -353,7 +354,6 @@ class Hub(SPCommunicator):
         window.Lock(self.strata_rank)
         window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
         window.Unlock(self.strata_rank)
-        self.cylinder_comm.Barrier()
 
     def hub_from_spoke(self, values, spoke_num):
         """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
@@ -368,6 +368,8 @@ class Hub(SPCommunicator):
                 f"Hub trying to get buffer of length {expected_length} "
                 f"from spoke, but provided buffer has length {len(values)}."
             )
+        # so the window in each rank gets read at approximately the same time,
+        # and so has the same write_id
         self.cylinder_comm.Barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)

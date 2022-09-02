@@ -80,7 +80,6 @@ class Spoke(SPCommunicator):
         window.Lock(self.strata_rank)
         window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
         window.Unlock(self.strata_rank)
-        self.cylinder_comm.Barrier()
 
     def spoke_from_hub(self, values):
         """
