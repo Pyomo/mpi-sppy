@@ -11,11 +11,10 @@ NOTICE
 
 There was a disruptive change on August 11, 2022 concerning how
 options are accessed. See the file ``disruptions.txt`` for more
-information. The most recent release was done before the change so
-installation using pip is not yet affected. If you are a new user,
-this will not affect you, regardless of how you install. If you are an
+information. If you are a new user, this will not affect you,
+regardless of how you install. If you are an
 existing user, you should consider the disruption before updating to
-the latest mpi-sppy code on github. The documentation on readthedocs
+the latest mpi-sppy. The documentation on readthedocs
 probably refers to the newest version.
 
 Status for internal tests
