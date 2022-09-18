@@ -279,9 +279,7 @@ class Amalgamator():
         self.verbose = verbose
         self.is_EF = _bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")
         if self.is_EF:
-            self.solvername = cfg.get('EF_solver_name', None)
-            self.solver_options = cfg['EF_solver_options'] \
-                if ('EF_solver_options' in cfg) else {}
+            sroot, self.solvername, self.solver_options = solver_options.solver_options(cfg, ["EF", ""])
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
         if self.is_multi and not "all_nodenames" in cfg:
             if "branching_factors" in cfg:

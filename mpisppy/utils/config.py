@@ -43,16 +43,6 @@ If you want a positional arg, you have to DIY:
 
 """
 
-"""
-TBD:
-  - Do a better job with solver options.
-
-  - There is some discussion of name spaces, but I think for
-things coming off the command line, we can't *really* do that since
-there is just one command line. See Prescient... maybe we can really do it.
-
-"""
-
 import argparse
 import pyomo.common.config as pyofig
 
@@ -160,6 +150,11 @@ class Config(pyofig.ConfigDict):
                             description= "solver name (default gurobi)",
                             domain = str,
                             default="gurobi")
+
+        self.add_to_config("solver_options", 
+                            description= "solver options; space delimited with = for values (default None)",
+                            domain = str,
+                            default=None)
 
         self.add_to_config("seed", 
                             description="Seed for random numbers (default is 1134)",
@@ -283,49 +278,47 @@ class Config(pyofig.ConfigDict):
 
     #### EF ####
     def make_EF2_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")    
+        raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")
 
-    def EF2(self):
-        self.add_to_config(
-            "num_scens", 
-                description="Number of scenarios (default None)",
-                domain=int,
-                default=None,
-            )
-
+    def _EF_base(self):
+        
         self.add_to_config("EF_solver_name", 
-            description= "solver name (default gurobi)",
-            domain = str,
-            default="gurobi")
+                           description= "solver name (default gurobi)",
+                           domain = str,
+                           default="gurobi")
+
+        self.add_to_config("EF_solver_options", 
+                           description= "solver name (default None)",
+                           domain = str,
+                           default=None)
+        
+        self.add_to_config("EF_solver_name", 
+                           description= "solver name (default gurobi)",
+                           domain = str,
+                           default="gurobi")
 
 
         self.add_to_config("EF_mipgap", 
-                            description="mip gap option for the solver if needed (default None)",
-                            domain=float,
-                            default=None)
+                           description="mip gap option for the solver if needed (default None)",
+                           domain=float,
+                           default=None)
+        
+
+    def EF2(self):
+        self._EF_base()
+        self.add_to_config("num_scens", 
+                           description="Number of scenarios (default None)",
+                           domain=int,
+                           default=None)
 
 
     def make_EF_multistage_parser(self, progname=None, num_scens_reqd=False):
         raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")        
 
     def EF_multistage(self):
-        self.add_to_config(
-            "num_scens", 
-                description="Number of scenarios (default None)",
-                domain=int,
-                default=None,
-            )
-
-        self.add_to_config("EF_solver_name", 
-            description= "solver name (default gurobi)",
-            domain = str,
-            default="gurobi")
-
-
-        self.add_to_config("EF_mipgap", 
-            description="mip gap option for the solver if needed (default None)",
-            domain=float,
-            default=None)
+        
+        self._EF_base()
+        # branching factors???
 
     ##### common additions to the command line #####
 
@@ -388,23 +381,24 @@ class Config(pyofig.ConfigDict):
 
     def fixer_args(self):
 
-        self.add_to_config('fixer',                               description="have an integer fixer extension",
-                              domain=bool,
-                              default=False)
+        self.add_to_config('fixer',
+                           description="have an integer fixer extension",
+                           domain=bool,
+                           default=False)
 
         self.add_to_config("fixer_tol", 
-                            description="fixer bounds tolerance  (default 1e-4)",
-                            domain=float,
-                            default=1e-2)
+                           description="fixer bounds tolerance  (default 1e-4)",
+                           domain=float,
+                           default=1e-2)
 
 
 
     def fwph_args(self):
 
         self.add_to_config('fwph', 
-                              description="have an fwph spoke",
-                              domain=bool,
-                              default=False)
+                           description="have an fwph spoke",
+                           domain=bool,
+                           default=False)
 
         self.add_to_config("fwph_iter_limit", 
                             description="maximum fwph iterations (default 10)",
