@@ -515,7 +515,7 @@ class SPBase:
             list of required options. Raises a ValueError if anything is
             missing.
         """
-        missing = [option for option in required_options if option not in given_options] 
+        missing = [option for option in required_options if given_options.get(option) is None] 
         if missing:
             raise ValueError(f"Missing the following required options: {', '.join(missing)}")
 

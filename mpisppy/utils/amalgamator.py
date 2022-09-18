@@ -428,6 +428,7 @@ if __name__ == "__main__":
     # num_scens_reqd has been deprecated
 
     ama = from_module("mpisppy.tests.examples.farmer", cfg)
+    cfg.default_rho = 1.0
     ama.run()
     # print(f"inner bound=", ama.best_inner_bound)
     # print(f"outer bound=", ama.best_outer_bound)
