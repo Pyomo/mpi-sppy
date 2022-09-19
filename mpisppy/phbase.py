@@ -665,7 +665,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         required = [
             "solvername", "PHIterLimit", "defaultPHrho", 
             "convthresh", "verbose", "display_progress", 
-            "iter0_solver_options", "iterk_solver_options"
         ]
         self._options_check(required, self.options)
         # Display timing and display convergence detail are special for no good reason.
