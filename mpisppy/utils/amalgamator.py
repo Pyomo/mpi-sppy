@@ -39,6 +39,7 @@ import argparse
 import copy
 import pyomo.common.config as pyofig
 from mpisppy.utils import config
+import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -279,7 +280,7 @@ class Amalgamator():
         self.verbose = verbose
         self.is_EF = _bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")
         if self.is_EF:
-            sroot, self.solvername, self.solver_options = solver_options.solver_options(cfg, ["EF", ""])
+            sroot, self.solvername, self.solver_options = solver_spec.solver_specification(cfg, ["EF", ""])
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
         if self.is_multi and not "all_nodenames" in cfg:
             if "branching_factors" in cfg:

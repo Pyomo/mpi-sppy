@@ -18,8 +18,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
 
     Args:
         options (dict):
-            Dictionary of options. Must include a `solver` key to
-            specify which solver to use on the EF.
+            Dictionary of options. May include a `solver` key to
+            specify which solver name to use on the EF.
         all_scenario_names (list):
             List of the names of each scenario in the EF (strings).
         scenario_creator (callable):
@@ -32,6 +32,9 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         suppress_warnings (bool, optional):
             Boolean to suppress warnings when building the EF. Default
             is False.
+
+    Note: allowing use of the "solver" option key is for backward compatibility
+
     """
     def __init__(
         self,
@@ -154,6 +157,7 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
 
 
 if __name__ == "__main__":
+    # for ad hoc developer testing
     import mpisppy.tests.examples.farmer as farmer
 
     """ Farmer example """

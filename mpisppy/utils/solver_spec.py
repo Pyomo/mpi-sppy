@@ -1,6 +1,8 @@
 # Utility to allow for a heirarchy of solvers and options
 # and perhaps utilities to support special options like threads and mipgap
 
+import mpisppy.utils.sputils as sputils
+
 """
 There is a naming convention that has a root (e.g., PH or Lagranger)
 that can be an empty string.
@@ -27,7 +29,7 @@ TBD: xxxx should mipgap and solver_threads be special?
 
 """
 
-def solver_options(cfg, root_list, name_required=True):
+def solver_specification(cfg, root_list, name_required=True):
     """ Look through cfg to find the soler_name and solver_options.
 
     Args:
@@ -49,7 +51,7 @@ def solver_options(cfg, root_list, name_required=True):
             solver_name = cfg[name_idx]
             options_idx = "solver_options" if sroot == "" else f"{sroot}_solver_options"
             ostr = cfg.get(options_idx)
-            solver_options = utils.option_string_to_dict(ostr)  # will return None for None
+            solver_options = sputils.option_string_to_dict(ostr)  # will return None for None
             break
     else:
         if name_required:
