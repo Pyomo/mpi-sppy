@@ -27,6 +27,8 @@ when those are used, thing should go smoothly.
 TBD: xxxx should mipgap and solver_threads be special?
    For now, we will let callers deal with them
 
+Note: we are no longer going to allow a dict as the options value. It will have to be a string.
+
 """
 
 def solver_specification(cfg, root_list, name_required=True):
