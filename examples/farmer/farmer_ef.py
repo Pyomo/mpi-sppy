@@ -61,7 +61,7 @@ def main_with_cfg():
         scenario_creator_kwargs=farmer.kw_creator(cfg),
     )
 
-    sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, ["EF"])
+    sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
    
     solver = pyo.SolverFactory(solver_name)
     if solver_options is not None:

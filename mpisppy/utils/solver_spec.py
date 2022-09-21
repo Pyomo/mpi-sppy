@@ -36,7 +36,7 @@ def solver_specification(cfg, root_list, name_required=True):
 
     Args:
         cfg (Config): options, typically from the command line
-        root_list (list of str): the list of root strings (e.g. "PH", "", "Lagranger")
+        prefix (str or list of str): the prefix strings (e.g. "PH", "", "Lagranger")
         name_required (boolean): throw an error if we don't get a solver name
 
     Returns:
@@ -44,7 +44,10 @@ def solver_specification(cfg, root_list, name_required=True):
         solver_name (str): the solver name (or None)
         solver_options (dict): the options dictionary created from the string
     """
-
+if isinstance(prefix, (list,tuple)):
+    root_list = prefix  
+else:
+    root_list = [prefix, ]
     idx_list = list()
     for sroot in root_list:
         name_idx = "solver_name" if sroot == "" else f"{sroot}_solver_name"
