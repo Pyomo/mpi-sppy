@@ -79,7 +79,7 @@ def main_with_cfg():
 
 if __name__ == '__main__':
     # show two ways to get parameters
-    use_cfg = True
+    use_cfg = False
     if not use_cfg:
         main_ef = main_no_cfg()
     else:
