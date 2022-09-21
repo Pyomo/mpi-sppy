@@ -44,10 +44,12 @@ def solver_specification(cfg, prefix="", name_required=True):
         solver_name (str): the solver name (or None)
         solver_options (dict): the options dictionary created from the string
     """
-if isinstance(prefix, (list,tuple)):
-    root_list = prefix  
-else:
-    root_list = [prefix, ]
+    
+    if isinstance(prefix, (list,tuple)):
+        root_list = prefix
+    else:
+        root_list = [prefix, ]
+
     idx_list = list()
     for sroot in root_list:
         name_idx = "solver_name" if sroot == "" else f"{sroot}_solver_name"
