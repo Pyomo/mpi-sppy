@@ -31,7 +31,7 @@ Note: we are no longer going to allow a dict as the options value. It will have 
 
 """
 
-def solver_specification(cfg, root_list, name_required=True):
+def solver_specification(cfg, prefix="", name_required=True):
     """ Look through cfg to find the soler_name and solver_options.
 
     Args:
