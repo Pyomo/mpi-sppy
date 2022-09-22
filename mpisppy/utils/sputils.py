@@ -546,7 +546,8 @@ def parent_ndn(nodename):
         return None
     else:
         return re.search('(.+)_(\d+)',nodename).group(1)
-        
+
+    
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
@@ -583,6 +584,29 @@ def option_string_to_dict(ostr):
             raise RuntimeError("Illegally formed subsolve directive"\
                                + " option=%s detected" % this_option)
     return solver_options
+
+
+def option_dict_to_string(odict):
+    """ Convert a standard dict for solver options to a string.
+
+    Args:
+        odict (dict): options dict for Pyomo
+
+    Returns:
+        ostring (str): options string as in mpi-sppy
+
+    Note: None begets None, and empty begets empty
+
+    """
+    if odict is None:
+        return None
+    ostr = ""
+    for i, v in odict.items():
+        if v is None:
+            ostr += "{i} "
+        else:
+            ostr += f"{i}={v} "
+    return ostr
 
 
 ################################################################################

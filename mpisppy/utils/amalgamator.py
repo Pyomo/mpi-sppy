@@ -39,6 +39,7 @@ import argparse
 import copy
 import pyomo.common.config as pyofig
 from mpisppy.utils import config
+import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -279,9 +280,7 @@ class Amalgamator():
         self.verbose = verbose
         self.is_EF = _bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")
         if self.is_EF:
-            self.solvername = cfg.get('EF_solver_name', None)
-            self.solver_options = cfg['EF_solver_options'] \
-                if ('EF_solver_options' in cfg) else {}
+            sroot, self.solvername, self.solver_options = solver_spec.solver_specification(cfg, ["EF", ""])
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
         if self.is_multi and not "all_nodenames" in cfg:
             if "branching_factors" in cfg:
@@ -307,8 +306,7 @@ class Amalgamator():
             solver = pyo.SolverFactory(solvername)
             if hasattr(self, "solver_options") and (self.solver_options is not None):
                 for option_key,option_value in self.solver_options.items():
-                    if option_value is not None:
-                        solver.options[option_key] = option_value
+                    solver.options[option_key] = option_value
             if self.verbose :
                 global_toc("Starting EF solve")
             if 'persistent' in solvername:
@@ -430,6 +428,7 @@ if __name__ == "__main__":
     # num_scens_reqd has been deprecated
 
     ama = from_module("mpisppy.tests.examples.farmer", cfg)
+    cfg.default_rho = 1.0
     ama.run()
     # print(f"inner bound=", ama.best_inner_bound)
     # print(f"outer bound=", ama.best_outer_bound)

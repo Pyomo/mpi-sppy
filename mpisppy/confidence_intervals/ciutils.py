@@ -313,7 +313,8 @@ def gap_estimators(xhat_one,
         ama_cfg = cfg()
         ama_cfg.quick_assign(solving_type, bool, True)
         ama_cfg.quick_assign("EF_solver_name", str, solvername)
-        ama_cfg.quick_assign("EF_solver_options", dict, solver_options)
+        solver_options_str= sputils.option_dict_to_string(solver_options)  # cfg need str
+        ama_cfg.quick_assign("EF_solver_options", str, solver_options_str)
         ama_cfg.quick_assign("num_scens", int, num_scens)
         ama_cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
         ama_cfg.quick_assign("start", int, start)
