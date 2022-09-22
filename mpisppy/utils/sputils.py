@@ -546,7 +546,8 @@ def parent_ndn(nodename):
         return None
     else:
         return re.search('(.+)_(\d+)',nodename).group(1)
-        
+
+    
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
@@ -583,6 +584,29 @@ def option_string_to_dict(ostr):
             raise RuntimeError("Illegally formed subsolve directive"\
                                + " option=%s detected" % this_option)
     return solver_options
+
+
+def option_dict_to_string(odict):
+    """ Convert a standard dict for solver options to a string.
+
+    Args:
+        odict (dict): options dict for Pyomo
+
+    Returns:
+        ostring (str): options string as in mpi-sppy
+
+    Note: None begets None, and empty begets empty
+
+    """
+    if odict is None:
+        return None
+    ostr = ""
+    for i, v in odict.items():
+        if v is None:
+            ostr += "{i} "
+        else:
+            ostr += f"{i}={v} "
+    return ostr
 
 
 ################################################################################
@@ -956,8 +980,25 @@ def number_of_nodes(branching_factors):
     return node_idx(last_node_stage_num, branching_factors)
     
 
-
-          
+def solver_name_from_list(cfg, idx, alt_list):
+    """ Find a solver name to assign to cfg[idx]; if you can't find anything, do nothing.
+    Args:
+        cfg (Config): the Pyomo Config object to update
+        idx (str): the index for the solver name
+        alt_list (list of str): alternative names to try, in order
+    Returns:
+        updated cfg
+    """
+    if cfg.get(idx) is None:  # if not None, we are done
+        for i in alt_list:
+            if cfg.get(i) is not None:
+                cfg.add_and_assign(name=idx,
+                                   description="solver name obtained as {i}",
+                                   domain=str,
+                                   default=None,
+                                   value=cfg.get(i))
+                break
+    return cfg
 
 if __name__ == "__main__":
     branching_factors = [2,2,2,3]

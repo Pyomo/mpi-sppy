@@ -1,10 +1,10 @@
-import argparse
 import itertools
 import os
 
+from config import add_extensive_form_args, add_common_args
 from generate_data import generate_coords, generate_data
 import mpisppy.opt.ef
-from parser import add_extensive_form_args, add_common_args
+import mpisppy.utils.config
 from scenario_creator import scenario_creator
 from write_solutions import walks_writer, gantt_writer
 
@@ -35,16 +35,16 @@ def extensive_form(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser()
-    add_extensive_form_args(parser)
-    add_common_args(parser)
-    args = parser.parse_args()
+    cnfg = mpisppy.utils.config.Config()
+    add_extensive_form_args(cnfg)
+    add_common_args(cnfg)
+    cnfg.parse_command_line()
 
-    ef = extensive_form(**vars(args))
+    ef = extensive_form(**cnfg)
 
     ef.solve_extensive_form(tee=True)
 
-    output_dir = args.output_dir
+    output_dir = cnfg["output_dir"]
     ef.write_tree_solution(os.path.join(output_dir, "walks"), walks_writer)
     ef.write_tree_solution(os.path.join(output_dir, "gantts"), gantt_writer)
 

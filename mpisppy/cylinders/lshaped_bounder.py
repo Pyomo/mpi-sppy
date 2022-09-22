@@ -71,9 +71,4 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
                 if obj is None:
                     continue
 
-                update = (obj < self.ib) if is_minimizing else (self.ib < obj)
-                if update:
-                    self.bound = obj
-                    self.ib = obj
-
-        ## TODO: Save somewhere?
+                self.update_if_improving(obj)

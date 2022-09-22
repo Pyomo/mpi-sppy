@@ -86,7 +86,9 @@ class SPBase:
         self.n_proc = self.mpicomm.Get_size()
         self.global_rank = MPI.COMM_WORLD.Get_rank()
 
-        global_toc("Initializing SPBase")
+
+        if options.get("toc", True):
+            global_toc("Initializing SPBase")
 
         if self.n_proc > len(self.all_scenario_names):
             raise RuntimeError("More ranks than scenarios")
@@ -513,7 +515,7 @@ class SPBase:
             list of required options. Raises a ValueError if anything is
             missing.
         """
-        missing = [option for option in required_options if option not in given_options] 
+        missing = [option for option in required_options if given_options.get(option) is None] 
         if missing:
             raise ValueError(f"Missing the following required options: {', '.join(missing)}")
 

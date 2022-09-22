@@ -23,7 +23,7 @@ problem, taking the amalgamator options as an input, and giving as an output
 additional arguments for the ``scenario_creator``. The amalgamator class
 is not flexible with respect to function names in the module.
 
-The ``options`` argument is a dictionary that specifies information 
+The ``cfg`` argument is a ``Config`` class object that specifies information 
 about the problem, and dictates the way Amalgamator runs. 
 It must contains the following attributes for use with cylinders:
 
@@ -49,10 +49,10 @@ It must contains the following attributes for use with cylinders:
 
 
 Create Amalgamator from a module and command line
--------------------------------------------------
-Given an options dictionary as above, ``amalgamator.Amalgamator_parser``
-calls the appropriate parsers from ``baseparsers.py`` and completes the options
-to add the necessary information for different modules.
+------------------------------------------------- Given an options
+``Config`` object (typically called `cfg`) as above,
+``amalgamator.Amalgamator_parser`` creates calls the appropriate
+functions to add the necessary information for different modules.
 
 The method ``amalgamator.from_module`` uses the two utilities described above.
 It takes as input a module name, and calls ``amalgamator.Amalgamator_parser``
@@ -63,7 +63,7 @@ runs an Amalgamator object.
 .. Note::
    The module must contains several methods:
    ``scenario_creator``, ``scenario_names_creator``, ``inparser_adder`` and
-   ``kw_creator``. The files ``examples.farmer.afarmer.py``, ``mpisppy.tests.examples.aircond.py`` contain
+   ``kw_creator``. The files ``examples.farmer.farmer.py``, ``mpisppy.tests.examples.aircond.py`` contain
    examples of these functions.
 
 The full options dictionary is passed through to ``kw_creator`` so keyword arguments for
@@ -72,8 +72,8 @@ scenario creation can be placed in the almalgamator options dictionary.
 Notes about ``inparser_adder``
 ------------------------------
 
-The function adds arguments unique to the instance. Note that `--branching-factors` can be added
-by this function if ``base_parsers.py`` has been used because it allows for conflict resolution.
+The function adds config arguments unique to the instance. Note that `--branching-factors` can be added
+even if something else added it, because the config.add functions bypass duplicates.
 
    
 Amalgamator with EF

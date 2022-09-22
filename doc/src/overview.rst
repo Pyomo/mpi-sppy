@@ -54,3 +54,14 @@ computing upper and lower bounds.
 Most developers using ``mpi-sppy`` will not need to concern themselves
 very much with the architecure because ``mpi-sppy`` can take
 care of the communcation aspects.
+
+Solver threads
+--------------
+
+To illustrate one of the issues associated with having a lot of things
+running at once, we note that you will often want to limit your
+solvers to two threads if they take essentially as many threads as
+they can get (e.g., cplex and gurobi). This is because if you have
+multiple cylinders each launching a solver and each solver wants to
+use every thread it can find, you may oversubscribe you computer
+rather badly.

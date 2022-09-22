@@ -1,7 +1,7 @@
 #ReferenceModel for full set of scenarios for AirCond; June 2021
 # Dec 2021; numerous enhancements by DLW; do not change defaults
 # Feb 2022: Changed all inventory cost coefficients to be positive numbers
-# exccept Last Inventory cost, which should be negative.
+# except Last Inventory cost, which should be negative.
 import pyomo.environ as pyo
 import numpy as np
 import time
@@ -10,12 +10,14 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import argparse
 from mpisppy import global_toc
+from mpisppy.utils import config
+import pyomo.common.config as pyofig
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
 # Do not edit these defaults!
-parms = {"mudev": (float, 0.),
-         "sigmadev": (float, 40.),
+parms = {"mu_dev": (float, 0.),
+         "sigma_dev": (float, 40.),
          "start_ups": (bool, False),
          "StartUpCost": (float, 300.),
          "start_seed": (int, 1134),
@@ -39,12 +41,13 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     start_seed = kwargs["start_seed"]
     max_d = kwargs.get("max_d", 400)
     min_d = kwargs.get("min_d", 0)
-    mudev = kwargs.get("mudev", None)
-    sigmadev = kwargs.get("sigmadev", None)
+    mu_dev = kwargs.get("mu_dev", None)
+    sigma_dev = kwargs.get("sigma_dev", None)
 
     scennum   = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
     prod = np.prod(sample_branching_factors)
+    assert prod is not None, "sample_branching_factors is None in _demands_creator"
     s = int(scennum % prod)
     d = kwargs.get("starting_d", 200)
     demands = [d]
@@ -58,7 +61,7 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     stagelist = [int(x) for x in nodenames[1:]]
     for t in range(1,len(nodenames)):
         aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
-        d = min(max_d,max(min_d,d+aircondstream.normal(mudev,sigmadev)))
+        d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev,sigma_dev)))
         demands.append(d)
     
     return demands,nodenames
@@ -180,7 +183,7 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
 #Assume that demands has been drawn before
 def aircond_model_creator(demands, **kwargs):
     # create a single aircond model for the given demands
-    # branching_factors=None, num_scens=None, mudev=0, sigmadev=40, start_seed=0, start_ups=None):
+    # branching_factors=None, num_scens=None, mu_dev=0, sigma_dev=40, start_seed=0, start_ups=None):
     # typing aids...
     start_seed = kwargs["start_seed"]
 
@@ -381,32 +384,24 @@ def scenario_names_creator(num_scens,start=None):
         
 
 #=========
-def inparser_adder(inparser):
-    # (only for Amalgamator): add command options unique to aircond
+def inparser_adder(cfg):
+    # Add command options unique to aircond
     # Do not change the defaults.
+    # cfg is a Config object
     def _doone(name, helptext, argname=None):
         # The name should be the name in parms
         # helptext should not include the default
-        aname = name.replace("_", "-") if argname is None else argname
         h = f"{helptext} (default {parms[name][1]})"
-        inparser.add_argument(f"--{aname}",
-                              help=h,
-                              dest=name,
-                              type=parms[name][0],
-                              default=parms[name][1])
+        cfg.add_to_config(name,
+                             description=h,
+                             domain=parms[name][0],
+                             default=parms[name][1],
+                             argparse=True)
 
-
-    _doone("mudev", "average deviation of demand between two periods", argname="mu-dev")
-    _doone("sigmadev", "standard deviation of deviation of demand between two periods", argname="sigma-dev")
-
-    d = parms["start_ups"][1]
-    inparser.add_argument("--start-ups",
-                          help="Include start-up costs in model, resulting in a MPI (default {d})",
-                          dest="start_ups",
-                          action="store_true"
-                          )
-    inparser.set_defaults(start_ups=d)
-    
+    cfg.add_to_config("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None)
+    _doone("mu_dev", "average deviation of demand between two periods", argname="mu-dev")
+    _doone("sigma_dev", "standard deviation of deviation of demand between two periods", argname="sigma-dev")
+    _doone("start_ups", "Include start-up costs in model, resulting in a MPI (default {d})")
     _doone("StartUpCost", helptext="Cost if production in a period is non-zero and start-up is True")
     _doone("start_seed", helptext="random number seed")
     _doone("min_d", helptext="minimum demand in a period")
@@ -421,12 +416,16 @@ def inparser_adder(inparser):
     _doone("NegInventoryCost", helptext="Linear coefficient for backorders (should be negative; not used in last stage)")
     _doone("QuadShortCoeff", helptext="Coefficient for backorders squared (should be nonnegative; not used in last stage)")
     
-    return inparser
-
 
 #=========
-def kw_creator(options):
-    # TBD: re-write this function...
+def kw_creator(cfg, optionsin=None):
+    """ Use the options passed in and/or cfg to 
+    create the key word arguments for the creator fucntion(s)
+    args:
+        cfg (Config object): probably has parsed values
+        optionsin (dict): programmatic options"""
+    # use an empty dict instead of None
+    options = optionsin if optionsin is not None else dict()
     if "kwargs" in options:
         return options["kwargs"]
     
@@ -437,14 +436,14 @@ def kw_creator(options):
         retval = options.get(option_name)
         if retval is not None:
             kwargs[option_name] = retval
-            return 
-        args = options.get('args')
+            return
+        # if not in the options, see if it is availalbe globally
         aname = option_name if arg_name is None else arg_name
-        retval = getattr(args, aname) if hasattr(args, aname) else None
+        retval = getattr(cfg, aname) if hasattr(cfg, aname) else None
         retval = default if retval is None else retval
         kwargs[option_name] = retval
             
-    # (only for Amalgamator): linked to the scenario_creator and inparser_adder
+    # Linked to the scenario_creator and inparser_adder
     # for confidence intervals, we need to see if the values are in args
     _kwarg("branching_factors")
     for idx, tpl in parms.items():
@@ -463,8 +462,8 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 #============================
-def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
-                           branching_factors=None, mudev = 0, sigmadev = 40,
+def xhat_generator_aircond(scenario_names, solvername=None, solver_options=None,
+                           branching_factors=None, mu_dev = 0, sigma_dev = 40,
                            start_ups=None, start_seed = 0):
     '''
     For sequential sampling.
@@ -474,17 +473,17 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     ----------
     scenario_names: list of str
         Names of the scenario we use
-    solvername: str, optional
-        Name of the solver used. The default is "gurobi"
+    solvername: str
+        Name of the solver used.
     solver_options: dict, optional
         Solving options. The default is None.
     branching_factors: list, optional
         Branching factors of the scenario 3. The default is [3,2,3] 
         (a 4 stage model with 18 different scenarios)
-    mudev: float, optional
+    mu_dev: float, optional
         The average deviation of demand between two stages; The default is 0.
     sigma_dev: float, optional
-        The standard deviation from mudev for the demand difference between
+        The standard deviation from mu_dev for the demand difference between
         two stages. The default is 40.
     start_seed: int, optional
         The starting seed, used to create different sample scenario trees.
@@ -500,21 +499,25 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
 
     '''
     num_scens = len(scenario_names)
+    assert branching_factors is not None, "branching factors must be supplied to xhat_generator_aircond"
+    assert solvername is not None, "solvername must be supplied to xhat_generator_aircond"
     
-    ama_options = { "EF-mstage": True,
-                    "EF_solver_name": solvername,
-                    "EF_solver_options": solver_options,
-                    "num_scens": num_scens,
-                    "_mpisppy_probability": 1/num_scens,
-                    "branching_factors":branching_factors,
-                    "mudev":mudev,
-                    "start_ups":start_ups,
-                    "start_seed":start_seed,
-                    "sigmadev":sigmadev
-                    }
+    cfg = config.Config()
+    cfg.quick_assign("EF_mstage", bool, True)
+    cfg.quick_assign("EF_solver_name", str, solvername)
+    #cfg.quick_assign("solvername", str, solvername)  # amalgamator wants this
+    cfg.quick_assign("EF_solver_options", dict, solver_options)
+    cfg.quick_assign("num_scens", int, num_scens)
+    cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+    cfg.quick_assign("start_seed", int, start_seed)
+    cfg.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=branching_factors)
+    cfg.quick_assign("mu_dev", float, mu_dev)
+    cfg.quick_assign("sigma_dev", float, sigma_dev)
+    cfg.quick_assign("start_ups", bool, start_ups)
+
     #We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("mpisppy.tests.examples.aircond",
-                                  ama_options,use_command_line=False)
+                                  cfg, use_command_line=False)
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.verbose = False
@@ -525,12 +528,13 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
 
     return xhat
 
+
 if __name__ == "__main__":
     # This __main__ is just for developers to use for quick tests
     parser = argparse.ArgumentParser()
     parser.add_argument('--solver-name',
-                        help="solver name (default 'gurobi_direct'",
-                        default='gurobi_direct')
+                        help="solver name",
+                        default=None)
     parser.add_argument("--branching-factors",
                         help="Spaces delimited branching factors (default 3 3)",
                         dest="branching_factors",
@@ -567,8 +571,8 @@ if __name__ == "__main__":
                     "EF_solver_options":solver_options,
                     "num_scens": num_scens,
                     "branching_factors":bfs,
-                    "mudev":0,
-                    "sigmadev":40,
+                    "mu_dev":0,
+                    "sigma_dev":40,
                     "start_ups":start_ups,
                     "start_seed":0
                     }

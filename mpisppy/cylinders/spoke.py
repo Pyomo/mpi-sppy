@@ -10,6 +10,7 @@ import math
 
 import mpisppy.utils.sputils as sputils
 
+from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
 
@@ -72,6 +73,7 @@ class Spoke(SPCommunicator):
                 f"Attempting to put array of length {len(values)} "
                 f"into local buffer of length {expected_length}"
             )
+        self.cylinder_comm.Barrier()
         self.local_write_id += 1
         values[-1] = self.local_write_id
         window = self.windows[self.strata_rank - 1]
@@ -88,13 +90,26 @@ class Spoke(SPCommunicator):
                 f"Spoke trying to get buffer of length {expected_length} "
                 f"from hub, but provided buffer has length {len(values)}."
             )
+        self.cylinder_comm.Barrier()
         window = self.windows[self.strata_rank - 1]
         window.Lock(0)
         window.Get((values, len(values), MPI.DOUBLE), 0)
         window.Unlock(0)
 
-        if values[-1] > self.remote_write_id:
-            self.remote_write_id = values[-1]
+        new_id = int(values[-1])
+        local_val = np.array((new_id,), 'i')
+        sum_ids = np.zeros(1, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (sum_ids, MPI.INT),
+                                     op=MPI.SUM)
+
+        # NOTE: we only proceed if all the ranks agree
+        #       on the ID
+        if new_id != sum_ids[0] / self.cylinder_comm.size:
+            return False
+
+        if (new_id > self.remote_write_id) or (new_id < 0):
+            self.remote_write_id = new_id
             return True
         return False
 
@@ -102,13 +117,7 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        # Spokes can sometimes call this frequently in a tight loop,
-        # causing the Allreduces to become out of sync
-        diff = time.time() - self.last_call_to_got_kill_signal
-        if diff < self.spoke_sleep_time:
-            time.sleep(self.spoke_sleep_time - diff)
-        self.last_call_to_got_kill_signal = time.time()
-        return self._got_kill_signal()
+        return self._got_kill_signal() 
 
     @abc.abstractmethod
     def main(self):
@@ -120,9 +129,8 @@ class Spoke(SPCommunicator):
         """
         pass
 
-    @abc.abstractmethod
     def get_serial_number(self):
-        pass
+        return self.remote_write_id
 
     @abc.abstractmethod
     def _got_kill_signal(self):
@@ -172,14 +180,10 @@ class _BoundSpoke(Spoke):
         self._bound[0] = value
         self.spoke_to_hub(self._bound)
 
-    def get_serial_number(self):
-        return int(self._kill_sig[-1])
-
     def _got_kill_signal(self):
         """Looks for the kill signal and returns True if sent"""
         self.spoke_from_hub(self._kill_sig)
-        kill = self._kill_sig[-1] == -1
-        return kill
+        return self.remote_write_id == -1
 
     def _append_trace(self, value):
         if self.cylinder_rank != 0 or self.trace_filen is None:
@@ -216,15 +220,11 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         self._bound = np.zeros(1 + 1)
         self._new_locals = False
 
-    def get_serial_number(self):
-        return int(self._locals[-1])
-
     def _got_kill_signal(self):
         """ returns True if a kill signal was received, 
             and refreshes the array and _locals"""
         self._new_locals = self.spoke_from_hub(self._locals)
-        kill = self._locals[-1] == -1
-        return kill
+        return self.remote_write_id == -1
 
 
 class InnerBoundSpoke(_BoundSpoke):
@@ -316,15 +316,9 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
 
-        # NOTE: defaults to True
-        self.save_tree_solution = True
-        if ('save_tree_solution' in self.options) and (not self.options['save_tree_solution']):
-            self.save_tree_solution = False
-
-        # set up best nonant cache
-        # NOTE: should we also cache the tree solution??
+        # set up best solution cache
         for k,s in self.opt.local_scenarios.items():
-            s._mpisppy_data.best_nonant_cache = None
+            s._mpisppy_data.best_solution_cache = None
 
     def update_if_improving(self, candidate_inner_bound):
         if candidate_inner_bound is None:
@@ -338,59 +332,27 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         self.best_inner_bound = candidate_inner_bound
         # send to hub
         self.bound = candidate_inner_bound
-        self._cache_best_nonants()
+        self._cache_best_solution()
         return True
 
     def finalize(self):
-        self._restore_and_fix_best_nonants()
-        if not self.opt.first_stage_solution_available:
-            return None
-        if not self.save_tree_solution:
-            return None
-
-        self.opt.solve_loop(solver_options=self.solver_options,
-                           verbose=False,
-                           tee=False)
-
-        ## NOTE: this should be feasible here,
-        ##       if not we've done something wrong
-        feasP = self.opt.feas_prob()
-        if abs(feasP - self.opt.E1) > self.opt.E1_tolerance:
-            raise RuntimeError(f"Found infeasible solution which was feasible before - feasP={feasP}, E1={self.opt.E1}, E1_tolerance={self.opt.E1_tolerance}")
-
-        obj = self.opt.Eobjective(verbose=False)
-        calculated_worse = obj > self.best_inner_bound if self.is_minimizing else self.best_inner_bound > obj
-        
-        if calculated_worse and not math.isclose(obj, self.best_inner_bound, rel_tol=1e-08, abs_tol=1e-12):
-            if self.cylinder_rank == 0:
-                print(f"WARNING: {self.__class__.__name__} best inner bound is different "
-                        f"from objective calculated in finalize")
-                print(f"Best inner bound: {self.best_inner_bound}")
-                print(f"Current objective: {obj}")
-
-        self.opt.tree_solution_available = True
-        self.final_bound = obj
-        return obj
-
-    def _cache_best_nonants(self):
         for k,s in self.opt.local_scenarios.items():
-            scenario_cache = {}
-            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                scenario_cache[ndn_i] = var.value
-            s._mpisppy_data.best_nonant_cache = scenario_cache
+            if s._mpisppy_data.best_solution_cache is None:
+                return None
+            for var, value in s._mpisppy_data.best_solution_cache.items():
+                var.set_value(value, skip_validation=True)
 
-    def _restore_and_fix_best_nonants(self):
-        for k,s in self.opt.local_scenarios.items():
-            scenario_cache = s._mpisppy_data.best_nonant_cache
-            if scenario_cache is None:
-                return
-            is_persistent = sputils.is_persistent(s._solver_plugin)
-            solver = s._solver_plugin
-            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                var.fix(scenario_cache[ndn_i])
-                if is_persistent:
-                    solver.update_var(var)
         self.opt.first_stage_solution_available = True
+        self.opt.tree_solution_available = True
+        self.final_bound = self.bound
+        return self.final_bound
+
+    def _cache_best_solution(self):
+        for k,s in self.opt.local_scenarios.items():
+            scenario_cache = ComponentMap()
+            for var in s.component_data_objects(Var):
+                scenario_cache[var] = var.value
+            s._mpisppy_data.best_solution_cache = scenario_cache
 
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):

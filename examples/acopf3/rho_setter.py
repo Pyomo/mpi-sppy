@@ -37,7 +37,6 @@ def ph_rhosetter_callback(scen):
             mid = lb + (ub - lb)/2.0
             cost_at_mid = generator_p_cost(scen._egret_md, egen, mid)
             rho = cost_at_mid * MyRhoFactor
-            print ("dlw debug: pgen={}, rho={}".format(pgen, rho))
             idv = id(pgen)
             retlist.append((idv, rho))
             qgen = scen.stage_models[stage].qg[egen]

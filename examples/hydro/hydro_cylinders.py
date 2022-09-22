@@ -1,55 +1,51 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # general example driver for the hydro example with cylinders
+# Modfied April 2022 by DLW to illustrate config.py
 
 import hydro
 
 import mpisppy.utils.sputils as sputils
 
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import baseparsers
-from mpisppy.utils import vanilla
+from mpisppy.utils import config
+import mpisppy.utils.cfg_vanilla as vanilla
 
 import mpisppy.cylinders as cylinders
-
-# For this problem, the subproblems are
-# small and take no time to solve. The
-# default SPOKE_SLEEP_TIME of 0.01 *causes*
-# synchronization issues in this case, so
-# we reduce it so as not to dominate the
-# time spent for cylinder synchronization
-SPOKE_SLEEP_TIME = 0.0001
 
 write_solution = True
 
 def _parse_args():
-    parser = baseparsers.make_multistage_parser()
-    parser = baseparsers.two_sided_args(parser)
-    parser = baseparsers.xhatlooper_args(parser)
-    parser = baseparsers.xhatshuffle_args(parser)
-    parser = baseparsers.lagrangian_args(parser)
-    parser = baseparsers.xhatspecific_args(parser)
+    # create a Config object, get values for it, and return it
+    cfg = config.Config()
+    cfg.multistage()
+    cfg.ph_args()
+    cfg.two_sided_args()
+    cfg.xhatlooper_args()
+    cfg.xhatshuffle_args()
+    cfg.lagrangian_args()
+    cfg.xhatspecific_args()
 
-    parser.add_argument("--stage2EFsolvern",
-                        help="Solver to use for xhatlooper stage2ef option (default None)",
-                        dest="stage2EFsolvern",
-                        default=None)
-                        
-    
-    args = parser.parse_args()
-    return args
+    cfg.add_to_config(name ="stage2EFsolvern",
+                         description="Solver to use for xhatlooper stage2ef option (default None)",
+                         domain = str,
+                         default=None)
+
+    cfg.parse_command_line("farmer_cylinders")
+    return cfg
 
 
 def main():
+    cfg = _parse_args()
 
-    args = _parse_args()
+    _parse_args()  # updates cfg
 
-    BFs = args.branching_factors
+    BFs = cfg["branching_factors"]
     if len(BFs) != 2:
         raise RuntimeError("Hydro is a three stage problem, so it needs 2 BFs")
 
-    with_xhatshuffle = args.with_xhatshuffle
-    with_lagrangian = args.with_lagrangian
+    xhatshuffle = cfg["xhatshuffle"]
+    lagrangian = cfg["lagrangian"]
 
     # This is multi-stage, so we need to supply node names
     all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
@@ -62,7 +58,7 @@ def main():
     rho_setter = None
     
     # Things needed for vanilla cylinders
-    beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
+    beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
     
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
@@ -70,34 +66,34 @@ def main():
                               ph_extensions=None,
                               rho_setter = rho_setter,
                               all_nodenames = all_nodenames,
-                              spoke_sleep_time = SPOKE_SLEEP_TIME)
+                             )
 
     # Standard Lagrangian bound spoke
-    if with_lagrangian:
+    if lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-               scenario_creator_kwargs=scenario_creator_kwargs,
-               rho_setter = rho_setter,
-               all_nodenames = all_nodenames,
-               spoke_sleep_time = SPOKE_SLEEP_TIME)
+                                                    scenario_creator_kwargs=scenario_creator_kwargs,
+                                                    rho_setter = rho_setter,
+                                                    all_nodenames = all_nodenames,
+                                                   )
 
 
     # xhat looper bound spoke
     
-    if with_xhatshuffle:
+    if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
-                all_nodenames=all_nodenames,
-                scenario_creator_kwargs=scenario_creator_kwargs,
-                spoke_sleep_time = SPOKE_SLEEP_TIME)
+                                                      all_nodenames=all_nodenames,
+                                                      scenario_creator_kwargs=scenario_creator_kwargs,
+                                                     )
 
     list_of_spoke_dict = list()
-    if with_lagrangian:
+    if lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if with_xhatshuffle:
+    if xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    if args.stage2EFsolvern is not None:
-        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = args.stage2EFsolvern
-        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = args.branching_factors
+    if cfg.stage2EFsolvern is not None:
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()

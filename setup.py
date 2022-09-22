@@ -11,18 +11,24 @@ if sys.version[0] == '2':
 
 from setuptools import find_packages
 from distutils.core import setup
+from pathlib import Path
 
 packages = find_packages()
+
+this_directory = Path(__file__).parent
+long_description = (this_directory / "README.rst").read_text()
 
 # intentionally leaving out mpi4py to help readthedocs
 setup(
     name='mpi-sppy',
-    version='0.11.dev0',
+    version='0.12.dev0',
     description="mpi-sppy",
+    long_description=long_description,
     url='https://github.com/Pyomo/mpi-sppy',
     author='David Woodruff',
     author_email='dlwoodruff@ucdavis.edu',
     packages=packages,
+    python_requires='>=3.8',
     install_requires=[
         'numpy',
         'scipy',
