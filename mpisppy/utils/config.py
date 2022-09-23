@@ -147,9 +147,9 @@ class Config(pyofig.ConfigDict):
                             default=1)
 
         self.add_to_config("solver_name", 
-                            description= "solver name (default gurobi)",
+                            description= "solver name (default None)",
                             domain = str,
-                            default="gurobi")
+                            default=None)
 
         self.add_to_config("solver_options", 
                             description= "solver options; space delimited with = for values (default None)",
@@ -283,9 +283,9 @@ class Config(pyofig.ConfigDict):
     def _EF_base(self):
         
         self.add_to_config("EF_solver_name", 
-                           description= "solver name (default gurobi)",
+                           description= "solver name (default None)",
                            domain = str,
-                           default="gurobi")
+                           default=None)
 
         self.add_to_config("EF_solver_options", 
                            description= "solver name (default None)",
@@ -293,9 +293,9 @@ class Config(pyofig.ConfigDict):
                            default=None)
         
         self.add_to_config("EF_solver_name", 
-                           description= "solver name (default gurobi)",
+                           description= "solver name (default None)",
                            domain = str,
-                           default="gurobi")
+                           default=None)
 
 
         self.add_to_config("EF_mipgap", 

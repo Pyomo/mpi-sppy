@@ -15,7 +15,8 @@ import scipy.stats
 import importlib
 from mpisppy import global_toc
 from mpisppy.utils import config
-    
+import mpisppy.utils.solver_spec as solver_spec
+
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -23,7 +24,6 @@ import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
-from mpisppy.tests.examples.apl1p import xhat_generator_apl1p
 
 #==========
 
@@ -58,7 +58,7 @@ def add_options(cfg, optional_things):
             else:
                 raise RuntimeError(f"add_options cannot process type {type(v)} for option {i}:{v}")
 
-def xhat_generator_farmer(scenario_names, solver_name="gurobi", solver_options=None, crops_multiplier=1):
+def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None, crops_multiplier=1):
     ''' For developer testing: Given scenario names and
     options, create the scenarios and compute the xhat that is minimizing the
     approximate problem associated with these scenarios.
@@ -163,13 +163,6 @@ class SeqSampling():
         self.stochastic_sampling = stochastic_sampling
         self.stopping_criterion = stopping_criterion
         self.solving_type = solving_type
-        self.solver_name = cfg.get("solver_name")
-        if self.solver_name is None:   # TBD: solver heirarchy
-            self.solver_name = cfg.get("EF_solver_name")
-        if self.solver_name is None:   # TBD: solver heirarchy
-            self.solver_name = cfg.get("solver_name")
-        assert self.solver_name is not None
-        self.solver_options = cfg.get("solver_options", None)  # TBD
         self.sample_size_ratio = cfg.get("sample_size_ratio", 1)
         self.xhat_gen_kwargs = cfg.get("xhat_gen_kwargs", {})
         
@@ -209,8 +202,12 @@ class SeqSampling():
                 add_options(cfg, optional_things)
         else:
             raise RuntimeError("Only BM and BPL criteria are supported at this time.")
+
+        # TBD: do a better job with options
         for oname in cfg:
             setattr(self, oname, cfg[oname]) # Set every option as an attribute
+        sroot, self.solver_name, self.solver_options = solver_spec.solver_specification(cfg, ["EF",""])
+        assert self.solver_name is not None
         
         #Check the solving_type, and find if the problem is multistage
         two_stage_types = ['EF_2stage']
@@ -380,10 +377,10 @@ class SeqSampling():
             self.ScenCount+=mk
 
         xgo = self.xhat_gen_kwargs.copy()
-        print("TBD: track down seqsampling solver choice options")
         xgo.pop("solver_name", None)  # it will be given explicitly
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # given explicitly
+
         xhat_k = self.xhat_generator(xhat_scenario_names,
                                    solver_name=self.solver_name,
                                    solver_options=self.solver_options,

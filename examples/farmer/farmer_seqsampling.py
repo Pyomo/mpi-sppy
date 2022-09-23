@@ -21,7 +21,7 @@ import mpisppy.confidence_intervals.confidence_config as confidence_config
 
 
 #============================
-def xhat_generator_farmer(scenario_names, solver_name="gurobi", solver_options=None,
+def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
                           use_integer=False, crops_multiplier=1, start_seed=None):
     '''
     For sequential sampling.
@@ -105,7 +105,7 @@ def main(cfg):
 
     # Note that as of July 2022, we are not using conditional args so cfg has everything
     if cfg.BM_vs_BPL == "BM":
-
+        print("pre-sampler")
         sampler = seqsampling.SeqSampling(refmodelname,
                                 xhat_generator_farmer,
                                 cfg,
@@ -113,6 +113,9 @@ def main(cfg):
                                 stopping_criterion="BM",
                                 solving_type="EF_2stage",
                                 )
+        ##for i in cfg:
+        ##    print(i, cfg[i])
+        print(f"II in farmer_seq {sampler.solver_name =}")
     else:  # must be BPL
         ss = int(cfg.BPL_n0min) != 0
         sampler = seqsampling.SeqSampling(refmodelname,
@@ -122,7 +125,6 @@ def main(cfg):
                                 stopping_criterion="BPL",
                                 solving_type="EF_2stage",
                                 )
-        
     xhat = sampler.run()
     return xhat
 
