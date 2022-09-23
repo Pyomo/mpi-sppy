@@ -24,10 +24,10 @@ ScenCount = 10  # 3 or 10
 if __name__ == "__main__":
 
     if len(sys.argv) != 2:
-        print("usage: python sizes_demo.py solvername")
+        print("usage: python sizes_demo.py solver_name")
         quit()
     options = {}
-    options["solvername"] = sys.argv[1]
+    options["solver_name"] = sys.argv[1]
     options["asynchronousPH"] = False
     options["PHIterLimit"] = 2
     options["defaultPHrho"] = 1
@@ -74,14 +74,14 @@ if __name__ == "__main__":
     # end hardwire
 
     ######### EF ########
-    solver = pyo.SolverFactory(options["solvername"])
+    solver = pyo.SolverFactory(options["solver_name"])
 
     ef = mpisppy.utils.sputils.create_EF(
         all_scenario_names,
         scenario_creator,
         scenario_creator_kwargs={"scenario_count": ScenCount},
     )
-    if 'persistent' in options["solvername"]:
+    if 'persistent' in options["solver_name"]:
         solver.set_instance(ef, symbolic_solver_labels=True)
     solver.options["mipgap"] = 0.01
     results = solver.solve(ef, tee=options["verbose"])

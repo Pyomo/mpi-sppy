@@ -31,7 +31,7 @@ global_rank = fullcomm.Get_rank()
 
 __version__ = 0.1
 
-solver_available, solvername, persistent_available, persistentsolvername= get_solver()
+solver_available, solver_name, persistent_available, persistentsolver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 badguys = list()
@@ -84,7 +84,7 @@ class Test_pickle_bundles(unittest.TestCase):
             raise RuntimeError(f"pickler part of test run failed with code {ret}")
         
         cmdstr = f"python aircond_cylinders.py --branching-factors=\"{self.BPF}\" --unpickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC} "+\
-                 f"--default-rho=1 --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solvername}"
+                 f"--default-rho=1 --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solver_name}"
         ret = os.system(cmdstr)
         if ret != 0:
             raise RuntimeError(f"cylinders part of test run failed with code {ret}")

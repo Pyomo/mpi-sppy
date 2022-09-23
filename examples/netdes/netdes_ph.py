@@ -15,7 +15,7 @@ def main():
 
     ''' Now solve with PH to see what happens (very little, I imagine) '''
     PH_options = {
-        'solvername'           : 'gurobi_persistent',
+        'solver_name'           : 'gurobi_persistent',
         'PHIterLimit'          : 20,
         'defaultPHrho'         : 10000,
         'convthresh'           : 1e-8,

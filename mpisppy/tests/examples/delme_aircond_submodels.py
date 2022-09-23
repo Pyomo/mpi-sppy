@@ -374,7 +374,7 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 #============================
-def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
+def xhat_generator_aircond(scenario_names, solver_name="gurobi", solver_options=None,
                            branching_factors=None, mudev = 0, sigmadev = 40,
                            start_ups=None, start_seed = 0):
     '''
@@ -385,7 +385,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     ----------
     scenario_names: list of str
         Names of the scenario we use
-    solvername: str, optional
+    solver_name: str, optional
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
@@ -413,7 +413,7 @@ def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=N
     num_scens = len(scenario_names)
     
     ama_options = { "EF-mstage": True,
-                    "EF_solver_name": solvername,
+                    "EF_solver_name": solver_name,
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,

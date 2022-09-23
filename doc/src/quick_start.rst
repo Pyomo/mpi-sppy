@@ -23,9 +23,9 @@ terminal commands:
 
    cd examples
    cd farmer
-   python farmer_ef 1 3 solvername
+   python farmer_ef 1 3 solver_name
 
-but replace `solvername` with the name of the solver you have installed, e.g., if you have installed glpk, use
+but replace `solver_name` with the name of the solver you have installed, e.g., if you have installed glpk, use
 
 ::
    

@@ -280,7 +280,7 @@ class Amalgamator():
         self.verbose = verbose
         self.is_EF = _bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")
         if self.is_EF:
-            sroot, self.solvername, self.solver_options = solver_spec.solver_specification(cfg, ["EF", ""])
+            sroot, self.solver_name, self.solver_options = solver_spec.solver_specification(cfg, ["EF", ""])
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
         if self.is_multi and not "all_nodenames" in cfg:
             if "branching_factors" in cfg:
@@ -302,14 +302,14 @@ class Amalgamator():
 
             tee_ef_solves = self.cfg.get('tee_ef_solves',False)
             
-            solvername = self.solvername
-            solver = pyo.SolverFactory(solvername)
+            solver_name = self.solver_name
+            solver = pyo.SolverFactory(solver_name)
             if hasattr(self, "solver_options") and (self.solver_options is not None):
                 for option_key,option_value in self.solver_options.items():
                     solver.options[option_key] = option_value
             if self.verbose :
                 global_toc("Starting EF solve")
-            if 'persistent' in solvername:
+            if 'persistent' in solver_name:
                 solver.set_instance(ef, symbolic_solver_labels=True)
                 results = solver.solve(tee=tee_ef_solves)
             else:

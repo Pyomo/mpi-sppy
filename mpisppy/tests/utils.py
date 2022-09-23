@@ -8,24 +8,24 @@ from math import log10, floor
 def get_solver():
     solvers = [n+e for e in ('_persistent', '') for n in ("cplex","gurobi","xpress")]
     
-    for solvername in solvers:
+    for solver_name in solvers:
         try:
-            solver_available = pyo.SolverFactory(solvername).available()
+            solver_available = pyo.SolverFactory(solver_name).available()
         except:
             solver_available = False
         if solver_available:
             break
     
-    if '_persistent' in solvername:
-        persistentsolvername = solvername
+    if '_persistent' in solver_name:
+        persistentsolver_name = solver_name
     else:
-        persistentsolvername = solvername+"_persistent"
+        persistentsolver_name = solver_name+"_persistent"
     try:
-        persistent_available = pyo.SolverFactory(persistentsolvername).available()
+        persistent_available = pyo.SolverFactory(persistentsolver_name).available()
     except:
         persistent_available = False
     
-    return solver_available, solvername, persistent_available, persistentsolvername
+    return solver_available, solver_name, persistent_available, persistentsolver_name
 
 def round_pos_sig(x, sig=1):
     return round(x, sig-int(floor(log10(abs(x))))-1)

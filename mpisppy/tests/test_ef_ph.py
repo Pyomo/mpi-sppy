@@ -24,12 +24,12 @@ from mpisppy.tests.utils import get_solver,round_pos_sig
 
 __version__ = 0.54
 
-solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+solver_available,solver_name, persistent_available, persistentsolver_name= get_solver()
 
 def _get_ph_base_options():
     Baseoptions = {}
     Baseoptions["asynchronousPH"] = False
-    Baseoptions["solvername"] = solvername
+    Baseoptions["solver_name"] = solver_name
     Baseoptions["PHIterLimit"] = 10
     Baseoptions["defaultPHrho"] = 1
     Baseoptions["convthresh"] = 0.001
@@ -37,7 +37,7 @@ def _get_ph_base_options():
     Baseoptions["verbose"] = False
     Baseoptions["display_timing"] = False
     Baseoptions["display_progress"] = False
-    if "cplex" in solvername:
+    if "cplex" in solver_name:
         Baseoptions["iter0_solver_options"] = {"mip_tolerances_mipgap": 0.001}
         Baseoptions["iterk_solver_options"] = {"mip_tolerances_mipgap": 0.00001}
     else:
@@ -119,7 +119,7 @@ class Test_sizes(unittest.TestCase):
                      "no solver is available")
     def test_ef_solve(self):
         options = self._copy_of_base_options()
-        solver = pyo.SolverFactory(options["solvername"])
+        solver = pyo.SolverFactory(options["solver_name"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
             self.all3_scenario_names,
@@ -127,7 +127,7 @@ class Test_sizes(unittest.TestCase):
             scenario_creator_kwargs={"scenario_count": ScenCount},
             suppress_warnings=True
         )
-        if '_persistent' in options["solvername"]:
+        if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
@@ -137,14 +137,14 @@ class Test_sizes(unittest.TestCase):
                      "no solver is available")
     def test_fix_ef_solve(self):
         options = self._copy_of_base_options()
-        solver = pyo.SolverFactory(options["solvername"])
+        solver = pyo.SolverFactory(options["solver_name"])
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(
             self.all3_scenario_names,
             self._fix_creator,
             scenario_creator_kwargs={"scenario_count": ScenCount},
         )
-        if '_persistent' in options["solvername"]:
+        if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
@@ -257,7 +257,7 @@ class Test_sizes(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
 
     @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistentsolvername,))
+                     "%s solver is not available" % (persistentsolver_name,))
     def test_persistent_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10
@@ -272,7 +272,7 @@ class Test_sizes(unittest.TestCase):
 
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10
-        options["solvername"] = persistentsolvername
+        options["solver_name"] = persistentsolver_name
         ph = mpisppy.opt.ph.PH(
             options,
             self.all3_scenario_names,
@@ -287,7 +287,7 @@ class Test_sizes(unittest.TestCase):
         self.assertEqual(sig2basic, sig2pobj)
         
     @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistentsolvername,))
+                     "%s solver is not available" % (persistentsolver_name,))
     def test_persistent_bundles(self):
         """ This excercises complicated code.
         """
@@ -306,7 +306,7 @@ class Test_sizes(unittest.TestCase):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
         options["bundles_per_rank"] = 2
-        options["solvername"] = persistentsolvername
+        options["solver_name"] = persistentsolver_name
         ph = mpisppy.opt.ph.PH(
             options,
             self.all10_scenario_names,
@@ -486,13 +486,13 @@ class Test_hydro(unittest.TestCase):
                      "no solver is available")
     def test_ef_solve(self):
         options = self._copy_of_base_options()
-        solver = pyo.SolverFactory(options["solvername"])
+        solver = pyo.SolverFactory(options["solver_name"])
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
             scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
-        if '_persistent' in options["solvername"]:
+        if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
         mpisppy.utils.sputils.ef_nonants_csv(ef, "delme.csv")
@@ -507,13 +507,13 @@ class Test_hydro(unittest.TestCase):
                      "no solver is available")
     def test_ef_csv(self):
         options = self._copy_of_base_options()
-        solver = pyo.SolverFactory(options["solvername"])
+        solver = pyo.SolverFactory(options["solver_name"])
         ef = mpisppy.utils.sputils.create_EF(
             self.all_scenario_names,
             hydro.scenario_creator,
             scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
-        if '_persistent' in options["solvername"]:
+        if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
     

@@ -81,7 +81,7 @@ if __name__ == "__main__":
     }
 
     hub_ph_options = {
-        "solvername": "gurobi_persistent",
+        "solver_name": "gurobi_persistent",
         'bundles_per_rank': bundles_per_rank,  # 0 = no bundles
         "asynchronousPH": False,
         "PHIterLimit": PHIterLimit,

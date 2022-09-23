@@ -254,7 +254,7 @@ First, we must construct a PH object:
     from mpisppy.opt.ph import PH
 
     options = {
-        "solvername": "cplex_persistent",
+        "solver_name": "cplex_persistent",
         "PHIterLimit": 5,
         "defaultPHrho": 10,
         "convthresh": 1e-7,

@@ -922,7 +922,7 @@ if __name__ == "__main__":
 
     PHopt = {}
     PHopt["asynchronousPH"] = False # APH is *projective* and always APH
-    PHopt["solvername"] = "cplex"
+    PHopt["solver_name"] = "cplex"
     PHopt["PHIterLimit"] = 5
     PHopt["defaultPHrho"] = 1
     PHopt["APHgamma"] = 1

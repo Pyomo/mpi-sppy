@@ -38,7 +38,7 @@ first branching factor.
   
 To change other parameters, change these lines in ccopf2wood.py:
     # start options
-    solvername = "ipopt"
+    solver_name = "ipopt"
     number_of_stages = 3
     stage_duration_minutes = [5, 15, 30]
     seed = 1134

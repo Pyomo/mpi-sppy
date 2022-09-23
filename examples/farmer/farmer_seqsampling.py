@@ -21,7 +21,7 @@ import mpisppy.confidence_intervals.confidence_config as confidence_config
 
 
 #============================
-def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=None,
+def xhat_generator_farmer(scenario_names, solver_name="gurobi", solver_options=None,
                           use_integer=False, crops_multiplier=1, start_seed=None):
     '''
     For sequential sampling.
@@ -31,7 +31,7 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
     ----------
     scenario_names: list of str
         Names of the scenario we use
-    solvername: str, optional
+    solver_name: str, optional
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
@@ -56,8 +56,8 @@ def xhat_generator_farmer(scenario_names, solvername="gurobi", solver_options=No
 
     cfg = config.Config()
     cfg.quick_assign("EF_2stage", bool, True)
-    cfg.quick_assign("EF_solver_name", str, solvername)
-    #cfg.quick_assign("solvername", str, solvername)  # amalgamator wants this
+    cfg.quick_assign("EF_solver_name", str, solver_name)
+    #cfg.quick_assign("solver_name", str, solver_name)  # amalgamator wants this
     cfg.quick_assign("EF_solver_options", dict, solver_options)
     cfg.quick_assign("num_scens", int, num_scens)
     cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
@@ -95,7 +95,7 @@ def main(cfg):
     scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
     
     xhat_gen_kwargs = {"scenario_names": scenario_names,
-                       "solvername": solver_name,
+                       "solver_name": solver_name,
                        "solver_options": None,
                        "use_integer": False,
                        "crops_multiplier": crops_multiplier,

@@ -188,7 +188,7 @@ def gap_estimators(xhat_one,
                    ArRP=1,
                    cfg=None,   # was: options; before that: scenario_creator_kwargs={}
                    scenario_denouement=None,
-                   solvername=None, 
+                   solver_name=None, 
                    solver_options=None,
                    verbose=False,
                    objective_gap=False
@@ -223,7 +223,7 @@ def gap_estimators(xhat_one,
         Additional arguments for scenario_creator. Default is {}
     scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
-    solvername : str, optional
+    solver_name : str, optional
         Solver. Default is None
     solver_options: dict, optional
         Solving options. Default is None
@@ -273,7 +273,7 @@ def gap_estimators(xhat_one,
         for k in range(ArRP):
             scennames = scenario_names[k*(n//ArRP):(k+1)*(n//ArRP)]
             tmp = gap_estimators(xhat_one, mname,
-                                   solvername=solvername,
+                                   solver_name=solver_name,
                                    scenario_names=scennames, ArRP=1,
                                    cfg=cfg,
                                    scenario_denouement=scenario_denouement,
@@ -302,7 +302,7 @@ def gap_estimators(xhat_one,
                                               branching_factors=branching_factors,
                                               seed=start, 
                                               cfg=cfg,
-                                              solvername=solvername,
+                                              solver_name=solver_name,
                                               solver_options=solver_options)
         samp_tree.run()
         start += sputils.number_of_nodes(branching_factors)
@@ -312,7 +312,7 @@ def gap_estimators(xhat_one,
         num_scens = len(scenario_names)
         ama_cfg = cfg()
         ama_cfg.quick_assign(solving_type, bool, True)
-        ama_cfg.quick_assign("EF_solver_name", str, solvername)
+        ama_cfg.quick_assign("EF_solver_name", str, solver_name)
         solver_options_str= sputils.option_dict_to_string(solver_options)  # cfg need str
         ama_cfg.quick_assign("EF_solver_options", str, solver_options_str)
         ama_cfg.quick_assign("num_scens", int, num_scens)
@@ -345,7 +345,7 @@ def gap_estimators(xhat_one,
                                                     branching_factors,
                                                     start,
                                                     cfg,
-                                                    solvername=solvername,
+                                                    solver_name=solver_name,
                                                     solver_options=solver_options)
         
         #Compute then the average function value with this policy
@@ -359,7 +359,7 @@ def gap_estimators(xhat_one,
     xhat_eval_options = {"iter0_solver_options": None,
                          "iterk_solver_options": None,
                          "display_timing": False,
-                         "solvername": solvername,
+                         "solver_name": solver_name,
                          "verbose": False,
                          "solver_options":solver_options}
     ev = xhat_eval.Xhat_Eval(xhat_eval_options,

@@ -135,7 +135,7 @@ class MMWConfidenceIntervals():
         sample_scen_creator = self.refmodel.scenario_creator
         
         #Solver settings
-        solvername = self.cfg['EF_solver_name']
+        solver_name = self.cfg['EF_solver_name']
         solver_options = self.cfg.get('EF_solver_options')
         solver_options = remove_None(solver_options)
             
@@ -156,7 +156,7 @@ class MMWConfidenceIntervals():
                                            ArRP=1,
                                            cfg=sample_cfg,
                                            scenario_denouement=scenario_denouement,
-                                           solvername=solvername,
+                                           solver_name=solver_name,
                                            solver_options=solver_options,
                                            objective_gap=objective_gap)
             Gn = estim['G']

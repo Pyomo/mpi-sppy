@@ -30,7 +30,7 @@ farmer = PySPModel(model=os.path.join(pref,"concrete",
                    scenario_tree=os.path.join(pref,"ScenarioStructure.dat"))
 
 phoptions = {'defaultPHrho': 1.0,
-             'solvername':sys.argv[1],
+             'solver_name':sys.argv[1],
              'PHIterLimit': 50,
              'convthresh': 0.01,
              'verbose': False,
