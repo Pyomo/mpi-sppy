@@ -112,9 +112,6 @@ def main(cfg):
                                 stopping_criterion="BM",
                                 solving_type="EF_2stage",
                                 )
-        ##for i in cfg:
-        ##    print(i, cfg[i])
-        print(f"II in farmer_seq {sampler.solver_name =}")
     else:  # must be BPL
         ss = int(cfg.BPL_n0min) != 0
         sampler = seqsampling.SeqSampling(refmodelname,
