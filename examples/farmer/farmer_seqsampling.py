@@ -105,7 +105,6 @@ def main(cfg):
 
     # Note that as of July 2022, we are not using conditional args so cfg has everything
     if cfg.BM_vs_BPL == "BM":
-        print("pre-sampler")
         sampler = seqsampling.SeqSampling(refmodelname,
                                 xhat_generator_farmer,
                                 cfg,
