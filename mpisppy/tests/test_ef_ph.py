@@ -24,7 +24,7 @@ from mpisppy.tests.utils import get_solver,round_pos_sig
 
 __version__ = 0.54
 
-solver_available,solver_name, persistent_available, persistentsolver_name= get_solver()
+solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
 def _get_ph_base_options():
     Baseoptions = {}
@@ -257,7 +257,7 @@ class Test_sizes(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
 
     @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistentsolver_name,))
+                     "%s solver is not available" % (persistent_solver_name,))
     def test_persistent_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10
@@ -272,7 +272,7 @@ class Test_sizes(unittest.TestCase):
 
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10
-        options["solver_name"] = persistentsolver_name
+        options["solver_name"] = persistent_solver_name
         ph = mpisppy.opt.ph.PH(
             options,
             self.all3_scenario_names,
@@ -287,7 +287,7 @@ class Test_sizes(unittest.TestCase):
         self.assertEqual(sig2basic, sig2pobj)
         
     @unittest.skipIf(not persistent_available,
-                     "%s solver is not available" % (persistentsolver_name,))
+                     "%s solver is not available" % (persistent_solver_name,))
     def test_persistent_bundles(self):
         """ This excercises complicated code.
         """
@@ -306,7 +306,7 @@ class Test_sizes(unittest.TestCase):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
         options["bundles_per_rank"] = 2
-        options["solver_name"] = persistentsolver_name
+        options["solver_name"] = persistent_solver_name
         ph = mpisppy.opt.ph.PH(
             options,
             self.all10_scenario_names,

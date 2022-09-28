@@ -31,7 +31,7 @@ import pyomo.common.config as pyofig
 
 __version__ = 0.4
 
-solver_available, solver_name, persistent_available, persistentsolver_name= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 global_BFs = [4,3,2]

@@ -21,7 +21,7 @@ import mpisppy.tests.examples.farmer as farmer
 from mpisppy.tests.utils import get_solver, round_pos_sig
 
 __version__ = 0.6
-solver_available,solver_name, persistent_available, persistentsolver_name= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 import mpisppy.MPI as mpi
 fullcomm = mpi.COMM_WORLD

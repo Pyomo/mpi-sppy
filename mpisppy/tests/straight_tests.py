@@ -5,7 +5,7 @@ import sys
 import tempfile
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
-solver_available, solver_name, persistent_available, persistentsolver_name= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 badguys = list()
 

@@ -31,7 +31,7 @@ global_rank = fullcomm.Get_rank()
 
 __version__ = 0.1
 
-solver_available, solver_name, persistent_available, persistentsolver_name= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 badguys = list()

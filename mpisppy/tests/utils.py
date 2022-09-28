@@ -17,15 +17,15 @@ def get_solver():
             break
     
     if '_persistent' in solver_name:
-        persistentsolver_name = solver_name
+        persistent_solver_name = solver_name
     else:
-        persistentsolver_name = solver_name+"_persistent"
+        persistent_solver_name = solver_name+"_persistent"
     try:
-        persistent_available = pyo.SolverFactory(persistentsolver_name).available()
+        persistent_available = pyo.SolverFactory(persistent_solver_name).available()
     except:
         persistent_available = False
     
-    return solver_available, solver_name, persistent_available, persistentsolver_name
+    return solver_available, solver_name, persistent_available, persistent_solver_name
 
 def round_pos_sig(x, sig=1):
     return round(x, sig-int(floor(log10(abs(x))))-1)
