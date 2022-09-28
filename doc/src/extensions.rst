@@ -109,14 +109,14 @@ The variable probabilities impact the computation of
 ``xbars`` and ``W``.
 
 Objective function considerations
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------
 
 If variables with by-variable probability are in the objective function, it is
 up to the scenario creator code to deal with it. This is not so difficult for
 zero-probability variables.
 
 zero-probability variables
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 
 When you
 create the scenario, you probably want to fix zero probability variables and perhaps give
