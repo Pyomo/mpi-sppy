@@ -34,7 +34,7 @@ farmer = PySPModel(model=os.path.join(pref,"ReferenceModel.py"),
                    data_dir=pref)
 
 phoptions = {'defaultPHrho': 1.0,
-             'solvername':solver_name,
+             'solver_name':solver_name,
              'PHIterLimit': 50,
              'convthresh': 0.01,
              'verbose': False,

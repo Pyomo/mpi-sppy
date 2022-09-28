@@ -46,14 +46,14 @@ class SampleSubtree():
         Seed to create scenarios.
     cfg : Config
        To create scenario creator arguments.
-    solvername : str, optional
+    solver_name : str, optional
         Solver name. The default is None.
     solver_options : dict, optional
         Solver options. The default is None.
 
     '''
     def __init__(self, mname, xhats, root_scen, starting_stage, branching_factors,
-                 seed, cfg, solvername=None, solver_options=None):
+                 seed, cfg, solver_name=None, solver_options=None):
 
         self.refmodel = importlib.import_module(mname)
         #Checking that refmodel has all the needed attributes
@@ -69,7 +69,7 @@ class SampleSubtree():
         self.numscens = np.prod(self.sampling_branching_factors)
         self.seed = seed
         self.cfg = cfg
-        self.solvername = solvername
+        self.solver_name = solver_name
         self.solver_options = solver_options
         
         #Create an amalgamator object to solve the subtree problem
@@ -125,7 +125,7 @@ class SampleSubtree():
         cfg = self.cfg()   # ephemeral
         cfg.quick_assign('EF-mstage', domain=str, value=len(self.original_branching_factors) > 1)
         cfg.quick_assign('EF-2stage', domain=str, value=len(self.original_branching_factors) <= 1)
-        cfg.quick_assign('EF_solver_name', domain=str, value=self.solvername)
+        cfg.quick_assign('EF_solver_name', domain=str, value=self.solver_name)
         if self.solver_options is not None:
             cfg.add_and_assign("solver_options", "solver options dict", dict, None, self.solver_options)
         cfg.quick_assign('num_scens', domain=int, value=self.numscens)
@@ -159,13 +159,13 @@ class SampleSubtree():
 
 
 def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,cfg,
-                       solvername=None, solver_options=None):
+                       solver_name=None, solver_options=None):
     '''
     Given a scenario and a first-stage policy xhat_one, this method computes
     non-anticipative feasible policies for the following stages.
 
     '''
-    assert solvername is not None
+    assert solver_name is not None
     if xhat_one is None:
         raise RuntimeError("Xhat_one can't be None for now")
     ciutils.is_sorted(scenario._mpisppy_node_list)
@@ -176,7 +176,7 @@ def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,cfg,
     
         subtree = SampleSubtree(mname, xhats, scenario, 
                                 t, branching_factors, seed, cfg,
-                                solvername, solver_options)
+                                solver_name, solver_options)
         subtree.run()
         xhats.append(subtree.xhat_at_stage)
         seed+=sputils.number_of_nodes(branching_factors[(t-1):])
@@ -184,7 +184,7 @@ def _feasible_solution(mname,scenario,xhat_one,branching_factors,seed,cfg,
     return xhat_dict,seed
 
 def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed, cfg,
-                       solvername=None, solver_options=None):
+                       solver_name=None, solver_options=None):
     """
     This methods takes a scenario tree (represented by a scenario list) as an input, 
     a first stage policy xhat_one and several settings, and computes 
@@ -226,7 +226,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
     if len(local_scenarios)==1:
         scen = list(local_scenarios.values())[0]
         res = _feasible_solution(mname, scen, xhat_one, branching_factors, seed, cfg,
-                                solvername=solvername,
+                                solver_name=solver_name,
                                 solver_options=solver_options)
         return res
         
@@ -240,7 +240,7 @@ def walking_tree_xhats(mname, local_scenarios, xhat_one,branching_factors, seed,
             else:
                subtree = SampleSubtree(mname, scen_xhats, s, 
                                        node.stage, branching_factors, seed, cfg,
-                                       solvername, solver_options)
+                                       solver_name, solver_options)
                subtree.run()
                xhat = subtree.xhat_at_stage
 
@@ -287,7 +287,7 @@ if __name__ == "__main__":
     scenario = ama.ef.scen0
     seed = sputils.number_of_nodes(branching_factors)
     
-    xhats,seed = _feasible_solution(mname, scenario, xhat_one, branching_factors, seed, cfg, solvername=solver_name)
+    xhats,seed = _feasible_solution(mname, scenario, xhat_one, branching_factors, seed, cfg, solver_name=solver_name)
     print(xhats)
     
     #----------Find feasible solutions for every scenario ------------
@@ -302,7 +302,7 @@ if __name__ == "__main__":
         #print(f"{demands =}")
     seed = sputils.number_of_nodes(branching_factors)
     
-    xhats,seed = walking_tree_xhats(mname,scenarios,xhat_one,branching_factors,seed,cfg,solvername=solver_name)
+    xhats,seed = walking_tree_xhats(mname,scenarios,xhat_one,branching_factors,seed,cfg,solver_name=solver_name)
     print(xhats)
     
 

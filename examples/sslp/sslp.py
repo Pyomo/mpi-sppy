@@ -101,7 +101,7 @@ if __name__ == "__main__":
     start_time = dt.datetime.now()
 
     options = {}
-    options["solvername"] = "gurobi_persistent"
+    options["solver_name"] = "gurobi_persistent"
     options["PHIterLimit"] = maxit
     options["defaultPHrho"] = rho
     options["convthresh"] = -1
@@ -163,7 +163,7 @@ if __name__ == "__main__":
             f.write(
                 "\n" + str(start_time) + "," + socket.gethostname() + "," + instname
             )
-            f.write(", " + str(options["solvername"]))
+            f.write(", " + str(options["solver_name"]))
             f.write(", " + str(ph.n_proc))
             f.write(", " + nbunstr)
             f.write(", " + str(options["PHIterLimit"]))

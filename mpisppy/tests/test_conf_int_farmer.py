@@ -31,7 +31,7 @@ global_rank = fullcomm.Get_rank()
 
 __version__ = 0.5
 
-solver_available, solvername, persistent_available, persistentsolvername= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -47,7 +47,7 @@ class Test_confint_farmer(unittest.TestCase):
 
     def _get_base_options(self):
         cfg = config.Config()
-        cfg.quick_assign("EF_solver_name", str, solvername)
+        cfg.quick_assign("EF_solver_name", str, solver_name)
         cfg.quick_assign("use_integer", bool, False)
         cfg.quick_assign("crops_multiplier", int, 1)
         cfg.quick_assign("num_scens", int, 12)
@@ -62,7 +62,7 @@ class Test_confint_farmer(unittest.TestCase):
         options = {"iter0_solver_options": None,
                  "iterk_solver_options": None,
                  "display_timing": False,
-                 "solvername": solvername,
+                 "solver_name": solver_name,
                  "verbose": False,
                  "solver_options":None}
         return options
@@ -115,7 +115,7 @@ class Test_confint_farmer(unittest.TestCase):
         optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
         optionsBM.quick_assign("BM_p", float, 0.2)
         optionsBM.quick_assign("BM_q", float, 1.2)
-        optionsBM.quick_assign("solvername", str, solvername)
+        optionsBM.quick_assign("solver_name", str, solver_name)
         optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
         optionsBM.quick_assign("solving_type", str, "EF_2stage")
         seqsampling.SeqSampling("mpisppy.tests.examples.farmer",
@@ -215,7 +215,7 @@ class Test_confint_farmer(unittest.TestCase):
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
                                        cfg=self._get_base_options(),
-                                       solvername=solvername,
+                                       solver_name=solver_name,
                                        scenario_names=scenario_names,
                                        )
         G = estim['G']
@@ -237,7 +237,7 @@ class Test_confint_farmer(unittest.TestCase):
         optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
         optionsBM.quick_assign("BM_p", float, 0.2)
         optionsBM.quick_assign("BM_q", float, 1.2)
-        optionsBM.quick_assign("solvername", str, solvername)
+        optionsBM.quick_assign("solver_name", str, solver_name)
         optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
         optionsBM.quick_assign("solving_type", str, "EF_2stage")
         seq_pb = seqsampling.SeqSampling("mpisppy.tests.examples.farmer",

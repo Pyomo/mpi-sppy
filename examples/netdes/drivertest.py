@@ -33,7 +33,7 @@ if __name__=="__main__":
     scenario_creator_kwargs = {"path": path}
 
     hub_ph_options = {
-        "solvername": "gurobi_persistent",
+        "solver_name": "gurobi_persistent",
         "PHIterLimit": 1000,
         "defaultPHrho": 10000, # Big for netdes
         "convthresh": 0.,
@@ -63,7 +63,7 @@ if __name__=="__main__":
     }
 
     ph_options = {
-        "solvername": "gurobi_persistent",
+        "solver_name": "gurobi_persistent",
         "PHIterLimit": 1000,
         "defaultPHrho": 10000, # Big for netdes
         "convthresh": 0., # To prevent FWPH from terminating
@@ -79,7 +79,7 @@ if __name__=="__main__":
         "FW_iter_limit": 10,
         "FW_weight": 0., # Or 1.? I forget what this does, honestly
         "FW_conv_thresh": 1e-4,
-        "solvername": "gurobi_persistent",
+        "solver_name": "gurobi_persistent",
         "FW_verbose": False,
     }
     fw_spoke = {

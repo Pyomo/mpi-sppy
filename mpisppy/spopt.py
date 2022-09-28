@@ -838,7 +838,7 @@ class SPOpt(SPBase):
     def _create_solvers(self):
 
         for sname, s in self.local_subproblems.items(): # solver creation
-            s._solver_plugin = SolverFactory(self.options["solvername"])
+            s._solver_plugin = SolverFactory(self.options["solver_name"])
 
             if (sputils.is_persistent(s._solver_plugin)):
                 dtiming = ("display_timing" in self.options) and self.options["display_timing"]

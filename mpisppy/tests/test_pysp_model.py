@@ -53,7 +53,7 @@ class Test_sizes_abstract(unittest.TestCase):
     def test_ef_solve(self):
         pysp_sizes = self.pysp_sizes3
         options = _get_ph_base_options()
-        options = {"solver": options["solvername"]}
+        options = {"solver": options["solver_name"]}
         ef = mpisppy.opt.ef.ExtensiveForm(
             options,
             pysp_sizes.all_scenario_names,

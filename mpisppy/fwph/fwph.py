@@ -494,7 +494,7 @@ class FWPH(mpisppy.phbase.PHBase):
                    + pyo.quicksum(aux.slack_minus.values())
         aux.obj = pyo.Objective(expr=obj_expr, sense=pyo.minimize)
 
-        solver = pyo.SolverFactory(self.FW_options['solvername'])
+        solver = pyo.SolverFactory(self.FW_options['solver_name'])
         results = solver.solve(aux)
         self._check_solve(results, 'Auxiliary LP')
 
@@ -822,7 +822,7 @@ class FWPH(mpisppy.phbase.PHBase):
         '''
         # 1. Check for required options
         reqd_options = ['FW_iter_limit', 'FW_weight', 'FW_conv_thresh',
-                        'solvername']
+                        'solver_name']
         losers = [opt for opt in reqd_options if opt not in self.FW_options]
         if (len(losers) > 0):
             msg = "FW_options is missing the following key(s): " + \
@@ -977,7 +977,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 QP.obj = pyo.Objective(expr=-new+ph_term, sense=pyo.minimize)
 
             ''' Attach a solver with various options '''
-            solver = pyo.SolverFactory(self.FW_options['solvername'])
+            solver = pyo.SolverFactory(self.FW_options['solver_name'])
             if sputils.is_persistent(solver):
                 solver.set_instance(QP)
             if 'qp_solver_options' in self.FW_options:

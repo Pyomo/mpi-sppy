@@ -19,7 +19,7 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
     def lagrangian(self):
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
-        if "ipopt" in self.opt.options["solvername"]:
+        if "ipopt" in self.opt.options["solver_name"]:
             print("\n WARNING: An ipopt solver will not give outer bounds\n")
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
