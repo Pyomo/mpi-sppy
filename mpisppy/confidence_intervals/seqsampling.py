@@ -431,7 +431,7 @@ class SeqSampling():
             k+=1
             nk_m1 = nk #n_{k-1}
             mk_m1 = mk
-            lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)`
+            lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
             
             #Computing m_k and associated scenario names
             if self.multistage:
