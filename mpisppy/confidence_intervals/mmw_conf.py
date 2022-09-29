@@ -1,7 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 
 # To test: (from confidence_intervals directory; assumes the npy file is in the farmer directory) 
-# python mmw_conf.py mpisppy/tests/examples/farmer.py ../../examples/farmer/farmer_root_nonants.npy gurobi --MMW-num-batches 3 --MMW-batch-size 3 --num-scens 3
+# python mmw_conf.py mpisppy/tests/examples/farmer.py --xhatpath ../../examples/farmer/farmer_root_nonants.npy --confidence-level 0.95 --EF-solver-name gurobi --MMW-num-batches 3 --MMW-batch-size 5
 
 import re
 import sys
@@ -28,11 +28,7 @@ if __name__ == "__main__":
     cfg.add_to_config('confidence_level', 
                          description="defines confidence interval size (default 0.95)", 
                          domain=float,
-                         default=None) #None will set alpha = 0.95 and tell user
-    cfg.add_to_config('objective_gap',
-                         description="option to return gap around objective value (default False)",
-                         domain=bool,
-                         default=False)
+                         default=None) #None will set alpha = 0.95 
     cfg.add_to_config('start_scen',
                          description="starting scenario number (perhpas to avoid scenarios used to get solve xhat) default 0",
                          domain=int,
@@ -110,7 +106,8 @@ if __name__ == "__main__":
 
     cl = float(cfg.confidence_level)
 
-    r = mmw.run(confidence_level=cl, objective_gap = cfg.objective_gap)
+    #objective_gap removed sept29th 2022
+    r = mmw.run(confidence_level=cl)
 
     global_toc(r)
     
