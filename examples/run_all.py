@@ -306,7 +306,7 @@ do_one("aircond",
 
 #=========MMW TESTS==========
 # do_one_mmw is special
-do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", f"--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --objective-gap --start-scen 4 --EF-solver-name={solver_name}")
+do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", f"--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --start-scen 4 --EF-solver-name={solver_name}")
 
 
 #============================
