@@ -1,8 +1,6 @@
 # This software is distributed under the 3-clause BSD License.
 
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
-# To test: python mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3
-# or: python3 mmw_ci.py --num-scens=3  --MMW-num-batches=3 --MMW-batch-size=3 --EF-solver-name cplex
 
 import mpisppy.MPI as mpi
 import argparse
@@ -104,7 +102,7 @@ class MMWConfidenceIntervals():
         if "EF_solver_name" not in self.cfg:
             raise RuntimeError("EF_solver_name not in Argument list for MMW")
 
-    def run(self, confidence_level=0.95, objective_gap=False):
+    def run(self, confidence_level=0.95):
 
         # We get the MMW right term, then xhat, then the MMW left term.
 
@@ -126,14 +124,11 @@ class MMWConfidenceIntervals():
             #TODO: Change this to get a more logical way to compute branching_factors
             batch_size = np.prod(sampling_branching_factors)
         else:
-            sampling_BFs = None
             if batch_size == 0:
                 raise RuntimeError("batch size can't be zero for two stage problems")
         sample_cfg.quick_assign('num_scens', int, batch_size)
         sample_cfg.quick_assign('_mpisppy_probability', float, 1/batch_size)
-        scenario_creator_kwargs=self.refmodel.kw_creator(sample_cfg)
-        sample_scen_creator = self.refmodel.scenario_creator
-        
+
         #Solver settings
         solver_name = self.cfg['EF_solver_name']
         solver_options = self.cfg.get('EF_solver_options')
@@ -143,8 +138,7 @@ class MMWConfidenceIntervals():
 
         G = np.zeros(num_batches) #the Gbar of MMW (10)
         #we will compute the mean via a loop (to be parallelized ?)
-        zhats = [] #evaluation of xhat at each scenario
-        zstars=[]
+
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
             gap_options = {'seed':start,'branching_factors':sampling_branching_factors} if self.multistage else None
@@ -158,16 +152,11 @@ class MMWConfidenceIntervals():
                                            scenario_denouement=scenario_denouement,
                                            solver_name=solver_name,
                                            solver_options=solver_options,
-                                           objective_gap=objective_gap)
+                                           )
             Gn = estim['G']
             start = estim['seed']
 
-            # collect evaluation of xhat at all scenario
-            if objective_gap:
-                for zhat in estim['zhats']:
-                    zhats.append(zhat)
-                for zstar in estim['zstars']:
-                    zstars.append(zstar)      
+            #objective_gap removed Sept.29th 2022
 
             if(self.verbose):
                 global_toc(f"Gn={Gn} for the batch {i}")  # Left term of LHS of (9)
@@ -184,35 +173,12 @@ class MMWConfidenceIntervals():
         gap_inner_bound =  Gbar + epsilon_g
         gap_outer_bound = 0
  
-        if objective_gap == True:
-            # find confidence interval for zhat
-            zhat_bar = np.mean(zhats)
-            s_zhat = np.std(zhats)
-            t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
-            epsilon_zhat = t_zhat*s_zhat / np.sqrt(len(zhats))
-
-            zstar_bar = np.mean(zstars)
-            s_zstar = np.std(zstars)
-
-            # compute conservative interval on zhat plus 
-            # optimality gap in which we expect zstar to lie
-            obj_upper_bound = zhat_bar + epsilon_zhat
-            obj_lower_bound = zhat_bar - epsilon_zhat - (Gbar + epsilon_g)
-
         self.result={"gap_inner_bound": gap_inner_bound,
                       "gap_outer_bound": gap_outer_bound,
                       "Gbar": Gbar,
                       "std": s_g,
                       "Glist": G}
-
-        if objective_gap:
-            self.result["obj_upper_bound"] = obj_upper_bound
-            self.result["obj_lower_bound"] = obj_lower_bound
-            self.result["zhat_bar"] = zhat_bar
-            self.result["std_zhat"] = s_zhat
-            self.result["zstar_bar"] = zstar_bar
-            self.result["std_zstar"] = s_zstar
-
+        
         return(self.result)
         
         
