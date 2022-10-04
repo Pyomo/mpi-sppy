@@ -59,6 +59,7 @@ class MMWConfidenceIntervals():
                  batch_size=None,
                  start=None,
                  verbose=True,
+                 mpicomm=None
                  ):
         self.refmodel = importlib.import_module(refmodel)
         self.refmodelname = refmodel
@@ -67,6 +68,7 @@ class MMWConfidenceIntervals():
         self.num_batches = num_batches
         self.batch_size = batch_size
         self.verbose = verbose
+        self.mpicomm=mpicomm
 
         #Getting the start
         if start is None :
@@ -152,6 +154,7 @@ class MMWConfidenceIntervals():
                                            scenario_denouement=scenario_denouement,
                                            solver_name=solver_name,
                                            solver_options=solver_options,
+                                           mpicomm=self.mpicomm
                                            )
             Gn = estim['G']
             start = estim['seed']

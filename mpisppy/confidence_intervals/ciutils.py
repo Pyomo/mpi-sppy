@@ -191,6 +191,7 @@ def gap_estimators(xhat_one,
                    solver_name=None, 
                    solver_options=None,
                    verbose=False,
+                   mpicomm=None,
                    ):
     ''' Given a xhat, scenario names, a scenario creator and options, 
     gap_estimators creates a scenario tree and the associatd estimators 
@@ -364,7 +365,7 @@ def gap_estimators(xhat_one,
                             ama_object.scenario_creator,
                             scenario_denouement,
                             scenario_creator_kwargs=scenario_creator_kwargs,
-                            all_nodenames = all_nodenames)
+                            all_nodenames = all_nodenames,mpicomm=mpicomm)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
     zn_hat=ev.evaluate(xhats)
