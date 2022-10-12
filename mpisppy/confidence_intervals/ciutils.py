@@ -316,7 +316,6 @@ def gap_estimators(xhat_one,
         ama_cfg.quick_assign("num_scens", int, num_scens)
         ama_cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
         ama_cfg.quick_assign("start", int, start)
-        print("\n HEY!!! search everywhere for start vs start_seed (ciutils.py)")
         ama_object = ama.from_module(mname, ama_cfg, use_command_line=False)
         ama_object.scenario_names = scenario_names
         ama_object.verbose = False

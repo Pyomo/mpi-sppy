@@ -25,6 +25,9 @@ import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 
+print("\nTBD: check seqsampling for start vs start_seed")
+
+
 #==========
 
 def is_needed(cfg, needed_things, message=""):
