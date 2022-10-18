@@ -1,3 +1,10 @@
+"""Provides top-level functions for USAR with `WheelSpinner`.
+
+This script is intended to be run from the command line. Command-line
+arguments serve to configure the USAR problem being solved. You can run
+with ``--help`` to show the command-line arguments. Additionally, the
+functions here can be imported and used as documented.
+"""
 import itertools
 import os
 
@@ -27,6 +34,14 @@ SUPPORTED_SPOKES = (
 def wheel_spinner(
     cnfg: pyomo.common.config.ConfigDict,
 ) -> mpisppy.spin_the_wheel.WheelSpinner:
+    """Creates a `WheelSpinner` to solve a USAR stochastic program.
+
+    Args:
+        cnfg: `WheelSpinner` and general configuration as in config.py.
+
+    Returns:
+        An unsolved `WheelSpinner` for the stochastic program.
+    """
     if cnfg["num_scens"] <= 0:
         raise ValueError("Provide a positive integer for num_scens")
     scenario_names = list(map(str, range(cnfg["num_scens"])))
@@ -57,6 +72,7 @@ def wheel_spinner(
 
 
 def main() -> None:
+    """Runs command line-configured `WheelSpinner`; plots solution."""
     cnfg = mpisppy.utils.config.Config()
     cnfg.num_scens_required()
     cnfg.popular_args()

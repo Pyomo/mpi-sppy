@@ -1,3 +1,10 @@
+"""Provides top-level functions for USAR with `ExtensiveForm`.
+
+This script is intended to be run from the command line. Command-line
+arguments serve to configure the USAR problem being solved. You can run
+with ``--help`` to show the command-line arguments. Additionally, the
+functions here can be imported and used as documented.
+"""
 import itertools
 import os
 
@@ -12,6 +19,16 @@ from write_solutions import walks_writer, gantt_writer
 def extensive_form(
     solver_name: str, num_scens: int, **generate_data_kwargs
 ) -> mpisppy.opt.ef.ExtensiveForm:
+    """Creates an `ExtensiveForm` to solve a USAR stochastic program.
+
+    Args:
+        solver_name: Solver to be used for optimization.
+        num_scens: Positive number of scenarios generated.
+        **generate_data_kwargs: Arguments passed on to `generate_data`.
+
+    Returns:
+        An unsolved `ExtensiveForm` for the stochastic program.
+    """
     if num_scens <= 0:
         raise ValueError("Provide a positive integer for num_scens")
     scenario_names = list(map(str, range(num_scens)))
@@ -35,6 +52,7 @@ def extensive_form(
 
 
 def main() -> None:
+    """Runs command line-configured `ExtensiveForm`; plots solution."""
     cnfg = mpisppy.utils.config.Config()
     add_extensive_form_args(cnfg)
     add_common_args(cnfg)

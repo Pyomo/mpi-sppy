@@ -1,7 +1,18 @@
+"""Functions for adding configuration to a `ConfigDict`.
+
+To add the USAR problem-specific configuration, call `add_common_args`.
+`add_extensive_form_args` and `add_wheel_spinner_args` add several
+options needed in extensive_form.py and wheel_spinner.py, respectively.
+"""
 from pyomo.common.config import ConfigDict, ConfigValue
 
 
 def add_extensive_form_args(cnfg: ConfigDict) -> None:
+    """Adds configuration for solving USAR models with `ExtensiveForm`.
+
+    Args:
+        cnfg: Will store the `ExtensiveForm`-specific configuration.
+    """
     cnfg.declare("num_scens", ConfigValue(
         domain=int,
         description="Positive number of scenarios (int) generated",
@@ -18,6 +29,11 @@ def add_extensive_form_args(cnfg: ConfigDict) -> None:
 
 
 def add_wheel_spinner_args(cnfg: ConfigDict) -> None:
+    """Adds configuration for solving USAR models with `WheelSpinner`.
+
+    Args:
+        cnfg: Will store the `WheelSpinner`-specific configuration.
+    """
     cnfg.declare("run_async", ConfigValue(
         default=False,
         domain=bool,
@@ -26,6 +42,11 @@ def add_wheel_spinner_args(cnfg: ConfigDict) -> None:
 
 
 def add_common_args(cnfg: ConfigDict) -> None:
+    """Adds configuration needed generally for solving USAR models.
+
+    Args:
+        cnfg: Will store the general USAR configuration.
+    """
     cnfg.declare("output_dir", ConfigValue(
         default=".",
         description="Directory for output files (current dir by default)",

@@ -1,3 +1,13 @@
+"""Functions for obtaining and plotting team schedules.
+
+The problem of assigning departures to teams and obtaining team-specific
+rescue schedules is reduced to strongly connecting subgraphs of
+departures and finding an Eulerian circuit for each time step. A simpler
+approach may exist, but it's not clear such an approach could generalize
+to solutions with travel times of 0.
+
+Typically, you will only directly call functions prefixed with "plot\_".
+"""
 import itertools
 import random
 from typing import (
@@ -29,6 +39,7 @@ import pyomo.environ as pyo
 
 
 def default_colors(n: int, seed=0) -> Callable[[int], Any]:
+    """Gives a randomly shuffled rainbow colormap with `n` colors."""
     colors = list(plt.cm.rainbow(np.linspace(0, 1, n)))
     random.Random(seed).shuffle(colors)
     return ListedColormap(colors)
@@ -40,6 +51,36 @@ V = TypeVar("V", bound=Hashable)
 def hierholzers_alg(
     out_edges: Mapping[V, Collection[V]], start_vertex: V
 ) -> Tuple[Deque[Tuple[V, V]], int]:
+    """Finds an Eulerian circuit relative to a start vertex.
+
+    Implements Hierholzer's algorithm ([hierholzer1873moglichkeit]_).
+
+    .. [hierholzer1873moglichkeit]
+    .. code:: bibtex
+
+       @article{hierholzer1873moglichkeit,
+         title={{\"U}ber die M{\"o}glichkeit, einen Linienzug ohne Wiederholung und ohne Unterbrechung zu umfahren},
+         author={Hierholzer, Carl and Wiener, Chr},
+         journal={Mathematische Annalen},
+         volume={6},
+         number={1},
+         pages={30--32},
+         year={1873},
+         publisher={Springer-Verlag}
+       }
+
+    Args:
+        out_edges: Gives the vertices neighboring each vertex.
+        start_vertex: A vertex considered a reference/starting point.
+
+    Returns:
+        A tuple (`eulerian_circuit`, `num_rotated`), where
+        `eulerian_circuit` does not necessarily start at `start_vertex`,
+        and `num_rotated` is an integer offset for `start_vertex`.
+
+    Raises:
+        ValueError: If no Eulerian circuit exists for the input.
+    """
     eulerian_circuit = Deque[Tuple[V, V]]()
     num_rotated = 0
     num_edges = sum(map(len, out_edges.values()))
@@ -64,6 +105,34 @@ def hierholzers_alg(
 def tarjans_scc_alg(
     out_edges: Mapping[V, Iterable[V]], vertices: Optional[Iterable[V]] = None
 ) -> Generator[Set[V], None, None]:
+    """Gives the strongly connected components for a directed graph.
+
+    Implements Tarjan's strongly connected components algorithm
+    ([tarjan1972depth]_).
+
+    .. [tarjan1972depth]
+    .. code:: bibtex
+
+       @article{tarjan1972depth,
+         title={Depth-first search and linear graph algorithms},
+         author={Tarjan, Robert},
+         journal={SIAM journal on computing},
+         volume={1},
+         number={2},
+         pages={146--160},
+         year={1972},
+         publisher={SIAM}
+       }
+
+
+    Args:
+        out_edges: Gives the vertices neighboring each vertex.
+        vertices:
+            Vertex set, if given. Inferred from `out_edges` otherwise.
+
+    Yields:
+        Sets of vertices comprising strongly connected components.
+    """
     if vertices is None:
         vertices = set(itertools.chain(out_edges.keys(), *out_edges.values()))
 
@@ -108,6 +177,16 @@ NumberedEvent = Tuple[int, Event]
 
 
 def event_walks(numbered_events: Iterable[NumberedEvent]) -> List[List[int]]:
+    """Assigns departures in `numbered_events` by team.
+
+    This function strongly connects a subgraph for each time step (in
+    chronological order) and finds an Eulerian circuit for the subgraph.
+    A dummy vertex strongly connects the graph and indicates a change of
+    teams when interpreting the resulting Eulerian circuit.
+
+    Returns:
+        List of team walks numbering departures as in `numbered_events`.
+    """
     event_numbers = DefaultDict[Event, Deque[int]](Deque)
     events_by_time = DefaultDict[Time, Deque[Event]](Deque)
     available_walks = DefaultDict[Location, Deque[List[int]]](Deque)
@@ -176,6 +255,7 @@ def event_walks(numbered_events: Iterable[NumberedEvent]) -> List[List[int]]:
 
 
 def filter_keys_by_value(indexed_var: IndexedVar) -> Iterable:
+    """Filters `indexed_var` to just what has value that is truthy."""
     def value_truthyness(key):
         var = indexed_var[key]
         try:
@@ -188,6 +268,15 @@ def filter_keys_by_value(indexed_var: IndexedVar) -> Iterable:
 
 
 def assign_departures(scen_mod: pyo.ConcreteModel) -> List[List[Transition]]:
+    """Reads solution in `scen_mod` and assigns departures to teams.
+
+    Args:
+        scen_mod: Model defined as in abstract.py.
+
+    Returns:
+        List of team walks consisting of (from, to) transitions, where
+        from and to are tuples of time and location.
+    """
     depot_deps = [
         ((t1, d), (t1 + scen_mod.from_depot_travel_times[t1, d, s], s))
         for t1, d, s in filter_keys_by_value(scen_mod.depot_departures)
@@ -206,6 +295,13 @@ def plot_walks(
     scen_name: str,
     team_colors: Optional[Callable[[int], Any]] = None,
 ) -> None:
+    """Plots a map of rescue team movements color-coded by team.
+
+    Args:
+        scen_mod: Model with the solution to be plotted.
+        scen_name: A string name for `scen_mod`.
+        team_colors: If given, returns the color for a team number.
+    """
     team_walks = assign_departures(scen_mod)
 
     if team_colors is None:
@@ -249,6 +345,13 @@ def plot_gantt(
     scen_name: str,
     team_colors: Optional[Callable[[int], Any]] = None,
 ) -> None:
+    """Plots a Gantt chart of rescue schedules color-coded by team.
+
+    Args:
+        scen_mod: Model with the solution to be plotted.
+        scen_name: A string name for `scen_mod`.
+        team_colors: If given, returns the color for a team number.
+    """
     team_walks = assign_departures(scen_mod)
 
     if team_colors is None:

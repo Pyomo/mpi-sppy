@@ -1,7 +1,27 @@
+"""Provides an importable function for creating an `AbstractModel`."""
 import pyomo.environ as pyo
 
 
 def abstract_model() -> pyo.AbstractModel:
+    """Returns an `AbstractModel` for urban search and rescue.
+
+    This formulation is similar to the multistage stochastic formulation
+    in [chen2012optimal]_.
+
+    .. [chen2012optimal]
+    .. code:: bibtex
+
+       @article{chen2012optimal,
+           title={Optimal team deployment in urban search and rescue},
+           author={Chen, Lichun and Miller-Hooks, Elise},
+           journal={Transportation Research Part B: Methodological},
+           volume={46},
+           number={8},
+           pages={984--999},
+           year={2012},
+           publisher={Elsevier}
+       }
+    """
     ab = pyo.AbstractModel()
 
     ab.time_horizon = pyo.Param(within=pyo.PositiveIntegers)
@@ -19,6 +39,8 @@ def abstract_model() -> pyo.AbstractModel:
 
     ab.rescue_times = pyo.Param(
         ab.times, ab.sites, within=pyo.NonNegativeIntegers)
+
+    # For a solution without site cycles, travel times cannot be 0:
     ab.from_depot_travel_times = pyo.Param(
         ab.times, ab.depots, ab.sites, within=pyo.PositiveIntegers)
     ab.inter_site_travel_times = pyo.Param(
@@ -28,6 +50,7 @@ def abstract_model() -> pyo.AbstractModel:
 
     ab.is_active_depot = pyo.Var(ab.depots, domain=pyo.Binary)
 
+    # Self-loops are prohibited; stays_at_site should be used instead:
     def no_self_loops(mod, _, s1, s2):
         return (0, int(s1 != s2))
     ab.site_departures = pyo.Var(

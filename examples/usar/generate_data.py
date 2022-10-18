@@ -1,3 +1,12 @@
+"""Contains helper functions to randomly generate USAR problem data.
+
+Depot and household coordinates are generated uniformly at random.
+Household sizes are sampled from an approximate Poisson distribution.
+The times before which households must be rescued are obtained from a
+scaled Pareto distribution, which assumes that emergency preparedness
+follows a power law and households can generally survive some minimum
+amount of time.
+"""
 import itertools
 import math
 import random
@@ -16,6 +25,19 @@ Coordinates = Tuple[float, float]
 def generate_coords(
     num_depots: int, num_households: int, seed=None, **kwargs
 ) -> Tuple[List[Coordinates], List[Coordinates]]:
+    """Samples coordinates uniformly from :math:`[0, 1) × [0, 1)`.
+
+    Notably, also seeds the random module before sampling coordinates.
+
+    Args:
+        num_depots: Number of depot coordinates generated.
+        num_households: Number of household coordinates generated.
+        seed: Seed for the random module.
+        **kwargs: Takes any additional, unused arguments.
+
+    Returns:
+        A 2-tuple of depot and household coords, each of given lengths.
+    """
     for param in ("num_depots", "num_households"):
         if eval(param) < 0:
             raise ValueError(f"Give a nonnegative value for {param}")
@@ -36,6 +58,21 @@ V = TypeVar("V")
 def index(
     values: Iterable[V], idx: Iterable, *other_idxs: Iterable
 ) -> Dict[Any, V]:
+    """Indexes `values` for inclusion in a Pyomo data dict.
+
+    Args:
+        values: An iterable of values for the returned dict.
+        idx: Keys to index `values`.
+        *other_idxs:
+            If given, the keys are instead the Cartesian product,
+            :math:`\mathtt{idx} × \mathtt{other\_idxs}[0] × \cdots`.
+
+    Returns:
+        dict containing `values` keyed by index(es).
+
+    Raises:
+        ValueError: There are fewer values than the index(es) imply.
+    """
     keys = idx if not other_idxs else itertools.product(idx, *other_idxs)
     keys = list(keys)
     idxed_vals = dict(zip(keys, values))
@@ -56,6 +93,23 @@ def generate_data(
     seed=None,
     **kwargs,
 ) -> Generator[Dict, None, None]:
+    """Generates USAR scenario data dictionaries ad infinitum.
+
+    Args:
+        time_horizon: Number of time steps considered in optimization.
+        time_unit_minutes: Number of minutes per time step.
+        num_depots: Passed to `generate_coords`.
+        num_active_depots: Number of depots that can host rescue teams.
+        num_households: Passed to `generate_coords`.
+        constant_rescue_time: Number of time steps a rescue takes.
+        travel_speed: Team speed in units of coordinates per time step.
+        constant_depot_inflow: Maximum depot departures per time step.
+        seed: Seed for the random module.
+        **kwargs: Takes any additional, unused arguments.
+
+    Yields:
+        A dict parameterizing a specific USAR problem.
+    """
     for param in ("time_horizon", "num_depots", "num_households"):
         if eval(param) < 0:
             raise ValueError(f"Give a nonnegative value for {param}")
