@@ -23,7 +23,7 @@ Coordinates = Tuple[float, float]
 
 
 def generate_coords(
-    num_depots: int, num_households: int, seed=None, **kwargs
+    num_depots: int, num_households: int, seed, **kwargs
 ) -> Tuple[List[Coordinates], List[Coordinates]]:
     """Samples coordinates uniformly from :math:`[0, 1) × [0, 1)`.
 
@@ -90,7 +90,7 @@ def generate_data(
     constant_rescue_time: int,
     travel_speed: float,
     constant_depot_inflow: int,
-    seed=None,
+    seed,
     **kwargs,
 ) -> Generator[Dict, None, None]:
     """Generates USAR scenario data dictionaries ad infinitum.
