@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     PHopt = {}
     PHopt["asynchronousPH"] = False
-    PHopt["solvername"] = "cplex"
+    PHopt["solver_name"] = "cplex"
     PHopt["PHIterLimit"] = 5
     PHopt["defaultPHrho"] = 1
     PHopt["convthresh"] = 0.001

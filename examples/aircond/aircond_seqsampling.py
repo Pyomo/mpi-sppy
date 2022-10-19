@@ -39,7 +39,7 @@ def main(cfg):
     scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
     
     xhat_gen_kwargs = {"scenario_names": scenario_names,
-                        "solvername": cfg.solver_name,
+                        "solver_name": cfg.solver_name,
                         "solver_options": None,
                         "branching_factors" : BFs,
                         "mu_dev": cfg.mu_dev,

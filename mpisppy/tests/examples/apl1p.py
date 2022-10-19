@@ -200,7 +200,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 
 #============================
-def xhat_generator_apl1p(scenario_names, solvername="gurobi", solver_options=None):
+def xhat_generator_apl1p(scenario_names, solver_name="gurobi", solver_options=None):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -209,7 +209,7 @@ def xhat_generator_apl1p(scenario_names, solvername="gurobi", solver_options=Non
     ----------
     scenario_names: int
         Names of the scenario we use
-    solvername: str, optional
+    solver_name: str, optional
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
@@ -223,7 +223,7 @@ def xhat_generator_apl1p(scenario_names, solvername="gurobi", solver_options=Non
     num_scens = len(scenario_names)
     
     ama_options = { "EF-2stage": True,
-                    "EF_solver_name": solvername,
+                    "EF_solver_name": solver_name,
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
@@ -244,7 +244,7 @@ if __name__ == "__main__":
     #An example of sequential sampling for the APL1P model
     from mpisppy.confidence_intervals.seqsampling import SeqSampling
     optionsFSP = {'eps': 5.0,
-                  'solvername': "gurobi_direct",
+                  'solver_name': "gurobi_direct",
                   "c0":50,}
     apl1p_pb = SeqSampling("mpisppy.tests.examples.apl1p",
                             xhat_generator_apl1p, 

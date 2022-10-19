@@ -462,7 +462,7 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 #============================
-def xhat_generator_aircond(scenario_names, solvername=None, solver_options=None,
+def xhat_generator_aircond(scenario_names, solver_name=None, solver_options=None,
                            branching_factors=None, mu_dev = 0, sigma_dev = 40,
                            start_ups=None, start_seed = 0):
     '''
@@ -473,7 +473,7 @@ def xhat_generator_aircond(scenario_names, solvername=None, solver_options=None,
     ----------
     scenario_names: list of str
         Names of the scenario we use
-    solvername: str
+    solver_name: str
         Name of the solver used.
     solver_options: dict, optional
         Solving options. The default is None.
@@ -500,12 +500,12 @@ def xhat_generator_aircond(scenario_names, solvername=None, solver_options=None,
     '''
     num_scens = len(scenario_names)
     assert branching_factors is not None, "branching factors must be supplied to xhat_generator_aircond"
-    assert solvername is not None, "solvername must be supplied to xhat_generator_aircond"
+    assert solver_name is not None, "solver_name must be supplied to xhat_generator_aircond"
     
     cfg = config.Config()
     cfg.quick_assign("EF_mstage", bool, True)
-    cfg.quick_assign("EF_solver_name", str, solvername)
-    #cfg.quick_assign("solvername", str, solvername)  # amalgamator wants this
+    cfg.quick_assign("EF_solver_name", str, solver_name)
+    #cfg.quick_assign("solver_name", str, solver_name)  # amalgamator wants this
     cfg.quick_assign("EF_solver_options", dict, solver_options)
     cfg.quick_assign("num_scens", int, num_scens)
     cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)

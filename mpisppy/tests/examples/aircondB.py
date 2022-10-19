@@ -214,10 +214,10 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 
 #============================
-def xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=None,
+def xhat_generator_aircond(scenario_names, solver_name="gurobi", solver_options=None,
                            branching_factors=None, mudev = 0, sigmadev = 40,
                            start_ups=None, start_seed = 0):
-    return base_aircond.xhat_generator_aircond(scenario_names, solvername="gurobi", solver_options=solver_options,
+    return base_aircond.xhat_generator_aircond(scenario_names, solver_name="gurobi", solver_options=solver_options,
                                                branching_factors=branching_factors, mudev = mudev, sigmadev = sigmadev,
                                                start_ups=start_ups, start_seed = start_seed)
 

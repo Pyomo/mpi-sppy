@@ -13,7 +13,7 @@ def main():
         'lam'            : 467, # Dual weight for dualized chance constr
     }
     PH_options = {
-        'solvername' : 'gurobi',
+        'solver_name' : 'gurobi',
         'PHIterLimit' : 250,
         'defaultPHrho' : 1e-1,
         'convthresh' : 1e-3,

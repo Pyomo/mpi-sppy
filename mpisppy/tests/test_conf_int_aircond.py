@@ -31,7 +31,7 @@ import pyomo.common.config as pyofig
 
 __version__ = 0.4
 
-solver_available, solvername, persistent_available, persistentsolvername= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
 
 global_BFs = [4,3,2]
@@ -51,7 +51,7 @@ class Test_confint_aircond(unittest.TestCase):
         # plus kwoptions to pass to kw_creator
         # and kwargs, which is the result of that.
         cfg = config.Config()
-        cfg.quick_assign("EF_solver_name", str, solvername)
+        cfg.quick_assign("EF_solver_name", str, solver_name)
         cfg.quick_assign("start_ups", bool, False)
         cfg.quick_assign("num_scens", int, 24)
         cfg.quick_assign("start_seed", int, 0)
@@ -68,7 +68,7 @@ class Test_confint_aircond(unittest.TestCase):
         options = {"iter0_solver_options": None,
                  "iterk_solver_options": None,
                  "display_timing": False,
-                 "solvername": solvername,
+                 "solver_name": solver_name,
                  "verbose": False,
                  "solver_options":None}
 
@@ -79,7 +79,7 @@ class Test_confint_aircond(unittest.TestCase):
         num_scens = np.prod(BFs)
         scenario_names = aircond.scenario_names_creator(num_scens)
         xhat_gen_options = {"scenario_names": scenario_names,
-                            "solvername": solvername,
+                            "solver_name": solver_name,
                             "solver_options": None,
                             "branching_factors": BFs,
                             "mu_dev": 0,
@@ -151,7 +151,7 @@ class Test_confint_aircond(unittest.TestCase):
         optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
         optionsBM.quick_assign("BM_p", float, 0.2)
         optionsBM.quick_assign("BM_q", float, 1.2)
-        optionsBM.quick_assign("solvername", str, solvername)
+        optionsBM.quick_assign("solver_name", str, solver_name)
         optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
         optionsBM.quick_assign("solving_type", str, "EF_mstage")
         optionsBM.quick_assign("branching_factors", pyofig.ListOf(int), global_BFs)
@@ -180,7 +180,7 @@ class Test_confint_aircond(unittest.TestCase):
         optionsBM.quick_assign('BM_eps_prime', float, 0.1,)
         optionsBM.quick_assign("BM_p", float, 0.1)
         optionsBM.quick_assign("BM_q", float, 1.2)
-        optionsBM.quick_assign("solvername", str, solvername)
+        optionsBM.quick_assign("solver_name", str, solver_name)
         optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
         optionsBM.quick_assign("solving_type", str, "EF_mstage")
         optionsBM.quick_assign("branching_factors", pyofig.ListOf(int), global_BFs)
@@ -270,7 +270,7 @@ class Test_confint_aircond(unittest.TestCase):
                                        solving_type="EF_mstage",
                                        sample_options=sample_options,
                                        cfg = options,
-                                       solvername=solvername,
+                                       solver_name=solver_name,
                                        scenario_names=scenario_names,
                                        )
         G = estim['G']
@@ -298,7 +298,7 @@ class Test_confint_aircond(unittest.TestCase):
         optionsBM.quick_assign('BM_eps_prime', float, 0.1,)
         optionsBM.quick_assign("BM_p", float, 0.1)
         optionsBM.quick_assign("BM_q", float, 1.2)
-        optionsBM.quick_assign("solvername", str, solvername)
+        optionsBM.quick_assign("solver_name", str, solver_name)
         optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
         optionsBM.quick_assign("solving_type", str, "EF_mstage")
         optionsBM.quick_assign("EF_mstage", bool, True)   # TBD: we should not need both

@@ -38,7 +38,7 @@ def _hasit(args, argname):
 
 def shared_options(args):
     shoptions = {
-        "solvername": args.solver_name,
+        "solver_name": args.solver_name,
         "defaultPHrho": args.default_rho,
         "convthresh": 0,
         "PHIterLimit": args.max_iterations,  # not needed by all
@@ -215,7 +215,7 @@ def fwph_spoke(
         "FW_weight": args.fwph_weight,
         "FW_conv_thresh": args.fwph_conv_thresh,
         "stop_check_tol": args.fwph_stop_check_tol,
-        "solvername": args.solver_name,
+        "solver_name": args.solver_name,
         "FW_verbose": args.with_verbose,
         "mip_solver_options" : mip_solver_options,
         "qp_solver_options" : qp_solver_options,

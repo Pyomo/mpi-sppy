@@ -21,7 +21,7 @@ import mpisppy.tests.examples.farmer as farmer
 from mpisppy.tests.utils import get_solver, round_pos_sig
 
 __version__ = 0.6
-solver_available,solvername, persistent_available, persistentsolvername= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 import mpisppy.MPI as mpi
 fullcomm = mpi.COMM_WORLD
@@ -34,7 +34,7 @@ class Test_aph_sizes(unittest.TestCase):
     def setUp(self):
         self.Baseoptions = {}
         self.Baseoptions["asynchronousPH"] = False
-        self.Baseoptions["solvername"] = solvername
+        self.Baseoptions["solver_name"] = solver_name
         self.Baseoptions["PHIterLimit"] = 10
         self.Baseoptions["defaultPHrho"] = 1
         self.Baseoptions["convthresh"] = 0.001
@@ -76,7 +76,7 @@ class Test_aph_sizes(unittest.TestCase):
         )
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_aph_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -113,7 +113,7 @@ class Test_aph_sizes(unittest.TestCase):
 
         
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_APHgamma(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -135,7 +135,7 @@ class Test_aph_sizes(unittest.TestCase):
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_use_lag(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -157,7 +157,7 @@ class Test_aph_sizes(unittest.TestCase):
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_running_dump(self):
         # just see if "display_convergence_detail" causes a crash
         options = self._copy_of_base_options()
@@ -200,7 +200,7 @@ class Test_aph_farmer(unittest.TestCase):
     def setUp(self):
         self.Baseoptions = {}
         self.Baseoptions["asynchronousPH"] = False
-        self.Baseoptions["solvername"] = solvername
+        self.Baseoptions["solver_name"] = solver_name
         self.Baseoptions["PHIterLimit"] = 10
         self.Baseoptions["defaultPHrho"] = 1
         self.Baseoptions["convthresh"] = 0.001
@@ -226,7 +226,7 @@ class Test_aph_farmer(unittest.TestCase):
         return [f"Scenario{i+1}" for i in range(cnt)]
         
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_aph_farmer_basic30(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -253,7 +253,7 @@ class Test_aph_farmer(unittest.TestCase):
         self.assertEqual(objgot, objtarget)
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_aph_farmer_dispatch(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -281,7 +281,7 @@ class Test_aph_farmer(unittest.TestCase):
 
 
     @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solvername,))
+                     "%s solver is not available" % (solver_name,))
     def test_aph_farmer_dispatch_bundles(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2

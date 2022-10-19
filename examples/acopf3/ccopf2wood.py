@@ -52,7 +52,7 @@ def main():
     branching_factors = [int(sys.argv[1]), int(sys.argv[2])]
     PHIterLimit = int(sys.argv[3])
     scenperbun = int(sys.argv[4])
-    solvername = sys.argv[5]
+    solver_name = sys.argv[5]
 
     seed = 1134
     a_line_fails_prob = 0.1
@@ -70,13 +70,13 @@ def main():
     }
     if scenario_creator_kwargs["convex_relaxation"]:
         # for initialization solve
-        solver = pyo.SolverFactory(solvername)
+        solver = pyo.SolverFactory(solver_name)
         scenario_creator_kwargs["solver"] = None
-        ##if "gurobi" in solvername:
+        ##if "gurobi" in solver_name:
             ##solver.options["BarHomogeneous"] = 1
     else:
-        solver = pyo.SolverFactory(solvername)
-        if "gurobi" in solvername:
+        solver = pyo.SolverFactory(solver_name)
+        if "gurobi" in solver_name:
             solver.options["BarHomogeneous"] = 1
         scenario_creator_kwargs["solver"] = solver
     md_dict = _md_dict(scenario_creator_kwargs["epath"])
@@ -114,15 +114,15 @@ def main():
 
     options = dict()
     if scenario_creator_kwargs["convex_relaxation"]:
-        options["solvername"] = solvername
-        if "gurobi" in options["solvername"]:
+        options["solver_name"] = solver_name
+        if "gurobi" in options["solver_name"]:
             options["iter0_solver_options"] = {"BarHomogeneous": 1}
             options["iterk_solver_options"] = {"BarHomogeneous": 1}
         else:
             options["iter0_solver_options"] = None
             options["iterk_solver_options"] = None
     else:
-        options["solvername"] = solvername  # needs to be ipopt
+        options["solver_name"] = solver_name  # needs to be ipopt
         options["iter0_solver_options"] = None
         options["iterk_solver_options"] = None
     options["PHIterLimit"] = PHIterLimit
@@ -156,7 +156,7 @@ def main():
             nbunstr = "0"
         oline = "\n"+ str(start_time)+","+socket.gethostname()
         oline += ","+str(branching_factors[0])+","+str(branching_factors[1])
-        oline += ", "+str(seed) + ", "+str(options["solvername"])
+        oline += ", "+str(seed) + ", "+str(options["solver_name"])
         oline += ", "+str(n_proc) + ", "+ nbunstr
         oline += ", "+str(options["PHIterLimit"])
         oline += ", "+str(options["convthresh"])

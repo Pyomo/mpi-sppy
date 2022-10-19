@@ -648,7 +648,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         Required options are
 
-        - solvername (string): The name of the solver to use.
+        - solver_name (string): The name of the solver to use.
         - PHIterLimit (int): The maximum number of PH iterations to execute.
         - defaultPHrho (float): The default value of rho (penalty parameter) to
           use for PH.
@@ -663,7 +663,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         """
         required = [
-            "solvername", "PHIterLimit", "defaultPHrho", 
+            "solver_name", "PHIterLimit", "defaultPHrho", 
             "convthresh", "verbose", "display_progress", 
         ]
         self._options_check(required, self.options)

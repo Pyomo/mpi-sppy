@@ -237,7 +237,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 if __name__ == "__main__":
     options = {}
     options["asynchronousPH"] = False
-    options["solvername"] = "cplex"
+    options["solver_name"] = "cplex"
     options["PHIterLimit"] = 200
     options["defaultPHrho"] = 1
     options["convthresh"] = 0.0001
@@ -266,7 +266,7 @@ if __name__ == "__main__":
     all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 
     # **** ef ****
-    solver = pyo.SolverFactory(options["solvername"])
+    solver = pyo.SolverFactory(options["solver_name"])
 
     ef = sputils.create_EF(
         all_scenario_names,

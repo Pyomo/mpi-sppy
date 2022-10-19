@@ -79,7 +79,7 @@ class IndepScens_SeqSampling(SeqSampling):
         xhat_scenario_names = refmodel.scenario_names_creator(mk)
 
         xgo = self.xhat_gen_kwargs.copy()
-        xgo["solvername"] = self.solvername
+        xgo["solver_name"] = self.solver_name
         xgo.pop("solver_options", None)  # it will be given explicitly
         xgo.pop("scenario_names", None)  # it will be given explicitly
         xgo["branching_factors"] = xhat_branching_factors
@@ -188,7 +188,7 @@ class IndepScens_SeqSampling(SeqSampling):
         """
         cfg = config.Config()
         cfg.quick_assign("EF_mstage", bool, True)
-        cfg.quick_assign("EF_solver_name", str, self.solvername)
+        cfg.quick_assign("EF_solver_name", str, self.solver_name)
         cfg.quick_assign("EF_solver_options", dict, self.solver_options)
         cfg.quick_assign("num_scens", int, nk)
         cfg.quick_assign("_mpisppy_probability", float, 1/nk)
@@ -215,7 +215,7 @@ class IndepScens_SeqSampling(SeqSampling):
                                                     self.cfg['branching_factors'],  # psuedo
                                                     self.SeedCount,
                                                      self.cfg,
-                                                    solvername=self.solvername,
+                                                    solver_name=self.solver_name,
                                                     solver_options=self.solver_options)
         
         #Compute then the average function value with this policy
@@ -223,7 +223,7 @@ class IndepScens_SeqSampling(SeqSampling):
         xhat_eval_options = {"iter0_solver_options": None,
                          "iterk_solver_options": None,
                          "display_timing": False,
-                         "solvername": self.solvername,
+                         "solver_name": self.solver_name,
                          "verbose": False,
                          "solver_options":self.solver_options}
         ev = xhat_eval.Xhat_Eval(xhat_eval_options,
@@ -273,14 +273,14 @@ class IndepScens_SeqSampling(SeqSampling):
 
 if __name__ == "__main__":
     # For use by confidence interval develepors who need a quick test.
-    solvername = "cplex"
+    solver_name = "cplex"
     #An example of sequential sampling for the aircond model
     import mpisppy.tests.examples.aircond
     bfs = [3,3,2]
     num_scens = np.prod(bfs)
     scenario_names = mpisppy.tests.examples.aircond.scenario_names_creator(num_scens)
     xhat_gen_kwargs = {"scenario_names": scenario_names,
-                        "solvername": solvername,
+                        "solver_name": solver_name,
                         "solver_options": None,
                         "branching_factors": bfs,
                         "mu_dev": 0,
@@ -299,8 +299,8 @@ if __name__ == "__main__":
     optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
     optionsBM.quick_assign("BM_p", float, 0.2)
     optionsBM.quick_assign("BM_q", float, 1.2)
-    optionsBM.quick_assign("solvername", str, solvername)
-    optionsBM.quick_assign("solver_name", str, solvername)
+    optionsBM.quick_assign("solver_name", str, solver_name)
+    optionsBM.quick_assign("solver_name", str, solver_name)
     optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
     optionsBM.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
     optionsBM.quick_assign("solving_type", str, "EF_mstage")
@@ -319,8 +319,8 @@ if __name__ == "__main__":
     optionsFSP.quick_assign("ArRP", int, 2)  # this must be 1 for any multi-stage problems
     optionsFSP.quick_assign("stopping", str, "BPL")
     optionsFSP.quick_assign("solving_type", str, "EF_mstage")
-    optionsFSP.quick_assign("solvername", str, solvername)
-    optionsFSP.quick_assign("solver_name", str, solvername)
+    optionsFSP.quick_assign("solver_name", str, solver_name)
+    optionsFSP.quick_assign("solver_name", str, solver_name)
     optionsFSP.add_and_assign("branching_factors", description="branching factors", domain=pyofig.ListOf(int), default=None, value=bfs)
     optionsFSP.quick_assign("start_ups", bool, False)
     optionsBM.quick_assign("EF_mstage", bool, True)

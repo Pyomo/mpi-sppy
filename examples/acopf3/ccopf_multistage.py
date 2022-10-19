@@ -286,10 +286,10 @@ if __name__ == "__main__":
     import mpisppy.MPI as mpi
     n_proc = mpi.COMM_WORLD.Get_size()  # for error check
     # start options
-    solvername = "cplex"
-    print(f"Solving with {solvername}")
-    solver = pyo.SolverFactory(solvername)
-    if "gurobi" in solvername:
+    solver_name = "cplex"
+    print(f"Solving with {solver_name}")
+    solver = pyo.SolverFactory(solver_name)
+    if "gurobi" in solver_name:
         solver.options["BarHomogeneous"] = 1
 
     casename = "pglib-opf-master/pglib_opf_case14_ieee.m"
@@ -373,7 +373,7 @@ if __name__ == "__main__":
                              pysp2_callback,
                              scenario_creator_kwargs=scenario_creator_kwargs)
     ###solver.options["BarHomogeneous"] = 1
-    if "gurobi" in solvername:
+    if "gurobi" in solver_name:
         solver.options["BarHomogeneous"] = 1
 
     results = solver.solve(ef, tee=True)

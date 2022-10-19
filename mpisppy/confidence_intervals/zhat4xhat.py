@@ -39,12 +39,12 @@ def evaluate_sample_trees(xhat_one,
     zhats = list()
     bfs = cfg["branching_factors"]
     scenario_count = np.prod(bfs)
-    solvername = cfg["EF_solver_name"]
+    solver_name = cfg["EF_solver_name"]
     #sampling_bfs = ciutils.scalable_BFs(batch_size, bfs) # use for variance?
     xhat_eval_options = {"iter0_solver_options": None,
                      "iterk_solver_options": None,
                      "display_timing": False,
-                     "solvername": solvername,
+                     "solver_name": solver_name,
                      "verbose": False,
                      "solver_options":{}}
 
@@ -58,7 +58,7 @@ def evaluate_sample_trees(xhat_one,
                                               branching_factors=bfs,
                                               seed=seed, 
                                               cfg=cfg,
-                                              solvername=solvername,
+                                              solver_name=solver_name,
                                               solver_options={})
         samp_tree.run()
         ama_object = samp_tree.ama
@@ -76,7 +76,7 @@ def evaluate_sample_trees(xhat_one,
                                                      bfs,
                                                      seed,
                                                      cfg,
-                                                     solvername=solvername,
+                                                     solver_name=solver_name,
                                                      solver_options=None)
         # for Xhat_Eval
         # scenario_creator_kwargs = ama_object.kwargs

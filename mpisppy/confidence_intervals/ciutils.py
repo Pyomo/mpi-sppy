@@ -188,10 +188,10 @@ def gap_estimators(xhat_one,
                    ArRP=1,
                    cfg=None,   # was: options; before that: scenario_creator_kwargs={}
                    scenario_denouement=None,
-                   solvername=None, 
+                   solver_name=None, 
                    solver_options=None,
                    verbose=False,
-                   objective_gap=False
+                   mpicomm=None,
                    ):
     ''' Given a xhat, scenario names, a scenario creator and options, 
     gap_estimators creates a scenario tree and the associatd estimators 
@@ -223,14 +223,12 @@ def gap_estimators(xhat_one,
         Additional arguments for scenario_creator. Default is {}
     scenario_denouement: function, optional
         Function to run after scenario creation. Default is None.
-    solvername : str, optional
+    solver_name : str, optional
         Solver. Default is None
     solver_options: dict, optional
         Solving options. Default is None
     verbose: bool, optional
         Should it print the gap estimator ? Default is True
-    objective_gap: bool, optional
-        Returns a gap estimate around approximate objective value
 
     branching_factors: list, optional
         Only for multistage. List of branching factors of the sample scenario tree.
@@ -273,7 +271,7 @@ def gap_estimators(xhat_one,
         for k in range(ArRP):
             scennames = scenario_names[k*(n//ArRP):(k+1)*(n//ArRP)]
             tmp = gap_estimators(xhat_one, mname,
-                                   solvername=solvername,
+                                   solver_name=solver_name,
                                    scenario_names=scennames, ArRP=1,
                                    cfg=cfg,
                                    scenario_denouement=scenario_denouement,
@@ -302,7 +300,7 @@ def gap_estimators(xhat_one,
                                               branching_factors=branching_factors,
                                               seed=start, 
                                               cfg=cfg,
-                                              solvername=solvername,
+                                              solver_name=solver_name,
                                               solver_options=solver_options)
         samp_tree.run()
         start += sputils.number_of_nodes(branching_factors)
@@ -312,13 +310,12 @@ def gap_estimators(xhat_one,
         num_scens = len(scenario_names)
         ama_cfg = cfg()
         ama_cfg.quick_assign(solving_type, bool, True)
-        ama_cfg.quick_assign("EF_solver_name", str, solvername)
+        ama_cfg.quick_assign("EF_solver_name", str, solver_name)
         solver_options_str= sputils.option_dict_to_string(solver_options)  # cfg need str
         ama_cfg.quick_assign("EF_solver_options", str, solver_options_str)
         ama_cfg.quick_assign("num_scens", int, num_scens)
         ama_cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
         ama_cfg.quick_assign("start", int, start)
-        print("\n HEY!!! search everywhere for start vs start_seed (ciutils.py)")
         ama_object = ama.from_module(mname, ama_cfg, use_command_line=False)
         ama_object.scenario_names = scenario_names
         ama_object.verbose = False
@@ -326,11 +323,11 @@ def gap_estimators(xhat_one,
         start += len(scenario_names)
         
     #Optimal solution of the approximate problem
-    zstar = ama_object.best_outer_bound
+    zn_star = ama_object.best_outer_bound
     #Associated policies
     xstars = sputils.nonant_cache_from_ef(ama_object.ef)
     
-    #Then, we evaluate the fonction value induced by the scenario at xstar.
+    #Then, we evaluate the function value induced by the scenario at xstar.
     
     if is_multi:
         # Find feasible policies (i.e. xhats) for every non-leaf nodes
@@ -345,7 +342,7 @@ def gap_estimators(xhat_one,
                                                     branching_factors,
                                                     start,
                                                     cfg,
-                                                    solvername=solvername,
+                                                    solver_name=solver_name,
                                                     solver_options=solver_options)
         
         #Compute then the average function value with this policy
@@ -359,7 +356,7 @@ def gap_estimators(xhat_one,
     xhat_eval_options = {"iter0_solver_options": None,
                          "iterk_solver_options": None,
                          "display_timing": False,
-                         "solvername": solvername,
+                         "solver_name": solver_name,
                          "verbose": False,
                          "solver_options":solver_options}
     ev = xhat_eval.Xhat_Eval(xhat_eval_options,
@@ -367,12 +364,12 @@ def gap_estimators(xhat_one,
                             ama_object.scenario_creator,
                             scenario_denouement,
                             scenario_creator_kwargs=scenario_creator_kwargs,
-                            all_nodenames = all_nodenames)
+                            all_nodenames = all_nodenames,mpicomm=mpicomm)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    zhat=ev.evaluate(xhats)
+    zn_hat=ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
-    zstar=ev.evaluate(xstars)
+    zn_star=ev.evaluate(xstars)
     objs_at_xstar = ev.objs_dict
     
     eval_scen_at_xhat = []
@@ -397,13 +394,9 @@ def gap_estimators(xhat_one,
     sample_var = (ssq - G**2)/(1-prob_sqnorm) #Unbiased sample variance
     s = np.sqrt(sample_var)
     
-    use_relative_error = (np.abs(zstar)>1)
+    use_relative_error = (np.abs(zn_star)>1)
     G = correcting_numeric(G,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
-    if objective_gap:
-        if is_multi:
-            return {"G":G,"s":s,"zhats": [zhat],"zstars":[zstar], "seed":start} 
-        else:
-            return {"G":G,"s":s,"zhats": eval_scen_at_xhat, "zstars": eval_scen_at_xstar, "seed":start} 
-    else:
-        return {"G":G,"s":s,"seed":start}
+  
+    #objective_gap removed Sept.29 2022
+    return {"G":G,"s":s,"seed":start}
