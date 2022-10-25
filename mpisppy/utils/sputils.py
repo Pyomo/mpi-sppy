@@ -448,14 +448,11 @@ def write_ef_first_stage_solution(ef,
     NOTE:
         This utility is replicating WheelSpinner.write_first_stage_solution for EF
     """
-    if global_rank==0:
-        dirname = os.path.dirname(solution_file_name)
-        if dirname != '':
-            os.makedirs(os.path.dirname(solution_file_name), exist_ok=True)
-            representative_scenario = getattr(ef,ef._ef_scenario_names[0])
-            first_stage_solution_writer(solution_file_name, 
-                                        representative_scenario,
-                                        bundling=False)
+    if global_rank == 0:
+        representative_scenario = getattr(ef,ef._ef_scenario_names[0])
+        first_stage_solution_writer(solution_file_name, 
+                                    representative_scenario,
+                                    bundling=False)
 
 def write_ef_tree_solution(ef, solution_directory_name,
         scenario_tree_solution_writer=scenario_tree_solution_writer):
