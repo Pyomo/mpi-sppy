@@ -74,16 +74,8 @@ def scenario_creator(
     # Create the list of nodes associated with the scenario (for two stage,
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
-    model._mpisppy_node_list = [
-        scenario_tree.ScenarioNode(
-            name="ROOT",
-            cond_prob=1.0,
-            stage=1,
-            cost_expression=model.FirstStageCost,
-            nonant_list=[model.DevotedAcreage],
-            scen_model=model,
-        )
-    ]
+    varlist = [model.DevotedAcreage]
+    sputils.attach_root_node(model, model.FirstStageCost, varlist)    
     
     #Add the probability of the scenario
     if num_scens is not None :
