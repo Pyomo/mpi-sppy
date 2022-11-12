@@ -136,7 +136,18 @@ class Config(pyofig.ConfigDict):
         else:
             return ifmissing
 
+    def add_solver_specs(self, prefix=""):
+        sstr = f"{prefix}_solver" if prefix != "" else "solver"
+        self.add_to_config(f"{sstr}_name", 
+                            description= "solver name (default None)",
+                            domain = str,
+                            default=None)
 
+        self.add_to_config(f"{sstr}_options", 
+                            description= "solver options; space delimited with = for values (default None)",
+                            domain = str,
+                            default=None)
+        
     def _common_args(self):
         raise RuntimeError("_common_args is no longer used. See comments at top of config.py")
 
@@ -145,16 +156,8 @@ class Config(pyofig.ConfigDict):
                             description="hub max iiterations (default 1)",
                             domain=int,
                             default=1)
-
-        self.add_to_config("solver_name", 
-                            description= "solver name (default None)",
-                            domain = str,
-                            default=None)
-
-        self.add_to_config("solver_options", 
-                            description= "solver options; space delimited with = for values (default None)",
-                            domain = str,
-                            default=None)
+        
+        self.add_solver_specs(prefix="")
 
         self.add_to_config("seed", 
                             description="Seed for random numbers (default is 1134)",
@@ -282,21 +285,7 @@ class Config(pyofig.ConfigDict):
 
     def _EF_base(self):
         
-        self.add_to_config("EF_solver_name", 
-                           description= "solver name (default None)",
-                           domain = str,
-                           default=None)
-
-        self.add_to_config("EF_solver_options", 
-                           description= "solver name (default None)",
-                           domain = str,
-                           default=None)
-        
-        self.add_to_config("EF_solver_name", 
-                           description= "solver name (default None)",
-                           domain = str,
-                           default=None)
-
+        self.add_solver_specs(prefix="EF")
 
         self.add_to_config("EF_mipgap", 
                            description="mip gap option for the solver if needed (default None)",
