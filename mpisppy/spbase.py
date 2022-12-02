@@ -6,6 +6,7 @@ import os
 import time
 import logging
 import weakref
+import math
 import numpy as np
 import re
 import pyomo.environ as pyo
@@ -406,6 +407,9 @@ class SPBase:
                             else dict()
         for sname, s in self.local_scenarios.items():
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
+            sum_prob = sum(prob for vid,prob in variable_probability)
+            if not math.isclose(sum_prob, 1.0, abs_tol=self.E1_tolerance):
+                raise RuntimeError(f"Probability sum for variable id={vid} in scenario={sname} is not unity - computed sum={sum_prob}")
             s._mpisppy_data.has_variable_probability = True
             for (vid, prob) in variable_probability:
                 ndn, i = s._mpisppy_data.varid_to_nonant_index[vid]
