@@ -419,10 +419,7 @@ class SPBase:
                 s._mpisppy_data.prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
                     s._mpisppy_data.w_coeff[ndn][i] = 0
-                if (ndn,i) not in sum_probs:
-                    sum_probs[(ndn,i)] = prob
-                else:
-                    sum_probs[(ndn,i)] += prob
+                sum_probs[(ndn,i)] = sum_probs.get((ndn,i),0.0) + prob
             didit += len(variable_probability)
             skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit
             
