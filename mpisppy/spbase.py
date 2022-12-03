@@ -405,11 +405,9 @@ class SPBase:
         variable_probability_kwargs = self.options['variable_probability_kwargs'] \
                             if 'variable_probability_kwargs' in self.options \
                             else dict()
+        sum_probs = {} # indexed by (ndn,i) - maps to sum of probs for that variable
         for sname, s in self.local_scenarios.items():
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
-            sum_prob = sum(prob for vid,prob in variable_probability)
-            if not math.isclose(sum_prob, 1.0, abs_tol=self.E1_tolerance):
-                raise RuntimeError(f"Probability sum for variable id={vid} in scenario={sname} is not unity - computed sum={sum_prob}")
             s._mpisppy_data.has_variable_probability = True
             for (vid, prob) in variable_probability:
                 ndn, i = s._mpisppy_data.varid_to_nonant_index[vid]
@@ -421,8 +419,17 @@ class SPBase:
                 s._mpisppy_data.prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
                     s._mpisppy_data.w_coeff[ndn][i] = 0
+                if (ndn,i) not in sum_probs:
+                    sum_probs[(ndn,i)] = prob
+                else:
+                    sum_probs[(ndn,i)] += prob
             didit += len(variable_probability)
             skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit
+            
+        for (ndn,i),prob in sum_probs.items():
+            if not math.isclose(prob, 1.0, abs_tol=self.E1_tolerance):
+                raise RuntimeError(f"Probability sum for variable with index={i} at node={ndn} is not unity - computed sum={prob}")
+
         if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
 
