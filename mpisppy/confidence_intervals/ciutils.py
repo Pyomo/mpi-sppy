@@ -163,22 +163,31 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
         os.remove(path)
     return(xhat)
 
-def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
-    #Correcting small negative G due to numerical error while solving EF 
+def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None):
+    #Correcting small negative G due to numerical error while solving EF
+    sense = cfg.get("pyo_opt_sense", pyo.minimize)  # 1 is minimize, -1 max
+    assert sense == 1 or sense == -1
     if relative_error:
         if objfct is None:
-            raise RuntimeError("We need a value of the objective function to remove numerically negative G")
-        elif (G<= -threshold*np.abs(objfct)):
-            print(f"WARNING: The gap estimator is anormaly negative : {G}")
+            raise RuntimeError("We need a value of the objective function to remove numerically small G")
+        elif (sense*G <= -sense * threshold*np.abs(objfct)):
+            print(f"WARNING: The gap estimator is the wrong sign: {G}")
             return G
         else:
-            return max(0,G)
+            if sense == pyo.minimize:
+                return max(0, G)
+            else:
+                return min(0, G)
     else:
-        if (G<=-threshold):
-            print(f"WARNING: The gap estimator is anormaly negative : {G}")
+        if (sense*G <= -sense * threshold):
+            print(f"WARNING: The gap estimator is the wrong sign: {G}")
             return G
         else: 
-            return max(0,G)           
+            if sense == pyo.minimize:
+                return max(0, G)
+            else:
+                return min(0, G)
+
 
 def gap_estimators(xhat_one,
                    mname, 
@@ -395,7 +404,7 @@ def gap_estimators(xhat_one,
     s = np.sqrt(sample_var)
     
     use_relative_error = (np.abs(zn_star)>1)
-    G = correcting_numeric(G,objfct=obj_at_xhat,
+    G = correcting_numeric(G,cfg,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
   
     #objective_gap removed Sept.29 2022
