@@ -425,7 +425,7 @@ class SPBase:
             
         for (ndn,i),prob in sum_probs.items():
             if not math.isclose(prob, 1.0, abs_tol=self.E1_tolerance):
-                raise RuntimeError(f"Probability sum for variable with index={i} at node={ndn} is not unity - computed sum={prob}")
+                raise RuntimeError(f"Probability sum for variable with nonant index={i} at node={ndn} is not unity - computed sum={prob}")
 
         if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
