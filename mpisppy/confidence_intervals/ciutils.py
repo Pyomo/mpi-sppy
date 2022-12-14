@@ -168,25 +168,22 @@ def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None)
     sense = cfg.get("pyo_opt_sense", pyo.minimize)  # 1 is minimize, -1 max
     assert sense == 1 or sense == -1
     if relative_error:
-        if objfct is None:
-            raise RuntimeError("We need a value of the objective function to remove numerically small G")
-        elif (sense*G <= -sense * threshold*np.abs(objfct)):
-            print(f"WARNING: The gap estimator is the wrong sign: {G}")
-            return G
-        else:
-            if sense == pyo.minimize:
-                return max(0, G)
-            else:
-                return min(0, G)
+        crit = threshold*np.abs(objfct)
     else:
-        if (sense*G <= -sense * threshold):
-            print(f"WARNING: The gap estimator is the wrong sign: {G}")
-            return G
-        else: 
-            if sense == pyo.minimize:
-                return max(0, G)
-            else:
-                return min(0, G)
+        crit = threshold
+    if objfct is None:
+        raise RuntimeError("We need a value of the objective function to remove numerically small G")
+    elif sense == 1 and G <= -crit:
+        print(f"WARNING: The gap estimator is the wrong sign: {G}")
+        return G
+    elif sense == -1 and G >= crit:
+        print(f"WARNING: The gap estimator is the wrong sign: {G}")
+        return G
+    else:
+        if sense == pyo.minimize:
+            return max(0, G)
+        else:
+            return min(0, G)
 
 
 def gap_estimators(xhat_one,
