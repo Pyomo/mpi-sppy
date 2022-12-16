@@ -89,8 +89,7 @@ def get_objs(scenario_instance, allow_none=False):
                            "objective functions.")
     if (len(scenario_objs) > 1):
         print("WARNING: Scenario", sname, "has multiple active "
-              "objectives. Selecting the first objective for "
-                  "inclusion in the extensive form.")
+              "objectives. Selecting the first objective.")
     return scenario_objs
 
 
