@@ -8,12 +8,12 @@ Just thinking about support for straight PH for now. Bundles are probably the fi
 with _mpisppy_data and _mpisppy_model attached.
   - it might result in a little speed-up to cut Pyomo out some day, but we should start with Pyomo, I think
 
-1. Some functions in spbase, most functions in phbase, and maybe some functions in spopt  will call a this function:
+1. Some functions in spbase, most functions in phbase, and maybe some functions in spopt  will call this function:
 
    def callout_agnostic(cfg, name, **kwargs):
        """ callout for AML-agnostic support
        Args:
-           cfg (Config): could have a module in "AML_agnostic"
+           cfg (Config): the field "AML_agnostic" might contain a module with callouts
 	   name (str): the function name to call
 	   kwargs (dict): the keywords args for the callout function
        Calls:
