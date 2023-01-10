@@ -368,6 +368,7 @@ class Hub(SPCommunicator):
                 f"Hub trying to get buffer of length {expected_length} "
                 f"from spoke, but provided buffer has length {len(values)}."
             )
+        # DLW Jan 2023: I think this does not hurt APH because the listener doe not use this comm...
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
         self.cylinder_comm.Barrier()
@@ -376,19 +377,24 @@ class Hub(SPCommunicator):
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
         window.Unlock(spoke_num)
 
-        new_id = int(values[-1])
-        local_val = np.array((new_id,), 'i')
-        sum_ids = np.zeros(1, 'i')
-        self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (sum_ids, MPI.INT),
-                                     op=MPI.SUM)
+        revert = True  # xxxxx reverting part of changes from Ben getting rid of spoke sleep DLW jan 2022
+        if revert:
+            if values[-1] > self.remote_write_ids[spoke_num - 1]:
+                self.remote_write_ids[spoke_num - 1] = values[-1]
+                return True
+        else:
+            new_id = int(values[-1])
+            local_val = np.array((new_id,), 'i')
+            sum_ids = np.zeros(1, 'i')
+            self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                         (sum_ids, MPI.INT),
+                                         op=MPI.SUM)
+            if new_id != sum_ids[0] / self.cylinder_comm.size:
+                return False
 
-        if new_id != sum_ids[0] / self.cylinder_comm.size:
-            return False
-
-        if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
-            self.remote_write_ids[spoke_num - 1] = new_id
-            return True
+            if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
+                self.remote_write_ids[spoke_num - 1] = new_id
+                return True
         return False
 
     def send_terminate(self):
