@@ -7,6 +7,7 @@ import math
 import collections
 import time
 import logging
+import datetime as dt
 import mpisppy
 import mpisppy.MPI as mpi
 import pyomo.environ as pyo
@@ -644,8 +645,9 @@ class APH(ph_base.PHBase):
             _vb("dispatch k={}; phi={}".format(k, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.cylinder_rank, k, p))
+            # the lower lever dtiming does a gather
             pyomo_solve_time = self.solve_one(solver_options, k, s,
-                                              dtiming=dtiming,
+                                              dtiming=False,
                                               verbose=verbose,
                                               tee=tee,
                                               gripe=gripe,
@@ -653,13 +655,9 @@ class APH(ph_base.PHBase):
             )
 
         if dtiming:
-            all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.cylinder_rank == 0:
-                print("Pyomo solve times (seconds):")
-                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
-                      (np.min(all_pyomo_solve_times),
-                      np.mean(all_pyomo_solve_times),
-                      np.max(all_pyomo_solve_times)))
+            r = self.global_rank
+            with open(f"aph_dtiming_rank{r}.csv","a+") as fh:
+                fh.write(f"{dt.datetime.now()},{r},{pyomo_solve_time}")
         return dispatch_list
 
     #========

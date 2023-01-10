@@ -12,6 +12,7 @@ import unittest
 import subprocess
 import importlib
 
+import pyomo.environ as pyo
 import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
@@ -29,7 +30,7 @@ import mpisppy.confidence_intervals.confidence_config as confidence_config
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-__version__ = 0.5
+__version__ = 0.6
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
@@ -125,6 +126,14 @@ class Test_confint_farmer(unittest.TestCase):
                                 stopping_criterion="BM",
                                 solving_type="EF_2stage",
         )
+
+
+    def test_pyomo_opt_sense(self):
+        cfg = self._get_base_options()
+        module = self.refmodelname
+        ciutils.pyomo_opt_sense(module, cfg)
+        assert cfg.pyomo_opt_sense == pyo.minimize  # minimize is 1
+
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")

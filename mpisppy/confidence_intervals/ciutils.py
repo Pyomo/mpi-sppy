@@ -163,6 +163,25 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
         os.remove(path)
     return(xhat)
 
+def _fct_check(module, fct):
+    if not hasattr(module, fct):
+        raise RuntimeError(f"pyomo_opt_sense needs the module to have the {fct} function")
+
+def pyomo_opt_sense(module_name, cfg):
+    """ update cfg to have the optimization sense"""
+    module = importlib.import_module(module_name)
+    _fct_check(module, "scenario_names_creator")
+    sn = module.scenario_names_creator(1)  # an arbitrary scenario name
+    _fct_check(module, "kw_creator")
+    kw = module.kw_creator(cfg)
+    m = module.scenario_creator(sn[0], **kw)
+    objs = sputils.get_objs(m)
+    if objs[0].is_minimizing:
+        cfg.quick_assign("pyomo_opt_sense", int, pyo.minimize)
+    else:
+        cfg.quick_assign("pyomo_opt_sense", int, pyo.maximize)
+
+        
 def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None):
     #Correcting small negative G due to numerical error while solving EF
     sense = cfg.get("pyo_opt_sense", pyo.minimize)  # 1 is minimize, -1 max
@@ -173,10 +192,10 @@ def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None)
         crit = threshold
     if objfct is None:
         raise RuntimeError("We need a value of the objective function to remove numerically small G")
-    elif sense == 1 and G <= -crit:
+    elif sense == pyo.minimize and G <= -crit:
         print(f"WARNING: The gap estimator is the wrong sign: {G}")
         return G
-    elif sense == -1 and G >= crit:
+    elif sense == pyo.maximize and G >= crit:
         print(f"WARNING: The gap estimator is the wrong sign: {G}")
         return G
     else:
