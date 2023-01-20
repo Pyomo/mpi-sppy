@@ -10,7 +10,6 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:
         spo (SPOpt object): the calling object
-        rank (int): mpi process rank of currently running process
     """
     def __init__(self, spo):
         super().__init__(spo)

@@ -20,9 +20,10 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
+from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.tests.utils import get_solver,round_pos_sig
 
-__version__ = 0.54
+__version__ = 0.55
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -543,7 +544,7 @@ class Test_hydro(unittest.TestCase):
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    def test_ph_xhat(self):
+    def test_ph_xhat_specific(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10  # xhat is feasible
         options["xhat_specific_options"] = {"xhat_solver_options":
@@ -567,6 +568,23 @@ class Test_hydro(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
         sig2xhatobj = round_pos_sig(ph.extobject._xhat_specific_obj_final, 2)
         self.assertEqual(190, sig2xhatobj)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_xhat_xbar(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 5
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            hydro.scenario_denouement,
+            all_nodenames=self.all_nodenames,
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
+            extensions = XhatXbar
+        )
+        conv, obj, tbound = ph.ph_main()
 
 
 if __name__ == '__main__':

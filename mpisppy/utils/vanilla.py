@@ -20,6 +20,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
+from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
@@ -308,7 +309,6 @@ def lagranger_spoke(
     
     return lagranger_spoke
 
-        
 def xhatlooper_spoke(
     args,
     scenario_creator,
@@ -316,7 +316,6 @@ def xhatlooper_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
 ):
-    
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
@@ -326,7 +325,7 @@ def xhatlooper_spoke(
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
-    xhatlooper_dict = {
+    xhat_dict = {
         "spoke_class": XhatLooperInnerBound,
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
@@ -337,7 +336,35 @@ def xhatlooper_spoke(
             "scenario_denouement": scenario_denouement            
         },
     }
-    return xhatlooper_dict
+    return xhat_dict
+        
+def xhatxbar_spoke(
+    args,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
+    shoptions = shared_options(args)
+    xhat_options = copy.deepcopy(shoptions)
+    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhat_options["xhat_xbar_options"] = {
+        "xhat_solver_options": shoptions["iterk_solver_options"],
+        "dump_prefix": "delme",
+        "csvname": "xhatxbar.csv",
+    }
+    xhat_dict = {
+        "spoke_class": XhatXbarInnerBound,
+        "opt_class": Xhat_Eval,
+        "opt_kwargs": {
+            "options": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
+        },
+    }
+    return xhat_dict
 
 
 def xhatshuffle_spoke(
@@ -355,7 +382,7 @@ def xhatshuffle_spoke(
     xhat_options["xhat_looper_options"] = {
         "xhat_solver_options": shoptions["iterk_solver_options"],
         "dump_prefix": "delme",
-        "csvname": "looper.csv",
+        "csvname": "shufflelooper.csv",
     }
     if _hasit(args,"add_reversed_shuffle"):
         xhat_options["xhat_looper_options"]["reverse"] = args.add_reversed_shuffle
@@ -448,7 +475,7 @@ def slammax_spoke(
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhatlooper_dict = {
+    xhat_dict = {
         "spoke_class": SlamMaxHeuristic,
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
@@ -459,7 +486,7 @@ def slammax_spoke(
             "scenario_denouement": scenario_denouement
         },
     }
-    return xhatlooper_dict
+    return xhat_dict
 
 def slammin_spoke(
     args,
@@ -472,7 +499,7 @@ def slammin_spoke(
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhatlooper_dict = {
+    xhat_dict = {
         "spoke_class": SlamMinHeuristic,
         "opt_class": Xhat_Eval,
         "opt_kwargs": {
@@ -483,7 +510,7 @@ def slammin_spoke(
             "scenario_denouement": scenario_denouement            
         },
     }
-    return xhatlooper_dict
+    return xhat_dict
 
 def cross_scenario_cuts_spoke(
     args,
