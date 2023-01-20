@@ -2,8 +2,10 @@
 # This software is distributed under the 3-clause BSD License.
 # Try a particular scenario as xhat. This is mainly for regression testing.
 # DLW, Jan 2023
+# IMPORTANT: as of Jan 2023, not tested on multi-stage
 
 
+import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.xhatbase
 
 class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
@@ -32,7 +34,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             You probably want to call _save_nonants right before calling this
             copy/pasted from phabse _fix_nonants
         """
-        for k,s in self.local_scenarios.items():
+        for k,s in self.opt.local_scenarios.items():
 
             persistent_solver = None
             if (sputils.is_persistent(s._solver_plugin)):
@@ -41,17 +43,12 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             nlens = s._mpisppy_data.nlens
             for node in s._mpisppy_node_list:
                 ndn = node.name
-                if ndn not in cache:
-                    raise RuntimeError("Could not find {} in {}"\
-                                       .format(ndn, cache))
-                if cache[ndn] is None:
-                    raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
-                if len(cache[ndn]) != nlens[ndn]:
-                    raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
-                                       .format(nlens[ndn], ndn, len(cache[ndn])))
                 for i in range(nlens[ndn]): 
                     this_vardata = node.nonant_vardata_list[i]
-                    this_vardata._value = s._mpisppy_model.xbars[(ndn,i)]
+                    if this_vardata.is_integer or this_vardata.is_binary:
+                        this_vardata._value = round(s._mpisppy_model.xbars[(ndn,i)]._value)
+                    else:
+                        this_vardata._value = s._mpisppy_model.xbars[(ndn,i)]._value
 
                     this_vardata.fix()
                     if persistent_solver is not None:
@@ -79,30 +76,29 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         obj = None
         sname = None
 
-        _vb("Enter XhatXbar.xhat_tryit to try: "+str(xhat_scenario_dict))
+        _vb("Enter XhatXbar.xhat_tryit")
 
         _vb("   Solver options="+str(self.solver_options))
-        self.opt._fix_nonants_xhat()  # (BTW: for all local scenarios)
+        self._fix_nonants_xhat()  # (BTW: for all local scenarios)
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
-        self.opt.solve_loop(solver_options=sopt,
+        self.opt.solve_loop(solver_options=self.solver_options,
                            #dis_W=True, dis_prox=True,
                            verbose=verbose,
-                           tee=Tee)
+                            tee=False)
 
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
             # restoring does no harm
             # if this solution is infeasible
-            self.opt._restore_nonants()
+            self._restore_nonants()
             return None
         else:
             if verbose and src_rank == self.cylinder_rank:
-                print("   Feasible xhat found:")
-                self.opt.local_scenarios[sname].pprint()
+                print("   Feasible xhat found at xbar")
             obj = self.opt.Eobjective(verbose=verbose)
             if restore_nonants:
-                self.opt._restore_nonants()
+                self._restore_nonants()
 
         if obj is None:
             _vb("Infeasible")

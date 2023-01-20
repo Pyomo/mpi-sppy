@@ -443,6 +443,29 @@ class Test_sizes(unittest.TestCase):
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
             self.assertEqual(pyo.value(s.NumProducedFirstStage[5]), 1134)
 
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_xhat_xbar(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 5
+        options["xhat_xbar_options"] = {"xhat_solver_options":
+                                        options["iterk_solver_options"],
+                                        "csvname": "xhatxbar.csv"}
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            extensions = XhatXbar
+        )
+        conv, obj, tbound = ph.ph_main()
+        sig2obj = round_pos_sig(obj,2)
+        self.assertEqual(sig2obj, 230000)
+
+            
 #*****************************************************************************
 class Test_hydro(unittest.TestCase):
     """ Test the mpisppy code using hydro (three stages)."""
@@ -568,23 +591,6 @@ class Test_hydro(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
         sig2xhatobj = round_pos_sig(ph.extobject._xhat_specific_obj_final, 2)
         self.assertEqual(190, sig2xhatobj)
-
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")
-    def test_ph_xhat_xbar(self):
-        options = self._copy_of_base_options()
-        options["PHIterLimit"] = 5
-
-        ph = mpisppy.opt.ph.PH(
-            options,
-            self.all_scenario_names,
-            hydro.scenario_creator,
-            hydro.scenario_denouement,
-            all_nodenames=self.all_nodenames,
-            scenario_creator_kwargs={"branching_factors": self.branching_factors},
-            extensions = XhatXbar
-        )
-        conv, obj, tbound = ph.ph_main()
 
 
 if __name__ == '__main__':
