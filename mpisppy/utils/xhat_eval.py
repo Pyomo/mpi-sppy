@@ -10,7 +10,6 @@ import numpy as np
 import math
 
 import mpisppy.log
-import mpisppy.phbase
 from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
