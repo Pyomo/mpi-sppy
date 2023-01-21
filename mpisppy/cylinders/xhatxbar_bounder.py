@@ -3,6 +3,7 @@
 # udpated April 20
 # xbar from xhat (copied from xhat specific, DLW Feb 2023)
 
+import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.utils.xhat_eval import Xhat_Eval
@@ -13,6 +14,17 @@ import logging
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 fullcom_n_proc = fullcomm.Get_size()
+
+
+def _attach_xbars(opt):
+    # attach xbars to an Xhat_Eval object given as opt
+    for scenario in opt.local_scenarios.values():
+        scenario._mpisppy_model.xbars = pyo.Param(
+            scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
+        )
+        scenario._mpisppy_model.xsqbars = pyo.Param(
+            scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
+        )
 
 
 ############################################################################
@@ -32,7 +44,7 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
         if not isinstance(self.opt, Xhat_Eval):
-            raise RuntimeError("XhatShuffleInnerBound must be used with Xhat_Eval.")
+            raise RuntimeError("XhatXbarInnerBound must be used with Xhat_Eval.")
 
         verbose = self.opt.options['verbose']
         xhatter = XhatXbar(self.opt)
@@ -55,6 +67,8 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         ### end iter0 stuff
 
         xhatter.post_iter0()
+        print("about to attach xbars")
+        _attach_xbars(self.opt)
         self.opt._save_nonants()  # make the cache
 
         return xhatter

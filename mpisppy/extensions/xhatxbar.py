@@ -7,6 +7,7 @@
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.xhatbase
+import mpisppy.phbase as phbase
 
 class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -27,8 +28,6 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             to alert persistent solvers.
         Args:
             cache (ndn dict of list or numpy vector): values at which to fix
-        Returns:
-            True: if fixed; False: if not fixed (e.g. too early to have averages)
         WARNING: 
             We are counting on Pyomo indices not to change order between
             when the cache_list is created and used.
@@ -37,10 +36,6 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             copy/pasted from phabse _fix_nonants
         """
         for k,s in self.opt.local_scenarios.items():
-            if not hasattr(s._mpisppy_model, "xbars"):  # too soon
-                print("debug: too soon for xbar xhat")
-                return False
-
             persistent_solver = None
             if (sputils.is_persistent(s._solver_plugin)):
                 persistent_solver = s._solver_plugin
@@ -58,7 +53,6 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
-        return True
 
             
     #==========
@@ -85,8 +79,9 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
 
         _vb("   Solver options="+str(self.solver_options))
 
-        if not self._fix_nonants_xhat():  # (BTW: for all local scenarios)
-            return None
+        # This might be an extension for a Xhat_Eval object or a PH object, so we will assume the worst
+        phbase._Compute_Xbar(self.opt)
+        self._fix_nonants_xhat() # (BTW: for all local scenarios)
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
         self.opt.solve_loop(solver_options=self.solver_options,
@@ -98,7 +93,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         if infeasP != 0.:
             # restoring does no harm
             # if this solution is infeasible
-            self._restore_nonants()
+            self.opt._restore_nonants()
             return None
         else:
             if verbose and src_rank == self.cylinder_rank:
