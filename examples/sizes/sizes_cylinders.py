@@ -101,7 +101,7 @@ def main():
        
     # xhat using xbar bound spoke
     if xhatxbar:
-        xhatxbar_spoke = vanilla.xhatshuffle_spoke(
+        xhatxbar_spoke = vanilla.xhatxbar_spoke(
             *beans,
             scenario_creator_kwargs=scenario_creator_kwargs,
         )

@@ -86,7 +86,7 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 self.opt._restore_nonants()
-                innerbound = xhatter.xhat_tryit(xhat_scenario_dict, restore_nonants=False)
+                innerbound = xhatter.xhat_tryit(restore_nonants=False)
 
                 self.update_if_improving(innerbound)
 

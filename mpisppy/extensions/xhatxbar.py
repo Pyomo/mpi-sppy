@@ -27,6 +27,8 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             to alert persistent solvers.
         Args:
             cache (ndn dict of list or numpy vector): values at which to fix
+        Returns:
+            True: if fixed; False: if not fixed (e.g. too early to have averages)
         WARNING: 
             We are counting on Pyomo indices not to change order between
             when the cache_list is created and used.
@@ -35,6 +37,9 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             copy/pasted from phabse _fix_nonants
         """
         for k,s in self.opt.local_scenarios.items():
+            if not hasattr(s._mpisppy_model, "xbars"):  # too soon
+                print("debug: too soon for xbar xhat")
+                return False
 
             persistent_solver = None
             if (sputils.is_persistent(s._solver_plugin)):
@@ -53,7 +58,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
-                        
+        return True
 
             
     #==========
@@ -79,7 +84,9 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
         _vb("Enter XhatXbar.xhat_tryit")
 
         _vb("   Solver options="+str(self.solver_options))
-        self._fix_nonants_xhat()  # (BTW: for all local scenarios)
+
+        if not self._fix_nonants_xhat():  # (BTW: for all local scenarios)
+            return None
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
         self.opt.solve_loop(solver_options=self.solver_options,

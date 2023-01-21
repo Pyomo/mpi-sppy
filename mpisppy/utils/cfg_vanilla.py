@@ -19,6 +19,7 @@ from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
+from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
@@ -336,6 +337,37 @@ def xhatlooper_spoke(
         },
     }
     return xhatlooper_dict
+
+
+def xhatxbar_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+):
+    
+    shoptions = shared_options(cfg)
+    xhat_options = copy.deepcopy(shoptions)
+    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhat_options["xhat_xbar_options"] = {
+        "xhat_solver_options": shoptions["iterk_solver_options"],
+        "scen_limit": cfg.xhat_scen_limit,
+        "dump_prefix": "delme",
+        "csvname": "xbar.csv",
+    }
+    xhatxbar_dict = {
+        "spoke_class": XhatXbarInnerBound,
+        "opt_class": Xhat_Eval,
+        "opt_kwargs": {
+            "options": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement            
+        },
+    }
+    return xhatxbar_dict
 
 
 def xhatshuffle_spoke(
