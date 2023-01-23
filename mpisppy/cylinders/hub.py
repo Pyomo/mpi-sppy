@@ -5,6 +5,7 @@ import abc
 import logging
 import time
 import mpisppy.log
+from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
@@ -377,8 +378,8 @@ class Hub(SPCommunicator):
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
         window.Unlock(spoke_num)
 
-        revert = True  # xxxxx reverting part of changes from Ben getting rid of spoke sleep DLW jan 2022
-        if revert:
+        if isinstance(self.opt, APH):
+            # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
             if values[-1] > self.remote_write_ids[spoke_num - 1]:
                 self.remote_write_ids[spoke_num - 1] = values[-1]
                 return True
