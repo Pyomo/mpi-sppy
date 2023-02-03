@@ -250,9 +250,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             if s._mpisppy_data.has_variable_probability:
                 for ndn_i in s._mpisppy_data.nonant_indices:
                     (lndn, li) = ndn_i
-                    # Requiring a vector for every tree node? (should we?)
-                    # if type(s._mpisppy_data.w_coeff[lndn]) is not float:
-                    s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.w_coeff[lndn][li]
+                    s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.prob0_mask[lndn][li]
 
 
     def convergence_diff(self):

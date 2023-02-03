@@ -376,7 +376,7 @@ class SPBase:
 
     def _compute_unconditional_node_probabilities(self):
         """ calculates unconditional node probabilities and prob_coeff
-            and _PySP_W_coeff is set to a scalar 1 (used by variable_probability)"""
+            and prob0_mask is set to a scalar 1 (used by variable_probability)"""
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0
@@ -384,16 +384,16 @@ class SPBase:
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
             if not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
-                s._mpisppy_data.w_coeff = dict()
+                s._mpisppy_data.prob0_mask = dict()
                 for node in s._mpisppy_node_list:
                     s._mpisppy_data.prob_coeff[node.name] = (s._mpisppy_probability / node.uncond_prob)
-                    s._mpisppy_data.w_coeff[node.name] = 1.0  # needs to be a float
+                    s._mpisppy_data.prob0_mask[node.name] = 1.0  # needs to be a float
 
 
     def _use_variable_probability_setter(self, verbose=False):
         """ set variable probability unconditional values using a function self.variable_probability
         that gives us a list of (id(vardata), probability)]
-        ALSO set _PySP_W_coeff, which is a mask for W calculations (mask out zero probs)
+        ALSO set prob0_mask, which is a mask for W calculations (mask out zero probs)
         Note: We estimate that less than 0.01 of mpi-sppy runs will call this.
         """
         if self.variable_probability is None:
@@ -415,10 +415,10 @@ class SPBase:
                 if type(s._mpisppy_data.prob_coeff[ndn]) is float:  # not yet a vector
                     defprob = s._mpisppy_data.prob_coeff[ndn]
                     s._mpisppy_data.prob_coeff[ndn] = np.full(s._mpisppy_data.nlens[ndn], defprob, dtype='d')
-                    s._mpisppy_data.w_coeff[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
+                    s._mpisppy_data.prob0_mask[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
                 s._mpisppy_data.prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
-                    s._mpisppy_data.w_coeff[ndn][i] = 0
+                    s._mpisppy_data.prob0_mask[ndn][i] = 0
                 sum_probs[(ndn,i)] = sum_probs.get((ndn,i),0.0) + prob
             didit += len(variable_probability)
             skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit

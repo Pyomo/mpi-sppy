@@ -344,6 +344,7 @@ def xhatxbar_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    variable_probability=None,
 ):
     shoptions = shared_options(args)
     xhat_options = copy.deepcopy(shoptions)
@@ -361,7 +362,8 @@ def xhatxbar_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement,
+            "variable_probability": variable_probability,
         },
     }
     return xhat_dict
