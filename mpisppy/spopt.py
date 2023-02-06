@@ -280,7 +280,7 @@ class SPOpt(SPBase):
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
-            pyomo_solve_time.append(self.solve_one(solver_options, k, s,
+            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
                                               verbose=verbose,
                                               tee=tee,
