@@ -125,6 +125,7 @@ class SPOpt(SPBase):
         
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
+        # high variance in set objective time (Feb 2023)?
         if update_objective and (sputils.is_persistent(s._solver_plugin)):
             set_objective_start_time = time.time()
 
@@ -138,20 +139,10 @@ class SPOpt(SPBase):
                                    'for scenario {sn}'.format(sn=s._name))
             else:
                 s._solver_plugin.set_objective(active_objective_datas[0])
-
-            if dtiming:
-
                 set_objective_time = time.time() - set_objective_start_time
-
-                all_set_objective_times = self.mpicomm.gather(set_objective_time,
-                                                          root=0)
-                if self.cylinder_rank == 0:
-                    print("Set objective times (seconds):")
-                    print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
-                          (np.mean(all_set_objective_times),
-                           np.mean(all_set_objective_times),
-                           np.max(all_set_objective_times)))
-
+        else:
+            set_objective_time = 0
+    
         if self.extensions is not None:
             results = self.extobject.pre_solve(s)
 
@@ -227,7 +218,7 @@ class SPOpt(SPBase):
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 
-        return pyomo_solve_time
+        return pyomo_solve_time + set_objective_time  # set_objective_time added Feb 2023
 
 
     def solve_loop(self, solver_options=None,
@@ -284,23 +275,24 @@ class SPOpt(SPBase):
             s_source = self.local_scenarios
         else:
             s_source = self.local_subproblems
+        pyomo_solve_times = list()
         for k,s in s_source.items():
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
-            pyomo_solve_time = self.solve_one(solver_options, k, s,
+            pyomo_solve_time.append(self.solve_one(solver_options, k, s,
                                               dtiming=dtiming,
                                               verbose=verbose,
                                               tee=tee,
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            )
+            ))
 
         if dtiming:
-            all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
+            all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_times, root=0)
             if self.cylinder_rank == 0:
                 print("Pyomo solve times (seconds):")
-                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
+                print("\tmin=,%4.2f, mean=,%4.2f, max=,%4.2f" %
                       (np.min(all_pyomo_solve_times),
                       np.mean(all_pyomo_solve_times),
                       np.max(all_pyomo_solve_times)))
