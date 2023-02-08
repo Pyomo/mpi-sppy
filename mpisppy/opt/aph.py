@@ -637,6 +637,7 @@ class APH(ph_base.PHBase):
         scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
         dispatch_list = _dispatch_list(scnt)
         _vb("dispatch list before dispath: {}".format(dispatch_list))
+        pyomo_solve_times = list()
         for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
@@ -646,18 +647,23 @@ class APH(ph_base.PHBase):
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.cylinder_rank, k, p))
             # the lower lever dtiming does a gather
-            pyomo_solve_time = self.solve_one(solver_options, k, s,
+            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
                                               dtiming=False,
                                               verbose=verbose,
                                               tee=tee,
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            )
+            ))
 
         if dtiming:
-            r = self.global_rank
-            with open(f"aph_dtiming_rank{r}.csv","a+") as fh:
-                fh.write(f"{dt.datetime.now()},{r},{pyomo_solve_time}")
+            print("Pyomo solve times (seconds):")
+            print("\trank=,%d, n=,%d, min=,%4.2f, mean=,%4.2f, max=,%4.2f" %
+                  (self.global_rank,
+                   len(pyomo_solve_times),
+                   np.min(pyomo_solve_times),
+                   np.mean(pyomo_solve_times),
+                   np.max(pyomo_solve_times)))
+
         return dispatch_list
 
     #========
