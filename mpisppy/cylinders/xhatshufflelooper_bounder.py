@@ -34,7 +34,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
         # Start code to support running trace. TBD: factor this up?
         if self.cylinder_rank == 0 and \
-                'suffle_running_trace_prefix' in self.opt.options and \
+                'shuffle_running_trace_prefix' in self.opt.options and \
                 self.opt.options['shuffle_running_trace_prefix'] is not None:
             running_trace_prefix =\
                             self.opt.options['shuffle_running_trace_prefix']
