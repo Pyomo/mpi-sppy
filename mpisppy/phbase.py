@@ -72,10 +72,24 @@ def _Compute_Xbar(opt, verbose=False):
             xbars = local_concats[ndn][:nlen]
             xsqbars = local_concats[ndn][nlen:]
 
-            nonants_array = np.fromiter( (v._value for v in node.nonant_vardata_list),
-                                         dtype='d', count=nlen )
-            xbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array
-            xsqbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array**2
+            nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
+                                        dtype='d', count=nlen)
+            if not s._mpisppy_data.has_variable_probability:
+                xbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array
+                xsqbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array**2
+            else:
+                # rarely-used overwrite in the event of variable probability
+                # (not efficient for multi-stage)
+                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
+                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
+                                         dtype='d', count=nlen)
+
+                # Note: Intermediate scen_contribution to get proper
+                # overloading
+                scen_contribution = prob_array * nonants_array
+                xbars += scen_contribution
+                scen_contribution = prob_array * nonants_array**2
+                xsqbars += scen_contribution          
 
     # compute node xbar values(reduction)
     for nodename in nodenames:
@@ -99,8 +113,8 @@ def _Compute_Xbar(opt, verbose=False):
             for i in range(nlen):
                 s._mpisppy_model.xbars[(ndn,i)]._value = xbars[i]
                 s._mpisppy_model.xsqbars[(ndn,i)]._value = xsqbars[i]
-                if verbose and opt.cylinder_rank == 0:
-                    print ("rank, scen, node, var, xbar:",
+                if verbose: # and opt.cylinder_rank == 0:
+                    print ("cylinder rank, scen, node, var, xbar:",
                            opt.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                            pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 

@@ -5,6 +5,7 @@
 
 import inspect
 import pyomo.environ as pyo
+from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 import logging
 import numpy as np
 import math
@@ -76,6 +77,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
                   compute_val_at_nonant=False):
+
         self._lazy_create_solvers()
         pyomo_solve_time = super().solve_one(solver_options, k, s,
                                              dtiming=dtiming,
@@ -84,6 +86,45 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              verbose=verbose,
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective)
+
+        solve_keyword_args = dict()
+        if self.cylinder_rank == 0:
+            if tee is not None and tee is True:
+                solve_keyword_args["tee"] = True
+        if (sputils.is_persistent(s._solver_plugin)):
+            solve_keyword_args["save_results"] = False
+        elif disable_pyomo_signal_handling:
+            solve_keyword_args["use_signal_handling"] = False
+
+        try:
+            solve_keyword_args["tee"] = True
+            results = s._solver_plugin.solve(s,
+                                             **solve_keyword_args,
+                                             load_solutions=False)
+            solver_exception = None
+        except Exception as e:
+            results = None
+            solver_exception = e
+
+        if (results is None) or (len(results.solution) == 0) or \
+                (results.solution(0).status == SolutionStatus.infeasible) or \
+                (results.solver.termination_condition == TerminationCondition.infeasible) or \
+                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+                (results.solver.termination_condition == TerminationCondition.unbounded):
+
+            s._mpisppy_data.scenario_feasible = False
+        else:
+            if sputils.is_persistent(s._solver_plugin):
+                s._solver_plugin.load_vars()
+            else:
+                s.solutions.load_from(results)
+            if self.is_minimizing:
+                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+            else:
+                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+                s._mpisppy_data.scenario_feasible = True
+
+
         if compute_val_at_nonant:
                 if self.bundling:
                     objfct = self.saved_objs[k]
