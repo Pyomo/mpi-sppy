@@ -3,45 +3,74 @@
 
 """
 - A utility to track W and compute interesting statistics and/or log the w values
-- We are going to take a comm as input so we can do a gather,
-  so be careful if you use this with APH (you might want to call it from a lagrangian spoke)
+- Uses time and memory so it is intended for diagnostics, not everyday use.
+- If we do a gather, we are going to take a comm as input,
+  so you can be careful if you use this with APH (you might want to call it from a lagrangian spoke)
+- TBD as of March 2023: track oscillations, which are important for MIPs (could compare two moving_stddevs)
 """
 
+import numpy as np
 import mpisppy.opt.ph
 import pyomo.environ as pyo
 
 class WTracker():
     """
-
+    Args:
+        PHB (PHBase): the object that has all the scenarios and _PHIter
+        comm (MPI comm): to maybe do a gather
     Notes:
     - A utility to track W and compute interesting statistics and/or log the w values
-    - We are going to take a comm as input so we can do a gather,
+    - We are going to take a comm as input so we can do a gather if we want to,
     so be careful if you use this with APH (you might want to call it from a lagrangian spoke)
+    
     """
 
     
-    def __init__(self, PHB, comm = None):
-        #### assert comm is not None
-        self.comm = comm
-        self.varnames = list()  # bound by index to W vals
-        self.Ws = dict()  #  [iteration][sname](list of W vals)
+    def __init__(self, PHB):
+        self.local_Ws = dict()  #  [iteration][sname](list of W vals)
         self.PHB = PHB
+        # get the nonant variable names, bound by index to W vals
+        arbitrary_scen = PHB.local_scenarios[list(PHB.local_scenarios.keys())[0]]
+        self.varnames = [var.name for node in arbitrary_scen._mpisppy_node_list
+                         for (ix, var) in enumerate(node.nonant_vardata_list)]
 
-    def track_Ws(self):
+        
+    def grab_local_Ws(self):
         """ Get the W values from the PHB that we are following
             NOTE: we assume this is called only once per iteration
         """
         
-        for (sname, scenario) in self.PHB.local_scenarios.items():
-            scenario_Ws = {var.name: pyo.value(scenario._mpisppy_model.W[node.name, ix])
-                           for node in scenario._mpisppy_node_list
-                           for (ix, var) in enumerate(node.nonant_vardata_list)}
+        scenario_Ws = {sname: [pyo.value(scenario._mpisppy_model.W[node.name, ix])
+                               for node in scenario._mpisppy_node_list
+                               for (ix, var) in enumerate(node.nonant_vardata_list)]
+                       for (sname, scenario) in self.PHB.local_scenarios.items()}
 
-        for node in scenario._mpisppy_node_list:
-            for (ix, var) in enumerate(node.nonant_vardata_list):
-                for (vname, val) in scenario_Ws.items():
-                    print(vname, val)
-        
+        self.local_Ws[self.PHB._PHIter] = scenario_Ws
+
+
+    def compute_moving_stats(self, wlen, offsetback=0):
+        """ Use self.local_Ws to compute moving mean and stdev
+        ASSUMES grab_local_Ws is called before this
+        Args:
+            wlen (int): desired window length
+            offsetback (int): how far back from the most recent observation to start
+        Returns:
+            window_stats (dict): xxxxx
+        NOTE: we sort of treat iterations as one-based
+        """
+        cI = self.PHB._PHIter
+        li = cI - offsetback
+        fi = max(1, li - wlen)
+        if li - fi < wlen:
+            raise RuntimeError(f"Not enough iterations ({cI}) for window len {wlen} and"
+                               f" offsetback {offsetback}")
+        window_stats = dict()
+        for idx, varname in enumerate(self.varnames):
+            for sname in self.PHB.local_scenario_names:
+                wlist = [self.local_Ws[i][sname][idx] for i in range(fi, li+1)]
+                window_stats[(varname, sname)] = [np.mean(wlist), np.std(wlist)]
+        return window_stats
+
 
 if __name__ == "__main__":
     # for ad hoc developer testing
@@ -77,4 +106,13 @@ if __name__ == "__main__":
 
     conv, obj, trivial_bound = ph.ph_main()
     wt = WTracker(ph)
-    wt.track_Ws()
+    wt.grab_local_Ws()
+
+    # wild hack to look for stack traces...
+    wlen = 5
+    for i in range(wlen):
+        ph._PHIter += 1
+        wt.grab_local_Ws()
+    wstats = wt.compute_moving_stats(wlen)
+    for idx, v in wstats.items():
+        print(idx, v)
