@@ -10,6 +10,7 @@
 """
 
 import numpy as np
+import pandas as pd
 import mpisppy.opt.ph
 import pyomo.environ as pyo
 
@@ -55,7 +56,7 @@ class WTracker():
             wlen (int): desired window length
             offsetback (int): how far back from the most recent observation to start
         Returns:
-            window_stats (dict): xxxxx
+            window_stats (dict): (varname, scenname): [mean, stdev]
         NOTE: we sort of treat iterations as one-based
         """
         cI = self.PHB._PHIter
@@ -72,6 +73,33 @@ class WTracker():
         return window_stats
 
 
+    def report_by_moving_stats(self, wlen, reportlen=None, stdevthresh=None):
+        """ Compute window_stats then sort by "badness" to print a report
+        ASSUMES grab_local_Ws is called before this
+        Args:
+            wlen (int): desired window length
+            reportlen (int): max rows in each report
+            stdevthresh (float): threshold for a good enough std dev
+        """
+        print(f"==== Moving Stats W Report at iteration {self.PHB._PHIter}")
+        print(f"    {len(self.varnames)} noants\n"
+              f"    {len(self.PHB.local_scenario_names)} scenarios")
+        total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
+        
+        self.compute_moving_stats(wlen)
+        Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
+                                      columns=["mean", "stdev"])
+
+        stt = stdevthresh if stdevthresh is not None else self.PHB.E1_tolerance
+        goodcnt = len(Wsdf[Wsdf["stdev"] <= stt])
+        print(f" {goodcnt} of {total_traces} have windowed stdev below {stt}")
+        
+
+        print(f"Sorted by unscaled windowed stdev, row limit={reportlen}, window len={wlen}")
+        by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
+        print(by_stdev[0:reportlen])
+
+    
 if __name__ == "__main__":
     # for ad hoc developer testing
     solver_name = "cplex"
@@ -114,5 +142,5 @@ if __name__ == "__main__":
         ph._PHIter += 1
         wt.grab_local_Ws()
     wstats = wt.compute_moving_stats(wlen)
-    for idx, v in wstats.items():
-        print(idx, v)
+
+    wt.report_by_moving_stats(wlen, reportlen=6, stdevthresh=1e-16)
