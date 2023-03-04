@@ -93,7 +93,8 @@ class WTracker():
         stt = stdevthresh if stdevthresh is not None else self.PHB.E1_tolerance
         goodcnt = len(Wsdf[Wsdf["stdev"] <= stt])
         print(f" {goodcnt} of {total_traces} have windowed stdev below {stt}")
-        
+        total_stdev = Wsdf["stdev"].sum()
+        print(f" sum of stdev={total_stdev}")
 
         print(f"Sorted by unscaled windowed stdev, row limit={reportlen}, window len={wlen}")
         by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
