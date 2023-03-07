@@ -433,9 +433,7 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
-
-
-
+        
     def lagranger_args(self):
 
         self.add_to_config('lagranger', 
@@ -459,8 +457,6 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
 
-
-
     def xhatlooper_args(self):
 
         self.add_to_config('xhatlooper', 
@@ -472,8 +468,6 @@ class Config(pyofig.ConfigDict):
                             description="scenario limit xhat looper to try (default 3)",
                             domain=int,
                             default=3)
-
-
 
 
     def xhatshuffle_args(self):
@@ -515,6 +509,27 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+    def wtracker_args(self):
+
+        self.add_to_config('wtracker', 
+                              description="Use a wtracker extension",
+                              domain=bool,
+                              default=False)
+
+        self.add_to_config('wtracker_wlen', 
+                            description="max length of iteration window for xtracker (default 20)",
+                            domain=int,
+                            default=20)
+
+        self.add_to_config('wtracker_reportlen', 
+                            description="max length of long reports for xtracker (default 100)",
+                            domain=int,
+                            default=100)
+
+        self.add_to_config('wtracker_stdevthresh',
+                            description="Ignore moving std dev below this value (default None)",
+                            domain=float,
+                            default=None)
 
 
     def slammax_args(self):
@@ -524,7 +539,6 @@ class Config(pyofig.ConfigDict):
                             description="have a slammax spoke",
                               domain=bool,
                               default=False)
-
 
 
     def slammin_args(self):

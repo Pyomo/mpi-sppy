@@ -80,6 +80,8 @@ class WTracker():
             wlen (int): desired window length
             reportlen (int): max rows in each report
             stdevthresh (float): threshold for a good enough std dev
+        NOTE:
+            For large problems, this will create a lot of garbage for the collector
         """
         print(f"==== Moving Stats W Report at iteration {self.PHB._PHIter}")
         print(f"    {len(self.varnames)} noants\n"
@@ -91,15 +93,28 @@ class WTracker():
                                       columns=["mean", "stdev"])
 
         stt = stdevthresh if stdevthresh is not None else self.PHB.E1_tolerance
+        
+        # unscaled
         goodcnt = len(Wsdf[Wsdf["stdev"] <= stt])
-        print(f" {goodcnt} of {total_traces} have windowed stdev below {stt}")
+        print(f" {goodcnt} of {total_traces} have windowed stdev (unscaled) below {stt}")
         total_stdev = Wsdf["stdev"].sum()
         print(f" sum of stdev={total_stdev}")
 
-        print(f"Sorted by unscaled windowed stdev, row limit={reportlen}, window len={wlen}")
+        print(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}")
         by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
         print(by_stdev[0:reportlen])
 
+        # scaled
+        ####scaleddf = Wsdf.assign(CV=lambda x: x.stdev/x.mean if x.mean > 0 else np.nan)
+        scaleddf = np.where(Wsdf["main"] > 0 V=lambda x: x.stdev/x.mean #??? in-place?
+        goodcnt = len(scaledf[scaleddf["CV"] <= stt])
+        print(f" {goodcnt} of {total_traces} have windowed CV below {stt}")
+        total_CV = scaleddf["CV"].sum()
+        print(f" sum of CV={tota_CV}")
+
+        print(f"Sorted by windowed CV, row limit={reportlen}, window len={wlen}")
+        by_CV = scaleddf.sort_values(by="CV", ascending=False)
+        print(by_CV[0:reportlen])
     
 if __name__ == "__main__":
     # for ad hoc developer testing
