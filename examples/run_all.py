@@ -247,6 +247,15 @@ do_one("sizes",
 
 do_one("sizes",
        "sizes_cylinders.py",
+       3,
+       "--linearize-proximal-terms "
+       "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
+       "--default-rho=1 --lagrangian --xhatxbar "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+       "--solver-name={}".format(solver_name))
+
+do_one("sizes",
+       "sizes_cylinders.py",
        4,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
