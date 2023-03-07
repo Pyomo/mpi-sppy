@@ -67,7 +67,7 @@ if __name__ == "__main__":
                                   1: 0.009,
                                   5: 0.005,
                                  10: 0.001}}
-    options["xtracker_options"] ={"wlen": 4,
+    options["wtracker_options"] ={"wlen": 4,
                                   "reportlen": 6,
                                   "stdevthresh": 0.1}
     
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     #### first PH ####
 
     #####multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
-    multi_ext = {"ext_classes": [Fixer, Gapper, Wtracker_extension]
+    multi_ext = {"ext_classes": [Fixer, Gapper, Wtracker_extension]}
     ph = mpisppy.opt.ph.PH(
         options,
         all_scenario_names,
@@ -110,7 +110,8 @@ if __name__ == "__main__":
     if ph.cylinder_rank == 0:
          print ("Trival bound =",tbound)
 
-    print("Quitting early.")
+    #print("Quitting early.")
+    #quit()
 
     ############ test W and xbar writers and special joint reader  ############
     from mpisppy.utils.wxbarwriter import WXBarWriter

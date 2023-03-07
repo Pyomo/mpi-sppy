@@ -88,7 +88,7 @@ class WTracker():
               f"    {len(self.PHB.local_scenario_names)} scenarios")
         total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
         
-        self.compute_moving_stats(wlen)
+        wstats = self.compute_moving_stats(wlen)
         Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
                                       columns=["mean", "stdev"])
 
@@ -106,14 +106,14 @@ class WTracker():
 
         # scaled
         ####scaleddf = Wsdf.assign(CV=lambda x: x.stdev/x.mean if x.mean > 0 else np.nan)
-        scaleddf = np.where(Wsdf["main"] > 0 V=lambda x: x.stdev/x.mean #??? in-place?
-        goodcnt = len(scaledf[scaleddf["CV"] <= stt])
+        Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan) #??? in-place?
+        goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
         print(f" {goodcnt} of {total_traces} have windowed CV below {stt}")
-        total_CV = scaleddf["CV"].sum()
-        print(f" sum of CV={tota_CV}")
+        total_CV = Wsdf["CV"].sum()
+        print(f" sum of CV={total_CV}")
 
-        print(f"Sorted by windowed CV, row limit={reportlen}, window len={wlen}")
-        by_CV = scaleddf.sort_values(by="CV", ascending=False)
+        print(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}")
+        by_CV = Wsdf.sort_values(by="CV", ascending=False)
         print(by_CV[0:reportlen])
     
 if __name__ == "__main__":
