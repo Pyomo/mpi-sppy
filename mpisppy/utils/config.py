@@ -1,10 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
-# Started 12 April by DLW
 # Replace baseparsers.py and enhance functionality.
 # A class drived form pyomo.common.config is defined with
 #   supporting member functions.
-# NOTE: at first I am just copying directly from baseparsers.py
-# TBD: reorganize some of this.
 # NOTE: the xxxx_args() naming convention is used by amalgamator.py
 
 """ Notes 
@@ -501,6 +498,14 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config('xhatspecific', 
                               description="have an xhatspecific spoke",
+                              domain=bool,
+                              default=False)
+
+
+    def xhatxbar_args(self):
+    
+        self.add_to_config('xhatxbar', 
+                              description="have an xhatxbar spoke",
                               domain=bool,
                               default=False)
 
