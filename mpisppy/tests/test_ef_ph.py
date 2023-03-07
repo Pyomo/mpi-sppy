@@ -20,9 +20,10 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
 from mpisppy.extensions.xhatspecific import XhatSpecific
+from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.tests.utils import get_solver,round_pos_sig
 
-__version__ = 0.54
+__version__ = 0.55
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -465,6 +466,29 @@ class Test_sizes(unittest.TestCase):
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
             self.assertEqual(pyo.value(s.NumProducedFirstStage[5]), 1134)
 
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_xhat_xbar(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 5
+        options["xhat_xbar_options"] = {"xhat_solver_options":
+                                        options["iterk_solver_options"],
+                                        "csvname": "xhatxbar.csv"}
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            extensions = XhatXbar
+        )
+        conv, obj, tbound = ph.ph_main()
+        sig2obj = round_pos_sig(obj,2)
+        self.assertEqual(sig2obj, 230000)
+
+            
 #*****************************************************************************
 class Test_hydro(unittest.TestCase):
     """ Test the mpisppy code using hydro (three stages)."""
@@ -566,7 +590,7 @@ class Test_hydro(unittest.TestCase):
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    def test_ph_xhat(self):
+    def test_ph_xhat_specific(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 10  # xhat is feasible
         options["xhat_specific_options"] = {"xhat_solver_options":
