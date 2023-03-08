@@ -97,7 +97,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             solve_keyword_args["use_signal_handling"] = False
 
         try:
-            solve_keyword_args["tee"] = True
             results = s._solver_plugin.solve(s,
                                              **solve_keyword_args,
                                              load_solutions=False)
