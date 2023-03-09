@@ -44,8 +44,10 @@ class Wtracker_extension(mpisppy.extensions.extension.Extension):
     def post_everything(self):
         reportlen = self.options.get("reportlen")
         stdevthresh = self.options.get("stdevthresh")
+        file_prefix = self.options.get("file_prefix")
         self.wtracker.report_by_moving_stats(self.wlen,
                                              reportlen=reportlen,
-                                             stdevthresh=stdevthresh)
+                                             stdevthresh=stdevthresh,
+                                             file_prefix=file_prefix)
 
         

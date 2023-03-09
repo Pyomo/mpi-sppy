@@ -73,7 +73,7 @@ class WTracker():
         return window_stats
 
 
-    def report_by_moving_stats(self, wlen, reportlen=None, stdevthresh=None):
+    def report_by_moving_stats(self, wlen, reportlen=None, stdevthresh=None, file_prefix=''):
         """ Compute window_stats then sort by "badness" to print a report
         ASSUMES grab_local_Ws is called before this
         Args:
@@ -83,9 +83,14 @@ class WTracker():
         NOTE:
             For large problems, this will create a lot of garbage for the collector
         """
-        print(f"==== Moving Stats W Report at iteration {self.PHB._PHIter}")
-        print(f"    {len(self.varnames)} noants\n"
-              f"    {len(self.PHB.local_scenario_names)} scenarios")
+        fname = f"{file_prefix}_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.csv"
+        if self.PHB.cylinder_rank == 0:
+            print(f"Writing (a) W tracker report(s) to files with names like {fname}")
+        with open(fname, "w") as fil:
+            fil.write(f"Moving Stats W Report at iteration {self.PHB._PHIter}\n")
+            fil.write(f"    {len(self.varnames)} nonants\n"
+                      f"    {len(self.PHB.local_scenario_names)} scenarios\n")
+            
         total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
         
         wstats = self.compute_moving_stats(wlen)
@@ -96,25 +101,27 @@ class WTracker():
         
         # unscaled
         goodcnt = len(Wsdf[Wsdf["stdev"] <= stt])
-        print(f" {goodcnt} of {total_traces} have windowed stdev (unscaled) below {stt}")
         total_stdev = Wsdf["stdev"].sum()
-        print(f" sum of stdev={total_stdev}")
 
-        print(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}")
+        with open(fname, "a") as fil:
+            fil.write(f" {goodcnt} of {total_traces} have windowed stdev (unscaled) below {stt}\n")
+            fil.write(f" sum of stdev={total_stdev}\n")
+
+            fil.write(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}\n")
         by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
-        print(by_stdev[0:reportlen])
+        by_stdev[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
 
         # scaled
-        ####scaleddf = Wsdf.assign(CV=lambda x: x.stdev/x.mean if x.mean > 0 else np.nan)
-        Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan) #??? in-place?
+        Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
         goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
-        print(f" {goodcnt} of {total_traces} have windowed CV below {stt}")
         total_CV = Wsdf["CV"].sum()
-        print(f" sum of CV={total_CV}")
+        with open(fname, "a") as fil:
+            fil.write(f" {goodcnt} of {total_traces} have windowed CV below {stt}\n")
+            fil.write(f" sum of CV={total_CV}\n")
 
-        print(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}")
+            fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}\n")
         by_CV = Wsdf.sort_values(by="CV", ascending=False)
-        print(by_CV[0:reportlen])
+        by_CV[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
     
 if __name__ == "__main__":
     # for ad hoc developer testing

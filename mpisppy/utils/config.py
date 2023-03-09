@@ -521,6 +521,11 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_to_config('wtracker_file_prefix', 
+                            description="prefix for rank by rank wtracker files (default '')",
+                            domain=str,
+                            default='')
+
         self.add_to_config('wtracker_wlen', 
                             description="max length of iteration window for xtracker (default 20)",
                             domain=int,
