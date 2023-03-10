@@ -57,20 +57,22 @@ class WTracker():
             offsetback (int): how far back from the most recent observation to start
         Returns:
             window_stats (dict): (varname, scenname): [mean, stdev]
+                                  OR returns a warning string
         NOTE: we sort of treat iterations as one-based
         """
         cI = self.PHB._PHIter
         li = cI - offsetback
         fi = max(1, li - wlen)
         if li - fi < wlen:
-            raise RuntimeError(f"Not enough iterations ({cI}) for window len {wlen} and"
-                               f" offsetback {offsetback}")
-        window_stats = dict()
-        for idx, varname in enumerate(self.varnames):
-            for sname in self.PHB.local_scenario_names:
-                wlist = [self.local_Ws[i][sname][idx] for i in range(fi, li+1)]
-                window_stats[(varname, sname)] = [np.mean(wlist), np.std(wlist)]
-        return window_stats
+            return (f"WARNING: Not enough iterations ({cI}) for window len {wlen} and"
+                   f" offsetback {offsetback}\n")
+        else:
+            window_stats = dict()
+            for idx, varname in enumerate(self.varnames):
+                for sname in self.PHB.local_scenario_names:
+                    wlist = [self.local_Ws[i][sname][idx] for i in range(fi, li+1)]
+                    window_stats[(varname, sname)] = [np.mean(wlist), np.std(wlist)]
+            return window_stats
 
 
     def report_by_moving_stats(self, wlen, reportlen=None, stdevthresh=None, file_prefix=''):
@@ -94,35 +96,40 @@ class WTracker():
         total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
         
         wstats = self.compute_moving_stats(wlen)
-        Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
-                                      columns=["mean", "stdev"])
+        if not isinstance(wstats, str):
+            Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
+                                          columns=["mean", "stdev"])
 
-        stt = stdevthresh if stdevthresh is not None else self.PHB.E1_tolerance
-        
-        # unscaled
-        goodcnt = len(Wsdf[Wsdf["stdev"] <= stt])
-        total_stdev = Wsdf["stdev"].sum()
+            stt = stdevthresh if stdevthresh is not None else self.PHB.E1_tolerance
 
-        with open(fname, "a") as fil:
-            fil.write(f" {goodcnt} of {total_traces} have windowed stdev (unscaled) below {stt}\n")
-            fil.write(f" sum of stdev={total_stdev}\n")
+            # unscaled
+            goodcnt = len(Wsdf[Wsdf["stdev"] <= stt])
+            total_stdev = Wsdf["stdev"].sum()
 
-            fil.write(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}\n")
-        by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
-        by_stdev[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
+            with open(fname, "a") as fil:
+                fil.write(f" {goodcnt} of {total_traces} have windowed stdev (unscaled) below {stt}\n")
+                fil.write(f" sum of stdev={total_stdev}\n")
 
-        # scaled
-        Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
-        goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
-        total_CV = Wsdf["CV"].sum()
-        with open(fname, "a") as fil:
-            fil.write(f" {goodcnt} of {total_traces} have windowed CV below {stt}\n")
-            fil.write(f" sum of CV={total_CV}\n")
+                fil.write(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}\n")
+            by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
+            by_stdev[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
 
-            fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}\n")
-        by_CV = Wsdf.sort_values(by="CV", ascending=False)
-        by_CV[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
-    
+            # scaled
+            Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
+            goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
+            total_CV = Wsdf["CV"].sum()
+            with open(fname, "a") as fil:
+                fil.write(f" {goodcnt} of {total_traces} have windowed CV below {stt}\n")
+                fil.write(f" sum of CV={total_CV}\n")
+
+                fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}\n")
+            by_CV = Wsdf.sort_values(by="CV", ascending=False)
+            by_CV[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
+        else:  # not enough data
+            with open(fname, "a") as fil:
+                fil.write(wstats)   # warning string
+
+                
 if __name__ == "__main__":
     # for ad hoc developer testing
     solver_name = "cplex"

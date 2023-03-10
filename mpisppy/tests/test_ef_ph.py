@@ -371,6 +371,29 @@ class Test_sizes(unittest.TestCase):
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
+    def test_wtracker_lacks_iters(self):
+        """ Make sure the wtracker is graceful with not enough data
+        """
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 4
+        options["wtracker_options"] ={"wlen": 10,
+                                      "reportlen": 6,
+                                      "stdevthresh": 0.1}
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            extensions=Wtracker_extension,
+        )
+        conv, basic_obj, tbound = ph.ph_main()
+
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
     def test_fix_xhat_extension(self):
         """ Make sure that ph and xhat do not unfix a fixed Var
         """
