@@ -18,7 +18,6 @@ class WTracker():
     """
     Args:
         PHB (PHBase): the object that has all the scenarios and _PHIter
-        comm (MPI comm): to maybe do a gather
     Notes:
     - A utility to track W and compute interesting statistics and/or log the w values
     - We are going to take a comm as input so we can do a gather if we want to,
@@ -76,7 +75,7 @@ class WTracker():
 
 
     def report_by_moving_stats(self, wlen, reportlen=None, stdevthresh=None, file_prefix=''):
-        """ Compute window_stats then sort by "badness" to print a report
+        """ Compute window_stats then sort by "badness" to write to three files
         ASSUMES grab_local_Ws is called before this
         Args:
             wlen (int): desired window length
@@ -85,9 +84,11 @@ class WTracker():
         NOTE:
             For large problems, this will create a lot of garbage for the collector
         """
-        fname = f"{file_prefix}_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.csv"
+        fname = f"{file_prefix}_summary_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.txt"
+        stname = f"{file_prefix}_stdev_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.csv"
+        cvname = f"{file_prefix}_cv_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.csv"
         if self.PHB.cylinder_rank == 0:
-            print(f"Writing (a) W tracker report(s) to files with names like {fname}")
+            print(f"Writing (a) W tracker report(s) to files with names like {fname}, {stname}, and {cvname}")
         with open(fname, "w") as fil:
             fil.write(f"Moving Stats W Report at iteration {self.PHB._PHIter}\n")
             fil.write(f"    {len(self.varnames)} nonants\n"
@@ -112,7 +113,7 @@ class WTracker():
 
                 fil.write(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}\n")
             by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
-            by_stdev[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
+            by_stdev[0:reportlen].to_csv(path_or_buf=stname, header=True, index=True, index_label=None, mode='w')
 
             # scaled
             Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
@@ -124,7 +125,7 @@ class WTracker():
 
                 fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}\n")
             by_CV = Wsdf.sort_values(by="CV", ascending=False)
-            by_CV[0:reportlen].to_csv(path_or_buf=fname, header=True, index=True, index_label=None, mode='a')
+            by_CV[0:reportlen].to_csv(path_or_buf=cvname, header=True, index=True, index_label=None, mode='w')
         else:  # not enough data
             with open(fname, "a") as fil:
                 fil.write(wstats)   # warning string
