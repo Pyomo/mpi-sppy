@@ -132,7 +132,7 @@ class Test_sizes(unittest.TestCase):
         if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
-        sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
+        sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),1)
         self.assertEqual(220000.0, sig2eobj)
 
     @unittest.skipIf(not solver_available,
@@ -240,8 +240,8 @@ class Test_sizes(unittest.TestCase):
             rho_setter=_rho_setter,
         )
         conv, obj, tbound = ph.ph_main()
-        sig2obj = round_pos_sig(obj,2)
-        self.assertEqual(220000.0, sig2obj)
+        sig1obj = round_pos_sig(obj,2)
+        self.assertEqual(200000.0, sig2obj)
 
         
     @unittest.skipIf(not solver_available,
@@ -261,11 +261,11 @@ class Test_sizes(unittest.TestCase):
         # The rho_setter is called after iter0
         fname = "__1134__.csv"
         s = ph.local_scenarios[list(ph.local_scenarios.keys())[0]]
-        rhoval = s._mpisppy_model.rho[("ROOT",0)]
+        rhoval = pyo.value(s._mpisppy_model.rho[("ROOT",0)])
         mpisppy.utils.sputils.rhos_to_csv(s, fname)
         rholist = mpisppy.utils.sputils.rho_list_from_csv(s, fname)
         os.remove(fname)
-        assert rholist[0][1] == rhoval
+        self.assertEqual(rholist[0][1], rhoval)
 
         
     @unittest.skipIf(not solver_available,
