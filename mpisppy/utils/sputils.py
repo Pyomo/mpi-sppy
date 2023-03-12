@@ -125,23 +125,50 @@ def reactivate_objs(scenario_instance):
         obj.activate()
 
 
-def id_from_strings(s, vname, idx=None, safemode=False):
+def id_from_strings(s, vname, idx=None):
     """ Python id of a Pyomo (indexed) Var
+    WARNING: Pyomo gives a lot of flexibility to modelers, so this might not always work
+    TBD: maybe query the vardata to find out about its indexes and cast based on their types
     Args:
         k (str): scenario name
         s (ConcreteModel): scenario model
         vname (str): Var name
         idx (str): index in into Var
-        safemode (bool): if true, do a lot of checking; if false, have faith
     Returns:
         varid (python variable id): the id for the particular Pyomo Var
     """
-    if safemode and not hasattr(s, vname):
+    if not hasattr(s, vname):
         raise RuntimeError(f"Scenario {k} does not have a Var named {vname}")
     varattr = getattr(s, vname)
-    if safemode and idx is not None and idx not in varattr:
-        raise RuntimeError(f"Scenario (.name={s.name}) Var named {vname} does not have index {idx}")
-    return id(varattr[idx])
+    if idx is None:
+        return id(varattr)
+
+    # if we are still here, we have an index
+    try:
+        return id(varattr[idx])
+    except:
+        pass
+    if ',' not in idx:
+        try:
+            return id(varattr[int(idx)])
+        except:
+            pass
+    else:
+        try:
+            return id(varattr[tuple(idx.split(","))])
+        except:
+            pass
+        try:
+            parts = idx.split(",")
+            return id(varattr[tuple((int(i) for i in parts))])
+        except:
+            pass
+                      
+    
+    print(f"ERROR for var={vname}, idx={idx}; here a all legal indexes:")
+    print([i for i in varattr])
+    raise RuntimeError(f"Scenario (name={s.name}) Var named {vname} does not have index {idx}")
+
 
 
 def rhos_to_csv(s, filename):
@@ -167,7 +194,7 @@ def rhos_to_csv(s, filename):
             f.write(f'"{fullname}",{rho._value}\n')
 
             
-def rhos_from_csv(s, filename):
+def rho_list_from_csv(s, filename):
     """ read rho values from a file and return a list suitable for rho_setter
     Args:
         s (ConcreteModel): scenario whence the id values come
@@ -186,8 +213,6 @@ def rhos_from_csv(s, filename):
             varindex = fullname.split('[')[1].split(']')[0]
         idval = id_from_strings(s, varname, idx=varindex)
         retlist.append((idval, row["rho"]))
-    print(f"{retlist =}")
-    quit()
     return retlist    
 
     

@@ -8,6 +8,7 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import os
+import glob
 import pandas as pd
 import unittest
 
@@ -240,7 +241,32 @@ class Test_sizes(unittest.TestCase):
         )
         conv, obj, tbound = ph.ph_main()
         sig2obj = round_pos_sig(obj,2)
-        #self.assertEqual(220000.0, sig2obj)
+        self.assertEqual(220000.0, sig2obj)
+
+        
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_write_read(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            rho_setter=_rho_setter,
+        )
+        conv, obj, tbound = ph.ph_main()
+        # The rho_setter is called after iter0
+        fname = "__1134__.csv"
+        s = ph.local_scenarios[list(ph.local_scenarios.keys())[0]]
+        rhoval = s._mpisppy_model.rho[("ROOT",0)]
+        mpisppy.utils.sputils.rhos_to_csv(s, fname)
+        rholist = mpisppy.utils.sputils.rho_list_from_csv(s, fname)
+        os.remove(fname)
+        assert rholist[0][1] == rhoval
+
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -356,8 +382,8 @@ class Test_sizes(unittest.TestCase):
         options["PHIterLimit"] = 4
         options["wtracker_options"] ={"wlen": 3,
                                       "reportlen": 6,
-                                      "stdevthresh": 0.1}
-
+                                      "stdevthresh": 0.1,
+                                      "file_prefix": "__1134__"}
         ph = mpisppy.opt.ph.PH(
             options,
             self.all3_scenario_names,
@@ -367,7 +393,9 @@ class Test_sizes(unittest.TestCase):
             extensions=Wtracker_extension,
         )
         conv, basic_obj, tbound = ph.ph_main()
-
+        fileList = glob.glob('__1134__*.csv')
+        for filePath in fileList:
+            os.remove(filePath)
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -390,7 +418,7 @@ class Test_sizes(unittest.TestCase):
             extensions=Wtracker_extension,
         )
         conv, basic_obj, tbound = ph.ph_main()
-
+        
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
