@@ -3,6 +3,7 @@
 # Base and utility functions for mpisppy
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
+import pandas as pd
 import pyomo.environ as pyo
 import sys
 import os
@@ -78,6 +79,8 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
 def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
+### a few Pyomo-related utilities ###
+
 
 def get_objs(scenario_instance, allow_none=False):
     """ return the list of objective functions for scenario_instance"""
@@ -122,6 +125,72 @@ def reactivate_objs(scenario_instance):
         obj.activate()
 
 
+def id_from_strings(s, vname, idx=None, safemode=False):
+    """ Python id of a Pyomo (indexed) Var
+    Args:
+        k (str): scenario name
+        s (ConcreteModel): scenario model
+        vname (str): Var name
+        idx (str): index in into Var
+        safemode (bool): if true, do a lot of checking; if false, have faith
+    Returns:
+        varid (python variable id): the id for the particular Pyomo Var
+    """
+    if safemode and not hasattr(s, vname):
+        raise RuntimeError(f"Scenario {k} does not have a Var named {vname}")
+    varattr = getattr(s, vname)
+    if safemode and idx is not None and idx not in varattr:
+        raise RuntimeError(f"Scenario (.name={s.name}) Var named {vname} does not have index {idx}")
+    return id(varattr[idx])
+
+
+def rhos_to_csv(s, filename):
+    """ write the rho values to a csv "fullname", rho
+    Args:
+        s (ConcreteModel): the scenario Pyomo model
+        filenaame (str): file to which to write
+    """
+
+    # This is probably already done somewhere...
+    def _ndn_to_node(ndn):
+        for n in s._mpisppy_node_list:
+            if n.name == ndn:
+                return n
+        raise RuntimeError(f"Cannot find {ndn} in node list for scenario {k}")
+    
+    with open(filename, "w") as f:
+        f.write("fullname,rho\n")
+        for ndn_i, rho in s._mpisppy_model.rho.items():
+            n = _ndn_to_node(ndn_i[0])
+            vdata = n.nonant_vardata_list[ndn_i[1]]
+            fullname = vdata.name
+            f.write(f'"{fullname}",{rho._value}\n')
+
+            
+def rhos_from_csv(s, filename):
+    """ read rho values from a file and return a list suitable for rho_setter
+    Args:
+        s (ConcreteModel): scenario whence the id values come
+        filename (str): name of the csv file to read (fullname, rho)
+    Returns:
+        retlist (list of (id, rho) tuples); list suitable for rho_setter
+   """
+    rhodf = pd.read_csv(filename)
+    retlist = list()
+    for idx, row in rhodf.iterrows():
+        fullname = row["fullname"]
+        varname = fullname.split('[')[0]
+        if varname == fullname:
+            varindex = None
+        else:
+            varindex = fullname.split('[')[1].split(']')[0]
+        idval = id_from_strings(s, varname, idx=varindex)
+        retlist.append((idval, row["rho"]))
+    print(f"{retlist =}")
+    quit()
+    return retlist    
+
+    
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True):
