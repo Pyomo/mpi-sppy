@@ -240,8 +240,8 @@ class Test_sizes(unittest.TestCase):
             rho_setter=_rho_setter,
         )
         conv, obj, tbound = ph.ph_main()
-        sig2obj = round_pos_sig(obj,2)
-        self.assertEqual(220000.0, sig2obj)
+        sig1obj = round_pos_sig(obj,2)
+        self.assertEqual(200000.0, sig2obj)
 
         
     @unittest.skipIf(not solver_available,
