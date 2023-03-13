@@ -116,16 +116,16 @@ class WTracker():
             by_stdev[0:reportlen].to_csv(path_or_buf=stname, header=True, index=True, index_label=None, mode='w')
 
             # scaled
-            Wsdf["CV"] = np.where(Wsdf["mean"] != 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
-            goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
-            mean_CV = Wsdf["CV"].mean()
-            stdev_CV = Wsdf["CV"].std()
+            Wsdf["absCV"] = np.where(Wsdf["mean"] != 0, Wsdf["stdev"]/abs(Wsdf["mean"]), np.nan)
+            goodcnt = len(Wsdf[Wsdf["absCV"] <= stt])
+            mean_absCV = Wsdf["absCV"].mean()
+            stdev_absCV = Wsdf["absCV"].std()
             with open(fname, "a") as fil:
-                fil.write(f"  {goodcnt} of {total_traces} have windowed CV below {stt}\n")
-                fil.write(f"  mean CV={mean_CV}, stdev={stdev_CV}\n")
-                fil.write(f"  Sorted by windowed CV, row limit={reportlen}, window len={wlen} in {cvname}\n")
-            by_CV = Wsdf.sort_values(by="CV", ascending=False)
-            by_CV[0:reportlen].to_csv(path_or_buf=cvname, header=True, index=True, index_label=None, mode='w')
+                fil.write(f"  {goodcnt} of {total_traces} have windowed absCV below {stt}\n")
+                fil.write(f"  mean absCV={mean_absCV}, stdev={stdev_absCV}\n")
+                fil.write(f"  Sorted by windowed abs CV, row limit={reportlen}, window len={wlen} in {cvname}\n")
+            by_absCV = Wsdf.sort_values(by="absCV", ascending=False)
+            by_absCV[0:reportlen].to_csv(path_or_buf=cvname, header=True, index=True, index_label=None, mode='w')
         else:  # not enough data
             with open(fname, "a") as fil:
                 fil.write(wstats)   # warning string
