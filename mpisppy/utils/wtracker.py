@@ -116,7 +116,7 @@ class WTracker():
             by_stdev[0:reportlen].to_csv(path_or_buf=stname, header=True, index=True, index_label=None, mode='w')
 
             # scaled
-            Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
+            Wsdf["CV"] = np.where(Wsdf["mean"] != 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
             goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
             mean_CV = Wsdf["CV"].mean()
             stdev_CV = Wsdf["CV"].std()
