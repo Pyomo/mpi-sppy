@@ -111,7 +111,7 @@ class WTracker():
                 fil.write(f" {goodcnt} of {total_traces} have windowed stdev (unscaled) below {stt}\n")
                 fil.write(f" sum of stdev={total_stdev}\n")
 
-                fil.write(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen}\n")
+                fil.write(f"Sorted by windowed stdev, row limit={reportlen}, window len={wlen} in {stname}\n")
             by_stdev = Wsdf.sort_values(by="stdev", ascending=False)
             by_stdev[0:reportlen].to_csv(path_or_buf=stname, header=True, index=True, index_label=None, mode='w')
 
@@ -123,7 +123,7 @@ class WTracker():
                 fil.write(f" {goodcnt} of {total_traces} have windowed CV below {stt}\n")
                 fil.write(f" sum of CV={total_CV}\n")
 
-                fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen}\n")
+                fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen} in {cvname}\n")
             by_CV = Wsdf.sort_values(by="CV", ascending=False)
             by_CV[0:reportlen].to_csv(path_or_buf=cvname, header=True, index=True, index_label=None, mode='w')
         else:  # not enough data
