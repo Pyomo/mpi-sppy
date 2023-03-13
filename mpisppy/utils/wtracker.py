@@ -118,12 +118,12 @@ class WTracker():
             # scaled
             Wsdf["CV"] = np.where(Wsdf["mean"] > 0, Wsdf["stdev"]/Wsdf["mean"], np.nan)
             goodcnt = len(Wsdf[Wsdf["CV"] <= stt])
-            total_CV = Wsdf["CV"].sum()
+            mean_CV = Wsdf["CV"].mean()
+            stdev_CV = Wsdf["CV"].std()
             with open(fname, "a") as fil:
-                fil.write(f" {goodcnt} of {total_traces} have windowed CV below {stt}\n")
-                fil.write(f" sum of CV={total_CV}\n")
-
-                fil.write(f"\nSorted by windowed CV, row limit={reportlen}, window len={wlen} in {cvname}\n")
+                fil.write(f"  {goodcnt} of {total_traces} have windowed CV below {stt}\n")
+                fil.write(f"  mean CV={mean_CV}, stdev={stdev_CV}\n")
+                fil.write(f"  Sorted by windowed CV, row limit={reportlen}, window len={wlen} in {cvname}\n")
             by_CV = Wsdf.sort_values(by="CV", ascending=False)
             by_CV[0:reportlen].to_csv(path_or_buf=cvname, header=True, index=True, index_label=None, mode='w')
         else:  # not enough data
