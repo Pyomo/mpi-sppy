@@ -120,8 +120,9 @@ class WTracker():
             goodcnt = len(Wsdf[Wsdf["absCV"] <= stt])
             mean_absCV = Wsdf["absCV"].mean()
             stdev_absCV = Wsdf["absCV"].std()
+            zeroWcnt = len(Wsdf[Wsdf["mean"] == 0])
             with open(fname, "a") as fil:
-                fil.write(f"  {goodcnt} of {total_traces} have windowed absCV below {stt}\n")
+                fil.write(f"  {goodcnt} of ({total_traces} less meanzero {zeroWcnt}) have windowed absCV below {stt}\n")
                 fil.write(f"  mean absCV={mean_absCV}, stdev={stdev_absCV}\n")
                 fil.write(f"  Sorted by windowed abs CV, row limit={reportlen}, window len={wlen} in {cvname}\n")
             by_absCV = Wsdf.sort_values(by="absCV", ascending=False)
