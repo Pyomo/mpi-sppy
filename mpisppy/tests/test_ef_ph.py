@@ -19,6 +19,7 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement, \
                                                _rho_setter
 import mpisppy.tests.examples.hydro.hydro as hydro
+from mpisppy.extensions.mult_rho_updater import MultRhoUpdater
 from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.tests.utils import get_solver,round_pos_sig
@@ -593,5 +594,32 @@ class Test_hydro(unittest.TestCase):
         self.assertEqual(190, sig2xhatobj)
 
 
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_mult_rho_updater(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 5
+        options["mult_rho_options"] = {'convergence_tolerance' : 1e-4,
+                                       'rho_update_stop_iteration' : 4,
+                                       'rho_update_start_iteration' : 1,
+                                       'verbose' : False,
+                                       }
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all_scenario_names,
+            hydro.scenario_creator,
+            hydro.scenario_denouement,
+            all_nodenames=self.all_nodenames,
+            scenario_creator_kwargs={"branching_factors": self.branching_factors},
+            extensions = MultRhoUpdater,
+        )
+        conv, obj, tbound = ph.ph_main()
+        obj2 = round_pos_sig(obj, 2)
+        self.assertEqual(160, obj2)
+
+        
+# MultRhoUpdater
+        
 if __name__ == '__main__':
     unittest.main()
