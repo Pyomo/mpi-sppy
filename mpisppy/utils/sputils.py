@@ -3,7 +3,6 @@
 # Base and utility functions for mpisppy
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
-import pandas as pd
 import pyomo.environ as pyo
 import sys
 import os
@@ -123,97 +122,6 @@ def reactivate_objs(scenario_instance):
         raise RuntimeError("reactivate_objs called with prior call to stash_ref_objs")
     for obj in scenario_instance._mpisppy_data.obj_list:
         obj.activate()
-
-
-def id_from_strings(s, vname, idx=None):
-    """ Python id of a Pyomo (indexed) Var
-    WARNING: Pyomo gives a lot of flexibility to modelers, so this might not always work
-    TBD: maybe query the vardata to find out about its indexes and cast based on their types
-    Args:
-        k (str): scenario name
-        s (ConcreteModel): scenario model
-        vname (str): Var name
-        idx (str): index in into Var
-    Returns:
-        varid (python variable id): the id for the particular Pyomo Var
-    """
-    if not hasattr(s, vname):
-        raise RuntimeError(f"Scenario {k} does not have a Var named {vname}")
-    varattr = getattr(s, vname)
-    if idx is None:
-        return id(varattr)
-
-    # if we are still here, we have an index
-    try:
-        return id(varattr[idx])
-    except:
-        pass
-    if ',' not in idx:
-        try:
-            return id(varattr[int(idx)])
-        except:
-            pass
-    else:
-        try:
-            return id(varattr[tuple(idx.split(","))])
-        except:
-            pass
-        try:
-            parts = idx.split(",")
-            return id(varattr[tuple((int(i) for i in parts))])
-        except:
-            pass
-                      
-    
-    print(f"ERROR for var={vname}, idx={idx}; here a all legal indexes:")
-    print([i for i in varattr])
-    raise RuntimeError(f"Scenario (name={s.name}) Var named {vname} does not have index {idx}")
-
-
-
-def rhos_to_csv(s, filename):
-    """ write the rho values to a csv "fullname", rho
-    Args:
-        s (ConcreteModel): the scenario Pyomo model
-        filenaame (str): file to which to write
-    """
-
-    # This is probably already done somewhere...
-    def _ndn_to_node(ndn):
-        for n in s._mpisppy_node_list:
-            if n.name == ndn:
-                return n
-        raise RuntimeError(f"Cannot find {ndn} in node list for scenario {k}")
-    
-    with open(filename, "w") as f:
-        f.write("fullname,rho\n")
-        for ndn_i, rho in s._mpisppy_model.rho.items():
-            n = _ndn_to_node(ndn_i[0])
-            vdata = n.nonant_vardata_list[ndn_i[1]]
-            fullname = vdata.name
-            f.write(f'"{fullname}",{rho._value}\n')
-
-            
-def rho_list_from_csv(s, filename):
-    """ read rho values from a file and return a list suitable for rho_setter
-    Args:
-        s (ConcreteModel): scenario whence the id values come
-        filename (str): name of the csv file to read (fullname, rho)
-    Returns:
-        retlist (list of (id, rho) tuples); list suitable for rho_setter
-   """
-    rhodf = pd.read_csv(filename)
-    retlist = list()
-    for idx, row in rhodf.iterrows():
-        fullname = row["fullname"]
-        varname = fullname.split('[')[0]
-        if varname == fullname:
-            varindex = None
-        else:
-            varindex = fullname.split('[')[1].split(']')[0]
-        idval = id_from_strings(s, varname, idx=varindex)
-        retlist.append((idval, row["rho"]))
-    return retlist    
 
     
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,

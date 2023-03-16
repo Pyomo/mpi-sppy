@@ -9,13 +9,13 @@ version matter a lot, so we often just do smoke tests.
 
 import os
 import glob
-import pandas as pd
 import unittest
-
+import pandas as pd
 import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.phbase
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.rho_utils as rho_utils
 from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement, \
                                                _rho_setter
@@ -262,8 +262,8 @@ class Test_sizes(unittest.TestCase):
         fname = "__1134__.csv"
         s = ph.local_scenarios[list(ph.local_scenarios.keys())[0]]
         rholen = len(s._mpisppy_model.rho)
-        mpisppy.utils.sputils.rhos_to_csv(s, fname)
-        rholist = mpisppy.utils.sputils.rho_list_from_csv(s, fname)
+        rho_utils.rhos_to_csv(s, fname)
+        rholist = rho_utils.rho_list_from_csv(s, fname)
         os.remove(fname)
         self.assertEqual(len(rholist), rholen)  # not a deep test...
 

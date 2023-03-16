@@ -39,10 +39,8 @@ class WTracker():
         """ Get the W values from the PHB that we are following
             NOTE: we assume this is called only once per iteration
         """
-        
-        scenario_Ws = {sname: [pyo.value(scenario._mpisppy_model.W[node.name, ix])
-                               for node in scenario._mpisppy_node_list
-                               for (ix, var) in enumerate(node.nonant_vardata_list)]
+
+        scenario_Ws = {sname: [w._value for w in scenario._mpisppy_model.W.values()]
                        for (sname, scenario) in self.PHB.local_scenarios.items()}
 
         self.local_Ws[self.PHB._PHIter] = scenario_Ws
@@ -70,7 +68,7 @@ class WTracker():
             for idx, varname in enumerate(self.varnames):
                 for sname in self.PHB.local_scenario_names:
                     wlist = [self.local_Ws[i][sname][idx] for i in range(fi, li+1)]
-                    window_stats[(varname, sname)] = [np.mean(wlist), np.std(wlist)]
+                    window_stats[(varname, sname)] = (np.mean(wlist), np.std(wlist))
             return window_stats
 
 
