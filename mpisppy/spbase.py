@@ -162,7 +162,7 @@ class SPBase:
                     raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
                             f"variables between scenarios {mylen} vs. {local_node_nonant_lengths[ndn]}")
 
-        # compute node xbar values(reduction)
+        # compute node values(reduction)
         for ndn, val in local_node_nonant_lengths.items():
             local_val = np.array([val], 'i')
             max_val = np.zeros(1, 'i')

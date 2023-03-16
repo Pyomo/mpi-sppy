@@ -97,7 +97,6 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
                 logging.debug('  and its new! on global rank {}'.\
                               format(global_rank))
                 logging.debug('  localnonants={}'.format(str(self.localnonants)))
-
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 self.opt._restore_nonants()
                 innerbound = xhatter.xhat_tryit(restore_nonants=False)
@@ -108,5 +107,12 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
         dtm.debug(f'IB xbar thread ran {ib_iter} iterations\n')
     
+        # for debugging
+        #print("output .txt files for debugging in xhatxbar_bounder.py")
+        #for k,s in self.opt.local_scenarios.items():
+        #    fname = f"xhatxbar_model_{k}.txt"
+        #    with open(fname, "w") as f:
+        #        s.pprint(f)
+
 if __name__ == "__main__":
     print("no main.")

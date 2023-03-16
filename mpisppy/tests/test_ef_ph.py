@@ -8,13 +8,14 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import os
-import pandas as pd
+import glob
 import unittest
-
+import pandas as pd
 import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.phbase
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.rho_utils as rho_utils
 from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement, \
                                                _rho_setter
@@ -240,8 +241,33 @@ class Test_sizes(unittest.TestCase):
             rho_setter=_rho_setter,
         )
         conv, obj, tbound = ph.ph_main()
-        sig2obj = round_pos_sig(obj,2)
-        #self.assertEqual(220000.0, sig2obj)
+        sig1obj = round_pos_sig(obj,1)
+        self.assertEqual(200000.0, sig1obj)
+
+        
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_write_read(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            rho_setter=_rho_setter,
+        )
+        conv, obj, tbound = ph.ph_main()
+        # The rho_setter is called after iter0
+        fname = "__1134__.csv"
+        s = ph.local_scenarios[list(ph.local_scenarios.keys())[0]]
+        rholen = len(s._mpisppy_model.rho)
+        rho_utils.rhos_to_csv(s, fname)
+        rholist = rho_utils.rho_list_from_csv(s, fname)
+        os.remove(fname)
+        self.assertEqual(len(rholist), rholen)  # not a deep test...
+
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -346,6 +372,54 @@ class Test_sizes(unittest.TestCase):
         # in this particular case, the extobject is an xhatter
         xhatobj1 = round_pos_sig(ph.extobject._xhat_looper_obj_final, 1)
         self.assertEqual(xhatobj1, 200000)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_wtracker_extension(self):
+        """ Make sure the wtracker at least does not cause a stack trace
+        """
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 4
+        options["wtracker_options"] ={"wlen": 3,
+                                      "reportlen": 6,
+                                      "stdevthresh": 0.1,
+                                      "file_prefix": "__1134__"}
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            extensions=Wtracker_extension,
+        )
+        conv, basic_obj, tbound = ph.ph_main()
+        fileList = glob.glob('__1134__*.csv')
+        for filePath in fileList:
+            os.remove(filePath)
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_wtracker_lacks_iters(self):
+        """ Make sure the wtracker is graceful with not enough data
+        """
+        from mpisppy.extensions.wtracker_extension import Wtracker_extension
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 4
+        options["wtracker_options"] ={"wlen": 10,
+                                      "reportlen": 6,
+                                      "stdevthresh": 0.1}
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            extensions=Wtracker_extension,
+        )
+        conv, basic_obj, tbound = ph.ph_main()
+        
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
