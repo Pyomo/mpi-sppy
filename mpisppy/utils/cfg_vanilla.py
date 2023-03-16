@@ -79,6 +79,7 @@ def ph_hub(
         all_scenario_names,
         scenario_creator_kwargs=None,
         ph_extensions=None,
+        extension_kwargs=None,
         ph_converger=None,
         rho_setter=None,
         variable_probability=None,
@@ -112,6 +113,7 @@ def ph_hub(
             "rho_setter": rho_setter,
             "variable_probability": variable_probability,
             "extensions": ph_extensions,
+            "extension_kwargs": extension_kwargs,
             "ph_converger": ph_converger,
             "all_nodenames": all_nodenames
         }
@@ -126,16 +128,19 @@ def aph_hub(cfg,
     all_scenario_names,
     scenario_creator_kwargs=None,
     ph_extensions=None,
+    extension_kwargs=None,
     rho_setter=None,
     variable_probability=None,
     all_nodenames=None,
 ):
+    # TBD: March 2023: multiple extensions needs work
     hub_dict = ph_hub(cfg,
                       scenario_creator,
                       scenario_denouement,
                       all_scenario_names,
                       scenario_creator_kwargs=scenario_creator_kwargs,
                       ph_extensions=ph_extensions,
+                      extension_kwargs=extension_kwargs,
                       rho_setter=rho_setter,
                       variable_probability=variable_probability,
                       all_nodenames = all_nodenames,
@@ -154,6 +159,7 @@ def aph_hub(cfg,
 
 
 def extension_adder(hub_dict,ext_class):
+    # TBD March 2023: this is not really good enough
     if "extensions" not in hub_dict["opt_kwargs"] or \
         hub_dict["opt_kwargs"]["extensions"] is None:
         hub_dict["opt_kwargs"]["extensions"] = ext_class

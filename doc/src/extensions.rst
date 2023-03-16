@@ -90,6 +90,13 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 There is an example of the function in the sizes example (``_rho_setter``).
 
 
+wtracker_extension
+==================
+
+The wtracker_extension outputs a report about the convergence (or really, lack thereof) of
+W values.
+An example of its use is shown in ``examples.sizes.sizes_demo.py``
+
 
 variable_probability
 ====================
