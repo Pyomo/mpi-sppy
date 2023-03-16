@@ -34,7 +34,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
             ph.options['mult_rho_options'] if 'mult_rho_options' in ph.options else dict()
 
         self._set_options()
-        self._rho_ratio = None
+        self._first_rho = None
         self.best_conv = float("inf")
         
     def _set_options(self):
@@ -42,7 +42,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         for attr_name, opt_name in _attr_to_option_name_map.items():
             setattr(self, attr_name, options[opt_name] if opt_name in options else _mult_rho_defaults[opt_name])
 
-    def _compute_rho_ratio(self, ph, conv):
+    def _attach_rho_ratio_data(self, ph, conv):
         if conv == None or conv == self._tol:
             return
         self.first_c = conv
@@ -79,12 +79,12 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
             (self._start_iter is not None and \
              ph_iter < self._start_iter):
             return
-        if self._rho_ratio is None:
-            self._compute_rho_ratio(ph, conv)  # rho / conv
+        if self._first_rho is None:
+            self._attach_rho_ratio_data(ph, conv)  # rho / conv
         elif conv != 0:
             for s in ph.local_scenarios.values():
                 for ndn_i, rho in s._mpisppy_model.rho.items():
-                    rho._value = self._first_rho[ndn_i] * conv /self.first_c
+                    rho._value = self._first_rho[ndn_i] * self.first_c / conv
             if ph.cylinder_rank == 0:
                 print(f"MultRhoUpdater iter={ph_iter}; {ndn_i} now has value {rho._value}")
 
