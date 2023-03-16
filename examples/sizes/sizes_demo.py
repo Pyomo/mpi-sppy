@@ -14,6 +14,7 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatlooper import XhatLooper
 from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.extensions.wtracker_extension import Wtracker_extension
 from sizes import scenario_creator, \
                   scenario_denouement, \
                   _rho_setter, \
@@ -29,7 +30,7 @@ if __name__ == "__main__":
     options = {}
     options["solver_name"] = sys.argv[1]
     options["asynchronousPH"] = False
-    options["PHIterLimit"] = 2
+    options["PHIterLimit"] = 5
     options["defaultPHrho"] = 1
     options["convthresh"] = 0.001
     options["subsolvedirectives"] = None
@@ -66,7 +67,10 @@ if __name__ == "__main__":
                                   1: 0.009,
                                   5: 0.005,
                                  10: 0.001}}
-
+    options["wtracker_options"] ={"wlen": 4,
+                                  "reportlen": 6,
+                                  "stdevthresh": 0.1}
+    
 
     all_scenario_names = list()
     for sn in range(ScenCount):
@@ -90,7 +94,7 @@ if __name__ == "__main__":
     #### first PH ####
 
     #####multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
-    multi_ext = {"ext_classes": [Fixer, Gapper]}
+    multi_ext = {"ext_classes": [Fixer, Gapper, Wtracker_extension]}
     ph = mpisppy.opt.ph.PH(
         options,
         all_scenario_names,
@@ -106,7 +110,8 @@ if __name__ == "__main__":
     if ph.cylinder_rank == 0:
          print ("Trival bound =",tbound)
 
-    print("Quitting early.")
+    #print("Quitting early.")
+    #quit()
 
     ############ test W and xbar writers and special joint reader  ############
     from mpisppy.utils.wxbarwriter import WXBarWriter
