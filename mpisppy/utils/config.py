@@ -466,6 +466,23 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=3)
 
+    def xhatshuffle_args(self):
+
+        self.add_to_config('xhatshuffle', 
+                           description="have an xhatshuffle spoke",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('add_reversed_shuffle', 
+                           description="using also the reversed shuffling (multistage only, default True)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('xhatshuffle_iter_step', 
+                           description="step in shuffled list between 2 scenarios to try (default None)",
+                           domain=int,
+                           default=None)
+
 
     def rho_mult_args(self):
 
