@@ -484,34 +484,34 @@ class Config(pyofig.ConfigDict):
                            default=None)
 
 
-    def rho_mult_args(self):
+    def mult_rho_args(self):
 
-        self.add_to_config('rho_mult', 
-                              description="Have rho_mult extension (default False)",
+        self.add_to_config('mult_rho', 
+                              description="Have mult_rho extension (default False)",
                               domain=bool,
                               default=False)
 
-        self.add_to_config('rho_mult_convergence_tolerance', 
+        self.add_to_config('mult_rho_convergence_tolerance', 
                             description="rhomult does nothing with convergence below this (default 1e-4)",
                               domain=float,
                               default=1e-4)
 
-        self.add_to_config('rho_mult_update_stop_iteration', 
+        self.add_to_config('mult_rho_update_stop_iteration', 
                             description="stop doing rhomult rho updates after this iteration (default None)",
                             domain=int,
                             default=None)
 
-        self.add_to_config('rho_mult_update_stop_iteration', 
+        self.add_to_config('mult_rho_update_stop_iteration', 
                             description="start doing rhomult rho updates on this iteration (default 2)",
                             domain=int,
                             default=2)
 
-    def rho_mult_to_dict(self):
-        assert hasattr(self, "rho_mult")
-        return {"rho_mult": self.rho_mult,
-                "convergence_tolerance": self.rho_mult_convergence_tolerance,
-                "rho_update_stop_iteration": self.rho_mult_update_stop_iteration,
-                "rho_update_start_iteration": self.rho_mult_update_start_iteration,
+    def mult_rho_to_dict(self):
+        assert hasattr(self, "mult_rho")
+        return {"mult_rho": self.mult_rho,
+                "convergence_tolerance": self.mult_rho_convergence_tolerance,
+                "rho_update_stop_iteration": self.mult_rho_update_stop_iteration,
+                "rho_update_start_iteration": self.mult_rho_update_start_iteration,
                 "verbose": False}
 
     def xhatspecific_args(self):
