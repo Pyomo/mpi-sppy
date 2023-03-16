@@ -45,16 +45,17 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
     def _compute_rho_ratio(self, ph, conv):
         if conv == None or conv == self._tol:
             return
+        self.first_c = conv
         if len(list(ph.local_scenarios.values())[0]._mpisppy_node_list) == 1:
             # two stage
             s = list(ph.local_scenarios.values())[0]  # arbitrary scenario
-            self._rho_ratio = {ndn_i: rho._value / conv for ndn_i, rho in s._mpisppy_model.rho.items()}
+            self._first_rho = {ndn_i: rho._value for ndn_i, rho in s._mpisppy_model.rho.items()}
         else:
             # loop over all scenarios to get all nodes when multi-stage (wastes time...)
-            self._rho_ratio = dict()
+            self._first_rho = dict()
             for k, s in ph.local_scenarios.items():
                 for ndn_i, rho  in s._mpisppy_model.rho.items():
-                    self._rho_ratio[ndn_i] = rho._value / conv 
+                    self._first_rho[ndn_i] = rho._value
 
 
     def pre_iter0(self):
@@ -83,7 +84,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         elif conv != 0:
             for s in ph.local_scenarios.values():
                 for ndn_i, rho in s._mpisppy_model.rho.items():
-                    rho._value = self._rho_ratio[ndn_i] * conv
+                    rho._value = self._first_rho[ndn_i] * conv /self.first_c
             if ph.cylinder_rank == 0:
                 print(f"MultRhoUpdater iter={ph_iter}; {ndn_i} now has value {rho._value}")
 

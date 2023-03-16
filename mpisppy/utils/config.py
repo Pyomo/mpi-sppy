@@ -501,7 +501,7 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=None)
 
-        self.add_to_config('mult_rho_update_stop_iteration', 
+        self.add_to_config('mult_rho_update_start_iteration', 
                             description="start doing rhomult rho updates on this iteration (default 2)",
                             domain=int,
                             default=2)
