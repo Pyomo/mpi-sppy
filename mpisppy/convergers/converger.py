@@ -6,6 +6,11 @@
 
     Replaces the old implementation in which
     convergers were modules rather than classes.
+
+    DLW: as of  March 2023 note that user supplied convergers do compute
+    ph.conv (which is computed as a scaled norm difference)
+    and both ph.conv and the user supplied converger, could trigger convergence
+    (see phbase.py)
 '''
 
 import abc
