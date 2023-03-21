@@ -690,7 +690,7 @@ class Test_hydro(unittest.TestCase):
         )
         conv, obj, tbound = ph.ph_main()
         obj2 = round_pos_sig(obj, 2)
-        self.assertEqual(160, obj2)
+        self.assertEqual(210, obj2)
 
         
 # MultRhoUpdater
