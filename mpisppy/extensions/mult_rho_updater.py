@@ -3,6 +3,7 @@
 
 # DLW March 2023 A simple rho updater. Hold rho as a constant multple of the convergence metric
 # but only update when convergence improves
+# Preference given to user-supplied converger
 
 import math
 import mpisppy.extensions.extension
@@ -36,12 +37,21 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         self._set_options()
         self._first_rho = None
         self.best_conv = float("inf")
+
         
+    def _conv(self):
+        if self.ph.convobject is not None:
+            return self.ph.convobject.conv
+        else:
+            return self.ph.conv 
+
+
     def _set_options(self):
         options = self.mult_rho_options
         for attr_name, opt_name in _attr_to_option_name_map.items():
             setattr(self, attr_name, options[opt_name] if opt_name in options else _mult_rho_defaults[opt_name])
 
+            
     def _attach_rho_ratio_data(self, ph, conv):
         if conv == None or conv == self._tol:
             return
@@ -68,17 +78,17 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
 
         ph = self.ph
         ph_iter = ph._PHIter
-        if ph.conv < self.best_conv:
-            conv = ph.conv
-            self.best_conv = conv
-        else:
-            return   # only do something if we have a new best
         if (self._stop_iter is not None and \
             ph_iter > self._stop_iter) \
             or \
             (self._start_iter is not None and \
              ph_iter < self._start_iter):
             return
+        conv =  self._conv()
+        if conv < self.best_conv:
+            self.best_conv = conv
+        else:
+            return   # only do something if we have a new best
         if self._first_rho is None:
             self._attach_rho_ratio_data(ph, conv)  # rho / conv
         elif conv != 0:
