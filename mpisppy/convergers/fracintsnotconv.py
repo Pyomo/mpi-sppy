@@ -73,4 +73,5 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         Returns:
            converged?: True if converged, False otherwise
         """
-        return self._convergence_value() < self._options['convthresh']
+        self.conv = self._convergence_value()
+        return self.conv < self._options['convthresh']
