@@ -1,3 +1,4 @@
+# April 2, 2023 trying it without cplex 
 name: straight (Pyomo released)
 
 on:
@@ -26,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo pandas sphinx sphinx_rtd_theme cplex
+          pip install pyomo pandas sphinx sphinx_rtd_theme 
           pip install xpress numpy scipy dill
 
       - name: setup the program
