@@ -372,7 +372,7 @@ class Hub(SPCommunicator):
             )
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
-        if isinstance(self.opt, APH):
+        if not isinstance(self.opt, APH):
             self.cylinder_comm.Barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)
