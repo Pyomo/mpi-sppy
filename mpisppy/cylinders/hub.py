@@ -5,6 +5,7 @@ import abc
 import logging
 import time
 import mpisppy.log
+from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
@@ -347,7 +348,8 @@ class Hub(SPCommunicator):
                 f"into local buffer of length {expected_length}"
             )
         # this is so the spoke ranks all get the same write_id at approximately the same time
-        self.cylinder_comm.Barrier()
+        if not isinstance(self.opt, APH):
+            self.cylinder_comm.Barrier()
         self.local_write_ids[spoke_strata_rank - 1] += 1
         values[-1] = self.local_write_ids[spoke_strata_rank - 1]
         window = self.windows[spoke_strata_rank - 1]
@@ -370,25 +372,31 @@ class Hub(SPCommunicator):
             )
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
-        self.cylinder_comm.Barrier()
+        if not isinstance(self.opt, APH):
+            self.cylinder_comm.Barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
         window.Unlock(spoke_num)
 
-        new_id = int(values[-1])
-        local_val = np.array((new_id,), 'i')
-        sum_ids = np.zeros(1, 'i')
-        self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (sum_ids, MPI.INT),
-                                     op=MPI.SUM)
+        if isinstance(self.opt, APH):
+            # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
+            if values[-1] > self.remote_write_ids[spoke_num - 1]:
+                self.remote_write_ids[spoke_num - 1] = values[-1]
+                return True
+        else:
+            new_id = int(values[-1])
+            local_val = np.array((new_id,), 'i')
+            sum_ids = np.zeros(1, 'i')
+            self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                         (sum_ids, MPI.INT),
+                                         op=MPI.SUM)
+            if new_id != sum_ids[0] / self.cylinder_comm.size:
+                return False
 
-        if new_id != sum_ids[0] / self.cylinder_comm.size:
-            return False
-
-        if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
-            self.remote_write_ids[spoke_num - 1] = new_id
-            return True
+            if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
+                self.remote_write_ids[spoke_num - 1] = new_id
+                return True
         return False
 
     def send_terminate(self):
