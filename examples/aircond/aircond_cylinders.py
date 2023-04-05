@@ -223,6 +223,7 @@ def main():
     scenario_denouement = refmodule.scenario_denouement
     
     if cfg.EF_directly:
+        """
         ama_options = {"EF-mstage": not proper_bundles,
                        "EF-2stage": proper_bundles,
                        "EF_solver_name": cfg.solver_name,
@@ -231,8 +232,9 @@ def main():
                        "_mpisppy_probability": 1/ScenCount,  # is this needed?
                        "tee_ef_solves":False,
                        }
+        """
         ama = amalgamator.from_module(refmodule,
-                                      ama_options,use_command_line=False)
+                                      cfg, use_command_line=False)
         ama.run()
         print(f"EF inner bound=", ama.best_inner_bound)
         print(f"EF outer bound=", ama.best_outer_bound)
@@ -306,13 +308,17 @@ def main():
         soptions = option_string_to_dict(cfg.solver_options)
         hub_dict["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
         hub_dict["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
+        for sd in list_of_spoke_dict:
+            sd["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
+            sd["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
+
         if with_xhatspecific:
             xhatspecific_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
         if with_xhatshuffle:
             xhatshuffle_spoke["opt_kwargs"]["options"]["xhat_looper_options"]["xhat_solver_options"].update(soptions)
-        for sd in list_of_spoke_dict:
-            sd["opt_kwargs"]["options"]["iter0_solver_options"].update(soptions)
-            sd["opt_kwargs"]["options"]["iterk_solver_options"].update(soptions)
+    # special code to get a trace for xhatshuffle
+    if with_xhatshuffle and cfg.trace_prefix is not None:
+        xhatshuffle_spoke["opt_kwargs"]["options"]['shuffle_running_trace_prefix']  = cfg.trace_prefix
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
