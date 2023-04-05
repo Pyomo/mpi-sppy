@@ -1,5 +1,7 @@
 name: straight (Pyomo released)
 
+# april 2023, dropped pip install: sphinx sphinx_rtd_theme cplex
+
 on:
   push:
     branches: [ main ]
@@ -26,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo pandas sphinx sphinx_rtd_theme cplex
+          pip install pyomo cplex
           pip install xpress numpy scipy dill
 
       - name: setup the program
