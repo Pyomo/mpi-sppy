@@ -348,7 +348,8 @@ class Hub(SPCommunicator):
                 f"into local buffer of length {expected_length}"
             )
         # this is so the spoke ranks all get the same write_id at approximately the same time
-        self.cylinder_comm.Barrier()
+        if not isinstance(self.opt, APH):
+            self.cylinder_comm.Barrier()
         self.local_write_ids[spoke_strata_rank - 1] += 1
         values[-1] = self.local_write_ids[spoke_strata_rank - 1]
         window = self.windows[spoke_strata_rank - 1]
@@ -369,10 +370,10 @@ class Hub(SPCommunicator):
                 f"Hub trying to get buffer of length {expected_length} "
                 f"from spoke, but provided buffer has length {len(values)}."
             )
-        # DLW Jan 2023: I think this does not hurt APH because the listener doe not use this comm...
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
-        self.cylinder_comm.Barrier()
+        if isinstance(self.opt, APH):
+            self.cylinder_comm.Barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
