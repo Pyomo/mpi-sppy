@@ -56,9 +56,10 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         if conv == None or conv == self._tol:
             return
         self.first_c = conv
-        if len(list(ph.local_scenarios.values())[0]._mpisppy_node_list) == 1:
+        if not self.multistage:
             # two stage
-            s = list(ph.local_scenarios.values())[0]  # arbitrary scenario
+            for s in ph.local_scenarios.values():
+                 break # arbitrary scenario
             self._first_rho = {ndn_i: rho._value for ndn_i, rho in s._mpisppy_model.rho.items()}
         else:
             # loop over all scenarios to get all nodes when multi-stage (wastes time...)
