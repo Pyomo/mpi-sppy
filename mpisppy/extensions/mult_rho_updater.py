@@ -56,7 +56,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
         if conv == None or conv == self._tol:
             return
         self.first_c = conv
-        if not self.multistage:
+        if not self.ph.multistage:
             # two stage
             for s in ph.local_scenarios.values():
                  break # arbitrary scenario
