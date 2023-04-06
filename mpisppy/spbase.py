@@ -422,16 +422,17 @@ class SPBase:
                 sum_probs[(ndn,i)] = sum_probs.get((ndn,i),0.0) + prob
             didit += len(variable_probability)
             skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit
-            
+        
+        """ this needs to be MPIized; but check below should do the trick
         for (ndn,i),prob in sum_probs.items():
             if not math.isclose(prob, 1.0, abs_tol=self.E1_tolerance):
                 raise RuntimeError(f"Probability sum for variable with nonant index={i} at node={ndn} is not unity - computed sum={prob}")
+        """
 
         if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
 
-        if 'do_not_check_variable_probabilities' in self.options\
-           and not self.options['do_not_check_variable_probabilities']:
+        if not self.options.get('do_not_check_variable_probabilities', False):
             self._check_variable_probabilities_sum(verbose)
 
     def is_zero_prob( self, scenario_model, var ):
