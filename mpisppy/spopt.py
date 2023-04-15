@@ -291,11 +291,12 @@ class SPOpt(SPBase):
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_times, root=0)
             if self.cylinder_rank == 0:
+                apst = [pst for l_pst in all_pyomo_solve_times for pst in l_pst]
                 print("Pyomo solve times (seconds):")
-                print("\tmin=,%4.2f, mean=,%4.2f, max=,%4.2f" %
-                      (np.min(all_pyomo_solve_times),
-                      np.mean(all_pyomo_solve_times),
-                      np.max(all_pyomo_solve_times)))
+                print("\tmin=%4.2f@%d mean=%4.2f max=%4.2f@%d" %
+                      (np.min(apst), np.argmin(apst),
+                       np.mean(apst),
+                       np.max(apst), np.argmax(apst)))
 
 
     def Eobjective(self, verbose=False):
@@ -829,26 +830,18 @@ class SPOpt(SPBase):
 
     def _create_solvers(self):
 
+        dtiming = ("display_timing" in self.options) and self.options["display_timing"]
+        local_sit = [] # Local set instance time for time tracking
         for sname, s in self.local_subproblems.items(): # solver creation
             s._solver_plugin = SolverFactory(self.options["solver_name"])
-
             if (sputils.is_persistent(s._solver_plugin)):
-                dtiming = ("display_timing" in self.options) and self.options["display_timing"]
                 if dtiming:
                     set_instance_start_time = time.time()
 
                 set_instance_retry(s, s._solver_plugin, sname)
 
                 if dtiming:
-                    set_instance_time = time.time() - set_instance_start_time
-                    all_set_instance_times = self.mpicomm.gather(set_instance_time,
-                                                                 root=0)
-                    if self.cylinder_rank == 0:
-                        print("Set instance times:")
-                        print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
-                              (np.min(all_set_instance_times),
-                               np.mean(all_set_instance_times),
-                               np.max(all_set_instance_times)))
+                    local_sit.append( time.time() - set_instance_start_time )
 
             ## if we have bundling, attach
             ## the solver plugin to the scenarios
@@ -857,6 +850,14 @@ class SPOpt(SPBase):
                 for scen_name in s.scen_list:
                     scen = self.local_scenarios[scen_name]
                     scen._solver_plugin = s._solver_plugin
+        if dtiming:
+            all_set_instance_times = self.mpicomm.gather(local_sit,
+                                                     root=0)
+            if self.cylinder_rank == 0:
+                asit = [sit for l_sit in all_set_instance_times for sit in l_sit]
+                print("Set instance times:")
+                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
+                      (np.min(asit), np.mean(asit), np.max(asit)))
 
 
 # these parameters should eventually be promoted to a non-PH
