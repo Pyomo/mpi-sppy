@@ -80,6 +80,8 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
 
         self.bound = self.trivial_bound
 
+        self.opt.current_solver_options = self.opt.iterk_solver_options
+
         self.A_iter = 1
         while not self.got_kill_signal():
             # because of aph, do not check for new data, just go for it
