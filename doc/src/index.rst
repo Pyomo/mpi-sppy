@@ -28,6 +28,8 @@ MPI is used.
    nompi4py.rst
    secretmenu.rst
    pickledbundles.rst
+   grad_rho.rst
+   w_rho.rst
    contributors.rst
    api.rst
    refs.rst
