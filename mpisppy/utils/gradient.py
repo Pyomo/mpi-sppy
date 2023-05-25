@@ -49,7 +49,6 @@ class Find_Grad():
 
     """
 
-
     def __init__(self,
                  ph_object,
                  cfg):
@@ -57,7 +56,6 @@ class Find_Grad():
         self.cfg = cfg
 
     #======================================================================
-
 
     def compute_grad(self, sname, scenario):
         """ Computes gradient cost for a given scenario
@@ -73,13 +71,12 @@ class Find_Grad():
         nlp = PyomoNLP(scenario)
         nlp_vars = nlp.get_pyomo_variables()
         grad = nlp.evaluate_grad_objective()
-        grad_cost = {}
-        for ndn_i, var in scenario._mpisppy_data.nonant_indices.items():
-            grad_cost[ndn_i] = -grad[ndn_i[1]]
+        grad_cost = {ndn_i: -grad[ndn_i[1]]
+                     for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
         return grad_cost
         
 
-    def scenario_loop(self):
+    def grad_cost(self):
         """ Computes gradient cost for all scenarios and write them in a file.
         
         ASSUMES:
@@ -102,10 +99,8 @@ class Find_Grad():
                     for v in node.nonant_vardata_list:
                         v.unfix()
 
-            grad_cost ={}
-            for sname, scenario in self.ph_object.local_scenarios.items():
-                grad_cost[sname] = self.compute_grad(sname, scenario)
-
+            grad_cost ={sname: self.compute_grad(sname, scenario) 
+                        for sname, scenario in self.ph_object.local_scenarios.items()} 
             local_costs = {(sname, var.name): grad_cost[sname][node.name, ix]
                            for (sname, scenario) in self.ph_object.local_scenarios.items()
                            for node in scenario._mpisppy_node_list
@@ -197,12 +192,11 @@ class Find_Rhos():
                                                op=MPI.SUM)
 
         if self.ph_object.cylinder_rank == 0:
-            #g_denom = np.maximum(np.ones(len(g_denom)), g_denom)
             g_denom = np.maximum(np.ones(len(g_denom))*1e-8, g_denom)
             return g_denom
 
 
-    def compute_rhos(self):
+    def compute_grad_rhos(self):
         """ Computes rhos for each scenario and each variable using the WW heuristic.
         
         Returns:
@@ -224,34 +218,34 @@ class Find_Rhos():
             rho = dict()
             for k in all_snames:
                 rho[k] = np.abs(np.divide(cost[k], denom))
-
-            arranged_rho = dict()
-            for vname, idx in vname_to_idx.items():
-                arranged_rho[vname] = [rho_list[idx] for _, rho_list in rho.items()]
+            arranged_rho = {vname: [rho_list[idx] for _, rho_list in rho.items()]
+                            for vname, idx in vname_to_idx.items()}
             return arranged_rho
                 
 
-    def _pstat(self, rho_list):
+    def _order_stat(self, rho_list):
         """ Computes a scenario independant rho from a list of rhos. It's the mean for now.
 
         Returns:
            rho (float): the rho value for a given list
 
         """
-        return np.mean(rho_list)
+        alpha = self.cfg.order_stat
+        assert alpha != -1.0, "you need to set the order statistic parameter for rho using --order-stat"
+        assert (alpha >= 0 and alpha <= 1), "your order_stat is a fraction and needs to be between 0 and 1"
+        i = int(np.floor(alpha * (len(rho_list)-1)))
+        return rho_list[i]
 
 
-    def rhos(self):
+    def grad_rhos(self):
         """ Write the computed rhos in the file --grad-rho-file.
 
         """
         if self.cfg.grad_rho_file == '': pass
         else:
-            rhos = dict()
-            rho_data = self.compute_rhos()
+            rho_data = self.compute_grad_rhos()
             if self.ph_object.cylinder_rank == 0:
-                for (vname, rho_list) in rho_data.items():
-                    rhos[vname] = self._pstat(rho_list)
+                rhos = {vname: self._order_stat(rho_list) for (vname, rho_list) in rho_data.items()}
 
                 with open(self.cfg.grad_rho_file, 'a', newline='') as file:
                     writer = csv.writer(file)
@@ -326,8 +320,8 @@ def grad_cost_and_rho(mname, original_cfg):
     
     #============================================================================== 
     # Compute grad cost and rhos                                                                                           
-    Find_Grad(ph_object, cfg).scenario_loop()
-    Find_Rhos(ph_object, cfg).rhos()
+    Find_Grad(ph_object, cfg).grad_cost()
+    Find_Rhos(ph_object, cfg).grad_rhos()
 
 
 if __name__ == "__main__":

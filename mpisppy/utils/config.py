@@ -596,6 +596,10 @@ class Config(pyofig.ConfigDict):
                            description="name of the gradient rho file (must be csv)",
                            domain=str,
                            default='')
+        self.add_to_config("order_stat",
+                           description="order statistic for rho (must be between 0 and 1)",
+                           domain=float,
+                           default=-1.0)
 
     def rho_args(self):
         self.add_to_config("whatpath",
@@ -614,7 +618,10 @@ class Config(pyofig.ConfigDict):
                            description="csv file for the rho setter",
                            domain=str,
                            default='')
-        
+        self.add_to_config("order_stat",
+                           description="order statistic for rho (must be between 0 and 1)",
+                           domain=float,
+                           default=-1.0)
 
 
     #================

@@ -87,8 +87,8 @@ class Find_Rhos():
         for (sname, vname) in self.c.keys():
             if sname not in all_snames: all_snames.append(sname)
             if vname not in all_vnames:all_vnames.append(vname)
-        for k in all_snames:
-            cost[k] = np.array([self.c[k, vname] for vname in all_vnames])
+        cost = {k : np.array([self.c[k, vname] for vname in all_vnames])
+                for k in all_snames}
         phbase._Compute_Xbar(self.ph_object)
         for k, s in self.ph_object.local_scenarios.items():
             for node in s._mpisppy_node_list:
@@ -99,14 +99,18 @@ class Find_Rhos():
                 rho[k] = np.abs(np.divide(cost[k], (nonants_array - xbar_array)))
         return rho
 
-    def _pstat(self, rho_list):
+    def _order_stat(self, rho_list):
         """ Computes a scenario independant rho from a list of rhos. It's the mean for now.
 
         Returns:
            rho (float): the rho value for a given list
 
         """
-        return np.mean(rho_list)
+        alpha = self.cfg.order_stat
+        assert alpha != -1.0, "you need to set the order statistic parameter for rho using --order-stat"
+        assert (alpha >= 0 and alpha <= 1), "your order_stat is a fraction and needs to be between 0 and 1"
+        i = int(np.floor(alpha * (len(rho_list)-1)))
+        return rho_list[i]
 
 
     def rhos(self):
@@ -117,18 +121,16 @@ class Find_Rhos():
         else:
             k0, s0 = list(self.ph_object.local_scenarios.items())[0]
             vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
-            rhos = dict()
             global_rhos = dict()
-            arranged_rhos = dict()
             local_rhos = self.compute_rhos()
             g_rhos = self.ph_object.comms['ROOT'].gather(local_rhos, root=0)
             if self.ph_object.cylinder_rank == 0:
                 for l_rhos in g_rhos: 
                     global_rhos.update(l_rhos)
-                for vname, idx in vname_to_idx.items():
-                    arranged_rhos[vname] = [rho_list[idx] for _, rho_list in global_rhos.items()]
-                for (vname, rho_list) in arranged_rhos.items():
-                    rhos[vname] = self._pstat(rho_list)
+                arranged_rhos = {vname: [rho_list[idx] for _, rho_list in global_rhos.items()]
+                                 for vname, idx in vname_to_idx.items()}
+                rhos = {vname: self._order_stat(rho_list)
+                        for (vname, rho_list) in arranged_rhos.items()}
 
                 with open(self.cfg.rho_file, 'a', newline='') as file:
                     writer = csv.writer(file)

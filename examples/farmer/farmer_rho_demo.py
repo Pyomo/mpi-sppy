@@ -3,7 +3,7 @@
 # general example driver for farmer with cylinders
 
 ### Modified 2023 by U.Naepels: example to compute grad cost and rhos from gradient and use the corresponding rho setter
-# mpiexec -np 2 python -m mpi4py farmer_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=/.../xhat.npy --rhopath= --grad-rho-setter
+# mpiexec -np 2 python -m mpi4py farmer_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --grad-rho-setter --order-stat=
 
 
 import farmer

@@ -47,8 +47,8 @@ rhos
 
 This function computes a rho for each variable using the dictionnary
 returned by ``compute_rhos``.
-The method for doing so is the average for now,
-but can be edited in ``_pstat``.
+To do so, it uses an order statistic which you should set with ``--order-stat``.
+It needs to be a float between 0 and 1.
 It will write the resulting rhos in a csv file
 containing each variable name and the corresponding value.
 
@@ -58,6 +58,7 @@ To use it you should include the following in your bash script.
 
    --whatpath #file with the Ws you want to use
    --rho-file #file where rhos will be written
+   --order-stat #float between 0 and 1
 
 
 rho_setter

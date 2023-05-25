@@ -69,6 +69,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.grad_cost_file = '_test_grad_cost.csv'
         self.cfg.grad_rho_file= './_test_grad_rho.csv'
+        self.cfg.order_stat = 0.4
         self.cfg.max_iterations = 0
         self.ph_object = self._create_ph_farmer()
 
@@ -82,9 +83,9 @@ class Test_gradient_farmer(unittest.TestCase):
         grad_cost0 = self.grad_object.compute_grad(k0, s0)
         self.assertEqual(grad_cost0[('ROOT', 1)], -230)
 
-    def test_grad_cost_loop(self):
+    def test_grad_cost(self):
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
-        self.grad_object.scenario_loop()
+        self.grad_object.grad_cost()
         try:
             os.remove(self.cfg.grad_cost_file)
         except:
@@ -100,22 +101,23 @@ class Test_gradient_farmer(unittest.TestCase):
         denom = self.rho_object._global_denom()
         self.assertAlmostEqual(denom[0], 21.48148148148148)
 
-    def test_compute_grad_rho(self):
+    def test_compute_grad_rhos(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
         self.rho_object = grad.Find_Rhos(self.ph_object, self.cfg)
-        rhos = self.rho_object.compute_rhos()
+        rhos = self.rho_object.compute_grad_rhos()
         self.assertAlmostEqual(rhos['DevotedAcreage[CORN0]'][0], 6.982758620689654)
                       
-    def test_pstat(self):
+    def test_order_stat(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
         self.rho_object = grad.Find_Rhos(self.ph_object, self.cfg)
-        rho = self.rho_object._pstat([1, 2, 3, 4, 5])
-        self.assertIsInstance(rho, float)
+        test_list = [1, 2, 3, 4, 5]
+        rho = self.rho_object._order_stat(test_list)
+        self.assertTrue(rho == 2)
 
     def test_grad_rho_loop(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
         self.rho_object = grad.Find_Rhos(self.ph_object, self.cfg)
-        self.rho_object.rhos()
+        self.rho_object.grad_rhos()
         try:
             os.remove(self.cfg.grad_rho_file)
         except:
@@ -158,6 +160,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.ph_object = self._create_ph_farmer()
         self.cfg.whatpath = './examples/rho_test_data/grad_cost.csv'
         self.cfg.rho_file= './_test_rho.csv'
+        self.cfg.order_stat = 0.4
 
     def test_grad_rho_init(self):
         self.rho_object = find_rho.Find_Rhos(self.ph_object, self.cfg)
@@ -167,10 +170,12 @@ class Test_find_rho_farmer(unittest.TestCase):
         rho = self.rho_object.compute_rhos()
         self.assertAlmostEqual(rho['scen0'][0], 11.57142954)
 
-    def test_pstat(self):
+    def test_order_stat(self):
         self.rho_object = find_rho.Find_Rhos(self.ph_object, self.cfg)
-        rho = self.rho_object._pstat([1, 2, 3, 4, 5])
-        self.assertIsInstance(rho, float)
+        rho = self.rho_object._order_stat([1, 2, 3, 4, 5])
+        test_list = [1, 2, 3, 4, 5]
+        rho = self.rho_object._order_stat(test_list)
+        self.assertTrue(rho == 2)
 
     def test_rhos(self):
         self.rho_object = find_rho.Find_Rhos(self.ph_object, self.cfg)

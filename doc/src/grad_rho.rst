@@ -48,8 +48,8 @@ To use it you should include the following in your bash script.
    --grad-cost-file #file where gradient costs will be written
 
 
-compute_rhos
-------------
+compute_grad_rhos
+-----------------
 
 This function computes rhos for each scenario and variable 
 using the previously computed gradient costs.
@@ -58,13 +58,13 @@ The rho values depend on both the scenario and the variable:
 and a list of corresponding rho values for each scenario.
 
 
-rhos
-----
+grad_rhos
+---------
 
 This function computes a rho for each variable using the dictionnary 
-returned by ``compute_rhos``. 
-The method for doing so is the average for now, 
-but can be edited in ``_pstat``.
+returned by ``compute_rhos``.
+To do so, it uses an order statistic which you should set with ``--order-stat``. 
+It needs to be a float between 0 and 1.
 It will write the resulting rhos in a csv file
 containing each variable name and the corresponding value.
 
@@ -73,3 +73,4 @@ To use it you should include the following in your bash script.
 .. code-block:: bash
 
    --grad-rho-file #file where gradient rhos will be written
+   --order-stat #float between 0 and 1
