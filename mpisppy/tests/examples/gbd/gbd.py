@@ -220,7 +220,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 
 #============================
-def xhat_generator_gbd(scenario_names, solvername="gurobi", solver_options=None):
+def xhat_generator_gbd(scenario_names, solver_name="gurobi", solver_options=None):
     '''
     For sequential sampling.
     Takes scenario names as input and provide the best solution for the 
@@ -229,7 +229,7 @@ def xhat_generator_gbd(scenario_names, solvername="gurobi", solver_options=None)
     ----------
     scenario_names: int
         Names of the scenario we use
-    solvername: str, optional
+    solver_name: str, optional
         Name of the solver used. The default is "gurobi"
     solver_options: dict, optional
         Solving options. The default is None.
@@ -243,7 +243,7 @@ def xhat_generator_gbd(scenario_names, solvername="gurobi", solver_options=None)
     num_scens = len(scenario_names)
     
     ama_options = { "EF-2stage": True,
-                    "EF_solver_name": solvername,
+                    "EF_solver_name": solver_name,
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": 1/num_scens,
@@ -263,13 +263,13 @@ def xhat_generator_gbd(scenario_names, solvername="gurobi", solver_options=None)
 if __name__ == "__main__":
 
     num_scens = 300
-    solvername = 'gurobi_direct'
+    solver_name = 'gurobi_direct'
     solver_options=None
     
     scenario_names = scenario_names_creator(num_scens,start=6000)
 
     ama_options = { "EF-2stage": True,
-                    "EF_solver_name": solvername,
+                    "EF_solver_name": solver_name,
                     "EF_solver_options": solver_options,
                     "num_scens": num_scens,
                     "_mpisppy_probability": None,
@@ -288,7 +288,7 @@ if __name__ == "__main__":
 
     from mpisppy.confidence_intervals.seqsampling import SeqSampling
     optionsFSP = {'eps': 8.0,
-                  'solvername': "gurobi_direct",
+                  'solver_name': "gurobi_direct",
                   "c0":300,
                   "kf_Gs":25,
                   "kf_xhat":25}
@@ -301,7 +301,7 @@ if __name__ == "__main__":
                     "p":0.191,
                     "kf_Gs":25,
                     "kf_xhat":1,
-                    "solvername":"gurobi_direct",
+                    "solver_name":"gurobi_direct",
                     }
     optionsBM_GBD_500 =  { 'h':0.1427,
                     'hprime':0.015, 
@@ -310,7 +310,7 @@ if __name__ == "__main__":
                     "p":0.191,
                     "kf_Gs":25,
                     "kf_xhat":1,
-                    "solvername":"gurobi_direct",
+                    "solver_name":"gurobi_direct",
                     }
 
     gbd_pb = SeqSampling("mpisppy.tests.examples.gbd.gbd",

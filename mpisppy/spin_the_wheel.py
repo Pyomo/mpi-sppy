@@ -138,6 +138,8 @@ class WheelSpinner:
         ## give the hub the chance to catch new values
         spcomm.hub_finalize()
     
+        fullcomm.Barrier()
+
         spcomm.free_windows()
         global_toc("Windows freed")
 

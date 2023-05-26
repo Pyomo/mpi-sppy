@@ -254,7 +254,7 @@ First, we must construct a PH object:
     from mpisppy.opt.ph import PH
 
     options = {
-        "solvername": "cplex_persistent",
+        "solver_name": "cplex_persistent",
         "PHIterLimit": 5,
         "defaultPHrho": 10,
         "convthresh": 1e-7,
@@ -403,27 +403,21 @@ unusual in that the model file, ``aircond.py``, lives in
 ``mpisppy.tests.examples`` directory. Scripts and bash files that use
 it live in ``examples.aircond``.  A good place to start is the
 ``aircond_cylinders.py`` file that starts with some functions that
-support the main program. The main program makes use of the command
-line parsers provided with the library supplemented by arguments
-provided by the aircond reference model using the line
+support the main program. The main program makes use of the 
+``Config`` object called `cfg` that creates a parser and gets arguments.
 
-::
+The configuration data obtained by the parser are passed directly to the vanilla hub
+and spoke creator which knows how to use the arguments from a ``Config`` object.
+The arguments unique to aircond are processed by the ``create_kwargs`` function
+in the reference model file.
 
-  parser = aircond.inparsers_adder(parser)
+A simple example that uses a few of the options is shown in ``aircond_zhat.bash``, which
+also calls the ``xhat4xhat`` program to estimate confidence intervals for the solution
+obtained.
 
 
- The ``args`` obtained by the parser are passed directly to the vanilla hub
- and spoke creator which knows how to use the arguments from the ``baseparsers``.
- The arguments unique to aircond are processed by the ``create_kwargs`` function
- in the reference model file.
-
- A simple example that uses a few of the options is shown in ``aircond_zhat.bash``, which
- also calls the ``xhat4xhat`` program to estimate confidence intervals for the solution
- obtained.
-
- 
- hydro
- -----
+hydro
+-----
 
 Hydro is a three stage example that was originally coded in PySP and we make extensive use
 of the PySP files. Unlike farmer and aircond where the scenario data are created from distributions,

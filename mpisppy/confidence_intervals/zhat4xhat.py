@@ -10,11 +10,11 @@ from mpisppy.utils import sputils
 from mpisppy.confidence_intervals import ciutils
 from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.utils.sputils import option_string_to_dict
-
+from mpisppy.utils import config
 
 def evaluate_sample_trees(xhat_one, 
                           num_samples,
-                          ama_options,  
+                          cfg,
                           InitSeed=0,  
                           model_module = None):
     """ Create and evaluate multiple sampled trees.
@@ -22,7 +22,7 @@ def evaluate_sample_trees(xhat_one,
         xhat_one : list or np.array of float (*not* a dict)
             A feasible and nonanticipative first stage solution.
         num_samples (int): number of trees to sample
-        ama_options (dict): options for the amalgamator
+        cfg (Config): options for/from the amalgamator
         InitSeed (int): starting seed (but might be used for a scenario name offset)
         model_modules: an imported module with the functions needed by, e.g., amalgamator
     Returns:
@@ -32,26 +32,24 @@ def evaluate_sample_trees(xhat_one,
     ''' creates batch_size sample trees with first-stage solution xhat_one
     using SampleSubtree class from sample_tree
     used to approximate E_{xi_2} phi(x_1, xi_2) for confidence interval coverage experiments
-    note: ama_options will include the command line args as 'args'
     '''
-    mname = ama_options["args"].model_module_name
+    cfg = cfg()  # so the seed can be ephemeral
+    mname = cfg.model_module_name
     seed = InitSeed
     zhats = list()
-    bfs = ama_options["branching_factors"]
+    bfs = cfg["branching_factors"]
     scenario_count = np.prod(bfs)
-    solvername = ama_options["EF_solver_name"]
+    solver_name = cfg["EF_solver_name"]
     #sampling_bfs = ciutils.scalable_BFs(batch_size, bfs) # use for variance?
     xhat_eval_options = {"iter0_solver_options": None,
                      "iterk_solver_options": None,
                      "display_timing": False,
-                     "solvername": solvername,
+                     "solver_name": solver_name,
                      "verbose": False,
                      "solver_options":{}}
 
-    ### wrestling with options 5 April 2022 - TBD delete this comment
-    if 'seed' not in ama_options:
-        ama_options['seed'] = seed
-    ###scenario_creator_kwargs = model_module.kw_creator(ama_options)
+    cfg.dict_assign('seed', 'seed', int, None, seed)
+
     for j in range(num_samples): # number of sample trees to create
         samp_tree = sample_tree.SampleSubtree(mname,
                                               xhats = [],
@@ -59,13 +57,12 @@ def evaluate_sample_trees(xhat_one,
                                               starting_stage=1, 
                                               branching_factors=bfs,
                                               seed=seed, 
-                                              options=ama_options,
-                                              solvername=solvername,
+                                              cfg=cfg,
+                                              solver_name=solver_name,
                                               solver_options={})
         samp_tree.run()
         ama_object = samp_tree.ama
-        ama_options = ama_object.options
-        ama_options['verbose'] = False
+        cfg = ama_object.cfg
         scenario_creator_kwargs = ama_object.kwargs
         if len(samp_tree.ef._ef_scenario_names)>1:
             local_scenarios = {sname: getattr(samp_tree.ef, sname)
@@ -78,8 +75,8 @@ def evaluate_sample_trees(xhat_one,
                                                      xhat_one,
                                                      bfs,
                                                      seed,
-                                                     ama_options,
-                                                     solvername=solvername,
+                                                     cfg,
+                                                     solver_name=solver_name,
                                                      solver_options=None)
         # for Xhat_Eval
         # scenario_creator_kwargs = ama_object.kwargs
@@ -100,21 +97,19 @@ def evaluate_sample_trees(xhat_one,
 
     return np.array(zhats), seed
 
-def run_samples(ama_options, args, model_module):
-    
-    # TBD: This has evolved so there may be overlap between ama_options and args
-    #  (some codes assume that ama_options includes "args": args)
-    
-    # Read xhats from xhatpath
-    xhat_one = ciutils.read_xhat(args.xhatpath)["ROOT"]
+def run_samples(cfg, model_module):
+    # Does all the work for zhat4xhat    
 
-    num_samples = args.num_samples
+    # Read xhats from xhatpath
+    xhat_one = ciutils.read_xhat(cfg.xhatpath)["ROOT"]
+
+    num_samples = cfg.num_samples
 
     zhats,seed = evaluate_sample_trees(xhat_one, num_samples,
-                                       ama_options, InitSeed=0,
+                                       cfg, InitSeed=0,
                                        model_module=model_module)
 
-    confidence_level = args.confidence_level
+    confidence_level = cfg.confidence_level
     zhatbar = np.mean(zhats)
     s_zhat = np.std(np.array(zhats))
     t_zhat = scipy.stats.t.ppf(confidence_level, len(zhats)-1)
@@ -127,73 +122,79 @@ def run_samples(ama_options, args, model_module):
     return zhatbar, eps_z
 
 def _parser_setup():
-    # return the parser
+    # set up the config object and return it, but don't parse
     # parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-    parser = argparse.ArgumentParser(prog="zhat4xhat", conflict_handler="resolve")
-
-    parser.add_argument('model_module_name',
-                        help="name of model module, must be compatible with amalgamator")
-    parser.add_argument('xhatpath',
-                        help="path to .npy file with feasible nonant solution xhat")
-    parser.add_argument("--solver-name",
-                        help="solver name (default gurobi_direct)",
-                        dest='solver_name',
-                        default="gurobi_direct")
-    parser.add_argument("--branching-factors",
-                        help="Spaces delimited branching factors (default 10 10) for two "
-                        "stage, just enter one number",
-                        dest="branching_factors",
-                        nargs="*",
-                        type=int,
-                        default=[10,10])
-    parser.add_argument("--num-samples",
-                        help="Number of independent sample trees to construct",
-                        dest="num_samples",
-                        type=int,
-                        default=10)
-    parser.add_argument("--solver-options",
-                            help="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
-                            default='')
+    cfg = config.Config()
+    cfg.add_to_config("EF_solver_name",
+                         description="solver name (default gurobi_direct)",
+                         domain=str,
+                         default="gurobi_direct")
+    cfg.add_branching_factors()
+    cfg.add_to_config("num_samples",
+                         description="Number of independent sample trees to construct",
+                         domain=int,
+                         default=10)
+    cfg.add_to_config("solver_options",
+                         description="space separated string of solver options, e.g. 'option1=value1 option2 = value2'",
+                         domain=str,
+                         default='')
     
-    parser.add_argument("--confidence-level",
-                        help="one minus alpha (default 0.95)",
-                        dest="confidence_level",
-                        type=float,
-                        default=0.95)
-    return parser
+    cfg.add_to_config("xhatpath",
+                         description="path to npy file with xhat",
+                         domain=str,
+                         default='')
+    
+    cfg.add_to_config("confidence_level",
+                         description="one minus alpha (default 0.95)",
+                         domain=float,
+                         default=0.95)
+    return cfg
 
 
-def _main_body(args, model_module):
+def _main_body(model_module, cfg):
     # body of main, pulled out for testing
-    solver_options = option_string_to_dict(args.solver_options)
 
-    bfs = args.branching_factors
-    solver_name = args.solver_name
-    num_samples = args.num_samples
+    lcfg = cfg()  # make a copy because of EF-mstage
+    solver_options_dict = option_string_to_dict(cfg.solver_options)
+    lcfg.add_and_assign("EF_solver_options", "solver options dict", dict, None, solver_options_dict)
+    
+    lcfg.quick_assign("EF_mstage", domain=bool, value=True)
 
-    ama_options = {"EF-mstage": True,
-                   "EF_solver_name": solver_name,
-                   "EF_solver_options": solver_options,
-                   "branching_factors": bfs,
-                   "args": args,
-                   }
-
-    return run_samples(ama_options, args, model_module)
+    return run_samples(lcfg, model_module)
 
 
 if __name__ == "__main__":
 
-    parser = _parser_setup()
-    
+    cfg = _parser_setup()
     # now get the extra args from the module
     mname = sys.argv[1]  # args.model_module_name eventually
     if mname[-3:] == ".py":
-        raise ValueError(f"Module name should end in .py ({mname})")
+        raise ValueError(f"Module name should not end in .py ({mname})")
     try:
         model_module = importlib.import_module(mname)
     except:
         raise RuntimeError(f"Could not import module: {mname}")
-    model_module.inparser_adder(parser)
-    args = parser.parse_args()  
+    model_module.inparser_adder(cfg)
+    # TBD xxxx the inprser_adder might want num_scens, but zhat4xhat contols the number of scenarios
+    # see if this works:
+    try:
+        del cfg.num_scens
+    except:
+        pass
+    
+    parser = cfg.create_parser("zhat4zhat")
+    # the module name is very special because it has to be plucked from argv
+    parser.add_argument(
+            "model_module_name", help="amalgamator compatible module (often read from argv)", type=str,
+        )
+    cfg.add_to_config("model_module_name",
+                         description="amalgamator compatible module",
+                         domain=str,
+                         default='',
+                         argparse=False)
+    cfg.model_module_name = mname
+    
+    args = parser.parse_args()  # from the command line
+    args = cfg.import_argparse(args)
 
-    zhatbar, eps_z = _main_body(args, model_module)
+    zhatbar, eps_z = _main_body(model_module, cfg)

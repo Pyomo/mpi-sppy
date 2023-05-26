@@ -13,7 +13,7 @@ Unless you are directly using mid-level functionality, your
 code may need to write the root node nonanticipative variable values
 (called `xhat` or `xhat_one`) to a file for later processing. This is
 typically done using ``sputils.ef_ROOT_nonants_npy_serializer``, which
-is shown in various examples, e.g., ``examples.farmer.afarmer.py``
+is shown in various examples, e.g., ``examples.farmer.farmer.py``
 
 zhat4xhat
 ---------
@@ -36,7 +36,7 @@ seedoffset
 
 Most of the confidence interval code assumes that is can pass in a
 seed, particularly to the ``scenario_creator`` function so that
-replicates can be obtained. See ``examples.farmer.afarmer.py`` for an
+replicates can be obtained. See ``examples.farmer.farmer.py`` for an
 example.
 
 When only a small number of scenarios are available, the

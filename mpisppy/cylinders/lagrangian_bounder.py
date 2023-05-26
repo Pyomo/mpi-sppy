@@ -19,7 +19,7 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
     def lagrangian(self):
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
-        if "ipopt" in self.opt.options["solvername"]:
+        if "ipopt" in self.opt.options["solver_name"]:
             print("\n WARNING: An ipopt solver will not give outer bounds\n")
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
@@ -49,9 +49,10 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         if total == serial_number_sum:
             return bound
         elif self.cylinder_rank == 0:
-            print("WARNING: Lagrangian spokes out of snyc, consider changing the spoke_sleep_time option; "
-                  "see the documentation for more information. "
-                  f"(The current value is {self.spoke_sleep_time})")
+            # TODO: this whole check can probably be removed as its done
+            #       within `got_kill_signal`. Leaving it for now as an
+            #       additional check.
+            raise RuntimeError("Lagrangian spokes unexpectly out of snyc")
         return None
 
     def _set_weights_and_solve(self):
@@ -67,6 +68,8 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         self.lagrangian_prep()
 
         self.trivial_bound = self.lagrangian()
+
+        self.opt.current_solver_options = self.opt.iterk_solver_options
 
         self.bound = self.trivial_bound
 

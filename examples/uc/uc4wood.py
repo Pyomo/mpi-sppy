@@ -78,7 +78,7 @@ if __name__ == "__main__":
     }
     
     hub_ph_options = {
-        "solvername": "gurobi_persistent",
+        "solver_name": "gurobi_persistent",
         'bundles_per_rank': bundles_per_rank, # 0 = no bundles
         "asynchronousPH": False,
         "PHIterLimit": PHIterLimit,
@@ -133,7 +133,7 @@ if __name__ == "__main__":
         "FW_iter_limit": 10,
         "FW_weight": 0., # Or 1.? I forget what this does, honestly
         "FW_conv_thresh": 1e-4,
-        "solvername": "gurobi_persistent",
+        "solver_name": "gurobi_persistent",
         "FW_verbose": False,
     }
     fw_spoke = {

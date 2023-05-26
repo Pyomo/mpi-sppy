@@ -7,6 +7,7 @@ import math
 import collections
 import time
 import logging
+import datetime as dt
 import mpisppy
 import mpisppy.MPI as mpi
 import pyomo.environ as pyo
@@ -636,6 +637,7 @@ class APH(ph_base.PHBase):
         scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
         dispatch_list = _dispatch_list(scnt)
         _vb("dispatch list before dispath: {}".format(dispatch_list))
+        pyomo_solve_times = list()
         for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
@@ -644,22 +646,24 @@ class APH(ph_base.PHBase):
             _vb("dispatch k={}; phi={}".format(k, p))
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.cylinder_rank, k, p))
-            pyomo_solve_time = self.solve_one(solver_options, k, s,
-                                              dtiming=dtiming,
+            # the lower lever dtiming does a gather
+            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
+                                              dtiming=False,
                                               verbose=verbose,
                                               tee=tee,
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            )
+            ))
 
         if dtiming:
-            all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)
-            if self.cylinder_rank == 0:
-                print("Pyomo solve times (seconds):")
-                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
-                      (np.min(all_pyomo_solve_times),
-                      np.mean(all_pyomo_solve_times),
-                      np.max(all_pyomo_solve_times)))
+            print("Pyomo solve times (seconds):")
+            print("\trank=,%d, n=,%d, min=,%4.2f, mean=,%4.2f, max=,%4.2f" %
+                  (self.global_rank,
+                   len(pyomo_solve_times),
+                   np.min(pyomo_solve_times),
+                   np.mean(pyomo_solve_times),
+                   np.max(pyomo_solve_times)))
+
         return dispatch_list
 
     #========
@@ -922,7 +926,7 @@ if __name__ == "__main__":
 
     PHopt = {}
     PHopt["asynchronousPH"] = False # APH is *projective* and always APH
-    PHopt["solvername"] = "cplex"
+    PHopt["solver_name"] = "cplex"
     PHopt["PHIterLimit"] = 5
     PHopt["defaultPHrho"] = 1
     PHopt["APHgamma"] = 1

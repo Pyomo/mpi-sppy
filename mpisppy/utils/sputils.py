@@ -78,6 +78,8 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
 def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
+### a few Pyomo-related utilities ###
+
 
 def get_objs(scenario_instance, allow_none=False):
     """ return the list of objective functions for scenario_instance"""
@@ -89,8 +91,7 @@ def get_objs(scenario_instance, allow_none=False):
                            "objective functions.")
     if (len(scenario_objs) > 1):
         print("WARNING: Scenario", sname, "has multiple active "
-              "objectives. Selecting the first objective for "
-                  "inclusion in the extensive form.")
+              "objectives. Selecting the first objective.")
     return scenario_objs
 
 
@@ -122,7 +123,7 @@ def reactivate_objs(scenario_instance):
     for obj in scenario_instance._mpisppy_data.obj_list:
         obj.activate()
 
-
+    
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True):
@@ -456,14 +457,11 @@ def write_ef_first_stage_solution(ef,
     NOTE:
         This utility is replicating WheelSpinner.write_first_stage_solution for EF
     """
-    if global_rank==0:
-        dirname = os.path.dirname(solution_file_name)
-        if dirname != '':
-            os.makedirs(os.path.dirname(solution_file_name), exist_ok=True)
-            representative_scenario = getattr(ef,ef._ef_scenario_names[0])
-            first_stage_solution_writer(solution_file_name, 
-                                        representative_scenario,
-                                        bundling=False)
+    if global_rank == 0:
+        representative_scenario = getattr(ef,ef._ef_scenario_names[0])
+        first_stage_solution_writer(solution_file_name, 
+                                    representative_scenario,
+                                    bundling=False)
 
 def write_ef_tree_solution(ef, solution_directory_name,
         scenario_tree_solution_writer=scenario_tree_solution_writer):
@@ -554,7 +552,8 @@ def parent_ndn(nodename):
         return None
     else:
         return re.search('(.+)_(\d+)',nodename).group(1)
-        
+
+    
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
@@ -591,6 +590,29 @@ def option_string_to_dict(ostr):
             raise RuntimeError("Illegally formed subsolve directive"\
                                + " option=%s detected" % this_option)
     return solver_options
+
+
+def option_dict_to_string(odict):
+    """ Convert a standard dict for solver options to a string.
+
+    Args:
+        odict (dict): options dict for Pyomo
+
+    Returns:
+        ostring (str): options string as in mpi-sppy
+
+    Note: None begets None, and empty begets empty
+
+    """
+    if odict is None:
+        return None
+    ostr = ""
+    for i, v in odict.items():
+        if v is None:
+            ostr += "{i} "
+        else:
+            ostr += f"{i}={v} "
+    return ostr
 
 
 ################################################################################
@@ -963,9 +985,6 @@ def number_of_nodes(branching_factors):
     last_node_stage_num = [i-1 for i in branching_factors]
     return node_idx(last_node_stage_num, branching_factors)
     
-
-
-          
 
 if __name__ == "__main__":
     branching_factors = [2,2,2,3]

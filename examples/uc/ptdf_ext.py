@@ -69,6 +69,12 @@ class PTDFExtension(Extension):
             self._mip_pass(subproblem, scenario_blocks, results)
         return results
 
+    def _is_transmission_constrained(self, scenario_blocks):
+        for s in scenario_blocks:
+            if len(s.TransmissionLines) == 0:
+                return False
+        return True
+
     def _get_scenario_blocks(self, subproblem):
         if self.bundling:
             return tuple( subproblem.component(sname) \
@@ -79,6 +85,8 @@ class PTDFExtension(Extension):
     def _initial_pass(self, subproblem):
         # get vars_to_load for later
         scenario_blocks = self._get_scenario_blocks(subproblem)
+        if not self._is_transmission_constrained(scenario_blocks):
+            return
         if is_persistent(subproblem._solver_plugin):
             subproblem_vars_to_load = []
             for s in scenario_blocks:
@@ -256,6 +264,8 @@ class PTDFExtension(Extension):
                              results=None, pre_lp_cleanup=False) 
 
     def _mip_pass(self, subproblem, scenario_blocks, results):
+        if not self._is_transmission_constrained(scenario_blocks):
+            return None, results, 0
         return self._do_pass(subproblem, scenario_blocks,
                              self.time_periods, self.vars_to_load[subproblem],
                              prepend_str=f"[MIP phase on rank {self.opt.global_rank} for {self.spoke_name}] ",

@@ -41,6 +41,10 @@ except ImportError:
             else:
                 return [obj]
     
+        def Gatherv(self, sendbuf, recvbuf, root=0):
+            # TBD: check this
+            _set_data(sendbuf, recvbuf)            
+    
         def Allreduce(self, sendbuf, recvbuf, op=SUM):
             _set_data(sendbuf, recvbuf)
     

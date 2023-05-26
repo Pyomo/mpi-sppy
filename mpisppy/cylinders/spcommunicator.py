@@ -22,9 +22,6 @@ class SPCommunicator:
     """ Notes: TODO
     """
 
-    # magic constant for spoke_sleep_time calculation below
-    _SLEEP_TIME_MUTLIPLIER = 1e-5
-
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         # flag for if the windows have been constructed
         self._windows_constructed = False
@@ -41,11 +38,6 @@ class SPCommunicator:
             self.options = dict()
         else:
             self.options = options
-
-        self.spoke_sleep_time = self.options.get('spoke_sleep_time')
-        # the user could set None
-        if self.spoke_sleep_time is None:
-                self.spoke_sleep_time = self._SLEEP_TIME_MUTLIPLIER * spbase_object.nonant_length
 
         # attach the SPCommunicator to
         # the SPBase object
@@ -77,13 +69,8 @@ class SPCommunicator:
     def hub_finalize(self):
         """ Every hub may have another finalize function,
             which collects any results from finalize
-
-            Spokes use the implementation below, which just
-            puts a small sleep in so windows are not freed
-            too soon.
         """
-        ## give the hub the chance to catch new values
-        time.sleep(self.spoke_sleep_time)
+        pass
 
     def allreduce_or(self, val):
         local_val = np.array([val], dtype='int8')

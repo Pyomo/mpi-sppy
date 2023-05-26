@@ -22,7 +22,7 @@ def read_test():
     scenario_rhosetter  = uc_funcs.scenario_rhos
 
     PH_options = {
-        'solvername': 'gurobi',
+        'solver_name': 'gurobi',
         'PHIterLimit': 2,
         'defaultPHrho': 1,
         'convthresh': 1e-6,
@@ -51,7 +51,7 @@ def write_test():
     scenario_rhosetter  = uc_funcs.scenario_rhos
 
     PH_options = {
-        'solvername': 'gurobi',
+        'solver_name': 'gurobi',
         'PHIterLimit': 2,
         'defaultPHrho': 1,
         'convthresh': 1e-6,

@@ -10,6 +10,7 @@ import os
 from pyomo.dataportal import DataPortal
 
 import mpisppy.scenario_tree as scenario_tree
+from mpisppy.utils import config
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
@@ -88,7 +89,7 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 # TBD: there are legacy functions here that should probably be factored.
 
 def scenario_creator(scenario_name, scenario_count=None, path=None,
-                     num_scens=None, seedoffset=0):
+                     num_scens=None, seedoffset=0, **kwargs):
 
     # Do some calculations that might be needed by confidence interval software
     scennum = sputils.extract_num(scenario_name)
@@ -99,14 +100,14 @@ def scenario_creator(scenario_name, scenario_count=None, path=None,
                           path=path, num_scens=num_scens, seedoffset=seedoffset)
 
 def pysp2_callback(scenario_name, scenario_count=None, path=None,
-                     num_scens=None, seedoffset=0):
+                     num_scens=None, seedoffset=0, **kwargs):
     ''' The callback needs to create an instance and then attach
         the nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho. 
     '''
 
     instance = pysp_instance_creation_callback(
-        scenario_name, **kwargs,
+        scenario_name, scenario_count=scenario_count, path=path, **kwargs,
     )
 
     #Add the probability of the scenario
@@ -320,13 +321,12 @@ def scenario_names_creator(scnt,start=0):
     return [F"Scenario{i+1}" for i in range(start,scnt+start)]
 
 #=========
-def inparser_adder(inparser):
+def inparser_adder(cfg):
     # (only for Amalgamator): add command options unique to uc
-    # we don't need to add any command for the uc problem
-    inparser.add_argument("--UC-count-for-path",
-                          help="Mainly for confidence intervals to give a prefix for the directory provides the scenario data but will be overridden if scen_count is greater (default 0)",
-                          dest="UC_count_for_path",
-                          type=int,
+    cfg.num_scens_required()
+    cfg.add_to_config("UC_count_for_path",
+                         description="Mainly for confidence intervals to give a prefix for the directory providing the scenario data but will be overridden if scen_count is greater (default 0)",
+                          domain=int,
                           default=0)
     return()
 

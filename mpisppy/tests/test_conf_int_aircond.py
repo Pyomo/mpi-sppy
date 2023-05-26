@@ -24,15 +24,17 @@ import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
+import mpisppy.confidence_intervals.confidence_config as confidence_config
 import mpisppy.confidence_intervals.ciutils as ciutils
+from mpisppy.utils import config
+import pyomo.common.config as pyofig
 
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
+__version__ = 0.4
 
-__version__ = 0.21
-
-solver_available, solvername, persistent_available, persistentsolvername= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 module_dir = os.path.dirname(os.path.abspath(__file__))
+
+global_BFs = [4,3,2]
 
 #*****************************************************************************
 class Test_confint_aircond(unittest.TestCase):
@@ -48,40 +50,40 @@ class Test_confint_aircond(unittest.TestCase):
         # Base option has batch options
         # plus kwoptions to pass to kw_creator
         # and kwargs, which is the result of that.
-        kwoptions = { "EF_solver_name": solvername,
-                    "start_ups": False,
-                    "branching_factors": [4, 3, 2],
-                    "num_scens": 24,
-                    "start_seed": 0,
-                    "EF-mstage": True}
-        Baseoptions =  {"from_Baseoptions": True,
-                        "num_batches": 5,
-                        "batch_size": 6,
-                        "kwoptions":kwoptions}
-        scenario_creator_kwargs = aircond.kw_creator(kwoptions)
-        Baseoptions['kwargs'] = scenario_creator_kwargs
-        return Baseoptions
+        cfg = config.Config()
+        cfg.quick_assign("EF_solver_name", str, solver_name)
+        cfg.quick_assign("start_ups", bool, False)
+        cfg.quick_assign("num_scens", int, 24)
+        cfg.quick_assign("start_seed", int, 0)
+        cfg.quick_assign("EF_mstage", bool, True)
+        cfg.quick_assign("branching_factors", pyofig.ListOf(int), global_BFs)
+        cfg.quick_assign("num_batches", int, 5)
+        cfg.quick_assign("batch_size", int, 6)
+
+        scenario_creator_kwargs = aircond.kw_creator(cfg)
+        return cfg, scenario_creator_kwargs
 
     def _get_xhatEval_options(self):
-        Baseoptions = self._get_base_options()
+        cfg, scenario_creator_kwargs = self._get_base_options()
         options = {"iter0_solver_options": None,
                  "iterk_solver_options": None,
                  "display_timing": False,
-                 "solvername": solvername,
+                 "solver_name": solver_name,
                  "verbose": False,
                  "solver_options":None}
-        options.update(Baseoptions["kwoptions"])
+
+        options.update(cfg)
         return options
 
     def _get_xhat_gen_options(self, BFs):
         num_scens = np.prod(BFs)
         scenario_names = aircond.scenario_names_creator(num_scens)
         xhat_gen_options = {"scenario_names": scenario_names,
-                            "solvername": solvername,
+                            "solver_name": solver_name,
                             "solver_options": None,
                             "branching_factors": BFs,
-                            "mudev": 0,
-                            "sigmadev": 40,
+                            "mu_dev": 0,
+                            "sigma_dev": 40,
                             "start_ups": False,
                             "start_seed": 0,
                             }
@@ -105,16 +107,14 @@ class Test_confint_aircond(unittest.TestCase):
 
         
     def _eval_creator(self):
-        options = self._get_xhatEval_options()
+        xh_options = self._get_xhatEval_options()
         
-        MMW_options = self._get_base_options()
-        branching_factors= MMW_options['kwoptions']['branching_factors']
+        MMW_options, scenario_creator_kwargs = self._get_base_options()
+        branching_factors= global_BFs
         scen_count = np.prod(branching_factors)
-        scenario_creator_kwargs = MMW_options['kwargs']
-        ###scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         all_scenario_names = aircond.scenario_names_creator(scen_count)
         all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
-        ev = Xhat_Eval(options,
+        ev = Xhat_Eval(xh_options,
                        all_scenario_names,
                        aircond.scenario_creator,
                        scenario_denouement=None,
@@ -123,76 +123,83 @@ class Test_confint_aircond(unittest.TestCase):
                        )
         return ev
 
+
     def test_ama_creator(self):
-        options = self._get_base_options()
-        ama_options = options['kwoptions']
+        options, scenario_creator_kwargs = self._get_base_options()
         ama_object = ama.from_module(self.refmodelname,
-                                     options=ama_options,
+                                     cfg=options,
                                      use_command_line=False)   
         
     def test_MMW_constructor(self):
-        options = self._get_base_options()
+        options, scenario_creator_kwargs = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
 
         MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
-                          options['kwoptions'],
+                          options,
                           xhat,
-                          options['num_batches'], batch_size = options["batch_size"], start = options['kwoptions']['num_scens'])
+                          options['num_batches'], batch_size = options["batch_size"], start = options['num_scens'])
 
     def test_seqsampling_creator(self):
         BFs = [4, 3, 2]
         xhat_gen_options = self._get_xhat_gen_options(BFs)
-        optionsBM = {'h':0.2,
-                     'hprime':0.015, 
-                     'eps':0.5, 
-                     'epsprime':0.4, 
-                     "p":2,
-                     "q":1.2,
-                     "solvername":solvername,
-                     "xhat_gen_options": xhat_gen_options,
-                     "branching_factors": BFs,
-                     }
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        optionsBM.quick_assign('BM_h', float, 0.2)
+        optionsBM.quick_assign('BM_hprime', float, 0.015,)
+        optionsBM.quick_assign('BM_eps', float, 0.5,)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.4,)
+        optionsBM.quick_assign("BM_p", float, 0.2)
+        optionsBM.quick_assign("BM_q", float, 1.2)
+        optionsBM.quick_assign("solver_name", str, solver_name)
+        optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
+        optionsBM.quick_assign("solving_type", str, "EF_mstage")
+        optionsBM.quick_assign("branching_factors", pyofig.ListOf(int), global_BFs)
+
         seqsampling.SeqSampling(self.refmodelname,
                                 aircond.xhat_generator_aircond,
                                 optionsBM,
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
-                                solving_type="EF-mstage",
+                                solving_type="EF_mstage",
                                 )
 
         
     def test_indepscens_seqsampling_creator(self):
-        options = self._get_base_options()
-        branching_factors= options['kwoptions']['branching_factors']
+        options, scenario_creator_kwargs = self._get_base_options()
+        branching_factors= global_BFs
         xhat_gen_options = self._get_xhat_gen_options(branching_factors)
         
         # We want a very small instance for testing on GitHub.
-        optionsBM = {'h':1.75,
-                     'hprime':0.5, 
-                     'eps':0.2, 
-                     'epsprime':0.1, 
-                     "p":0.1,
-                     "q":1.2,
-                     "branching_factors": branching_factors,
-                     "xhat_gen_options": xhat_gen_options,
-                     }
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        optionsBM.quick_assign('BM_h', float, 1.75)
+        optionsBM.quick_assign('BM_hprime', float, 0.5,)
+        optionsBM.quick_assign('BM_eps', float, 0.2,)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.1,)
+        optionsBM.quick_assign("BM_p", float, 0.1)
+        optionsBM.quick_assign("BM_q", float, 1.2)
+        optionsBM.quick_assign("solver_name", str, solver_name)
+        optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
+        optionsBM.quick_assign("solving_type", str, "EF_mstage")
+        optionsBM.quick_assign("branching_factors", pyofig.ListOf(int), global_BFs)
 
         multi_seqsampling.IndepScens_SeqSampling(self.refmodelname,
                                 aircond.xhat_generator_aircond,
                                 optionsBM,
                                 stochastic_sampling=False,
                                 stopping_criterion="BM",
-                                solving_type="EF-mstage",
+                                solving_type="EF_mstage",
                                 )
 
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_ama_running(self):
-        options = self._get_base_options()
-        ama_options = options['kwoptions']
+        options, scenario_creator_kwargs = self._get_base_options()
         ama_object = ama.from_module(self.refmodelname,
-                                     ama_options, use_command_line=False)
+                                     options, use_command_line=False)
         ama_object.run()
         obj = round_pos_sig(ama_object.EF_Obj,2)
         self.assertEqual(obj, 970.)
@@ -209,8 +216,8 @@ class Test_confint_aircond(unittest.TestCase):
     def test_xhat_eval_evaluate(self):
         ev = self._eval_creator()
 
-        base_options = self._get_base_options()
-        branching_factors= base_options['kwoptions']['branching_factors']
+        base_options, scenario_creator_kwargs = self._get_base_options()
+        branching_factors= global_BFs
         full_xhat = self._make_full_xhat(branching_factors)
         obj = round_pos_sig(ev.evaluate(full_xhat),2)
         self.assertEqual(obj, 1000.0)  # rebaselined feb 2022
@@ -219,12 +226,11 @@ class Test_confint_aircond(unittest.TestCase):
                      "no solver is available")  
     def test_xhat_eval_evaluate_one(self):
         ev = self._eval_creator()
-        options = self._get_base_options()
-        branching_factors= options['kwoptions']['branching_factors']
+        options, scenario_creator_kwargs = self._get_base_options()
+        branching_factors = global_BFs
         full_xhat = self._make_full_xhat(branching_factors)
 
         num_scens = np.prod(branching_factors)
-        scenario_creator_kwargs = options['kwargs']
         scenario_creator_kwargs['num_scens'] = num_scens
         all_scenario_names = aircond.scenario_names_creator(num_scens)
 
@@ -236,14 +242,14 @@ class Test_confint_aircond(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")  
     def test_MMW_running(self):
-        options = self._get_base_options()
+        options, scenario_creator_kwargs = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
         MMW = MMWci.MMWConfidenceIntervals(self.refmodelname,
-                                        options['kwoptions'],
-                                        xhat,
-                                        options['num_batches'],
-                                        batch_size = options["batch_size"],
-                                         start = options['kwoptions']['num_scens'])
+                                           options,
+                                           xhat,
+                                           options['num_batches'],
+                                           batch_size = options["batch_size"],
+                                           start = options['num_scens'])
         r = MMW.run() 
         s = round_pos_sig(r['std'],2)
         bound = round_pos_sig(r['gap_inner_bound'],2)
@@ -253,18 +259,18 @@ class Test_confint_aircond(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_gap_estimators(self):
-        options = self._get_base_options()
-        branching_factors= options['kwoptions']['branching_factors']
+        options, scenario_creator_kwargs = self._get_base_options()
+        branching_factors= global_BFs
         scen_count = np.prod(branching_factors)
         scenario_names = aircond.scenario_names_creator(scen_count, start=1000)
         sample_options = {"seed": 0,
-                          "branching_factors": options['kwoptions']['branching_factors']}
+                          "branching_factors": global_BFs}
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
-                                       solving_type="EF-mstage",
+                                       solving_type="EF_mstage",
                                        sample_options=sample_options,
-                                       options = options,
-                                       solvername=solvername,
+                                       cfg = options,
+                                       solver_name=solver_name,
                                        scenario_names=scenario_names,
                                        )
         G = estim['G']
@@ -278,55 +284,40 @@ class Test_confint_aircond(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_indepscens_seqsampling_running(self):
-        options = self._get_base_options()
-        branching_factors= options['kwoptions']['branching_factors']
+        options, scenario_creator_kwargs = self._get_base_options()
+        branching_factors= global_BFs
         xhat_gen_options = self._get_xhat_gen_options(branching_factors)
         
         # We want a very small instance for testing on GitHub.
-        optionsBM = {'h':1.75,
-                     'hprime':0.5, 
-                     'eps':0.2, 
-                     'epsprime':0.1, 
-                     "p":0.1,
-                     "q":1.2,
-                     "branching_factors": branching_factors,
-                     "xhat_gen_options": xhat_gen_options,
-                     "start_ups": False,
-                     "start_seed": 0,
-                     "solvername":solvername,
-                     }
+        optionsBM = config.Config()
+        confidence_config.confidence_config(optionsBM)
+        confidence_config.sequential_config(optionsBM)
+        optionsBM.quick_assign('BM_h', float, 1.75)
+        optionsBM.quick_assign('BM_hprime', float, 0.5,)
+        optionsBM.quick_assign('BM_eps', float, 0.2,)
+        optionsBM.quick_assign('BM_eps_prime', float, 0.1,)
+        optionsBM.quick_assign("BM_p", float, 0.1)
+        optionsBM.quick_assign("BM_q", float, 1.2)
+        optionsBM.quick_assign("solver_name", str, solver_name)
+        optionsBM.quick_assign("stopping", str, "BM")  # TBD use this and drop stopping_criterion from the constructor
+        optionsBM.quick_assign("solving_type", str, "EF_mstage")
+        optionsBM.quick_assign("EF_mstage", bool, True)   # TBD: we should not need both
+        optionsBM.quick_assign("start_seed", str, 0)
+        optionsBM.quick_assign("branching_factors", pyofig.ListOf(int), [4, 3, 2])
+        optionsBM.quick_assign("xhat_gen_kwargs", dict, xhat_gen_options)
+
         seq_pb = multi_seqsampling.IndepScens_SeqSampling(self.refmodelname,
                                                           aircond.xhat_generator_aircond,
                                                           optionsBM,
                                                           stochastic_sampling=False,
                                                           stopping_criterion="BM",
-                                                          solving_type="EF-mstage",
+                                                          solving_type="EF_mstage",
                                                           )
         x = seq_pb.run(maxit=50)
         T = x['T']
         ub = round_pos_sig(x['CI'][1],2)
         self.assertEqual((T,ub), (15, 180.0))
 
-
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")
-    def test_zhat4xhat(self):
-        cmdline = [self.refmodelname, self.xhat_path, "--solver-name",
-                   solvername, "--branching-factors",  "4" ]   # mainly using defaults
-        parser = zhat4xhat._parser_setup()
-        aircond.inparser_adder(parser)
-        args = parser.parse_args(cmdline)
-        # I couldnt't figure out how to get the branching factors parsed from this list, so
-        args.branching_factors = [4, 3, 2]
-                      
-        model_module = importlib.import_module(self.refmodelname)
-        zhatbar, eps_z = zhat4xhat._main_body(args, model_module)
-
-        z2 = round_pos_sig(zhatbar, 2)
-        self.assertEqual(z2, 850.)
-        e2 = round_pos_sig(eps_z, 2)
-        self.assertEqual(e2, 68.)
-        #print(f"*** {z2 =} {e2 =}")
 
 if __name__ == '__main__':
     unittest.main()

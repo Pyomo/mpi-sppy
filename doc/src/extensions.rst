@@ -51,7 +51,10 @@ fixer.py
 
 This extension provides methods for fixing variables (usually integers) for
 which all scenarios have agreed for some number of iterations. There
-is an example of its use in ``examples.sizes.sizes_demo.py``
+is an example of its use in ``examples.sizes.sizes_demo.py`` also
+in ``examples.sizes.uc_ama.py``. The ``uc_ama`` example illustrates
+that when ``amgalgamator`` is used ``"id_fix_list_fct"`` needs
+to be on the ``Config`` object so the amalgamator can find it.
 
 xhat
 ^^^^
@@ -87,6 +90,13 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 There is an example of the function in the sizes example (``_rho_setter``).
 
 
+wtracker_extension
+==================
+
+The wtracker_extension outputs a report about the convergence (or really, lack thereof) of
+W values.
+An example of its use is shown in ``examples.sizes.sizes_demo.py``
+
 
 variable_probability
 ====================
@@ -106,14 +116,14 @@ The variable probabilities impact the computation of
 ``xbars`` and ``W``.
 
 Objective function considerations
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+---------------------------------
 
 If variables with by-variable probability are in the objective function, it is
 up to the scenario creator code to deal with it. This is not so difficult for
 zero-probability variables.
 
 zero-probability variables
-^^^^^^^^^^^^^^^^^^^^^^^^^^
+--------------------------
 
 When you
 create the scenario, you probably want to fix zero probability variables and perhaps give

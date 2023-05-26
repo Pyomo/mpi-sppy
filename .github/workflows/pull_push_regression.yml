@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme cplex
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex
           pip install xpress
 
       - name: setup the program
@@ -40,6 +40,11 @@ jobs:
         run: |
           cd examples
           python afew.py xpress_persistent 
+
+      - name: Test run_all nouc 
+        run: |
+          cd examples
+          python run_all.py xpress_persistent "" nouc
 
       - name: Test docs
         run: |
