@@ -217,6 +217,11 @@ class SPOpt(SPBase):
 
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
+            if pyo.check_optimal_termination(results):
+                if self.is_minimizing:
+                    s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                else:
+                    s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
 
         return pyomo_solve_time + set_objective_time  # set_objective_time added Feb 2023
 

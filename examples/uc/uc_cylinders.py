@@ -23,7 +23,7 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 from ptdf_ext import PTDFExtension
 
-input_dir = "/Users/bknueven/Projects/Texas7k/egret_instances/2018-08-01/"
+input_dir = "/projects/watertap/bknueven/Texas7K/egret_instances/2018-08-01/"
 
 def _parse_args():
     cfg = config.Config()
@@ -59,7 +59,7 @@ def _parse_args():
     cfg.add_to_config("add_contingency_constraints",
                       description="Use Egret to monitor all possible non-disconnnection contingencies (default False)",
                       domain=bool,
-                      default=True)
+                      default=False)
     cfg.parse_command_line("uc_cylinders")
     return cfg
 
