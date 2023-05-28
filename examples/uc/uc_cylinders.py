@@ -23,6 +23,8 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 from ptdf_ext import PTDFExtension
 
+input_dir = "/Users/bknueven/Projects/Texas7k/egret_instances/2018-08-01/"
+
 def _parse_args():
     cfg = config.Config()
     cfg.popular_args()
@@ -76,14 +78,14 @@ def main():
     fixer_tol = cfg.fixer_tol
     cross_scenario_cuts = cfg.cross_scenario_cuts
 
-    scensavail = [3,4,5,10,25,50,100]
+    scensavail = [2,3,4,5,10,25,50,100]
     if num_scen not in scensavail:
         raise RuntimeError("num-scen was {}, but must be in {}".\
                            format(num_scen, scensavail))
     
     scenario_creator_kwargs = {
             "scenario_count": num_scen,
-            "path": str(num_scen) + "scenarios_r1",
+            "path": input_dir + str(num_scen) + "scenarios_r1",
             "add_contingency_constraints": cfg.add_contingency_constraints,
         }
     if num_scen == 4:

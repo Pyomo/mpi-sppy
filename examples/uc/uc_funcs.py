@@ -33,9 +33,8 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
     root_node_dat = os.path.isfile(os.path.join(path,"RootNode.dat"))
     scenario_1_dat = os.path.isfile(os.path.join(path,"Scenario_1.dat"))
-    scenario_1_json = os.path.isfile(os.path.join(path,"Scenario_1.json")) or\
-                        os.path.isfile(os.path.join(path,"Scenario_1.json.gz"))
-
+    scenario_1_json = os.path.isfile(os.path.join(path,"Scenario_1.json"))
+    scenario_1_json_gz = os.path.isfile(os.path.join(path,"Scenario_1.json.gz"))
 
     assert not (root_node_dat and scenario_1_dat)
     assert not (root_node_dat and scenario_1_json)
@@ -68,6 +67,9 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
     elif scenario_1_json:
         scenario_md = md.ModelData(os.path.join(path, f"Scenario_{scennum}.json"))
+
+    elif scenario_1_json_gz:
+        scenario_md = md.ModelData(os.path.join(path, f"Scenario_{scennum}.json.gz"))
 
     else:
         raise RuntimeError(f"Can't determine stochastic UC data type in directory {path}")
