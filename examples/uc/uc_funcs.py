@@ -75,9 +75,7 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
     if add_contingency_constraints:
         _add_all_contingency_constraints(scenario_md)
 
-    ## TODO: use the "power_balance_constraints" for now. In the future, networks should be
-    ##       handled with a custom callback -- also consider other base models
-    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md)
+    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md, slack_type=uc.SlackType.TRANSMISSION_LIMITS)
 
     # hold over string attribute from Egret,
     # causes warning wth LShaped/Benders

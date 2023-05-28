@@ -33,9 +33,8 @@ class PTDFExtension(Extension):
         # attach self.opt
         super().__init__(spopt_object)
 
-        self.pre_lp_iteration_limit = kwargs.get('pre_lp_iteration_limit', 100)
-        self.lp_iteration_limit = kwargs.get('lp_iteration_limit', 100)
-        self.lp_cleanup_phase = kwargs.get('lp_cleanup_phase', True)
+        self.pre_lp_iteration_limit = kwargs.get('pre_lp_iteration_limit', 0)
+        self.lp_iteration_limit = kwargs.get('lp_iteration_limit', 0)
         self.iteration_limit = kwargs.get('iteration_limit', 100000)
         self.verbose = kwargs.get('verbose',False)
 
