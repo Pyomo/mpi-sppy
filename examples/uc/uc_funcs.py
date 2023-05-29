@@ -73,7 +73,7 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
     else:
         raise RuntimeError(f"Can't determine stochastic UC data type in directory {path}")
-
+ 
     if add_contingency_constraints:
         _add_all_contingency_constraints(scenario_md)
 
@@ -97,7 +97,7 @@ def scenario_creator(scenario_name, scenario_count=None, path=None,
     newname = f"Scenario{newnum}"
     
     return pysp2_callback(scenario_name, scenario_count=scenario_count,
-                          path=path, num_scens=num_scens, seedoffset=seedoffset)
+                          path=path, num_scens=num_scens, seedoffset=seedoffset, **kwargs)
 
 def pysp2_callback(scenario_name, scenario_count=None, path=None,
                      num_scens=None, seedoffset=0, **kwargs):
@@ -314,6 +314,7 @@ def _add_all_contingency_constraints(md):
 
     md.data['elements']['contingency'] = \
             { bn : {'branch_contingency': bn} for bn in all_connected_contigencies }
+    print(f"Added {len(md.data['elements']['contingency'])} contingencies")
 
 #=========
 def scenario_names_creator(scnt,start=0):
