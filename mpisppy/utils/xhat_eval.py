@@ -30,16 +30,19 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
     """ See SPOpt for list of args. """
     
     def __init__(
-        self,
-        options,
-        all_scenario_names,
-        scenario_creator,
-        scenario_denouement=None,
-        all_nodenames=None,
-        mpicomm=None,
-        scenario_creator_kwargs=None,
-        variable_probability=None,
-        ):
+            self,
+            options,
+            all_scenario_names,
+            scenario_creator,
+            scenario_denouement=None,
+            all_nodenames=None,
+            mpicomm=None,
+            extensions=None,
+            extension_kwargs=None,
+            scenario_creator_kwargs=None,
+            variable_probability=None,
+            E1_tolerance=1e-5
+    ):
         
         super().__init__(
             options,
@@ -48,16 +51,23 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
             mpicomm=mpicomm,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
+            E1_tolerance=E1_tolerance
         )
         
         self.verbose = self.options['verbose']
+        self.current_solver_options = self.options['iter0_solver_options'] if 'iter0_solver_options' in self.options else (
+                                        self.options['solver_options'] if 'solver_options' in self.options else dict() )
+
         
         #TODO: CHANGE THIS AFTER UPDATE
         self.PH_extensions = None
 
         self._subproblems_solvers_created = False
+
         
 
     def _lazy_create_solvers(self):

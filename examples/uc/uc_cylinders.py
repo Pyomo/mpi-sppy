@@ -21,6 +21,10 @@ from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
+from ptdf_ext import PTDFExtension
+
+input_dir = "/projects/watertap/bknueven/Texas7K/egret_instances/2018-08-01/"
+
 def _parse_args():
     cfg = config.Config()
     cfg.popular_args()
@@ -52,6 +56,10 @@ def _parse_args():
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)        
+    cfg.add_to_config("add_contingency_constraints",
+                      description="Use Egret to monitor all possible non-disconnnection contingencies (default False)",
+                      domain=bool,
+                      default=False)
     cfg.parse_command_line("uc_cylinders")
     return cfg
 
@@ -70,15 +78,19 @@ def main():
     fixer_tol = cfg.fixer_tol
     cross_scenario_cuts = cfg.cross_scenario_cuts
 
-    scensavail = [3,5,10,25,50,100]
+    scensavail = [2,3,4,5,10,25,50,100]
     if num_scen not in scensavail:
         raise RuntimeError("num-scen was {}, but must be in {}".\
                            format(num_scen, scensavail))
     
     scenario_creator_kwargs = {
-        "scenario_count": num_scen,
-        "path": str(num_scen) + "scenarios_r1",
-    }
+            "scenario_count": num_scen,
+            "path": input_dir + str(num_scen) + "scenarios_r1",
+            "add_contingency_constraints": cfg.add_contingency_constraints,
+        }
+    if num_scen == 4:
+        scenario_creator_kwargs["path"] = str(num_scen) + "scenarios_rtsgmlc"
+
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
@@ -100,7 +112,7 @@ def main():
                                   rho_setter = rho_setter)
         
     # Extend and/or correct the vanilla dictionary
-    ext_classes =  [Gapper]
+    ext_classes = [Gapper, PTDFExtension]
     if fixer:
         ext_classes.append(Fixer)
     if cross_scenario_cuts:
@@ -144,24 +156,29 @@ def main():
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        fw_spoke["opt_kwargs"]["extensions"] = PTDFExtension
 
     # Standard Lagrangian bound spoke
     if lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
+        lagrangian_spoke["opt_kwargs"]["extensions"] = PTDFExtension
 
     # xhat looper bound spoke
     if xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatlooper_spoke["opt_kwargs"]["extensions"] = PTDFExtension
 
     # xhat shuffle bound spoke
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatshuffle_spoke["opt_kwargs"]["extensions"] = PTDFExtension
        
     # cross scenario cut spoke
     if cross_scenario_cuts:
         cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        cross_scenario_cuts_spoke["opt_kwargs"]["extensions"] = PTDFExtension
 
     list_of_spoke_dict = list()
     if fwph:

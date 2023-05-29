@@ -97,6 +97,15 @@ class MultiExtension(Extension):
             name = constr.__name__
             self.extdict[name] = constr(ph)
 
+    def pre_solve(self, subproblem):
+        for lobject in self.extdict.values():
+            lobject.pre_solve(subproblem)
+
+    def post_solve(self, subproblem, results):
+        for lobject in self.extdict.values():
+            results = lobject.post_solve(subproblem, results)
+        return results
+
     def pre_iter0(self):
         for lobject in self.extdict.values():
             lobject.pre_iter0()

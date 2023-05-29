@@ -20,7 +20,8 @@ import egret.data.model_data as md
 import egret.models.unit_commitment as uc
 
 
-def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None):
+def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=None,
+                                    add_contingency_constraints=False):
     """
     All this does is create the concrete model instance.
     Notes:
@@ -30,22 +31,53 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
     #print("Building instance for scenario =", scenario_name)
     scennum = sputils.extract_num(scenario_name)
 
-    uc_model_params = pdp.get_uc_model()
+    root_node_dat = os.path.isfile(os.path.join(path,"RootNode.dat"))
+    scenario_1_dat = os.path.isfile(os.path.join(path,"Scenario_1.dat"))
+    scenario_1_json = os.path.isfile(os.path.join(path,"Scenario_1.json"))
+    scenario_1_json_gz = os.path.isfile(os.path.join(path,"Scenario_1.json.gz"))
 
-    scenario_data = DataPortal(model=uc_model_params)
-    scenario_data.load(filename=path+os.sep+"RootNode.dat")
-    scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
+    assert not (root_node_dat and scenario_1_dat)
+    assert not (root_node_dat and scenario_1_json)
+    assert not (scenario_1_dat and scenario_1_json)
 
-    scenario_params = uc_model_params.create_instance(scenario_data,
-                                                      report_timing=False,
-                                                      name=scenario_name)
+    if root_node_dat:
+        uc_model_params = pdp.get_uc_model()
 
-    scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+        scenario_data = DataPortal(model=uc_model_params)
+        scenario_data.load(filename=path+os.sep+"RootNode.dat")
+        scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
 
-    ## TODO: use the "power_balance_constraints" for now. In the future, networks should be
-    ##       handled with a custom callback -- also consider other base models
-    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md,
-                                                    network_constraints='power_balance_constraints')
+        scenario_params = uc_model_params.create_instance(scenario_data,
+                                                          report_timing=False,
+                                                          name=scenario_name)
+
+        scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+
+    elif scenario_1_dat:
+        uc_model_params = pdp.get_uc_model()
+
+        scenario_data = DataPortal(model=uc_model_params)
+        scenario_data.load(filename=path+os.sep+"Scenario_"+str(scennum)+".dat")
+
+        scenario_params = uc_model_params.create_instance(scenario_data,
+                                                          report_timing=False,
+                                                          name=scenario_name)
+
+        scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+
+    elif scenario_1_json:
+        scenario_md = md.ModelData(os.path.join(path, f"Scenario_{scennum}.json"))
+
+    elif scenario_1_json_gz:
+        scenario_md = md.ModelData(os.path.join(path, f"Scenario_{scennum}.json.gz"))
+
+    else:
+        raise RuntimeError(f"Can't determine stochastic UC data type in directory {path}")
+ 
+    if add_contingency_constraints:
+        _add_all_contingency_constraints(scenario_md)
+
+    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md, slack_type=uc.SlackType.TRANSMISSION_LIMITS)
 
     # hold over string attribute from Egret,
     # causes warning wth LShaped/Benders
@@ -57,7 +89,7 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 # TBD: there are legacy functions here that should probably be factored.
 
 def scenario_creator(scenario_name, scenario_count=None, path=None,
-                     num_scens=None, seedoffset=0):
+                     num_scens=None, seedoffset=0, **kwargs):
 
     # Do some calculations that might be needed by confidence interval software
     scennum = sputils.extract_num(scenario_name)
@@ -65,17 +97,17 @@ def scenario_creator(scenario_name, scenario_count=None, path=None,
     newname = f"Scenario{newnum}"
     
     return pysp2_callback(scenario_name, scenario_count=scenario_count,
-                          path=path, num_scens=num_scens, seedoffset=seedoffset)
+                          path=path, num_scens=num_scens, seedoffset=seedoffset, **kwargs)
 
 def pysp2_callback(scenario_name, scenario_count=None, path=None,
-                     num_scens=None, seedoffset=0):
+                     num_scens=None, seedoffset=0, **kwargs):
     ''' The callback needs to create an instance and then attach
         the nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho. 
     '''
 
     instance = pysp_instance_creation_callback(
-        scenario_name, scenario_count=scenario_count, path=path,
+        scenario_name, scenario_count=scenario_count, path=path, **kwargs,
     )
 
     #Add the probability of the scenario
@@ -129,7 +161,7 @@ def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
             avg_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, avg_power) + min_cost
             #max_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, max_power) + min_cost
 
-            computed_rho = rho_scale_factor * avg_cost
+            computed_rho = max(rho_scale_factor * avg_cost, rho_scale_factor*0.1)
             computed_rhos.append((id(scenario_instance.UnitOn[g,t]), computed_rho))
                              
     return computed_rhos
@@ -270,6 +302,20 @@ def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
     mds = uc._save_uc_results(scenario, relaxed=False)
     mds.write(file_name)
 
+def _add_all_contingency_constraints(md):
+    from egret.model_library.transmission.tx_calc import (construct_connection_graph,
+                                                          get_N_minus_1_branches,
+                                                         )
+
+    branches = dict(md.elements(element_type='branch'))
+    mapping_bus_to_idx = { bus_n: i for i, bus_n in enumerate(md.data['elements']['bus'].keys()) }
+    graph = construct_connection_graph(branches, mapping_bus_to_idx)
+    all_connected_contigencies = get_N_minus_1_branches(graph, branches, mapping_bus_to_idx)
+
+    md.data['elements']['contingency'] = \
+            { bn : {'branch_contingency': bn} for bn in all_connected_contigencies }
+    print(f"Added {len(md.data['elements']['contingency'])} contingencies")
+
 #=========
 def scenario_names_creator(scnt,start=0):
     # (only for Amalgamator): return the full list of names
@@ -326,4 +372,3 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["seedoffset"] = seed
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
-

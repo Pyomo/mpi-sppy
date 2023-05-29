@@ -48,6 +48,18 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
             raise ValueError(f"Total probability of scenarios was {self.opt.E1} "+\
                                  f"(E1_tolerance is {self.opt.E1_tolerance})")
+
+        verbose = self.opt.options['verbose']
+        teeme = False
+        if "tee-rank0-solves" in self.opt.options:
+            teeme = self.opt.options['tee-rank0-solves']
+        self.opt.solve_loop(
+            solver_options=self.opt.current_solver_options,
+            dtiming=False,
+            gripe=True,
+            tee=teeme,
+            verbose=verbose
+        )
         ### end iter0 stuff (but note: no need for iter 0 solves in an xhatter)
 
         xhatter.post_iter0()

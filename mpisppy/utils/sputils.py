@@ -263,7 +263,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         obj_func = scenario_objs[0] # Select the first objective
         try:
             EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
-            EF_instance._mpisppy_probability   += scenario_instance._mpisppy_probability
+            EF_instance._mpisppy_probability += scenario_instance._mpisppy_probability
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
@@ -271,6 +271,14 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     # Normalization does nothing when solving the full EF, but is required for
     # appropraite scaling of EFs used as bundles.
     EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
+
+    for sn in EF_instance._ef_scenario_names:
+        scenario_mpisppy_data = EF_instance.component(sn).component('_mpisppy_data')
+        if scenario_mpisppy_data is None:
+            break # none will be in a bundle
+        # else part of a bundle
+        scenario_mpisppy_data.bundle_conditional_probability = \
+                scenario_instance._mpisppy_probability / EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the
     # nonanticipative vars and create the constraints for them,
