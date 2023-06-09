@@ -115,6 +115,13 @@ the ``SPBase`` option ``variable_probability_kwargs``
 The variable probabilities impact the computation of
 ``xbars`` and ``W``.
 
+
+gradient_extension
+==================
+The gradient_extension sets adaptative gradient-based rho for PH.
+An example of its use is shown in  ``examples.farmer.farmer_rho_demo.py``
+
+
 Objective function considerations
 ---------------------------------
 

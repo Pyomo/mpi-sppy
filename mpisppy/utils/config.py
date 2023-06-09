@@ -619,9 +619,13 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default='')
         self.add_to_config("order_stat",
-                           description="order statistic for rho (must be between 0 and 1)",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
                            domain=float,
                            default=-1.0)
+        self.add_to_config("rho_relative_bound",
+                           description="factor that bounds rho/cost",
+                           domain=float,
+                           default=1e3)
 
 
     #================

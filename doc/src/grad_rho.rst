@@ -33,8 +33,8 @@ For example with farmer:
 You can find a detailed example using this code in ``examples.farmer.farmer_rho_demo.py``.
 
 
-find_grad
----------
+compute_grad
+------------
 
 This function computes the gradient of the objective function for each scenario. 
 It will write the resulting gradient costs in a csv file
@@ -48,8 +48,8 @@ To use it you should include the following in your bash script.
    --grad-cost-file #file where gradient costs will be written
 
 
-compute_grad_rhos
------------------
+find_grad_rho
+-------------
 
 This function computes rhos for each scenario and variable 
 using the previously computed gradient costs.
@@ -58,13 +58,14 @@ The rho values depend on both the scenario and the variable:
 and a list of corresponding rho values for each scenario.
 
 
-grad_rhos
----------
+grad_cost_and_rho
+-----------------
 
 This function computes a rho for each variable using the dictionnary 
-returned by ``compute_rhos``.
+returned by ``find_grad_rho``.
 To do so, it uses an order statistic which you should set with ``--order-stat``. 
-It needs to be a float between 0 and 1.
+It needs to be a float between 0 and 1: 0 (resp. 1, 0.5) 
+corresponding to the min (resp. max, average).
 It will write the resulting rhos in a csv file
 containing each variable name and the corresponding value.
 

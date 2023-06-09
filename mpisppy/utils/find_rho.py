@@ -42,8 +42,8 @@ logger = logging.getLogger("mpisppy.utils.find_rho")"""
 ############################################################################
 
 
-class Find_Rhos():
-    """ Interface to compute rhos for a given ph object and write them in a file
+class Find_Rho():
+    """ Interface to compute rhos from Ws for a given ph object and write them in a file
     
     Args:
        ph_object (PHBase): ph object
@@ -60,7 +60,8 @@ class Find_Rhos():
         self.cfg = cfg
         self.c = dict()
 
-        if cfg.rho_file == '': pass
+        if cfg.rho_file == '' and cfg.grad_rho_file == '': 
+            pass
         else:
             assert self.cfg.whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
             if (not os.path.exists(self.cfg.whatpath)):
@@ -74,73 +75,158 @@ class Find_Rhos():
                     self.c[(line[0], line[1])] = cval
 
 
-    def compute_rhos(self):
-        """ Computes rhos for each scenario and each variable using the WW heuristic.
-        
+    def _w_denom(self, s, node):
+        """ Computes the denominator for w-based rho. This denominator is scenario dependant. 
+
+        Args:
+           s (Pyomo Concrete Model): scenario
+           node: only ROOT for now
+
         Returns:
-           rho (dict): dict {scenario name: list of rhos for this scenario}
+           w_denom (numpy array): denominator
 
         """
-        all_vnames, all_snames = [], []
-        cost = dict()
-        rho = dict()
-        for (sname, vname) in self.c.keys():
-            if sname not in all_snames: all_snames.append(sname)
-            if vname not in all_vnames:all_vnames.append(vname)
-        cost = {k : np.array([self.c[k, vname] for vname in all_vnames])
-                for k in all_snames}
-        phbase._Compute_Xbar(self.ph_object)
-        for k, s in self.ph_object.local_scenarios.items():
-            for node in s._mpisppy_node_list:
-                nlen = s._mpisppy_data.nlens[node.name]
-                xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
-                nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
-                                            dtype='d', count=nlen)
-                rho[k] = np.abs(np.divide(cost[k], (nonants_array - xbar_array)))
-        return rho
+        assert node.name == "ROOT", "compute rho only works for two stage for now"
+        nlen = s._mpisppy_data.nlens[node.name]
+        xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
+        nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
+                                    dtype='d', count=nlen)
+        w_denom = np.abs(nonants_array - xbar_array)
+        return w_denom
 
-    def _order_stat(self, rho_list):
-        """ Computes a scenario independant rho from a list of rhos. It's the mean for now.
+
+    def _prox_denom(self, s, node):
+        """ Computes the denominator corresponding to the proximal term. This denominator is scenario dependant.
+
+        Args:
+           s (Pyomo Concrete Model): scenario
+           node: only ROOT for now
 
         Returns:
-           rho (float): the rho value for a given list
+           w_denom (numpy array): denominator
 
+        """
+        assert node.name == "ROOT", "compute rho only works for two stage for now"
+        nlen = s._mpisppy_data.nlens[node.name]
+        xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
+        nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
+                                    dtype='d', count=nlen)
+        prox_denom = 2 * np.square(nonants_array - xbar_array)
+        return prox_denom
+
+
+    def _grad_denom(self):
+        """Computes the scenario independant denominator in the WW heuristic.
+
+        Returns:
+           g_denom (numpy array): denominator
+
+        """
+        phbase._Compute_Xbar(self.ph_object)
+        sname, scenario = list(self.ph_object.local_scenarios.items())[0]
+        for node in scenario._mpisppy_node_list:
+            assert node.name == "ROOT", "compute rho only works for two stage for now"
+        nlen0 = scenario._mpisppy_data.nlens["ROOT"]
+        g_denom = np.zeros(nlen0, dtype='d')
+        xbar_array = np.array([scenario._mpisppy_model.xbars[("ROOT",j)]._value for j in range(nlen0)])
+        denom = 0
+        for k,s in self.ph_object.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                nlen = nlens[ndn]
+                nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
+                                            dtype='d', count=nlen)
+                if not s._mpisppy_data.has_variable_probability:
+                    denom += s._mpisppy_data.prob_coeff[ndn] * abs(nonants_array - xbar_array)
+                else:
+                    # rarely-used overwrite in the event of variable probability (not efficient for multi-stage)
+                    prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
+                                              for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
+                                             dtype='d', count=nlen)
+                    # Note: Intermediate scen_contribution to get proper overloading
+                    scen_contribution = prob_array * abs(nonants_array - xbar_array)
+                    denom += scen_contribution
+        self.ph_object.comms["ROOT"].Allreduce([denom, MPI.DOUBLE],
+                                               [g_denom, MPI.DOUBLE],
+                                               op=MPI.SUM)
+        if self.ph_object.cylinder_rank == 0:
+            g_denom = np.maximum(np.ones(len(g_denom))/self.cfg.rho_relative_bound, g_denom)
+            return g_denom
+        
+
+    def _order_stat(self, rho_list):
+        """ Computes a scenario independant rho from a list of rhos.
+
+        Args:
+           rho_list (list): list of rhos
+
+        Returns: 
+           rho (float): rho value
         """
         alpha = self.cfg.order_stat
         assert alpha != -1.0, "you need to set the order statistic parameter for rho using --order-stat"
-        assert (alpha >= 0 and alpha <= 1), "your order_stat is a fraction and needs to be between 0 and 1"
-        i = int(np.floor(alpha * (len(rho_list)-1)))
-        return rho_list[i]
+        assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max"
+        rho_mean, rho_min, rho_max = np.mean(rho_list), np.min(rho_list), np.max(rho_list)
+        if alpha == 0.5:
+            return rho_mean
+        if alpha < 0.5:
+            return (rho_min + alpha * 2 * (rho_mean - rho_min))
+        if alpha > 0.5:
+            return (2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)
+
+    def compute_rho(self, indep_denom = False):
+        """ Computes rhos for each scenario and each variable using the WW heuristic.
+
+        Returns:
+           arranged_rho (dict): dict {variable name: list of rhos for this variable}          
+        """
+        all_vnames, all_snames = [], []
+        for (sname, vname) in self.c.keys():
+            if sname not in all_snames: all_snames.append(sname)
+            if vname not in all_vnames:all_vnames.append(vname)
+        k0, s0 = list(self.ph_object.local_scenarios.items())[0]
+        vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
+        cost = {k : np.array([self.c[k, vname] 
+                for vname in all_vnames])
+                for k in all_snames}
+        if indep_denom:
+            grad_denom = self._grad_denom()
+            denom = {k: grad_denom for k in all_snames}
+        else:
+            loc_denom = {k: np.max((self._w_denom(s, node), self._prox_denom(s, node)))
+                           for k, s in self.ph_object.local_scenarios.items()
+                           for node in s._mpisppy_node_list}
+            global_denom = self.ph_object.comms['ROOT'].gather(loc_denom, root=0)
+            denom = dict()
+            if self.ph_object.cylinder_rank == 0:
+                for loc_denom in global_denom:
+                    denom.update(loc_denom)
+        if self.ph_object.cylinder_rank == 0:
+            rho = dict()
+            for k in all_snames:
+                rho[k] = np.abs(np.divide(cost[k], denom[k]))
+            arranged_rho = {vname: [rho_list[idx] for _, rho_list in rho.items()]
+                            for vname, idx in vname_to_idx.items()}
+            rho = {vname: self._order_stat(rho_list) for (vname, rho_list) in arranged_rho.items()}
+            return rho
 
 
-    def rhos(self):
-        """ Write the computed rhos in a file named using --rho-file.
-
+    def write_rho(self):
+        """ Write the computed rhos in the file --rho-file.
         """
         if self.cfg.rho_file == '': pass
         else:
-            k0, s0 = list(self.ph_object.local_scenarios.items())[0]
-            vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
-            global_rhos = dict()
-            local_rhos = self.compute_rhos()
-            g_rhos = self.ph_object.comms['ROOT'].gather(local_rhos, root=0)
+            rho_data = self.compute_rho()
             if self.ph_object.cylinder_rank == 0:
-                for l_rhos in g_rhos: 
-                    global_rhos.update(l_rhos)
-                arranged_rhos = {vname: [rho_list[idx] for _, rho_list in global_rhos.items()]
-                                 for vname, idx in vname_to_idx.items()}
-                rhos = {vname: self._order_stat(rho_list)
-                        for (vname, rho_list) in arranged_rhos.items()}
-
-                with open(self.cfg.rho_file, 'a', newline='') as file:
+                with open(self.cfg.rho_file, 'w') as file:
                     writer = csv.writer(file)
                     writer.writerow(['#Rho values'])
-                    writer.writerow
-                    for (vname, rho) in rhos.items():
-                        writer.writerow([vname, rhos[vname]])
+                    for (vname, rho) in rho_data.items():
+                        writer.writerow([vname, rho])
 
 
-class Set_Rhos():
+class Set_Rho():
     """ Interface to set the computed rhos in PH.
 
     Args:
@@ -148,9 +234,7 @@ class Set_Rhos():
 
     """
     def __init__(self, cfg):
-        if not cfg.rho_setter: pass
-        else:
-            self.cfg = cfg
+        self.cfg = cfg
 
     def rho_setter(self, scenario):
         """ rho setter to be used in the PH algorithm
@@ -206,7 +290,7 @@ def _parser_setup():
     return cfg
 
 
-def get_rhos_from_Ws(mname, original_cfg):
+def get_rho_from_W(mname, original_cfg):
     """ Creates a ph object from cfg and using the module functions. Then computes rhos from the Ws.
 
     Args:
@@ -248,10 +332,10 @@ def get_rhos_from_Ws(mname, original_cfg):
 
     #============================================================================== 
     # Compute rhos                                                                                                              
-    Find_Rhos(ph_object, cfg).rhos()
+    Find_Rho(ph_object, cfg).rhos()
 
 
 if __name__ == "__main__":
-    print("call find_rho.get_rhos_from_Ws(modulename, cfg) and use --whatpath --rho-file to compute and write rhos") 
+    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos") 
     
     

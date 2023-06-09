@@ -1,11 +1,9 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
+# Copyright 2023 by U. Naepels and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# general example driver for farmer with cylinders
+# Example to compute grad cost and rhos from gradient and use the corresponding rho setter
+# mpiexec -np 2 python -m mpi4py farmer_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
 
-### Modified 2023 by U.Naepels: example to compute grad cost and rhos from gradient and use the corresponding rho setter
-# mpiexec -np 2 python -m mpi4py farmer_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --grad-rho-setter --order-stat=
-
-
+import time
 import farmer
 import mpisppy.cylinders
 
@@ -21,8 +19,9 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 from mpisppy.utils.wxbarwriter import WXBarWriter
+from mpisppy.utils.gradient_extension import Gradient_extension
 
-write_solution = True
+write_solution = False
 
 def _parse_args():
     # create a config object and parse
@@ -71,11 +70,7 @@ def main():
 
     num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
-    if cfg.rho_setter:
-        print("Rhos are set from rho file")
-        rho_setter = find_rho.Set_Rhos(cfg).rho_setter
-    else:
-        rho_setter = None
+    rho_setter = None
 
     if cfg.default_rho is None and rho_setter is None:
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
@@ -91,12 +86,11 @@ def main():
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = farmer.scenario_names_creator(cfg.num_scens)
-    #all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
     scenario_creator_kwargs = {
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
     }
-    #scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
+    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -111,13 +105,12 @@ def main():
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                  ph_extensions=WXBarWriter,
+                                  ph_extensions=Gradient_extension,
                                   ph_converger=ph_converger,
-                                  rho_setter=rho_setter)
+                                  rho_setter=None)
         
-    #write Ws in csv file
-    hub_dict['opt_kwargs']['options']["W_and_xbar_writer"] =  {"Wcsvdir": "Wdir"}
-    hub_dict['opt_kwargs']['options']["W_fname"] =  "w_fname.csv"
+    #gradient extension kwargs
+    hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
     
     ## hack in adaptive rho
     if cfg.use_norm_rho_updater:
@@ -162,11 +155,9 @@ def main():
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
-    if wheel.strata_rank == 0:  # don't do this for bound ranks
-        ph_object = wheel.spcomm.opt
 
-    grad.grad_cost_and_rho('farmer', cfg)
-    find_rho.get_rhos_from_Ws('farmer', cfg)
+    # If you want to write W and rho in a file :
+    #grad.grad_cost_and_rho('farmer', cfg)
 
     if write_solution:
         wheel.write_first_stage_solution('farmer_plant.csv')
