@@ -12,6 +12,7 @@ import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils.wtracker import WTracker
+from mpisppy import global_toc
 
 
 class Gradient_extension(mpisppy.extensions.extension.Extension):
@@ -71,6 +72,7 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         pass
 
     def post_iter0(self):
+        global_toc("Using gradient-based rho setter")
         self.primal_conv_cache.append(self.opt.convergence_diff())
         self.dual_conv_cache.append(self.wt.W_diff())
         self._display_rho_values()
