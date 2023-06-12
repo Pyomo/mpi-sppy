@@ -13,6 +13,7 @@ import numpy as np
 import pandas as pd
 import mpisppy.opt.ph
 import pyomo.environ as pyo
+import mpisppy.MPI as MPI
 
 class WTracker():
     """
@@ -129,7 +130,33 @@ class WTracker():
             with open(fname, "a") as fil:
                 fil.write(wstats)   # warning string
 
-                
+
+    def W_diff(self):
+        """ Compute the norm of the difference between to consecutive Ws / num_scenarios.
+
+        Returns:
+           global_diff (float): difference between to consecutive Ws
+
+        """
+        cI = self.PHB._PHIter
+        self.grab_local_Ws()
+        self.local_Ws[-1] = self.local_Ws[0]
+        global_diff = np.zeros(1)
+        local_diff = np.zeros(1)
+        varcount = 0
+        local_diff[0] = 0
+        for (sname, scenario) in self.PHB.local_scenarios.items():
+            local_wdiffs = [w - w1
+                            for w, w1 in zip(self.local_Ws[cI][sname], self.local_Ws[cI-1][sname])]
+            for wdiff in local_wdiffs:
+                local_diff[0] += abs(wdiff)
+                varcount += 1
+        local_diff[0] /= varcount
+        self.PHB.comms["ROOT"].Allreduce(local_diff, global_diff, op=MPI.SUM)
+
+        return global_diff[0] / self.PHB.n_proc
+
+
 if __name__ == "__main__":
     # for ad hoc developer testing
     solver_name = "cplex"

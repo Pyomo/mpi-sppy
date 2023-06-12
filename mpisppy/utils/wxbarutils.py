@@ -80,7 +80,11 @@ def write_W_to_file(PHB, fname, sep_files=False):
                         row = ','.join([sname, vname, str(val)]) + '\n'
                         f.write(row)
 
-def set_W_from_file(fname, PHB, rank, sep_files=False):
+
+
+
+
+def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
     ''' 
     Args:
         fname (str) -- if sep_files=False, file containing the dual weights.
@@ -110,7 +114,8 @@ def set_W_from_file(fname, PHB, rank, sep_files=False):
         w_val_dict = _parse_W_csv(fname, scenario_names_local,
                                     scenario_names_global, rank)
 
-    _check_W(w_val_dict, PHB, rank)
+    if not disable_check:
+        _check_W(w_val_dict, PHB, rank)
 
     mp = {(sname, var.name): (node.name, ix)
             for (sname, scenario) in PHB.local_scenarios.items()
