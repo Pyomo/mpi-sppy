@@ -2,6 +2,7 @@
 
 name: pysp tests
 
+
 on:
   push:
     branches: [ main ]
@@ -22,12 +23,13 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.8
+          python-version: 3.9
           auto-activate-base: false
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
           pip install pyomo xpress cplex
+          pip install numpy
 
       - name: setup the program
         run: |
