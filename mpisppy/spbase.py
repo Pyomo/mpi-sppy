@@ -267,6 +267,7 @@ class SPBase:
         if scenario_creator_kwargs is None:
             scenario_creator_kwargs = dict()
 
+        local_ict = list() # Local instance creation times for time tracking
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
@@ -277,16 +278,16 @@ class SPBase:
                 if(s._mpisppy_node_list[stmax].name)+'_0' not in self.all_nodenames:
                     raise RuntimeError("The leaf node associated with this scenario is not on all_nodenames"
                         f"Its last non-leaf node {s._mpisppy_node_list[stmax].name} has no first child {s._mpisppy_node_list[stmax].name+'_0'}")
+            local_ict.append(time.time() - instance_creation_start_time)
             
-            if self.options.get("display_timing", False):
-                instance_creation_time = time.time() - instance_creation_start_time
-                all_instance_creation_times = self.mpicomm.gather(
-                    instance_creation_time, root=0
-                )
-                if self.cylinder_rank == 0:
-                    aict = all_instance_creation_times
-                    print("Scenario instance creation times:")
-                    print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
+        if self.options.get("display_timing", False):
+            all_instance_creation_times = self.mpicomm.gather(
+                local_ict, root=0
+            )
+            if self.cylinder_rank == 0:
+                aict = [ict for l_ict in all_instance_creation_times for ict in l_ict]
+                print("Scenario instance creation times:")
+                print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
         self.scenarios_constructed = True
 
     def _attach_nonant_indices(self):

@@ -1,0 +1,10 @@
+#grad cost values
+scen0,DevotedAcreage[CORN0],-150.0
+scen0,DevotedAcreage[SUGAR_BEETS0],-230.0
+scen0,DevotedAcreage[WHEAT0],-260.0
+scen1,DevotedAcreage[CORN0],-150.0
+scen1,DevotedAcreage[SUGAR_BEETS0],-230.0
+scen1,DevotedAcreage[WHEAT0],-260.0
+scen2,DevotedAcreage[CORN0],-150.0
+scen2,DevotedAcreage[SUGAR_BEETS0],-230.0
+scen2,DevotedAcreage[WHEAT0],-260.0
