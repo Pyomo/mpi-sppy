@@ -1,7 +1,9 @@
 # Copyright 2023 by U. Naepels and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Example to compute grad cost and rhos from gradient and use the corresponding rho setter
-# mpiexec -np 2 python -m mpi4py farmer_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
+# This program can be used in two different ways:
+# Compute gradient-based cost and rho for a given problem
+# Use the gradient-based rho setter which sets adaptative gradient rho for PH.
+# mpiexec -np 2 python -m mpi4py farmer_rho_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
 
 import time
 import farmer
@@ -19,7 +21,7 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.utils.gradient_extension import Gradient_extension
+from mpisppy.extensions.gradient_extension import Gradient_extension
 
 write_solution = False
 
@@ -95,6 +97,10 @@ def main():
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
+    ph_extensions = None
+    if cfg.rho_setter:
+        ph_extensions = Gradient_extension
+
     if cfg.run_async:
         # Vanilla APH hub
         hub_dict = vanilla.aph_hub(*beans,
@@ -105,12 +111,13 @@ def main():
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                  ph_extensions=Gradient_extension,
+                                  ph_extensions=ph_extensions,
                                   ph_converger=ph_converger,
                                   rho_setter=None)
         
     #gradient extension kwargs
-    hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
+    if cfg.rho_setter:
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
     
     ## hack in adaptive rho
     if cfg.use_norm_rho_updater:
