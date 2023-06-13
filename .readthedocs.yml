@@ -10,7 +10,7 @@ sphinx:
 
 # we need mpi-sppy for automodule
 python:
-  version: 3.8
+  version: 3.9
   install:
     - method: setuptools
       path: .
