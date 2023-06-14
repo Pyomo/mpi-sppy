@@ -36,7 +36,7 @@ rank = MPI.COMM_WORLD.Get_rank()
 class WXBarReader(mpisppy.extensions.extension.Extension):
     """ Extension class for reading W values
     """
-    def __init__(self, ph):#, rank, n_proc):
+    def __init__(self, ph):
 
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = None, None, False
@@ -85,13 +85,13 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
     def post_iter0(self):
         pass
         
-    def miditer(self):#, PHIter, conv):
+    def miditer(self):
         ''' Called before the solveloop is called '''
         pass
 
-    def enditer(self):#, PHIter):
+    def enditer(self):
         ''' Called after the solve loop '''
         pass
 
-    def post_everything(self):#, PHIter, conv):
+    def post_everything(self):
         pass

@@ -88,9 +88,7 @@ def main():
     scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
 
-    multi_ext = {"ext_classes" : []}
-    multi_ext["ext_classes"].append(WXBarWriter)
-    multi_ext["ext_classes"].append(WXBarReader)
+    multi_ext = {"ext_classes" : [WXBarWriter, WXBarReader]}
     
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
