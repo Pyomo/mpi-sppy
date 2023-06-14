@@ -1,11 +1,9 @@
-B# gradient
+# gradient
 
 name: gradient and rho tests
 
 on:
-  push:
-    branches: [ subgradient ]
- 1;95;0c pull_request:
+    pull_request:
     branches: [ main ]
 
 defaults:
@@ -43,5 +41,5 @@ jobs:
         run: |
           cd mpisppy/tests
           python test_gradient_rho.py 
-	  python test_w_writer.py
+          python test_w_writer.py
 
