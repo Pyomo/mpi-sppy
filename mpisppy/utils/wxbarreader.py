@@ -28,11 +28,15 @@
 import mpisppy.utils.wxbarutils
 import os # For checking if files exist
 import mpisppy.extensions.extension
+import mpisppy.MPI as MPI
+
+n_proc = MPI.COMM_WORLD.Get_size()
+rank = MPI.COMM_WORLD.Get_rank()
 
 class WXBarReader(mpisppy.extensions.extension.Extension):
     """ Extension class for reading W values
     """
-    def __init__(self, ph, rank, n_proc):
+    def __init__(self, ph):#, rank, n_proc):
 
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = None, None, False
@@ -75,17 +79,19 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         if (self.x_fname):
             mpisppy.utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
             self.PHB._reenable_prox()
+        
+
 
     def post_iter0(self):
         pass
         
-    def miditer(self, PHIter, conv):
+    def miditer(self):#, PHIter, conv):
         ''' Called before the solveloop is called '''
         pass
 
-    def enditer(self, PHIter):
+    def enditer(self):#, PHIter):
         ''' Called after the solve loop '''
         pass
 
-    def post_everything(self, PHIter, conv):
+    def post_everything(self):#, PHIter, conv):
         pass

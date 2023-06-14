@@ -66,6 +66,12 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         verbose = self.opt.options["verbose"]
         self.opt.Compute_Xbar(verbose=verbose)
         self.opt.Update_W(verbose=verbose)
+        ## writes Ws here
+        if self.opt.options.get("lagranger_write_W", False):
+            mpisppy.utils.wxbarutils.write_W_to_file(self.opt, 'lagranger_w_vals.csv',
+                                                     sep_files=False)
+        if self.opt.options.get("lagranger_write_xbar", False):
+            mpisppy.utils.wxbarutils.write_xbar_to_file(self.opt, 'lagranger_xbar_vals.csv')
         return self._lagrangian(iternum)
 
     def main(self):
