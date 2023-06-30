@@ -81,3 +81,69 @@ The ``nonant_ef_suppl_list`` supplied (optinally) to the ``ScenarioNode`` constr
 sets up a nonant var data list for Vars whose nananticipative is enforced only in extensive
 forms (which includes bundles). This can be useful for supplemental variables whose values
 are implied by other nonanticipative variables (e.g. indicator variables).
+
+
+``nonant_indices``
+------------------
+
+The ``nonant_indices`` has the same information as the ``nonant_vardata_list`` but in a slightly more convenient format, so it is used
+more often in classes derived from ``SPBase``.  It is attached by a function in ``spbase.py`` (so `self` refers to ``SPBase``)
+
+.. code-block:: python
+
+    def _attach_nonant_indices(self):
+        for (sname, scenario) in self.local_scenarios.items():
+            _nonant_indices = dict()
+            nlens = scenario._mpisppy_data.nlens        
+            for node in scenario._mpisppy_node_list:
+                ndn = node.name
+                for i in range(nlens[ndn]):
+                    _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
+            scenario._mpisppy_data.nonant_indices = _nonant_indices
+        self.nonant_length = len(_nonant_indices)
+
+
+Note that the dictionary is indexed by a pair that is node name and the index into ``vardata_list`` and these
+indexes are used in various places, such as xbar.
+
+applications examples
+^^^^^^^^^^^^^^^^^^^^^
+
+A direct example is in ``_fix_nonants_at_value`` in ``xhat_eval.py``. 
+
+Here is a more subtle snippet from ``phbase.py` that takes advantage of the fact that many other structures use the same indexes. The
+only direct use of ``nonant_indices`` is reference to `nonant._value` to get the variable's current value. As an aside, we note that
+the use of direct reference to the "protected" `_value` element in Pyomo is common.
+
+.. code-block:: python
+
+        for k,s in self.local_scenarios.items():
+            for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+
+                xdiff = nonant._value \
+                        - s._mpisppy_model.xbars[ndn_i]._value
+                s._mpisppy_model.W[ndn_i]._value += pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
+                if verbose and self.cylinder_rank == 0:
+
+
+
+varid mapping
+^^^^^^^^^^^^^
+
+There is a mapping from the vardata object's varid back to the (node name, i) pair that is the key
+in the ``nonant_indidices`` dictionary. The mapping is create by this funcion in ``spbase.py``
+When used carefully, this map allows other programs to quickly communicate about nonanticipative Vars.
+
+.. code-block:: python
+
+    def _attach_varid_to_nonant_index(self):
+        """ Create a map from the id of nonant variables to their Pyomo index.
+        """
+        for (sname, scenario) in self.local_scenarios.items():
+            # In order to support rho setting, create a map
+            # from the id of vardata object back its _nonant_index.
+            scenario._mpisppy_data.varid_to_nonant_index =\
+                {id(var): ndn_i for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
+
+
+		
