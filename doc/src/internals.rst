@@ -16,7 +16,7 @@ setting the values of the nonanticipative variables in an abstract way.
 One way or the other, the scenario creator function
 needs to attached to each scenario model a list of `objects for non-leaf scenario tree nodes (the list will have only one member for two-stage problems)
 called ``_mpisppy_node_list``.
-Each node object contains the ``nonant_vardata_list`` for the scenaio at that scenario tree node. The list indexes are not meaningful, but the
+Each node object contains the ``nonant_vardata_list`` for the scenario at that scenario tree node. The list indexes are not meaningful, but the
 lists are assumed to be in the same order for every scenario at the tree node.
 
 Some uses
@@ -33,12 +33,7 @@ A simple use is found in ``sputils.py``
        root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
        np.save(file_name, root_nonants)
 
-Another simple use can be found in `xhat_eval.py`:
-
-
-.. code-block:: python
-		
-   def fix_nonants_upto_stage(self,t,cache):
+Another simple use can be found function ``fix_nonants_upto_stage`` function in `xhat_eval.py`:
 
 
 Standard Construction
@@ -72,13 +67,13 @@ creates the ``nonant_vardata_list`` with this call
                                                 scen_model,
                                                 self.nonant_list)
 
-The ``build_vardatalist`` 
+where ``build_vardatalist`` function converts strings to vardata objects and expands indexed Vars.
 
 nonant_ef_suppl_list
 ^^^^^^^^^^^^^^^^^^^^
 
-The ``nonant_ef_suppl_list`` supplied (optinally) to the ``ScenarioNode`` constructor
-sets up a nonant var data list for Vars whose nananticipative is enforced only in extensive
+The ``nonant_ef_suppl_list`` supplied (optionally) to the ``ScenarioNode`` constructor
+sets up a nonant var data list for Vars whose nonanticipativity is enforced only in extensive
 forms (which includes bundles). This can be useful for supplemental variables whose values
 are implied by other nonanticipative variables (e.g. indicator variables).
 
@@ -86,7 +81,7 @@ are implied by other nonanticipative variables (e.g. indicator variables).
 ``nonant_indices``
 ------------------
 
-The ``nonant_indices`` has the same information as the ``nonant_vardata_list`` but in a slightly more convenient format, so it is used
+The ``nonant_indices`` dictionary has the same information as the ``nonant_vardata_list`` but in a slightly more convenient format, so it is used
 more often in classes derived from ``SPBase``.  It is attached by a function in ``spbase.py`` (so `self` refers to ``SPBase``)
 
 .. code-block:: python
@@ -112,8 +107,8 @@ applications examples
 A direct example is in ``_fix_nonants_at_value`` in ``xhat_eval.py``. 
 
 Here is a more subtle snippet from ``phbase.py`` that takes advantage of the fact that many other structures use the same indexes. The
-only direct use of ``nonant_indices`` is reference to `nonant._value` to get the variable's current value. As an aside, we note that
-the use of direct reference to the "protected" `_value` element in Pyomo is common.
+only direct use of ``nonant_indices`` in this snippet is the reference to `nonant._value` to get the variable's current value. As an aside, we note that
+the use of direct reference to the "protected" `_value` element in a Pyomo var data object is common in ``mpi-sppy``.
 
 .. code-block:: python
 
@@ -131,8 +126,9 @@ varid mapping
 ^^^^^^^^^^^^^
 
 There is a mapping from the vardata object's varid back to the (node name, i) pair that is the key
-in the ``nonant_indidices`` dictionary. The mapping is create by this funcion in ``spbase.py``
+in the ``nonant_indidices`` dictionary. 
 When used carefully, this map allows other programs to quickly communicate about nonanticipative Vars.
+The mapping is created by this funcion in ``spbase.py``:
 
 .. code-block:: python
 
