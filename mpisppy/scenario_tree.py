@@ -11,7 +11,7 @@ from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 def build_vardatalist(self, model, varlist=None):
     """
     Convert a list of pyomo variables to a list of SimpleVar and _GeneralVarData. If varlist is none, builds a
-    list of all variables in the model. The new list is stored in the vars_to_tighten attribute. By CD Laird
+    list of all variables in the model. Written by CD Laird
 
     Parameters
     ----------
