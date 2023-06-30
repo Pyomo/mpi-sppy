@@ -107,17 +107,23 @@ class APH(ph_base.PHBase):
         self.local_pwsqnorm = 0
         self.local_pzsqnorm = 0
         self.conv = None
-        self.use_lag = False if "APHuse_lag" not in options\
-                        else options["APHuse_lag"]
-        self.APHgamma = 1 if "APHgamma" not in options\
-                        else options["APHgamma"]
+        self.use_lag = options.get("APHuse_lag", False)
+        self.APHgamma = options.get("APHgamma", 1)
         assert(self.APHgamma > 0)
+        self.use_dynamic_gamma = options.get("use_dynamic_gamma", True)
+        if self.use_dynamic_gamma:
+            print('**** dynamic gamma is default True so watch out!')
         self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
         self.round_robin_dispatch = options.get("round_robin_dispatch", False)
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
-        self.nu = 1 # might be changed dynamically by an extension
-        if "APHnu" in options:
-            self.nu = options["APHnu"]
+
+        # ESR June, 2023
+        self.nu = options.get("APHnu", 1)
+        # Note June, 2023: Hack for nu
+        self.use_hack_for_nu = options.get("use_hack_for_nu", True)
+        if self.use_hack_for_nu:
+            print('**** you are using the hack for nu since default is True so careful!')
+
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
 
@@ -167,7 +173,7 @@ class APH(ph_base.PHBase):
                         # pyo.value vs. _value ??
                         s._mpisppy_model.y[(ndn,i)]._value = W_touse \
                                               + pyo.value(s._mpisppy_model.rho[(ndn,i)]) \
-                                              * (xvar._value - z_touse)
+                                              * (xvar._value - z_touse) #Eq.25
                         if verbose and self.cylinder_rank == 0:
                             print ("node, scen, var, y", ndn, k,
                                    self.cylinder_rank, xvar.name,
@@ -182,11 +188,12 @@ class APH(ph_base.PHBase):
 
     #============================
     def compute_phis_summand(self):
-        # update phis, return summand
+        # update phis, return summand (variable_probability is alread resolved)
         summand = 0.0
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                # Step 16, phi
                 self.phis[k] += (pyo.value(s._mpisppy_model.z[(ndn,i)]) - xvar._value) \
                     *(pyo.value(s._mpisppy_model.W[(ndn,i)]) - pyo.value(s._mpisppy_model.y[(ndn,i)]))
             self.phis[k] *= pyo.value(s._mpisppy_probability)
@@ -194,6 +201,59 @@ class APH(ph_base.PHBase):
         return summand
 
     #============================***********=========
+
+    def _calculate_APHgamma(self, synchro):
+        """This function calculates a gamma value that accounts for the value
+        of ||u||^2 and ||v||^2 for each scenario for each iteration
+
+        The side effects are that we store the previous iteration's v and u norms
+
+        1. gamma should be monotonic?
+        2. we need to do a reduction to get one gamma OR better use the global norms
+        3. gamma should always (probably) be positive?
+        4. Maybe we should be looking into scaled_vterm and scaled_uterm
+        The global norms might be zero, so think about how to avoid
+        using it when they are zero
+
+        """
+        
+        uk = self.global_pusqnorm
+        vk = self.global_pvsqnorm
+        wk = self.global_pwsqnorm
+        zk = self.global_pzsqnorm
+        
+        # Note June, 2023: We are waiting until we get values greater
+        # than 0 for the norms. Iteration 3 is arbitrary
+        if self._PHIter <= 3:
+            gamma = self.APHgamma
+            self.uk1 = self.global_pusqnorm
+            self.vk1 = self.global_pvsqnorm
+        else:
+            if vk <= 0 or uk <= 0:
+                gamma = self.APHgamma
+            else:
+                uk1 = self.uk1
+                vk1 = self.vk1
+                # Note June, 2023: vk1 and uk1 should be going down
+                v_term = ((vk1 - vk) / vk) # use vk1 in denominator?
+                u_term = ((uk1 - uk) / uk) # use uk1 in denominator?
+                if v_term <= 0 or u_term <= 0:
+                    print('v_term=', v_term, 'u_term=', u_term, 'vk1=', vk1, 'vk=', vk, 'uk1=', uk1, 'uk=', uk)
+                    gamma = self.APHgamma
+                else:
+                    gamma = (
+                        v_term / u_term # gamma value gets 
+                        # vk / uk
+                        # (vk / zk) / (uk / wk) # use scaled v and u
+                    )
+                    self.uk1 = uk
+                    self.vk1 = vk
+                    
+        self.APHgamma = gamma
+
+        return self.APHgamma
+
+
     def listener_side_gig(self, synchro):
         """ Called by the listener after the first reduce.
         First, see if there are enough xbar contributions to proceed.
@@ -252,7 +312,7 @@ class APH(ph_base.PHBase):
             
         # set the xbar, xsqbar, and ybar in all the scenarios
         for k,s in self.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens        
+            nlens = s._mpisppy_data.nlens
             for (ndn,i) in s._mpisppy_data.nonant_indices:
                 s._mpisppy_model.xbars[(ndn,i)]._value \
                     = self.node_concats["FirstReduce"][ndn][i]
@@ -278,23 +338,50 @@ class APH(ph_base.PHBase):
         for sname,s in self.local_scenarios.items():
             scen_usqnorm = 0.0
             scen_vsqnorm = 0.0
-            nlens = s._mpisppy_data.nlens        
-            for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                self.uk[sname][(ndn,i)] = xvar._value \
-                                          - pyo.value(s._mpisppy_model.xbars[(ndn,i)])
-                # compute the usqnorm and vsqnorm (squared L2 norms)
-                scen_usqnorm += self.uk[sname][(ndn,i)] \
-                              * self.uk[sname][(ndn,i)]
-                scen_vsqnorm += pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
-                              * pyo.value(s._mpisppy_model.ybars[(ndn,i)])
-            self.local_pusqnorm += pyo.value(s._mpisppy_probability) * scen_usqnorm
-            self.local_pvsqnorm += pyo.value(s._mpisppy_probability) * scen_vsqnorm
-            new_tau_summand += pyo.value(s._mpisppy_probability) \
-                               * (scen_usqnorm + scen_vsqnorm/self.APHgamma)
-                
+            nlens = s._mpisppy_data.nlens
 
+            if not s._mpisppy_data.has_variable_probability:
+
+                for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                    self.uk[sname][(ndn,i)] = xvar._value \
+                        - pyo.value(s._mpisppy_model.xbars[(ndn,i)]) # Eq.27
+                    # compute the usqnorm and vsqnorm (squared L2 norms)
+                    scen_usqnorm += (self.uk[sname][(ndn,i)] \
+                                     * self.uk[sname][(ndn,i)])
+                    scen_vsqnorm += (pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
+                                     * pyo.value(s._mpisppy_model.ybars[(ndn,i)]))
+            else:
+                # In the unlikely event of variable probability, do it
+                # over again
+                for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                    if s._mpisppy_data.prob0_mask[ndn][i] != 0:
+                        self.uk[sname][(ndn,i)] = (
+                            xvar._value \
+                            - pyo.value(s._mpisppy_model.xbars[(ndn,i)]) # Eq.27
+                        )
+                    else:
+                        self.uk[sname][(ndn,i)] = 0
+                    # compute the usqnorm and vsqnorm (squared L2 norms)
+                    scen_usqnorm += (self.uk[sname][(ndn,i)] \
+                                     * self.uk[sname][(ndn,i)])
+                    scen_vsqnorm += (pyo.value(s._mpisppy_model.ybars[(ndn,i)]) \
+                                     * pyo.value(s._mpisppy_model.ybars[(ndn,i)]))
+                   
+            # Note by DLW April 2023: You need to move the probs up for multi-stage
+            self.local_pusqnorm += pyo.value(s._mpisppy_probability) * scen_usqnorm  # prob first done
+            self.local_pvsqnorm += pyo.value(s._mpisppy_probability) * scen_vsqnorm  # prob first done
+
+            if self.use_dynamic_gamma:
+                gamma = self._calculate_APHgamma(synchro)
+                print('dynamic gamma=', gamma, 'i=', i, 'sname=', sname)
             
-        # tauk is the expecation of the sum sum of squares; update for this calc
+            # I don't think s._mpisppy_dat.has_variable_probability is needed here
+            new_tau_summand += (
+                pyo.value(s._mpisppy_probability) \
+                * (scen_usqnorm + scen_vsqnorm/self.APHgamma)
+            )
+            
+        # tauk is the expectation of the sum sum of squares; update for this calc
         logging.debug('  in side-gig, old global_tau={}'.format(self.global_tau))
         logging.debug('  in side-gig, old summand={}'.format(self.tau_summand))
         logging.debug('  in side-gig, new summand={}'.format(new_tau_summand))
@@ -391,7 +478,7 @@ class APH(ph_base.PHBase):
         # We don't need to lock here because the direct buffers are only accessed
         # by compute_global_data.
         for k,s in self.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens        
+            nlens = s._mpisppy_data.nlens
             for node in s._mpisppy_node_list:
                 ndn = node.name
                 for i in range(nlens[node.name]):
@@ -405,6 +492,19 @@ class APH(ph_base.PHBase):
                     self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
                         += (s._mpisppy_probability / node.uncond_prob) \
                            * pyo.value(s._mpisppy_model.y[(node.name,i)])
+                    # print('test1', 'i:', i, 'mpisppy_prob', s._mpisppy_probability, 'uncond_prob', node.uncond_prob)
+                    if s._mpisppy_data.has_variable_probability:
+                        # re-do in the unlikely event of variable probabilities xxx TBD: check for multi-stage
+                        ##prob = s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
+                        prob = s._mpisppy_data.prob_coeff[ndn][i]
+                        self.local_concats["FirstReduce"][node.name][i] += \
+                            (prob / node.uncond_prob) * v_value
+                        self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
+                            += (prob / node.uncond_prob) * v_value * v_value
+                        self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
+                            += (prob / node.uncond_prob) \
+                            * pyo.value(s._mpisppy_model.y[(node.name,i)])
+                        # print('test2', 'i:', i, 'prob', prob, 'uncond_prob', node.uncond_prob)
 
         # record the time
         secs_sofar = time.perf_counter() - self.start_time
@@ -456,12 +556,38 @@ class APH(ph_base.PHBase):
         """
         if self.global_tau <= 0:
             logging.debug('|tau {}, rank {}'.format(self.global_tau, self.cylinder_rank))
-            self.theta = 0   
+            self.theta = 0 # Step 17
         elif self.global_phi <= 0:
             logging.debug('|phi {}, rank {}'.format(self.global_phi, self.cylinder_rank))
             self.theta = 0
         else:
-            self.theta = self.global_phi * self.nu / self.global_tau
+            punorm = math.sqrt(self.global_pusqnorm)
+            pvnorm = math.sqrt(self.global_pvsqnorm)
+            if self.use_hack_for_nu:
+                nu_val = 0.1
+                rho_val = 0.1
+            else:
+                nu_val = 0
+                rho_val = 0
+            # if punorm and pvnorm <= 1:
+            #     self.nu *= 1 + nu_val
+            # else:
+            #     self.nu /= 1 + nu_val
+            if self._PHIter <= 3:
+                self.nu = 1 - nu_val
+            else:
+                self.nu = 1 + nu_val
+            self.theta = self.global_phi * self.nu / self.global_tau # Step 16
+            print(f'nu={self.nu}')
+            for k,s in self.local_scenarios.items():
+                for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                    if punorm <= pvnorm:
+                        factor = 1 - rho_val
+                    else:
+                        factor = 1 + rho_val
+                    s._mpisppy_model.rho[(ndn,i)] = pyo.value(s._mpisppy_model.rho[(ndn,i)]) * factor
+                    print(f'rho={pyo.value(s._mpisppy_model.rho[(ndn,i)])}')
+                    
         logging.debug('Iter {} assigned theta {} on rank {}'\
                       .format(self._PHIter, self.theta, self.cylinder_rank))
 
@@ -473,16 +599,22 @@ class APH(ph_base.PHBase):
         for k,s in self.local_scenarios.items():
             probs = pyo.value(s._mpisppy_probability)
             for (ndn, i) in s._mpisppy_data.nonant_indices:
+                print('Update_theta_zw, ndn=', ndn, 'i=', i)
                 Wupdate = self.theta * self.uk[k][(ndn,i)]
-                Ws = pyo.value(s._mpisppy_model.W[(ndn,i)]) + Wupdate
-                s._mpisppy_model.W[(ndn,i)] = Ws 
+                Ws = pyo.value(s._mpisppy_model.W[(ndn,i)]) + Wupdate # Step 19, Algorithm 2
+                # Special code for variable probabilities to mask W; rarely used.
+                if s._mpisppy_data.has_variable_probability:
+                    Ws *= s._mpisppy_data.prob0_mask[ndn][i]
+
+                s._mpisppy_model.W[(ndn,i)] = Ws
                 self.local_pwsqnorm += probs * Ws * Ws
                 # iter 1 is iter 0 post-solves when seen from the paper
-                if self._PHIter != 1:
+                if self._PHIter != 1: # Step 18, Algorithm 2
                     zs = pyo.value(s._mpisppy_model.z[(ndn,i)])\
                      + self.theta * pyo.value(s._mpisppy_model.ybars[(ndn,i)])/self.APHgamma
                 else:
                      zs = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                #### ???? xxxx var prob for z???
                 s._mpisppy_model.z[(ndn,i)] = zs 
                 self.local_pzsqnorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
@@ -688,14 +820,17 @@ class APH(ph_base.PHBase):
         print(f"zero-based iteration number {self._PHIter}")
         self._print_conv_detail()
         print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
-        print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} ")
+        print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} {'v':8}")
         for k,s in self.local_scenarios.items():
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                print(f"   {(ndn,i)} {xvar._value:9.3} "
-                      f"{s._mpisppy_model.z[(ndn,i)]._value:9.3}"
-                      f"{s._mpisppy_model.W[(ndn,i)]._value:9.3}"
-                      f"{self.uk[k][(ndn,i)]:9.3}")
+                print(
+                    f"   {(ndn,i)} {xvar._value} "
+                    f"{s._mpisppy_model.z[(ndn,i)]._value} "
+                    f"{s._mpisppy_model.W[(ndn,i)]._value} "
+                    f"{self.uk[k][(ndn,i)]:9} "
+                    f"{s._mpisppy_model.ybars[(ndn,i)]._value:9}"
+                )
       
 
     #====================================================================
