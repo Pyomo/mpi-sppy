@@ -111,7 +111,7 @@ applications examples
 
 A direct example is in ``_fix_nonants_at_value`` in ``xhat_eval.py``. 
 
-Here is a more subtle snippet from ``phbase.py` that takes advantage of the fact that many other structures use the same indexes. The
+Here is a more subtle snippet from ``phbase.py`` that takes advantage of the fact that many other structures use the same indexes. The
 only direct use of ``nonant_indices`` is reference to `nonant._value` to get the variable's current value. As an aside, we note that
 the use of direct reference to the "protected" `_value` element in Pyomo is common.
 
