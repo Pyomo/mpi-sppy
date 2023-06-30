@@ -32,7 +32,6 @@ import mpisppy.MPI as MPI
                          
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
-#print("hello")
 
 class WXBarWriter(mpisppy.extensions.extension.Extension):
     """ Extension class for writing the W values
@@ -91,7 +90,7 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
 
     def post_everything(self):
         if (self.w_fname):
-            fname = f'fname.csv'
+            fname = self.w_fname
             mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, fname,
                 sep_files=self.sep_files)
         if (self.w_grad_fname):
