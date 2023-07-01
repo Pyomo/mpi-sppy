@@ -120,9 +120,11 @@ class APH(ph_base.PHBase):
         # ESR June, 2023
         self.nu = options.get("APHnu", 1)
         # Note June, 2023: Hack for nu
-        self.use_hack_for_nu = options.get("use_hack_for_nu", True)
+        self.use_hack_for_nu = options.get("use_hack_for_nu", False)
         if self.use_hack_for_nu:
             print('**** you are using the hack for nu since default is True so careful!')
+        else:
+            print('not using nu hack')
 
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
