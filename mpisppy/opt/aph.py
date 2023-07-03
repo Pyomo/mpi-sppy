@@ -65,6 +65,23 @@ class APH(ph_base.PHBase):
             `scenario_creator`.
 
     """
+    def setup_Lens(self):
+        """ We need to know the lengths of c-style vectors for listener_util
+        """
+        self.Lens = collections.OrderedDict({"FirstReduce": {},
+                                            "SecondReduce": {}})
+
+        for sname, scenario in self.local_scenarios.items():
+            for node in scenario._mpisppy_node_list:
+                self.Lens["FirstReduce"][node.name] \
+                    = 3 * len(node.nonant_vardata_list)
+                self.Lens["SecondReduce"][node.name] = 0 # only use root?
+        self.Lens["FirstReduce"]["ROOT"] += self.n_proc  # for time of update
+        # tau, phi, pusqnorm, pvsqnorm, pwsqnorm, pzsqnorm, secs
+        self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc
+        
+
+    #============================
     def __init__(
         self,
         options,
@@ -128,22 +145,14 @@ class APH(ph_base.PHBase):
 
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
-
-    #============================
-    def setup_Lens(self):
-        """ We need to know the lengths of c-style vectors for listener_util
-        """
-        self.Lens = collections.OrderedDict({"FirstReduce": {},
-                                            "SecondReduce": {}})
-
-        for sname, scenario in self.local_scenarios.items():
-            for node in scenario._mpisppy_node_list:
-                self.Lens["FirstReduce"][node.name] \
-                    = 3 * len(node.nonant_vardata_list)
-                self.Lens["SecondReduce"][node.name] = 0 # only use root?
-        self.Lens["FirstReduce"]["ROOT"] += self.n_proc  # for time of update
-        # tau, phi, pusqnorm, pvsqnorm, pwsqnorm, pzsqnorm, secs
-        self.Lens["SecondReduce"]["ROOT"] += 6 + self.n_proc 
+        # plot_trace_prefix or filename will indicate output is needed
+        self.plot_trace_prefix = options.get("APHplot_trace_prefix") if self.cylinder_rank == 0 else None
+        self.conv_trace_filename = None if self.plot_trace_prefix is None else\
+            f"{self.plot_trace_prefix}_dyngam_{self.use_dynamic_gamma}"
+            f"_hack_nu_{self.use_hack_for_nu}_nu_{self.nu}"
+            f"_default_rho_{self.defaultPHrho}"
+            with open(self.conv_trace_filename, "w") as fil:
+                fil.write("iter,conv,gamma,nu,punorm,pvnorm\n")
 
 
     #============================
@@ -374,7 +383,7 @@ class APH(ph_base.PHBase):
             self.local_pvsqnorm += pyo.value(s._mpisppy_probability) * scen_vsqnorm  # prob first done
 
             if self.use_dynamic_gamma:
-                gamma = self._calculate_APHgamma(synchro)
+                gamma = self._calculate_APHgamma(synchro) # update APHgamma
                 print('dynamic gamma=', gamma, 'i=', i, 'sname=', sname)
             
             # I don't think s._mpisppy_dat.has_variable_probability is needed here
@@ -656,6 +665,10 @@ class APH(ph_base.PHBase):
         if hasattr(self, "ph_conobject") and self.ph_convobject is not None:
             phc = self.ph_convobject(self, self.cylinder_rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
+
+        if self.conv_trace_filename is not None:
+            with open(self.self.conv_trace_filename, "a") as fil:
+                fil.write(f"{self.PHIter},{self.conv},{self.APHgamma},{self.nu},{punorm},{pvnorm}\n")
 
 
     #==========
