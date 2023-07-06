@@ -147,10 +147,10 @@ class APH(ph_base.PHBase):
         self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
         # plot_trace_prefix or filename will indicate output is needed
         self.plot_trace_prefix = options.get("APHplot_trace_prefix") if self.cylinder_rank == 0 else None
-        self.conv_trace_filename = None if self.plot_trace_prefix is None else\
-            f"{self.plot_trace_prefix}_dyngam_{self.use_dynamic_gamma}"
-            f"_hack_nu_{self.use_hack_for_nu}_nu_{self.nu}"
-            f"_default_rho_{self.defaultPHrho}"
+        self.conv_trace_filename = None if self.plot_trace_prefix is None else f"{self.plot_trace_prefix}_dyngam_{self.use_dynamic_gamma}"\
+            +f"_hack_nu_{self.use_hack_for_nu}_nu_{self.nu}"\
+            +".csv"
+        if self.plot_trace_prefix is not None:
             with open(self.conv_trace_filename, "w") as fil:
                 fil.write("iter,conv,gamma,nu,punorm,pvnorm\n")
 
@@ -667,8 +667,8 @@ class APH(ph_base.PHBase):
             logging.debug("PH converger called (returned {})".format(phc))
 
         if self.conv_trace_filename is not None:
-            with open(self.self.conv_trace_filename, "a") as fil:
-                fil.write(f"{self.PHIter},{self.conv},{self.APHgamma},{self.nu},{punorm},{pvnorm}\n")
+            with open(self.conv_trace_filename, "a") as fil:
+                fil.write(f"{self._PHIter},{self.conv},{self.APHgamma},{self.nu},{punorm},{pvnorm}\n")
 
 
     #==========
