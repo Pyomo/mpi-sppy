@@ -572,7 +572,7 @@ class PHHub(Hub):
             elif self.local_lengths[idx - 1] + 1 != len(self.boundsout_send_buffer):
                 raise RuntimeError("boundsout buffers disagree on size")
 
-    def _populate_boundsout_cache():
+    def _populate_boundsout_cache(self):
         self.boundsout_send_buffer[0] = self.BestOuterBound
         self.boundsout_send_buffer[1] = self.BestInnerBound
             
