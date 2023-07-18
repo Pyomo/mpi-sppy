@@ -514,7 +514,7 @@ class SPBase:
                 raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
             if not hasattr(scenario, "_mpisppy_probability") or scenario._mpisppy_probability == "uniform":
                 prob = 1./len(self.all_scenario_names)
-                if self.cylinder_rank == 0 scenario._mpisppy_probability != "uniform":
+                if self.cylinder_rank == 0 and scenario._mpisppy_probability != "uniform":
                     print(f"Did not find _mpisppy_probability, assuming uniform probability {prob}")
                 scenario._mpisppy_probability = prob
             if not hasattr(scenario, "_mpisppy_node_list"):
