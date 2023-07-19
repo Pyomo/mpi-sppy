@@ -20,6 +20,7 @@ class ConvergerSpokeType(enum.Enum):
     INNER_BOUND = 2
     W_GETTER = 3
     NONANT_GETTER = 4
+    BOUNDS_GETTER = 5
 
 class Spoke(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
@@ -230,7 +231,39 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         self._new_locals = self.spoke_from_hub(self._locals)
         return self.remote_write_id == -1
 
+    
+class _BoundBoundsOnlySpoke(_BoundSpoke):
+    """ A base class for bound spokes which only
+        want the best-so-far inner and outer bounds from OPT
+    """
 
+    def make_windows(self):
+        """ Makes the bound window and with a remote buffer long enough
+        """
+        vbuflen = 2  # inner and outerbounds
+
+        self._make_windows(1, vbuflen)
+        self._locals = np.zeros(vbuflen + 1) # Also has kill signal
+        self._bound = np.zeros(1 + 1)  # the bound going back to the hub
+        self._new_locals = False
+
+    def _got_kill_signal(self):
+        """ returns True if a kill signal was received, 
+            and refreshes the array and _locals"""
+        self._new_locals = self.spoke_from_hub(self._locals)
+        return self.remote_write_id == -1
+
+    @property
+    def local_outer_bound(self):
+        """Returns the local copy of the bound from the hub"""
+        return self._locals[0]
+
+    @property
+    def local_inner_bound(self):
+        """Returns the local copy of the bound from the hub"""
+        return self._locals[1]
+
+    
 class InnerBoundSpoke(_BoundSpoke):
     """ For Spokes that provide an inner bound through self.bound to the
         Hub, and do not need information from the main PH OPT hub.
@@ -370,3 +403,16 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
         ConvergerSpokeType.NONANT_GETTER,
     )
     converger_spoke_char = 'A'  # probably Lagrangian
+
+class OuterBoundBoundsOnlySpoke(_BoundBoundsOnlySpoke):
+    """ For Spokes that provide an outer
+        bound through self.bound to the Hub,
+        and receive the bounds
+        the main OPT hub.
+    """
+    converger_spoke_types = (
+        ConvergerSpokeType.OUTER_BOUND,
+        ConvergerSpokeType.BOUNDS_GETTER,
+    )
+    converger_spoke_char = 'A'  # probably Lagrangian
+    
