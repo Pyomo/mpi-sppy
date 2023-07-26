@@ -780,11 +780,11 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         #global_toc('Rank: {} - assigning rho'.format(rank), True)
 
-        if have_extensions:
-            self.extobject.post_iter0()
-
         if self.spcomm is not None:
             self.spcomm.sync()
+
+        if have_extensions:
+            self.extobject.post_iter0()
 
         if self.rho_setter is not None:
             if self.cylinder_rank == 0:
@@ -893,14 +893,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 verbose=verbose
             )
 
-            if have_extensions:
-                self.extobject.enditer()
-
             if self.spcomm is not None:
                 self.spcomm.sync()
                 if self.spcomm.is_converged():
                     global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break
+
+            if have_extensions:
+                self.extobject.enditer()
 
             if dprogress and self.cylinder_rank == 0:
                 print("")
