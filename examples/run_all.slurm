@@ -11,8 +11,8 @@
 #SBATCH --nodelist=c[4]
 
 conda activate mpisppy
-SOLVERNAME="gurobi"  # "gurobi_persistent"
-export GRB_LICENSE_FILE=/home/dlwoodruff/software/gurobi950/licenses/c4/gurobi.lic
+SOLVERNAME="gurobi_persistent"
+export GRB_LICENSE_FILE=/home/dlwoodruff/software/gurobi1000/licenses/c4/gurobi.lic
 
 python run_all.py $SOLVERNAME
 
