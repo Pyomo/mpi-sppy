@@ -512,9 +512,9 @@ class APH(ph_base.PHBase):
                             (prob / node.uncond_prob) * v_value
                         self.local_concats["FirstReduce"][node.name][nlens[ndn]+i]\
                             += (prob / node.uncond_prob) * v_value * v_value
+                        # for variable probability, ybar is really ysum!!!
                         self.local_concats["FirstReduce"][node.name][2*nlens[ndn]+i]\
-                            += (prob / node.uncond_prob) \
-                            * pyo.value(s._mpisppy_model.y[(node.name,i)])
+                            += pyo.value(s._mpisppy_model.y[(node.name,i)])
                         # print('test2', 'i:', i, 'prob', prob, 'uncond_prob', node.uncond_prob)
 
         # record the time
@@ -621,6 +621,7 @@ class APH(ph_base.PHBase):
                 self.local_pwsqnorm += probs * Ws * Ws
                 # iter 1 is iter 0 post-solves when seen from the paper
                 if self._PHIter != 1: # Step 18, Algorithm 2
+                    # NOTE: for variable probability, ybar is really a sum!!!!
                     zs = pyo.value(s._mpisppy_model.z[(ndn,i)])\
                      + self.theta * pyo.value(s._mpisppy_model.ybars[(ndn,i)])/self.APHgamma
                 else:
