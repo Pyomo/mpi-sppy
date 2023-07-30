@@ -127,9 +127,9 @@ class APH(ph_base.PHBase):
         self.use_lag = options.get("APHuse_lag", False)
         self.APHgamma = options.get("APHgamma", 1)
         assert(self.APHgamma > 0)
-        self.use_dynamic_gamma = options.get("use_dynamic_gamma", True)
+        self.use_dynamic_gamma = options.get("use_dynamic_gamma", False)
         if self.use_dynamic_gamma:
-            print('**** dynamic gamma is default True so watch out!')
+            print('**** dynamic gamma is True so watch out!')
         self.shelf_life = options.get("shelf_life", 99)  # 99 is intended to be large
         self.round_robin_dispatch = options.get("round_robin_dispatch", False)
         # TBD: use a property decorator for nu to enforce 0 < nu < 2
@@ -152,8 +152,13 @@ class APH(ph_base.PHBase):
             +".csv"
         if self.plot_trace_prefix is not None:
             with open(self.conv_trace_filename, "w") as fil:
-                fil.write("iter,conv,gamma,nu,punorm,pvnorm\n")
-
+                fil.write("iter,conv,gamma,nu,theta,punorm,pvnorm\n")
+            for k,s in self.local_scenarios.items():
+                with open(f"trace_{k}_{self.conv_trace_filename}", "w") as fil:
+                    fil.write("iter,obj fct")
+                    for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                        fil.write(f",{xvar.name} x,{xvar.name} z, {xvar.name} w")
+                    fil.write("\n")
 
     #============================
     def setup_dispatchrecord(self):
@@ -669,7 +674,7 @@ class APH(ph_base.PHBase):
 
         if self.conv_trace_filename is not None:
             with open(self.conv_trace_filename, "a") as fil:
-                fil.write(f"{self._PHIter},{self.conv},{self.APHgamma},{self.nu},{punorm},{pvnorm}\n")
+                fil.write(f"{self._PHIter},{self.conv},{self.APHgamma},{self.nu},{self.theta},{punorm},{pvnorm}\n")
 
 
     #==========
@@ -847,7 +852,16 @@ class APH(ph_base.PHBase):
                     f"{self.uk[k][(ndn,i)]:9} "
                     f"{s._mpisppy_model.ybars[(ndn,i)]._value:9}"
                 )
-      
+        if self.plot_trace_prefix is not None:
+            for k,s in self.local_scenarios.items():
+                objval = pyo.value(find_active_objective(s))
+                with open(f"trace_{k}_{self.conv_trace_filename}", "a") as fil:
+                    fil.write("{self._PHIter},{objval}")
+                    for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                        fil.write(f",{xvar._value},{s._mpisppy_model.z[(ndn,i)]._value},{s._mpisppy_model.W[(ndn,i)]._value}")
+                    fil.write("\n")
+
+
 
     #====================================================================
     def APH_iterk(self, spcomm):
