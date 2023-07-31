@@ -786,6 +786,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self.spcomm is not None:
             self.spcomm.sync()
 
+        if have_extensions and getattr(self.extobject, 'post_iter0_after_sync', None) is not None:
+            self.extobject.post_iter0_after_sync()
+
         if self.rho_setter is not None:
             if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
@@ -901,6 +904,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if self.spcomm.is_converged():
                     global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break
+
+            if have_extensions and getattr(self.extobject, 'enditer_after_sync', None) is not None:
+                self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
                 print("")
