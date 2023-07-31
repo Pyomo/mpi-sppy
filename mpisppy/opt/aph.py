@@ -856,7 +856,7 @@ class APH(ph_base.PHBase):
             for k,s in self.local_scenarios.items():
                 objval = pyo.value(find_active_objective(s))
                 with open(f"trace_{k}_{self.conv_trace_filename}", "a") as fil:
-                    fil.write("{self._PHIter},{objval}")
+                    fil.write(f"{self._PHIter},{objval}")
                     for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                         fil.write(f",{xvar._value},{s._mpisppy_model.z[(ndn,i)]._value},{s._mpisppy_model.W[(ndn,i)]._value}")
                     fil.write("\n")
