@@ -30,7 +30,8 @@ PH extensions
 
 Some of these can be used with other hubs. An extension object can be
 passed to the PH constructor and it is assumed to have methods defined
-for all the callout points in PH (so all of the examples do).  If you
+for all the callout points in PH (so all of the examples do). To see 
+the callout points look at ``phbase.py``.  If you
 want to use more than one extension, define a main extension that has
 a reference to the other extensions and can call their methods in the
 appropriate order. Extensions typically access low level elements of
