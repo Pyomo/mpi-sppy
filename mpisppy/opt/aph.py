@@ -16,6 +16,7 @@ from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.wxbarutils as wxbarutils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -692,11 +693,12 @@ class APH(ph_base.PHBase):
         for k,s in self.local_scenarios.items():
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                print(f"   {(ndn,i)} {xvar._value:9.3} "
-                      f"{s._mpisppy_model.z[(ndn,i)]._value:9.3}"
-                      f"{s._mpisppy_model.W[(ndn,i)]._value:9.3}"
-                      f"{self.uk[k][(ndn,i)]:9.3}")
-      
+                print(f"   {(ndn,i)} {float(xvar._value):9.3} "
+                      f"{float(s._mpisppy_model.z[(ndn,i)]._value):9.3}"
+                      f"{float(s._mpisppy_model.W[(ndn,i)]._value):9.3}"
+                      f"{float(self.uk[k][(ndn,i)]):9.3}")
+        ph_base._Compute_Wbar(self)
+
 
     #====================================================================
     def APH_iterk(self, spcomm):
