@@ -694,9 +694,9 @@ class APH(ph_base.PHBase):
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 print(f"   {(ndn,i)} {float(xvar._value):9.3} "
-                      f"float({s._mpisppy_model.z[(ndn,i)]._value):9.3}"
-                      f"float({s._mpisppy_model.W[(ndn,i)]._value):9.3}"
-                      f"float({self.uk[k][(ndn,i)]):9.3}")
+                      f"{float(s._mpisppy_model.z[(ndn,i)]._value):9.3}"
+                      f"{float(s._mpisppy_model.W[(ndn,i)]._value):9.3}"
+                      f"{float(self.uk[k][(ndn,i)]):9.3}")
         ph_base._Compute_Wbar(self)
 
 
