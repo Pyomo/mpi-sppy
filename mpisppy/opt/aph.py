@@ -16,6 +16,7 @@ from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.wxbarutils as wxbarutils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -845,22 +846,11 @@ class APH(ph_base.PHBase):
         for k,s in self.local_scenarios.items():
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                print(
-                    f"   {(ndn,i)} {xvar._value} "
-                    f"{s._mpisppy_model.z[(ndn,i)]._value} "
-                    f"{s._mpisppy_model.W[(ndn,i)]._value} "
-                    f"{self.uk[k][(ndn,i)]:9} "
-                    f"{s._mpisppy_model.ybars[(ndn,i)]._value:9}"
-                )
-        if self.plot_trace_prefix is not None:
-            for k,s in self.local_scenarios.items():
-                objval = pyo.value(find_active_objective(s))
-                with open(f"trace_{k}_{self.conv_trace_filename}", "a") as fil:
-                    fil.write(f"{self._PHIter},{objval}")
-                    for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                        fil.write(f",{xvar._value},{s._mpisppy_model.z[(ndn,i)]._value},{s._mpisppy_model.W[(ndn,i)]._value}")
-                    fil.write("\n")
-
+                print(f"   {(ndn,i)} {float(xvar._value):9.3} "
+                      f"{float(s._mpisppy_model.z[(ndn,i)]._value):9.3}"
+                      f"{float(s._mpisppy_model.W[(ndn,i)]._value):9.3}"
+                      f"{float(self.uk[k][(ndn,i)]):9.3}")
+        ph_base._Compute_Wbar(self)
 
 
     #====================================================================

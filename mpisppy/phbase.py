@@ -118,7 +118,81 @@ def _Compute_Xbar(opt, verbose=False):
                            opt.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                            pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 
+def _Compute_Wbar(opt, verbose=False):
+    """ Seldom used (mainly for diagnostics); gather  Wbar for each node.
 
+    Args:
+        opt (phbase or xhat_eval object): object with the local scenarios
+        verbose (boolean):
+            If True, prints verbose output.
+
+    NOTE: for now, we will just report on the non-zeros, since that is 
+          the only use-case as of August 2023
+    """
+    nodenames = [] # to transmit to comms
+    local_concats = {}   # keys are tree node names
+    global_concats =  {} # values are concat of xbar and xsqbar
+
+    # we need to accumulate all local contributions before the reduce
+    for k,s in opt.local_scenarios.items():
+        nlens = s._mpisppy_data.nlens        
+        for node in s._mpisppy_node_list:
+            if node.name not in nodenames:
+                ndn = node.name
+                nodenames.append(ndn)
+                mylen = nlens[ndn]
+
+                local_concats[ndn] = np.zeros(mylen, dtype='d')
+                global_concats[ndn] = np.zeros(mylen, dtype='d')
+
+    # compute the local Wbar 
+    for k,s in opt.local_scenarios.items():
+        nlens = s._mpisppy_data.nlens        
+        for node in s._mpisppy_node_list:
+            ndn = node.name
+            nlen = nlens[ndn]
+
+            Wbars = local_concats[ndn][:nlen]
+
+            # s._mpisppy_data.nonant_indices.keys() indexes the W Param
+            Wnonants_array = np.fromiter((pyo.value(s._mpisppy_model.W[idx]) for idx in s._mpisppy_data.nonant_indices if idx[0] == ndn),
+                                        dtype='d', count=nlen)
+            if not s._mpisppy_data.has_variable_probability:
+                Wbars += s._mpisppy_data.prob_coeff[ndn] * Wnonants_array
+            else:
+                # rarely-used overwrite in the event of variable probability
+                # (not efficient for multi-stage)
+                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
+                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
+                                         dtype='d', count=nlen)
+
+                # Note: Intermediate scen_contribution to get proper
+                # overloading
+                scen_contribution = prob_array * Wnonants_array
+                Wbars += scen_contribution
+
+    # compute node xbar values(reduction)
+    for nodename in nodenames:
+        opt.comms[nodename].Allreduce(
+            [local_concats[nodename], MPI.DOUBLE],
+            [global_concats[nodename], MPI.DOUBLE],
+            op=MPI.SUM)
+
+    # check the Wbar
+    for k,s in opt.local_scenarios.items():
+        logger.debug('  top of Wbar loop for {} on rank {}'.\
+                     format(k, opt.cylinder_rank))
+        nlens = s._mpisppy_data.nlens
+        for node in s._mpisppy_node_list:
+            ndn = node.name
+            nlen = nlens[ndn]
+
+            Wbars = global_concats[ndn][:nlen]
+
+            for i in range(nlen):
+                if abs(Wbars[i]) > opt.E1_tolerance and opt.cylinder_rank == 0:
+                    print(f"EW={Wbars[i]} for {node.nonant_vardata_list[i].name}")
+ 
 
 #======================
 
@@ -786,6 +860,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self.spcomm is not None:
             self.spcomm.sync()
 
+        if have_extensions and getattr(self.extobject, 'post_iter0_after_sync', None) is not None:
+            self.extobject.post_iter0_after_sync()
+
         if self.rho_setter is not None:
             if self.cylinder_rank == 0:
                 self._use_rho_setter(verbose)
@@ -901,6 +978,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if self.spcomm.is_converged():
                     global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break
+
+            if have_extensions and getattr(self.extobject, 'enditer_after_sync', None) is not None:
+                self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
                 print("")
