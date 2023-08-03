@@ -195,12 +195,16 @@ class APH(ph_base.PHBase):
                             print ("node, scen, var, y", ndn, k,
                                    self.cylinder_rank, xvar.name,
                                    pyo.value(s._mpisppy_model.y[(ndn,i)]))
+                        # Special code for variable probabilities to mask y; rarely used.
+                        if s._mpisppy_data.has_variable_probability:
+                            s._mpisppy_model.y[(ndn,i)]._value *= s._mpisppy_data.prob0_mask[ndn][i]
         else:
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                     s._mpisppy_model.y[(ndn,i)]._value = 0
             if verbose and self.cylinder_rank == 0:
                 print ("All y=0 for iter1")
+
 
 
     #============================
@@ -385,8 +389,15 @@ class APH(ph_base.PHBase):
                                      * pyo.value(s._mpisppy_model.ybars[(ndn,i)]))
                    
             # Note by DLW April 2023: You need to move the probs up for multi-stage
-            self.local_pusqnorm += pyo.value(s._mpisppy_probability) * scen_usqnorm  # prob first done
-            self.local_pvsqnorm += pyo.value(s._mpisppy_probability) * scen_vsqnorm  # prob first done
+            if not s._mpisppy_data.has_variable_probability:
+                # NOTE: The p is not true but we avoid changing the
+                # code in other places because pusqnorm and pvsqnorm
+                # are used everywhere
+                self.local_pusqnorm += scen_usqnorm
+                self.local_pvsqnorm += scen_vsqnorm
+            else:
+                self.local_pusqnorm += pyo.value(s._mpisppy_probability) * scen_usqnorm  # prob first done
+                self.local_pvsqnorm += pyo.value(s._mpisppy_probability) * scen_vsqnorm  # prob first done
 
             if self.use_dynamic_gamma:
                 gamma = self._calculate_APHgamma(synchro) # update APHgamma
@@ -627,12 +638,16 @@ class APH(ph_base.PHBase):
                 self.local_pwsqnorm += probs * Ws * Ws
                 # iter 1 is iter 0 post-solves when seen from the paper
                 if self._PHIter != 1: # Step 18, Algorithm 2
-                    # NOTE: for variable probability, ybar is really a sum!!!!
+                    # NOTE: for variable probability, ybar was computed as a sum!!!!
                     zs = pyo.value(s._mpisppy_model.z[(ndn,i)])\
                      + self.theta * pyo.value(s._mpisppy_model.ybars[(ndn,i)])/self.APHgamma
                 else:
-                     zs = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
-                #### ???? xxxx var prob for z???
+                    zs = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+
+                # Special code for variable probabilities to mask W; rarely used.
+                if s._mpisppy_data.has_variable_probability:
+                    zs *= s._mpisppy_data.prob0_mask[ndn][i]
+
                 s._mpisppy_model.z[(ndn,i)] = zs 
                 self.local_pzsqnorm += probs * zs * zs
                 logging.debug("rank={}, scen={}, i={}, Ws={}, zs={}".\
@@ -1020,6 +1035,8 @@ class APH(ph_base.PHBase):
             objfct = find_active_objective(scenario)
                 
             if self.use_lag:
+                assert not scenario._mpisppy_data.has_variable_probability
+                   
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
                     # proximal term
                     objfct.expr +=  scenario._mpisppy_model.prox_on * \
@@ -1029,10 +1046,17 @@ class APH(ph_base.PHBase):
                     objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W_foropt[ndn,i] * xvar
             else:
                 for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                    # proximal term
-                    objfct.expr +=  scenario._mpisppy_model.prox_on * \
-                        (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
-                        (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z[(ndn,i)] + scenario._mpisppy_model.z[(ndn,i)]**2)                        
+                    if not scenario._mpisppy_data.has_variable_probability:
+                        # proximal term
+                        objfct.expr +=  scenario._mpisppy_model.prox_on * \
+                            (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
+                            (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z[(ndn,i)] + scenario._mpisppy_model.z[(ndn,i)]**2)                        
+                    else:
+                        objfct.expr += scenario._mpisppy_data.prob0_mask[ndn][i] * \
+                            scenario._mpisppy_model.prox_on * \
+                            (scenario._mpisppy_model.rho[(ndn,i)] /2.0) * \
+                            (xvar**2 - 2.0*xvar*scenario._mpisppy_model.z[(ndn,i)] + scenario._mpisppy_model.z[(ndn,i)]**2)                        
+
                     # W term
                     objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
 
