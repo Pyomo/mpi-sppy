@@ -502,7 +502,7 @@ class APH(ph_base.PHBase):
             self.local_concats["SecondReduce"]["ROOT"].fill(0)
             self.node_concats["SecondReduce"]["ROOT"].fill(0)
 
-        # Compute the locals and concat them for the first reduce.
+        # Compute the locals and concat them for the first reduce, which includes xbar.
         # We don't need to lock here because the direct buffers are only accessed
         # by compute_global_data.
         for k,s in self.local_scenarios.items():
@@ -684,7 +684,7 @@ class APH(ph_base.PHBase):
         logging.debug('self.conv={} self.global_pusqnorm={} self.global_pwsqnorm={} self.global_pvsqnorm={} self.global_pzsqnorm={})'\
                       .format(self.conv, self.global_pusqnorm, self.global_pwsqnorm, self.global_pvsqnorm, self.global_pzsqnorm))
         # allow a PH converger, mainly for mpisspy to get xhat from a wheel conv
-        if hasattr(self, "ph_conobject") and self.ph_convobject is not None:
+        if hasattr(self, "ph_convobject") and self.ph_convobject is not None:
             phc = self.ph_convobject(self, self.cylinder_rank, self.n_proc)
             logging.debug("PH converger called (returned {})".format(phc))
 
