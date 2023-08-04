@@ -188,6 +188,8 @@ class APH(ph_base.PHBase):
                             z_touse = s._mpisppy_model.z_foropt[(ndn,i)]._value
                             W_touse = pyo.value(s._mpisppy_model.W_foropt[(ndn,i)])
                         # pyo.value vs. _value ??
+                        # NOTE: W_touse and z_touse are coming from
+                        # the previous iteration
                         s._mpisppy_model.y[(ndn,i)]._value = W_touse \
                                               + pyo.value(s._mpisppy_model.rho[(ndn,i)]) \
                                               * (xvar._value - z_touse) #Eq.25
@@ -857,15 +859,25 @@ class APH(ph_base.PHBase):
         print(f"zero-based iteration number {self._PHIter}")
         self._print_conv_detail()
         print(f"phi={self.global_phi}, nu={self.nu}, tau={self.global_tau} so theta={self.theta}")
-        print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} {'v':8}")
+        print(f"{'Nonants for':19} {'x':8} {'z':8} {'W':8} {'u':8} {'y':8}")
         for k,s in self.local_scenarios.items():
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                 print(f"   {(ndn,i)} {float(xvar._value):9.3} "
                       f"{float(s._mpisppy_model.z[(ndn,i)]._value):9.3}"
                       f"{float(s._mpisppy_model.W[(ndn,i)]._value):9.3}"
-                      f"{float(self.uk[k][(ndn,i)]):9.3}")
+                      f"{float(self.uk[k][(ndn,i)]):9.3}"
+                      f"{float(s._mpisppy_model.y[(ndn,i)]._value):9.3}")
         ph_base._Compute_Wbar(self)
+
+        if self.plot_trace_prefix is not None:
+            for k,s in self.local_scenarios.items():
+                objval = pyo.value(find_active_objective(s))
+                with open(f"trace_{k}_{self.conv_trace_filename}", "a") as fil:
+                    fil.write(f"{self._PHIter},{objval}")
+                    for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
+                        fil.write(f",{xvar._value},{s._mpisppy_model.z[(ndn,i)]._value},{s._mpisppy_model.W[(ndn,i)]._value}")
+                    fil.write("\n")
 
 
     #====================================================================
