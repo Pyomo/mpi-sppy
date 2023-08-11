@@ -19,6 +19,7 @@ import copy
 import time
 
 import mpisppy.log
+from mpisppy import global_toc
 from mpisppy import MPI
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
@@ -70,15 +71,23 @@ class Find_Grad():
            scenario (Pyomo Concrete Model): scenario
         
         Returns:
-           grad_cost (dict): a dictionnary {nonant indice: gradient cost}
+           grad_dict (dict): a dictionnary {nonant indice: -gradient}
 
         """
+        global_toc("gradient: relaxing integer variables")
+        relax_int = pyo.TransformationFactory('core.relax_integer_vars')
+        relax_int.apply_to(scenario)
         nlp = PyomoNLP(scenario)
+
         nlp_vars = nlp.get_pyomo_variables()
+        try:
+            grad = nlp.evaluate_grad_objective()
+        except:
+            raise RuntimeError("Cannot compute the gradient")
         grad = nlp.evaluate_grad_objective()
-        grad_cost = {ndn_i: -grad[ndn_i[1]]
+        grad_dict = {ndn_i: -grad[ndn_i[1]]
                      for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
-        return grad_cost
+        return grad_dict
         
 
     def find_grad_cost(self):
@@ -104,8 +113,8 @@ class Find_Grad():
                     for v in node.nonant_vardata_list:
                         v.unfix()
 
-            grad_cost ={sname: self.compute_grad(sname, scenario) 
-                        for sname, scenario in self.ph_object.local_scenarios.items()} 
+            grad_cost = {sname: self.compute_grad(sname, scenario)
+                         for sname, scenario in self.ph_object.local_scenarios.items()}
             local_costs = {(sname, var.name): grad_cost[sname][node.name, ix]
                            for (sname, scenario) in self.ph_object.local_scenarios.items()
                            for node in scenario._mpisppy_node_list
@@ -137,7 +146,8 @@ class Find_Grad():
                 writer.writerow(['#grad cost values'])
                 for (key, val) in self.c.items():
                     sname, vname = key[0], key[1]
-                    writer.writerow([sname, vname, str(val)])
+                    row = ','.join([sname, vname, str(val)]) + '\n'
+                    f.write(row)
         comm.Barrier()
 
 

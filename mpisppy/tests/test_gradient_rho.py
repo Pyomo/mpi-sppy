@@ -26,6 +26,7 @@ from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver,round_pos_sig
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
+import  mpisppy.extensions.gradient_extension as grad_ext
 
 __version__ = 0.1
 
@@ -69,7 +70,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.grad_cost_file = '_test_grad_cost.csv'
         self.cfg.grad_rho_file= './_test_grad_rho.csv'
-        self.cfg.order_stat = 0.4
+        self.cfg.order_stat = 0.5
         self.cfg.max_iterations = 0
         self.ph_object = self._create_ph_farmer()
 
@@ -100,7 +101,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
         rho = self.grad_object.find_grad_rho()
-        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 0.0007911111111111111)
+        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 0.5)
     
     def test_write_grad_rho(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
@@ -120,7 +121,7 @@ class Test_gradient_farmer(unittest.TestCase):
         with open(self.cfg.grad_rho_file, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
-            self.assertAlmostEqual(float(rows[3][1]), 0.0013712592592592591)
+            self.assertAlmostEqual(float(rows[3][1]), 0.8666666666666667)
         os.remove(self.cfg.grad_cost_file)
         os.remove(self.cfg.grad_rho_file)
     
@@ -183,8 +184,9 @@ class Test_find_rho_farmer(unittest.TestCase):
     def test_order_stat(self):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         test_list = [4, 3, 1, 5, 2]
-        rho = self.rho_object._order_stat(test_list)
-        self.assertEqual(rho, 2.6)
+        proba_list = [0.1, 0.1, 0.2, 0.3, 0.3]
+        rho = self.rho_object._order_stat(test_list, proba_list)
+        self.assertAlmostEqual(rho, 2.6)
 
     def test_compute_rho(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
@@ -193,7 +195,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         rho = self.rho_object.compute_rho(indep_denom=True)
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689654)
         rho = self.rho_object.compute_rho()
-        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 0.05230103406621424)
+        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 3.491811846689895)
 
     def test_write_rho(self):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
@@ -216,6 +218,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.assertIsInstance(id_var, int)
         self.assertAlmostEqual(rho, 6.982758620689654)
     
+
 
 if __name__ == '__main__':
     unittest.main()

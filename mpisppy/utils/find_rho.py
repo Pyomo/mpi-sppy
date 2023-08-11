@@ -71,8 +71,10 @@ class Find_Rho():
                     if (line.startswith('#')):
                         continue
                     line  = line.split(',')
-                    cval = float(line[2][:-2])
-                    self.c[(line[0], line[1])] = cval
+                    sname = line[0]
+                    vname = ','.join(line[1:-1])
+                    cval  = float(line[-1])
+                    self.c[(sname, vname)] = cval
 
 
     def _w_denom(self, s, node):
@@ -92,6 +94,11 @@ class Find_Rho():
         nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                     dtype='d', count=nlen)
         w_denom = np.abs(nonants_array - xbar_array)
+        #change null denom to min
+        min_denom = min(d for d in w_denom if (d > 0))
+        for i in range(len(w_denom)):
+            if w_denom[i] == 0.0:
+                w_denom[i] = min_denom
         return w_denom
 
 
@@ -155,7 +162,7 @@ class Find_Rho():
             return g_denom
         
 
-    def _order_stat(self, rho_list):
+    def _order_stat(self, rho_list, prob_list):
         """ Computes a scenario independant rho from a list of rhos.
 
         Args:
@@ -167,7 +174,8 @@ class Find_Rho():
         alpha = self.cfg.order_stat
         assert alpha != -1.0, "you need to set the order statistic parameter for rho using --order-stat"
         assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max"
-        rho_mean, rho_min, rho_max = np.mean(rho_list), np.min(rho_list), np.max(rho_list)
+        rho_mean = np.dot(rho_list, prob_list)
+        rho_min, rho_max = np.min(rho_list), np.max(rho_list)
         if alpha == 0.5:
             return rho_mean
         if alpha < 0.5:
@@ -175,15 +183,16 @@ class Find_Rho():
         if alpha > 0.5:
             return (2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)
 
-    def compute_rho(self, indep_denom = False):
-        """ Computes rhos for each scenario and each variable using the WW heuristic.
+    def compute_rho(self, indep_denom=False):
+        """ Computes rhos for each scenario and each variable using the WW heuristic
+        and first order condition.
 
         Returns:
            arranged_rho (dict): dict {variable name: list of rhos for this variable}          
         """
-        all_vnames, all_snames = [], []
+        all_snames = self.ph_object.all_scenario_names
+        all_vnames = []
         for (sname, vname) in self.c.keys():
-            if sname not in all_snames: all_snames.append(sname)
             if vname not in all_vnames:all_vnames.append(vname)
         k0, s0 = list(self.ph_object.local_scenarios.items())[0]
         vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
@@ -194,7 +203,7 @@ class Find_Rho():
             grad_denom = self._grad_denom()
             denom = {k: grad_denom for k in all_snames}
         else:
-            loc_denom = {k: np.max((self._w_denom(s, node), self._prox_denom(s, node)))
+            loc_denom = {k: self._w_denom(s, node)
                            for k, s in self.ph_object.local_scenarios.items()
                            for node in s._mpisppy_node_list}
             global_denom = self.ph_object.comms['ROOT'].gather(loc_denom, root=0)
@@ -203,12 +212,22 @@ class Find_Rho():
                 for loc_denom in global_denom:
                     denom.update(loc_denom)
         if self.ph_object.cylinder_rank == 0:
-            rho = dict()
-            for k in all_snames:
-                rho[k] = np.abs(np.divide(cost[k], denom[k]))
+            prob_list = [s._mpisppy_data.prob_coeff[node.name]
+                         for s in self.ph_object.local_scenarios.values()
+                         for node in s._mpisppy_node_list]
+            w = dict()
+            for k, scenario in self.ph_object.local_scenarios.items():
+                w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
+                                 for ndn_i in scenario._mpisppy_data.nonant_indices])
+            rho = {k : np.abs(np.divide(cost[k] - w[k], denom[k])) for k in all_snames}
             arranged_rho = {vname: [rho_list[idx] for _, rho_list in rho.items()]
                             for vname, idx in vname_to_idx.items()}
-            rho = {vname: self._order_stat(rho_list) for (vname, rho_list) in arranged_rho.items()}
+            rho = {vname: self._order_stat(rho_list, prob_list) for (vname, rho_list) in arranged_rho.items()}
+            #change null rho to min
+            min_rho = min(r for r in rho.values() if (r > 0))
+            for vname, r in rho.items():
+                if r == 0.0:
+                    rho[vname] = min_rho
             return rho
 
 
