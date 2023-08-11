@@ -94,11 +94,10 @@ class Find_Rho():
         nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                     dtype='d', count=nlen)
         w_denom = np.abs(nonants_array - xbar_array)
-        #change null denom to min
-        min_denom = min(d for d in w_denom if (d > 0))
+        denom_max = np.max(w_denom) #TBD: do something else to avoid 0 divide
         for i in range(len(w_denom)):
-            if w_denom[i] == 0.0:
-                w_denom[i] = min_denom
+            if w_denom[i] <= self.ph_object.E1_tolerance:
+                w_denom[i] = denom_max
         return w_denom
 
 
