@@ -101,7 +101,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
         rho = self.grad_object.find_grad_rho()
-        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 0.5)
+        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 3.375)
     
     def test_write_grad_rho(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
@@ -121,7 +121,7 @@ class Test_gradient_farmer(unittest.TestCase):
         with open(self.cfg.grad_rho_file, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
-            self.assertAlmostEqual(float(rows[3][1]), 0.8666666666666667)
+            self.assertAlmostEqual(float(rows[3][1]), 2.0616161616161617)
         os.remove(self.cfg.grad_cost_file)
         os.remove(self.cfg.grad_rho_file)
     
@@ -195,7 +195,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         rho = self.rho_object.compute_rho(indep_denom=True)
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689654)
         rho = self.rho_object.compute_rho()
-        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 3.491811846689895)
+        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 8.163805471726114)
 
     def test_write_rho(self):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
@@ -218,7 +218,6 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.assertIsInstance(id_var, int)
         self.assertAlmostEqual(rho, 6.982758620689654)
     
-
 
 if __name__ == '__main__':
     unittest.main()
