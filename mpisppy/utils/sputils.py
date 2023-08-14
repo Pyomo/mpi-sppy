@@ -841,7 +841,7 @@ class _ScenTree():
     
     
 ######## Utility to attach the one and only node to a two-stage scenario #######
-def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
+def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, do_uniform=True):
     """ Create a root node as a list to attach to a scenario model
     Args:
         model (ConcreteModel): model to which this will be attached
@@ -850,6 +850,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
         nonant_ef_suppl_list (list of pyo Var, Vardata or slices):
               vars for which nonanticipativity constraints tighten the EF
               (important for bundling)
+        do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
        attaches a list consisting of one scenario node to the model
@@ -858,6 +859,11 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None):
         scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
                                    nonant_ef_suppl_list = nonant_ef_suppl_list)
     ]
+    if do_uniform:
+        # Avoid a warning per scenario
+        if not hasattr(model, "_mpisppy_probability"):
+            model._mpisppy_probability = "uniform"
+    
 
 ### utilities to check the slices and the map ###
 def check4losses(numscens, branching_factors,
