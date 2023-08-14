@@ -247,7 +247,8 @@ class LShapedMethod(spbase.SPBase):
                 ef_scenarios[0],
                 **self.scenario_creator_kwargs,
             )
-            if not hasattr(root, '_mpisppy_probability'):
+            if not hasattr(root, '_mpisppy_probability')\
+               or root._mpisppy_probability == "uniform":
                 root._mpisppy_probability = 1./len(self.all_scenario_names)
 
             nonant_list, nonant_ids = _get_nonant_ids(root)
