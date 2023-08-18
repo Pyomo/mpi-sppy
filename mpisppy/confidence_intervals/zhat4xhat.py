@@ -154,13 +154,13 @@ def _parser_setup():
 def _main_body(model_module, cfg):
     # body of main, pulled out for testing
 
-    cfg = cfg()  # make a copy because of EF-mstage
+    lcfg = cfg()  # make a copy because of EF-mstage
     solver_options_dict = option_string_to_dict(cfg.solver_options)
-    cfg.add_and_assign("EF_solver_options", "solver options dict", dict, None, solver_options_dict)
+    lcfg.add_and_assign("EF_solver_options", "solver options dict", dict, None, solver_options_dict)
     
-    cfg.quick_assign("EF_mstage", domain=bool, value=True)
+    lcfg.quick_assign("EF_mstage", domain=bool, value=True)
 
-    return run_samples(cfg, model_module)
+    return run_samples(lcfg, model_module)
 
 
 if __name__ == "__main__":

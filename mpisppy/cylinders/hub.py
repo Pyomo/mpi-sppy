@@ -5,6 +5,7 @@ import abc
 import logging
 import time
 import mpisppy.log
+from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator
@@ -277,6 +278,7 @@ class Hub(SPCommunicator):
         self.innerbound_spoke_indices = set()
         self.nonant_spoke_indices = set()
         self.w_spoke_indices = set()
+        self.boundsout_spoke_indices = set()
 
         self.outerbound_spoke_chars = dict()
         self.innerbound_spoke_chars = dict()
@@ -295,6 +297,8 @@ class Hub(SPCommunicator):
                         self.w_spoke_indices.add(i + 1)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
                         self.nonant_spoke_indices.add(i + 1)
+                    elif cst == ConvergerSpokeType.BOUNDS_GETTER:
+                        self.boundsout_spoke_indices.add(i + 1)
                     else:
                         raise RuntimeError(f"Unrecognized converger_spoke_type {cst}")
             else:  ##this isn't necessarily wrong, i.e., cut generators
@@ -304,6 +308,7 @@ class Hub(SPCommunicator):
         self.has_innerbound_spokes = len(self.innerbound_spoke_indices) > 0
         self.has_nonant_spokes = len(self.nonant_spoke_indices) > 0
         self.has_w_spokes = len(self.w_spoke_indices) > 0
+        self.has_boundsout_spokes = len(self.boundsout_spoke_indices) > 0
 
     def make_windows(self):
         if self._windows_constructed:
@@ -347,7 +352,8 @@ class Hub(SPCommunicator):
                 f"into local buffer of length {expected_length}"
             )
         # this is so the spoke ranks all get the same write_id at approximately the same time
-        self.cylinder_comm.Barrier()
+        if not isinstance(self.opt, APH):
+            self.cylinder_comm.Barrier()
         self.local_write_ids[spoke_strata_rank - 1] += 1
         values[-1] = self.local_write_ids[spoke_strata_rank - 1]
         window = self.windows[spoke_strata_rank - 1]
@@ -370,25 +376,31 @@ class Hub(SPCommunicator):
             )
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
-        self.cylinder_comm.Barrier()
+        if not isinstance(self.opt, APH):
+            self.cylinder_comm.Barrier()
         window = self.windows[spoke_num - 1]
         window.Lock(spoke_num)
         window.Get((values, len(values), MPI.DOUBLE), spoke_num)
         window.Unlock(spoke_num)
 
-        new_id = int(values[-1])
-        local_val = np.array((new_id,), 'i')
-        sum_ids = np.zeros(1, 'i')
-        self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (sum_ids, MPI.INT),
-                                     op=MPI.SUM)
+        if isinstance(self.opt, APH):
+            # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
+            if values[-1] > self.remote_write_ids[spoke_num - 1]:
+                self.remote_write_ids[spoke_num - 1] = values[-1]
+                return True
+        else:
+            new_id = int(values[-1])
+            local_val = np.array((new_id,), 'i')
+            sum_ids = np.zeros(1, 'i')
+            self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                         (sum_ids, MPI.INT),
+                                         op=MPI.SUM)
+            if new_id != sum_ids[0] / self.cylinder_comm.size:
+                return False
 
-        if new_id != sum_ids[0] / self.cylinder_comm.size:
-            return False
-
-        if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
-            self.remote_write_ids[spoke_num - 1] = new_id
-            return True
+            if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
+                self.remote_write_ids[spoke_num - 1] = new_id
+                return True
         return False
 
     def send_terminate(self):
@@ -427,6 +439,8 @@ class PHHub(Hub):
             self.initialize_ws()
         if self.has_nonant_spokes:
             self.initialize_nonants()
+        if self.has_boundsout_spokes:
+            self.initialize_boundsout()  # bounds going out
 
         ## Do some checking for things we currently don't support
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
@@ -460,6 +474,8 @@ class PHHub(Hub):
             self.send_ws()
         if self.has_nonant_spokes:
             self.send_nonants()
+        if self.has_boundsout_spokes:
+            self.send_boundsout()
         if self.has_outerbound_spokes:
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
@@ -544,6 +560,29 @@ class PHHub(Hub):
         logging.debug("hub is sending Ws={}".format(self.w_send_buffer))
         for idx in self.w_spoke_indices:
             self.hub_to_spoke(self.w_send_buffer, idx)
+
+    def initialize_boundsout(self):
+        """ Initialize the buffer for the hub to send bounds
+            to the appropriate spokes
+        """
+        self.boundsout_send_buffer = None
+        for idx in self.boundsout_spoke_indices:
+            if self.boundsout_send_buffer is None:
+                self.boundsout_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+            elif self.local_lengths[idx - 1] + 1 != len(self.boundsout_send_buffer):
+                raise RuntimeError("boundsout buffers disagree on size")
+
+    def _populate_boundsout_cache(self):
+        self.boundsout_send_buffer[0] = self.BestOuterBound
+        self.boundsout_send_buffer[1] = self.BestInnerBound
+            
+    def send_boundsout(self):
+        """ Send bounds to the appropriate spokes
+        """
+        self._populate_boundsout_cache()
+        logging.debug("hub is sending bounds={}".format(self.boundsout_send_buffer))
+        for idx in self.boundsout_spoke_indices:
+            self.hub_to_spoke(self.boundsout_send_buffer, idx)
 
 
 class LShapedHub(Hub):

@@ -30,7 +30,8 @@ PH extensions
 
 Some of these can be used with other hubs. An extension object can be
 passed to the PH constructor and it is assumed to have methods defined
-for all the callout points in PH (so all of the examples do).  If you
+for all the callout points in PH (so all of the examples do). To see 
+the callout points look at ``phbase.py``.  If you
 want to use more than one extension, define a main extension that has
 a reference to the other extensions and can call their methods in the
 appropriate order. Extensions typically access low level elements of
@@ -90,6 +91,13 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 There is an example of the function in the sizes example (``_rho_setter``).
 
 
+wtracker_extension
+==================
+
+The wtracker_extension outputs a report about the convergence (or really, lack thereof) of
+W values.
+An example of its use is shown in ``examples.sizes.sizes_demo.py``
+
 
 variable_probability
 ====================
@@ -107,6 +115,13 @@ the ``SPBase`` option ``variable_probability_kwargs``
 
 The variable probabilities impact the computation of
 ``xbars`` and ``W``.
+
+
+gradient_extension
+==================
+The gradient_extension sets adaptative gradient-based rho for PH.
+An example of its use is shown in  ``examples.farmer.farmer_rho_demo.py``
+
 
 Objective function considerations
 ---------------------------------

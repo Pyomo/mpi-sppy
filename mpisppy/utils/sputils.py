@@ -78,6 +78,8 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
 def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
+### a few Pyomo-related utilities ###
+
 
 def get_objs(scenario_instance, allow_none=False):
     """ return the list of objective functions for scenario_instance"""
@@ -121,7 +123,7 @@ def reactivate_objs(scenario_instance):
     for obj in scenario_instance._mpisppy_data.obj_list:
         obj.activate()
 
-
+    
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True):
@@ -189,11 +191,13 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
     # Check if every scenario has a specified probability
     probs_specified = \
-        all([hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values()])
-    if not probs_specified:
+        all(hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values())
+    uniform_specified = \
+        probs_specified and all(scen._mpisppy_probability == "uniform" for scen in scen_dict.values())
+    if not probs_specified or uniform_specified:
         for scen in scen_dict.values():
             scen._mpisppy_probability = 1 / len(scen_dict)
-        if not suppress_warnings:
+        if not suppress_warnings and not uniform_specified:
             print('WARNING: At least one scenario is missing _mpisppy_probability attribute.',
                   'Assuming equally-likely scenarios...')
 

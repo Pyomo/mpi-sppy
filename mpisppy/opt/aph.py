@@ -16,6 +16,7 @@ from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
+import mpisppy.utils.wxbarutils as wxbarutils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -637,6 +638,7 @@ class APH(ph_base.PHBase):
         scnt = max(1, round(len(self.dispatchrecord) * dispatch_frac))
         dispatch_list = _dispatch_list(scnt)
         _vb("dispatch list before dispath: {}".format(dispatch_list))
+        pyomo_solve_times = list()
         for dguy in dispatch_list:
             k = dguy[0]   # name of who to dispatch
             p = dguy[1]   # phi
@@ -646,18 +648,23 @@ class APH(ph_base.PHBase):
             logging.debug("  in APH solve_loop rank={}, k={}, phi={}".\
                           format(self.cylinder_rank, k, p))
             # the lower lever dtiming does a gather
-            pyomo_solve_time = self.solve_one(solver_options, k, s,
+            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
                                               dtiming=False,
                                               verbose=verbose,
                                               tee=tee,
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            )
+            ))
 
         if dtiming:
-            r = self.global_rank
-            with open(f"aph_dtiming_rank{r}.csv","a+") as fh:
-                fh.write(f"{dt.datetime.now()},{r},{pyomo_solve_time}")
+            print("Pyomo solve times (seconds):")
+            print("\trank=,%d, n=,%d, min=,%4.2f, mean=,%4.2f, max=,%4.2f" %
+                  (self.global_rank,
+                   len(pyomo_solve_times),
+                   np.min(pyomo_solve_times),
+                   np.mean(pyomo_solve_times),
+                   np.max(pyomo_solve_times)))
+
         return dispatch_list
 
     #========
@@ -686,11 +693,12 @@ class APH(ph_base.PHBase):
         for k,s in self.local_scenarios.items():
             print(f"   Scenario {k}")
             for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
-                print(f"   {(ndn,i)} {xvar._value:9.3} "
-                      f"{s._mpisppy_model.z[(ndn,i)]._value:9.3}"
-                      f"{s._mpisppy_model.W[(ndn,i)]._value:9.3}"
-                      f"{self.uk[k][(ndn,i)]:9.3}")
-      
+                print(f"   {(ndn,i)} {float(xvar._value):9.3} "
+                      f"{float(s._mpisppy_model.z[(ndn,i)]._value):9.3}"
+                      f"{float(s._mpisppy_model.W[(ndn,i)]._value):9.3}"
+                      f"{float(self.uk[k][(ndn,i)]):9.3}")
+        ph_base._Compute_Wbar(self)
+
 
     #====================================================================
     def APH_iterk(self, spcomm):

@@ -5,6 +5,7 @@
 
 import time
 import json
+import csv
 import mpisppy.cylinders.spoke
 
 class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
@@ -57,8 +58,22 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         for (sname, scenario) in self.opt.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                 scenario._mpisppy_model.rho[ndn_i] *= rf
-        
-    
+
+    def _write_W_and_xbar(self, iternum):
+        if self.opt.options.get("lagranger_write_W", False):
+            w_fname = 'lagranger_w_vals.csv'
+            with open(w_fname, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow(['#iteration number', iternum])
+            mpisppy.utils.wxbarutils.write_W_to_file(self.opt, w_fname,
+                                                     sep_files=False)
+        if self.opt.options.get("lagranger_write_xbar", False):
+            xbar_fname = 'lagranger_xbar_vals.csv'
+            with open(xbar_fname, 'a') as f:
+                writer = csv.writer(f)
+                writer.writerow(['#iteration number', iternum])
+            mpisppy.utils.wxbarutils.write_xbar_to_file(self.opt, xbar_fname)
+
     def _update_weights_and_solve(self, iternum):
         # Work with the nonants that we have (and we might not have any yet).
         self.opt._put_nonant_cache(self.localnonants)
@@ -66,6 +81,8 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         verbose = self.opt.options["verbose"]
         self.opt.Compute_Xbar(verbose=verbose)
         self.opt.Update_W(verbose=verbose)
+        ## writes Ws here
+        self._write_W_and_xbar(iternum)
         return self._lagrangian(iternum)
 
     def main(self):
@@ -79,6 +96,8 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         self.trivial_bound = self._lagrangian(0)
 
         self.bound = self.trivial_bound
+
+        self.opt.current_solver_options = self.opt.iterk_solver_options
 
         self.A_iter = 1
         while not self.got_kill_signal():

@@ -3,6 +3,7 @@
 """ fraction of ints converger to illustrate a custom converger that does not
     directly use mpi reduce calls.
     DLW Jan 2019
+    (DLW March 2023: Not tested with multiple hub ranks and might not work well in that case)
 """
 
 import math
@@ -72,4 +73,5 @@ class FractionalConverger(mpisppy.convergers.converger.Converger):
         Returns:
            converged?: True if converged, False otherwise
         """
-        return self._convergence_value() < self._options['convthresh']
+        self.conv = self._convergence_value()
+        return self.conv < self._options['convthresh']

@@ -1,10 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
-# Started 12 April by DLW
 # Replace baseparsers.py and enhance functionality.
 # A class drived form pyomo.common.config is defined with
 #   supporting member functions.
-# NOTE: at first I am just copying directly from baseparsers.py
-# TBD: reorganize some of this.
 # NOTE: the xxxx_args() naming convention is used by amalgamator.py
 
 """ Notes 
@@ -433,9 +430,7 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
-
-
-
+        
     def lagranger_args(self):
 
         self.add_to_config('lagranger', 
@@ -459,8 +454,6 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
 
-
-
     def xhatlooper_args(self):
 
         self.add_to_config('xhatlooper', 
@@ -473,26 +466,53 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=3)
 
-
-
-
     def xhatshuffle_args(self):
 
-        self.add_to_config('xhatshuffle', 
-                              description="have an xhatshuffle spoke",
+        self.add_to_config('xhatshuffle',
+                           description="have an xhatshuffle spoke",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('add_reversed_shuffle',
+                           description="using also the reversed shuffling (multistage only, default True)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('xhatshuffle_iter_step',
+                           description="step in shuffled list between 2 scenarios to try (default None)",
+                           domain=int,
+                           default=None)
+
+
+    def mult_rho_args(self):
+
+        self.add_to_config('mult_rho',
+                              description="Have mult_rho extension (default False)",
                               domain=bool,
                               default=False)
 
-        self.add_to_config('add_reversed_shuffle', 
-                            description="using also the reversed shuffling (multistage only, default True)",
-                              domain=bool,
-                              default=False)
+        self.add_to_config('mult_rho_convergence_tolerance',
+                            description="rhomult does nothing with convergence below this (default 1e-4)",
+                              domain=float,
+                              default=1e-4)
 
-        self.add_to_config('xhatshuffle_iter_step', 
-                            description="step in shuffled list between 2 scenarios to try (default None)",
+        self.add_to_config('mult_rho_update_stop_iteration',
+                            description="stop doing rhomult rho updates after this iteration (default None)",
                             domain=int,
                             default=None)
 
+        self.add_to_config('mult_rho_update_start_iteration',
+                            description="start doing rhomult rho updates on this iteration (default 2)",
+                            domain=int,
+                            default=2)
+
+    def mult_rho_to_dict(self):
+        assert hasattr(self, "mult_rho")
+        return {"mult_rho": self.mult_rho,
+                "convergence_tolerance": self.mult_rho_convergence_tolerance,
+                "rho_update_stop_iteration": self.mult_rho_update_stop_iteration,
+                "rho_update_start_iteration": self.mult_rho_update_start_iteration,
+                "verbose": False}
 
 
 
@@ -501,6 +521,14 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config('xhatspecific', 
                               description="have an xhatspecific spoke",
+                              domain=bool,
+                              default=False)
+
+
+    def xhatxbar_args(self):
+    
+        self.add_to_config('xhatxbar', 
+                              description="have an xhatxbar spoke",
                               domain=bool,
                               default=False)
 
@@ -515,6 +543,32 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+    def wtracker_args(self):
+
+        self.add_to_config('wtracker', 
+                              description="Use a wtracker extension",
+                              domain=bool,
+                              default=False)
+
+        self.add_to_config('wtracker_file_prefix', 
+                            description="prefix for rank by rank wtracker files (default '')",
+                            domain=str,
+                            default='')
+
+        self.add_to_config('wtracker_wlen', 
+                            description="max length of iteration window for xtracker (default 20)",
+                            domain=int,
+                            default=20)
+
+        self.add_to_config('wtracker_reportlen', 
+                            description="max length of long reports for xtracker (default 100)",
+                            domain=int,
+                            default=100)
+
+        self.add_to_config('wtracker_stdevthresh',
+                            description="Ignore moving std dev below this value (default None)",
+                            domain=float,
+                            default=None)
 
 
     def slammax_args(self):
@@ -526,7 +580,6 @@ class Config(pyofig.ConfigDict):
                               default=False)
 
 
-
     def slammin_args(self):
         # we will not try to get the specification from the command line
 
@@ -534,7 +587,6 @@ class Config(pyofig.ConfigDict):
                             description="have a slammin spoke",
                               domain=bool,
                               default=False)
-
 
 
     def cross_scenario_cuts_args(self):
@@ -556,6 +608,53 @@ class Config(pyofig.ConfigDict):
                               "scenario cuts (default 0.01)",
                               domain=float,
                               default=0.01)
+
+
+    def gradient_args(self):
+         # we will not try to get the specification from the command line
+        
+        self.add_to_config("xhatpath",
+                           description="path to npy file with xhat",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_cost_file",
+                           description="name of the gradient cost file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_rho_file",
+                           description="name of the gradient rho file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("order_stat",
+                           description="order statistic for rho (must be between 0 and 1)",
+                           domain=float,
+                           default=-1.0)
+
+    def rho_args(self):
+        self.add_to_config("whatpath",
+                           description="path to csv file with what",
+                           domain=str,
+                           default='')
+        self.add_to_config("rho_file",
+                           description="name of the rho file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config('rho_setter',
+                           description="use rho setter from a rho file",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("rho_path",
+                           description="csv file for the rho setter",
+                           domain=str,
+                           default='')
+        self.add_to_config("order_stat",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
+                           domain=float,
+                           default=-1.0)
+        self.add_to_config("rho_relative_bound",
+                           description="factor that bounds rho/cost",
+                           domain=float,
+                           default=1e3)
 
 
     #================

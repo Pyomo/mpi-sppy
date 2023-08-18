@@ -86,6 +86,12 @@ At each step, it takes the first-stage solution specified by a scenario,
 and then uses the scenarios that follows in the shuffled loop to get the 
 values of the non-first-stage variables that were not fixed before.
 
+xhatxbar_bounder
+^^^^^^^^^^^^^^^^
+
+This bounder computes and uses :math:`\overline{x}` as :math:`\hat{x}`. It does simple rounding
+for integer variables.
+
 stage2ef
 ~~~~~~~~
 

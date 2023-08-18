@@ -22,6 +22,7 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.xhatlooper_args()
     cfg.xhatshuffle_args()
+    cfg.xhatxbar_args()
 
     cfg.parse_command_line("sizes_cylinders")
     return cfg
@@ -35,6 +36,7 @@ def main():
     fwph = cfg.fwph
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
+    xhatxbar = cfg.xhatxbar
     lagrangian = cfg.lagrangian
     fixer = cfg.fixer
     fixer_tol = cfg.fixer_tol
@@ -97,6 +99,13 @@ def main():
             scenario_creator_kwargs=scenario_creator_kwargs,
         )
        
+    # xhat using xbar bound spoke
+    if xhatxbar:
+        xhatxbar_spoke = vanilla.xhatxbar_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
+       
     list_of_spoke_dict = list()
     if fwph:
         list_of_spoke_dict.append(fw_spoke)
@@ -106,6 +115,8 @@ def main():
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+    if xhatxbar:
+        list_of_spoke_dict.append(xhatxbar_spoke)
 
     WheelSpinner(hub_dict, list_of_spoke_dict).spin()
 
