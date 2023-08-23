@@ -94,7 +94,7 @@ def pysp_instance_creation_callback(
     scengroupnum = sputils.extract_num(scenario_name)
     scenario_base_name = scenario_name.rstrip("0123456789")
     
-    model = pyo.ConcreteModel()
+    model = pyo.ConcreteModel(scenario_name)
 
     def crops_init(m):
         retval = []
@@ -253,7 +253,7 @@ def inparser_adder(cfg):
 #=========
 def kw_creator(cfg):
     # (for Amalgamator): linked to the scenario_creator and inparser_adder
-    kwargs = {"use_integer": cfg.get('use_integer', False),
+    kwargs = {"use_integer": cfg.get('farmer_with_integers', False),
               "crops_multiplier": cfg.get('crops_multiplier', 1),
               "num_scens" : cfg.get('num_scens', None),
               }

@@ -1,0 +1,45 @@
+# gradient
+
+name: gradient and rho tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+defaults:
+    run:
+        shell: bash -l {0}
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py numpy setuptools cmake
+          pip install pyomo pandas xpress cplex scipy sympy dill
+
+      - name: setup the program
+        run: |
+          python setup.py develop
+
+      - name: Build Pyomo extensions
+        run: |
+          # some failures are expected, but this should succeed as long as pynumero is built correctly
+          pyomo build-extensions || python -c "from pyomo.contrib.pynumero.asl import AmplInterface; exit(0) if AmplInterface.available() else exit(1)"
+
+      - name: run farmer tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          python test_gradient_rho.py 
+          python test_w_writer.py
+

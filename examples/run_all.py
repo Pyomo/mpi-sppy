@@ -198,7 +198,7 @@ do_one("farmer",
 do_one("farmer",
        "farmer_cylinders.py",
        2,
-       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer",
        "farmer_cylinders.py",
        2,
@@ -242,6 +242,15 @@ do_one("sizes",
        "--linearize-proximal-terms "
        "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
        "--default-rho=1 --lagrangian --xhatshuffle "
+       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+       "--solver-name={}".format(solver_name))
+
+do_one("sizes",
+       "sizes_cylinders.py",
+       3,
+       "--linearize-proximal-terms "
+       "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
+       "--default-rho=1 --lagrangian --xhatxbar "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--solver-name={}".format(solver_name))
 

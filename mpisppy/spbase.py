@@ -6,6 +6,7 @@ import os
 import time
 import logging
 import weakref
+import math
 import numpy as np
 import re
 import pyomo.environ as pyo
@@ -161,7 +162,7 @@ class SPBase:
                     raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
                             f"variables between scenarios {mylen} vs. {local_node_nonant_lengths[ndn]}")
 
-        # compute node xbar values(reduction)
+        # compute node values(reduction)
         for ndn, val in local_node_nonant_lengths.items():
             local_val = np.array([val], 'i')
             max_val = np.zeros(1, 'i')
@@ -266,6 +267,7 @@ class SPBase:
         if scenario_creator_kwargs is None:
             scenario_creator_kwargs = dict()
 
+        local_ict = list() # Local instance creation times for time tracking
         for sname in self.local_scenario_names:
             instance_creation_start_time = time.time()
             s = self.scenario_creator(sname, **scenario_creator_kwargs)
@@ -276,16 +278,16 @@ class SPBase:
                 if(s._mpisppy_node_list[stmax].name)+'_0' not in self.all_nodenames:
                     raise RuntimeError("The leaf node associated with this scenario is not on all_nodenames"
                         f"Its last non-leaf node {s._mpisppy_node_list[stmax].name} has no first child {s._mpisppy_node_list[stmax].name+'_0'}")
+            local_ict.append(time.time() - instance_creation_start_time)
             
-            if self.options.get("display_timing", False):
-                instance_creation_time = time.time() - instance_creation_start_time
-                all_instance_creation_times = self.mpicomm.gather(
-                    instance_creation_time, root=0
-                )
-                if self.cylinder_rank == 0:
-                    aict = all_instance_creation_times
-                    print("Scenario instance creation times:")
-                    print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
+        if self.options.get("display_timing", False):
+            all_instance_creation_times = self.mpicomm.gather(
+                local_ict, root=0
+            )
+            if self.cylinder_rank == 0:
+                aict = [ict for l_ict in all_instance_creation_times for ict in l_ict]
+                print("Scenario instance creation times:")
+                print(f"\tmin={np.min(aict):4.2f} mean={np.mean(aict):4.2f} max={np.max(aict):4.2f}")
         self.scenarios_constructed = True
 
     def _attach_nonant_indices(self):
@@ -375,7 +377,7 @@ class SPBase:
 
     def _compute_unconditional_node_probabilities(self):
         """ calculates unconditional node probabilities and prob_coeff
-            and _PySP_W_coeff is set to a scalar 1 (used by variable_probability)"""
+            and prob0_mask is set to a scalar 1 (used by variable_probability)"""
         for k,s in self.local_scenarios.items():
             root = s._mpisppy_node_list[0]
             root.uncond_prob = 1.0
@@ -383,16 +385,16 @@ class SPBase:
                 child.uncond_prob = parent.uncond_prob * child.cond_prob
             if not hasattr(s._mpisppy_data, 'prob_coeff'):
                 s._mpisppy_data.prob_coeff = dict()
-                s._mpisppy_data.w_coeff = dict()
+                s._mpisppy_data.prob0_mask = dict()
                 for node in s._mpisppy_node_list:
                     s._mpisppy_data.prob_coeff[node.name] = (s._mpisppy_probability / node.uncond_prob)
-                    s._mpisppy_data.w_coeff[node.name] = 1.0  # needs to be a float
+                    s._mpisppy_data.prob0_mask[node.name] = 1.0  # needs to be a float
 
 
     def _use_variable_probability_setter(self, verbose=False):
         """ set variable probability unconditional values using a function self.variable_probability
         that gives us a list of (id(vardata), probability)]
-        ALSO set _PySP_W_coeff, which is a mask for W calculations (mask out zero probs)
+        ALSO set prob0_mask, which is a mask for W calculations (mask out zero probs)
         Note: We estimate that less than 0.01 of mpi-sppy runs will call this.
         """
         if self.variable_probability is None:
@@ -404,6 +406,7 @@ class SPBase:
         variable_probability_kwargs = self.options['variable_probability_kwargs'] \
                             if 'variable_probability_kwargs' in self.options \
                             else dict()
+        sum_probs = {} # indexed by (ndn,i) - maps to sum of probs for that variable
         for sname, s in self.local_scenarios.items():
             variable_probability = self.variable_probability(s, **variable_probability_kwargs)
             s._mpisppy_data.has_variable_probability = True
@@ -413,17 +416,24 @@ class SPBase:
                 if type(s._mpisppy_data.prob_coeff[ndn]) is float:  # not yet a vector
                     defprob = s._mpisppy_data.prob_coeff[ndn]
                     s._mpisppy_data.prob_coeff[ndn] = np.full(s._mpisppy_data.nlens[ndn], defprob, dtype='d')
-                    s._mpisppy_data.w_coeff[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
+                    s._mpisppy_data.prob0_mask[ndn] = np.ones(s._mpisppy_data.nlens[ndn], dtype='d')
                 s._mpisppy_data.prob_coeff[ndn][i] = prob
                 if prob == 0:  # there's probably a way to do this in numpy...
-                    s._mpisppy_data.w_coeff[ndn][i] = 0
+                    s._mpisppy_data.prob0_mask[ndn][i] = 0
+                sum_probs[(ndn,i)] = sum_probs.get((ndn,i),0.0) + prob
             didit += len(variable_probability)
             skipped += len(s._mpisppy_data.varid_to_nonant_index) - didit
+        
+        """ this needs to be MPIized; but check below should do the trick
+        for (ndn,i),prob in sum_probs.items():
+            if not math.isclose(prob, 1.0, abs_tol=self.E1_tolerance):
+                raise RuntimeError(f"Probability sum for variable with nonant index={i} at node={ndn} is not unity - computed sum={prob}")
+        """
+
         if verbose and self.cylinder_rank == 0:
             print ("variable_probability set",didit,"and skipped",skipped)
 
-        if 'do_not_check_variable_probabilities' in self.options\
-           and not self.options['do_not_check_variable_probabilities']:
+        if not self.options.get('do_not_check_variable_probabilities', False):
             self._check_variable_probabilities_sum(verbose)
 
     def is_zero_prob( self, scenario_model, var ):
@@ -502,9 +512,10 @@ class SPBase:
 
             if hasattr(scenario, "PySP_prob"):
                 raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
-            if not hasattr(scenario, "_mpisppy_probability"):
+            pspec =  scenario._mpisppy_probability if hasattr(scenario, "_mpisppy_probability") else None
+            if pspec is None or pspec == "uniform":
                 prob = 1./len(self.all_scenario_names)
-                if self.cylinder_rank == 0:
+                if self.cylinder_rank == 0 and pspec is None:
                     print(f"Did not find _mpisppy_probability, assuming uniform probability {prob}")
                 scenario._mpisppy_probability = prob
             if not hasattr(scenario, "_mpisppy_node_list"):

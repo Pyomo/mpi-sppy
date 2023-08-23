@@ -263,7 +263,7 @@ class IndepScens_SeqSampling(SeqSampling):
         sk = np.sqrt(sample_var)
         
         use_relative_error = (np.abs(zstar)>1)
-        Gk = ciutils.correcting_numeric(G,objfct=obj_at_xhat,
+        Gk = ciutils.correcting_numeric(G,cfg,objfct=obj_at_xhat,
                                relative_error=use_relative_error)
         
         self.SeedCount = start

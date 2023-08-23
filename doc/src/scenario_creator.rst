@@ -64,7 +64,9 @@ illustrated in the netdes example:
 
 The scenario probability should be attached by `scenario_creator` as
 ``_mpisppy_probability``. However, if you don't attach it, the scenarios are
-assumed to be equally likely.
+assumed to be equally likely. If the scenarios are equally likely, you
+can avoid a warning by assigning the string "uniform" to the
+``_mpisppy_probability`` attribute of the scenario model.
 
 EF Supplement List
 ------------------

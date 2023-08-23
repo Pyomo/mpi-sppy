@@ -163,22 +163,47 @@ def read_xhat(path="xhat.npy",num_stages=2,delete_file=False):
         os.remove(path)
     return(xhat)
 
-def correcting_numeric(G,relative_error=True,threshold=1e-4,objfct=None):
-    #Correcting small negative G due to numerical error while solving EF 
-    if relative_error:
-        if objfct is None:
-            raise RuntimeError("We need a value of the objective function to remove numerically negative G")
-        elif (G<= -threshold*np.abs(objfct)):
-            print(f"WARNING: The gap estimator is anormaly negative : {G}")
-            return G
-        else:
-            return max(0,G)
+def _fct_check(module, fct):
+    if not hasattr(module, fct):
+        raise RuntimeError(f"pyomo_opt_sense needs the module to have the {fct} function")
+
+def pyomo_opt_sense(module_name, cfg):
+    """ update cfg to have the optimization sense"""
+    module = importlib.import_module(module_name)
+    _fct_check(module, "scenario_names_creator")
+    sn = module.scenario_names_creator(1)  # an arbitrary scenario name
+    _fct_check(module, "kw_creator")
+    kw = module.kw_creator(cfg)
+    m = module.scenario_creator(sn[0], **kw)
+    objs = sputils.get_objs(m)
+    if objs[0].is_minimizing:
+        cfg.quick_assign("pyomo_opt_sense", int, pyo.minimize)
     else:
-        if (G<=-threshold):
-            print(f"WARNING: The gap estimator is anormaly negative : {G}")
-            return G
-        else: 
-            return max(0,G)           
+        cfg.quick_assign("pyomo_opt_sense", int, pyo.maximize)
+
+        
+def correcting_numeric(G, cfg, relative_error=True, threshold=1e-4, objfct=None):
+    #Correcting small negative G due to numerical error while solving EF
+    sense = cfg.get("pyo_opt_sense", pyo.minimize)  # 1 is minimize, -1 max
+    assert sense == 1 or sense == -1
+    if relative_error:
+        crit = threshold*np.abs(objfct)
+    else:
+        crit = threshold
+    if objfct is None:
+        raise RuntimeError("We need a value of the objective function to remove numerically small G")
+    elif sense == pyo.minimize and G <= -crit:
+        print(f"WARNING: The gap estimator is the wrong sign: {G}")
+        return G
+    elif sense == pyo.maximize and G >= crit:
+        print(f"WARNING: The gap estimator is the wrong sign: {G}")
+        return G
+    else:
+        if sense == pyo.minimize:
+            return max(0, G)
+        else:
+            return min(0, G)
+
 
 def gap_estimators(xhat_one,
                    mname, 
@@ -395,7 +420,7 @@ def gap_estimators(xhat_one,
     s = np.sqrt(sample_var)
     
     use_relative_error = (np.abs(zn_star)>1)
-    G = correcting_numeric(G,objfct=obj_at_xhat,
+    G = correcting_numeric(G,cfg,objfct=obj_at_xhat,
                            relative_error=use_relative_error)
   
     #objective_gap removed Sept.29 2022

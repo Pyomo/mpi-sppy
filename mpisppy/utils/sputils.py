@@ -78,6 +78,8 @@ def write_spin_the_wheel_tree_solution(spcomm, opt_dict, solution_directory_name
 def local_nonant_cache(spcomm):
     raise RuntimeError(_spin_the_wheel_move_msg)
 
+### a few Pyomo-related utilities ###
+
 
 def get_objs(scenario_instance, allow_none=False):
     """ return the list of objective functions for scenario_instance"""
@@ -89,8 +91,7 @@ def get_objs(scenario_instance, allow_none=False):
                            "objective functions.")
     if (len(scenario_objs) > 1):
         print("WARNING: Scenario", sname, "has multiple active "
-              "objectives. Selecting the first objective for "
-                  "inclusion in the extensive form.")
+              "objectives. Selecting the first objective.")
     return scenario_objs
 
 
@@ -122,7 +123,7 @@ def reactivate_objs(scenario_instance):
     for obj in scenario_instance._mpisppy_data.obj_list:
         obj.activate()
 
-
+    
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
               nonant_for_fixed_vars=True):
@@ -190,11 +191,13 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
     # Check if every scenario has a specified probability
     probs_specified = \
-        all([hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values()])
-    if not probs_specified:
+        all(hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values())
+    uniform_specified = \
+        probs_specified and all(scen._mpisppy_probability == "uniform" for scen in scen_dict.values())
+    if not probs_specified or uniform_specified:
         for scen in scen_dict.values():
             scen._mpisppy_probability = 1 / len(scen_dict)
-        if not suppress_warnings:
+        if not suppress_warnings and not uniform_specified:
             print('WARNING: At least one scenario is missing _mpisppy_probability attribute.',
                   'Assuming equally-likely scenarios...')
 
@@ -976,26 +979,6 @@ def number_of_nodes(branching_factors):
     last_node_stage_num = [i-1 for i in branching_factors]
     return node_idx(last_node_stage_num, branching_factors)
     
-
-def solver_name_from_list(cfg, idx, alt_list):
-    """ Find a solver name to assign to cfg[idx]; if you can't find anything, do nothing.
-    Args:
-        cfg (Config): the Pyomo Config object to update
-        idx (str): the index for the solver name
-        alt_list (list of str): alternative names to try, in order
-    Returns:
-        updated cfg
-    """
-    if cfg.get(idx) is None:  # if not None, we are done
-        for i in alt_list:
-            if cfg.get(i) is not None:
-                cfg.add_and_assign(name=idx,
-                                   description="solver name obtained as {i}",
-                                   domain=str,
-                                   default=None,
-                                   value=cfg.get(i))
-                break
-    return cfg
 
 if __name__ == "__main__":
     branching_factors = [2,2,2,3]

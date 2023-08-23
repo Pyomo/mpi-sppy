@@ -44,6 +44,7 @@ class NormRhoConverger(mpisppy.convergers.converger.Converger):
         log_rho_norm = math.log(self._compute_rho_norm(self.ph))
 
         ret_val = log_rho_norm < self.ph.options['convthresh']
+        self.conv = log_rho_norm
         if self._verbose and self.ph.cylinder_rank == 0:
             print(f"log(|rho|) = {log_rho_norm}")
             if ret_val:
