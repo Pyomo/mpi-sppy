@@ -54,7 +54,7 @@ class Agnostic():
 
        
     def scenario_creator(self, sname):
-        """ create scenario sname by calling guest language
+        """ create scenario sname by calling guest language, then attach stuff
         Args:
             sname (str): the scenario name that usually ends with a number
         Returns:
@@ -98,8 +98,53 @@ class Agnostic():
 
         sputils.attach_root_node(s, s.Obj, [s.nonantVars])
 
+
+############################################################################################################
+
+def _farmer_parse_args():
+    # create a config object and parse JUST FOR TESTING
+    cfg = config.Config()
+    
+    cfg.num_scens_required()
+    cfg.popular_args()
+    cfg.two_sided_args()
+    cfg.ph_args()    
+    cfg.aph_args()    
+    cfg.xhatlooper_args()
+    cfg.fwph_args()
+    cfg.lagrangian_args()
+    cfg.lagranger_args()
+    cfg.xhatshuffle_args()
+    cfg.add_to_config("crops_mult",
+                         description="There will be 3x this many crops (default 1)",
+                         domain=int,
+                         default=1)                
+    cfg.add_to_config("use_norm_rho_updater",
+                         description="Use the norm rho updater extension",
+                         domain=bool,
+                         default=False)
+    cfg.add_to_config("use-norm-rho-converger",
+                         description="Use the norm rho converger",
+                         domain=bool,
+                         default=False)
+    cfg.add_to_config("run_async",
+                         description="Run with async projective hedging instead of progressive hedging",
+                         domain=bool,
+                         default=False)
+    cfg.add_to_config("use_norm_rho_converger",
+                         description="Use the norm rho converger",
+                         domain=bool,
+                         default=False)
+
+    cfg.parse_command_line("farmer_cylinders")
+    return cfg
+
+
+        
 if __name__ == "__main__":
     # For use by developers doing ad hoc testing
     print("begin ad hoc main for agnostic.py")
-
+    import farmer_agnostic
+    cfg = _farmer_parse_args()
+    A = Agnostic(farmer_agnostic, cfg)
 
