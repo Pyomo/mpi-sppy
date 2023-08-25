@@ -11,6 +11,7 @@ notes by dlw:
 import inspect
 import pyomo.environ as pyo
 from mpisppy.utils import sputils
+from mpisppy.utils import config
 import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy.extensions.fixer import Fixer
@@ -29,28 +30,28 @@ class Agnostic():
         self.cfg = cfg
 
         
-   def callout_agnostic(self, **kwargs):
-       """ callout from mpi-sppy for AML-agnostic support
-       Args:
+    def callout_agnostic(self, **kwargs):
+        """ callout from mpi-sppy for AML-agnostic support
+        Args:
            cfg (Config): the field "AML_agnostic" might contain a module with callouts
 	   kwargs (dict): the keyword args for the callout function (e.g. scenario)
-       Calls:
+        Calls:
            a callout function that presumably has side-effects
-       Returns:
+        Returns:
            True if the callout was done and False if not
-       Note:
+        Note:
            Throws an error if the module exists, but the fct is missing
-       """
+        """
        
-       if self.module is not None:
-	   fname = inspect.stack()[1][3] 
-           fct = getattr(self.module, fname, None)
-           if fct is None:
-	       raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing function {fname}")
-	   fct(**kwargs)
-	   return True
-       else:
-           return False
+        if self.module is not None:
+            fname = inspect.stack()[1][3] 
+            fct = getattr(self.module, fname, None)
+            if fct is None:
+                raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing function {fname}")
+            fct(**kwargs)
+            return True
+        else:
+            return False
 
        
     def scenario_creator(self, sname):
@@ -75,7 +76,7 @@ class Agnostic():
         
         crfct = getattr(self.module, "scenario_creator", None)
         if crfct is None:
-	    raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing the scenario_creator function")
+            raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing the scenario_creator function")
         kwfct = getattr(self.module, "kw_creator", None)
         if kwfct is not None:
            kwargs = kwfct(self.cfg)
@@ -93,10 +94,12 @@ class Agnostic():
         s.Obj = pyo.Objective(expr=0, sense=gd["sense"])
         s._agnostic_dict = gd
 
-        assert BFs is None, "We are only doing two stage for now"
+        assert gd["BFs"] is None, "We are only doing two stage for now"
         # (it would not be that hard to be multi-stage; see hydro.py)
 
         sputils.attach_root_node(s, s.Obj, [s.nonantVars])
+
+        return s
 
 
 ############################################################################################################
@@ -147,4 +150,5 @@ if __name__ == "__main__":
     import farmer_agnostic
     cfg = _farmer_parse_args()
     A = Agnostic(farmer_agnostic, cfg)
-
+    m = A.scenario_creator("Scen1")
+    m.pprint()

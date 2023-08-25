@@ -34,8 +34,8 @@ def scenario_creator(
         num_scens, seedoffset)
     gd = {
         "scenario": s,
-        "nonants": [v for v in model.DevotedAcreage.values()],
-        "nonant_names": [v.name for v in model.DevotedAcreage.values()],
+        "nonants": {("ROOT",i): v for i,v in enumerate(s.DevotedAcreage.values())},
+        "nonant_names": {("ROOT",i): v.name for i, v in enumerate(s.DevotedAcreage.values())},
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None
