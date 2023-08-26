@@ -81,7 +81,7 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     gs.W = pyo.Param(nonant_idx, initialize=0.0, mutable=True)
     gs.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
     gs.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
-    gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default-rho)
+    gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
 
 
 def W_disabled(Ag):
@@ -92,7 +92,40 @@ def prox_disabled(Ag):
     lkfdsajlkfdjbooleanfunction
 
     
-def attach_PH_to_objective(Ag, sname, scenario):
+def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
-    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+
+    gd = scenario._agnostic_dict
+    gs = gd["scenario"]  # guest scenario handle
+    nonant_idx = list(gd["nonants"].keys())    
+    objfct = gs.Total_Cost_Objective  # we know this is farmer...
+    ph_term = 0
+    # Dual term (weights W)
+    if add_duals:
+        gs.WExpr = pyo.Expression(expr= sum(gs.W[ndn_i] * xvar for ndn_i,xvar in gd["nonants"].items()))
+        ph_term += gs.W_on * gs.WExpr
+        
+        # Prox term (quadratic)
+        if (add_prox):
+            prox_expr = 0.
+            for ndn_i, xvar in gd["nonants"].items():
+                # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
+                # x**2 is the only qradratic term, which might be
+                # dealt with differently depending on user-set options
+                if xvar.is_binary():
+                    xvarsqrd = xvar
+                else:
+                    xvarsqrd = xvar**2
+                prox_expr += (gs.rho[ndn_i] / 2.0) * \
+                    (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+            gs.ProxExpr = pyo.Expression(expr=prox_expr)
+            ph_term += gs.prox_on * gs.ProxExpr
+                    
+            if gd["sense"] == pyo.minimize:
+                objfct.expr += ph_term
+            elif gd["sense"] == pyo.maximize:
+                objfct.expr -= ph_term
+            else:
+                raise RuntimeError(f"Unknown sense {gd['sense'] =}")
+            

@@ -9,6 +9,9 @@ circa Aug 25
 
 -  ? for the phbase constructor: pass cfg that contains Ag or pass Ag?; use the options dict for now
 
+- working on an example, which is farmer_agnostic.py run from the __main__ of agnostic.py
+  (farmer_agnostic is presently run from the utils directory and I have a copy of farmer.py there as well)
+
 
 
 

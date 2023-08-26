@@ -731,6 +731,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             else:
                 objfct.expr -= ph_term
             
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"sname":sname, "scenario":scenario,
+                                          "add_duals": add_duals, "add_prox": add_prox})
+
 
 
     def PH_Prep(
