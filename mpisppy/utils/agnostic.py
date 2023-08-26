@@ -29,7 +29,7 @@ class Agnostic():
         self.cfg = cfg
 
         
-    def callout_agnostic(self, **kwargs):
+    def callout_agnostic(self, kwargs):
         """ callout from mpi-sppy for AML-agnostic support
         Args:
            cfg (Config): the field "AML_agnostic" might contain a module with callouts
@@ -43,12 +43,11 @@ class Agnostic():
         """
        
         if self.module is not None:
-
             fname = inspect.stack()[1][3] 
             fct = getattr(self.module, fname, None)
             if fct is None:
                 raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing function {fname}")
-            fct(**kwargs)
+            fct(self, **kwargs)
             return True
         else:
             return False

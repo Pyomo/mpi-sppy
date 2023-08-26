@@ -628,18 +628,22 @@ class PHBase(mpisppy.spopt.SPOpt):
                                         mutable=True,
                                         default=self.options["defaultPHrho"])
             if self.Ag is not None:
-                self.Ag.callout_agnostic(sname=sname, scenario=scenario)
+                self.Ag.callout_agnostic({"sname":sname, "scenario":scenario})
 
 
     @property
     def W_disabled(self):
         assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'W_on')
+        if self.Ag is not None:
+            self.Ag.callout_agnostic()
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.W_on.value)
 
 
     @property
     def prox_disabled(self):
         assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'prox_on')
+        if self.Ag is not None:
+            self.Ag.callout_agnostic()
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
 
 
@@ -726,6 +730,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 objfct.expr += ph_term
             else:
                 objfct.expr -= ph_term
+            
 
 
     def PH_Prep(
