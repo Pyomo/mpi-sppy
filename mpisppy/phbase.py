@@ -253,6 +253,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Function to set rho values throughout the PH algorithm.
             variable_probability (callable, optional):
                 Function to set variable specific probabilities.
+            cfg (config object, optional?)  controls (mainly from user)
+                (Maybe this should move up to spbase)
 
     """
     def __init__(
@@ -289,6 +291,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
         self.options = options
+        self.Ag = options.get("Ag", None)  # The Agnostic Object
+        
         self.options_check()
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
@@ -623,6 +627,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.options["defaultPHrho"])
+            if self.Ag is not None:
+                self.Ag.callout_agnostic(sname=sname, scenario=scenario)
 
 
     @property

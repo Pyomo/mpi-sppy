@@ -14,7 +14,6 @@ from mpisppy.utils import sputils
 from mpisppy.utils import config
 import mpisppy.utils.solver_spec as solver_spec
 
-from mpisppy.extensions.fixer import Fixer
 
 #========================================
 class Agnostic():
@@ -44,6 +43,7 @@ class Agnostic():
         """
        
         if self.module is not None:
+
             fname = inspect.stack()[1][3] 
             fct = getattr(self.module, fname, None)
             if fct is None:
@@ -104,51 +104,64 @@ class Agnostic():
 
 ############################################################################################################
 
-def _farmer_parse_args():
-    # create a config object and parse JUST FOR TESTING
-    cfg = config.Config()
-    
-    cfg.num_scens_required()
-    cfg.popular_args()
-    cfg.two_sided_args()
-    cfg.ph_args()    
-    cfg.aph_args()    
-    cfg.xhatlooper_args()
-    cfg.fwph_args()
-    cfg.lagrangian_args()
-    cfg.lagranger_args()
-    cfg.xhatshuffle_args()
-    cfg.add_to_config("crops_mult",
-                         description="There will be 3x this many crops (default 1)",
-                         domain=int,
-                         default=1)                
-    cfg.add_to_config("use_norm_rho_updater",
-                         description="Use the norm rho updater extension",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("use-norm-rho-converger",
-                         description="Use the norm rho converger",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("run_async",
-                         description="Run with async projective hedging instead of progressive hedging",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("use_norm_rho_converger",
-                         description="Use the norm rho converger",
-                         domain=bool,
-                         default=False)
-
-    cfg.parse_command_line("farmer_cylinders")
-    return cfg
-
-
         
 if __name__ == "__main__":
     # For use by developers doing ad hoc testing
     print("begin ad hoc main for agnostic.py")
-    import farmer_agnostic
+    import farmer_agnostic  # for ad hoc testing
+    from mpisppy.spin_the_wheel import WheelSpinner
+    import mpisppy.utils.cfg_vanilla as vanilla
+
+    
+    def _farmer_parse_args():
+        # create a config object and parse JUST FOR TESTING
+        cfg = config.Config()
+
+        farmer_agnostic.inparser_adder(cfg)
+
+        cfg.popular_args()
+        cfg.two_sided_args()
+        cfg.ph_args()    
+        cfg.aph_args()    
+        cfg.xhatlooper_args()
+        cfg.fwph_args()
+        cfg.lagrangian_args()
+        cfg.lagranger_args()
+        cfg.xhatshuffle_args()
+
+        cfg.parse_command_line("farmer_agnostic_adhoc")
+        return cfg
+
     cfg = _farmer_parse_args()
-    A = Agnostic(farmer_agnostic, cfg)
-    m = A.scenario_creator("Scen1")
+    Ag = Agnostic(farmer_agnostic, cfg)
+    m = Ag.scenario_creator("Scen1")
     m.pprint()
+
+    # start farmer_cylinders (old school)
+    scenario_creator = Ag.scenario_creator
+    scenario_denouement = farmer_agnostic.scenario_denouement   # should we go though Ag?
+    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
+
+    # Things needed for vanilla cylinders
+    beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
+
+    # Vanilla PH hub
+    hub_dict = vanilla.ph_hub(*beans,
+                              scenario_creator_kwargs=None,  # kwargs in Ag not here
+                              ph_extensions=None,
+                              ph_converger=None,
+                              rho_setter = None)
+    # pass the Ag object via options...
+    hub_dict["opt_kwargs"]["options"]["Ag"] = Ag
+    
+    list_of_spoke_dict = []
+    
+    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+    wheel.spin()
+
+    if write_solution:
+        wheel.write_first_stage_solution('farmer_plant.csv')
+        wheel.write_first_stage_solution('farmer_cyl_nonants.npy',
+                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
+        wheel.write_tree_solution('farmer_full_solution')
+    

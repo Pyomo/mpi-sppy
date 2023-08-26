@@ -1,3 +1,19 @@
+newest notes on top
+----------------------------------------
+
+circa Aug 25
+
+- no changes needed in spbase so long as agnostic scenario creator is passed in
+
+- EF will be basically a rewrite because we use blocks
+
+-  ? for the phbase constructor: pass cfg that contains Ag or pass Ag?; use the options dict for now
+
+
+
+
+
+===============================================================
 Thoughts about AML-agnostic extensions to mpi-sppy
 (started by DLW 18 Dec 2022)
 Just thinking about support for straight PH for now. Bundles are probably the first thing to add.
