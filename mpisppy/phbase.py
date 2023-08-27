@@ -437,7 +437,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 0
             if self.Ag is not None:
-                self.Ag.callout_agnostic(scenario)
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def _disable_W(self):
@@ -447,7 +447,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         for scenario in self.local_scenarios.values():
             scenario._mpisppy_model.W_on = 0
             if self.Ag is not None:
-                self.Ag.callout_agnostic(scenario)
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def disable_W_and_prox(self):
@@ -459,7 +459,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 1
             if self.Ag is not None:
-                self.Ag.callout_agnostic(scenario)
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def _reenable_W(self):
@@ -467,7 +467,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.W_on = 1
             if self.Ag is not None:
-                self.Ag.callout_agnostic(scenario)
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def reenable_W_and_prox(self):

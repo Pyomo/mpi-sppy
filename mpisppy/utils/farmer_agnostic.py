@@ -71,7 +71,9 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
-    farmer.scenario_denouement(rank, scenario_name, scenario)
+    pass
+    # (the fct in farmer won't work because the Var names don't match)
+    #farmer.scenario_denouement(rank, scenario_name, scenario)
 
 
 
