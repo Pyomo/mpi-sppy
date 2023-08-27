@@ -164,7 +164,9 @@ class SPOpt(SPBase):
 
         Ag = getattr(self, "Ag", None)
         if Ag is not None:
-            didcallout = Ag.callout_agnostic({"s": s, "solve_keyword_args": solve_keyword_args})
+            assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
+            kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee}
+            didcallout = Ag.callout_agnostic(kws)
 
         if not didcallout:
             try:
@@ -176,7 +178,6 @@ class SPOpt(SPBase):
                 results = None
                 solver_exception = e
 
-            pyomo_solve_time = time.time() - solve_start_time
             if (results is None) or (len(results.solution) == 0) or \
                     (results.solution(0).status == SolutionStatus.infeasible) or \
                     (results.solver.termination_condition == TerminationCondition.infeasible) or \
@@ -222,6 +223,9 @@ class SPOpt(SPBase):
                     self._check_staleness(s)                 
 
         # end of Agnostic bypass
+
+        # Time capture moved down August 2023
+        pyomo_solve_time = time.time() - solve_start_time
         
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)

@@ -3,9 +3,15 @@
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, Pyomo is the guest language just for
 # testing and documentation purposed.
+"""
+For other guest languages, the corresponding module is
+still written in Python, it just needs to interact
+with the guest language
+"""
 
 import pyomo.environ as pyo
-import farmer   # the native farmer
+from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
+import farmer   # the native farmer (makes a few things easy)
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
@@ -54,8 +60,10 @@ def inparser_adder(cfg):
     
 #=========
 def kw_creator(cfg):
+    # creates keywords for scenario creator
     return farmer.kw_creator(cfg)
 
+# This is not needed for PH
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
     return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
@@ -149,21 +157,69 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
                 raise RuntimeError(f"Unknown sense {gd['sense'] =}")
             
 
-def solve_one(Ag, s, solve_keyword_args):
+def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # This needs to attach stuff to s (see solve_one in spopt.py)
     # What about staleness?
     # Solve the guest language version, then copy values to the host scenario
 
-    # As of Aug 27, 2023 we are going to ignore the solver plugin and just
-    # try to get our hands on a solver
-    solvername = s._solver_plugin.name
+    # We need to operate on the guest scenario, not s; however, attach things to s (the host scenario)
+    # and copy to s. If you are working on a new guest, you should not have to edit the s side of things
+    
+    gd = s._agnostic_dict
+    gs = gd["scenario"]  # guest scenario handle
+
+    solver_name = s._solver_plugin.name
     solver = pyo.SolverFactory(solver_name)
     if 'persistent' in solver_name:
         raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
         ###solver.set_instance(ef, symbolic_solver_labels=True)
         ###solver.solve(tee=True)
     else:
-        # TBD: get tee from options for cfg
-        solver.solve(ef, tee=False, symbolic_solver_labels=True,)
-    xxxxx attach stuff
+        solver_exception = None
+        try:
+            results = solver.solve(gs, tee=tee, symbolic_solver_labels=True,load_solutions=False)
+        except Exception as e:
+            results = None
+            solver_exception = e
 
+    if (results is None) or (len(results.solution) == 0) or \
+            (results.solution(0).status == SolutionStatus.infeasible) or \
+            (results.solver.termination_condition == TerminationCondition.infeasible) or \
+            (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+            (results.solver.termination_condition == TerminationCondition.unbounded):
+
+        s._mpisppy_data.scenario_feasible = False
+
+        if gripe:
+            print (f"Solve failed for scenario {s.name}")
+            if results is not None:
+                print ("status=", results.solver.status)
+                print ("TerminationCondition=",
+                       results.solver.termination_condition)
+
+        if solver_exception is not None:
+            raise solver_exception
+
+    else:
+        s._mpisppy_data.scenario_feasible = True
+        if gd["sense"] == pyo.minimize:
+            s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+        else:
+            s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+        gs.solutions.load_from(results)
+        # copy the nonant x values from gs to s so mpisppy can use them in s
+        for ndn_i, gxvar in gd["nonants"].items():
+            # courtesy check for staleness on the guest side before the copy
+            if not gxvar.fixed and gxvar.stale:
+                try:
+                    float(pyo.value(gxvar))
+                except:
+                    raise RuntimeError(
+                        f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
+                        "reported as stale. This usually means this variable "
+                        "did not appear in any (active) components, and hence "
+                        "was not communicated to the subproblem solver. ")
+                
+            s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
+
+    # TBD: deal with bundling (see solve_one in spopt.py)
