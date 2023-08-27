@@ -324,6 +324,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             verbose (bool):
                 If True, displays verbose output during update.
         """
+        print("entered update_W")
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
@@ -371,7 +372,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def _populate_W_cache(self, cache):
-        """ Copy the W values for noants *for all local scenarios*
+        """ Copy the W values for nonants *for all local scenarios*
         Args:
             cache (np vector) to receive the W's for all local scenarios (for sending)
 

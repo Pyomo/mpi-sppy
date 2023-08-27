@@ -55,13 +55,14 @@ if __name__ == "__main__":
         xhatshuffle_spoke["opt_kwargs"]["options"]["Ag"] = Ag
     if cfg.lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans, scenario_creator_kwargs=None)       
-    if cfg.lagrangian:
-        list_of_spoke_dict.append(lagrangian_spoke)
-    list_of_spoke_dict = list()
+        lagrangian_spoke["opt_kwargs"]["options"]["Ag"] = Ag
 
+    list_of_spoke_dict = list()
     if cfg.xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
-
+    if cfg.lagrangian:
+        list_of_spoke_dict.append(lagrangian_spoke)
+        
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 

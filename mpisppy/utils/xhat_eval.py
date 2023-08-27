@@ -243,7 +243,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 If fct is R-->R, returns a float.
                 If fct is R-->R^p with p>1, returns a np.array of length p
         """
-        print("hey there in xhat_eval EObje")
         self._lazy_create_solvers()
         if fct is None:
             return super().Eobjective(verbose=verbose)

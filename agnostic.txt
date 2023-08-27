@@ -6,8 +6,14 @@ guest means whatever the guest language is (which can even be Pyomo, of course)
 
 Aug 27
 
+
 The example is now farmer_agnostic.py and agnostic_cylinders.py (ag.bash)
 in the farmer example directory.
+
+HEY::: who updates W? Let's do it right before the solve so we don't have to care...
+       this is a little dangerous at present because we are being silent whe
+       they are not there because of xhatters
+ 
 
 == nonant communication needs to be on the host side, of course, but
    then callouts need to get values copied to/from the guest

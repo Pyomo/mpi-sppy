@@ -164,14 +164,16 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # This needs to attach stuff to s (see solve_one in spopt.py)
-    # What about staleness?
     # Solve the guest language version, then copy values to the host scenario
+
+    # This function needs to  W on the guest right before the solve
 
     # We need to operate on the guest scenario, not s; however, attach things to s (the host scenario)
     # and copy to s. If you are working on a new guest, you should not have to edit the s side of things
 
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
-    
+
+    _copy_Ws_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
@@ -235,7 +237,25 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
 
 
-def _copy_from_host(s):
+# local helper
+def _copy_Ws_from_host(s):
+    print(f"   {s.name =}")
+    gd = s._agnostic_dict
+    gs = gd["scenario"]  # guest scenario handle
+    for ndn_i, gxvar in gd["nonants"].items():
+        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+        if not hasattr(s, "_mpisppy_model"):
+            print("what the heck!!")
+        if hasattr(s._mpisppy_model, "W"):
+            gs.W[ndn_i] = pyo.value(s._mpisppy_model.W[ndn_i])
+            print(f"{gs.W[ndn_i].value =}")
+        else:
+            # presumably an xhatter
+            pass
+
+
+# local helper
+def _copy_nonants_from_host(s):
     # values and fixedness; 
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
@@ -252,19 +272,19 @@ def _copy_from_host(s):
 
 def _restore_nonants(Ag, s):
     # the host has already restored
-    _copy_from_host(s)
+    _copy_nonants_from_host(s)
 
     
 def _restore_original_fixedness(Ag, s):
-    _copy_from_host(s)
+    _copy_nonants_from_host(s)
 
 
 def _fix_nonants(Ag, s):
-    _copy_from_host(s)
+    _copy_nonants_from_host(s)
 
 
 def _fix_root_nonants(Ag, s):
-    _copy_from_host(s)
+    _copy_nonants_from_host(s)
 
     
     

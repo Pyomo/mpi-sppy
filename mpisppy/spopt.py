@@ -397,6 +397,8 @@ class SPOpt(SPBase):
         
         self.mpicomm.Allreduce(local_Ebound, global_Ebound, op=MPI.SUM)
 
+        print(f"{global_Ebound[0]= }")
+        
         if extra_sum_terms is None:
             return global_Ebound[0]
         else:
