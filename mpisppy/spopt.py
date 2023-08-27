@@ -167,6 +167,8 @@ class SPOpt(SPBase):
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
             kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee}
             didcallout = Ag.callout_agnostic(kws)
+        else:
+            didcallout = False
 
         if not didcallout:
             try:
@@ -334,7 +336,13 @@ class SPOpt(SPBase):
                 objfct = self.saved_objs[k]
             else:
                 objfct = sputils.find_active_objective(s)
-            local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
+            Ag = getattr(self, "Ag", None)
+            if Ag is None:
+                local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
+            else:
+                # Agnostic will have attached the objective (and doesn't bundle as of Aug 2023)
+                local_Eobjs.append(s._mpisppy_probability * s._mpisppy_data._obj_from_agnostic)              
+                
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
@@ -555,6 +563,9 @@ class SPOpt(SPBase):
         for k,s in self.local_scenarios.items():        
             for ci, _ in enumerate(s._mpisppy_data.nonant_indices):
                 s._mpisppy_data.fixedness_cache[ci] = s._mpisppy_data.original_fixedness[ci]
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
         self._restore_nonants()
 
 
@@ -593,6 +604,12 @@ class SPOpt(SPBase):
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
+
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
+
+
                         
     def _fix_root_nonants(self,root_cache):
         """ Fix the 1st stage Vars subject to non-anticipativity at given values.
@@ -637,6 +654,10 @@ class SPOpt(SPBase):
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
                         
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
+
 
 
     def _restore_nonants(self):

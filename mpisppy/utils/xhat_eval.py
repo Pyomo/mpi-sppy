@@ -58,6 +58,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self.PH_extensions = None
 
         self._subproblems_solvers_created = False
+        self.Ag = options.get("Ag", None)
         
 
     def _lazy_create_solvers(self):
@@ -87,6 +88,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective)
 
+        """
+        DLW wonders about this block; Aug 2023 so it is removed so now there is really only one solve_one
         solve_keyword_args = dict()
         if self.cylinder_rank == 0:
             if tee is not None and tee is True:
@@ -123,8 +126,10 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
                 s._mpisppy_data.scenario_feasible = True
 
-
+        """
         if compute_val_at_nonant:
+            if self.Ag is None:
+                print("ono solf.ag is none")
                 if self.bundling:
                     objfct = self.saved_objs[k]
                     
@@ -135,6 +140,10 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
                                .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
                 self.objs_dict[k] = pyo.value(objfct)
+            else:
+                # if we did the callout, the obj should be attached to s
+                self.objs_dict[k] = s._mpisppy_data._obj_from_agnostic
+                print(f"{self.objs_dict[k] =}")
         return(pyomo_solve_time)
 
 
@@ -234,6 +243,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 If fct is R-->R, returns a float.
                 If fct is R-->R^p with p>1, returns a np.array of length p
         """
+        print("hey there in xhat_eval EObje")
         self._lazy_create_solvers()
         if fct is None:
             return super().Eobjective(verbose=verbose)
@@ -318,7 +328,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         )
         
         Eobj = self.Eobjective(self.verbose,fct=fct)
-        
+
         return Eobj
     
     

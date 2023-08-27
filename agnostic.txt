@@ -16,6 +16,8 @@ in the farmer example directory.
    between host and guest at all times (e.g. _restore_nonants needs to callout,
    but _save_nonants does not.
 
+== bundling is left hanging in dangerous ways: e.g. Eobjective in two places
+
 Aug 26
 
 Work proceeds on three fronts:

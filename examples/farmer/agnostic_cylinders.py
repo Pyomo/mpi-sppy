@@ -23,7 +23,7 @@ def _farmer_parse_args():
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
 
-    cfg.parse_command_line("farmer_agnostic_adhoc")
+    cfg.parse_command_line("farmer_agnostic_cylinders")
     return cfg
 
 
@@ -48,12 +48,24 @@ if __name__ == "__main__":
                               rho_setter = None)
     # pass the Ag object via options...
     hub_dict["opt_kwargs"]["options"]["Ag"] = Ag
-    
-    list_of_spoke_dict = []
-    
+
+    # xhat shuffle bound spoke
+    if cfg.xhatshuffle:
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=None)
+        xhatshuffle_spoke["opt_kwargs"]["options"]["Ag"] = Ag
+    if cfg.lagrangian:
+        lagrangian_spoke = vanilla.lagrangian_spoke(*beans, scenario_creator_kwargs=None)       
+    if cfg.lagrangian:
+        list_of_spoke_dict.append(lagrangian_spoke)
+    list_of_spoke_dict = list()
+
+    if cfg.xhatshuffle:
+        list_of_spoke_dict.append(xhatshuffle_spoke)
+
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
+    write_solution = False
     if write_solution:
         wheel.write_first_stage_solution('farmer_plant.csv')
         wheel.write_first_stage_solution('farmer_cyl_nonants.npy',

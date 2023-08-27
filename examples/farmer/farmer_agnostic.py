@@ -169,6 +169,8 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     # We need to operate on the guest scenario, not s; however, attach things to s (the host scenario)
     # and copy to s. If you are working on a new guest, you should not have to edit the s side of things
+
+    # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
     
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
@@ -227,7 +229,10 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
                 
             s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
-    # TBD: deal with bundling (see solve_one in spopt.py)
+        # the next line ignore bundling
+        s._mpisppy_data._obj_from_agnostic = pyo.value(gs.Total_Cost_Objective)
+
+    # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
 
 
 def _copy_from_host(s):
