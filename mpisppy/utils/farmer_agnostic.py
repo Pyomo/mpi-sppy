@@ -149,8 +149,21 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
                 raise RuntimeError(f"Unknown sense {gd['sense'] =}")
             
 
-def solve_one(Ag, s, solve_kw_args):
+def solve_one(Ag, s, solve_keyword_args):
     # This needs to attach stuff to s (see solve_one in spopt.py)
-    # xxxxxx how do you deal with the solver plugin? What about staleness?
+    # What about staleness?
     # Solve the guest language version, then copy values to the host scenario
-    fdsalkjlakj
+
+    # As of Aug 27, 2023 we are going to ignore the solver plugin and just
+    # try to get our hands on a solver
+    solvername = s._solver_plugin.name
+    solver = pyo.SolverFactory(solver_name)
+    if 'persistent' in solver_name:
+        raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
+        ###solver.set_instance(ef, symbolic_solver_labels=True)
+        ###solver.solve(tee=True)
+    else:
+        # TBD: get tee from options for cfg
+        solver.solve(ef, tee=False, symbolic_solver_labels=True,)
+    xxxxx attach stuff
+

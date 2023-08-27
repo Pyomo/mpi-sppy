@@ -164,7 +164,7 @@ class SPOpt(SPBase):
 
         Ag = getattr(self, "Ag", None)
         if Ag is not None:
-            didcallout = Ag.callout_agnostic(s, solve_keyword_args)
+            didcallout = Ag.callout_agnostic({"s": s, "solve_keyword_args": solve_keyword_args})
 
         if not didcallout:
             try:
