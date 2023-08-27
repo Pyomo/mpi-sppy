@@ -38,9 +38,12 @@ def scenario_creator(
     """
     s = farmer.scenario_creator(scenario_name, use_integer, sense, crops_multiplier,
         num_scens, seedoffset)
+    # In general, be sure to process variables in the same order has the guest does (so indexes match)
     gd = {
         "scenario": s,
         "nonants": {("ROOT",i): v for i,v in enumerate(s.DevotedAcreage.values())},
+        "nonant_fixedness": {("ROOT",i): v.is_fixed() for i,v in enumerate(s.DevotedAcreage.values())},
+        "nonant_start": {("ROOT",i): v._value for i,v in enumerate(s.DevotedAcreage.values())},
         "nonant_names": {("ROOT",i): v.name for i, v in enumerate(s.DevotedAcreage.values())},
         "probability": "uniform",
         "sense": pyo.minimize,
@@ -225,3 +228,38 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
             s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
     # TBD: deal with bundling (see solve_one in spopt.py)
+
+
+def _copy_from_host(s):
+    # values and fixedness; 
+    gd = s._agnostic_dict
+    gs = gd["scenario"]  # guest scenario handle
+    for ndn_i, gxvar in gd["nonants"].items():
+        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+        guestVar = gd["nonants"][ndn_i]
+        if guestVar.is_fixed():
+            guestVar.fixed = False
+        if hostVar.is_fixed():
+            guestVar.fix(hostVar._value)
+        else:
+            guestVar._value = hostVar._value
+
+
+def _restore_nonants(Ag, s):
+    # the host has already restored
+    _copy_from_host(s)
+
+    
+def _restore_original_fixedness(Ag, s):
+    _copy_from_host(s)
+
+
+def _fix_nonants(Ag, s):
+    _copy_from_host(s)
+
+
+def _fix_root_nonants(Ag, s):
+    _copy_from_host(s)
+
+    
+    

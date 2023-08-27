@@ -66,6 +66,8 @@ class Agnostic():
             gd["scenario"]: the guest language model handle
             gd["nonants"]: dict [(ndn,i)]: guest language Var handle
             gd["nonant_names"]: dict [(ndn,i)]: str with name of variable
+            gd["nonant_fixedness"]: dict [(ndn,i)]: indicator of fixed variable
+            gd["nonant_start"]: dict [(ndn,i)]: float with starting value
             gd["probability"]: float prob or str "uniform"
             gd["sense"]: pyo.minimize or pyo.maximize
             gd["BFs"]: scenario tree branching factors list or None
@@ -85,8 +87,11 @@ class Agnostic():
         s = pyo.ConcreteModel(sname)
 
         ndns = [ndn for (ndn,i) in gd["nonants"].keys()]
-        iis = [str(i) for (ndn,i) in gd["nonants"].keys()]  # is is reserved...
+        iis = [i for (ndn,i) in gd["nonants"].keys()]  # is is reserved...
         s.nonantVars = pyo.Var(ndns, iis)
+        for idx,v  in s.nonantVars.items():
+            v._value = gd["nonant_start"][idx]
+            v.fixed = gd["nonant_fixedness"][idx]
         
         # we don't really need an objective, but we do need a sense
         # note that other code may put W's and prox's on it
@@ -106,61 +111,4 @@ class Agnostic():
         
 if __name__ == "__main__":
     # For use by developers doing ad hoc testing
-    print("begin ad hoc main for agnostic.py")
-    import farmer_agnostic  # for ad hoc testing
-    from mpisppy.spin_the_wheel import WheelSpinner
-    import mpisppy.utils.cfg_vanilla as vanilla
-
-    
-    def _farmer_parse_args():
-        # create a config object and parse JUST FOR TESTING
-        cfg = config.Config()
-
-        farmer_agnostic.inparser_adder(cfg)
-
-        cfg.popular_args()
-        cfg.two_sided_args()
-        cfg.ph_args()    
-        cfg.aph_args()    
-        cfg.xhatlooper_args()
-        cfg.fwph_args()
-        cfg.lagrangian_args()
-        cfg.lagranger_args()
-        cfg.xhatshuffle_args()
-
-        cfg.parse_command_line("farmer_agnostic_adhoc")
-        return cfg
-
-    cfg = _farmer_parse_args()
-    Ag = Agnostic(farmer_agnostic, cfg)
-    m = Ag.scenario_creator("Scen1")
-    m.pprint()
-
-    # start farmer_cylinders (old school)
-    scenario_creator = Ag.scenario_creator
-    scenario_denouement = farmer_agnostic.scenario_denouement   # should we go though Ag?
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
-
-    # Things needed for vanilla cylinders
-    beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
-
-    # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=None,  # kwargs in Ag not here
-                              ph_extensions=None,
-                              ph_converger=None,
-                              rho_setter = None)
-    # pass the Ag object via options...
-    hub_dict["opt_kwargs"]["options"]["Ag"] = Ag
-    
-    list_of_spoke_dict = []
-    
-    wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
-    wheel.spin()
-
-    if write_solution:
-        wheel.write_first_stage_solution('farmer_plant.csv')
-        wheel.write_first_stage_solution('farmer_cyl_nonants.npy',
-                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution('farmer_full_solution')
-    
+    print("no main")

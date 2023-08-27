@@ -664,6 +664,10 @@ class SPOpt(SPBase):
 
                 if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
+                    
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
 
 
     def _save_nonants(self):
@@ -698,9 +702,6 @@ class SPOpt(SPBase):
         the variable was fixed is stored in `_PySP_original_fixedness`.
         """
         for k,s in self.local_scenarios.items():
-            if hasattr(s,"_PySP_original_fixedness"):
-                print ("ERROR: Attempt to replace original nonants")
-                raise
             if not hasattr(s._mpisppy_data,"nonant_cache"):
                 # uses nonant cache to signal other things have not
                 # been created 

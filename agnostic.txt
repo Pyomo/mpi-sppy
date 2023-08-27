@@ -4,6 +4,18 @@ newest notes on top
 host means mpisppy
 guest means whatever the guest language is (which can even be Pyomo, of course)
 
+Aug 27
+
+The example is now farmer_agnostic.py and agnostic_cylinders.py (ag.bash)
+in the farmer example directory.
+
+== nonant communication needs to be on the host side, of course, but
+   then callouts need to get values copied to/from the guest
+
+== we need to enforce the assumption that the nonants match in every way possible
+   between host and guest at all times (e.g. _restore_nonants needs to callout,
+   but _save_nonants does not.
+
 Aug 26
 
 Work proceeds on three fronts:

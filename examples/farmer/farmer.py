@@ -80,6 +80,8 @@ def scenario_creator(
     #Add the probability of the scenario
     if num_scens is not None :
         model._mpisppy_probability = 1/num_scens
+    else:
+        model._mpisppy_probability = "uniform"
     return model
 
 def pysp_instance_creation_callback(
