@@ -436,6 +436,8 @@ class PHBase(mpisppy.spopt.SPOpt):
     def _disable_prox(self):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 0
+            if self.Ag is not None:
+                self.Ag.callout_agnostic(scenario)
 
 
     def _disable_W(self):
@@ -444,6 +446,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         #       probably not mathematically useful
         for scenario in self.local_scenarios.values():
             scenario._mpisppy_model.W_on = 0
+            if self.Ag is not None:
+                self.Ag.callout_agnostic(scenario)
 
 
     def disable_W_and_prox(self):
@@ -454,12 +458,16 @@ class PHBase(mpisppy.spopt.SPOpt):
     def _reenable_prox(self):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 1
+            if self.Ag is not None:
+                self.Ag.callout_agnostic(scenario)
 
 
     def _reenable_W(self):
         # TODO: we should eliminate this method
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.W_on = 1
+            if self.Ag is not None:
+                self.Ag.callout_agnostic(scenario)
 
 
     def reenable_W_and_prox(self):

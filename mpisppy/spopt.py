@@ -162,59 +162,67 @@ class SPOpt(SPBase):
         elif disable_pyomo_signal_handling:
             solve_keyword_args["use_signal_handling"] = False
 
-        try:
-            results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
-            solver_exception = None
-        except Exception as e:
-            results = None
-            solver_exception = e
+        Ag = getattr(self, "Ag", None)
+        if Ag is not None:
+            didcallout = Ag.callout_agnostic(s, solve_keyword_args)
 
-        pyomo_solve_time = time.time() - solve_start_time
-        if (results is None) or (len(results.solution) == 0) or \
-                (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-                (results.solver.termination_condition == TerminationCondition.unbounded):
+        if not didcallout:
+            try:
+                results = s._solver_plugin.solve(s,
+                                                 **solve_keyword_args,
+                                                 load_solutions=False)
+                solver_exception = None
+            except Exception as e:
+                results = None
+                solver_exception = e
 
-            s._mpisppy_data.scenario_feasible = False
+            pyomo_solve_time = time.time() - solve_start_time
+            if (results is None) or (len(results.solution) == 0) or \
+                    (results.solution(0).status == SolutionStatus.infeasible) or \
+                    (results.solver.termination_condition == TerminationCondition.infeasible) or \
+                    (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+                    (results.solver.termination_condition == TerminationCondition.unbounded):
 
-            if gripe:
-                name = self.__class__.__name__
-                if self.spcomm:
-                    name = self.spcomm.__class__.__name__
-                print (f"[{name}] Solve failed for scenario {s.name}")
-                if results is not None:
-                    print ("status=", results.solver.status)
-                    print ("TerminationCondition=",
-                           results.solver.termination_condition)
+                s._mpisppy_data.scenario_feasible = False
 
-            if solver_exception is not None:
-                raise solver_exception
+                if gripe:
+                    name = self.__class__.__name__
+                    if self.spcomm:
+                        name = self.spcomm.__class__.__name__
+                    print (f"[{name}] Solve failed for scenario {s.name}")
+                    if results is not None:
+                        print ("status=", results.solver.status)
+                        print ("TerminationCondition=",
+                               results.solver.termination_condition)
 
-        else:
-            if sputils.is_persistent(s._solver_plugin):
-                s._solver_plugin.load_vars()
+                if solver_exception is not None:
+                    raise solver_exception
+
             else:
-                s.solutions.load_from(results)
-            if self.is_minimizing:
-                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-            else:
-                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-            s._mpisppy_data.scenario_feasible = True
-        # TBD: get this ready for IPopt (e.g., check feas_prob every time)
-        # propogate down
-        if self.bundling: # must be a bundle
-            for sname in s._ef_scenario_names:
-                 self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
-                     = s._mpisppy_data.scenario_feasible
-                 if s._mpisppy_data.scenario_feasible:
-                     self._check_staleness(self.local_scenarios[sname])
-        else:  # not a bundle
-            if s._mpisppy_data.scenario_feasible:
-                self._check_staleness(s)                 
+                if sputils.is_persistent(s._solver_plugin):
+                    s._solver_plugin.load_vars()
+                else:
+                    s.solutions.load_from(results)
+                if self.is_minimizing:
+                    s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                else:
+                    s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+                s._mpisppy_data.scenario_feasible = True
+        
+            # TBD: get this ready for IPopt (e.g., check feas_prob every time)
+            # propogate down
+            if self.bundling: # must be a bundle
+                for sname in s._ef_scenario_names:
+                    self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
+                        = s._mpisppy_data.scenario_feasible
+                    if s._mpisppy_data.scenario_feasible:
+                        self._check_staleness(self.local_scenarios[sname])
+            else:  # not a bundle
+                if s._mpisppy_data.scenario_feasible:
+                    self._check_staleness(s)                 
 
+        # end of Agnostic bypass
+        
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 

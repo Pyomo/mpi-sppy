@@ -84,17 +84,36 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
 
 
-def W_disabled(Ag):
-    lajsfdljfdsabooleanfunction
+def _disable_prox(Ag, scenario):
+    scenario._agnostic_dict["scenario"].prox_on._value = 0
 
     
+def _disable_W(Ag, scenario):
+    scenario._agnostic_dict["scenario"].W_on._value = 0
+    
+    
+def _reenable_prox(Ag, scenario):
+    scenario._agnostic_dict["scenario"].prox_on._value = 1
+
+    
+def _reenable_W(Ag, scenario):
+    scenario._agnostic_dict["scenario"].W_on._value = 1
+    
+    
 def prox_disabled(Ag):
-    lkfdsajlkfdjbooleanfunction
+    return scenario._agnostic_dict["scenario"].prox_on._value == 0
+
+
+def W_disabled(Ag):
+    return scenario._agnostic_dict["scenario"].W_on._value == 0
 
     
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
+
+    # The host has xbars and computes without involving the guest language
+    xbars = scenario._mpisppy_model.xbars
 
     gd = scenario._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
@@ -129,3 +148,9 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
             else:
                 raise RuntimeError(f"Unknown sense {gd['sense'] =}")
             
+
+def solve_one(Ag, s, solve_kw_args):
+    # This needs to attach stuff to s (see solve_one in spopt.py)
+    # xxxxxx how do you deal with the solver plugin? What about staleness?
+    # Solve the guest language version, then copy values to the host scenario
+    fdsalkjlakj

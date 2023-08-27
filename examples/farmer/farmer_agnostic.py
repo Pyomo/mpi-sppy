@@ -64,3 +64,93 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     farmer.scenario_denouement(rank, scenario_name, scenario)
+
+
+
+##################################################################################################
+# begin callouts
+# NOTE: the callouts all take the Ag object as their first argument, mainly to see cfg if needed
+# the function names correspond to function names in mpisppy
+
+def attach_Ws_and_prox(Ag, sname, scenario):
+    # this is farmer specific, so we know there is not a W already, e.g.
+    print("guest Ws and prox")
+    # Attach W's and prox to the guest scenario.
+    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    nonant_idx = list(scenario._agnostic_dict["nonants"].keys())
+    gs.W = pyo.Param(nonant_idx, initialize=0.0, mutable=True)
+    gs.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
+    gs.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
+    gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
+
+
+def _disable_prox(Ag, scenario):
+    scenario._agnostic_dict["scenario"].prox_on._value = 0
+
+    
+def _disable_W(Ag, scenario):
+    scenario._agnostic_dict["scenario"].W_on._value = 0
+    
+    
+def _reenable_prox(Ag, scenario):
+    scenario._agnostic_dict["scenario"].prox_on._value = 1
+
+    
+def _reenable_W(Ag, scenario):
+    scenario._agnostic_dict["scenario"].W_on._value = 1
+    
+    
+def prox_disabled(Ag):
+    return scenario._agnostic_dict["scenario"].prox_on._value == 0
+
+
+def W_disabled(Ag):
+    return scenario._agnostic_dict["scenario"].W_on._value == 0
+
+    
+def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
+    # Deal with prox linearization and approximation later,
+    # i.e., just do the quadratic version
+
+    # The host has xbars and computes without involving the guest language
+    xbars = scenario._mpisppy_model.xbars
+
+    gd = scenario._agnostic_dict
+    gs = gd["scenario"]  # guest scenario handle
+    nonant_idx = list(gd["nonants"].keys())    
+    objfct = gs.Total_Cost_Objective  # we know this is farmer...
+    ph_term = 0
+    # Dual term (weights W)
+    if add_duals:
+        gs.WExpr = pyo.Expression(expr= sum(gs.W[ndn_i] * xvar for ndn_i,xvar in gd["nonants"].items()))
+        ph_term += gs.W_on * gs.WExpr
+        
+        # Prox term (quadratic)
+        if (add_prox):
+            prox_expr = 0.
+            for ndn_i, xvar in gd["nonants"].items():
+                # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
+                # x**2 is the only qradratic term, which might be
+                # dealt with differently depending on user-set options
+                if xvar.is_binary():
+                    xvarsqrd = xvar
+                else:
+                    xvarsqrd = xvar**2
+                prox_expr += (gs.rho[ndn_i] / 2.0) * \
+                    (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+            gs.ProxExpr = pyo.Expression(expr=prox_expr)
+            ph_term += gs.prox_on * gs.ProxExpr
+                    
+            if gd["sense"] == pyo.minimize:
+                objfct.expr += ph_term
+            elif gd["sense"] == pyo.maximize:
+                objfct.expr -= ph_term
+            else:
+                raise RuntimeError(f"Unknown sense {gd['sense'] =}")
+            
+
+def solve_one(Ag, s, solve_kw_args):
+    # This needs to attach stuff to s (see solve_one in spopt.py)
+    # xxxxxx how do you deal with the solver plugin? What about staleness?
+    # Solve the guest language version, then copy values to the host scenario
+    fdsalkjlakj
