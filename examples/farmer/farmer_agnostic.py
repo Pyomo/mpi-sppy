@@ -13,6 +13,11 @@ import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 import farmer   # the native farmer (makes a few things easy)
 
+# for debuggig
+from mpisppy import MPI
+fullcomm = MPI.COMM_WORLD
+global_rank = fullcomm.Get_rank()
+
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
         num_scens=None, seedoffset=0
@@ -87,7 +92,6 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 def attach_Ws_and_prox(Ag, sname, scenario):
     # this is farmer specific, so we know there is not a W already, e.g.
-    print("guest Ws and prox")
     # Attach W's and prox to the guest scenario.
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     nonant_idx = list(scenario._agnostic_dict["nonants"].keys())
@@ -200,7 +204,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         s._mpisppy_data.scenario_feasible = False
 
         if gripe:
-            print (f"Solve failed for scenario {s.name}")
+            print (f"Solve failed for scenario {s.name} on rank {global_rank}")
             if results is not None:
                 print ("status=", results.solver.status)
                 print ("TerminationCondition=",
@@ -239,7 +243,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
 # local helper
 def _copy_Ws_from_host(s):
-    print(f"   {s.name =}")
+    print(f"   {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
     for ndn_i, gxvar in gd["nonants"].items():
