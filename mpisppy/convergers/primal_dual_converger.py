@@ -25,14 +25,6 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
 
         self.prev_xbars = self._get_xbars()
 
-        # if grab_everything() is invoked, will store w, xbar, prob, and rho values
-        # indexed by iteration and scenario name (xbar only indexed by iteration)) 
-        self.last_grabbed_iter = -1
-        self.w_cache = {}
-        self.xbar_cache = {}
-        self.p_cache = {}
-        self.r_cache = {}
-
     def _get_xbars(self):
         """
         Get the current xbar values from the local scenarios
@@ -68,8 +60,9 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
                     dtype='d', count=nlen)
                 _l1 = np.abs(x_bars - nonants_array)
                 
-                prob = s._mpisppy_data.prob_coeff[ndn]
-                local_sum_diff[0] += np.sum(np.dot(prob, _l1))
+                # invariant to prob_coeff being a scalar or array
+                prob = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+                local_sum_diff[0] += np.dot(prob, _l1)
 
         self._ph.comms["ROOT"].Allreduce(local_sum_diff, global_sum_diff, op=MPI.SUM)
         return global_sum_diff[0]

@@ -14,18 +14,19 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 write_solution = True
 
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    
+
     cfg.num_scens_required()
     cfg.popular_args()
     cfg.two_sided_args()
-    cfg.ph_args()    
-    cfg.aph_args()    
+    cfg.ph_args()
+    cfg.aph_args()
     cfg.xhatlooper_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
@@ -34,7 +35,7 @@ def _parse_args():
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
-                         default=1)                
+                         default=1)
     cfg.add_to_config("use_norm_rho_updater",
                          description="Use the norm rho updater extension",
                          domain=bool,
@@ -51,13 +52,21 @@ def _parse_args():
                          description="Use the norm rho converger",
                          domain=bool,
                          default=False)
+    cfg.add_to_config("primal_dual_converger",
+                            description="Use the primal dual converger",
+                            domain=bool,
+                            default=False)
+    cfg.add_to_config("primal_dual_converger_tol",
+                            description="Tolerance for primal dual converger",
+                            domain=float,
+                            default=1e-2)
 
     cfg.parse_command_line("farmer_cylinders")
     return cfg
 
-    
+
 def main():
-    
+
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -72,9 +81,11 @@ def main():
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
+    elif cfg.primal_dual_converger:
+        ph_converger = PrimalDualConverger
     else:
         ph_converger = None
-    
+
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
@@ -100,6 +111,12 @@ def main():
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter = rho_setter)
+
+    if cfg.primal_dual_converger:
+        hub_dict['opt_kwargs']['options']\
+            ['primal_dual_converger_options'] = {
+                'verbose': True,
+                'tol': cfg.primal_dual_converger_tol}
 
     ## hack in adaptive rho
     if cfg.use_norm_rho_updater:
@@ -129,7 +146,7 @@ def main():
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-        
+
     list_of_spoke_dict = list()
     if cfg.fwph:
         list_of_spoke_dict.append(fw_spoke)
