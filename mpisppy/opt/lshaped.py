@@ -232,7 +232,7 @@ class LShapedMethod(spbase.SPBase):
         if len(ef_scenarios) > 1:
             def scenario_creator_wrapper(name, **creator_options):
                 scenario = self.scenario_creator(name, **creator_options)
-                if not hasattr(scenario, '_mpisppy_probability'):
+                if not hasattr(scenario, '_mpisppy_probability') or scenario._mpisppy_probability == "uniform":
                     scenario._mpisppy_probability = 1./len(self.all_scenario_names)
                 return scenario
             root = sputils.create_EF(
@@ -247,7 +247,7 @@ class LShapedMethod(spbase.SPBase):
                 ef_scenarios[0],
                 **self.scenario_creator_kwargs,
             )
-            if not hasattr(root, '_mpisppy_probability'):
+            if not hasattr(root, '_mpisppy_probability') or root._mpisppy_probability == "uniform":
                 root._mpisppy_probability = 1./len(self.all_scenario_names)
 
             nonant_list, nonant_ids = _get_nonant_ids(root)
