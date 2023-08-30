@@ -3,6 +3,11 @@
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, AMPL is the guest language.
 
+"""
+Notes about generalization:
+  - need a list of vars and indexes for nonants
+"""
+
 from amplpy import AMPL
 import pyomo.environ as pyo
 import farmer
@@ -36,6 +41,8 @@ def scenario_creator(
             Number of scenarios. We use it to compute _mpisppy_probability. 
             Default is None.
         seedoffset (int): used by confidence interval code
+
+    NOTE: for ampl, the names will be tuples name, index
     """
 
     assert crops_multiplier == 1, "for AMPL, just getting started with 3 crops"
@@ -45,10 +52,6 @@ def scenario_creator(
     # the should really be in this file
     ampl.read("farmer_test.ampl")
 
-    efile = "export.mod"
-    ampl.eval("param W := 1;")
-    ampl.export_model(efile)
-    
     areaVarDatas = list(ampl.get_variable("area").instances())
 
     """
@@ -69,11 +72,11 @@ def scenario_creator(
         "nonants": {("ROOT",i): v[1] for i,v in enumerate(areaVarDatas)},
         "nonant_fixedness": {("ROOT",i): v[1].astatus() for i,v in enumerate(areaVarDatas)},
         "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(areaVarDatas)},
-        "nonant_names": {("ROOT",i): f"area[{v[0]}]" for i, v in enumerate(areaVarDatas)},
+        "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(areaVarDatas)},
         "probability": "uniform",
         "sense": pyo.maximize,
         "BFs": None
-        }
+    }
 
     return gd
     
@@ -113,79 +116,79 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 def attach_Ws_and_prox(Ag, sname, scenario):
     # this is farmer specific, so we know there is not a W already, e.g.
-    # Attach W's and prox to the guest scenario.
+    # Attach W's and rho to the guest scenario (mutable params).
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
-    nonant_idx = list(scenario._agnostic_dict["nonants"].keys())
-    gs.W = pyo.Param(nonant_idx, initialize=0.0, mutable=True)
-    gs.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
-    gs.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
-    gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
+    gd = scenario._agnostic_dict
+    # (there must be some way to create and assign *mutable* params in AMPL)
+    gs.eval("param W_on;")
+    gs.eval("let W_on := 0;")
+    gs.eval("param prox_on;")
+    gs.eval("let prox_on := 0;")
+    # we are trusing the order to match the nonant indexes
+    gs.eval("param W{Crops};")
+    # should set_values
+    gs.eval("let {c in Crops}  W[c] := 0;")
+    gs.eval("param rho{Crops};")
+    gs.eval("let {c in Crops}  rho[c] := 0;")
 
-
+    
 def _disable_prox(Ag, scenario):
-    scenario._agnostic_dict["scenario"].prox_on._value = 0
+    # scenario.eval("let prox_on := 0;")
+    scenario.get_parameter("prox_on").set(0)
 
     
 def _disable_W(Ag, scenario):
-    scenario._agnostic_dict["scenario"].W_on._value = 0
-    
+    # scenario.eval("let W_on := 0;")
+    scenario.get_parameter("W_on").set(0)
+
     
 def _reenable_prox(Ag, scenario):
-    scenario._agnostic_dict["scenario"].prox_on._value = 1
+    #scenario.eval("let prox_on := 1;")
+    scenario.get_parameter("prox_on").set(1)
 
     
 def _reenable_W(Ag, scenario):
-    scenario._agnostic_dict["scenario"].W_on._value = 1
+    #scenario.eval("let W_on := 1;")
+    scenario.get_parameter("W_on").set(1)
     
-    
-def prox_disabled(Ag):
-    return scenario._agnostic_dict["scenario"].prox_on._value == 0
-
-
-def W_disabled(Ag):
-    return scenario._agnostic_dict["scenario"].W_on._value == 0
-
     
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
 
     # The host has xbars and computes without involving the guest language
-    xbars = scenario._mpisppy_model.xbars
-
     gd = scenario._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
-    nonant_idx = list(gd["nonants"].keys())    
-    objfct = gs.Total_Cost_Objective  # we know this is farmer...
-    ph_term = 0
+    gs.eval("param xbars{Crops} := 0;")
+
     # Dual term (weights W)
+    objstr = str(gs.get_objective("profit"))
+    phobjstr = ""
     if add_duals:
-        gs.WExpr = pyo.Expression(expr= sum(gs.W[ndn_i] * xvar for ndn_i,xvar in gd["nonants"].items()))
-        ph_term += gs.W_on * gs.WExpr
+        phobjstr += " + W_on * sum{c in Crops} W[c] * area[c]"
+        print(phobjstr)
         
-        # Prox term (quadratic)
-        if (add_prox):
-            prox_expr = 0.
-            for ndn_i, xvar in gd["nonants"].items():
-                # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
-                # x**2 is the only qradratic term, which might be
-                # dealt with differently depending on user-set options
-                if xvar.is_binary():
-                    xvarsqrd = xvar
-                else:
-                    xvarsqrd = xvar**2
-                prox_expr += (gs.rho[ndn_i] / 2.0) * \
-                    (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
-            gs.ProxExpr = pyo.Expression(expr=prox_expr)
-            ph_term += gs.prox_on * gs.ProxExpr
-                    
-            if gd["sense"] == pyo.minimize:
-                objfct.expr += ph_term
-            elif gd["sense"] == pyo.maximize:
-                objfct.expr -= ph_term
+    # Prox term (quadratic)
+    if add_prox:
+        """
+        prox_expr = 0.
+        for ndn_i, xvar in gd["nonants"].items():
+            # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
+            # x**2 is the only qradratic term, which might be
+            # dealt with differently depending on user-set options
+            if xvar.is_binary():
+                xvarsqrd = xvar
             else:
-                raise RuntimeError(f"Unknown sense {gd['sense'] =}")
-            
+                xvarsqrd = xvar**2
+            prox_expr += (gs.rho[ndn_i] / 2.0) * \
+                (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+        """
+        phobjstr += " + prox_on * sum{c in Crops} rho[c] * area[c] * area[c] "+\
+                    " - 2.0 * xbars[c] - xbars[c] * xbars[c]^2"
+
+    objstr = objstr[:-1] + phobjstr + ";"
+    print(f"{objstr =}")
+
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # This needs to attach stuff to s (see solve_one in spopt.py)
@@ -205,77 +208,70 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gs = gd["scenario"]  # guest scenario handle
 
     solver_name = s._solver_plugin.name
-    solver = pyo.SolverFactory(solver_name)
+    gs.set_option("solver", solver_name)    
     if 'persistent' in solver_name:
         raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
-        ###solver.set_instance(ef, symbolic_solver_labels=True)
-        ###solver.solve(tee=True)
     else:
         solver_exception = None
         try:
-            results = solver.solve(gs, tee=tee, symbolic_solver_labels=True,load_solutions=False)
+            ampl.solve()
         except Exception as e:
             results = None
             solver_exception = e
 
-    if (results is None) or (len(results.solution) == 0) or \
-            (results.solution(0).status == SolutionStatus.infeasible) or \
-            (results.solver.termination_condition == TerminationCondition.infeasible) or \
-            (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-            (results.solver.termination_condition == TerminationCondition.unbounded):
-
-        s._mpisppy_data.scenario_feasible = False
+        if ampl.solve_result != "solved":
+            s._mpisppy_data.scenario_feasible = False
 
         if gripe:
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
-            if results is not None:
-                print ("status=", results.solver.status)
-                print ("TerminationCondition=",
-                       results.solver.termination_condition)
-
+            print(f"ampl.solve_result =}")
+            
         if solver_exception is not None:
             raise solver_exception
 
     else:
         s._mpisppy_data.scenario_feasible = True
+        # For AMPL mips, we need to use the gap option to compute bounds
+        # https://amplmp.readthedocs.io/rst/features-guide.html
+        objval = gs.get_objective("profit").value()
         if gd["sense"] == pyo.minimize:
-            s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+            s._mpisppy_data.outer_bound = objval
         else:
-            s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-        gs.solutions.load_from(results)
+            s._mpisppy_data.outer_bound = objval
+
         # copy the nonant x values from gs to s so mpisppy can use them in s
+        # in general, we need more checks (see the pyomo agnostic guest example)
         for ndn_i, gxvar in gd["nonants"].items():
-            # courtesy check for staleness on the guest side before the copy
-            if not gxvar.fixed and gxvar.stale:
-                try:
-                    float(pyo.value(gxvar))
-                except:
-                    raise RuntimeError(
-                        f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
-                        "reported as stale. This usually means this variable "
-                        "did not appear in any (active) components, and hence "
-                        "was not communicated to the subproblem solver. ")
-                
-            s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
+            try:
+                float(gxvar.value())
+            except:
+                raise RuntimeError(
+                    f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
+                    "had not value. This usually means this variable "
+                    "did not appear in any (active) components, and hence "
+                    "was not communicated to the subproblem solver. ")
+
+            s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
         # the next line ignore bundling
-        s._mpisppy_data._obj_from_agnostic = pyo.value(gs.Total_Cost_Objective)
+        s._mpisppy_data._obj_from_agnostic = objval
 
     # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
 
 
 # local helper
 def _copy_Ws_from_host(s):
+    # special for farmer
     print(f"   {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
+    # could/should use set values
+    parm = gs.get_parameter("W")
     for ndn_i, gxvar in gd["nonants"].items():
-        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        if not hasattr(s, "_mpisppy_model"):
-            print("what the heck!!")
         if hasattr(s._mpisppy_model, "W"):
-            gs.W[ndn_i] = pyo.value(s._mpisppy_model.W[ndn_i])
-            print(f"{gs.W[ndn_i].value =}")
+            c = gd["nonant_names"][ndn_i][1]
+            print(f"{c =}")
+            parm.set(c, s._mpisppy_model.W[ndn_i].value)
         else:
             # presumably an xhatter
             pass

@@ -643,16 +643,12 @@ class PHBase(mpisppy.spopt.SPOpt):
     @property
     def W_disabled(self):
         assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'W_on')
-        if self.Ag is not None:
-            self.Ag.callout_agnostic()
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.W_on.value)
 
 
     @property
     def prox_disabled(self):
         assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'prox_on')
-        if self.Ag is not None:
-            self.Ag.callout_agnostic()
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
 
 
