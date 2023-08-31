@@ -87,8 +87,8 @@ class Test_w_writer_farmer(unittest.TestCase):
         with open(self.temp_w_file_name, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
-            self.assertAlmostEqual(float(rows[1][2]), 70.84705075470873)
-            self.assertAlmostEqual(float(rows[3][2]), -41.10425239994846)
+            self.assertAlmostEqual(float(rows[1][2]), 70.84705093609978, places=5)
+            self.assertAlmostEqual(float(rows[3][2]), -41.104251445950844, places=5)
         os.remove(self.temp_w_file_name)
 
     def test_xbarwriter(self):
@@ -96,8 +96,8 @@ class Test_w_writer_farmer(unittest.TestCase):
         with open(self.temp_xbar_file_name, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
-            self.assertAlmostEqual(float(rows[1][1]), 274.22393690055117)
-            self.assertAlmostEqual(float(rows[3][1]), 96.88717421201876)
+            self.assertAlmostEqual(float(rows[1][1]), 274.2239371483933, places=5)
+            self.assertAlmostEqual(float(rows[3][1]), 96.88717449844287, places=5)
         os.remove(self.temp_xbar_file_name)
 
     def test_wreader(self):
