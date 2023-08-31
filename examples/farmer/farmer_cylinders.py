@@ -32,6 +32,7 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
+    cfg.converger_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -40,26 +41,10 @@ def _parse_args():
                          description="Use the norm rho updater extension",
                          domain=bool,
                          default=False)
-    cfg.add_to_config("use-norm-rho-converger",
-                         description="Use the norm rho converger",
-                         domain=bool,
-                         default=False)
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)
-    cfg.add_to_config("use_norm_rho_converger",
-                         description="Use the norm rho converger",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("primal_dual_converger",
-                            description="Use the primal dual converger",
-                            domain=bool,
-                            default=False)
-    cfg.add_to_config("primal_dual_converger_tol",
-                            description="Tolerance for primal dual converger",
-                            domain=float,
-                            default=1e-2)
 
     cfg.parse_command_line("farmer_cylinders")
     return cfg
