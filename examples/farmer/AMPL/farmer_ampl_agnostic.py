@@ -1,5 +1,3 @@
-# COPY !!!!!!!!!!!!!!!!!!!!! this is a copy.... but has probably been edited !!!! think!!!! meld with the original!!!!
-
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, AMPL is the guest language.
 
@@ -70,13 +68,15 @@ def scenario_creator(
     gd = {
         "scenario": ampl,
         "nonants": {("ROOT",i): v[1] for i,v in enumerate(areaVarDatas)},
-        "nonant_fixedness": {("ROOT",i): v[1].astatus() for i,v in enumerate(areaVarDatas)},
+        "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(areaVarDatas)},
         "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(areaVarDatas)},
         "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(areaVarDatas)},
         "probability": "uniform",
         "sense": pyo.maximize,
         "BFs": None
     }
+    print(f"{gd['nonant_fixedness'] =}")
+    quit()
 
     return gd
     
@@ -211,50 +211,50 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gs.set_option("solver", solver_name)    
     if 'persistent' in solver_name:
         raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
-    else:
-        solver_exception = None
-        try:
-            ampl.solve()
-        except Exception as e:
-            results = None
-            solver_exception = e
 
-        if ampl.solve_result != "solved":
-            s._mpisppy_data.scenario_feasible = False
+    solver_exception = None
+    try:
+        ampl.solve()
+    except Exception as e:
+        results = None
+        solver_exception = e
 
-        if gripe:
-            print (f"Solve failed for scenario {s.name} on rank {global_rank}")
-            print(f"ampl.solve_result =}")
+    if ampl.solve_result != "solved":
+        s._mpisppy_data.scenario_feasible = False
+
+    if gripe:
+        print (f"Solve failed for scenario {s.name} on rank {global_rank}")
+        print(f"{ampl.solve_result =}")
             
-        if solver_exception is not None:
-            raise solver_exception
+    if solver_exception is not None:
+        raise solver_exception
 
+
+    s._mpisppy_data.scenario_feasible = True
+    # For AMPL mips, we need to use the gap option to compute bounds
+    # https://amplmp.readthedocs.io/rst/features-guide.html
+    objval = gs.get_objective("profit").value()
+    if gd["sense"] == pyo.minimize:
+        s._mpisppy_data.outer_bound = objval
     else:
-        s._mpisppy_data.scenario_feasible = True
-        # For AMPL mips, we need to use the gap option to compute bounds
-        # https://amplmp.readthedocs.io/rst/features-guide.html
-        objval = gs.get_objective("profit").value()
-        if gd["sense"] == pyo.minimize:
-            s._mpisppy_data.outer_bound = objval
-        else:
-            s._mpisppy_data.outer_bound = objval
+        s._mpisppy_data.outer_bound = objval
 
-        # copy the nonant x values from gs to s so mpisppy can use them in s
-        # in general, we need more checks (see the pyomo agnostic guest example)
-        for ndn_i, gxvar in gd["nonants"].items():
-            try:
-                float(gxvar.value())
-            except:
-                raise RuntimeError(
-                    f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
-                    "had not value. This usually means this variable "
-                    "did not appear in any (active) components, and hence "
-                    "was not communicated to the subproblem solver. ")
+    # copy the nonant x values from gs to s so mpisppy can use them in s
+    # in general, we need more checks (see the pyomo agnostic guest example)
+    for ndn_i, gxvar in gd["nonants"].items():
+        try:
+            float(gxvar.value())
+        except:
+            raise RuntimeError(
+                f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
+                "had not value. This usually means this variable "
+                "did not appear in any (active) components, and hence "
+                "was not communicated to the subproblem solver. ")
 
-            s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
+        s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
-        # the next line ignore bundling
-        s._mpisppy_data._obj_from_agnostic = objval
+    # the next line ignore bundling
+    s._mpisppy_data._obj_from_agnostic = objval
 
     # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
 
@@ -262,7 +262,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 # local helper
 def _copy_Ws_from_host(s):
     # special for farmer
-    print(f"   {s.name =}, {global_rank =}")
+    # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
     # could/should use set values
@@ -281,16 +281,18 @@ def _copy_Ws_from_host(s):
 def _copy_nonants_from_host(s):
     # values and fixedness; 
     gd = s._agnostic_dict
-    gs = gd["scenario"]  # guest scenario handle
+    #### delme gs = gd["scenario"]  # guest scenario handle
+    #### delme areaVarDatas = list(ampl.get_variable("area").instances())    
     for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+        #c = gd["nonant_names"][ndn_i][1]
         guestVar = gd["nonants"][ndn_i]
-        if guestVar.is_fixed():
-            guestVar.fixed = False
+        if guestVar.astatus() == "fixed":
+            guestVar.unfix()
         if hostVar.is_fixed():
             guestVar.fix(hostVar._value)
         else:
-            guestVar._value = hostVar._value
+            guestVar.set_value(hostVar._value)
 
 
 def _restore_nonants(Ag, s):
