@@ -117,14 +117,6 @@ def _reenable_W(Ag, scenario):
     scenario._agnostic_dict["scenario"].W_on._value = 1
     
     
-def prox_disabled(Ag):
-    return scenario._agnostic_dict["scenario"].prox_on._value == 0
-
-
-def W_disabled(Ag):
-    return scenario._agnostic_dict["scenario"].W_on._value == 0
-
-    
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
