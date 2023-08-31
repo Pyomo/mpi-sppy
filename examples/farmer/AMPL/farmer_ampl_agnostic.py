@@ -75,8 +75,6 @@ def scenario_creator(
         "sense": pyo.maximize,
         "BFs": None
     }
-    print(f"{gd['nonant_fixedness'] =}")
-    quit()
 
     return gd
     
@@ -165,7 +163,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     objstr = str(gs.get_objective("profit"))
     phobjstr = ""
     if add_duals:
-        phobjstr += " + W_on * sum{c in Crops} W[c] * area[c]"
+        phobjstr += " + W_on * sum{c in Crops} (W[c] * area[c])"
         print(phobjstr)
         
     # Prox term (quadratic)
@@ -183,11 +181,13 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
             prox_expr += (gs.rho[ndn_i] / 2.0) * \
                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
         """
-        phobjstr += " + prox_on * sum{c in Crops} rho[c] * area[c] * area[c] "+\
-                    " - 2.0 * xbars[c] - xbars[c] * xbars[c]^2"
+        phobjstr += " + prox_on * sum{c in Crops} (rho[c] * area[c] * area[c] "+\
+                    " - 2.0 * xbars[c] - xbars[c] * xbars[c]^2)"
 
     objstr = objstr[:-1] + phobjstr + ";"
-    print(f"{objstr =}")
+    objstr = objstr.replace("maximize profit", "maximize phobj")
+    gs.eval(objstr)
+    gs.export_model("export.mod")
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
@@ -214,17 +214,17 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     solver_exception = None
     try:
-        ampl.solve()
+        gs.solve()
     except Exception as e:
         results = None
         solver_exception = e
 
-    if ampl.solve_result != "solved":
+    if gs.solve_result != "solved":
         s._mpisppy_data.scenario_feasible = False
 
     if gripe:
         print (f"Solve failed for scenario {s.name} on rank {global_rank}")
-        print(f"{ampl.solve_result =}")
+        print(f"{gs.solve_result =}")
             
     if solver_exception is not None:
         raise solver_exception
@@ -233,6 +233,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     s._mpisppy_data.scenario_feasible = True
     # For AMPL mips, we need to use the gap option to compute bounds
     # https://amplmp.readthedocs.io/rst/features-guide.html
+    # xxxxx TBD: does this work??? (what objective is active???)
     objval = gs.get_objective("profit").value()
     if gd["sense"] == pyo.minimize:
         s._mpisppy_data.outer_bound = objval
@@ -281,11 +282,8 @@ def _copy_Ws_from_host(s):
 def _copy_nonants_from_host(s):
     # values and fixedness; 
     gd = s._agnostic_dict
-    #### delme gs = gd["scenario"]  # guest scenario handle
-    #### delme areaVarDatas = list(ampl.get_variable("area").instances())    
     for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        #c = gd["nonant_names"][ndn_i][1]
         guestVar = gd["nonants"][ndn_i]
         if guestVar.astatus() == "fixed":
             guestVar.unfix()
