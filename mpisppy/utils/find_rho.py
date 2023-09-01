@@ -138,7 +138,7 @@ class Find_Rho():
                 nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                             dtype='d', count=nlen)
                 probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
-                denom += np.dot(probs, np.abs(nonants_array - xbar_array))
+                denom += probs * np.abs(nonants_array - xbar_array)
         self.ph_object.comms["ROOT"].Allreduce([denom, MPI.DOUBLE],
                                                [g_denom, MPI.DOUBLE],
                                                op=MPI.SUM)

@@ -77,7 +77,7 @@ def _Compute_Xbar(opt, verbose=False):
             probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
             xbars += probs * nonants_array
             xsqbars += probs * nonants_array**2
-            
+
     # compute node xbar values(reduction)
     for nodename in nodenames:
         opt.comms[nodename].Allreduce(
@@ -144,19 +144,8 @@ def _Compute_Wbar(opt, verbose=False):
             # s._mpisppy_data.nonant_indices.keys() indexes the W Param
             Wnonants_array = np.fromiter((pyo.value(s._mpisppy_model.W[idx]) for idx in s._mpisppy_data.nonant_indices if idx[0] == ndn),
                                         dtype='d', count=nlen)
-            if not s._mpisppy_data.has_variable_probability:
-                Wbars += s._mpisppy_data.prob_coeff[ndn] * Wnonants_array
-            else:
-                # rarely-used overwrite in the event of variable probability
-                # (not efficient for multi-stage)
-                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
-                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
-                                         dtype='d', count=nlen)
-
-                # Note: Intermediate scen_contribution to get proper
-                # overloading
-                scen_contribution = prob_array * Wnonants_array
-                Wbars += scen_contribution
+            probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+            Wbars += probs * Wnonants_array
 
     # compute node xbar values(reduction)
     for nodename in nodenames:

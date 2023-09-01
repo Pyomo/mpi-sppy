@@ -24,10 +24,10 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 def _parse_args():
     cfg = config.Config()
     cfg.popular_args()
-    cfg.num_scens_required() 
+    cfg.num_scens_required()
     cfg.ph_args()
     cfg.two_sided_args()
-    cfg.aph_args()        
+    cfg.aph_args()
     cfg.fixer_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
@@ -51,13 +51,13 @@ def _parse_args():
     cfg.add_to_config("run_aph",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
-                         default=False)        
+                         default=False)
     cfg.parse_command_line("uc_cylinders")
     return cfg
 
 
 def main():
-    
+
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -74,7 +74,7 @@ def main():
     if num_scen not in scensavail:
         raise RuntimeError("num-scen was {}, but must be in {}".\
                            format(num_scen, scensavail))
-    
+
     scenario_creator_kwargs = {
         "scenario_count": num_scen,
         "path": str(num_scen) + "scenarios_r1",
@@ -83,7 +83,7 @@ def main():
     scenario_denouement = uc.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
     rho_setter = uc._rho_setter
-    
+
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
@@ -98,7 +98,7 @@ def main():
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
                                   rho_setter = rho_setter)
-        
+
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
     if fixer:
@@ -107,7 +107,7 @@ def main():
         ext_classes.append(CrossScenarioExtension)
     if cfg.xhat_closest_tree:
         ext_classes.append(XhatClosest)
-        
+
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cross_scenario_cuts:
         hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
@@ -135,12 +135,12 @@ def main():
         "verbose": cfg.verbose,
         "mipgapdict": mipgapdict
         }
-        
+
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway
-        hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
+        hub_dict["opt_kwargs"]["options"]["defaultPHrho"] = 1
     ### end ph spoke ###
-    
+
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -158,7 +158,7 @@ def main():
     # xhat shuffle bound spoke
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-       
+
     # cross scenario cut spoke
     if cross_scenario_cuts:
         cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
