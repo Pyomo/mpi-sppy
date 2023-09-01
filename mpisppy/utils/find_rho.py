@@ -329,7 +329,3 @@ def get_rho_from_W(mname, original_cfg):
 
 if __name__ == "__main__":
     print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos")
-    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos")
-
-
-    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos")
