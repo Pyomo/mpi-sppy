@@ -8,9 +8,13 @@ Notes about generalization:
 
 from amplpy import AMPL
 import pyomo.environ as pyo
+import mpisppy.utils.sputils as sputils
 import farmer
+import numpy as np
 
-# ampl.eval to get new objective (string for original, then string for x and prox
+# If you need random numbers, use this random stream:
+farmerstream = np.random.RandomState()
+
 
 # for debugging
 from mpisppy import MPI
@@ -47,23 +51,18 @@ def scenario_creator(
 
     ampl = AMPL()
 
-    # the should really be in this file
     ampl.read("farmer_test.ampl")
+
+    # scenario specific data applied
+    scennum = sputils.extract_num(scenario_name)
+    assert scennum < 3, "three scenarios hardwired for now"
+    if scennum == 0:
+        xxxxx
+    elif scenumm == 2:
+        xxxxx
 
     areaVarDatas = list(ampl.get_variable("area").instances())
 
-    """
-    print(f"{areaVarDatas =}")
-    for a in areaVarDatas:   # a is a tuple (idx, vardata)
-        a[1].fix(value=1)
-        print(f"{a[1].astatus()= }")
-        print(f"{a[0] =}")
-          
-    objective = ampl.get_objective("profit")
-    print(f"{str(objective) =}")
-    print(objective)
-    """
-    
     # In general, be sure to process variables in the same order has the guest does (so indexes match)
     gd = {
         "scenario": ampl,
@@ -117,37 +116,37 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     # Attach W's and rho to the guest scenario (mutable params).
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gd = scenario._agnostic_dict
-    # (there must be some way to create and assign *mutable* params in AMPL)
+    # (there must be some way to create and assign *mutable* params in on call to AMPL)
     gs.eval("param W_on;")
     gs.eval("let W_on := 0;")
     gs.eval("param prox_on;")
     gs.eval("let prox_on := 0;")
     # we are trusing the order to match the nonant indexes
     gs.eval("param W{Crops};")
-    # should set_values
+    # should use set_values instead of let
     gs.eval("let {c in Crops}  W[c] := 0;")
     gs.eval("param rho{Crops};")
     gs.eval("let {c in Crops}  rho[c] := 0;")
 
     
 def _disable_prox(Ag, scenario):
-    # scenario.eval("let prox_on := 0;")
-    scenario.get_parameter("prox_on").set(0)
+    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    gs.get_parameter("prox_on").set(0)
 
     
 def _disable_W(Ag, scenario):
-    # scenario.eval("let W_on := 0;")
-    scenario.get_parameter("W_on").set(0)
+    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    gs.get_parameter("W_on").set(0)
 
     
 def _reenable_prox(Ag, scenario):
-    #scenario.eval("let prox_on := 1;")
-    scenario.get_parameter("prox_on").set(1)
+    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    gs.get_parameter("prox_on").set(1)
 
     
 def _reenable_W(Ag, scenario):
-    #scenario.eval("let W_on := 1;")
-    scenario.get_parameter("W_on").set(1)
+    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    gs.get_parameter("W_on").set(1)
     
     
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
