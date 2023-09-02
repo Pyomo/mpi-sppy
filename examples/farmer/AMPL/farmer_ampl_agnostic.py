@@ -2,8 +2,8 @@
 # In this example, AMPL is the guest language.
 
 """
-Notes about generalization:
-  - need a list of vars and indexes for nonants
+This file tries to show many ways to do things in AMPLpy,
+but not necessarily the best ways in all cases.
 """
 
 from amplpy import AMPL
@@ -56,10 +56,11 @@ def scenario_creator(
     # scenario specific data applied
     scennum = sputils.extract_num(scenario_name)
     assert scennum < 3, "three scenarios hardwired for now"
-    if scennum == 0:
-        xxxxx
-    elif scenumm == 2:
-        xxxxx
+    y = ampl.get_parameter("RandomYield")
+    if scennum == 0:  # below
+        y.set_values({"wheat": 2.0, "corn": 2.4, "beets": 16.0})
+    elif scennum == 2: # above
+        y.set_values({"wheat": 3.0, "corn": 3.6, "beets": 24.0})
 
     areaVarDatas = list(ampl.get_variable("area").instances())
 
@@ -186,7 +187,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     objstr = objstr[:-1] + phobjstr + ";"
     objstr = objstr.replace("maximize profit", "maximize phobj")
     gs.eval(objstr)
-    gs.export_model("export.mod")
+    #gs.export_model("export.mod")
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
@@ -200,8 +201,6 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
-    print("DO NOT LET AMPL PRESOLVE!!!!")
-    
     _copy_Ws_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
@@ -210,6 +209,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gs.set_option("solver", solver_name)    
     if 'persistent' in solver_name:
         raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
+    gs.set_option("presolve", 0)
 
     solver_exception = None
     try:
@@ -220,10 +220,9 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     if gs.solve_result != "solved":
         s._mpisppy_data.scenario_feasible = False
-
-    if gripe:
-        print (f"Solve failed for scenario {s.name} on rank {global_rank}")
-        print(f"{gs.solve_result =}")
+        if gripe:
+            print (f"Solve failed for scenario {s.name} on rank {global_rank}")
+            print(f"{gs.solve_result =}")
             
     if solver_exception is not None:
         raise solver_exception
@@ -242,12 +241,18 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # copy the nonant x values from gs to s so mpisppy can use them in s
     # in general, we need more checks (see the pyomo agnostic guest example)
     for ndn_i, gxvar in gd["nonants"].items():
-        try:
+        try:   # not sure this is needed
             float(gxvar.value())
         except:
             raise RuntimeError(
                 f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
-                "had not value. This usually means this variable "
+                "had no value. This usually means this variable "
+                "did not appear in any (active) components, and hence "
+                "was not communicated to the subproblem solver. ")
+        if gxvar.astatus() == "pre":
+            raise RuntimeError(
+                f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
+                "was presolved out. This usually means this variable "
                 "did not appear in any (active) components, and hence "
                 "was not communicated to the subproblem solver. ")
 
@@ -266,11 +271,14 @@ def _copy_Ws_from_host(s):
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
     # could/should use set values
-    parm = gs.get_parameter("W")
+    try:
+        parm = gs.get_parameter("W")
+    except:
+        # presumably an xhatter
+        pass
     for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
             c = gd["nonant_names"][ndn_i][1]
-            print(f"{c =}")
             parm.set(c, s._mpisppy_model.W[ndn_i].value)
         else:
             # presumably an xhatter
