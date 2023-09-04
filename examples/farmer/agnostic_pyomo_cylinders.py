@@ -1,7 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 # Started by dlw Aug 2023
 
-import farmer_agnostic
+import farmer_pyomo_agnostic
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
@@ -11,7 +11,7 @@ def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING
     cfg = config.Config()
 
-    farmer_agnostic.inparser_adder(cfg)
+    farmer_pyomo_agnostic.inparser_adder(cfg)
 
     cfg.popular_args()
     cfg.two_sided_args()
@@ -23,7 +23,7 @@ def _farmer_parse_args():
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
 
-    cfg.parse_command_line("farmer_agnostic_cylinders")
+    cfg.parse_command_line("farmer_pyomo_agnostic_cylinders")
     return cfg
 
 
@@ -31,10 +31,10 @@ if __name__ == "__main__":
     print("begin ad hoc main for agnostic.py")
 
     cfg = _farmer_parse_args()
-    Ag = agnostic.Agnostic(farmer_agnostic, cfg)
+    Ag = agnostic.Agnostic(farmer_pyomo_agnostic, cfg)
 
     scenario_creator = Ag.scenario_creator
-    scenario_denouement = farmer_agnostic.scenario_denouement   # should we go though Ag?
+    scenario_denouement = farmer_pyomo_agnostic.scenario_denouement   # should we go though Ag?
     all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
 
     # Things needed for vanilla cylinders

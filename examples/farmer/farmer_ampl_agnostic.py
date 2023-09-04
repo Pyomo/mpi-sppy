@@ -51,7 +51,7 @@ def scenario_creator(
 
     ampl = AMPL()
 
-    ampl.read("farmer_test.ampl")
+    ampl.read("farmer.mod")
 
     # scenario specific data applied
     scennum = sputils.extract_num(scenario_name)
