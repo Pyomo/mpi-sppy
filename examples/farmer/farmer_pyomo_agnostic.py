@@ -158,7 +158,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
                 raise RuntimeError(f"Unknown sense {gd['sense'] =}")
             
 
-def solve_one(Ag, s, solve_keyword_args, gripe, tee):
+def solve_one(Ag, s, solve_keyword_args, gripe, tee=False):
     # This needs to attach stuff to s (see solve_one in spopt.py)
     # Solve the guest language version, then copy values to the host scenario
 
