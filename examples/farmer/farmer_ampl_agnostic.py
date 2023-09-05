@@ -182,14 +182,14 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
             prox_expr += (gs.rho[ndn_i] / 2.0) * \
                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
         """
-        phobjstr += " + prox_on * sum{c in Crops} (rho[c] * area[c] * area[c] "+\
-                    " - 2.0 * xbars[c] - xbars[c] * xbars[c]^2)"
+        phobjstr += " + prox_on * sum{c in Crops} (rho[c]/2.0) * (area[c] * area[c] "+\
+                    " - 2.0 * xbars[c] * area[c] + xbars[c]^2)"
 
     objstr = objstr[:-1] + phobjstr + ";"
     objstr = objstr.replace("maximize profit", "maximize phobj")
     profitobj.drop()
     gs.eval(objstr)
-    #gs.export_model("export.mod")
+    gs.export_model("export.mod")
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
