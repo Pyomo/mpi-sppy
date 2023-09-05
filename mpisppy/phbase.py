@@ -324,7 +324,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             verbose (bool):
                 If True, displays verbose output during update.
         """
-        print("entered update_W")
         # Assumes the scenarios are up to date
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
