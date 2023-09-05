@@ -160,7 +160,8 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     gs.eval("param xbars{Crops} := 0;")
 
     # Dual term (weights W)
-    objstr = str(gs.get_objective("profit"))
+    profitobj = gs.get_objective("profit")
+    objstr = str(profitobj)
     phobjstr = ""
     if add_duals:
         phobjstr += " + W_on * sum{c in Crops} (W[c] * area[c])"
@@ -186,6 +187,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
 
     objstr = objstr[:-1] + phobjstr + ";"
     objstr = objstr.replace("maximize profit", "maximize phobj")
+    profitobj.drop()
     gs.eval(objstr)
     #gs.export_model("export.mod")
 
@@ -281,7 +283,7 @@ def _copy_Ws_from_host(s):
             c = gd["nonant_names"][ndn_i][1]
             parm.set(c, s._mpisppy_model.W[ndn_i].value)
         else:
-            # presumably an xhatter
+            # presumably an xhatter; we should check, I suppose
             pass
 
 
