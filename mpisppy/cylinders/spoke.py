@@ -193,7 +193,7 @@ class _BoundSpoke(Spoke):
         self.spoke_to_hub(self._bound)
 
     @property
-    def local_inner_bound(self):
+    def hub_inner_bound(self):
         """Returns the local copy of the inner bound from the hub"""
         if 'get_hub_bounds' in self.options and \
                 self.options['get_hub_bounds']:
@@ -201,7 +201,7 @@ class _BoundSpoke(Spoke):
         raise RuntimeError("This spoke does not recieve an inner bound")
 
     @property
-    def local_outer_bound(self):
+    def hub_outer_bound(self):
         """Returns the local copy of the outer bound from the hub"""
         if 'get_hub_bounds' in self.options and \
                 self.options['get_hub_bounds']:
