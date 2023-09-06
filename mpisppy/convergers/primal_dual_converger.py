@@ -105,7 +105,7 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
         primal_gap = self._compute_primal_convergence()
         dual_gap = self._compute_dual_residual()
         self.prev_xbars = self._get_xbars()
-        ret_val = primal_gap + dual_gap <= self.convergence_threshold
+        ret_val = max(primal_gap, dual_gap) <= self.convergence_threshold
 
         if self._verbose and self._ph.cylinder_rank == 0:
             print(f"primal gap = {round(primal_gap, 5)}, dual gap = {round(dual_gap, 5)}")
