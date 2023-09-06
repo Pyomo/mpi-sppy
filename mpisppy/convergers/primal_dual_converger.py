@@ -36,6 +36,7 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
         for s in self._ph.local_scenarios.values():
             for ndn_i, xbar in s._mpisppy_model.xbars.items():
                 xbars[ndn_i] = xbar.value
+            break
         return xbars
     
     def _compute_primal_convergence(self):
