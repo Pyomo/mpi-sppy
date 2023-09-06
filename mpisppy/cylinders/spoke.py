@@ -38,7 +38,7 @@ class Spoke(SPCommunicator):
         self.strata_comm.Send((pair_of_lengths, MPI.INT), dest=0, tag=self.strata_rank)
         self.local_length = local_length
         self.remote_length = remote_length
-        
+
         # Make the windows of the appropriate buffer sizes
         # To do?: Spoke should not need to know how many other spokes there are.
         # Just call a single _make_window()? Do you need to create empty
@@ -122,14 +122,14 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        return self._got_kill_signal() 
+        return self._got_kill_signal()
 
     @abc.abstractmethod
     def main(self):
         """
         The main call for the Spoke. Derived classe
-        should call the got_kill_signal method 
-        regularly to ensure all ranks terminate 
+        should call the got_kill_signal method
+        regularly to ensure all ranks terminate
         with the Hub.
         """
         pass
@@ -165,14 +165,21 @@ class _BoundSpoke(Spoke):
         else:
             self.trace_filen = None
 
+        self._new_locals = False
+        self._bound = None
+        self._locals = None
+
     def make_windows(self):
         """ Makes the bound window and a remote window to
             look for a kill signal
         """
-
+        vbuflen = 0
+        if 'get_hub_bounds' in self.options and \
+                self.options['get_hub_bounds']:
+            vbuflen += 2  # inner and outerbounds
         ## need a remote_length for the kill signal
-        self._make_windows(1, 0)
-        self._kill_sig = np.zeros(0 + 1)
+        self._make_windows(1, vbuflen)
+        self._locals = np.zeros(vbuflen + 1)
         self._bound = np.zeros(1 + 1)
 
     @property
@@ -185,9 +192,25 @@ class _BoundSpoke(Spoke):
         self._bound[0] = value
         self.spoke_to_hub(self._bound)
 
+    @property
+    def local_inner_bound(self):
+        """Returns the local copy of the inner bound from the hub"""
+        if 'get_hub_bounds' in self.options and \
+                self.options['get_hub_bounds']:
+            return self._locals[-3]
+        raise RuntimeError("This spoke does not recieve an inner bound")
+
+    @property
+    def local_outer_bound(self):
+        """Returns the local copy of the outer bound from the hub"""
+        if 'get_hub_bounds' in self.options and \
+                self.options['get_hub_bounds']:
+            return self._locals[-2]
+        raise RuntimeError("This spoke does not recieve an outer bound")
+
     def _got_kill_signal(self):
         """Looks for the kill signal and returns True if sent"""
-        self.spoke_from_hub(self._kill_sig)
+        self._new_locals = self.spoke_from_hub(self._locals)
         return self.remote_write_id == -1
 
     def _append_trace(self, value):
@@ -220,50 +243,14 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         for s in self.opt.local_scenarios.values():
             vbuflen += len(s._mpisppy_data.nonant_indices)
 
+        if 'get_hub_bounds' in self.options and \
+                self.options['get_hub_bounds']:
+            vbuflen += 2  # inner and outerbounds
+
         self._make_windows(1, vbuflen)
         self._locals = np.zeros(vbuflen + 1) # Also has kill signal
         self._bound = np.zeros(1 + 1)
-        self._new_locals = False
 
-    def _got_kill_signal(self):
-        """ returns True if a kill signal was received, 
-            and refreshes the array and _locals"""
-        self._new_locals = self.spoke_from_hub(self._locals)
-        return self.remote_write_id == -1
-
-    
-class _BoundBoundsOnlySpoke(_BoundSpoke):
-    """ A base class for bound spokes which only
-        want the best-so-far inner and outer bounds from OPT
-    """
-
-    def make_windows(self):
-        """ Makes the bound window and with a remote buffer long enough
-        """
-        vbuflen = 2  # inner and outerbounds
-
-        self._make_windows(1, vbuflen)
-        self._locals = np.zeros(vbuflen + 1) # Also has kill signal
-        self._bound = np.zeros(1 + 1)  # the bound going back to the hub
-        self._new_locals = False
-
-    def _got_kill_signal(self):
-        """ returns True if a kill signal was received, 
-            and refreshes the array and _locals"""
-        self._new_locals = self.spoke_from_hub(self._locals)
-        return self.remote_write_id == -1
-
-    @property
-    def local_outer_bound(self):
-        """Returns the local copy of the bound from the hub"""
-        return self._locals[0]
-
-    @property
-    def local_inner_bound(self):
-        """Returns the local copy of the bound from the hub"""
-        return self._locals[1]
-
-    
 class InnerBoundSpoke(_BoundSpoke):
     """ For Spokes that provide an inner bound through self.bound to the
         Hub, and do not need information from the main PH OPT hub.
@@ -288,11 +275,14 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
+        if 'get_hub_bounds' in self.options and \
+                self.options['get_hub_bounds']:
+            return self._locals[:-3]
         return self._locals[:-1]
 
     @property
     def new_Ws(self):
-        """ Returns True if the local copy of 
+        """ Returns True if the local copy of
             the weights has been updated since
             the last call to got_kill_signal
         """
@@ -322,18 +312,21 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     @property
     def localnonants(self):
         """Returns the local copy of the nonants"""
+        if 'get_hub_bounds' in self.options and \
+                self.options['get_hub_bounds']:
+            return self._locals[:-3]
         return self._locals[:-1]
 
     @property
     def new_nonants(self):
-        """Returns True if the local copy of 
+        """Returns True if the local copy of
            the nonants has been updated since
            the last call to got_kill_signal"""
         return self._new_locals
 
 
 class InnerBoundNonantSpoke(_BoundNonantSpoke):
-    """ For Spokes that provide an inner (incumbent) 
+    """ For Spokes that provide an inner (incumbent)
         bound through self.bound to the Hub,
         and receive the nonants from
         the main SPOpt hub.
@@ -403,16 +396,3 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
         ConvergerSpokeType.NONANT_GETTER,
     )
     converger_spoke_char = 'A'  # probably Lagrangian
-
-class OuterBoundBoundsOnlySpoke(_BoundBoundsOnlySpoke):
-    """ For Spokes that provide an outer
-        bound through self.bound to the Hub,
-        and receive the bounds
-        the main OPT hub.
-    """
-    converger_spoke_types = (
-        ConvergerSpokeType.OUTER_BOUND,
-        ConvergerSpokeType.BOUNDS_GETTER,
-    )
-    converger_spoke_char = 'A'  # probably Lagrangian
-    
