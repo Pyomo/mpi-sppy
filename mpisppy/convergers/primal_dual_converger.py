@@ -8,7 +8,7 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
         Primal convergence is measured as weighted sum over all scenarios s
         p_{s} * ||x_{s} - \bar{x}||_1.
         Dual convergence is measured as 
-        rho * ||\bar{x}_{t} - \bar{x}_{t}||_1 * r_{s}
+        rho * ||\bar{x}_{t} - \bar{x}_{t-1}||_1
     """
     def __init__(self, ph):
         """ Initialization method for the PrimalDualConverger class."""
