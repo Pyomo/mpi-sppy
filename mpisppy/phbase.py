@@ -35,7 +35,7 @@ def _Compute_Xbar(opt, verbose=False):
     """
 
     """
-    Note: 
+    Note:
         Each scenario knows its own probability and its nodes.
     Note:
         The scenario only "sends a reduce" to its own node's comms so even
@@ -52,7 +52,7 @@ def _Compute_Xbar(opt, verbose=False):
 
     # we need to accumulate all local contributions before the reduce
     for k,s in opt.local_scenarios.items():
-        nlens = s._mpisppy_data.nlens        
+        nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             if node.name not in nodenames:
                 ndn = node.name
@@ -64,7 +64,7 @@ def _Compute_Xbar(opt, verbose=False):
 
     # compute the local xbar and sqbar (put the sq in the 2nd 1/2 of concat)
     for k,s in opt.local_scenarios.items():
-        nlens = s._mpisppy_data.nlens        
+        nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             ndn = node.name
             nlen = nlens[ndn]
@@ -74,22 +74,9 @@ def _Compute_Xbar(opt, verbose=False):
 
             nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                         dtype='d', count=nlen)
-            if not s._mpisppy_data.has_variable_probability:
-                xbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array
-                xsqbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array**2
-            else:
-                # rarely-used overwrite in the event of variable probability
-                # (not efficient for multi-stage)
-                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
-                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
-                                         dtype='d', count=nlen)
-
-                # Note: Intermediate scen_contribution to get proper
-                # overloading
-                scen_contribution = prob_array * nonants_array
-                xbars += scen_contribution
-                scen_contribution = prob_array * nonants_array**2
-                xsqbars += scen_contribution          
+            probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+            xbars += probs * nonants_array
+            xsqbars += probs * nonants_array**2
 
     # compute node xbar values(reduction)
     for nodename in nodenames:
@@ -126,7 +113,7 @@ def _Compute_Wbar(opt, verbose=False):
         verbose (boolean):
             If True, prints verbose output.
 
-    NOTE: for now, we will just report on the non-zeros, since that is 
+    NOTE: for now, we will just report on the non-zeros, since that is
           the only use-case as of August 2023
     """
     nodenames = [] # to transmit to comms
@@ -135,7 +122,7 @@ def _Compute_Wbar(opt, verbose=False):
 
     # we need to accumulate all local contributions before the reduce
     for k,s in opt.local_scenarios.items():
-        nlens = s._mpisppy_data.nlens        
+        nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             if node.name not in nodenames:
                 ndn = node.name
@@ -145,9 +132,9 @@ def _Compute_Wbar(opt, verbose=False):
                 local_concats[ndn] = np.zeros(mylen, dtype='d')
                 global_concats[ndn] = np.zeros(mylen, dtype='d')
 
-    # compute the local Wbar 
+    # compute the local Wbar
     for k,s in opt.local_scenarios.items():
-        nlens = s._mpisppy_data.nlens        
+        nlens = s._mpisppy_data.nlens
         for node in s._mpisppy_node_list:
             ndn = node.name
             nlen = nlens[ndn]
@@ -157,19 +144,8 @@ def _Compute_Wbar(opt, verbose=False):
             # s._mpisppy_data.nonant_indices.keys() indexes the W Param
             Wnonants_array = np.fromiter((pyo.value(s._mpisppy_model.W[idx]) for idx in s._mpisppy_data.nonant_indices if idx[0] == ndn),
                                         dtype='d', count=nlen)
-            if not s._mpisppy_data.has_variable_probability:
-                Wbars += s._mpisppy_data.prob_coeff[ndn] * Wnonants_array
-            else:
-                # rarely-used overwrite in the event of variable probability
-                # (not efficient for multi-stage)
-                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
-                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
-                                         dtype='d', count=nlen)
-
-                # Note: Intermediate scen_contribution to get proper
-                # overloading
-                scen_contribution = prob_array * Wnonants_array
-                Wbars += scen_contribution
+            probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+            Wbars += probs * Wnonants_array
 
     # compute node xbar values(reduction)
     for nodename in nodenames:
@@ -192,7 +168,7 @@ def _Compute_Wbar(opt, verbose=False):
             for i in range(nlen):
                 if abs(Wbars[i]) > opt.E1_tolerance and opt.cylinder_rank == 0:
                     print(f"EW={Wbars[i]} for {node.nonant_vardata_list[i].name}")
- 
+
 
 #======================
 
@@ -211,11 +187,11 @@ class PHBase(mpisppy.spopt.SPOpt):
         To check for rank 0 use self.cylinder_rank == 0.
 
         Attributes:
-            local_scenarios (dict): 
+            local_scenarios (dict):
                 Dictionary mapping scenario names (strings) to scenarios (Pyomo
                 conrete model objects). These are only the scenarios managed by
                 the current rank (not all scenarios in the entire model).
-            comms (dict): 
+            comms (dict):
                 Dictionary mapping node names (strings) to MPI communicator
                 objects.
             local_scenario_names (list):
@@ -226,22 +202,22 @@ class PHBase(mpisppy.spopt.SPOpt):
                 callbacks could change these options.
 
         Args:
-            options (dict): 
+            options (dict):
                 Options for the PH algorithm.
-            all_scenario_names (list): 
+            all_scenario_names (list):
                 List of all scenario names in the model (strings).
-            scenario_creator (callable): 
+            scenario_creator (callable):
                 Function which take a scenario name (string) and returns a
                 Pyomo Concrete model with some things attached.
             scenario_denouement (callable, optional):
                 Function which does post-processing and reporting.
-            all_nodenames (list, optional): 
+            all_nodenames (list, optional):
                 List of all node name (strings). Can be `None` for two-stage
                 problems.
             mpicomm (MPI comm, optional):
                 MPI communicator to use between all scenarios. Default is
                 `MPI.COMM_WORLD`.
-            scenario_creator_kwargs (dict, optional): 
+            scenario_creator_kwargs (dict, optional):
                 Keyword arguments passed to `scenario_creator`.
             extensions (object, optional):
                 PH extension object.
@@ -345,9 +321,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
 
             Returns:
-                float: 
+                float:
                     The convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
-        
+
         """
         # Every scenario has its own node list, with a vardata list
         global_diff = np.zeros(1)
@@ -400,7 +376,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         Warning:
             We are counting on Pyomo indices not to change order between list
             creation and use.
-        """ 
+        """
         ci = 0 # Cache index
         for model in self.local_scenarios.values():
             for ndn_i in model._mpisppy_data.nonant_indices:
@@ -436,7 +412,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
     def _disable_W(self):
         # It would be odd to disable W and not prox.
-        # TODO: we should eliminate this method 
+        # TODO: we should eliminate this method
         #       probably not mathematically useful
         for scenario in self.local_scenarios.values():
             scenario._mpisppy_model.W_on = 0
@@ -473,10 +449,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, displays verbose output. Default False.
 
         Returns:
-            float: 
+            float:
                 An outer bound on the optimal objective function value.
 
-        Note: 
+        Note:
             This function overwrites current variable values. This is only
             suitable for use at the end of the solves, or if you really know
             what you are doing.  It is not suitable as a general, per-iteration
@@ -500,7 +476,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         # the incorrect value (unless you explicitly disable them again)
         self.solve_loop(solver_options=solver_options,
                         dis_prox=False, # Important
-                        gripe=True, 
+                        gripe=True,
                         tee=False,
                         verbose=verbose)
 
@@ -523,9 +499,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False):
-        """ Loop over `local_subproblems` and solve them in a manner 
-        dicated by the arguments. 
-        
+        """ Loop over `local_subproblems` and solve them in a manner
+        dicated by the arguments.
+
         In addition to changing the Var values in the scenarios, this function
         also updates the `_PySP_feas_indictor` to indicate which scenarios were
         feasible/infeasible.
@@ -538,7 +514,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 This distinction matters when using bundling. Default is False.
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
-            dis_W (boolean, optional): 
+            dis_W (boolean, optional):
                 If True, duals weights (Ws) are disabled before solve, then
                 re-enabled after solve. Default is False.
             dis_prox (boolean, optional):
@@ -571,7 +547,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._disable_W()
         elif dis_prox:
             self._disable_prox()
-    
+
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
 
@@ -613,7 +589,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.W = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
-            
+
             # create ph objective terms, but disabled
             scenario._mpisppy_model.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
 
@@ -723,7 +699,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def PH_Prep(
-        self, 
+        self,
         attach_duals=True,
         attach_prox=True,
     ):
@@ -767,8 +743,8 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         """
         required = [
-            "solver_name", "PHIterLimit", "defaultPHrho", 
-            "convthresh", "verbose", "display_progress", 
+            "solver_name", "PHIterLimit", "defaultPHrho",
+            "convthresh", "verbose", "display_progress",
         ]
         self._options_check(required, self.options)
         # Display timing and display convergence detail are special for no good reason.
@@ -786,7 +762,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         or if any of the scenario subproblems are infeasible. It also calls the
         `post_iter0` method of any extensions, and uses the rho setter (if
         present) after the inital solve.
-        
+
         Returns:
             float:
                 The so-called "trivial bound", i.e., the objective value of the
@@ -795,11 +771,11 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         if (self.extensions is not None):
             self.extobject.pre_iter0()
-        
+
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
-        dconvergence_detail = self.options["display_convergence_detail"]        
+        dconvergence_detail = self.options["display_convergence_detail"]
         have_extensions = self.extensions is not None
         have_converger = self.ph_converger is not None
 
@@ -812,12 +788,12 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         global_toc("Creating solvers")
         self._create_solvers()
-        
+
         teeme = ("tee-rank0-solves" in self.options
                  and self.options['tee-rank0-solves']
                  and self.cylinder_rank == 0
                  )
-            
+
         if self.options["verbose"]:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
         global_toc("Entering solve loop in PHBase.Iter0")
@@ -827,10 +803,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                         gripe=True,
                         tee=teeme,
                         verbose=verbose)
-        
+
         if self.options["verbose"]:
             print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
-        
+
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
             if self.cylinder_rank == 0:
@@ -886,7 +862,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
         if dconvergence_detail:
-            self.report_var_values_at_rank0(header="Convergence detail:")            
+            self.report_var_values_at_rank0(header="Convergence detail:")
 
         self.reenable_W_and_prox()
 
@@ -897,7 +873,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
     def iterk_loop(self):
         """ Perform all PH iterations after iteration 0.
-        
+
         This function terminates if any of the following occur:
 
         1. The maximum number of iterations is reached.
@@ -932,7 +908,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.Compute_Xbar(verbose)
             #global_toc('Rank: {} - After Compute_Xbar'.format(self.cylinder_rank), True)
 
-            # update the weights        
+            # update the weights
             self.Update_W(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
@@ -941,7 +917,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             if have_extensions:
                 self.extobject.miditer()
 
-            # The hub object takes precedence 
+            # The hub object takes precedence
             # over the converger, such that
             # the spokes will always have the
             # latest data, even at termination
@@ -990,7 +966,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if dconvergence_detail:
-                self.report_var_values_at_rank0(header="Convergence detail:")                
+                self.report_var_values_at_rank0(header="Convergence detail:")
 
         else: # no break, (self._PHIter == max_iterations)
             # NOTE: If we return for any other reason things are reasonably in-sync.
@@ -1034,7 +1010,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         if self.cylinder_rank == 0 and dprogress:
             print("")
-            print("Invoking PH extension finalization, if applicable")    
+            print("Invoking PH extension finalization, if applicable")
             print("")
 
         if have_extensions:
