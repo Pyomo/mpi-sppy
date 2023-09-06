@@ -344,7 +344,8 @@ class Hub(SPCommunicator):
                     else:
                         spoke["options"].update(spoke["spoke_kwargs"]["options"])
 
-                if 'get_hub_bounds' in spoke["options"] and spoke["options"]['get_hub_bounds']:
+                if 'options' in spoke and 'get_hub_bounds' in spoke["options"] \
+                    and spoke["options"]['get_hub_bounds']:
                     self.boundsout_spoke_indices.add(i + 1)
             else:  ##this isn't necessarily wrong, i.e., cut generators
                 logger.debug(f"Spoke class {spoke_class} not recognized by hub")
