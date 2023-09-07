@@ -656,6 +656,19 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e3)
 
+    def converger_args(self):
+        self.add_to_config("use_norm_rho_converger",
+                         description="Use the norm rho converger",
+                         domain=bool,
+                         default=False)
+        self.add_to_config("primal_dual_converger",
+                            description="Use the primal dual converger",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("primal_dual_converger_tol",
+                            description="Tolerance for primal dual converger (default 1e-2)",
+                            domain=float,
+                            default=1e-2)
 
     #================
     def create_parser(self,progname=None):
