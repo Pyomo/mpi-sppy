@@ -160,12 +160,18 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     gs.eval("param xbars{Crops} := 0;")
 
     # Dual term (weights W)
-    profitobj = gs.get_objective("minus_profit")
+    try:
+        profitobj = gs.get_objective("minus_profit")
+    except:
+        print("big troubles!!; we can't find the objective function")
+        print("doing export to export.mod")
+        gs.export_model("export.mod")
+        raise
+        
     objstr = str(profitobj)
     phobjstr = ""
     if add_duals:
         phobjstr += " + W_on * sum{c in Crops} (W[c] * area[c])"
-        print(phobjstr)
         
     # Prox term (quadratic)
     if add_prox:
@@ -189,9 +195,6 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     profitobj.drop()
     gs.eval(objstr)
     currentobj = gs.get_current_objective()
-    print(f"{str(currentobj) =}")
-    print("doing export")
-    gs.export_model("export.mod")
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):

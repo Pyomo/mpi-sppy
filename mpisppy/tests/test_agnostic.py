@@ -19,7 +19,7 @@ __version__ = 0.1
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
-# NOTE Gurobi is hardwired for AMPL, so don't install it on github
+# NOTE Gurobi is hardwired for the AMPL test, so don't install it on github
 # (and, if you have gurobi installed the ampl test will fail)
 
 def _farmer_cfg():
@@ -100,8 +100,8 @@ class Test_Agnostic_pyomo(unittest.TestCase):
             extensions=None
         )
         conv, obj, tbound = ph.ph_main()
-        self.assertAlmostEqual(-110433.4007, obj, places=2)
         self.assertAlmostEqual(-115405.5555, tbound, places=2)
+        self.assertAlmostEqual(-110433.4007, obj, places=2)
 
 class Test_Agnostic_AMPL(unittest.TestCase):
     # HEY (Sept 2023), when we go to a more generic cylinders for
@@ -139,11 +139,11 @@ class Test_Agnostic_AMPL(unittest.TestCase):
         conv, obj, tbound = ph.ph_main()
         print(f"{obj =}, {tbound}")
         message = """ NOTE if you are getting zeros it is because Gurobi is
-        hardwired for AMPL, so don't install it on github (and, if you have
+        hardwired for AMPL tests, so don't install it on github (and, if you have
         gurobi generally installed on your machine, then the ampl
         test will fail on your machine).  """
-        self.assertAlmostEqual(115405.5555, tbound, 2, message)
-        self.assertAlmostEqual(110433.4007, obj, 2, message)        
+        self.assertAlmostEqual(-115405.5555, tbound, 2, message)
+        self.assertAlmostEqual(-110433.4007, obj, 2, message)        
 
 if __name__ == '__main__':
     unittest.main()
