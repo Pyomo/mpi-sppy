@@ -238,8 +238,10 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     s._mpisppy_data.scenario_feasible = True
     # For AMPL mips, we need to use the gap option to compute bounds
     # https://amplmp.readthedocs.io/rst/features-guide.html
-    # xxxxx TBD: does this work??? (what objective is active???)
-    objval = gs.get_objective("minus_profit").value()
+    """ Meanwhile I am having trouble matching the LB reported to PH
+    in the Pyomo example. It sort of doesn't matter, but it bothers me"""
+    objval = gs.get_objective("minus_profit").value()  # use this?
+    ###phobjval = gs.get_objective("phobj").value()   # use this???
     if gd["sense"] == pyo.minimize:
         s._mpisppy_data.outer_bound = objval
     else:
