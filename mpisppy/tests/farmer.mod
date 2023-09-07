@@ -3,7 +3,7 @@
 # Reference:
 #  John R. Birge and Francois Louveaux. Introduction to Stochastic Programming.
 #
-# AMPL coding by Victor Zverovich; ## modifed by dlw
+# AMPL coding by Victor Zverovich; ## modifed by dlw; now *minization* 
 
 ##function expectation;
 ##function random;
@@ -49,11 +49,11 @@ param RandomYield{c in Crops};
 ##                     PurchasePrice[c] * buy[c])) -
 ## sum{c in Crops} PlantingCost[c] * area[c];
 
-maximize profit:
-    ExcessSellingPrice * sell_excess +
+minimize minus_profit:
+    - ExcessSellingPrice * sell_excess -
     sum{c in Crops} (SellingPrice[c] * sell[c] -
-                     PurchasePrice[c] * buy[c]) -
- sum{c in Crops} PlantingCost[c] * area[c];
+                     PurchasePrice[c] * buy[c]) +
+ sum{c in Crops} (PlantingCost[c] * area[c]);
 
 s.t. totalArea: sum {c in Crops} area[c] <= TotalArea;
 

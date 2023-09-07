@@ -72,7 +72,7 @@ def scenario_creator(
         "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(areaVarDatas)},
         "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(areaVarDatas)},
         "probability": "uniform",
-        "sense": pyo.maximize,
+        "sense": pyo.minimize,
         "BFs": None
     }
 
@@ -160,7 +160,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     gs.eval("param xbars{Crops} := 0;")
 
     # Dual term (weights W)
-    profitobj = gs.get_objective("profit")
+    profitobj = gs.get_objective("minus_profit")
     objstr = str(profitobj)
     phobjstr = ""
     if add_duals:
@@ -182,13 +182,15 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
             prox_expr += (gs.rho[ndn_i] / 2.0) * \
                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
         """
-        phobjstr += " + prox_on * sum{c in Crops} (rho[c]/2.0) * (area[c] * area[c] "+\
-                    " - 2.0 * xbars[c] * area[c] + xbars[c]^2)"
-
-    objstr = objstr[:-1] + phobjstr + ";"
-    objstr = objstr.replace("maximize profit", "maximize phobj")
+        phobjstr += " + prox_on * sum{c in Crops} ((rho[c]/2.0) * (area[c] * area[c] "+\
+                    " - 2.0 * xbars[c] * area[c] + xbars[c]^2))"
+    objstr = objstr[:-1] + "+ (" + phobjstr + ");"
+    objstr = objstr.replace("minimize minus_profit", "minimize phobj")
     profitobj.drop()
     gs.eval(objstr)
+    currentobj = gs.get_current_objective()
+    print(f"{str(currentobj) =}")
+    print("doing export")
     gs.export_model("export.mod")
 
 
@@ -234,7 +236,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # For AMPL mips, we need to use the gap option to compute bounds
     # https://amplmp.readthedocs.io/rst/features-guide.html
     # xxxxx TBD: does this work??? (what objective is active???)
-    objval = gs.get_objective("profit").value()
+    objval = gs.get_objective("minus_profit").value()
     if gd["sense"] == pyo.minimize:
         s._mpisppy_data.outer_bound = objval
     else:
