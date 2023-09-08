@@ -29,7 +29,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
           pip install pyomo xpress cplex
-          pip install numpy
+          pip install numpy matplotlib
 
       - name: setup the program
         run: |
@@ -40,7 +40,7 @@ jobs:
         run: |
           cd mpisppy/tests
           # envall does nothing
-          python test_pysp_model.py 
+          python test_pysp_model.py
 
       - name: run pysp unit tests
         timeout-minutes: 100

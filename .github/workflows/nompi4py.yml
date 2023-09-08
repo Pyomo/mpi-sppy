@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pyomo sphinx sphinx_rtd_theme cplex
-          pip install xpress numpy pandas scipy dill
+          pip install xpress numpy pandas scipy dill matplotlib
 
       - name: setup the program
         run: |
@@ -35,4 +35,3 @@ jobs:
         run: |
           cd mpisppy/tests
           python test_ef_ph.py
-

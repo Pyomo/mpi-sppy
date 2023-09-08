@@ -28,7 +28,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo xpress cplex
-          pip install numpy
+          pip install numpy matplotlib
 
       - name: setup the program
         run: |
@@ -39,4 +39,4 @@ jobs:
         run: |
           cd mpisppy/tests
           # envall does nothing
-          python test_aph.py 
+          python test_aph.py
