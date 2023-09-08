@@ -262,13 +262,14 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
                     if trval in {4, 5, 6}:
                         phtrackeroptions[f'plot_{t_var}'] = True
 
-        # because convergence maps to multiple tracking options
-        if phtrackeroptions.get('track_convergence'):
-            phtrackeroptions['track_bounds'] = True
-            phtrackeroptions['track_gaps'] = True
-        if phtrackeroptions.get('plot_convergence'):
-            phtrackeroptions['plot_bounds'] = True
-            phtrackeroptions['plot_gaps'] = True
+        # disabled until we finalize hub bounds passing
+        # # because convergence maps to multiple tracking options
+        # if phtrackeroptions.get('track_convergence'):
+        #     phtrackeroptions['track_bounds'] = True
+        #     phtrackeroptions['track_gaps'] = True
+        # if phtrackeroptions.get('plot_convergence'):
+        #     phtrackeroptions['plot_bounds'] = True
+        #     phtrackeroptions['plot_gaps'] = True
 
         cylinder_dict["opt_kwargs"]["options"]["phtracker_options"] = phtrackeroptions
 
