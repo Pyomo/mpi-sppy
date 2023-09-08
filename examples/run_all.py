@@ -163,12 +163,11 @@ do_one("farmer", "farmer_cylinders.py",  5,
        "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
        "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
        "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
-       "--track-duals=4 --primal-dual-converger --primal-dual-converger-tol=0.5".format(solver_name))
+       "--track-duals=4".format(solver_name))
 do_one("farmer", "farmer_cylinders.py",  5,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
-       "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 --primal-dual-converger "
-       "--primal-dual-converger-tol=0.5".format(solver_name))
+       "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
