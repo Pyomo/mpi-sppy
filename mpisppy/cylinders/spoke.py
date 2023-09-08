@@ -197,7 +197,7 @@ class _BoundSpoke(Spoke):
         """Returns the local copy of the inner bound from the hub"""
         if 'get_hub_bounds' in self.options and \
                 self.options['get_hub_bounds']:
-            return self._locals[-3]
+            return self._locals[-2]
         raise RuntimeError("This spoke does not recieve an inner bound")
 
     @property
@@ -205,7 +205,7 @@ class _BoundSpoke(Spoke):
         """Returns the local copy of the outer bound from the hub"""
         if 'get_hub_bounds' in self.options and \
                 self.options['get_hub_bounds']:
-            return self._locals[-2]
+            return self._locals[-3]
         raise RuntimeError("This spoke does not recieve an outer bound")
 
     def _got_kill_signal(self):

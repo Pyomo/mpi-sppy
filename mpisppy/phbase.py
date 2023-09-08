@@ -1016,6 +1016,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_everything()
 
+        if self.ph_converger is not None and hasattr(self.ph_converger, 'post_everything'):
+            self.convobject.post_everything()
+
         Eobj = self.Eobjective(verbose)
 
         self.mpicomm.Barrier()

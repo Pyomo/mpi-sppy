@@ -27,9 +27,15 @@ class Converger:
     @abc.abstractmethod
     def is_converged(self):
         ''' Indicated whether the algorithm has converged.
-            
+
             Must return a boolean. If True, the algorithm will terminate at the
             current iteration--no more solves will be performed by SPBase.
             Otherwise, the iterations will continue.
+        '''
+        pass
+
+    def post_loops(self):
+        '''Method called after the termination of the algorithm.
+            This method is called after the post_loops of any extensions
         '''
         pass

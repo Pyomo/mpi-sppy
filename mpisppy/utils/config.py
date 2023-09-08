@@ -671,34 +671,40 @@ class Config(pyofig.ConfigDict):
                             default=1e-2)
 
     def tracking_args(self):
-        self.add_to_config("results_folder",
-                            description="Path of results folder",
+        self.add_to_config("tracking_folder",
+                            description="Path of results folder (default results)",
                             domain=str,
-                            default="tracking_results")
+                            default="results")
         self.add_to_config("ph_track_progress",
                             description="Adds tracking extension to all"
-                            " ph opt cylinders (default False)",
+                            " ph opt cylinders (default False). Use --track_*"
+                            " to specificy what and how to track."
+                            " See mpisppy.utils.cfg_vanilla.add_ph_tracking for details",
                             domain=bool,
                             default=False)
         self.add_to_config("track_convergence",
                             description="Adds convergence tracking ie"
-                                " gaps, bounds, etc (default False)",
-                            domain=bool,
-                            default=False)
-        self.add_to_config("track_xbar",
-                            description="Adds xbar tracking (default False)",
-                            domain=bool,
-                            default=False)
+                                " gaps and bounds (default 0)",
+                            domain=int,
+                            default=0)
+        self.add_to_config("track_xbars",
+                            description="Adds xbar tracking (default 0)",
+                            domain=int,
+                            default=0)
         self.add_to_config("track_duals",
-                            description="Adds w tracking (default False)",
-                            domain=bool,
-                            default=False)
+                            description="Adds w tracking (default 0)",
+                            domain=int,
+                            default=0)
         self.add_to_config("track_nonants",
-                            description="Adds nonant tracking (default False)",
-                            domain=bool,
-                            default=False)
+                            description="Adds nonant tracking (default 0)",
+                            domain=int,
+                            default=0)
+        self.add_to_config('track_scen_gaps',
+                            description="Adds scenario gap tracking (default 0)",
+                            domain=int,
+                            default=0)
 
-    def wxbar_set_get_args(self):
+    def wxbar_read_write_args(self):
         self.add_to_config("init_W_fname",
                                 description="Path of initial W file (default None)",
                                 domain=str,
