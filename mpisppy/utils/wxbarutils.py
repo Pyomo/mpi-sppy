@@ -1,7 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-''' Utilities for reading and writing W and
-    x-bar values in and out of csv files.
+''' Utilities for reading and writing W and 
+    x-bar values in and out of csv files. 
 
     Written: DLW July 2019
     Modified: DTM Aug 2019
@@ -9,9 +9,9 @@
     Could stand to be re-factored a bit.
 
     When reading/writing the weight files, there are two options.
-
-     1. All weights are stored in a single main file.
-
+        
+     1. All weights are stored in a single main file. 
+        
             Reading: Set "init_W_fname" to the location of the main file
             containing all of the weights.
 
@@ -19,7 +19,7 @@
             contain all the weights.
 
      2. Each scenario's weights are stored in separate, individual files.
-
+        
             Reading: Set "init_W_fname" to the directory containing the weight
             files. This directory must contain one file per scenario, each
             named <scenario_name>_weights.csv. Set "init_separate_W_files" to
@@ -85,7 +85,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
 
 
 def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
-    '''
+    ''' 
     Args:
         fname (str) -- if sep_files=False, file containing the dual weights.
             Otherwise, path of the directory containing the dual weight files
@@ -96,10 +96,10 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
             individual files, one per scenario. The files must be contained in
             the same directory, and must be named <sname>_weights.csv for each
             scenario name <sname>.
-
+    
     Notes:
         Calls _check_W, which ensures that all required values were specified,
-        and that the specified weights satisfy the dual feasibility condition
+        and that the specified weights satisfy the dual feasibility condition 
         sum_{s\in S} p_s * w_s = 0.
     '''
     scenario_names_local  = list(PHB.local_scenarios.keys())
@@ -130,7 +130,7 @@ def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
 
 def _parse_W_csv_single(fname):
     ''' Read a file containing the weights for a single scenario. The file must
-        be formatted as
+        be formatted as 
 
         variable_name,variable_value
 
@@ -151,8 +151,8 @@ def _parse_W_csv_single(fname):
     return results
 
 def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
-    ''' Read a csv file containing weight information.
-
+    ''' Read a csv file containing weight information. 
+        
         Args:
             fname (str) -- Filename of csv file to read
             scenario_names_local (list of str) -- List of local scenario names
@@ -161,9 +161,9 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
                 all ranks--each PHBase object stores this information).
 
         Return:
-            results (dict) -- Doubly-nested dict mapping
+            results (dict) -- Doubly-nested dict mapping 
                 results[scenario_name][var_name] --> weight value (float)
-
+    
         Notes:
             This function is only called if sep_files=False, i.e., if all of
             the weights are stored in a single root file. The file must be
@@ -178,7 +178,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             Raises a RuntimeError if there are any missing scenarios. Prints a
             warning if there are any extra scenarios.
 
-            When this function returns, we are certain that
+            When this function returns, we are certain that 
                 results.keys() == PHB.local_scenarios.keys()
 
             When run in parallel, this method requires multiple ranks to open
@@ -197,7 +197,7 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             sname = line[0]
             vname = ','.join(line[1:-1])
             wval  = float(line[-1])
-
+            
             if (sname not in scenario_names_global):
                 if (rank == 0):
                     print('WARNING: Ignoring unknown scenario name', sname)
@@ -212,21 +212,21 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
     missing = [name for (name,is_seen) in seen.items() if not is_seen]
     if (missing):
         raise RuntimeError('rank ' + str(rank) +' could not find the following '
-                'scenarios in the provided weight file: ' + ', '.join(missing))
-
+                'scenarios in the provided weight file: ' + ', '.join(missing)) 
+        
     return results
-
+            
 def _check_W(w_val_dict, PHB, rank):
     '''
     Args:
-        w_val_dict (dict) -- doubly-nested dict mapping
+        w_val_dict (dict) -- doubly-nested dict mapping 
             w_val_dict[scenario_name][variable_name] = weight value.
         PHB (PHBase object) -- PHBase object
         rank (int) -- local rank
 
     Notes:
         Checks for three conditions:
-
+         
          1. Missing variables --> raises a RuntimeError
          2. Extra variables --> prints a warning
          3. Dual feasibility --> raises a RuntimeError
@@ -246,8 +246,8 @@ def _check_W(w_val_dict, PHB, rank):
             print('Removing unknown variables:', ', '.join(list(diff)))
             for vname in diff:
                 w_val_dict[sname].pop(vname, None)
-
-    # At this point, we are sure that every local
+        
+    # At this point, we are sure that every local 
     # scenario has the same set of variables
     probs = {name: model._mpisppy_probability for (name, model) in
                     PHB.local_scenarios.items()}
@@ -315,13 +315,13 @@ def set_xbar_from_file(fname, PHB):
                 scenario._mpisppy_model.xsqbars[node.name, ix] = val * val
 
 def _parse_xbar_csv(fname):
-    ''' Read a csv file containing weight information.
-
+    ''' Read a csv file containing weight information. 
+        
         Args:
             fname (str) -- Filename of csv file to read
         Return:
             results (dict) -- Dict mapping var_name --> variable value (float)
-
+    
         Notes:
             The file must be formatted as:
 
@@ -345,7 +345,7 @@ def _parse_xbar_csv(fname):
             line  = line.split(',')
             vname = ','.join(line[:-1])
             val  = float(line[-1])
-
+            
             results[vname] = val
 
     return results
