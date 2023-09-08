@@ -955,7 +955,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break
 
-            if have_extensions and getattr(self.extobject, 'enditer_after_sync', None) is not None:
+            if have_extensions and hasattr(self.extobject, 'enditer_after_sync'):
                 self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
