@@ -72,6 +72,13 @@ class Extension:
         '''
         pass
 
+    def post_iter0_after_sync(self):
+        ''' Method called after the first PH iteration, after the
+            synchronization of sending messages between cylinders
+            has completed.
+        '''
+        pass
+
     def miditer(self):
         ''' Method called after x-bar has been computed and the dual weights
             have been updated, but before solve_loop().
@@ -83,6 +90,13 @@ class Extension:
     def enditer(self):
         ''' Method called after the solve_loop(), but before the next x-bar and
             weight update.
+        '''
+        pass
+
+    def enditer_after_sync(self):
+        ''' Method called after the solve_loop(), after the
+            synchronization of sending messages between cylinders
+            has completed.
         '''
         pass
 
@@ -134,6 +148,10 @@ class MultiExtension(Extension):
         for lobject in self.extdict.values():
             lobject.post_iter0()
 
+    def post_iter0_after_sync(self):
+        for lobject in self.extdict.values():
+            lobject.post_iter0_after_sync()
+
     def miditer(self):
         for lobject in self.extdict.values():
             lobject.miditer()
@@ -141,6 +159,10 @@ class MultiExtension(Extension):
     def enditer(self):
         for lobject in self.extdict.values():
             lobject.enditer()
+
+    def enditer_after_sync(self):
+        for lobject in self.extdict.values():
+            lobject.enditer_after_sync()
 
     def post_everything(self):
         for lobject in self.extdict.values():

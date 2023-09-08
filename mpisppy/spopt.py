@@ -272,7 +272,7 @@ class SPOpt(SPBase):
         _vb("Entering solve_loop function.")
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
-        if self.extensions is not None and hasattr(self.extobject, 'pre_solve_loop'):
+        if self.extensions is not None:
                 self.extobject.pre_solve_loop()
 
         # note that when there is no bundling, scenarios are subproblems
@@ -293,7 +293,7 @@ class SPOpt(SPBase):
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
             ))
 
-        if self.extensions is not None and hasattr(self.extobject, 'post_solve_loop'):
+        if self.extensions is not None:
                 self.extobject.post_solve_loop()
 
         if dtiming:
