@@ -30,7 +30,7 @@ jobs:
           conda install mpi4py pandas setuptools git
           pip install sphinx sphinx_rtd_theme cplex
           pip install xpress
-          pip install numpy matplotlib
+          pip install numpy
 
       - name: set up pyomo
         run: |

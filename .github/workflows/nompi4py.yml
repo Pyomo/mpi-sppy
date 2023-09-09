@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install pyomo sphinx sphinx_rtd_theme cplex
-          pip install xpress numpy pandas scipy dill matplotlib
+          pip install xpress numpy pandas scipy dill
 
       - name: setup the program
         run: |
