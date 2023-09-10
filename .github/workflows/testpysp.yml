@@ -40,7 +40,7 @@ jobs:
         run: |
           cd mpisppy/tests
           # envall does nothing
-          python test_pysp_model.py 
+          python test_pysp_model.py
 
       - name: run pysp unit tests
         timeout-minutes: 100

@@ -80,7 +80,7 @@ class SPOpt(SPBase):
                             "reported as stale. This usually means this variable "
                             "did not appear in any (active) components, and hence "
                             "was not communicated to the subproblem solver. ")
-        
+
 
     def solve_one(self, solver_options, k, s,
                   dtiming=False,
@@ -92,13 +92,13 @@ class SPOpt(SPBase):
         """ Solve one subproblem.
 
         Args:
-            solver_options (dict or None): 
+            solver_options (dict or None):
                 The scenario solver options.
-            k (str): 
+            k (str):
                 Subproblem name.
-            s (ConcreteModel with appendages): 
+            s (ConcreteModel with appendages):
                 The subproblem to solve.
-            dtiming (boolean, optional): 
+            dtiming (boolean, optional):
                 If True, reports timing values. Default False.
             gripe (boolean, optional):
                 If True, outputs a message when a solve fails. Default False.
@@ -119,10 +119,10 @@ class SPOpt(SPBase):
         """
 
 
-        def _vb(msg): 
+        def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
-        
+
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
         # high variance in set objective time (Feb 2023)?
@@ -142,7 +142,7 @@ class SPOpt(SPBase):
                 set_objective_time = time.time() - set_objective_start_time
         else:
             set_objective_time = 0
-    
+
         if self.extensions is not None:
             results = self.extobject.pre_solve(s)
 
@@ -200,8 +200,10 @@ class SPOpt(SPBase):
                 s.solutions.load_from(results)
             if self.is_minimizing:
                 s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
             else:
                 s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+                s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
             s._mpisppy_data.scenario_feasible = True
         # TBD: get this ready for IPopt (e.g., check feas_prob every time)
         # propogate down
@@ -213,7 +215,7 @@ class SPOpt(SPBase):
                      self._check_staleness(self.local_scenarios[sname])
         else:  # not a bundle
             if s._mpisppy_data.scenario_feasible:
-                self._check_staleness(s)                 
+                self._check_staleness(s)
 
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
@@ -228,9 +230,9 @@ class SPOpt(SPBase):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False):
-        """ Loop over `local_subproblems` and solve them in a manner 
-        dicated by the arguments. 
-        
+        """ Loop over `local_subproblems` and solve them in a manner
+        dicated by the arguments.
+
         In addition to changing the Var values in the scenarios, this function
         also updates the `_PySP_feas_indictor` to indicate which scenarios were
         feasible/infeasible.
@@ -264,11 +266,14 @@ class SPOpt(SPBase):
 
         set_objective takes care of W and prox changes.
         """
-        def _vb(msg): 
+        def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(rank0) " + msg)
         _vb("Entering solve_loop function.")
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
+
+        if self.extensions is not None:
+                self.extobject.pre_solve_loop()
 
         # note that when there is no bundling, scenarios are subproblems
         if use_scenarios_not_subproblems:
@@ -288,6 +293,9 @@ class SPOpt(SPBase):
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling
             ))
 
+        if self.extensions is not None:
+                self.extobject.post_solve_loop()
+
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_times, root=0)
             if self.cylinder_rank == 0:
@@ -302,7 +310,7 @@ class SPOpt(SPBase):
     def Eobjective(self, verbose=False):
         """ Compute the expected objective function across all scenarios.
 
-        Note: 
+        Note:
             Assumes the optimization is done beforehand,
             therefore DOES NOT CHECK FEASIBILITY or NON-ANTICIPATIVITY!
             This method uses whatever the current value of the objective
@@ -338,7 +346,7 @@ class SPOpt(SPBase):
     def Ebound(self, verbose=False, extra_sum_terms=None):
         """ Compute the expected outer bound across all scenarios.
 
-        Note: 
+        Note:
             Assumes the optimization is done beforehand.
             Uses whatever bound is currently  attached to the subproblems.
 
@@ -374,7 +382,7 @@ class SPOpt(SPBase):
 
         local_Ebound = np.array(local_Ebound_list)
         global_Ebound = np.zeros(len(local_Ebound_list))
-        
+
         self.mpicomm.Allreduce(local_Ebound, global_Ebound, op=MPI.SUM)
 
         if extra_sum_terms is None:
@@ -405,7 +413,7 @@ class SPOpt(SPBase):
 
         This function can be used to check whether all scenarios are feasible
         by comparing the return value to one.
-        
+
         Note:
             This function assumes the scenarios have a boolean
             `_mpisppy_data.scenario_feasible` attribute.
@@ -462,14 +470,14 @@ class SPOpt(SPBase):
         """ Can be used to track convergence progress.
 
         Args:
-            compstr (str): 
+            compstr (str):
                 The name of the Pyomo component. Should not be indexed.
 
         Returns:
-            tuple: 
+            tuple:
                 Tuple containing
 
-                avg (float): 
+                avg (float):
                     Average across all scenarios.
                 min (float):
                     Minimum across all scenarios.
@@ -494,9 +502,9 @@ class SPOpt(SPBase):
 
             compv = pyo.value(v_cuid.find_component_on(s))
 
-            
+
             ###compv = pyo.value(getattr(s, compstr))
-            localavg[0] += s._mpisppy_probability * compv  
+            localavg[0] += s._mpisppy_probability * compv
             if compv < localmin[0] or firsttime:
                 localmin[0] = compv
             if compv > localmax[0] or firsttime:
@@ -540,7 +548,7 @@ class SPOpt(SPBase):
         # (We are assuming that algorithms are not fixing anticipative vars; but if they
         # do, they had better put their fixedness back to its correct state.)
         self._save_nonants()
-        for k,s in self.local_scenarios.items():        
+        for k,s in self.local_scenarios.items():
             for ci, _ in enumerate(s._mpisppy_data.nonant_indices):
                 s._mpisppy_data.fixedness_cache[ci] = s._mpisppy_data.original_fixedness[ci]
         self._restore_nonants()
@@ -552,7 +560,7 @@ class SPOpt(SPBase):
             to alert persistent solvers.
         Args:
             cache (ndn dict of list or numpy vector): values at which to fix
-        WARNING: 
+        WARNING:
             We are counting on Pyomo indices not to change order between
             when the cache_list is created and used.
         NOTE:
@@ -575,13 +583,13 @@ class SPOpt(SPBase):
                 if len(cache[ndn]) != nlens[ndn]:
                     raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
                                        .format(nlens[ndn], ndn, len(cache[ndn])))
-                for i in range(nlens[ndn]): 
+                for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
                     this_vardata._value = cache[ndn][i]
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
-                        
+
     def _fix_root_nonants(self,root_cache):
         """ Fix the 1st stage Vars subject to non-anticipativity at given values.
             Loop over the scenarios to restore, but loop over subproblems
@@ -589,7 +597,7 @@ class SPOpt(SPBase):
             Useful for multistage to find feasible solutions with a given scenario.
         Args:
             root_cache (numpy vector): values at which to fix
-        WARNING: 
+        WARNING:
             We are counting on Pyomo indices not to change order between
             when the cache_list is created and used.
         NOTE:
@@ -602,13 +610,13 @@ class SPOpt(SPBase):
                 persistent_solver = s._solver_plugin
 
             nlens = s._mpisppy_data.nlens
-            
+
             rootnode = None
             for node in s._mpisppy_node_list:
                 if node.name == 'ROOT':
                     rootnode = node
                     break
-                
+
             if rootnode is None:
                 raise RuntimeError("Could not find a 'ROOT' node in scen {}"\
                                    .format(k))
@@ -617,25 +625,25 @@ class SPOpt(SPBase):
             if len(root_cache) != nlens['ROOT']:
                 raise RuntimeError("Needed {} nonant Vars for 'ROOT', got {}"\
                                    .format(nlens['ROOT'], len(root_cache)))
-            
-            for i in range(nlens['ROOT']): 
+
+            for i in range(nlens['ROOT']):
                 this_vardata = node.nonant_vardata_list[i]
                 this_vardata._value = root_cache[i]
                 this_vardata.fix()
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
-                        
+
 
 
     def _restore_nonants(self):
         """ Restore nonanticipative variables to their original values.
-            
-        This function works in conjunction with _save_nonants. 
-        
+
+        This function works in conjunction with _save_nonants.
+
         We loop over the scenarios to restore variables, but loop over
         subproblems to alert persistent solvers.
 
-        Warning: 
+        Warning:
             We are counting on Pyomo indices not to change order between save
             and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
             hopefully does not need to.
@@ -661,7 +669,7 @@ class SPOpt(SPBase):
         Note:
             Assumes nonant_cache is on the scenarios and can be used
             as a list, or puts it there.
-        Warning: 
+        Warning:
             We are counting on Pyomo indices not to change order before the
             restoration. We also need the Var type to remain stable.
         Note:
@@ -681,7 +689,7 @@ class SPOpt(SPBase):
 
     def _save_original_nonants(self):
         """ Save the current value of the nonanticipative variables.
-            
+
         Values are saved in the `_PySP_original_nonants` attribute. Whether
         the variable was fixed is stored in `_PySP_original_fixedness`.
         """
@@ -691,7 +699,7 @@ class SPOpt(SPBase):
                 raise
             if not hasattr(s._mpisppy_data,"nonant_cache"):
                 # uses nonant cache to signal other things have not
-                # been created 
+                # been created
                 # TODO: combine cache creation (or something else)
                 clen = len(s._mpisppy_data.nonant_indices)
                 s._mpisppy_data.original_fixedness = [None] * clen
@@ -704,13 +712,13 @@ class SPOpt(SPBase):
 
     def _restore_original_nonants(self):
         """ Restore nonanticipative variables to their original values.
-            
-        This function works in conjunction with _save_original_nonants. 
-        
+
+        This function works in conjunction with _save_original_nonants.
+
         We loop over the scenarios to restore variables, but loop over
         subproblems to alert persistent solvers.
 
-        Warning: 
+        Warning:
             We are counting on Pyomo indices not to change order between save
             and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
             hopefully does not need to.
@@ -733,13 +741,13 @@ class SPOpt(SPBase):
 
 
     def FormEF(self, scen_dict, EF_name=None):
-        """ Make the EF for a list of scenarios. 
-        
+        """ Make the EF for a list of scenarios.
+
         This function is mainly to build bundles. To build (and solve) the
         EF of the entire problem, use the EF class instead.
 
         Args:
-            scen_dict (dict): 
+            scen_dict (dict):
                 Subset of local_scenarios; the scenarios to put in the EF. THe
                 dictionary maps sccneario names (strings) to scenarios (Pyomo
                 concrete model objects).
@@ -747,7 +755,7 @@ class SPOpt(SPBase):
                 Name for the resulting EF model.
 
         Returns:
-            :class:`pyomo.environ.ConcreteModel`: 
+            :class:`pyomo.environ.ConcreteModel`:
                 The EF with explicit non-anticipativity constraints.
 
         Raises:
@@ -756,7 +764,7 @@ class SPOpt(SPBase):
                 `scen_dict` is not owned locally (i.e. is not in
                 `local_scenarios`).
 
-        Note: 
+        Note:
             We attach a list of the scenario names called _PySP_subsecen_names
         Note:
             We deactivate the objective on the scenarios.

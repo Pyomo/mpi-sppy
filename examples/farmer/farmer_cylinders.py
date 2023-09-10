@@ -15,6 +15,7 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+from mpisppy.utils.cfg_vanilla import extension_adder
 
 write_solution = True
 
@@ -33,6 +34,8 @@ def _parse_args():
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
     cfg.converger_args()
+    cfg.wxbar_read_write_args()
+    cfg.tracking_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -101,11 +104,12 @@ def main():
         hub_dict['opt_kwargs']['options']\
             ['primal_dual_converger_options'] = {
                 'verbose': True,
-                'tol': cfg.primal_dual_converger_tol}
+                'tol': cfg.primal_dual_converger_tol,
+                'tracking': True}
 
     ## hack in adaptive rho
     if cfg.use_norm_rho_updater:
-        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
+        extension_adder(hub_dict, NormRhoUpdater)
         hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
     # FWPH spoke

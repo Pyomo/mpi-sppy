@@ -158,10 +158,16 @@ do_one("farmer", "farmer_cylinders.py",  3,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
        "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
-do_one("farmer", "farmer_cylinders.py",  4,
+do_one("farmer", "farmer_cylinders.py",  5,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
-       "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --xhatshuffle --fwph "
-       "--display-convergence-detail".format(solver_name))
+       "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
+       "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
+       "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
+       "--track-duals=4".format(solver_name))
+do_one("farmer", "farmer_cylinders.py",  5,
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
+       "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
@@ -361,14 +367,14 @@ if not nouc and egret_avail():
            "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
            "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
            "--ph-mipgaps-json=phmipgaps.json "
-           "--solver-name={}".format(solver_name))    
+           "--solver-name={}".format(solver_name))
     # as of May 2022, this one works well, but outputs some crazy messages
     do_one("uc", "uc_ama.py", 3,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 "
            "--fixer-tol=1e-2 --lagranger --xhatshuffle "
            "--solver-name={}".format(solver_name))
-    
+
     # 10-scenario UC
     time_one("UC_cylinder10scen", "uc", "uc_cylinders.py", 3,
              "--bundles-per-rank=5 --max-iterations=2 "
