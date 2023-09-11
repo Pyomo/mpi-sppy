@@ -116,6 +116,10 @@ the ``SPBase`` option ``variable_probability_kwargs``
 The variable probabilities impact the computation of
 ``xbars`` and ``W``.
 
+.. Note::
+   The only xhatter that is likely to work with variable probabilities is xhatxbar. The others
+   are likely to execute without error messages but will not find good solutions.
+
 
 gradient_extension
 ==================

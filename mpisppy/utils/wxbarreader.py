@@ -71,23 +71,23 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
         self.sep_files = sep_files
 
     def pre_iter0(self):
-        if (self.w_fname):
-            mpisppy.utils.wxbarutils.set_W_from_file(
-                    self.w_fname, self.PHB, self.cylinder_rank,
-                    sep_files=self.sep_files)
-            self.PHB._reenable_W() # This makes a big difference.
-        if (self.x_fname):
-            mpisppy.utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
-            self.PHB._reenable_prox()
-        
+        pass
 
 
     def post_iter0(self):
         pass
-        
+
     def miditer(self):
         ''' Called before the solveloop is called '''
-        pass
+        if self.PHB._PHIter == 1:
+            if self.w_fname:
+                mpisppy.utils.wxbarutils.set_W_from_file(
+                        self.w_fname, self.PHB, self.cylinder_rank,
+                        sep_files=self.sep_files)
+                self.PHB._reenable_W() # This makes a big difference.
+            if self.x_fname:
+                mpisppy.utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
+                self.PHB._reenable_prox()
 
     def enditer(self):
         ''' Called after the solve loop '''

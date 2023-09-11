@@ -4,7 +4,7 @@ name: pyomo tracker
 
 on:
   schedule:
-    # min hr dayofmonth month dayofweek 
+    # min hr dayofmonth month dayofweek
     - cron: "14 3 * * *"
 
 defaults:
@@ -47,7 +47,7 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent 
+          python afew.py xpress_persistent
 
       - name: Test docs
         run: |

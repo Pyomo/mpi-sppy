@@ -4,7 +4,7 @@
 #   supporting member functions.
 # NOTE: the xxxx_args() naming convention is used by amalgamator.py
 
-""" Notes 
+""" Notes
 The default for all 'with' options is False and we are dropping the with_
        (and we are dropping the `no` side that was in baseparsers.py)
        (so we are also dropping the use of with_)
@@ -113,7 +113,7 @@ class Config(pyofig.ConfigDict):
         else:
             self[name] = value
 
-        
+
     #===============
     def quick_assign(self, name, domain, value):
         """ mimic dict assignment with fewer args
@@ -135,100 +135,100 @@ class Config(pyofig.ConfigDict):
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
-        self.add_to_config(f"{sstr}_name", 
+        self.add_to_config(f"{sstr}_name",
                             description= "solver name (default None)",
                             domain = str,
                             default=None)
 
-        self.add_to_config(f"{sstr}_options", 
+        self.add_to_config(f"{sstr}_options",
                             description= "solver options; space delimited with = for values (default None)",
                             domain = str,
                             default=None)
-        
+
     def _common_args(self):
         raise RuntimeError("_common_args is no longer used. See comments at top of config.py")
 
     def popular_args(self):
-        self.add_to_config("max_iterations", 
+        self.add_to_config("max_iterations",
                             description="hub max iiterations (default 1)",
                             domain=int,
                             default=1)
-        
+
         self.add_solver_specs(prefix="")
 
-        self.add_to_config("seed", 
+        self.add_to_config("seed",
                             description="Seed for random numbers (default is 1134)",
                             domain=int,
                             default=1134)
 
-        self.add_to_config("default_rho", 
+        self.add_to_config("default_rho",
                             description="Global rho for PH (default None)",
                             domain=float,
                             default=None)
 
-        self.add_to_config("bundles_per_rank", 
+        self.add_to_config("bundles_per_rank",
                             description="bundles per rank (default 0 (no bundles))",
                             domain=int,
-                            default=0)                
+                            default=0)
 
-        self.add_to_config('verbose', 
+        self.add_to_config('verbose',
                               description="verbose output",
                               domain=bool,
                               default=False)
 
-        self.add_to_config('display_progress', 
+        self.add_to_config('display_progress',
                               description="display progress at each iteration",
                               domain=bool,
                               default=False)
 
-        self.add_to_config('display_convergence_detail', 
+        self.add_to_config('display_convergence_detail',
                               description="display non-anticipative variable convergence statistics at each iteration",
                               domain=bool,
                               default=False)
 
-        self.add_to_config("max_solver_threads", 
+        self.add_to_config("max_solver_threads",
                             description="Limit on threads per solver (default None)",
                             domain=int,
                             default=None)
 
-        self.add_to_config("intra_hub_conv_thresh", 
+        self.add_to_config("intra_hub_conv_thresh",
                             description="Within hub convergence threshold (default 1e-10)",
                             domain=float,
                             default=1e-10)
 
-        self.add_to_config("trace_prefix", 
+        self.add_to_config("trace_prefix",
                             description="Prefix for bound spoke trace files. If None "
                                  "bound spoke trace files are not written.",
                             domain=str,
                             default=None)
 
-        self.add_to_config("tee_rank0_solves", 
+        self.add_to_config("tee_rank0_solves",
                               description="Some cylinders support tee of rank 0 solves."
                               "(With multiple cylinders this could be confusing.)",
                               domain=bool,
                               default=False)
 
-        self.add_to_config("auxilliary", 
+        self.add_to_config("auxilliary",
                             description="Free text for use by hackers (default '').",
                             domain=str,
                             default='')
 
     def ph_args(self):
-        self.add_to_config("linearize_binary_proximal_terms", 
+        self.add_to_config("linearize_binary_proximal_terms",
                               description="For PH, linearize the proximal terms for "
                               "all binary nonanticipative variables",
                               domain=bool,
                               default=False)
 
 
-        self.add_to_config("linearize_proximal_terms", 
+        self.add_to_config("linearize_proximal_terms",
                               description="For PH, linearize the proximal terms for "
                               "all nonanticipative variables",
                               domain=bool,
                               default=False)
 
 
-        self.add_to_config("proximal_linearization_tolerance", 
+        self.add_to_config("proximal_linearization_tolerance",
                             description="For PH, when linearizing proximal terms, "
                             "a cut will be added if the proximal term approximation "
                             "is looser than this value (default 1e-1)",
@@ -241,7 +241,7 @@ class Config(pyofig.ConfigDict):
 
     def num_scens_optional(self):
         self.add_to_config(
-            "num_scens", 
+            "num_scens",
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
@@ -250,7 +250,7 @@ class Config(pyofig.ConfigDict):
     def num_scens_required(self):
         # required, but not postional
         self.add_to_config(
-            "num_scens", 
+            "num_scens",
             description="Number of scenarios (default None)",
             domain=int,
             default=None,
@@ -262,14 +262,14 @@ class Config(pyofig.ConfigDict):
         raise RuntimeError("_basic_multistage is no longer used. See comments at top of config.py")
 
     def add_branching_factors(self):
-        self.add_to_config("branching_factors", 
+        self.add_to_config("branching_factors",
                             description="Spaces delimited branching factors (e.g., 2 2)",
                             domain=pyofig.ListOf(int, pyofig.PositiveInt),
                             default=None)
 
 
     def make_multistage_parser(self, progname=None):
-        raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")    
+        raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")
 
     def multistage(self):
         self.add_branching_factors()
@@ -281,28 +281,28 @@ class Config(pyofig.ConfigDict):
         raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")
 
     def _EF_base(self):
-        
+
         self.add_solver_specs(prefix="EF")
 
-        self.add_to_config("EF_mipgap", 
+        self.add_to_config("EF_mipgap",
                            description="mip gap option for the solver if needed (default None)",
                            domain=float,
                            default=None)
-        
+
 
     def EF2(self):
         self._EF_base()
-        self.add_to_config("num_scens", 
+        self.add_to_config("num_scens",
                            description="Number of scenarios (default None)",
                            domain=int,
                            default=None)
 
 
     def make_EF_multistage_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")        
+        raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")
 
     def EF_multistage(self):
-        
+
         self._EF_base()
         # branching factors???
 
@@ -311,17 +311,17 @@ class Config(pyofig.ConfigDict):
     def two_sided_args(self):
         # add commands to  and also return the result
 
-        self.add_to_config("rel_gap", 
+        self.add_to_config("rel_gap",
                             description="relative termination gap (default 0.05)",
                             domain=float,
                             default=0.05)
 
-        self.add_to_config("abs_gap", 
+        self.add_to_config("abs_gap",
                             description="absolute termination gap (default 0)",
                             domain=float,
                             default=0.)
 
-        self.add_to_config("max_stalled_iters", 
+        self.add_to_config("max_stalled_iters",
                             description="maximum iterations with no reduction in gap (default 100)",
                             domain=int,
                             default=100)
@@ -330,12 +330,12 @@ class Config(pyofig.ConfigDict):
 
     def mip_options(self):
 
-        self.add_to_config("iter0_mipgap", 
+        self.add_to_config("iter0_mipgap",
                             description="mip gap option for iteration 0 (default None)",
                             domain=float,
                             default=None)
 
-        self.add_to_config("iterk_mipgap", 
+        self.add_to_config("iterk_mipgap",
                             description="mip gap option non-zero iterations (default None)",
                             domain=float,
                             default=None)
@@ -343,26 +343,26 @@ class Config(pyofig.ConfigDict):
 
     def aph_args(self):
 
-        self.add_to_config('aph_gamma', 
+        self.add_to_config('aph_gamma',
                             description='Gamma parameter associated with asychronous projective hedging (default 1.0)',
                             domain=float,
                             default=1.0)
-        self.add_to_config('aph_nu', 
+        self.add_to_config('aph_nu',
                             description='Nu parameter associated with asychronous projective hedging (default 1.0)',
                             domain=float,
                             default=1.0)
-        self.add_to_config('aph_frac_needed', 
+        self.add_to_config('aph_frac_needed',
                             description='Fraction of sub-problems required before computing projective step (default 1.0)',
                             domain=float,
                             default=1.0)
-        self.add_to_config('aph_dispatch_frac', 
+        self.add_to_config('aph_dispatch_frac',
                             description='Fraction of sub-problems to dispatch at each step of asychronous projective hedging (default 1.0)',
                             domain=float,
                             default=1.0)
-        self.add_to_config('aph_sleep_seconds', 
+        self.add_to_config('aph_sleep_seconds',
                             description='Spin-lock sleep time for APH (default 0.01)',
                             domain=float,
-                            default=0.01)    
+                            default=0.01)
 
 
     def fixer_args(self):
@@ -372,7 +372,7 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
-        self.add_to_config("fixer_tol", 
+        self.add_to_config("fixer_tol",
                            description="fixer bounds tolerance  (default 1e-4)",
                            domain=float,
                            default=1e-2)
@@ -381,32 +381,32 @@ class Config(pyofig.ConfigDict):
 
     def fwph_args(self):
 
-        self.add_to_config('fwph', 
+        self.add_to_config('fwph',
                            description="have an fwph spoke",
                            domain=bool,
                            default=False)
 
-        self.add_to_config("fwph_iter_limit", 
+        self.add_to_config("fwph_iter_limit",
                             description="maximum fwph iterations (default 10)",
                             domain=int,
                             default=10)
 
-        self.add_to_config("fwph_weight", 
+        self.add_to_config("fwph_weight",
                             description="fwph weight (default 0)",
                             domain=float,
                             default=0.0)
 
-        self.add_to_config("fwph_conv_thresh", 
+        self.add_to_config("fwph_conv_thresh",
                             description="fwph convergence threshold  (default 1e-4)",
                             domain=float,
                             default=1e-4)
 
-        self.add_to_config("fwph_stop_check_tol", 
+        self.add_to_config("fwph_stop_check_tol",
                             description="fwph tolerance for Gamma^t (default 1e-4)",
                             domain=float,
                             default=1e-4)
 
-        self.add_to_config("fwph_mipgap", 
+        self.add_to_config("fwph_mipgap",
                             description="mip gap option FW subproblems iterations (default None)",
                             domain=float,
                             default=None)
@@ -415,40 +415,40 @@ class Config(pyofig.ConfigDict):
 
     def lagrangian_args(self):
 
-        self.add_to_config('lagrangian', 
+        self.add_to_config('lagrangian',
                               description="have a lagrangian spoke",
                               domain=bool,
                               default=False)
 
-        self.add_to_config("lagrangian_iter0_mipgap", 
+        self.add_to_config("lagrangian_iter0_mipgap",
                             description="lgr. iter0 solver option mipgap (default None)",
                             domain=float,
                             default=None)
 
-        self.add_to_config("lagrangian_iterk_mipgap", 
+        self.add_to_config("lagrangian_iterk_mipgap",
                             description="lgr. iterk solver option mipgap (default None)",
                             domain=float,
                             default=None)
 
-        
+
     def lagranger_args(self):
 
-        self.add_to_config('lagranger', 
+        self.add_to_config('lagranger',
                             description="have a special lagranger spoke",
                               domain=bool,
                               default=False)
 
-        self.add_to_config("lagranger_iter0_mipgap", 
+        self.add_to_config("lagranger_iter0_mipgap",
                             description="lagranger iter0 mipgap (default None)",
                             domain=float,
                             default=None)
 
-        self.add_to_config("lagranger_iterk_mipgap", 
+        self.add_to_config("lagranger_iterk_mipgap",
                             description="lagranger iterk mipgap (default None)",
                             domain=float,
                             default=None)
 
-        self.add_to_config("lagranger_rho_rescale_factors_json", 
+        self.add_to_config("lagranger_rho_rescale_factors_json",
                             description="json file: rho rescale factors (default None)",
                             domain=str,
                             default=None)
@@ -456,12 +456,12 @@ class Config(pyofig.ConfigDict):
 
     def xhatlooper_args(self):
 
-        self.add_to_config('xhatlooper', 
+        self.add_to_config('xhatlooper',
                               description="have an xhatlooper spoke",
                               domain=bool,
                               default=False)
 
-        self.add_to_config("xhat_scen_limit", 
+        self.add_to_config("xhat_scen_limit",
                             description="scenario limit xhat looper to try (default 3)",
                             domain=int,
                             default=3)
@@ -519,15 +519,15 @@ class Config(pyofig.ConfigDict):
     def xhatspecific_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('xhatspecific', 
+        self.add_to_config('xhatspecific',
                               description="have an xhatspecific spoke",
                               domain=bool,
                               default=False)
 
 
     def xhatxbar_args(self):
-    
-        self.add_to_config('xhatxbar', 
+
+        self.add_to_config('xhatxbar',
                               description="have an xhatxbar spoke",
                               domain=bool,
                               default=False)
@@ -538,29 +538,29 @@ class Config(pyofig.ConfigDict):
     def xhatlshaped_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('xhatlshaped', 
+        self.add_to_config('xhatlshaped',
                               description="have an xhatlshaped spoke",
                               domain=bool,
                               default=False)
 
     def wtracker_args(self):
 
-        self.add_to_config('wtracker', 
+        self.add_to_config('wtracker',
                               description="Use a wtracker extension",
                               domain=bool,
                               default=False)
 
-        self.add_to_config('wtracker_file_prefix', 
+        self.add_to_config('wtracker_file_prefix',
                             description="prefix for rank by rank wtracker files (default '')",
                             domain=str,
                             default='')
 
-        self.add_to_config('wtracker_wlen', 
+        self.add_to_config('wtracker_wlen',
                             description="max length of iteration window for xtracker (default 20)",
                             domain=int,
                             default=20)
 
-        self.add_to_config('wtracker_reportlen', 
+        self.add_to_config('wtracker_reportlen',
                             description="max length of long reports for xtracker (default 100)",
                             domain=int,
                             default=100)
@@ -574,7 +574,7 @@ class Config(pyofig.ConfigDict):
     def slammax_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('slammax', 
+        self.add_to_config('slammax',
                             description="have a slammax spoke",
                               domain=bool,
                               default=False)
@@ -583,7 +583,7 @@ class Config(pyofig.ConfigDict):
     def slammin_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('slammin', 
+        self.add_to_config('slammin',
                             description="have a slammin spoke",
                               domain=bool,
                               default=False)
@@ -592,18 +592,18 @@ class Config(pyofig.ConfigDict):
     def cross_scenario_cuts_args(self):
         # we will not try to get the specification from the command line
 
-        self.add_to_config('cross_scenario_cuts', 
+        self.add_to_config('cross_scenario_cuts',
                               description="have a cross scenario cuts spoke",
                               domain=bool,
                               default=False)
 
-        self.add_to_config("cross_scenario_iter_cnt", 
+        self.add_to_config("cross_scenario_iter_cnt",
                               description="cross scen check bound improve iterations "
                               "(default 4)",
                               domain=int,
                               default=4)
 
-        self.add_to_config("eta_bounds_mipgap", 
+        self.add_to_config("eta_bounds_mipgap",
                               description="mipgap for determining eta bounds for cross "
                               "scenario cuts (default 0.01)",
                               domain=float,
@@ -612,7 +612,7 @@ class Config(pyofig.ConfigDict):
 
     def gradient_args(self):
          # we will not try to get the specification from the command line
-        
+
         self.add_to_config("xhatpath",
                            description="path to npy file with xhat",
                            domain=str,
@@ -656,6 +656,80 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e3)
 
+    def converger_args(self):
+        self.add_to_config("use_norm_rho_converger",
+                         description="Use the norm rho converger",
+                         domain=bool,
+                         default=False)
+        self.add_to_config("primal_dual_converger",
+                            description="Use the primal dual converger",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("primal_dual_converger_tol",
+                            description="Tolerance for primal dual converger (default 1e-2)",
+                            domain=float,
+                            default=1e-2)
+
+    def tracking_args(self):
+        self.add_to_config("tracking_folder",
+                            description="Path of results folder (default results)",
+                            domain=str,
+                            default="results")
+        self.add_to_config("ph_track_progress",
+                            description="Adds tracking extension to all"
+                            " ph opt cylinders (default False). Use --track_*"
+                            " to specificy what and how to track."
+                            " See mpisppy.utils.cfg_vanilla.add_ph_tracking for details",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("track_convergence",
+                            description="Adds convergence tracking ie"
+                                " gaps and bounds (default 0)",
+                            domain=int,
+                            default=0)
+        self.add_to_config("track_xbars",
+                            description="Adds xbar tracking (default 0)",
+                            domain=int,
+                            default=0)
+        self.add_to_config("track_duals",
+                            description="Adds w tracking (default 0)",
+                            domain=int,
+                            default=0)
+        self.add_to_config("track_nonants",
+                            description="Adds nonant tracking (default 0)",
+                            domain=int,
+                            default=0)
+        self.add_to_config('track_scen_gaps',
+                            description="Adds scenario gap tracking (default 0)",
+                            domain=int,
+                            default=0)
+
+    def wxbar_read_write_args(self):
+        self.add_to_config("init_W_fname",
+                                description="Path of initial W file (default None)",
+                                domain=str,
+                                default=None)
+        self.add_to_config("init_Xbar_fname",
+                                description="Path of initial Xbar file (default None)",
+                                domain=str,
+                                default=None)
+        self.add_to_config("init_separate_W_files",
+                                description="If True, W is read from separate files (default False)",
+                                domain=bool,
+                                default=False)
+        self.add_to_config("W_fname",
+                                description="Path of final W file (default None)",
+                                domain=str,
+                                default=None)
+        self.add_to_config("Xbar_fname",
+                                description="Path of final Xbar file (default None)",
+                                domain=str,
+                                default=None)
+        self.add_to_config("separate_W_files",
+                                description="If True, writes W to separate files (default False)",
+                                domain=bool,
+                                default=False)
+
 
     #================
     def create_parser(self,progname=None):
@@ -675,11 +749,11 @@ class Config(pyofig.ConfigDict):
         args = parser.parse_args()
         args = self.import_argparse(args)
         return args
-             
+
 #=================
 if __name__ == "__main__":
     # a place for ad hoc testing by developers
-    config = Config()  
+    config = Config()
     config.popular_args() # populates self
     config.display()
     for i,j in config.items():
@@ -698,12 +772,7 @@ if __name__ == "__main__":
     args=parser.parse_args(['3', '--max-iterations', '99', '--solver-name', 'cplex'])
 
     args = config.import_argparse(args)
-    
-    config.display()    
+
+    config.display()
 
     #parser.parse_args(['--help'])
-
-
-
-
-    

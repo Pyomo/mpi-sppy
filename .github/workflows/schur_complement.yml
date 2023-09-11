@@ -27,7 +27,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install numpy scipy nose pybind11
         conda install openmpi pymumps --no-update-deps
-        pip install mpi4py pandas
+        pip install mpi4py pandas matplotlib
         pip install git+https://github.com/pyutilib/pyutilib.git
         git clone https://github.com/pyomo/pyomo.git
         cd pyomo/

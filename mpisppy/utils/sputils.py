@@ -191,9 +191,9 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
     # Check if every scenario has a specified probability
     probs_specified = \
-        all([hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values()])
+        all(hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values())
     uniform_specified = \
-        probs_specified and all([scen._mpisppy_probability == "uniform" for scen in scen_dict.values()])
+        probs_specified and all(scen._mpisppy_probability == "uniform" for scen in scen_dict.values())
     if not probs_specified or uniform_specified:
         for scen in scen_dict.values():
             scen._mpisppy_probability = 1 / len(scen_dict)
