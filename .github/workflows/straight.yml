@@ -27,7 +27,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex dill
+          pip install pyomo xpress cplex dill matplotlib
 
       - name: setup the program
         run: |
@@ -37,4 +37,3 @@ jobs:
         run: |
           cd mpisppy/tests
           python straight_tests.py
-

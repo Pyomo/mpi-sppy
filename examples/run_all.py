@@ -33,7 +33,7 @@ if len(sys.argv) > 3:
     if sys.argv[3] != "nouc":
         raise RuntimeError("Third arg can only be nouc (you have {})".\
                            format(sys.argv[3]))
-    
+
 badguys = dict()
 
 def egret_avail():
@@ -50,7 +50,7 @@ def egret_avail():
     egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
     if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):
         return True
-    
+
     from egret.thirdparty.get_pglib_opf import get_pglib_opf
     get_pglib_opf(egret_thirdparty_path)
     return True
@@ -79,14 +79,14 @@ def time_one(ID, dirname, progname, np, argstring):
         ID must be unique and ID.perf.csv will be(come) a local file name
         and should be allowed to sit on your machine in your examples directory.
         Do not record a time for a bad guy."""
-    
+
     if ID in time_one.ID_check:
         raise RuntimeError(f"Duplicate time_one ID={ID}")
     else:
         time_one.ID_check.append(ID)
 
     listfname = ID+".perf.csv"
-        
+
     start = dt.now()
     code = do_one(dirname, progname, np, argstring)
     finish = dt.now()
@@ -102,7 +102,7 @@ def time_one(ID, dirname, progname, np, argstring):
             bar = str(i)+"!"
     finish = dt.now()
     refsecs = (finish-start).total_seconds()
-    
+
     if os.path.isfile(listfname):
         timelistdf = pd.read_csv(listfname)
         timelistdf.loc[len(timelistdf.index)] = [str(finish), refsecs, runsecs]
@@ -121,13 +121,13 @@ def time_one(ID, dirname, progname, np, argstring):
         deltafrac = (thisscaled - lastscaled) / lastscaled
         if deltafrac > 0.1:
             print(f"**** WARNING: {100*deltafrac}% time increase for {ID}, see {listfname}")
-            
+
     timelistdf.to_csv(listfname, index=False)
 time_one.ID_check = list()
-    
+
 def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
     # assume that the dirname matches the module name
-    
+
     os.chdir(dirname)
     # solve ef, save .npy file (file name hardcoded in progname at the moment)
     code = os.system("echo {} && {}".format(runefstring, runefstring))
@@ -147,17 +147,27 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
                 badguys[dirname] = [runstring]
             else:
                 badguys[dirname].append(runstring)
-        
+
         os.remove(npyfile)
     os.chdir("..")
 
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
-do_one("farmer", "farmer_cylinders.py",  4,
+do_one("farmer", "farmer_cylinders.py",  3,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
-       "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --xhatshuffle --fwph "
-       "--display-convergence-detail".format(solver_name))
+       "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
+       "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
+do_one("farmer", "farmer_cylinders.py",  5,
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
+       "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
+       "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
+       "--track-duals=4".format(solver_name))
+do_one("farmer", "farmer_cylinders.py",  5,
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
+       "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
@@ -198,7 +208,7 @@ do_one("farmer",
 do_one("farmer",
        "farmer_cylinders.py",
        2,
-       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer",
        "farmer_cylinders.py",
        2,
@@ -322,7 +332,7 @@ do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonan
 
 if egret_avail():
     do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
-    do_one("acopf3", "fourstage.py", 4, f"2 2 2 1 0 {solver_name}")        
+    do_one("acopf3", "fourstage.py", 4, f"2 2 2 1 0 {solver_name}")
 
 #  sizes kills the github tests using xpress
 #  so we use linearized proximal terms
@@ -357,14 +367,14 @@ if not nouc and egret_avail():
            "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
            "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
            "--ph-mipgaps-json=phmipgaps.json "
-           "--solver-name={}".format(solver_name))    
+           "--solver-name={}".format(solver_name))
     # as of May 2022, this one works well, but outputs some crazy messages
     do_one("uc", "uc_ama.py", 3,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 "
            "--fixer-tol=1e-2 --lagranger --xhatshuffle "
            "--solver-name={}".format(solver_name))
-    
+
     # 10-scenario UC
     time_one("UC_cylinder10scen", "uc", "uc_cylinders.py", 3,
              "--bundles-per-rank=5 --max-iterations=2 "
