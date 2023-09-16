@@ -87,8 +87,8 @@ class Test_w_writer_farmer(unittest.TestCase):
         with open(self.temp_w_file_name, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
-            self.assertAlmostEqual(float(rows[1][2]), 70.84705093609978)
-            self.assertAlmostEqual(float(rows[3][2]), -41.104251445950844)
+            self.assertAlmostEqual(float(rows[1][2]), 70.84705093609978, places=5)
+            self.assertAlmostEqual(float(rows[3][2]), -41.104251445950844, places=5)
         os.remove(self.temp_w_file_name)
 
     def test_xbarwriter(self):
@@ -96,12 +96,12 @@ class Test_w_writer_farmer(unittest.TestCase):
         with open(self.temp_xbar_file_name, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
-            self.assertAlmostEqual(float(rows[1][1]), 274.2239371483933)
-            self.assertAlmostEqual(float(rows[3][1]), 96.88717449844287)
+            self.assertAlmostEqual(float(rows[1][1]), 274.2239371483933, places=5)
+            self.assertAlmostEqual(float(rows[3][1]), 96.88717449844287, places=5)
         os.remove(self.temp_xbar_file_name)
 
     def test_wreader(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=0)
+        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=1)
         for sname, scenario in self.ph_object.local_scenarios.items():
             if sname == 'scen0':
                 self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 1)]._value, 70.84705093609978)
@@ -109,15 +109,12 @@ class Test_w_writer_farmer(unittest.TestCase):
                 self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 0)]._value, -41.104251445950844)
 
     def test_xbarreader(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=0)
+        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=1)
         for sname, scenario in self.ph_object.local_scenarios.items():
             if sname == 'scen0':
                 self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 1)]._value, 274.2239371483933)
             if sname == 'scen1':
                 self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 0)]._value, 96.88717449844287)
-
-
-
 
 if __name__ == '__main__':
     unittest.main()

@@ -25,7 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py numpy setuptools cmake
-          pip install pyomo pandas xpress cplex scipy sympy dill
+          pip install pyomo pandas xpress cplex scipy sympy dill matplotlib
 
       - name: setup the program
         run: |
@@ -40,6 +40,5 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_gradient_rho.py 
+          python test_gradient_rho.py
           python test_w_writer.py
-

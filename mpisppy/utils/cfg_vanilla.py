@@ -31,6 +31,9 @@ from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+from mpisppy.extensions.phtracker import PHTracker
+from mpisppy.utils.wxbarreader import WXBarReader
+from mpisppy.utils.wxbarwriter import WXBarWriter
 
 def _hasit(cfg, argname):
     # aside: Config objects act like a dict or an object TBD: so why the and?
@@ -118,7 +121,8 @@ def ph_hub(
             "all_nodenames": all_nodenames
         }
     }
-    
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
     return hub_dict
 
 
@@ -147,7 +151,7 @@ def aph_hub(cfg,
                     )
 
     hub_dict['hub_class'] = APHHub
-    hub_dict['opt_class'] = APH    
+    hub_dict['opt_class'] = APH
 
     hub_dict['opt_kwargs']['options']['APHgamma'] = cfg.aph_gamma
     hub_dict['opt_kwargs']['options']['APHnu'] = cfg.aph_nu
@@ -164,21 +168,19 @@ def extension_adder(hub_dict,ext_class):
         hub_dict["opt_kwargs"]["extensions"] is None:
         hub_dict["opt_kwargs"]["extensions"] = ext_class
     elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
-        if not ext_class in  hub_dict["opt_kwargs"]["ext_classes"]:
-            hub_dict["opt_kwargs"]["ext_classes"].append(ext_class)
-    elif hub_dict["opt_kwargs"]["extensions"] != ext_class: 
+        if hub_dict["opt_kwargs"]["extension_kwargs"] is None:
+            hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes": []}
+        if not ext_class in hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]:
+            hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"].append(ext_class)
+    elif hub_dict["opt_kwargs"]["extensions"] != ext_class:
         #ext_class is the second extension
         if not "extensions_kwargs" in hub_dict["opt_kwargs"]:
-            hub_dict["opt_kwargs"]["extension_kwargs"] = {
-                "ext_classes": [hub_dict["opt_kwargs"]["extensions"],
-                                                 ext_class]}
-        else:
-            hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"] = \
-                [hub_dict["opt_kwargs"]["extensions"],
-                                                 ext_class]
+            hub_dict["opt_kwargs"]["extension_kwargs"] = {}
+        hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"] = \
+            [hub_dict["opt_kwargs"]["extensions"], ext_class]
         hub_dict["opt_kwargs"]["extensions"] = MultiExtension
     return hub_dict
-    
+
 
 def add_fixer(hub_dict,
               cfg,
@@ -197,6 +199,90 @@ def add_cross_scenario_cuts(hub_dict,
     hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
     return hub_dict
+
+def add_wxbar_read_write(hub_dict, cfg):
+    """
+    Add the wxbar read and write extensions to the hub_dict
+
+    NOTE
+    At the moment, the options are not stored in a extension options dict()
+    but are 'loose' in the hub options dict
+    """
+    if _hasit(cfg, 'init_W_fname') or _hasit(cfg, 'init_Xbar_fname'):
+        hub_dict = extension_adder(hub_dict, WXBarReader)
+        hub_dict["opt_kwargs"]["options"].update(
+            {"init_W_fname" : cfg.init_W_fname,
+             "init_Xbar_fname" : cfg.init_Xbar_fname,
+             "init_separate_W_files" : cfg.init_separate_W_files
+            })
+    if _hasit(cfg, 'W_fname') or _hasit(cfg, 'Xbar_fname'):
+        hub_dict = extension_adder(hub_dict, WXBarWriter)
+        hub_dict["opt_kwargs"]["options"].update(
+            {"W_fname" : cfg.W_fname,
+             "Xbar_fname" : cfg.Xbar_fname,
+             "separate_W_files" : cfg.separate_W_files
+            })
+    return hub_dict
+
+def add_ph_tracking(cylinder_dict, cfg, spoke=False):
+    """ Manage the phtracker extension and bridge gap between config and ph options dict
+        Args:
+            cylinder_dict (dict): the hub or spoke dictionary
+            cfg (dict): the configuration dictionary
+            spoke (bool, optional): Whether the cylinder is a spoke. Defaults to False.
+        Returns:
+            cylinder_dict (dict): the updated hub or spoke dictionary
+
+        for cfg.track_* flags, the ints are mapped as followed:
+
+        0: do not track
+        1: track for all cylinders
+        2: track for hub only
+        3: track for spokes only
+        4: track and plot for all cylinders
+        5: track and plot for hub
+        6: track and plot for spokes
+
+        If 'ph_track_progress' is True in the cfg dictionary, this function adds the
+        ph tracking extension to the cylinder dict with the specified tracking options.
+    """
+    if _hasit(cfg, 'ph_track_progress') and cfg.ph_track_progress:
+        cylinder_dict = extension_adder(cylinder_dict, PHTracker)
+        phtrackeroptions = {"results_folder": cfg.tracking_folder}
+
+        t_vars = ['convergence', 'xbars', 'duals', 'nonants', 'scen_gaps']
+        for t_var in t_vars:
+            if _hasit(cfg, f'track_{t_var}'):
+                trval = cfg[f'track_{t_var}']
+                if ((trval in {1, 4} or \
+                    (not spoke and trval in {2, 5}) or \
+                    (spoke and trval in {3, 6}))):
+                    phtrackeroptions[f'track_{t_var}'] = True
+
+                    if trval in {4, 5, 6}:
+                        phtrackeroptions[f'plot_{t_var}'] = True
+
+        # disabled until we finalize hub bounds passing
+        # # because convergence maps to multiple tracking options
+        # if phtrackeroptions.get('track_convergence'):
+        #     phtrackeroptions['track_bounds'] = True
+        #     phtrackeroptions['track_gaps'] = True
+        # if phtrackeroptions.get('plot_convergence'):
+        #     phtrackeroptions['plot_bounds'] = True
+        #     phtrackeroptions['plot_gaps'] = True
+
+        cylinder_dict["opt_kwargs"]["options"]["phtracker_options"] = phtrackeroptions
+
+        # only needed if buffers need to be dynamically resized to track hub bounds
+        if spoke and ('track_gaps' in phtrackeroptions and phtrackeroptions['track_gaps'] \
+            or 'track_bounds' in phtrackeroptions and phtrackeroptions['track_bounds']):
+            if 'spoke_kwargs' not in cylinder_dict:
+                cylinder_dict['spoke_kwargs'] = {}
+            if 'options' not in cylinder_dict['spoke_kwargs']:
+                cylinder_dict['spoke_kwargs']['options'] = {}
+            cylinder_dict['spoke_kwargs']['options']['get_hub_bounds'] = True
+
+    return cylinder_dict
 
 def fwph_spoke(
     cfg,
@@ -235,10 +321,9 @@ def fwph_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames            
+            "all_nodenames": all_nodenames
         },
     }
-    
     return fw_dict
 
 
@@ -260,7 +345,7 @@ def lagrangian_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            'scenario_denouement': scenario_denouement,            
+            'scenario_denouement': scenario_denouement,
             "rho_setter": rho_setter,
             "all_nodenames": all_nodenames
 
@@ -272,7 +357,8 @@ def lagrangian_spoke(
     if cfg.lagrangian_iterk_mipgap is not None:
         lagrangian_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
             ["mipgap"] = cfg.lagrangian_iterk_mipgap
-    
+    add_ph_tracking(lagrangian_spoke, cfg, spoke=True)
+
     return lagrangian_spoke
 
 
@@ -295,7 +381,7 @@ def lagranger_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            'scenario_denouement': scenario_denouement,            
+            'scenario_denouement': scenario_denouement,
             "rho_setter": rho_setter,
             "all_nodenames": all_nodenames
         }
@@ -310,10 +396,10 @@ def lagranger_spoke(
         lagranger_spoke["opt_kwargs"]["options"]\
             ["lagranger_rho_rescale_factors_json"]\
             = cfg.lagranger_rho_rescale_factors_json
-    
+    add_ph_tracking(lagranger_spoke, cfg, spoke=True)
     return lagranger_spoke
 
-        
+
 def xhatlooper_spoke(
     cfg,
     scenario_creator,
@@ -321,7 +407,7 @@ def xhatlooper_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
 ):
-    
+
     shoptions = shared_options(cfg)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
@@ -339,7 +425,7 @@ def xhatlooper_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement
         },
     }
     return xhatlooper_dict
@@ -353,7 +439,7 @@ def xhatxbar_spoke(
     scenario_creator_kwargs=None,
     variable_probability=None
 ):
-    
+
     shoptions = shared_options(cfg)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
@@ -399,7 +485,7 @@ def xhatshuffle_spoke(
         xhat_options["xhat_looper_options"]["reverse"] = cfg.add_reversed_shuffle
     if _hasit(cfg, "add_reversed_shuffle"):
         xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
-    
+
     xhatlooper_dict = {
         "spoke_class": XhatShuffleInnerBound,
         "opt_class": Xhat_Eval,
@@ -408,8 +494,8 @@ def xhatshuffle_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement,   
-            "all_nodenames": all_nodenames                    
+            "scenario_denouement": scenario_denouement,
+            "all_nodenames": all_nodenames
         },
     }
 
@@ -425,7 +511,7 @@ def xhatspecific_spoke(
     all_nodenames=None,
     scenario_creator_kwargs=None,
 ):
-    
+
     shoptions = shared_options(cfg)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options["xhat_specific_options"] = {
@@ -457,7 +543,7 @@ def xhatlshaped_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
 ):
-    
+
     shoptions = shared_options(cfg)
     xhat_options = copy.deepcopy(shoptions)
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
@@ -470,7 +556,7 @@ def xhatlshaped_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement
         },
     }
     return xhatlshaped_dict
@@ -518,7 +604,7 @@ def slammin_spoke(
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement            
+            "scenario_denouement": scenario_denouement
         },
     }
     return xhatlooper_dict
@@ -535,7 +621,7 @@ def cross_scenario_cuts_spoke(
     if _hasit(cfg, "max_solver_threads"):
         sp_solver_options = {"threads":cfg.max_solver_threads}
     else:
-        sp_solver_options = dict() 
+        sp_solver_options = dict()
 
     if _hasit(cfg, "eta_bounds_mipgap"):
         sp_solver_options["mipgap"] = cfg.eta_bounds_mipgap
@@ -559,5 +645,3 @@ def cross_scenario_cuts_spoke(
         }
 
     return cut_spoke
-
-        

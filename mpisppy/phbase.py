@@ -74,22 +74,10 @@ def _Compute_Xbar(opt, verbose=False):
 
             nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                         dtype='d', count=nlen)
-            if not s._mpisppy_data.has_variable_probability:
-                xbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array
-                xsqbars += s._mpisppy_data.prob_coeff[ndn] * nonants_array**2
-            else:
-                # rarely-used overwrite in the event of variable probability
-                # (not efficient for multi-stage)
-                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
-                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
-                                         dtype='d', count=nlen)
 
-                # Note: Intermediate scen_contribution to get proper
-                # overloading
-                scen_contribution = prob_array * nonants_array
-                xbars += scen_contribution
-                scen_contribution = prob_array * nonants_array**2
-                xsqbars += scen_contribution
+            probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+            xbars += probs * nonants_array
+            xsqbars += probs * nonants_array**2
 
     # compute node xbar values(reduction)
     for nodename in nodenames:
@@ -157,19 +145,8 @@ def _Compute_Wbar(opt, verbose=False):
             # s._mpisppy_data.nonant_indices.keys() indexes the W Param
             Wnonants_array = np.fromiter((pyo.value(s._mpisppy_model.W[idx]) for idx in s._mpisppy_data.nonant_indices if idx[0] == ndn),
                                         dtype='d', count=nlen)
-            if not s._mpisppy_data.has_variable_probability:
-                Wbars += s._mpisppy_data.prob_coeff[ndn] * Wnonants_array
-            else:
-                # rarely-used overwrite in the event of variable probability
-                # (not efficient for multi-stage)
-                prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
-                                          for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
-                                         dtype='d', count=nlen)
-
-                # Note: Intermediate scen_contribution to get proper
-                # overloading
-                scen_contribution = prob_array * Wnonants_array
-                Wbars += scen_contribution
+            probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+            Wbars += probs * Wnonants_array
 
     # compute node xbar values(reduction)
     for nodename in nodenames:
@@ -860,7 +837,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self.spcomm is not None:
             self.spcomm.sync()
 
-        if have_extensions and getattr(self.extobject, 'post_iter0_after_sync', None) is not None:
+        if have_extensions:
             self.extobject.post_iter0_after_sync()
 
         if self.rho_setter is not None:
@@ -979,7 +956,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break
 
-            if have_extensions and getattr(self.extobject, 'enditer_after_sync', None) is not None:
+            if have_extensions:
                 self.extobject.enditer_after_sync()
 
             if dprogress and self.cylinder_rank == 0:
@@ -1039,6 +1016,9 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         if have_extensions:
             self.extobject.post_everything()
+
+        if self.ph_converger is not None and hasattr(self.ph_converger, 'post_everything'):
+            self.convobject.post_everything()
 
         Eobj = self.Eobjective(verbose)
 
