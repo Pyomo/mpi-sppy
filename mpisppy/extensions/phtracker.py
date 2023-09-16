@@ -8,7 +8,6 @@ import numpy as np
 import os
 import pandas as pd
 from mpisppy.extensions.extension import Extension
-from mpisppy.utils.wxbarutils import write_W_to_file, write_xbar_to_file
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 from mpisppy.cylinders.spoke import Spoke
 

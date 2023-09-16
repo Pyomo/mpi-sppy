@@ -2,7 +2,6 @@ import numpy as np
 import os
 import pandas as pd
 import mpisppy.convergers.converger
-import matplotlib.pyplot as plt
 from mpisppy import MPI
 from mpisppy.extensions.phtracker import TrackedData
 
@@ -141,6 +140,7 @@ class PrimalDualConverger(mpisppy.convergers.converger.Converger):
         Plot the results of the convergence checks
         by reading in csv file and plotting
         """
+        import matplotlib.pyplot as plt
         plot_fname = self.tracker.plot_fname
         conv_data = pd.read_csv(self.tracker.fname)
 
