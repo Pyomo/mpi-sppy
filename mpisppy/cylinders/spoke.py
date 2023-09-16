@@ -20,7 +20,6 @@ class ConvergerSpokeType(enum.Enum):
     INNER_BOUND = 2
     W_GETTER = 3
     NONANT_GETTER = 4
-    BOUNDS_GETTER = 5
 
 class Spoke(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
@@ -173,14 +172,9 @@ class _BoundSpoke(Spoke):
         """ Makes the bound window and a remote window to
             look for a kill signal
         """
-        vbuflen = 0
-        if 'get_hub_bounds' in self.options and \
-                self.options['get_hub_bounds']:
-            vbuflen += 2  # inner and outerbounds
-        ## need a remote_length for the kill signal
-        self._make_windows(1, vbuflen)
-        self._locals = np.zeros(vbuflen + 1)
-        self._bound = np.zeros(1 + 1)
+        self._make_windows(1, 2) # kill signals are accounted for in _make_window
+        self._locals = np.zeros(0 + 3) # hub outer/inner bounds and kill signal
+        self._bound = np.zeros(1 + 1) # spoke bound + kill signal
 
     @property
     def bound(self):
@@ -195,18 +189,12 @@ class _BoundSpoke(Spoke):
     @property
     def hub_inner_bound(self):
         """Returns the local copy of the inner bound from the hub"""
-        if 'get_hub_bounds' in self.options and \
-                self.options['get_hub_bounds']:
-            return self._locals[-3]
-        raise RuntimeError("This spoke does not recieve an inner bound")
+        return self._locals[-2]
 
     @property
     def hub_outer_bound(self):
         """Returns the local copy of the outer bound from the hub"""
-        if 'get_hub_bounds' in self.options and \
-                self.options['get_hub_bounds']:
-            return self._locals[-2]
-        raise RuntimeError("This spoke does not recieve an outer bound")
+        return self._locals[-3]
 
     def _got_kill_signal(self):
         """Looks for the kill signal and returns True if sent"""
@@ -239,16 +227,12 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         if len(self.opt.local_scenarios) == 0:
             raise RuntimeError(f"Rank has zero local_scenarios")
 
-        vbuflen = 0
+        vbuflen = 2
         for s in self.opt.local_scenarios.values():
             vbuflen += len(s._mpisppy_data.nonant_indices)
 
-        if 'get_hub_bounds' in self.options and \
-                self.options['get_hub_bounds']:
-            vbuflen += 2  # inner and outerbounds
-
         self._make_windows(1, vbuflen)
-        self._locals = np.zeros(vbuflen + 1) # Also has kill signal
+        self._locals = np.zeros(vbuflen + 1)
         self._bound = np.zeros(1 + 1)
 
 class InnerBoundSpoke(_BoundSpoke):
@@ -275,10 +259,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
-        if 'get_hub_bounds' in self.options and \
-                self.options['get_hub_bounds']:
-            return self._locals[:-3]
-        return self._locals[:-1]
+        return self._locals[:-3] # -3 for the bounds and kill signal
 
     @property
     def new_Ws(self):
@@ -312,10 +293,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     @property
     def localnonants(self):
         """Returns the local copy of the nonants"""
-        if 'get_hub_bounds' in self.options and \
-                self.options['get_hub_bounds']:
-            return self._locals[:-3]
-        return self._locals[:-1]
+        return self._locals[:-3]
 
     @property
     def new_nonants(self):

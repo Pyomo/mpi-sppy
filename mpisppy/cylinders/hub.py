@@ -259,20 +259,13 @@ class Hub(SPCommunicator):
         """ Initialize the buffer for the hub to send nonants
             to the appropriate spokes
         """
-        nonant_buf_len = None
-        # unclear if buffers have to be class attributes;
-        # can verify local_lengths in a more general function
-        for idx in self.nonant_spoke_indices - self.boundsout_spoke_indices:
-            if nonant_buf_len is None:
-                nonant_buf_len = self.local_lengths[idx - 1] + 1
-            elif self.local_lengths[idx - 1] + 1 != nonant_buf_len:
+        self.nonant_send_buffer = None
+        for idx in self.nonant_spoke_indices:
+            if self.nonant_send_buffer is None:
+                # for hub outer/inner bounds and kill signal
+                self.nonant_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+            elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
                 raise RuntimeError("Nonant buffers disagree on size")
-        for idx in self.nonant_spoke_indices & self.boundsout_spoke_indices:
-            if nonant_buf_len is None:
-                nonant_buf_len = self.local_lengths[idx - 1] - 1
-            elif self.local_lengths[idx - 1] - 1 != nonant_buf_len:
-                raise RuntimeError("Nonant, bounds buffers disagree on size")
-        self.nonant_send_buffer = np.zeros(nonant_buf_len)
 
     def initialize_boundsout(self):
         """ Initialize the buffer for the hub to send bounds
@@ -282,8 +275,8 @@ class Hub(SPCommunicator):
         for idx in self.bounds_only_indices:
             if self.boundsout_send_buffer is None:
                 self.boundsout_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
-            elif self.local_lengths[idx - 1] + 1 != len(self.boundsout_send_buffer):
-                raise RuntimeError("boundsout buffers disagree on size")
+            if self.local_lengths[idx - 1] != 2:
+                raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
 
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
@@ -313,7 +306,6 @@ class Hub(SPCommunicator):
         self.innerbound_spoke_indices = set()
         self.nonant_spoke_indices = set()
         self.w_spoke_indices = set()
-        self.boundsout_spoke_indices = set()
 
         self.outerbound_spoke_chars = dict()
         self.innerbound_spoke_chars = dict()
@@ -332,36 +324,23 @@ class Hub(SPCommunicator):
                         self.w_spoke_indices.add(i + 1)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
                         self.nonant_spoke_indices.add(i + 1)
-                    elif cst == ConvergerSpokeType.BOUNDS_GETTER:
-                        self.boundsout_spoke_indices.add(i + 1)
                     else:
                         raise RuntimeError(f"Unrecognized converger_spoke_type {cst}")
 
-                # dynamically change spoke type based on options
-                if "spoke_kwargs" in spoke and "options" in spoke["spoke_kwargs"]:
-                    if "options" not in spoke:
-                        spoke["options"] = spoke["spoke_kwargs"]["options"]
-                    else:
-                        spoke["options"].update(spoke["spoke_kwargs"]["options"])
-
-                if 'options' in spoke and 'get_hub_bounds' in spoke["options"] \
-                    and spoke["options"]['get_hub_bounds']:
-                    self.boundsout_spoke_indices.add(i + 1)
             else:  ##this isn't necessarily wrong, i.e., cut generators
                 logger.debug(f"Spoke class {spoke_class} not recognized by hub")
+
+        # all _BoundSpoke spokes get hub bounds so we determine which spokes
+        # are "bounds only"
+        self.bounds_only_indices = \
+            (self.outerbound_spoke_indices | self.innerbound_spoke_indices) - \
+            (self.w_spoke_indices | self.nonant_spoke_indices)
 
         self.has_outerbound_spokes = len(self.outerbound_spoke_indices) > 0
         self.has_innerbound_spokes = len(self.innerbound_spoke_indices) > 0
         self.has_nonant_spokes = len(self.nonant_spoke_indices) > 0
         self.has_w_spokes = len(self.w_spoke_indices) > 0
-        self.has_boundsout_spokes = len(self.boundsout_spoke_indices) > 0
-        self.bounds_only_indices = self.boundsout_spoke_indices - self.w_spoke_indices \
-            - self.nonant_spoke_indices
         self.has_bounds_only_spokes = len(self.bounds_only_indices) > 0
-        self.has_nonant_and_bounds_spokes = len(self.nonant_spoke_indices \
-            & self.boundsout_spoke_indices) > 0
-        self.has_w_and_bounds_spokes = len(self.w_spoke_indices \
-            & self.boundsout_spoke_indices) > 0
 
     def make_windows(self):
         if self._windows_constructed:
@@ -592,50 +571,31 @@ class PHHub(Hub):
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
-
-        if self.has_nonant_and_bounds_spokes:
-            nonant_bound_send_buffer = np.zeros(self.nonant_send_buffer.shape[0] + 2)
-            nonant_bound_send_buffer[:ci] = nonant_send_buffer[:ci]
-            self._populate_boundsout_cache(nonant_bound_send_buffer)
+        self._populate_boundsout_cache(nonant_send_buffer)
 
         for idx in self.nonant_spoke_indices:
-            if idx in self.boundsout_spoke_indices:
-                self.hub_to_spoke(nonant_bound_send_buffer, idx)
-            else:
                 self.hub_to_spoke(nonant_send_buffer, idx)
 
     def initialize_ws(self):
         """ Initialize the buffer for the hub to send dual weights
             to the appropriate spokes
         """
-        w_buf_len = None
-        for idx in self.w_spoke_indices - self.boundsout_spoke_indices:
-            if w_buf_len is None:
-                w_buf_len = self.local_lengths[idx - 1] + 1
-            elif self.local_lengths[idx - 1] + 1 != w_buf_len:
+        self.w_send_buffer = None
+        for idx in self.w_spoke_indices:
+            if self.w_send_buffer is None:
+                self.w_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+            elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
                 raise RuntimeError("W buffers disagree on size")
-        for idx in self.w_spoke_indices & self.boundsout_spoke_indices:
-            if w_buf_len is None:
-                w_buf_len = self.local_lengths[idx - 1] - 1 # -1 for bounds
-            elif self.local_lengths[idx - 1] - 1 != w_buf_len:
-                raise RuntimeError("W, bounds buffers disagree on size")
-
-        self.w_send_buffer = np.zeros(w_buf_len)
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
         """
-        self.opt._populate_W_cache(self.w_send_buffer)
+        self.opt._populate_W_cache(self.w_send_buffer, padding=3)
         logging.debug("hub is sending Ws={}".format(self.w_send_buffer))
-        if self.has_w_and_bounds_spokes:
-            w_bound_send_buffer = np.zeros(self.w_send_buffer.shape[0] + 2)
-            w_bound_send_buffer[:-3] = self.w_send_buffer[:-1]
-            self._populate_boundsout_cache(w_bound_send_buffer)
+        self._populate_boundsout_cache(self.w_send_buffer)
+
         for idx in self.w_spoke_indices:
-            if idx in self.boundsout_spoke_indices:
-                self.hub_to_spoke(w_bound_send_buffer, idx)
-            else:
-                self.hub_to_spoke(self.w_send_buffer, idx)
+            self.hub_to_spoke(self.w_send_buffer, idx)
 
 class LShapedHub(Hub):
 
@@ -723,17 +683,10 @@ class LShapedHub(Hub):
                 nonant_send_buffer[ci] = nonant_to_root_var_map[xvar]._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
-        if self.has_nonant_and_bounds_spokes:
-            nonant_bound_send_buffer = np.zeros(self.nonant_send_buffer.shape[0] + 2)
-            nonant_bound_send_buffer[:ci] = nonant_send_buffer[:ci]
-            self._populate_boundsout_cache(nonant_bound_send_buffer)
+        self._populate_boundsout_cache(nonant_send_buffer)
 
         for idx in self.nonant_spoke_indices:
-            if idx in self.boundsout_spoke_indices:
-                self.hub_to_spoke(nonant_bound_send_buffer, idx)
-            else:
-                self.hub_to_spoke(nonant_send_buffer, idx)
-
+            self.hub_to_spoke(nonant_send_buffer, idx)
 
 class APHHub(PHHub):
     def setup_hub(self):
