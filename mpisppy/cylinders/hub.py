@@ -574,7 +574,7 @@ class PHHub(Hub):
         self._populate_boundsout_cache(nonant_send_buffer)
 
         for idx in self.nonant_spoke_indices:
-                self.hub_to_spoke(nonant_send_buffer, idx)
+            self.hub_to_spoke(nonant_send_buffer, idx)
 
     def initialize_ws(self):
         """ Initialize the buffer for the hub to send dual weights
