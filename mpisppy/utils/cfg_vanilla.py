@@ -31,7 +31,6 @@ from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
-from mpisppy.extensions.phtracker import PHTracker
 from mpisppy.utils.wxbarreader import WXBarReader
 from mpisppy.utils.wxbarwriter import WXBarWriter
 
@@ -247,6 +246,7 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
         ph tracking extension to the cylinder dict with the specified tracking options.
     """
     if _hasit(cfg, 'ph_track_progress') and cfg.ph_track_progress:
+        from mpisppy.extensions.phtracker import PHTracker
         cylinder_dict = extension_adder(cylinder_dict, PHTracker)
         phtrackeroptions = {"results_folder": cfg.tracking_folder}
 
