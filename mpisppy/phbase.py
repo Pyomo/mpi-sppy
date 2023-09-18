@@ -74,6 +74,7 @@ def _Compute_Xbar(opt, verbose=False):
 
             nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                         dtype='d', count=nlen)
+
             probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
             xbars += probs * nonants_array
             xsqbars += probs * nonants_array**2
@@ -342,7 +343,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         return global_diff[0] / self.n_proc
 
 
-    def _populate_W_cache(self, cache):
+    def _populate_W_cache(self, cache, padding):
         """ Copy the W values for noants *for all local scenarios*
         Args:
             cache (np vector) to receive the W's for all local scenarios (for sending)
@@ -362,7 +363,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             for ix in model._mpisppy_data.nonant_indices:
                 cache[ci] = pyo.value(model._mpisppy_model.W[ix])
                 ci += 1
-        assert(ci == len(cache) - 1)  # the other cylinder will fail above
+        assert(ci == len(cache) - padding)  # the other cylinder will fail above
 
 
     def W_from_flat_list(self, flat_list):
