@@ -262,25 +262,15 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
                     if trval in {4, 5, 6}:
                         phtrackeroptions[f'plot_{t_var}'] = True
 
-        # disabled until we finalize hub bounds passing
-        # # because convergence maps to multiple tracking options
-        # if phtrackeroptions.get('track_convergence'):
-        #     phtrackeroptions['track_bounds'] = True
-        #     phtrackeroptions['track_gaps'] = True
-        # if phtrackeroptions.get('plot_convergence'):
-        #     phtrackeroptions['plot_bounds'] = True
-        #     phtrackeroptions['plot_gaps'] = True
+        # because convergence maps to multiple tracking options
+        if phtrackeroptions.get('track_convergence'):
+            phtrackeroptions['track_bounds'] = True
+            phtrackeroptions['track_gaps'] = True
+        if phtrackeroptions.get('plot_convergence'):
+            phtrackeroptions['plot_bounds'] = True
+            phtrackeroptions['plot_gaps'] = True
 
         cylinder_dict["opt_kwargs"]["options"]["phtracker_options"] = phtrackeroptions
-
-        # only needed if buffers need to be dynamically resized to track hub bounds
-        if spoke and ('track_gaps' in phtrackeroptions and phtrackeroptions['track_gaps'] \
-            or 'track_bounds' in phtrackeroptions and phtrackeroptions['track_bounds']):
-            if 'spoke_kwargs' not in cylinder_dict:
-                cylinder_dict['spoke_kwargs'] = {}
-            if 'options' not in cylinder_dict['spoke_kwargs']:
-                cylinder_dict['spoke_kwargs']['options'] = {}
-            cylinder_dict['spoke_kwargs']['options']['get_hub_bounds'] = True
 
     return cylinder_dict
 

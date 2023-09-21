@@ -169,12 +169,16 @@ class PHTracker(Extension):
         raise RuntimeError("Iteration not found")
 
     def verify_tracking(self):
-        """ Verify that the user has specified the correct tracking options
+        """ Verify that the user has specified the correct tracking options given
+            the spcomm object
         """
         if 'gaps' in self.track_dict or 'bounds' in self.track_dict:
-            if isinstance(self.spcomm, Spoke) and 'get_hub_bounds' not in self.spcomm.options:
-                raise RuntimeError("Cannot save access hub gaps without passing"
-                                   " them in spcomm through get_hub_bounds")
+            if isinstance(self.spcomm, Spoke) and \
+                not hasattr(self.spcomm, 'hub_outer_bound') and \
+                not hasattr(self.spcomm, 'hub_inner_bound'):
+
+                raise RuntimeError("Cannot access hub gaps without passing"
+                                   " them to spcomm")
 
     def get_var_names(self, xbar=False):
         """ Get the names of the variables
