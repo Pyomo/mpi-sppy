@@ -625,6 +625,22 @@ class Config(pyofig.ConfigDict):
                            description="name of the gradient rho file (must be csv)",
                            domain=str,
                            default='')
+        self.add_to_config("grad_display_rho",
+                           description="display rho during gradient calscs (default True)",
+                           domain=bool,
+                           default=True)
+        self.add_to_config("grad_primal_thresh",
+                           description="primal threshold during gradient calcs",
+                           domain=float,
+                           default=0.001)
+        self.add_to_config("grad_dual_thresh",
+                           description="dual threshold during gradient calcs",
+                           domain=float,
+                           default=0.1)
+        self.add_to_config("grad_pd_thresh",
+                           description="threshold for dual/primal during gradient calcs",
+                           domain=float,
+                           default=0.1)
         self.add_to_config("order_stat",
                            description="order statistic for rho (must be between 0 and 1)",
                            domain=float,

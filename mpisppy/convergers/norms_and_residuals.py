@@ -50,7 +50,7 @@ def scaled_primal_metric(PHB):
                                   for i in range(nlen)), dtype='d')
             nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                         dtype='d', count=nlen)
-            scaled_norm = np.divide(np.abs(nonants_array - xbars), xbars)
+            scaled_norm = np.divide(np.abs(nonants_array - xbars), xbars, out=np.zeros_like(xbars))
             if not s._mpisppy_data.has_variable_probability:
                 local_sum[0] += s._mpisppy_data.prob_coeff[ndn] * np.sum(np.multiply(scaled_norm, scaled_norm))
             else:
@@ -59,7 +59,8 @@ def scaled_primal_metric(PHB):
                                           for ndn_i in s._mpisppy_data.nonant_indices
                                           if ndn_i[0] == ndn),
                                          dtype='d', count=nlen)
-                local_sum[0] += np.dot(prob_array, scaled_norm)
+                ### TBD: check this!!
+                local_sum[0] += np.dot(prob_array, scaled_norm^2)
     PHB.comms["ROOT"].Allreduce(local_sum, global_sum, op=MPI.SUM)
     return np.sqrt(global_sum[0])
 
@@ -75,7 +76,7 @@ def scaled_dual_metric(PHB, w_cache, curr_iter):
     for sname, s in PHB.local_scenarios.items():
         current_w = np.array(w_cache[curr_iter][sname])
         prev_w = np.array(w_cache[curr_iter-1][sname])
-        scaled_norm = np.divide(np.abs(current_w - prev_w), np.abs(current_w))
+        scaled_norm = np.divide(np.abs(current_w - prev_w), np.abs(current_w), out=np.zeros_like(current_w))
         for node in s._mpisppy_node_list:
             ndn = node.name
             nlen = s._mpisppy_data.nlens[ndn]
@@ -87,7 +88,8 @@ def scaled_dual_metric(PHB, w_cache, curr_iter):
                                           for ndn_i in s._mpisppy_data.nonant_indices
                                           if ndn_i[0] == ndn),
                                          dtype='d', count=nlen)
-                local_sum[0] += np.dot(prob_array, scaled_norm)
+                # tbd: does this give use the squared norm?
+                local_sum[0] += np.dot(prob_array, scaled_norm^2)
 
     PHB.comms["ROOT"].Allreduce(local_sum, global_sum, op=MPI.SUM)
     return np.sqrt(global_sum[0])

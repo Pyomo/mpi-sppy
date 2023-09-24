@@ -57,11 +57,12 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
             for (vid, rho) in rholist:
                 (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
                 scenario._mpisppy_model.rho[(ndn, i)] = rho
-        self.display_rho_values()
+        if self.cfg.get("grad_display_rho", True):
+            self.display_rho_values()
 
 
     def _rho_primal_crit(self):
-        primal_thresh = 0.001 # or other value
+        primal_thresh = self.cfg.grad_primal_thresh
         self.prev_primal_norm = self.curr_primal_norm
         self.curr_primal_norm = norms.scaled_primal_metric(self.opt)
         norm_diff = np.abs(self.curr_primal_norm - self.prev_primal_norm)
@@ -69,18 +70,18 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         return (norm_diff <= primal_thresh)
 
     def _rho_dual_crit(self):
-        dual_thresh = 0.1 # or other value
+        dual_thresh = cfg.grad_dual_thresh
         self.wt.grab_local_Ws()
         dual_norm = norms.scaled_dual_metric(self.opt, self.wt.local_Ws, self.opt._PHIter)
         #print(f'{dual_norm =}')
         return (dual_norm <= dual_thresh)
 
     def _rho_primal_dual_crit(self):
-        pd_thresh = 2 #or other value
+        pd_thresh = cfg.grad_pd_thresh
         self.wt.grab_local_xbars()
         primal_resid = norms.primal_residuals_norm(self.opt)
         dual_resid = norms.dual_residuals_norm(self.opt, self.wt.local_xbars, self.opt._PHIter)
-        resid_rel_norm = dual_resid / primal_resid
+        resid_rel_norm = np.divide(dual_resid, primal_resid, out=np.zeros_like(primal_resid))
         #print(f'{resid_rel_norm =}')
         return (resid_rel_norm <= pd_thresh)
 
