@@ -9,13 +9,12 @@ import time
 import json
 import csv
 import mpisppy.cylinders.spoke
-import mpisppy.cylinders.cylinder_wtracker as cylinder_wtracker
 import mpisppy.utils.find_rho as find_rho
 import mpisppy.utils.gradient as grad
 from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 
-class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke): #OuterBoundBoundsOnlySpoke eventually
+class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
     """Updates its own W and x.
     """
     converger_spoke_char = 'B'
@@ -138,13 +137,6 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke): #OuterBoundBo
         verbose = self.opt.options["verbose"]
         self.opt.Compute_Xbar(verbose=verbose)
         self.opt.Update_W(verbose=verbose)
-        ## writes Ws here
-        if self.opt.options.get("ph_ob_write_W", False):
-            w_fname = self.opt.options.get("ph_ob_w_vals")
-            xbar_fname = self.opt.options.get("ph_ob_xbar_vals")
-            rho_fname = self.opt.options.get("ph_ob_rho_vals")
-            cylinder_wtracker._write_W_and_xbar(iternum,self.opt,w_fname,xbar_fname)
-            cylinder_wtracker._write_rho(iternum,self.opt,rho_fname)
         # see if rho should be rescaled
         if self.use_gradient_rho and iternum == 0:
             self._set_gradient_rho()

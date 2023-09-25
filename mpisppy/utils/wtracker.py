@@ -40,11 +40,16 @@ class WTracker():
         """ Get the W values from the PHB that we are following
             NOTE: we assume this is called only once per iteration
         """
-
+        if hasattr(self.PHB, '_PHIter'): #update the iter value
+            self.ph_iter = self.PHB._PHIter
+        elif hasattr(self.PHB, 'A_iter'):
+            self.ph_iter = self.PHB.A_iter
+        elif hasattr(self.PHB, 'B_iter'):
+            self.ph_iter = self.PHB.B_iter
         scenario_Ws = {sname: [w._value for w in scenario._mpisppy_model.W.values()]
                        for (sname, scenario) in self.PHB.local_scenarios.items()}
 
-        self.local_Ws[self.PHB._PHIter] = scenario_Ws
+        self.local_Ws[self.ph_iter] = scenario_Ws
 
 
     def compute_moving_stats(self, wlen, offsetback=0):
