@@ -186,9 +186,9 @@ class SPBase:
                 for i, var in enumerate(node.nonant_vardata_list):
                     if i in local_nonant_char_array[ndn]:
                         if var.name != local_nonant_char_array[ndn][i]:
-                            raise RuntimeError(f"Tree node {ndn} has different non-anticipative "
+                            raise RuntimeError(f"[rank {self.gobal_rank}] Tree node {ndn} has different non-anticipative "
                                                f"variables in position {i}, scenario {s} has name "
-                                               f"var.name, some other scenario has name "
+                                               f"{var.name}, some other scenario has name "
                                                f"{local_nonant_char_array[ndn][i]}")
                     else:
                         local_nonant_char_array[ndn][i] = var.name
