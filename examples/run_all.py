@@ -220,7 +220,7 @@ do_one("farmer",
 
 do_one("farmer",
        "farmer_cylinders.py",
-       2,
+       4,
        f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
 
 do_one("farmer",
