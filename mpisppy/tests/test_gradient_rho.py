@@ -1,6 +1,6 @@
 # Copyright 2023 by U. Naepels and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Author: Ulysse Naepels
+# Author: Ulysse Naepels and D.L. Woodruff
 """
 IMPORTANT:
   Unless we run to convergence, the solver, and even solver
@@ -28,7 +28,11 @@ import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 import  mpisppy.extensions.gradient_extension as grad_ext
 
-__version__ = 0.1
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.extensions.gradient_extension import Gradient_extension
+
+__version__ = 0.2
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -218,6 +222,48 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.assertIsInstance(id_var, int)
         self.assertAlmostEqual(rho, 6.982758620689654)
     
+
+#*****************************************************************************
+
+class Test_grad_extension_farmer(unittest.TestCase):
+    """ Test the gradient extension code using farmer.
+    See also: farmer_rho_demo.py
+    writen by DLW Sept 2023 TBD: this code should be re-organized"""
+
+    def _run_ph_farmer(self):
+        ph_converger = NormRhoConverger
+        ph_extensions = Gradient_extension
+        
+        self.cfg.num_scens = 3
+        scenario_creator = farmer.scenario_creator
+        scenario_denouement = farmer.scenario_denouement
+        all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
+        scenario_creator_kwargs = farmer.kw_creator(self.cfg)
+        beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
+        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=ph_extensions, ph_converger = ph_converger)
+
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': self.cfg}
+        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}        
+
+        
+        list_of_spoke_dict = list()
+        wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+        wheel.spin()
+        if wheel.strata_rank == 0:
+            ph_object = wheel.spcomm.opt
+            return ph_object
+
+    def setUp(self):
+        self.cfg = _create_cfg()
+
+    def test_norm_rho_updater_converger(self):
+        print("** test norm rho updater converger **")
+        self.cfg.max_iterations = 4
+        self.ph_object = self._run_ph_farmer()
+        # TBD: verify that it did something
+
 
 if __name__ == '__main__':
     unittest.main()
