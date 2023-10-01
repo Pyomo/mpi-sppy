@@ -70,14 +70,14 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         return (norm_diff <= primal_thresh)
 
     def _rho_dual_crit(self):
-        dual_thresh = cfg.grad_dual_thresh
+        dual_thresh = self.cfg.grad_dual_thresh
         self.wt.grab_local_Ws()
         dual_norm = norms.scaled_dual_metric(self.opt, self.wt.local_Ws, self.opt._PHIter)
         #print(f'{dual_norm =}')
         return (dual_norm <= dual_thresh)
 
     def _rho_primal_dual_crit(self):
-        pd_thresh = cfg.grad_pd_thresh
+        pd_thresh = self.cfg.grad_pd_thresh
         self.wt.grab_local_xbars()
         primal_resid = norms.primal_residuals_norm(self.opt)
         dual_resid = norms.dual_residuals_norm(self.opt, self.wt.local_xbars, self.opt._PHIter)
