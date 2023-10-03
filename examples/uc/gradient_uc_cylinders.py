@@ -18,7 +18,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.gradient_extension import Gradient_rho_extension
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
@@ -40,8 +40,9 @@ def _parse_args():
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
     cfg.gradient_args()
-    cfg.rho_args()
-    cfg.ph_ob_args()
+    cfg.grad_rho_args()
+    print("dropping ob args")
+    #####cfg.ph_ob_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
@@ -119,7 +120,9 @@ def main():
     if track_ws:
         results_dir_name="gradient_uc_cylinders_tracking_W"
         create_dir_structure(results_dir_name, hub_dict)
-    
+
+    print("dropping ph_ob!!!")
+    """
     if cfg.ph_ob:
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                             scenario_creator_kwargs=scenario_creator_kwargs,
@@ -129,10 +132,10 @@ def main():
             # this is necessary to write Ws and xbars (old code)
             ph_ob_spoke['opt_kwargs']['options']['ph_ob_write_W'] = True
             ph_ob_spoke['opt_kwargs']['options']['ph_ob_write_xbar'] = True
-
+    """
     
-    if cfg.rho_setter:
-        ext_classes.append(Gradient_extension)
+    if cfg.grad_rho_setter:
+        ext_classes.append(Gradient_rho_extension)
         
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cross_scenario_cuts:
@@ -151,8 +154,12 @@ def main():
             "keep_solution" : True
         }
 
-    if cfg.rho_setter:
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
+    if cfg.grad_rho_setter:
+        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': cfg}
+        if cfg.default_rho is None:
+            # since we are using a rho_setter anyway
+            hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
+            ### end ph spoke ###
 
     if cfg.ph_mipgaps_json is not None:
         with open(cfg.ph_mipgaps_json) as fin:
@@ -165,10 +172,6 @@ def main():
         "mipgapdict": mipgapdict
         }
         
-    if cfg.default_rho is None:
-        # since we are using a rho_setter anyway
-        hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
-    ### end ph spoke ###
     
     # FWPH spoke
     if fwph:
@@ -215,8 +218,11 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cuts_spoke)
+    print("dropping ph_ob!!!")
+    """
     if cfg.ph_ob:
         list_of_spoke_dict.append(ph_ob_spoke)
+    """
     if cfg.lagranger:
         list_of_spoke_dict.append(lagranger_spoke)
 

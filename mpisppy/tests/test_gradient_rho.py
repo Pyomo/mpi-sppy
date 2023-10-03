@@ -26,11 +26,10 @@ from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver,round_pos_sig
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
-import  mpisppy.extensions.gradient_extension as grad_ext
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.gradient_extension import Gradient_rho_extension
 
 __version__ = 0.2
 
@@ -232,7 +231,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
 
     def _run_ph_farmer(self):
         ph_converger = NormRhoConverger
-        ph_extensions = Gradient_extension
+        ph_extensions = Gradient_rho_extension
         
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator

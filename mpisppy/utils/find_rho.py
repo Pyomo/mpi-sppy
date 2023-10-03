@@ -63,10 +63,10 @@ class Find_Rho():
         if cfg.rho_file == '' and cfg.grad_rho_file == '': 
             pass
         else:
-            assert self.cfg.whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
-            if (not os.path.exists(self.cfg.whatpath)):
-                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.whatpath))
-            with open(self.cfg.whatpath, 'r') as f:
+            assert self.cfg.grad_whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
+            if (not os.path.exists(self.cfg.grad_whatpath)):
+                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_whatpath))
+            with open(self.cfg.grad_whatpath, 'r') as f:
                 for line in f:
                     if (line.startswith('#')):
                         continue
@@ -157,7 +157,7 @@ class Find_Rho():
                                                [g_denom, MPI.DOUBLE],
                                                op=MPI.SUM)
         if self.ph_object.cylinder_rank == 0:
-            g_denom = np.maximum(np.ones(len(g_denom))/self.cfg.rho_relative_bound, g_denom)
+            g_denom = np.maximum(np.ones(len(g_denom))/self.cfg.grad_rho_relative_bound, g_denom)
             return g_denom
         
 
@@ -170,7 +170,7 @@ class Find_Rho():
         Returns: 
            rho (float): rho value
         """
-        alpha = self.cfg.order_stat
+        alpha = self.cfg.grad_order_stat
         assert alpha != -1.0, "you need to set the order statistic parameter for rho using --order-stat"
         assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max"
         rho_mean = np.dot(rho_list, prob_list)
@@ -233,11 +233,11 @@ class Find_Rho():
     def write_rho(self):
         """ Write the computed rhos in the file --rho-file.
         """
-        if self.cfg.rho_file == '': pass
+        if self.cfg.grad_rho_file == '': pass
         else:
             rho_data = self.compute_rho()
             if self.ph_object.cylinder_rank == 0:
-                with open(self.cfg.rho_file, 'w') as file:
+                with open(self.cfg.grad_rho_file, 'w') as file:
                     writer = csv.writer(file)
                     writer.writerow(['#Rho values'])
                     for (vname, rho) in rho_data.items():
@@ -266,8 +266,8 @@ class Set_Rho():
 
         """
         assert self.cfg != None, "you have to give the rho_setter a cfg"
-        assert self.cfg.rho_path != '', "use --rho-path to give the path of your rhos file"
-        rhofile = self.cfg.rho_path
+        assert self.cfg.grad_rho_path != '', "use --rho-path to give the path of your rhos file"
+        rhofile = self.cfg.grad_rho_path
         rho_list = list()
         with open(rhofile) as infile:
             reader = csv.reader(infile)
@@ -303,7 +303,7 @@ def _parser_setup():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
-    cfg.rho_args()
+    cfg.grad_rho_args()
 
     return cfg
 
@@ -316,7 +316,7 @@ def get_rho_from_W(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
-    if  (original_cfg.rho_file == ''): return
+    if  (original_cfg.grad_rho_file == ''): return
 
     try:
         model_module = importlib.import_module(mname)

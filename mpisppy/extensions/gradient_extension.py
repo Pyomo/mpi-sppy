@@ -16,7 +16,7 @@ from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 
 
-class Gradient_extension(mpisppy.extensions.extension.Extension):
+class Gradient_rho_extension(mpisppy.extensions.extension.Extension):
     """
     This extension makes PH use gradient-rho and the corresponding rho setter.
     
@@ -31,14 +31,14 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
     def __init__(self, opt, comm=None):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
-        self.cfg = opt.options["gradient_extension_options"]["cfg"]
+        self.cfg = opt.options["gradient_rho_extension_options"]["cfg"]
         self.cfg_args_cache = {'grad_cost_file': self.cfg.grad_cost_file,
                                'grad_rho_file': self.cfg.grad_rho_file,
-                               'rho_path': self.cfg.rho_path,
-                               'rho_setter': self.cfg.rho_setter}
+                               'grad_rho_path': self.cfg.grad_rho_path,
+                               'grad_rho_setter': self.cfg.grad_rho_setter}
         self.cfg.grad_cost_file = './_temp_grad_cost_file.csv'
         self.cfg.grad_rho_file = './_temp_grad_rho_file.csv'
-        self.cfg.rho_path = './_temp_grad_rho_file.csv'
+        self.cfg.grad_rho_path = './_temp_grad_rho_file.csv'
         self.grad_object = grad.Find_Grad(opt, self.cfg)
         self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter
         self.prev_primal_norm, self.curr_primal_norm = 0, 0

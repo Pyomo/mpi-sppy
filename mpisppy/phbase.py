@@ -285,6 +285,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         )
 
         global_toc("Initializing PHBase")
+        print(f"{extensions =}")
 
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.

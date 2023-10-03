@@ -4,6 +4,7 @@
 # Compute gradient-based cost and rho for a given problem
 # Use the gradient-based rho setter which sets adaptative gradient rho for PH.
 # mpiexec -np 2 python -m mpi4py farmer_rho_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
+# Edited by DLW Oct 2023: still not sure it is correct...
 
 import time
 import farmer
@@ -15,6 +16,8 @@ import mpisppy.utils.sputils as sputils
 
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
+
+from mpisppy.extensions.extension import MultiExtension
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
@@ -97,21 +100,17 @@ def main():
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
-    ph_extensions = None
+    ph_extensions = []
     if cfg.rho_setter:
-        ph_extensions = Gradient_extension
+        ph_extensions.append(Gradient_extension)
 
     if cfg.run_async:
-        # Vanilla APH hub
-        hub_dict = vanilla.aph_hub(*beans,
-                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                   ph_extensions=None,
-                                   rho_setter=rho_setter)
+        raise RuntimeError("APH not supported in this example.")
     else:
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                  ph_extensions=ph_extensions,
+                                  ph_extensions=MultiExtension,
                                   ph_converger=ph_converger,
                                   rho_setter=None)
         
