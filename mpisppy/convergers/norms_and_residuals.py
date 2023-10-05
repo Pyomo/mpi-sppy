@@ -76,6 +76,7 @@ def scaled_dual_metric(PHB, w_cache, curr_iter):
     for sname, s in PHB.local_scenarios.items():
         current_w = np.array(w_cache[curr_iter][sname])
         prev_w = np.array(w_cache[curr_iter-1][sname])
+        # np.seterr(invalid='ignore')
         scaled_norm = np.divide(np.abs(current_w - prev_w), np.abs(current_w), out=np.zeros_like(current_w))
         for node in s._mpisppy_node_list:
             ndn = node.name
