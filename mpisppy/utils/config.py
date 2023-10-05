@@ -641,8 +641,8 @@ class Config(pyofig.ConfigDict):
                            description="threshold for dual/primal during gradient calcs",
                            domain=float,
                            default=0.1)
-        self.add_to_config("order_stat",
-                           description="order statistic for rho (must be between 0 and 1)",
+        self.add_to_config("grad_order_stat",
+                           description="order statistic for gradient based rho (must be between 0 and 1)",
                            domain=float,
                            default=-1.0)
 

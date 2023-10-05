@@ -4,7 +4,7 @@
 # Compute gradient-based cost and rho for a given problem
 # Use the gradient-based rho setter which sets adaptative gradient rho for PH.
 # mpiexec -np 2 python -m mpi4py farmer_rho_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
-# Edited by DLW Oct 2023: still not sure it is correct...
+# Edited by DLW Oct 2023
 
 import time
 import farmer
@@ -24,7 +24,7 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.gradient_extension import Gradient_rho_extension
 
 write_solution = False
 
@@ -43,7 +43,7 @@ def _parse_args():
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
     cfg.gradient_args() #required to use gradient
-    cfg.rho_args()
+    cfg.grad_rho_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -75,7 +75,7 @@ def main():
 
     num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
-    rho_setter = None
+    rho_setter = None  # non-grad rho setter?
 
     if cfg.default_rho is None and rho_setter is None:
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
@@ -101,8 +101,8 @@ def main():
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     ph_extensions = []
-    if cfg.rho_setter:
-        ph_extensions.append(Gradient_extension)
+    if cfg.grad_rho_setter:
+        ph_extensions.append(Gradient_rho_extension)
 
     if cfg.run_async:
         raise RuntimeError("APH not supported in this example.")
@@ -112,11 +112,12 @@ def main():
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
                                   ph_converger=ph_converger,
-                                  rho_setter=None)
-        
+                                  rho_setter=rho_setter)  # non-grad rho setter
+    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ph_extensions}
+
     #gradient extension kwargs
-    if cfg.rho_setter:
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
+    if cfg.grad_rho_setter:
+        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': cfg}
     
     ## hack in adaptive rho
     if cfg.use_norm_rho_updater:

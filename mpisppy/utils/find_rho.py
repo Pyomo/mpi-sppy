@@ -60,7 +60,8 @@ class Find_Rho():
         self.cfg = cfg
         self.c = dict()
 
-        if cfg.rho_file == '' and cfg.grad_rho_file == '': 
+        if cfg.get("rho_file", ifmissing='')  == ''\
+           and cfg.get("grad_rho_file", ifmissing='')  == '': 
             pass
         else:
             assert self.cfg.grad_whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
@@ -171,7 +172,7 @@ class Find_Rho():
            rho (float): rho value
         """
         alpha = self.cfg.grad_order_stat
-        assert alpha != -1.0, "you need to set the order statistic parameter for rho using --order-stat"
+        assert alpha != -1.0, "you need to set the order statistic parameter for rho using --grad-order-stat"
         assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max"
         rho_mean = np.dot(rho_list, prob_list)
         rho_min, rho_max = np.min(rho_list), np.max(rho_list)
