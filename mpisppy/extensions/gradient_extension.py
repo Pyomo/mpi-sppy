@@ -127,7 +127,7 @@ class Gradient_rho_extension(mpisppy.extensions.extension.Extension):
             os.remove(self.cfg.grad_cost_file)
         self.cfg.grad_cost_file = self.cfg_args_cache['grad_cost_file']
         self.cfg.grad_rho_file = self.cfg_args_cache['grad_rho_file']
-        self.cfg.rho_path = self.cfg_args_cache['rho_path']
+        self.cfg.grad_rho_path = self.cfg_args_cache['grad_rho_path']
 
 
 
