@@ -44,6 +44,18 @@ class Extension:
         '''
         return results
 
+    def pre_solve_loop(self):
+        ''' Method called before every solve loop within
+            mpisppy.spot.SPOpt.solve_loop()
+        '''
+        pass
+
+    def post_solve_loop(self):
+        ''' Method called after every solve loop within
+            mpisppy.spot.SPOpt.solve_loop()
+        '''
+        pass
+
     def pre_iter0(self):
         ''' Method called at the end of PH_Prep().
             When this method is called, all scenarios have been created, and
@@ -60,9 +72,16 @@ class Extension:
         '''
         pass
 
+    def post_iter0_after_sync(self):
+        ''' Method called after the first PH iteration, after the
+            synchronization of sending messages between cylinders
+            has completed.
+        '''
+        pass
+
     def miditer(self):
         ''' Method called after x-bar has been computed and the dual weights
-            have been updated, but before solve_loop(). 
+            have been updated, but before solve_loop().
             If a converger is present, this method is called between the
             convergence_value() method and the is_converged() method.
         '''
@@ -71,6 +90,13 @@ class Extension:
     def enditer(self):
         ''' Method called after the solve_loop(), but before the next x-bar and
             weight update.
+        '''
+        pass
+
+    def enditer_after_sync(self):
+        ''' Method called after the solve_loop(), after the
+            synchronization of sending messages between cylinders
+            has completed.
         '''
         pass
 
@@ -97,13 +123,34 @@ class MultiExtension(Extension):
             name = constr.__name__
             self.extdict[name] = constr(ph)
 
+    def pre_solve(self, subproblem):
+        for lobject in self.extdict.values():
+            lobject.pre_solve(subproblem)
+
+    def post_solve(self, subproblem, results):
+        for lobject in self.extdict.values():
+            results = lobject.post_solve(subproblem, results)
+        return results
+
+    def pre_solve_loop(self):
+        for lobject in self.extdict.values():
+            lobject.pre_solve_loop()
+
+    def post_solve_loop(self):
+        for lobject in self.extdict.values():
+            lobject.post_solve_loop()
+
     def pre_iter0(self):
         for lobject in self.extdict.values():
             lobject.pre_iter0()
-                                        
+
     def post_iter0(self):
         for lobject in self.extdict.values():
             lobject.post_iter0()
+
+    def post_iter0_after_sync(self):
+        for lobject in self.extdict.values():
+            lobject.post_iter0_after_sync()
 
     def miditer(self):
         for lobject in self.extdict.values():
@@ -112,6 +159,10 @@ class MultiExtension(Extension):
     def enditer(self):
         for lobject in self.extdict.values():
             lobject.enditer()
+
+    def enditer_after_sync(self):
+        for lobject in self.extdict.values():
+            lobject.enditer_after_sync()
 
     def post_everything(self):
         for lobject in self.extdict.values():

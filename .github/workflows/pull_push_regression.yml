@@ -39,9 +39,9 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent 
+          python afew.py xpress_persistent
 
-      - name: Test run_all nouc 
+      - name: Test run_all nouc
         run: |
           cd examples
           python run_all.py xpress_persistent "" nouc

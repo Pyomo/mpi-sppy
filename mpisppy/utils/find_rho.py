@@ -36,7 +36,7 @@ import mpisppy.phbase as phbase
 # Could also pass, e.g., sys.stdout instead of a filename
 """mpisppy.log.setup_logger("mpisppy.utils.find_rho",
                          "findrho.log",
-                         level=logging.CRITICAL)                         
+                         level=logging.CRITICAL)
 logger = logging.getLogger("mpisppy.utils.find_rho")"""
 
 ############################################################################
@@ -44,13 +44,13 @@ logger = logging.getLogger("mpisppy.utils.find_rho")"""
 
 class Find_Rho():
     """ Interface to compute rhos from Ws for a given ph object and write them in a file
-    
+
     Args:
        ph_object (PHBase): ph object
        cfg (Config): config object
 
     Attributes:
-       c (dict): a dictionnary {(scenario name, nonant indice): c value} 
+       c (dict): a dictionnary {(scenario name, nonant indice): c value}
        corresponding to the cost vector in the PH algorithm
 
     """
@@ -79,7 +79,7 @@ class Find_Rho():
 
 
     def _w_denom(self, s, node):
-        """ Computes the denominator for w-based rho. This denominator is scenario dependant. 
+        """ Computes the denominator for w-based rho. This denominator is scenario dependant.
 
         Args:
            s (Pyomo Concrete Model): scenario
@@ -144,23 +144,15 @@ class Find_Rho():
                 nlen = nlens[ndn]
                 nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                             dtype='d', count=nlen)
-                if not s._mpisppy_data.has_variable_probability:
-                    denom += s._mpisppy_data.prob_coeff[ndn] * abs(nonants_array - xbar_array)
-                else:
-                    # rarely-used overwrite in the event of variable probability (not efficient for multi-stage)
-                    prob_array = np.fromiter((s._mpisppy_data.prob_coeff[ndn_i[0]][ndn_i[1]]
-                                              for ndn_i in s._mpisppy_data.nonant_indices if ndn_i[0] == ndn),
-                                             dtype='d', count=nlen)
-                    # Note: Intermediate scen_contribution to get proper overloading
-                    scen_contribution = prob_array * abs(nonants_array - xbar_array)
-                    denom += scen_contribution
+                probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
+                denom += probs * np.abs(nonants_array - xbar_array)
         self.ph_object.comms["ROOT"].Allreduce([denom, MPI.DOUBLE],
                                                [g_denom, MPI.DOUBLE],
                                                op=MPI.SUM)
         if self.ph_object.cylinder_rank == 0:
             g_denom = np.maximum(np.ones(len(g_denom))/self.cfg.grad_rho_relative_bound, g_denom)
             return g_denom
-        
+
 
     def _order_stat(self, rho_list, prob_list):
         """ Computes a scenario independant rho from a list of rhos.
@@ -168,7 +160,7 @@ class Find_Rho():
         Args:
            rho_list (list): list of rhos
 
-        Returns: 
+        Returns:
            rho (float): rho value
         """
         alpha = self.cfg.grad_order_stat
@@ -188,7 +180,7 @@ class Find_Rho():
         and first order condition.
 
         Returns:
-           arranged_rho (dict): dict {variable name: list of rhos for this variable}          
+           arranged_rho (dict): dict {variable name: list of rhos for this variable}
         """
         all_snames = self.ph_object.all_scenario_names
         all_vnames = []
@@ -196,7 +188,7 @@ class Find_Rho():
             if vname not in all_vnames:all_vnames.append(vname)
         k0, s0 = list(self.ph_object.local_scenarios.items())[0]
         vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
-        cost = {k : np.array([self.c[k, vname] 
+        cost = {k : np.array([self.c[k, vname]
                 for vname in all_vnames])
                 for k in all_snames}
         if indep_denom:
@@ -257,7 +249,7 @@ class Set_Rho():
 
     def rho_setter(self, scenario):
         """ rho setter to be used in the PH algorithm
-        
+
         Args:
         scenario (Pyomo Concrete Model): scenario
         cfg (Config object): config object
@@ -286,10 +278,10 @@ class Set_Rho():
         return rho_list
 
 
-    #======================================================================   
+    #======================================================================
 
 def _parser_setup():
-    """ Set up config object and return it, but don't parse 
+    """ Set up config object and return it, but don't parse
 
     Returns:
        cfg (Config): config object
@@ -326,7 +318,7 @@ def get_rho_from_W(mname, original_cfg):
     cfg = copy.deepcopy(original_cfg)
     cfg.max_iterations = 0 #we only need x0 here
 
-    #create ph_object via vanilla           
+    #create ph_object via vanilla
     scenario_creator = model_module.scenario_creator
     scenario_denouement = model_module.scenario_denouement
     scen_names_creator_args = inspect.getargspec(model_module.scenario_names_creator).args #partition requires to do that
@@ -346,15 +338,13 @@ def get_rho_from_W(mname, original_cfg):
     list_of_spoke_dict = list()
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin() #TODO: steal only what's needed in  WheelSpinner
-    if wheel.strata_rank == 0:  # don't do this for bound ranks                                                               
+    if wheel.strata_rank == 0:  # don't do this for bound ranks
         ph_object = wheel.spcomm.opt
 
-    #============================================================================== 
-    # Compute rhos                                                                                                              
+    #==============================================================================
+    # Compute rhos
     Find_Rho(ph_object, cfg).rhos()
 
 
 if __name__ == "__main__":
-    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos") 
-    
-    
+    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos")
