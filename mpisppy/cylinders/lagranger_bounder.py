@@ -93,13 +93,13 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
 
         self.lagrangian_prep()
 
+        self.A_iter = 1
         self.trivial_bound = self._lagrangian(0)
 
         self.bound = self.trivial_bound
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
-        self.A_iter = 1
         while not self.got_kill_signal():
             # because of aph, do not check for new data, just go for it
             self.bound = self._update_weights_and_solve(self.A_iter)
@@ -113,4 +113,7 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         '''
         self.final_bound = self._update_weights_and_solve(self.A_iter)
         self.bound = self.final_bound
+        if self.opt.extensions is not None and \
+            hasattr(self.opt.extobject, 'post_everything'):
+            self.opt.extobject.post_everything()
         return self.final_bound

@@ -40,6 +40,5 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_gradient_rho.py 
+          python test_gradient_rho.py
           python test_w_writer.py
-

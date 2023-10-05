@@ -35,4 +35,3 @@ jobs:
         run: |
           cd mpisppy/tests
           python test_ef_ph.py
-

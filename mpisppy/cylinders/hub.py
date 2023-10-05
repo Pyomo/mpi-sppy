@@ -12,7 +12,7 @@ from mpisppy.cylinders.spcommunicator import SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
-from mpisppy import global_toc 
+from mpisppy import global_toc
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
@@ -73,9 +73,9 @@ class Hub(SPCommunicator):
         self.latest_ib_char = None
         self.latest_ob_char = None
 
-        
+
     def compute_gaps(self):
-        """ Compute the current absolute and relative gaps, 
+        """ Compute the current absolute and relative gaps,
             using the current self.BestInnerBound and self.BestOuterBound
         """
         if self.opt.is_minimizing:
@@ -97,7 +97,7 @@ class Hub(SPCommunicator):
             rel_gap = float("inf")
         return abs_gap, rel_gap
 
-    
+
     def get_update_string(self):
         if self.latest_ib_char is None and \
                 self.latest_ob_char is None:
@@ -124,23 +124,23 @@ class Hub(SPCommunicator):
 
     def determine_termination(self):
         # return True if termination is indicated, otherwise return False
-        
+
         if not hasattr(self,"options") or self.options is None\
            or ("rel_gap" not in self.options and "abs_gap" not in self.options\
            and "max_stalled_iters" not in self.options):
             return False  # Nothing to see here folks...
-        
+
         # If we are still here, there is some option for termination
         abs_gap, rel_gap = self.compute_gaps()
-        
+
         abs_gap_satisfied = False
         rel_gap_satisfied = False
         max_stalled_satisfied = False
 
         if "rel_gap" in self.options and rel_gap <= self.options["rel_gap"]:
-            rel_gap_satisfied = True 
+            rel_gap_satisfied = True
         if "abs_gap" in self.options and abs_gap <= self.options["abs_gap"]:
-            abs_gap_satisfied = True             
+            abs_gap_satisfied = True
 
         if "max_stalled_iters" in self.options:
             if abs_gap < self.last_gap:  # liberal test (we could use an epsilon)
@@ -150,7 +150,7 @@ class Hub(SPCommunicator):
                 self.stalled_iter_cnt += 1
                 if self.stalled_iter_cnt >= self.options["max_stalled_iters"]:
                     max_stalled_satisfied = True
-            
+
         if abs_gap_satisfied:
             global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
         if rel_gap_satisfied:
@@ -262,15 +262,43 @@ class Hub(SPCommunicator):
         self.nonant_send_buffer = None
         for idx in self.nonant_spoke_indices:
             if self.nonant_send_buffer is None:
+                # for hub outer/inner bounds and kill signal
                 self.nonant_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
             elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
                 raise RuntimeError("Nonant buffers disagree on size")
 
+    def initialize_boundsout(self):
+        """ Initialize the buffer for the hub to send bounds
+            to bounds only spokes
+        """
+        self.boundsout_send_buffer = None
+        for idx in self.bounds_only_indices:
+            if self.boundsout_send_buffer is None:
+                self.boundsout_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+            if self.local_lengths[idx - 1] != 2:
+                raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
+
+    def _populate_boundsout_cache(self, buf):
+        """ Populate a given buffer with the current bounds
+        """
+        buf[-3] = self.BestOuterBound
+        buf[-2] = self.BestInnerBound
+
+    def send_boundsout(self):
+        """ Send bounds to the appropriate spokes
+        This is called only for spokes which are bounds only.
+        w and nonant spokes are passed bounds through the w and nonant buffers
+        """
+        self._populate_boundsout_cache(self.boundsout_send_buffer)
+        logging.debug("hub is sending bounds={}".format(self.boundsout_send_buffer))
+        for idx in self.bounds_only_indices:
+            self.hub_to_spoke(self.boundsout_send_buffer, idx)
+
     def initialize_spoke_indices(self):
-        """ Figure out what types of spokes we have, 
+        """ Figure out what types of spokes we have,
         and sort them into the appropriate classes.
 
-        Note: 
+        Note:
             Some spokes may be multiple types (e.g. outerbound and nonant),
             though not all combinations are supported.
         """
@@ -278,7 +306,6 @@ class Hub(SPCommunicator):
         self.innerbound_spoke_indices = set()
         self.nonant_spoke_indices = set()
         self.w_spoke_indices = set()
-        self.boundsout_spoke_indices = set()
 
         self.outerbound_spoke_chars = dict()
         self.innerbound_spoke_chars = dict()
@@ -297,18 +324,23 @@ class Hub(SPCommunicator):
                         self.w_spoke_indices.add(i + 1)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
                         self.nonant_spoke_indices.add(i + 1)
-                    elif cst == ConvergerSpokeType.BOUNDS_GETTER:
-                        self.boundsout_spoke_indices.add(i + 1)
                     else:
                         raise RuntimeError(f"Unrecognized converger_spoke_type {cst}")
+
             else:  ##this isn't necessarily wrong, i.e., cut generators
                 logger.debug(f"Spoke class {spoke_class} not recognized by hub")
+
+        # all _BoundSpoke spokes get hub bounds so we determine which spokes
+        # are "bounds only"
+        self.bounds_only_indices = \
+            (self.outerbound_spoke_indices | self.innerbound_spoke_indices) - \
+            (self.w_spoke_indices | self.nonant_spoke_indices)
 
         self.has_outerbound_spokes = len(self.outerbound_spoke_indices) > 0
         self.has_innerbound_spokes = len(self.innerbound_spoke_indices) > 0
         self.has_nonant_spokes = len(self.nonant_spoke_indices) > 0
         self.has_w_spokes = len(self.w_spoke_indices) > 0
-        self.has_boundsout_spokes = len(self.boundsout_spoke_indices) > 0
+        self.has_bounds_only_spokes = len(self.bounds_only_indices) > 0
 
     def make_windows(self):
         if self._windows_constructed:
@@ -363,7 +395,7 @@ class Hub(SPCommunicator):
 
     def hub_from_spoke(self, values, spoke_num):
         """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
-            
+
             Returns:
                 is_new (bool): Indicates whether the "gotten" values are new,
                     based on the write_id.
@@ -406,7 +438,7 @@ class Hub(SPCommunicator):
     def send_terminate(self):
         """ Send an array of zeros with a -1 appended to the
             end to indicate termination. This function puts to the local
-            buffer, so every spoke will see it simultaneously. 
+            buffer, so every spoke will see it simultaneously.
             processes (don't need to call them one at a time).
         """
         for rank in range(1, self.n_spokes + 1):
@@ -420,7 +452,7 @@ class Hub(SPCommunicator):
 
 class PHHub(Hub):
     def setup_hub(self):
-        """ Must be called after make_windows(), so that 
+        """ Must be called after make_windows(), so that
             the hub knows the sizes of all the spokes windows
         """
         if not self._windows_constructed:
@@ -439,7 +471,7 @@ class PHHub(Hub):
             self.initialize_ws()
         if self.has_nonant_spokes:
             self.initialize_nonants()
-        if self.has_boundsout_spokes:
+        if self.has_bounds_only_spokes:
             self.initialize_boundsout()  # bounds going out
 
         ## Do some checking for things we currently don't support
@@ -474,7 +506,7 @@ class PHHub(Hub):
             self.send_ws()
         if self.has_nonant_spokes:
             self.send_nonants()
-        if self.has_boundsout_spokes:
+        if self.has_bounds_only_spokes:
             self.send_boundsout()
         if self.has_outerbound_spokes:
             self.receive_outerbounds()
@@ -497,9 +529,9 @@ class PHHub(Hub):
                 )
 
             ## you still want to output status, even without inner bounders configured
-            if self.global_rank == 0:                
+            if self.global_rank == 0:
                 self.screen_trace()
-                
+
             return False
 
         if not self.has_outerbound_spokes:
@@ -517,7 +549,7 @@ class PHHub(Hub):
     def current_iteration(self):
         """ Return the current PH iteration."""
         return self.opt._PHIter
-    
+
     def main(self):
         """ SPComm gets attached in self.__init__ """
         self.opt.ph_main(finalize=False)
@@ -539,6 +571,8 @@ class PHHub(Hub):
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        self._populate_boundsout_cache(nonant_send_buffer)
+
         for idx in self.nonant_spoke_indices:
             self.hub_to_spoke(nonant_send_buffer, idx)
 
@@ -556,39 +590,17 @@ class PHHub(Hub):
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
         """
-        self.opt._populate_W_cache(self.w_send_buffer)
+        self.opt._populate_W_cache(self.w_send_buffer, padding=3)
         logging.debug("hub is sending Ws={}".format(self.w_send_buffer))
+        self._populate_boundsout_cache(self.w_send_buffer)
+
         for idx in self.w_spoke_indices:
             self.hub_to_spoke(self.w_send_buffer, idx)
-
-    def initialize_boundsout(self):
-        """ Initialize the buffer for the hub to send bounds
-            to the appropriate spokes
-        """
-        self.boundsout_send_buffer = None
-        for idx in self.boundsout_spoke_indices:
-            if self.boundsout_send_buffer is None:
-                self.boundsout_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
-            elif self.local_lengths[idx - 1] + 1 != len(self.boundsout_send_buffer):
-                raise RuntimeError("boundsout buffers disagree on size")
-
-    def _populate_boundsout_cache(self):
-        self.boundsout_send_buffer[0] = self.BestOuterBound
-        self.boundsout_send_buffer[1] = self.BestInnerBound
-            
-    def send_boundsout(self):
-        """ Send bounds to the appropriate spokes
-        """
-        self._populate_boundsout_cache()
-        logging.debug("hub is sending bounds={}".format(self.boundsout_send_buffer))
-        for idx in self.boundsout_spoke_indices:
-            self.hub_to_spoke(self.boundsout_send_buffer, idx)
-
 
 class LShapedHub(Hub):
 
     def setup_hub(self):
-        """ Must be called after make_windows(), so that 
+        """ Must be called after make_windows(), so that
             the hub knows the sizes of all the spokes windows
         """
         if not self._windows_constructed:
@@ -624,7 +636,7 @@ class LShapedHub(Hub):
             )
 
     def sync(self, send_nonants=True):
-        """ 
+        """
         Manages communication with Bound Spokes
         """
         if send_nonants and self.has_nonant_spokes:
@@ -645,7 +657,7 @@ class LShapedHub(Hub):
         self.BestOuterBound = self.OuterBoundUpdate(bound)
 
         ## log some output
-        if self.global_rank == 0:                
+        if self.global_rank == 0:
             self.screen_trace()
 
         return self.determine_termination()
@@ -655,7 +667,7 @@ class LShapedHub(Hub):
         return self.opt.iter
 
     def main(self):
-        """ SPComm gets attached in self.__init__ """ 
+        """ SPComm gets attached in self.__init__ """
         self.opt.lshaped_algorithm()
 
     def send_nonants(self):
@@ -671,13 +683,14 @@ class LShapedHub(Hub):
                 nonant_send_buffer[ci] = nonant_to_root_var_map[xvar]._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+        self._populate_boundsout_cache(nonant_send_buffer)
+
         for idx in self.nonant_spoke_indices:
             self.hub_to_spoke(nonant_send_buffer, idx)
 
-
 class APHHub(PHHub):
     def setup_hub(self):
-        """ Must be called after make_windows(), so that 
+        """ Must be called after make_windows(), so that
             the hub knows the sizes of all the spokes windows
         """
         if not self._windows_constructed:
