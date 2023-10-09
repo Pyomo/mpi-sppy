@@ -1,8 +1,8 @@
 import numpy as np
 import os
 import pandas as pd
-import mpisppy.convergers.converger
 import matplotlib.pyplot as plt
+import mpisppy.convergers.converger
 from mpisppy import MPI
 from mpisppy.extensions.phtracker import TrackedData
 
