@@ -141,8 +141,6 @@ class APH(ph_base.PHBase):
         self.use_hack_for_nu = options.get("use_hack_for_nu", False)
         if self.use_hack_for_nu:
             print('**** you are using the hack for nu since default is True so careful!')
-        else:
-            print('not using nu hack')
 
         assert 0 < self.nu and self.nu < 2
         self.dispatchrecord = dict()   # for local subproblems sname: (iter, phi)
@@ -261,7 +259,7 @@ class APH(ph_base.PHBase):
                 v_term = ((vk1 - vk) / vk) # use vk1 in denominator?
                 u_term = ((uk1 - uk) / uk) # use uk1 in denominator?
                 if v_term <= 0 or u_term <= 0:
-                    print('v_term=', v_term, 'u_term=', u_term, 'vk1=', vk1, 'vk=', vk, 'uk1=', uk1, 'uk=', uk)
+                    # print('v_term=', v_term, 'u_term=', u_term, 'vk1=', vk1, 'vk=', vk, 'uk1=', uk1, 'uk=', uk)
                     gamma = self.APHgamma
                 else:
                     gamma = (
@@ -594,21 +592,18 @@ class APH(ph_base.PHBase):
             punorm = math.sqrt(self.global_pusqnorm)
             pvnorm = math.sqrt(self.global_pvsqnorm)
             if self.use_hack_for_nu:
+                # these vals control the additive hacking below
                 nu_val = 0.1
                 rho_val = 0.1
             else:
                 nu_val = 0
                 rho_val = 0
-            # if punorm and pvnorm <= 1:
-            #     self.nu *= 1 + nu_val
-            # else:
-            #     self.nu /= 1 + nu_val
             if self._PHIter <= 3:
                 self.nu = 1 - nu_val
             else:
                 self.nu = 1 + nu_val
             self.theta = self.global_phi * self.nu / self.global_tau # Step 16
-            print(f'nu={self.nu}')
+            # print(f'nu={self.nu}')
             for k,s in self.local_scenarios.items():
                 for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                     if punorm <= pvnorm:
@@ -616,7 +611,7 @@ class APH(ph_base.PHBase):
                     else:
                         factor = 1 + rho_val
                     s._mpisppy_model.rho[(ndn,i)] = pyo.value(s._mpisppy_model.rho[(ndn,i)]) * factor
-                    print(f'rho={pyo.value(s._mpisppy_model.rho[(ndn,i)])}')
+                    # print(f'rho={pyo.value(s._mpisppy_model.rho[(ndn,i)])}')
                     
         logging.debug('Iter {} assigned theta {} on rank {}'\
                       .format(self._PHIter, self.theta, self.cylinder_rank))
@@ -629,7 +624,6 @@ class APH(ph_base.PHBase):
         for k,s in self.local_scenarios.items():
             probs = pyo.value(s._mpisppy_probability)
             for (ndn, i) in s._mpisppy_data.nonant_indices:
-                print('Update_theta_zw, ndn=', ndn, 'i=', i)
                 Wupdate = self.theta * self.uk[k][(ndn,i)]
                 Ws = pyo.value(s._mpisppy_model.W[(ndn,i)]) + Wupdate # Step 19, Algorithm 2
                 # Special code for variable probabilities to mask W; rarely used.
