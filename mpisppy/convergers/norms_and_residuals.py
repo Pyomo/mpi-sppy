@@ -60,7 +60,7 @@ def scaled_primal_metric(PHB):
                                           if ndn_i[0] == ndn),
                                          dtype='d', count=nlen)
                 ### TBD: check this!!
-                local_sum[0] += np.dot(prob_array, scaled_norm^2)
+                local_sum[0] += np.dot(prob_array, scaled_norm**2)
     PHB.comms["ROOT"].Allreduce(local_sum, global_sum, op=MPI.SUM)
     return np.sqrt(global_sum[0])
 
@@ -90,7 +90,7 @@ def scaled_dual_metric(PHB, w_cache, curr_iter):
                                           if ndn_i[0] == ndn),
                                          dtype='d', count=nlen)
                 # tbd: does this give use the squared norm?
-                local_sum[0] += np.dot(prob_array, scaled_norm^2)
+                local_sum[0] += np.dot(prob_array, scaled_norm**2)
 
     PHB.comms["ROOT"].Allreduce(local_sum, global_sum, op=MPI.SUM)
     return np.sqrt(global_sum[0])
