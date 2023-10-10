@@ -107,6 +107,8 @@ def main():
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
                                   rho_setter = rho_setter)
+    hub_dict['opt_kwargs']['extensions'] = MultiExtension  # DLW: ???? (seems to not matter)
+
         
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]

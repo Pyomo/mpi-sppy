@@ -30,6 +30,7 @@ import mpisppy.utils.find_rho as find_rho
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.extensions.gradient_extension import Gradient_rho_extension
+from mpisppy.extensions.extension import MultiExtension
 
 __version__ = 0.2
 
@@ -42,7 +43,7 @@ def _create_cfg():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
-    cfg.rho_args()
+    cfg.grad_rho_args()
     cfg.gradient_args()
     cfg.solver_name = solver_name
     cfg.default_rho = 1
@@ -73,7 +74,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.grad_cost_file = '_test_grad_cost.csv'
         self.cfg.grad_rho_file= './_test_grad_rho.csv'
-        self.cfg.order_stat = 0.5
+        self.cfg.grad_order_stat = 0.5
         self.cfg.max_iterations = 0
         self.ph_object = self._create_ph_farmer()
 
@@ -154,16 +155,16 @@ class Test_find_rho_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
         self.ph_object = self._create_ph_farmer()
-        self.cfg.whatpath = './examples/rho_test_data/grad_cost.csv'
-        self.cfg.rho_file= './_test_rho.csv'
-        self.cfg.order_stat = 0.4
+        self.cfg.grad_whatpath = './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_rho_file= './_test_rho.csv'
+        self.cfg.grad_order_stat = 0.4
 
     def test_grad_rho_init(self):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
     
     def test_w_denom(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]        
         denom = {node.name: self.rho_object._w_denom(s0, node) for node in s0._mpisppy_node_list}
@@ -171,7 +172,7 @@ class Test_find_rho_farmer(unittest.TestCase):
 
     def test_prox_denom(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]
         denom = {node.name: self.rho_object._prox_denom(s0, node) for node in s0._mpisppy_node_list}
@@ -179,7 +180,7 @@ class Test_find_rho_farmer(unittest.TestCase):
 
     def test_grad_denom(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         denom = self.rho_object._grad_denom()
         self.assertAlmostEqual(denom[0], 21.48148148148148) 
@@ -193,7 +194,7 @@ class Test_find_rho_farmer(unittest.TestCase):
 
     def test_compute_rho(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         rho = self.rho_object.compute_rho(indep_denom=True)
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689654)
@@ -204,13 +205,13 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         self.rho_object.write_rho()
         try:
-            os.remove(self.cfg.rho_file)
+            os.remove(self.cfg.grad_rho_file)
         except:
             raise RuntimeError('find_rho.write_rho() did not write a csv file')
 
     def test_rho_setter(self):
-        self.cfg.rho_setter = True
-        self.cfg.rho_path = './examples/rho_test_data/rho.csv'
+        self.cfg.grad_rho_setter = True
+        self.cfg.grad_rho_path = './examples/rho_test_data/rho.csv'
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         self.set_rho = find_rho.Set_Rho(self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]
@@ -230,8 +231,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
     writen by DLW Sept 2023 TBD: this code should be re-organized"""
 
     def _run_ph_farmer(self):
-        ph_converger = NormRhoConverger
-        ph_extensions = Gradient_rho_extension
+        ext_classes = [Gradient_rho_extension]
         
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator
@@ -239,13 +239,15 @@ class Test_grad_extension_farmer(unittest.TestCase):
         all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
-        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs,
-                                  ph_extensions=ph_extensions, ph_converger = ph_converger)
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=MultiExtension,
+                                  ph_converger = None)  # ??? DLW Oct 2023: is this correct?
+        hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
 
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': self.cfg}
-        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
-        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}        
 
+        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': self.cfg}
+        hub_dict['opt_kwargs']['extensions'] = MultiExtension
         
         list_of_spoke_dict = list()
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
@@ -257,11 +259,12 @@ class Test_grad_extension_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
 
-    def test_norm_rho_updater_converger(self):
-        print("** test norm rho updater converger **")
+    def test_grad_extensions(self):
+        print("** test grad extensions **")
+        self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.max_iterations = 4
         self.ph_object = self._run_ph_farmer()
-        # TBD: verify that it did something
+        self.assertAlmostEqual(self.ph_object.conv, 12.1691811918913)
 
 
 if __name__ == '__main__':

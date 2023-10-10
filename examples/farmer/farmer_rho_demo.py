@@ -5,6 +5,7 @@
 # Use the gradient-based rho setter which sets adaptative gradient rho for PH.
 # mpiexec -np 2 python -m mpi4py farmer_rho_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
 # Edited by DLW Oct 2023
+# Note: norm_rho_updater is the Gabe thing
 
 import time
 import farmer
@@ -83,6 +84,8 @@ def main():
     if cfg.use_norm_rho_converger:
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+        elif cfg.grad_rho_setter:
+            raise RuntimeError("You cannot have--use-norm-rho-converger and --grad-rho-setter")            
         else:
             ph_converger = NormRhoConverger
     else:
@@ -100,9 +103,9 @@ def main():
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
-    ph_extensions = []
+    ext_classes = []
     if cfg.grad_rho_setter:
-        ph_extensions.append(Gradient_rho_extension)
+        ext_classes.append(Gradient_rho_extension)
 
     if cfg.run_async:
         raise RuntimeError("APH not supported in this example.")
@@ -113,15 +116,17 @@ def main():
                                   ph_extensions=MultiExtension,
                                   ph_converger=ph_converger,
                                   rho_setter=rho_setter)  # non-grad rho setter
-    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ph_extensions}
+    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
+    hub_dict['opt_kwargs']['extensions'] = MultiExtension  # DLW: ???? (seems to not matter)
 
     #gradient extension kwargs
     if cfg.grad_rho_setter:
+        ext_classes.append(Gradient_rho_extension)        
         hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': cfg}
     
-    ## hack in adaptive rho
+    ## Gabe's (way pre-pandemic) adaptive rho
     if cfg.use_norm_rho_updater:
-        hub_dict['opt_kwargs']['extensions'] = NormRhoUpdater
+        ext_classes.append(NormRhoUpdater)                
         hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
     # FWPH spoke
