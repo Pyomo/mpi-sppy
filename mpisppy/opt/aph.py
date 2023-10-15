@@ -209,7 +209,7 @@ class APH(ph_base.PHBase):
 
     #============================
     def compute_phis_summand(self):
-        # update phis, return summand (variable_probability is alread resolved)
+        # update phis, return summand (variable_probability is already resolved)
         summand = 0.0
         for k,s in self.local_scenarios.items():
             self.phis[k] = 0.0
