@@ -63,7 +63,6 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         ### end iter0 stuff
 
         xhatter.post_iter0()
-        print("about to attach xbars")
         _attach_xbars(self.opt)
         self.opt._save_nonants()  # make the cache
 
