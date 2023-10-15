@@ -113,9 +113,9 @@ class Find_Grad():
                     for v in node.nonant_vardata_list:
                         v.unfix()
 
-            grad_cost = {sname: self.compute_grad(sname, scenario)
+            grad_dict = {sname: self.compute_grad(sname, scenario)
                          for sname, scenario in self.ph_object.local_scenarios.items()}
-            local_costs = {(sname, var.name): grad_cost[sname][node.name, ix]
+            local_costs = {(sname, var.name): grad_dict[sname][node.name, ix]
                            for (sname, scenario) in self.ph_object.local_scenarios.items()
                            for node in scenario._mpisppy_node_list
                            for (ix, var) in enumerate(node.nonant_vardata_list)}
