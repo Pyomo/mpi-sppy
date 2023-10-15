@@ -113,7 +113,7 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
         opt (phbase or xhat_eval object): object with the local scenarios
         verbose (boolean):
             If True, prints verbose output.
-        repare (boolean):
+        repair (boolean):
             If True, normalize the W values so EW = 0
 
     """
@@ -167,8 +167,8 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
             Wbars = global_concats[ndn][:nlen]
 
             for i in range(nlen):
-                if abs(Wbars[i]) > opt.E1_tolerance:
-                    print(f"EW={Wbars[i]} for {node.nonant_vardata_list[i].name}")
+                if abs(Wbars[i]) > opt.E1_tolerance and opt.cylinder_rank == 0:
+                    print(f"EW={Wbars[i]} (should be zero) for {node.nonant_vardata_list[i].name}")
                     if repair:
                         print(f"   repairing in {k}")
                         s._mpisppy_model.W[(ndn,i)]._value -= Wbars[i]
