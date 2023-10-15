@@ -106,16 +106,16 @@ def _Compute_Xbar(opt, verbose=False):
                            opt.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                            pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 
-def _Compute_Wbar(opt, verbose=False):
+def _Compute_Wbar(opt, verbose=False, repair=True):
     """ Seldom used (mainly for diagnostics); gather  Wbar for each node.
 
     Args:
         opt (phbase or xhat_eval object): object with the local scenarios
         verbose (boolean):
             If True, prints verbose output.
+        repair (boolean):
+            If True, normalize the W values so EW = 0
 
-    NOTE: for now, we will just report on the non-zeros, since that is
-          the only use-case as of August 2023
     """
     nodenames = [] # to transmit to comms
     local_concats = {}   # keys are tree node names
@@ -168,8 +168,11 @@ def _Compute_Wbar(opt, verbose=False):
 
             for i in range(nlen):
                 if abs(Wbars[i]) > opt.E1_tolerance and opt.cylinder_rank == 0:
-                    print(f"EW={Wbars[i]} for {node.nonant_vardata_list[i].name}")
-
+                    print(f"EW={Wbars[i]} (should be zero) for {node.nonant_vardata_list[i].name}")
+                    if repair:
+                        print(f"   repairing in {k}")
+                        s._mpisppy_model.W[(ndn,i)]._value -= Wbars[i]
+ 
 
 #======================
 
