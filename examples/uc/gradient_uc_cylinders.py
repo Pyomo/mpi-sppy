@@ -41,8 +41,7 @@ def _parse_args():
     cfg.cross_scenario_cuts_args()
     cfg.gradient_args()
     cfg.grad_rho_args()
-    print("dropping ob args")
-    #####cfg.ph_ob_args()
+    cfg.ph_ob_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
@@ -123,8 +122,6 @@ def main():
         results_dir_name="gradient_uc_cylinders_tracking_W"
         create_dir_structure(results_dir_name, hub_dict)
 
-    print("dropping ph_ob!!!")
-    """
     if cfg.ph_ob:
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                             scenario_creator_kwargs=scenario_creator_kwargs,
@@ -134,7 +131,6 @@ def main():
             # this is necessary to write Ws and xbars (old code)
             ph_ob_spoke['opt_kwargs']['options']['ph_ob_write_W'] = True
             ph_ob_spoke['opt_kwargs']['options']['ph_ob_write_xbar'] = True
-    """
     
     if cfg.grad_rho_setter:
         ext_classes.append(Gradient_rho_extension)
@@ -220,11 +216,8 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cuts_spoke)
-    print("dropping ph_ob!!!")
-    """
     if cfg.ph_ob:
         list_of_spoke_dict.append(ph_ob_spoke)
-    """
     if cfg.lagranger:
         list_of_spoke_dict.append(lagranger_spoke)
 
