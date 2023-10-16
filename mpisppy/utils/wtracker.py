@@ -29,11 +29,18 @@ class WTracker():
     
     def __init__(self, PHB):
         self.local_Ws = dict()  #  [iteration][sname](list of W vals)
+        self.local_xbars = dict()  #  [iteration][sname](list of xbar vals)
         self.PHB = PHB
         # get the nonant variable names, bound by index to W vals
         arbitrary_scen = PHB.local_scenarios[list(PHB.local_scenarios.keys())[0]]
         self.varnames = [var.name for node in arbitrary_scen._mpisppy_node_list
                          for (ix, var) in enumerate(node.nonant_vardata_list)]
+        if hasattr(self.PHB, '_PHIter'):
+            self.ph_iter = self.PHB._PHIter
+        elif hasattr(self.PHB, 'A_iter'):
+            self.ph_iter = self.PHB.A_iter
+        elif hasattr(self.PHB, 'B_iter'):
+            self.ph_iter = self.PHB.B_iter
 
         
     def grab_local_Ws(self):
@@ -48,8 +55,21 @@ class WTracker():
             self.ph_iter = self.PHB.B_iter
         scenario_Ws = {sname: [w._value for w in scenario._mpisppy_model.W.values()]
                        for (sname, scenario) in self.PHB.local_scenarios.items()}
-
         self.local_Ws[self.ph_iter] = scenario_Ws
+
+    def grab_local_xbars(self):
+        """ Get the xbar values from the PHB that we are following
+            NOTE: we assume this is called only once per iteration
+        """
+        if hasattr(self.PHB, '_PHIter'): #update the iter value
+            self.ph_iter = self.PHB._PHIter
+        elif hasattr(self.PHB, 'A_iter'):
+            self.ph_iter = self.PHB.A_iter
+        elif hasattr(self.PHB, 'B_iter'):
+            self.ph_iter = self.PHB.B_iter
+        scenario_xbars = {sname: [s._mpisppy_model.xbars[ndn_i]._value for ndn_i in s._mpisppy_data.nonant_indices]
+                          for (sname, s) in self.PHB.local_scenarios.items()}
+        self.local_xbars[self.ph_iter] = scenario_xbars
 
 
     def compute_moving_stats(self, wlen, offsetback=0):
@@ -63,7 +83,7 @@ class WTracker():
                                   OR returns a warning string
         NOTE: we sort of treat iterations as one-based
         """
-        cI = self.PHB._PHIter
+        cI = self.ph_iter
         li = cI - offsetback
         fi = max(1, li - wlen)
         if li - fi < wlen:
@@ -71,11 +91,12 @@ class WTracker():
                    f" offsetback {offsetback}\n")
         else:
             window_stats = dict()
+            wlist = dict()
             for idx, varname in enumerate(self.varnames):
                 for sname in self.PHB.local_scenario_names:
-                    wlist = [self.local_Ws[i][sname][idx] for i in range(fi, li+1)]
-                    window_stats[(varname, sname)] = (np.mean(wlist), np.std(wlist))
-            return window_stats
+                    wlist[(varname, sname)] = [self.local_Ws[i][sname][idx] for i in range(fi, li+1)]
+                    window_stats[(varname, sname)] = (np.mean(wlist[(varname, sname)]), np.std(wlist[(varname, sname)]))
+            return wlist, window_stats
 
 
     def report_by_moving_stats(self, wlen, reportlen=None, stdevthresh=None, file_prefix=''):
@@ -88,19 +109,19 @@ class WTracker():
         NOTE:
             For large problems, this will create a lot of garbage for the collector
         """
-        fname = f"{file_prefix}_summary_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.txt"
-        stname = f"{file_prefix}_stdev_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.csv"
-        cvname = f"{file_prefix}_cv_iter{self.PHB._PHIter}_rank{self.PHB.global_rank}.csv"
+        fname = f"{file_prefix}_summary_iter{self.ph_iter}_rank{self.PHB.global_rank}.txt"
+        stname = f"{file_prefix}_stdev_iter{self.ph_iter}_rank{self.PHB.global_rank}.csv"
+        cvname = f"{file_prefix}_cv_iter{self.ph_iter}_rank{self.PHB.global_rank}.csv"
+
         if self.PHB.cylinder_rank == 0:
             print(f"Writing (a) W tracker report(s) to files with names like {fname}, {stname}, and {cvname}")
         with open(fname, "w") as fil:
-            fil.write(f"Moving Stats W Report at iteration {self.PHB._PHIter}\n")
+            fil.write(f"Moving Stats W Report at iteration {self.ph_iter}\n")
             fil.write(f"    {len(self.varnames)} nonants\n"
                       f"    {len(self.PHB.local_scenario_names)} scenarios\n")
             
         total_traces = len(self.varnames) * len(self.PHB.local_scenario_names)
-        
-        wstats = self.compute_moving_stats(wlen)
+        wstats = self.compute_moving_stats(wlen)[1]
         if not isinstance(wstats, str):
             Wsdf = pd.DataFrame.from_dict(wstats, orient='index',
                                           columns=["mean", "stdev"])
@@ -137,29 +158,110 @@ class WTracker():
 
 
     def W_diff(self):
-        """ Compute the norm of the difference between to consecutive Ws / num_scenarios.
+        """ Compute the scaled norm of the difference between to consecutive Ws / num_scenarios.
 
         Returns:
            global_diff (float): difference between to consecutive Ws
 
         """
-        cI = self.PHB._PHIter
-        self.grab_local_Ws()
+        cI = self.ph_iter
         self.local_Ws[-1] = self.local_Ws[0]
-        global_diff = np.zeros(1)
-        local_diff = np.zeros(1)
+        global_diff_norm = np.zeros(1)
+        local_diff_norm = np.zeros(1)
+        global_w_norm = np.zeros(1)
+        local_w_norm = np.zeros(1)
         varcount = 0
-        local_diff[0] = 0
         for (sname, scenario) in self.PHB.local_scenarios.items():
             local_wdiffs = [w - w1
                             for w, w1 in zip(self.local_Ws[cI][sname], self.local_Ws[cI-1][sname])]
+            local_w = self.local_Ws[cI][sname]
             for wdiff in local_wdiffs:
-                local_diff[0] += abs(wdiff)
+                local_diff_norm[0] += abs(wdiff)
                 varcount += 1
-        local_diff[0] /= varcount
-        self.PHB.comms["ROOT"].Allreduce(local_diff, global_diff, op=MPI.SUM)
+            for w in local_w:
+                local_w_norm[0] += abs(w)
+        local_diff_norm[0] /= varcount
+        local_w_norm[0] /= varcount
+        self.PHB.comms["ROOT"].Allreduce(local_diff_norm, global_diff_norm, op=MPI.SUM)
+        self.PHB.comms["ROOT"].Allreduce(local_w_norm, global_w_norm, op=MPI.SUM)
+        scaled_diff_norm = np.divide(global_diff_norm, 1)#global_w_norm)
+        return scaled_diff_norm[0]
 
-        return global_diff[0] / self.PHB.n_proc
+
+    def check_cross_zero(self, wlen, offsetback=0):
+        """NOTE: we assume this is called after grab_local_Ws
+        """
+        cI = self.ph_iter
+        li = cI - offsetback
+        fi = max(1, li - wlen)
+        if li - fi < wlen:
+            return (f"WTRACKER WARNING: Not enough iterations ({cI}) for window len {wlen} and"
+                   f" offsetback {offsetback}\n")
+        else:
+            print(f"{np.shape(self.local_Ws)}")
+            wlist = dict()
+            for i in range(fi+1, li+1):
+                for sname, _ in self.PHB.local_scenarios.items():
+                    sgn_curr_iter = np.sign(np.array(self.local_Ws[fi][sname]))
+                    sgn_last_iter = np.sign(np.array(self.local_Ws[fi-1][sname]))
+                    if np.all(sgn_curr_iter!=sgn_last_iter):
+                        return (f"WTRACKER BAD: Ws crossed zero, sensed at iter {i}")
+            return (f"WTRACKER GOOD: Ws did not cross zero over the past {wlen} iters")
+
+    def check_w_stdev(self, wlen, stdevthresh, offsetback=0):
+        _, window_stats = self.compute_moving_stats(wlen)
+        cI = self.ph_iter
+        li = cI - offsetback
+        fi = max(1, li - wlen)
+        if li - fi < wlen:
+            return (f"WTRACKER WARNING: Not enough iterations ({cI}) for window len {wlen} and"
+                    f" offsetback {offsetback}\n")
+        else:
+            for idx, varname in enumerate(self.varnames):
+                for sname in self.PHB.local_scenario_names:
+                    if np.abs(window_stats[(varname, sname)][1]) >= np.abs(stdevthresh * window_stats[(varname, sname)][0]): #stdev scaled by mean
+                        return (f"WTRACKER BAD: at least one scaled stdev is bigger than {stdevthresh}")
+            return (f"WTRACKER GOOD: all scaled stdev are smaller than {stdevthresh}")
+
+    def Ws_cross_zero(self, wlen, offsetback=0):
+        # FOR GRADIENT RHO: copy of check_cross_zero which returns boolean (True if Ws cross zero)
+        """NOTE: we assume this is called after grab_local_Ws
+        """
+        cI = self.ph_iter
+        li = cI - offsetback
+        fi = max(1, li - wlen)
+        if li - fi < wlen:
+            print(f"WTRACKER WARNING: Not enough iterations ({cI}) for window len {wlen} and"
+                  f" offsetback {offsetback}\n")
+            pass
+        else:
+            wlist = dict()
+            for i in range(fi+1, li+1):
+                for sname, _ in self.PHB.local_scenarios.items():
+                    sgn_curr_iter = np.sign(np.array(self.local_Ws[fi][sname]))
+                    sgn_last_iter = np.sign(np.array(self.local_Ws[fi-1][sname]))
+                    if np.all(sgn_curr_iter!=sgn_last_iter):
+                        return True
+            return False
+
+    def w_stdev_above_thresh(self, wlen, stdevthresh, offsetback=0):
+        # FOR GRADIENT RHO: copy of w_stdev which returns boolean (True if stdev above threshold)
+        _, window_stats = self.compute_moving_stats(wlen)
+        cI = self.ph_iter
+        li = cI - offsetback
+        fi = max(1, li - wlen)
+        if li - fi < wlen:
+            print(f"WTRACKER WARNING: Not enough iterations ({cI}) for window len {wlen} and"
+                  f" offsetback {offsetback}\n")
+            pass
+        else:
+            for idx, varname in enumerate(self.varnames):
+                for sname in self.PHB.local_scenario_names:
+                    if np.abs(window_stats[(varname, sname)][1]) >= np.abs(stdevthresh * window_stats[(varname, sname)][0]): #stdev scaled by mean
+                        return True
+            return False
+
+
 
 
 if __name__ == "__main__":
@@ -203,6 +305,6 @@ if __name__ == "__main__":
     for i in range(wlen):
         ph._PHIter += 1
         wt.grab_local_Ws()
-    wstats = wt.compute_moving_stats(wlen)
+    _, wstats = wt.compute_moving_stats(wlen)
 
     wt.report_by_moving_stats(wlen, reportlen=6, stdevthresh=1e-16)

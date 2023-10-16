@@ -58,11 +58,7 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._update_E1()  
         if (abs(1 - self.opt.E1) > self.opt.E1_tolerance):
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.opt.E1)
-                print("E1_tolerance = ", self.opt.E1_tolerance)
-            quit()
+            raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
 
         ### end iter0 stuff
 

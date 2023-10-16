@@ -813,17 +813,10 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
-            if self.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.E1)
-                print("E1_tolerance = ", self.E1_tolerance)
-            quit()
+            raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
         feasP = self.feas_prob()
         if feasP != self.E1:
-            if self.cylinder_rank == 0:
-                print("ERROR")
-                print("Infeasibility detected; E_feas, E1=", feasP, self.E1)
-            quit()
+            raise RuntimeError(f"Infeasibility detected; E_feas={feasp}, E1={self.E1}")
 
         """
         with open('mpi.out-{}'.format(rank), 'w') as fd:
