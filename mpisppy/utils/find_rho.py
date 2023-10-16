@@ -164,8 +164,7 @@ class Find_Rho():
            rho (float): rho value
         """
         alpha = self.cfg.grad_order_stat
-        assert alpha != -1.0, "you need to set the order statistic parameter for rho using --grad-order-stat"
-        assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max"
+        assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max for grad_order_stat"
         rho_mean = np.dot(rho_list, prob_list)
         rho_min, rho_max = np.min(rho_list), np.max(rho_list)
         if alpha == 0.5:

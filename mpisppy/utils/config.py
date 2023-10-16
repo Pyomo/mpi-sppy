@@ -644,7 +644,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("grad_order_stat",
                            description="order statistic for gradient based rho (must be between 0 and 1)",
                            domain=float,
-                           default=-1.0)
+                           default=0.5)
 
     def grad_rho_args(self):
         self.add_to_config("grad_whatpath",
