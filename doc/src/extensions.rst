@@ -21,7 +21,8 @@ Multiple Extensions
 
 To employ multiple PH extensions, use ``mpisppy.extensions.extension import MultiExtension``
 that allows you to give a list of extensions that will fire in order
-at each callout point. See, e.g. ``examples.sizes.sizes_demo.py`` for an
+at each callout point. See, e.g. ``examples.sizes.sizes_demo.py`` or
+``examples.farmer.farmer_rho_demo.py`` for an
 example of use.
 
 
@@ -74,11 +75,12 @@ norm_rho_updater
 
 This extension adjust rho dynamically. The code is in ``mpisppy.extensions.norm_rho_updater.py``
 and there is an accompanying converger in ``mpisppy.convergers.norm_rho_converger``. An
-example of use is shown in ``examples.farmer.farmer_cylinders.py``.
+example of use is shown in ``examples.farmer.farmer_cylinders.py``. This is
+the original Gabe H. dynamic rho.
 
 
 rho_setter
-==========
+^^^^^^^^^^
 
 Per variable rho values (mainly for PH) can be set using a function
 that takes a scenario (a Pyomo ``ConcreteModel``) as its only
@@ -92,11 +94,23 @@ There is an example of the function in the sizes example (``_rho_setter``).
 
 
 wtracker_extension
-==================
+^^^^^^^^^^^^^^^^^^
 
 The wtracker_extension outputs a report about the convergence (or really, lack thereof) of
 W values.
 An example of its use is shown in ``examples.sizes.sizes_demo.py``
+
+
+gradient_extension
+^^^^^^^^^^^^^^^^^^
+The gradient_extension sets gradient-based rho for PH.
+An example of its use is shown in  ``examples.farmer.farmer_rho_demo.py``
+There are options in ``cfg`` to control dynamic updates.
+
+mult_rho_updater
+^^^^^^^^^^^^^^^^
+
+This extension does a simple multiplicative update of rho.
 
 
 variable_probability
@@ -119,12 +133,6 @@ The variable probabilities impact the computation of
 .. Note::
    The only xhatter that is likely to work with variable probabilities is xhatxbar. The others
    are likely to execute without error messages but will not find good solutions.
-
-
-gradient_extension
-==================
-The gradient_extension sets adaptative gradient-based rho for PH.
-An example of its use is shown in  ``examples.farmer.farmer_rho_demo.py``
 
 
 Objective function considerations
