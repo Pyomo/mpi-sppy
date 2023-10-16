@@ -454,6 +454,22 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
 
+    def ph_ob_args(self):
+
+        self.add_to_config("ph_ob",
+                            description="use PH to compute outer bound",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("ph_ob_rho_rescale_factors_json",
+                            description="json file: rho rescale factors (default None)",
+                            domain=str,
+                            default=None)
+        self.add_to_config("ph_ob_gradient_rho",
+                            description="use gradient-based rho in PH OB",
+                            domain=bool,
+                            default=False)
+
+
     def xhatlooper_args(self):
 
         self.add_to_config('xhatlooper',
