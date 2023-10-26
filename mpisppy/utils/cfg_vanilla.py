@@ -423,13 +423,15 @@ def xhatlooper_spoke(
 
 
 def xhatxbar_spoke(
-    cfg,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    variable_probability=None
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        variable_probability=None,
+        ph_extensions=None
 ):
+    # Oct 2023: make sure the ph_extensions is factored for all xhatters
 
     shoptions = shared_options(cfg)
     xhat_options = copy.deepcopy(shoptions)
@@ -449,7 +451,8 @@ def xhatxbar_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "variable_probability": variable_probability
+            "variable_probability": variable_probability,
+            "ph_extensions": ph_extensions
         },
     }
     return xhatxbar_dict
