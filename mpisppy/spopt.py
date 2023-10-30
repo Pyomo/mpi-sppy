@@ -6,6 +6,7 @@ import logging
 import time
 import math
 import inspect
+import traceback
 
 import numpy as np
 from mpisppy import MPI
@@ -35,7 +36,7 @@ class SPOpt(SPBase):
             extension_kwargs=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
-            E1_tolerance=1e-5
+            E1_tolerance=1e-5,
     ):
         super().__init__(
             options,
