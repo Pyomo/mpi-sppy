@@ -15,8 +15,17 @@ from pyomo.core import Objective
 from mpisppy import MPI, haveMPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 from pyomo.core.expr.numeric_expr import LinearExpression
+from pyomo.opt import SolutionStatus, TerminationCondition
 
 from mpisppy import tt_timer, global_toc
+
+def not_good_enough_results(results):
+    return (results is None) or (len(results.solution) == 0) or \
+        (results.solution(0).status == SolutionStatus.infeasible) or \
+        (results.solver.termination_condition == TerminationCondition.infeasible) or \
+        (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
+        (results.solver.termination_condition == TerminationCondition.unbounded)
+
 
 _spin_the_wheel_move_msg = \
         "spin_the_wheel should now be used as the class "\

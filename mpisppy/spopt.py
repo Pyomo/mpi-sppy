@@ -12,7 +12,7 @@ import numpy as np
 from mpisppy import MPI
 
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
+from pyomo.opt import SolverFactory
 
 from mpisppy import global_toc
 from mpisppy.spbase import SPBase
@@ -173,12 +173,7 @@ class SPOpt(SPBase):
             solver_exception = e
 
         pyomo_solve_time = time.time() - solve_start_time
-        if (results is None) or (len(results.solution) == 0) or \
-                (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-                (results.solver.termination_condition == TerminationCondition.unbounded):
-
+        if sputils.not_good_enough_results(results):
             s._mpisppy_data.scenario_feasible = False
 
             if gripe:
