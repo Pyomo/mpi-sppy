@@ -438,7 +438,6 @@ def xhatxbar_spoke(
     xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhat_options["xhat_xbar_options"] = {
         "xhat_solver_options": shoptions["iterk_solver_options"],
-        "scen_limit": cfg.xhat_scen_limit,
         "dump_prefix": "delme",
         "csvname": "xbar.csv",
     }
