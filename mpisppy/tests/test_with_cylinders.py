@@ -19,7 +19,7 @@ __version__ = 0.1
 
 from mpi4py import MPI
 comm = MPI.COMM_WORLD
-assert comm.size > 1, "These tests need at least two ranks"
+assert comm.size == 2, "These tests need two ranks"
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -72,9 +72,10 @@ class Test_farmer_with_cylinders(unittest.TestCase):
 
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
-        if wheel.strata_rank == 0:
-            ph_object = wheel.spcomm.opt
-            print(f"{ph_object._TestExtension_who_is_called =}")
+        if wheel.global_rank == 1:
+            xhat_object = wheel.spcomm.opt
+            print(f"{xhat_object._TestExtension_who_is_called =}")
+            self.assertIn('post_solve', xhat_object._TestExtension_who_is_called)
 
 if __name__ == '__main__':
     unittest.main()

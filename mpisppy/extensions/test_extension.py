@@ -15,48 +15,49 @@ class TestExtension(mpisppy.extensions.extension.Extension):
     """
     def __init__(self, spo):
         super().__init__(spo)
-        self.who_is_called = list()
+        self.who_is_called = set()
+        # make it a little easier to find out who has been called
+        self.opt._TestExtension_who_is_called = self.who_is_called        
 
         
     def pre_solve(self, subproblem):
-        self.who_is_called.append("pre_solve")
+        self.who_is_called.add("pre_solve")
 
         
     def post_solve_loop(self):
-        self.who_is_called.append("post_solve_loop")
+        self.who_is_called.add("post_solve_loop")
 
         
     def post_solve(self, subproblem, results):
-        self.who_is_called.append("post_solve")
+        self.who_is_called.add("post_solve")
         return results
 
         
     def pre_iter0(self):
-        self.who_is_called.append("pre_iter0")
+        self.who_is_called.add("pre_iter0")
 
         
     def post_iter0(self):
-        self.who_is_called.append("post_iter0")
+        self.who_is_called.add("post_iter0")
 
 
     def post_iter0_after_sync(self):
-        self.who_is_called.append("post_iter0_after_sync")
+        self.who_is_called.add("post_iter0_after_sync")
         
         
     def miditer(self):
-        self.who_is_called.append("miditer")
+        self.who_is_called.add("miditer")
 
     
     def enditer(self):
-        self.who_is_called.append("enditer")
+        self.who_is_called.add("enditer")
+        print(f"end_iter {self.who_is_called =}")
 
         
     def enditer_after_sync(self):        
-        self.who_is_called.append("enditer_after_sync")
+        self.who_is_called.add("enditer_after_sync")
 
         
     def post_everything(self):
-        self.who_is_called.append("post_everything")
-        # make it easy to find out who has been called
-        self.opt._TestExtension_who_is_called = self.who_is_called
+        self.who_is_called.add("post_everything")
 
