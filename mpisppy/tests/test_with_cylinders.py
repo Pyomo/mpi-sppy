@@ -42,7 +42,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
     def _create_stuff(self):
         # assumes setup has been called; very specific...
         self.cfg.num_scens = 3
-        self.cfg.max_iterations = 3
+        self.cfg.max_iterations = 5
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
         all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
@@ -70,6 +70,31 @@ class Test_farmer_with_cylinders(unittest.TestCase):
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    ph_extensions=TestExtension)
         list_of_spoke_dict.append(xhatxbar_spoke)
+
+        wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+        wheel.spin()
+        if wheel.global_rank == 1:
+            xhat_object = wheel.spcomm.opt
+            print(f"{xhat_object._TestExtension_who_is_called =}")
+            self.assertIn('post_solve', xhat_object._TestExtension_who_is_called)
+
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_xhatshuffle_extended(self):
+        print("begin xhatshuffle_extended with extension dropped")
+        from mpisppy.extensions.test_extension import TestExtension
+        
+        self.cfg.xhatxbar_args()
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
+
+        list_of_spoke_dict = list()
+        # xhat shuffle bound spoke
+        ext = TestExtension
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
+                                scenario_creator_kwargs=scenario_creator_kwargs,
+                                ph_extensions=ext)
+        list_of_spoke_dict.append(xhatshuffle_spoke)
 
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()

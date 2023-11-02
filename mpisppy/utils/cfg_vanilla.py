@@ -299,8 +299,8 @@ def fwph_spoke(
         "stop_check_tol": cfg.fwph_stop_check_tol,
         "solver_name": cfg.solver_name,
         "FW_verbose": cfg.verbose,
-        "mip_solver_options" : mip_solver_options,
-        "qp_solver_options" : qp_solver_options,
+        "mip_solver_options": mip_solver_options,
+        "qp_solver_options": qp_solver_options,
     }
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,
@@ -318,6 +318,7 @@ def fwph_spoke(
     return fw_dict
 
 
+# The next function is to provide some standardization
 def _PHBase_spoke_foundation(
         spoke_class,
         cfg,
@@ -327,7 +328,9 @@ def _PHBase_spoke_foundation(
         scenario_creator_kwargs=None,
         rho_setter=None,
         all_nodenames=None,
+        ph_extensions=None,
         ):
+    # only the shared options
     shoptions = shared_options(cfg)
     my_options = copy.deepcopy(shoptions)  # extra safe...    
     spoke_dict = {
@@ -339,10 +342,42 @@ def _PHBase_spoke_foundation(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,
-            "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames,
         }
     }
+    if all_nodenames is not None:
+        spoke_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
+    if rho_setter is not None:
+        spoke_dict["opt_kwargs"]["rho_setter"] = rho_setter
+    if ph_extensions is not None:
+        spoke_dict["opt_kwargs"]["extensions"] = ph_extensions
+
+    return spoke_dict
+
+def _Xhat_Eval_spoke_foundation(
+        spoke_class,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        rho_setter=None,
+        all_nodenames=None,
+        ph_extensions=None,
+        ):
+    spoke_dict = _PHBase_spoke_foundation(
+        spoke_class,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions)
+    spoke_dict["opt_class"] = Xhat_Eval
+    if ph_extensions is not None:
+        spoke_dict["opt_kwargs"]["ph_extensions"] = ph_extensions
+        del spoke_dict["opt_kwargs"]["extensions"]  # ph_extensions in Xhat_Eval
     return spoke_dict
 
 
@@ -376,7 +411,8 @@ def lagrangian_spoke(
     return lagrangian_spoke
 
 
-# special lagrangian that computes its own xhat and W
+# special lagrangian: computes its own xhat and W (does not seem to work well)
+# ph_ob_spoke is probably better
 def lagranger_spoke(
     cfg,
     scenario_creator,
@@ -386,20 +422,16 @@ def lagranger_spoke(
     rho_setter=None,
     all_nodenames = None,
 ):
-    shoptions = shared_options(cfg)
-    lagranger_spoke = {
-        "spoke_class": LagrangerOuterBound,
-        "opt_class": PHBase,
-        "opt_kwargs": {
-            "options": shoptions,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            'scenario_denouement': scenario_denouement,
-            "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames
-        }
-    }
+    lagranger_spoke = _PHBase_spoke_foundation(
+        LagrangerOuterBound,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+    )
     if cfg.lagranger_iter0_mipgap is not None:
         lagranger_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
             ["mipgap"] = cfg.lagranger_iter0_mipgap
@@ -420,28 +452,26 @@ def xhatlooper_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    ph_extensions=None,
 ):
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhat_options["xhat_looper_options"] = {
+    xhatlooper_dict = _Xhat_Eval_spoke_foundation(
+        XhatLooperInnerBound,        
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
+
+    xhatlooper_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhatlooper_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": shoptions["iterk_solver_options"],
-        "scen_limit": cfg.xhat_scen_limit,
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
-    xhatlooper_dict = {
-        "spoke_class": XhatLooperInnerBound,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement
-        },
-    }
+    
     return xhatlooper_dict
 
 
@@ -454,29 +484,25 @@ def xhatxbar_spoke(
         variable_probability=None,
         ph_extensions=None
 ):
-    # Oct 2023: make sure the ph_extensions is factored for all xhatters
+    xhatxbar_dict = _Xhat_Eval_spoke_foundation(
+        XhatXbarInnerBound,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhat_options["xhat_xbar_options"] = {
-        "xhat_solver_options": shoptions["iterk_solver_options"],
+    xhatxbar_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
+    xhatxbar_dict["opt_kwargs"]["options"]["xhat_xbar_options"] = {
+        "xhat_solver_options": xhatxbar_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
-        "csvname": "xbar.csv",
+        "csvname": "looper.csv",
     }
-    xhatxbar_dict = {
-        "spoke_class": XhatXbarInnerBound,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement,
-            "variable_probability": variable_probability,
-            "ph_extensions": ph_extensions
-        },
-    }
+    
+    xhatxbar_dict["opt_kwargs"]["variable_probability"] = variable_probability
+
     return xhatxbar_dict
 
 
@@ -487,35 +513,31 @@ def xhatshuffle_spoke(
     all_scenario_names,
     all_nodenames=None,
     scenario_creator_kwargs=None,
+    ph_extensions=None,
 ):
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhat_options["xhat_looper_options"] = {
-        "xhat_solver_options": shoptions["iterk_solver_options"],
+    xhatshuffle_dict = _Xhat_Eval_spoke_foundation(
+        XhatShuffleInnerBound,        
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        all_nodenames=all_nodenames,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
+    xhatshuffle_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
+    xhatshuffle_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
+        "xhat_solver_options": xhatshuffle_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
     if _hasit(cfg, "add_reversed_shuffle"):
-        xhat_options["xhat_looper_options"]["reverse"] = cfg.add_reversed_shuffle
+        xhatshuffle_dict["opt_kwargs"]["options"]["xhat_looper_options"]["reverse"] = cfg.add_reversed_shuffle
     if _hasit(cfg, "add_reversed_shuffle"):
-        xhat_options["xhat_looper_options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
+        xhatshuffle_dict["opt_kwargs"]["options"]["xhatshuffle_iter_step"] = cfg.xhatshuffle_iter_step
 
-    xhatlooper_dict = {
-        "spoke_class": XhatShuffleInnerBound,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames
-        },
-    }
-
-    return xhatlooper_dict
+    return xhatshuffle_dict
 
 
 def xhatspecific_spoke(
@@ -526,30 +548,19 @@ def xhatspecific_spoke(
     scenario_dict,
     all_nodenames=None,
     scenario_creator_kwargs=None,
+        ph_extensions=None,
 ):
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options["xhat_specific_options"] = {
-        "xhat_solver_options": shoptions["iterk_solver_options"],
-        "xhat_scenario_dict": scenario_dict,
-        "csvname": "specific.csv",
-    }
-
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhatspecific_dict = {
-        "spoke_class": XhatSpecificInnerBound,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames
-        },
-    }
-
+    xhatspecific_dict = _Xhat_Eval_spoke_foundation(
+        XhatSpecificInnerBound,        
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
+    xhatspecific_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat    
     return xhatspecific_dict
 
 def xhatlshaped_spoke(
@@ -558,23 +569,20 @@ def xhatlshaped_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    ph_extensions=None,
 ):
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
+    xhatlshaped_dict = _Xhat_Eval_spoke_foundation(
+        XhatLShapedInnerBound,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
+    xhatlshaped_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat    
 
-    xhatlshaped_dict = {
-        "spoke_class": XhatLShapedInnerBound,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement
-        },
-    }
     return xhatlshaped_dict
 
 def slammax_spoke(
@@ -583,23 +591,20 @@ def slammax_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    ph_extensions=None,
 ):
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhatlooper_dict = {
-        "spoke_class": SlamMaxHeuristic,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement
-        },
-    }
-    return xhatlooper_dict
+    slammax_dict = _Xhat_Eval_spoke_foundation(
+        SlamMaxHeuristic,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
+    slammax_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for slamming
+    return slammax_dict
 
 def slammin_spoke(
     cfg,
@@ -607,23 +612,20 @@ def slammin_spoke(
     scenario_denouement,
     all_scenario_names,
     scenario_creator_kwargs=None,
+    ph_extensions=None,
 ):
+    slammin_dict = _Xhat_Eval_spoke_foundation(
+        SlamMinHeuristic,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+    )
+    slammin_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for slamming
+    return slammin_dict
 
-    shoptions = shared_options(cfg)
-    xhat_options = copy.deepcopy(shoptions)
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhatlooper_dict = {
-        "spoke_class": SlamMinHeuristic,
-        "opt_class": Xhat_Eval,
-        "opt_kwargs": {
-            "options": xhat_options,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            "scenario_denouement": scenario_denouement
-        },
-    }
-    return xhatlooper_dict
 
 def cross_scenario_cuts_spoke(
     cfg,
