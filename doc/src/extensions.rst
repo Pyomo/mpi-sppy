@@ -25,6 +25,15 @@ at each callout point. See, e.g. ``examples.sizes.sizes_demo.py`` or
 ``examples.farmer.farmer_rho_demo.py`` for an
 example of use.
 
+.. note::
+   The ``MultiExtension`` constructor in ``mpisppy.extensions.extensions.py``
+   takes a list of extensions classes in addition to the optimization object
+   (e.g. inherited from ``PHBase``). However, ``cfg_vanilla.py`` wants
+   to see the class ``MultiExtension`` in the hub or cylinder dict entry
+   for ``["opt_kwargs"]["extensions"]`` and then wants to see a list of
+   extension classes in ``["opt_kwargs"]["extension_kwargs"]["ext_classes"]``.
+   Some examples do both, which can be little confusing.
+
 
 PH extensions
 -------------
