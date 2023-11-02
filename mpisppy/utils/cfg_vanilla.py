@@ -318,6 +318,34 @@ def fwph_spoke(
     return fw_dict
 
 
+def _PHBase_spoke_foundation(
+        spoke_class,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        rho_setter=None,
+        all_nodenames=None,
+        ):
+    shoptions = shared_options(cfg)
+    my_options = copy.deepcopy(shoptions)  # extra safe...    
+    spoke_dict = {
+        "spoke_class": spoke_class,
+        "opt_class": PHBase,
+        "opt_kwargs": {
+            "options": my_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            'scenario_denouement': scenario_denouement,
+            "rho_setter": rho_setter,
+            "all_nodenames": all_nodenames,
+        }
+    }
+    return spoke_dict
+
+
 def lagrangian_spoke(
     cfg,
     scenario_creator,
@@ -327,21 +355,16 @@ def lagrangian_spoke(
     rho_setter=None,
     all_nodenames=None,
 ):
-    shoptions = shared_options(cfg)
-    lagrangian_spoke = {
-        "spoke_class": LagrangianOuterBound,
-        "opt_class": PHBase,
-        "opt_kwargs": {
-            "options": shoptions,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            'scenario_denouement': scenario_denouement,
-            "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames
-
-        }
-    }
+    lagrangian_spoke = _PHBase_spoke_foundation(
+        LagrangianOuterBound,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+    )
     if cfg.lagrangian_iter0_mipgap is not None:
         lagrangian_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
             ["mipgap"] = cfg.lagrangian_iter0_mipgap

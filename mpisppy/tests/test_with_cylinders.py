@@ -29,7 +29,6 @@ def _create_cfg():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
-    cfg.xhatxbar_args()
     cfg.solver_name = solver_name
     cfg.default_rho = 1
     return cfg
@@ -61,6 +60,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
                      "no solver is available")
     def test_xhatxbar_extended(self):
         from mpisppy.extensions.test_extension import TestExtension
+        
+        self.cfg.xhatxbar_args()
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
 
         list_of_spoke_dict = list()
@@ -76,6 +77,27 @@ class Test_farmer_with_cylinders(unittest.TestCase):
             xhat_object = wheel.spcomm.opt
             print(f"{xhat_object._TestExtension_who_is_called =}")
             self.assertIn('post_solve', xhat_object._TestExtension_who_is_called)
+
+
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_lagrangian(self):
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
+
+        self.cfg.lagrangian_args()
+        list_of_spoke_dict = list()
+        # xhat shuffle bound spoke
+        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
+                                                    scenario_creator_kwargs=scenario_creator_kwargs,)
+        list_of_spoke_dict.append(lagrangian_spoke)
+
+        wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+        wheel.spin()
+        if wheel.global_rank == 1:
+            lagrangian_object = wheel.spcomm.opt
+            # TBD: check something
+            print(f"{lagrangian_object.extensions= }")
+
 
 if __name__ == '__main__':
     unittest.main()
