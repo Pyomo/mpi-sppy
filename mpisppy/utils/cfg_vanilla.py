@@ -467,7 +467,7 @@ def xhatlooper_spoke(
 
     xhatlooper_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
-        "xhat_solver_options": shoptions["iterk_solver_options"],
+        "xhat_solver_options": xhatlooper_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
         "csvname": "looper.csv",
     }
