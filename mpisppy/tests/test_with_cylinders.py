@@ -107,6 +107,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_lagrangian(self):
+        print("Start lagrangian")
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
 
         self.cfg.lagrangian_args()
@@ -119,9 +120,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
         if wheel.global_rank == 1:
-            lagrangian_object = wheel.spcomm.opt
-            # TBD: check something
-            print(f"{lagrangian_object.extensions= }")
+            #print(f"{wheel.spcomm.bound= }")
+            self.assertAlmostEqual(wheel.spcomm.bound, -115405.55555,1)
 
 
 if __name__ == '__main__':
