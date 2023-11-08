@@ -1,8 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# Try a particular scenario as xhat. This is mainly for regression testing.
-# DLW, Jan 2023
-# IMPORTANT: as of Jan 2023, not tested on multi-stage
+# Try xbar as xhat.
 
 
 import mpisppy.utils.sputils as sputils

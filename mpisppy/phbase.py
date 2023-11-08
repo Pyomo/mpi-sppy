@@ -816,7 +816,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
         feasP = self.feas_prob()
         if feasP != self.E1:
-            raise RuntimeError(f"Infeasibility detected; E_feas={feasp}, E1={self.E1}")
+            raise RuntimeError(f"Infeasibility detected; E_feas={feasP}, E1={self.E1}")
 
         """
         with open('mpi.out-{}'.format(rank), 'w') as fd:

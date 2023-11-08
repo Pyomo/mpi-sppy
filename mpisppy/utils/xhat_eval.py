@@ -39,6 +39,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         mpicomm=None,
         scenario_creator_kwargs=None,
         variable_probability=None,
+        ph_extensions=None,
         ):
         
         super().__init__(
@@ -47,6 +48,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             scenario_creator,
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
+            extensions=ph_extensions,
             mpicomm=mpicomm,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
@@ -54,9 +56,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         
         self.verbose = self.options['verbose']
         
-        #TODO: CHANGE THIS AFTER UPDATE
-        self.PH_extensions = None
-
         self._subproblems_solvers_created = False
         
 

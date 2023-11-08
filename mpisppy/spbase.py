@@ -51,7 +51,7 @@ class SPBase:
             mpicomm=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
-            E1_tolerance=1e-5
+            E1_tolerance=1e-5,
     ):
         # TODO add missing and private attributes (JP)
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
