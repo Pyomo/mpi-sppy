@@ -6,7 +6,6 @@ import logging
 import time
 import math
 import inspect
-import traceback
 
 import numpy as np
 from mpisppy import MPI
