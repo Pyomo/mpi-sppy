@@ -6,6 +6,7 @@ import logging
 import time
 import math
 import inspect
+import random
 
 import numpy as np
 from mpisppy import MPI
@@ -867,7 +868,6 @@ class SPOpt(SPBase):
 # general class / location. even better, the entire retry
 # logic can be encapsulated in a sputils.py function.
 MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
-LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
 
 def set_instance_retry(subproblem, solver_plugin, subproblem_name):
 
@@ -893,6 +893,7 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
             if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
                 raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
             else:
-                print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
-                time.sleep(LICENSE_RETRY_SLEEP_TIME)
+                sleep_time = random.random()
+                print(f"Sleeping for {sleep_time:.2f} seconds before re-attempting")
+                time.sleep(sleep_time)
                 num_retry_attempts += 1
