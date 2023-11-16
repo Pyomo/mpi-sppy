@@ -350,7 +350,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         return global_diff[0] / self.n_proc
 
 
-    def _populate_W_cache(self, cache):
+    def _populate_W_cache(self, cache, padding):
         """ Copy the W values for nonants *for all local scenarios*
         Args:
             cache (np vector) to receive the W's for all local scenarios (for sending)
