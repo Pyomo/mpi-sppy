@@ -51,7 +51,7 @@ class SPBase:
             mpicomm=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
-            E1_tolerance=1e-5
+            E1_tolerance=1e-5,
     ):
         # TODO add missing and private attributes (JP)
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
@@ -516,7 +516,7 @@ class SPBase:
             if pspec is None or pspec == "uniform":
                 prob = 1./len(self.all_scenario_names)
                 if self.cylinder_rank == 0 and pspec is None:
-                    print(f"Did not find _mpisppy_probability, assuming uniform probability {prob}")
+                    print(f"Did not find _mpisppy_probability, assuming uniform probability {prob} (avoid this message by assigning a probability or the string 'uniform' to _mpisppy_probability on the scenario model object)")
                 scenario._mpisppy_probability = prob
             if not hasattr(scenario, "_mpisppy_node_list"):
                 raise RuntimeError(f"_mpisppy_node_list not found on scenario {sname}")

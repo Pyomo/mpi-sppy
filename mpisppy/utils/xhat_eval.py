@@ -39,6 +39,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         mpicomm=None,
         scenario_creator_kwargs=None,
         variable_probability=None,
+        ph_extensions=None,
         ):
         
         super().__init__(
@@ -47,6 +48,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             scenario_creator,
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
+            extensions=ph_extensions,
             mpicomm=mpicomm,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
@@ -54,9 +56,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         
         self.verbose = self.options['verbose']
         
-        #TODO: CHANGE THIS AFTER UPDATE
-        self.PH_extensions = None
-
         self._subproblems_solvers_created = False
         self.Ag = options.get("Ag", None)
         
@@ -88,62 +87,17 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective)
 
-        """
-        DLW wonders about this block; Aug 2023 so it is removed so now there is really only one solve_one
-        solve_keyword_args = dict()
-        if self.cylinder_rank == 0:
-            if tee is not None and tee is True:
-                solve_keyword_args["tee"] = True
-        if (sputils.is_persistent(s._solver_plugin)):
-            solve_keyword_args["save_results"] = False
-        elif disable_pyomo_signal_handling:
-            solve_keyword_args["use_signal_handling"] = False
-
-        try:
-            results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
-            solver_exception = None
-        except Exception as e:
-            results = None
-            solver_exception = e
-
-        if (results is None) or (len(results.solution) == 0) or \
-                (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-                (results.solver.termination_condition == TerminationCondition.unbounded):
-
-            s._mpisppy_data.scenario_feasible = False
-        else:
-            if sputils.is_persistent(s._solver_plugin):
-                s._solver_plugin.load_vars()
-            else:
-                s.solutions.load_from(results)
-            if self.is_minimizing:
-                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-            else:
-                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                s._mpisppy_data.scenario_feasible = True
-
-        """
         if compute_val_at_nonant:
-            if self.Ag is None:
-                print("ono solf.ag is none")
-                if self.bundling:
-                    objfct = self.saved_objs[k]
-                    
-                else:
-                    objfct = sputils.find_active_objective(s)
-                    if self.verbose:
-                        print ("caller", inspect.stack()[1][3])
-                        print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                               .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
-                self.objs_dict[k] = pyo.value(objfct)
+            if self.bundling:
+                objfct = self.saved_objs[k]    
             else:
-                # if we did the callout, the obj should be attached to s
-                self.objs_dict[k] = s._mpisppy_data._obj_from_agnostic
-                print(f"{self.objs_dict[k] =}")
+                objfct = sputils.find_active_objective(s)
+                if self.verbose:
+                    print ("caller", inspect.stack()[1][3])
+                    print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
+                           .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+            self.objs_dict[k] = pyo.value(objfct)
+
         return(pyomo_solve_time)
 
 

@@ -74,6 +74,7 @@ def _Compute_Xbar(opt, verbose=False):
 
             nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                         dtype='d', count=nlen)
+
             probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
             xbars += probs * nonants_array
             xsqbars += probs * nonants_array**2
@@ -105,16 +106,16 @@ def _Compute_Xbar(opt, verbose=False):
                            opt.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                            pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 
-def _Compute_Wbar(opt, verbose=False):
+def _Compute_Wbar(opt, verbose=False, repair=True):
     """ Seldom used (mainly for diagnostics); gather  Wbar for each node.
 
     Args:
         opt (phbase or xhat_eval object): object with the local scenarios
         verbose (boolean):
             If True, prints verbose output.
+        repair (boolean):
+            If True, normalize the W values so EW = 0
 
-    NOTE: for now, we will just report on the non-zeros, since that is
-          the only use-case as of August 2023
     """
     nodenames = [] # to transmit to comms
     local_concats = {}   # keys are tree node names
@@ -167,8 +168,11 @@ def _Compute_Wbar(opt, verbose=False):
 
             for i in range(nlen):
                 if abs(Wbars[i]) > opt.E1_tolerance and opt.cylinder_rank == 0:
-                    print(f"EW={Wbars[i]} for {node.nonant_vardata_list[i].name}")
-
+                    print(f"EW={Wbars[i]} (should be zero) for {node.nonant_vardata_list[i].name}")
+                    if repair:
+                        print(f"   repairing in {k}")
+                        s._mpisppy_model.W[(ndn,i)]._value -= Wbars[i]
+ 
 
 #======================
 
@@ -366,7 +370,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             for ix in model._mpisppy_data.nonant_indices:
                 cache[ci] = pyo.value(model._mpisppy_model.W[ix])
                 ci += 1
-        assert(ci == len(cache) - 1)  # the other cylinder will fail above
+        assert(ci == len(cache) - padding)  # the other cylinder will fail above
 
 
     def W_from_flat_list(self, flat_list):
@@ -828,17 +832,10 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
-            if self.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.E1)
-                print("E1_tolerance = ", self.E1_tolerance)
-            quit()
+            raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
         feasP = self.feas_prob()
         if feasP != self.E1:
-            if self.cylinder_rank == 0:
-                print("ERROR")
-                print("Infeasibility detected; E_feas, E1=", feasP, self.E1)
-            quit()
+            raise RuntimeError(f"Infeasibility detected; E_feas={feasP}, E1={self.E1}")
 
         """
         with open('mpi.out-{}'.format(rank), 'w') as fd:

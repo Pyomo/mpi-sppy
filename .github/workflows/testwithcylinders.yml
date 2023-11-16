@@ -1,6 +1,6 @@
-# confint (pyomo released)
+# tests with cylinders (pyomo released)
 
-name: confidence intervals tests
+name: tests on some cylinders
 
 on:
   push:
@@ -27,20 +27,15 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py numpy setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill
+          pip install pyomo pandas xpress cplex scipy
 
       - name: setup the program
         run: |
           python setup.py develop
 
-      - name: run farmer tests
+      - name: run tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_conf_int_farmer.py
+          mpiexec -np 2 python -m mpi4py test_with_cylinders.py          
 
-      - name: run aircond tests
-        timeout-minutes: 10
-        run: |
-          cd mpisppy/tests
-          python test_conf_int_aircond.py
