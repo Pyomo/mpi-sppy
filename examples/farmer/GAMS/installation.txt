@@ -1,1 +1,1 @@
-pip install gamspy_base
+pip install gamspy_base gamsapi
