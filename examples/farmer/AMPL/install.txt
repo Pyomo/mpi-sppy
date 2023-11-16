@@ -1,0 +1,6 @@
+0. follow instructions at https://pypi.org/project/amplpy
+1. install asl:
+   get the source code
+   $ ./configure
+   $ make
+   $ make install
