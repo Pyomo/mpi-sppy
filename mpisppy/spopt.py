@@ -609,15 +609,10 @@ class SPOpt(SPBase):
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
 
-<<<<<<< HEAD
             Ag = getattr(self, "Ag", None)
             if Ag is not None:
                 Ag.callout_agnostic({"s": s})
 
-
-                        
-=======
->>>>>>> main
     def _fix_root_nonants(self,root_cache):
         """ Fix the 1st stage Vars subject to non-anticipativity at given values.
             Loop over the scenarios to restore, but loop over subproblems
