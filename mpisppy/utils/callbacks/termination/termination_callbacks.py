@@ -3,7 +3,7 @@ from pyomo.solvers.plugins.solvers.cplex_persistent import CPLEXPersistent
 from pyomo.solvers.plugins.solvers.gurobi_persistent import GurobiPersistent
 from pyomo.solvers.plugins.solvers.xpress_persistent import XpressPersistent
 
-import solver_termination_callbacks as tc
+import mpisppy.utils.callbacks.termination.solver_callbacks as tc
 
 _termination_callback_solvers_to_setters = {
     CPLEXPersistent: tc.set_cplex_callback,

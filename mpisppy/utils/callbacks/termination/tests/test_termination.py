@@ -1,4 +1,6 @@
-from mpisppy.utils.callbacks.termination import (
+import pytest
+
+from mpisppy.utils.callbacks.termination.termination_callbacks import (
     set_termination_callback,
     supports_termination_callback,
 )
@@ -51,6 +53,10 @@ class XpressTermination(_TestTermination):
         self._solver.options["maxtime"] = 20
 
 
+@pytest.mark.skipif(
+    not SolverFactory("cplex_persistent").available(),
+    reason="cplex_persistent not available",
+)
 def test_cplex_termination_callback():
     st = time.time()
     cplextest = CPLEXTermination()
@@ -62,6 +68,10 @@ def test_cplex_termination_callback():
     assert end - st < 5
 
 
+@pytest.mark.skipif(
+    not SolverFactory("gurobi_persistent").available(),
+    reason="gurobi_persistent not available",
+)
 def test_gurobi_termination_callback():
     st = time.time()
     gurobitest = GurobiTermination()
@@ -70,6 +80,10 @@ def test_gurobi_termination_callback():
     assert end - st < 5
 
 
+@pytest.mark.skipif(
+    not SolverFactory("xpress_persistent").available(),
+    reason="xpress_persistent not available",
+)
 def test_xpress_termination_callback():
     st = time.time()
     xpresstest = XpressTermination()
