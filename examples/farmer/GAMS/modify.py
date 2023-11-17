@@ -8,6 +8,7 @@ model.run(checkpoint=cp)
 
 crop = mi.sync_db.add_set("crop", 1, "crop type")
 
+y = mi.sync_db.add_parameter_dc("yield", [crop,], "yield")
 rho = mi.sync_db.add_parameter_dc("rho", [crop,], "ph rho")
 ph_W = mi.sync_db.add_parameter_dc("ph_W", [crop,], "ph weight")
 xbar = mi.sync_db.add_parameter_dc("xbar", [crop,], "ph average")
@@ -20,6 +21,7 @@ mi.instantiate("simple min negprofit using nlp",
         gams.GamsModifier(rho),
         gams.GamsModifier(ph_W),
         gams.GamsModifier(xbar),
+        gams.GamsModifier(y),
         gams.GamsModifier(W_on),
         gams.GamsModifier(prox_on),
     ],
@@ -34,6 +36,7 @@ for c in crop_ext:
     ph_W.add_record(name).value = 50
     xbar.add_record(name).value = 100
     rho.add_record(name).value = 10
+    y.add_record(name).value = 42
 
 mi.solve(output=sys.stdout)
 
