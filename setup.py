@@ -33,5 +33,11 @@ setup(
         'numpy',
         'scipy',
         'pyomo>=6.4',
-    ]
+    ],
+    extras_require={
+        'doc': [
+            'sphinx_rtd_theme',
+            'sphinx',
+        ]
+    },
 )
