@@ -41,10 +41,16 @@ def set_termination_callback(solver_instance, termination_callback):
         Pyomo PersistentSolver. Must be one of CPLEXPersistent, GurobiPersistent,
         or XpressPersistent. The solver object is modified with the callback.
     termination_callback : callable
-        A callable which takes no arguments. Returns True if the solver should stop
-        and False otherwise. Assume to be a "hot" function within the MIP solver
-        and so should not have expensive operations.
+        A callable which takes exactly three position arguments: run-time, best
+        incumbent objective, and best objective bound. Returns True if the solver
+        should stop and False otherwise. Assume to be a "hot" function within the
+        MIP solver and so should not have expensive operations.
     """
+
+    if not tc.check_user_termination_callback_signature(termination_callback):
+        raise RuntimeError(
+            f"Provided user termination callback did not match expected signature with 3 positional arguments"
+            )
 
     try:
         _termination_callback_solvers_to_setters[solver_instance.__class__](

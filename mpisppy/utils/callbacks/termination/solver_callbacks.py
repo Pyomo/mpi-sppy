@@ -5,8 +5,10 @@
 #        are (mostly) defined in the context of MIPs. If we want to expand to LPs
 #        and other non-branch-and-bound contexts, additional work is required.
 
-# TBD - add check for 3 fixed position arguments in user-supplied termination function
+def check_user_termination_callback_signature(user_termination_callback):
 
+    import inspect
+    return len(inspect.signature(user_termination_callback).parameters) == 3
 
 def set_cplex_callback(solver, user_termination_callback):
     
