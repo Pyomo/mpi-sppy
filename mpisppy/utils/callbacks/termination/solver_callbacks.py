@@ -17,16 +17,13 @@ def set_cplex_callback(solver, user_termination_callback):
 
     class Termination(
         cplex.callbacks.MIPInfoCallback,
-        cplex.callbacks.ContinuousCallback,
-        cplex.callbacks.CrossoverCallback,
     ):
-        self._tc = user_termination_callback
+        _tc = user_termination_callback
 
         def __call__(self):
-            # TBD - extract runtime, best objective, best bound
-            runtime = 0.0
-            obj_best = 0.0
-            obj_bound = 0.0            
+            runtime = self.get_time() - self.get_start_time()
+            obj_best = self.get_incumbent_objective_value()
+            obj_bound = self.get_best_objective_value()
             if self._tc(runtime, obj_best, obj_bound):
                 self.abort()
                 return
