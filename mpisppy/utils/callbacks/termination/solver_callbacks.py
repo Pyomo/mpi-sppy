@@ -1,7 +1,15 @@
 # This software is distributed under the 3-clause BSD License.
 
+# NOTES: The design of the generic termination callback below is strictly MIP-centric.
+#        Specifically, we assume the following 3 attributes can be extracted, and
+#        are (mostly) defined in the context of MIPs. If we want to expand to LPs
+#        and other non-branch-and-bound contexts, additional work is required.
 
-def set_cplex_callback(solver, termination_callback):
+# TBD - add check for 3 fixed position arguments in user-supplied termination function
+
+
+def set_cplex_callback(solver, user_termination_callback):
+    
     cplex = solver._cplex
     cplex_model = solver._solver_model
 
@@ -10,38 +18,55 @@ def set_cplex_callback(solver, termination_callback):
         cplex.callbacks.ContinuousCallback,
         cplex.callbacks.CrossoverCallback,
     ):
-        _tc = termination_callback
+        self._tc = user_termination_callback
 
         def __call__(self):
-            if self._tc():
+            # TBD - extract runtime, best objective, best bound
+            runtime = 0.0
+            obj_best = 0.0
+            obj_bound = 0.0            
+            if self._tc(runtime, obj_best, obj_bound):
                 self.abort()
                 return
 
     cplex_model.register_callback(Termination)
 
 
-def set_gurobi_callback(solver, termination_callback):
+def set_gurobi_callback(solver, user_termination_callback):
+    
     gurobi_model = solver._solver_model
-    gurobi_model._terminate_function = termination_callback
+    gurobi_model._terminate_function = user_termination_callback
 
-    def termination_callback(gurobi_model, where):
-        # 0 == GRB.Callback.POLLING
-        if where == 0:
-            if gurobi_model._terminate_function():
+    # TBD - best placement? For speeed...
+    from gurobipy import GRB
+
+    # TBD - deconflict names with termination_callback above and below
+
+    def gurobi_callback(gurobi_model, where):
+        if where == GRB.Callback.MIP:
+            runtime = gurobi_model.cbGet(GRB.Callback.RUNTIME)
+            obj_best = gurobi_model.cbGet(GRB.Callback.MIP_OBJBST)
+            obj_bound = gurobi_model.cbGet(GRB.Callback.MIP_OBJBND)
+            if gurobi_model._terminate_function(runtime, obj_best, obj_bound):
                 gurobi_model.terminate()
 
     # This overwrites GurobiPersistent's
     # existing callback. gurobipy callbacks
     # are set by gurobi_model.solve, so we
     # need to let Pyomo do this.
-    solver._callback = termination_callback
+    solver._callback = gurobi_callback
 
 
-def set_xpress_callback(solver, termination_callback):
+def set_xpress_callback(solver, user_termination_callback):
+    
     xpress_problem = solver._solver_model
 
     def cbchecktime_callback(xpress_problem, termination_callback):
-        if termination_callback():
+        # TBD - extract runtime, best objective, best bound
+        runtime = 0.0
+        obj_best = 0.0
+        obj_bound = 0.0
+        if user_termination_callback(runtime, obj_best, obj_bound):
             return 1
         return 0
 

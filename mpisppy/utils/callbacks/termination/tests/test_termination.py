@@ -9,7 +9,6 @@ from pyomo.environ import SolverFactory
 
 import time
 
-
 class _TestTermination:
     def __init__(self):
         self.model = model
@@ -18,9 +17,8 @@ class _TestTermination:
 
         self.time_start = time.time()
 
-    def solver_terminate(self):
-        t_now = time.time()
-        if t_now - self.time_start > 2:
+    def solver_terminate(self, runtime, best_obj, best_bound):
+        if runtime > 2:
             return True
         else:
             return False
@@ -33,13 +31,14 @@ class _TestTermination:
 
 
 class CPLEXTermination(_TestTermination):
+    
     _solver_name = "cplex_persistent"
 
     def _set_time_limit(self):
         self._solver.options["timelimit"] = 20
 
-
 class GurobiTermination(_TestTermination):
+    
     _solver_name = "gurobi_persistent"
 
     def _set_time_limit(self):
@@ -47,6 +46,7 @@ class GurobiTermination(_TestTermination):
 
 
 class XpressTermination(_TestTermination):
+    
     _solver_name = "xpress_persistent"
 
     def _set_time_limit(self):
@@ -58,6 +58,7 @@ class XpressTermination(_TestTermination):
     reason="cplex_persistent not available",
 )
 def test_cplex_termination_callback():
+    
     st = time.time()
     cplextest = CPLEXTermination()
     try:
@@ -73,6 +74,7 @@ def test_cplex_termination_callback():
     reason="gurobi_persistent not available",
 )
 def test_gurobi_termination_callback():
+    
     st = time.time()
     gurobitest = GurobiTermination()
     gurobitest.solve()
@@ -85,6 +87,7 @@ def test_gurobi_termination_callback():
     reason="xpress_persistent not available",
 )
 def test_xpress_termination_callback():
+    
     st = time.time()
     xpresstest = XpressTermination()
     xpresstest.solve()
@@ -93,6 +96,7 @@ def test_xpress_termination_callback():
 
     
 def test_unsupported():
+    
     cbc = SolverFactory("cbc")
 
     assert not supports_termination_callback("xpress_persistent")

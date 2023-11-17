@@ -5,6 +5,8 @@ from pyomo.solvers.plugins.solvers.xpress_persistent import XpressPersistent
 
 import mpisppy.utils.callbacks.termination.solver_callbacks as tc
 
+# these are mpisppy callbacks, defined in the tc module imported immediately above.
+
 _termination_callback_solvers_to_setters = {
     CPLEXPersistent: tc.set_cplex_callback,
     GurobiPersistent: tc.set_gurobi_callback,
