@@ -54,7 +54,7 @@ class XpressTermination(_TestTermination):
 
 
 @pytest.mark.skipif(
-    not SolverFactory("cplex_persistent").available(),
+    not SolverFactory("cplex_persistent").available(exception_flag=False),
     reason="cplex_persistent not available",
 )
 def test_cplex_termination_callback():
@@ -67,9 +67,9 @@ def test_cplex_termination_callback():
     end = time.time()
     assert end - st < 5
 
-
+    
 @pytest.mark.skipif(
-    not SolverFactory("gurobi_persistent").available(),
+    not SolverFactory("gurobi_persistent").available(exception_flag=False),
     reason="gurobi_persistent not available",
 )
 def test_gurobi_termination_callback():
@@ -79,9 +79,9 @@ def test_gurobi_termination_callback():
     end = time.time()
     assert end - st < 5
 
-
+    
 @pytest.mark.skipif(
-    not SolverFactory("xpress_persistent").available(),
+    not SolverFactory("xpress_persistent").available(exception_flag=False),
     reason="xpress_persistent not available",
 )
 def test_xpress_termination_callback():
@@ -91,7 +91,7 @@ def test_xpress_termination_callback():
     end = time.time()
     assert end - st < 5
 
-
+    
 def test_unsupported():
     cbc = SolverFactory("cbc")
 
