@@ -35,3 +35,19 @@ for c in crop_ext:
     xbar.add_record(name).value = 100
 
 mi.solve(output=sys.stdout)
+
+prox_on.find_record().value = 1.0
+W_on.find_record().value = 1.0
+
+crop_ext = model.out_db.get_set("crop")
+for c in crop_ext:
+    name = c.key(0)
+    ph_W.find_record(name).value = 500
+    xbar.find_record(name).value = 1000
+
+mi.solve(output=sys.stdout)
+
+prox_on.find_record().value = 0.0
+W_on.find_record().value = 0.0
+
+mi.solve(output=sys.stdout)
