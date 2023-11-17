@@ -20,6 +20,7 @@ MPI is used.
    output_solutions.rst
    access_solutions.rst
    extensions.rst
+   aph.rst
    zhat.rst
    confidence_intervals.rst
    seqsamp.rst
