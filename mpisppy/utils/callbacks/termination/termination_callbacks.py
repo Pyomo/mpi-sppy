@@ -1,0 +1,55 @@
+# This software is distributed under the 3-clause BSD License.
+from pyomo.solvers.plugins.solvers.cplex_persistent import CPLEXPersistent
+from pyomo.solvers.plugins.solvers.gurobi_persistent import GurobiPersistent
+from pyomo.solvers.plugins.solvers.xpress_persistent import XpressPersistent
+
+import solver_termination_callbacks as tc
+
+_termination_callback_solvers_to_setters = {
+    CPLEXPersistent: tc.set_cplex_callback,
+    GurobiPersistent: tc.set_gurobi_callback,
+    XpressPersistent: tc.set_xpress_callback,
+}
+
+def supports_termination_callback(solver_instance):
+    """
+    Determines if this module supports a solver instance
+
+    Parameters
+    ----------
+    solver_instance : An instance of a Pyomo solver
+
+    Returns
+    -------
+    bool : True if this module can set a termination callback on the solver instance
+
+    """
+    return isinstance(
+        solver_instance, tuple(_termination_callback_solvers_to_setters.keys())
+    )
+
+
+def set_termination_callback(solver_instance, termination_callback):
+    """
+    Sets a termination callback on the solver object.
+
+    Parameters
+    ----------
+    solver_instance : pyomo.solver.plugins.solvers.persistent_solver.PersistentSolver
+        Pyomo PersistentSolver. Must be one of CPLEXPersistent, GurobiPersistent,
+        or XpressPersistent. The solver object is modified with the callback.
+    termination_callback : callable
+        A callable which takes no arguments. Returns True if the solver should stop
+        and False otherwise. Assume to be a "hot" function within the MIP solver
+        and so should not have expensive operations.
+    """
+
+    try:
+        _termination_callback_solvers_to_setters[solver_instance.__class__](
+            solver_instance, termination_callback
+        )
+    except KeyError:
+        raise RuntimeError(
+            f"solver {solver_instance.__class__.__name___} termination callback "
+            "is not currently supported."
+        )
