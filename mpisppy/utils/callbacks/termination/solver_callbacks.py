@@ -40,8 +40,6 @@ def set_gurobi_callback(solver, user_termination_callback):
     # TBD - best placement? For speeed...
     from gurobipy import GRB
 
-    # TBD - deconflict names with termination_callback above and below
-
     def gurobi_callback(gurobi_model, where):
         if where == GRB.Callback.MIP:
             runtime = gurobi_model.cbGet(GRB.Callback.RUNTIME)
@@ -62,12 +60,14 @@ def set_xpress_callback(solver, user_termination_callback):
     xpress_problem = solver._solver_model
 
     def cbchecktime_callback(xpress_problem, termination_callback):
-        # TBD - extract runtime, best objective, best bound
-        runtime = 0.0
-        obj_best = 0.0
-        obj_bound = 0.0
-        if user_termination_callback(runtime, obj_best, obj_bound):
+        runtime = xpress_problem.attributes.time
+        obj_best = xpress_problem.attributes.mipbestobjval
+        obj_bound = xpress_problem.attributes.bestbound
+        if termination_callback(runtime, obj_best, obj_bound):
             return 1
         return 0
 
-    xpress_problem.addcbchecktime(cbchecktime_callback, termination_callback, 0)
+    # per the Xpress documentation, this callback is invoked every time the Optimizer
+    # checks if the time limit has been reached. So broader than what is presently
+    # needed for our present MIP-based use cases.
+    xpress_problem.addcbchecktime(cbchecktime_callback, user_termination_callback, 0)
