@@ -355,7 +355,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         # TBD: should this be higher in the class hierarchy?
         if self.opt.scenario_denouement is not None:
             for sname,s in self.opt.local_scenarios.items():
-                self.opr.scenario_denouement(self.cylinder_rank, sname, s)
+                self.opt.scenario_denouement(self.cylinder_rank, sname, s)
 
 
         self.opt.first_stage_solution_available = True
