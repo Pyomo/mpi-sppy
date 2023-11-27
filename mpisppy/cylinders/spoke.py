@@ -350,6 +350,14 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
             for var, value in s._mpisppy_data.best_solution_cache.items():
                 var.set_value(value, skip_validation=True)
 
+        # xhatters that don't want the denouement should remove it from their cylinder
+        #  (e.g. when they call vanilla)
+        # TBD: should this be higher in the class hierarchy?
+        if self.scenario_denouement is not None:
+            for sname,s in self.local_scenarios.items():
+                self.scenario_denouement(self.cylinder_rank, sname, s)
+
+
         self.opt.first_stage_solution_available = True
         self.opt.tree_solution_available = True
         self.final_bound = self.bound
