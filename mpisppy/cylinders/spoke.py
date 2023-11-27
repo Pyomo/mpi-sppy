@@ -353,9 +353,9 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         # xhatters that don't want the denouement should remove it from their cylinder
         #  (e.g. when they call vanilla)
         # TBD: should this be higher in the class hierarchy?
-        if self.scenario_denouement is not None:
-            for sname,s in self.local_scenarios.items():
-                self.scenario_denouement(self.cylinder_rank, sname, s)
+        if self.opt.scenario_denouement is not None:
+            for sname,s in self.opt.local_scenarios.items():
+                self.opr.scenario_denouement(self.cylinder_rank, sname, s)
 
 
         self.opt.first_stage_solution_available = True
