@@ -213,7 +213,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
-    _copy_Ws_from_host(s)
+    _copy_Ws_xbars_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
@@ -271,7 +271,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
 
 # local helper
-def _copy_Ws_from_host(s):
+def _copy_Ws_xbars_rho_from_host(s):
     # special for farmer
     # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
@@ -282,6 +282,8 @@ def _copy_Ws_from_host(s):
         else:
             # presumably an xhatter; we should check, I suppose
             pass
+        gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])   xxxx
+        gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i]) xxxx
 
 
 # local helper

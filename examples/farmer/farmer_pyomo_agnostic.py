@@ -167,7 +167,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False):
 
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
-    _copy_Ws_from_host(s)
+    _copy_Ws_xbars_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
@@ -232,20 +232,23 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False):
 
 
 # local helper
-def _copy_Ws_from_host(s):
-    print(f"   {s.name =}, {global_rank =}")
+def _copy_Ws_xbars_rho_from_host(s):
+    # This is an important function because it allows us to capture whatever the host did
+    # print(f"   {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
     for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        if not hasattr(s, "_mpisppy_model"):
-            print("what the heck!!")
+        assert hasattr(s, "_mpisppy_model"), 
+            print(f"what the heck!! no _mpisppy_model {s.name =} {global_rank =}")
         if hasattr(s._mpisppy_model, "W"):
             gs.W[ndn_i] = pyo.value(s._mpisppy_model.W[ndn_i])
             print(f"{gs.W[ndn_i].value =}")
         else:
             # presumably an xhatter
             pass
+        gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])
+        gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i])
 
 
 # local helper
