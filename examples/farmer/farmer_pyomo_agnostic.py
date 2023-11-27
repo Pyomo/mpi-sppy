@@ -1,5 +1,3 @@
-# COPY !!!!!!!!!!!!!!!!!!!!! this is a copy.... but has probably been edited !!!! think!!!! meld with the original!!!!
-
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, Pyomo is the guest language just for
 # testing and documentation purposed.

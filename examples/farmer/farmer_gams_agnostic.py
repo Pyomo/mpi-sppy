@@ -32,8 +32,7 @@ def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
         num_scens=None, seedoffset=0
 ):
-    """ Create a scenario for the (scalable) farmer example, but
-   but pretend that Pyomo is a guest language.
+    """ Create a scenario for the (scalable) farmer example.
     
     Args:
         scenario_name (str):
@@ -176,9 +175,12 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 def attach_Ws_and_prox(Ag, sname, scenario):
     # TODO: the current version has this hardcoded in the GAMS model
-    pass
+    # give rho a value
+    gd = scenario._agnostic_dict
+    for ndn_i, gxvar in gd["nonants"].items():
+        gd["ph"]["ph_rho"][ndn_i].set_value(scenario._mpisppy_model.rho.value)
 
- 
+
 def _disable_prox(Ag, scenario):
     scenario._agnostic_dict["ph"]["prox_on"].set_value(0)
 

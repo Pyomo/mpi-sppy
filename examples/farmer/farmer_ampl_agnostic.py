@@ -25,8 +25,7 @@ def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
         num_scens=None, seedoffset=0
 ):
-    """ Create a scenario for the (scalable) farmer example, but
-   but pretend that Pyomo is a guest language.
+    """ Create a scenario for the (scalable) farmer example
     
     Args:
         scenario_name (str):
@@ -127,7 +126,7 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     # should use set_values instead of let
     gs.eval("let {c in Crops}  W[c] := 0;")
     gs.eval("param rho{Crops};")
-    gs.eval("let {c in Crops}  rho[c] := 0;")
+    gs.eval(f"let {c in Crops}  rho[c] := {s._mpisppy_model.rho.value};")
 
     
 def _disable_prox(Ag, scenario):
