@@ -3,6 +3,7 @@
 
 import os
 
+import pyomo
 from pyomo.dataportal import DataPortal
 
 import mpisppy.scenario_tree as scenario_tree
