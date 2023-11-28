@@ -71,12 +71,12 @@ class CrossScenarioExtension(Extension):
     def _check_bound(self):
         opt = self.opt
 
-        chached_ph_obj = dict()
+        cached_ph_obj = dict()
 
         for k,s in opt.local_subproblems.items():
             phobj = find_active_objective(s)
             phobj.deactivate()
-            chached_ph_obj[k] = phobj
+            cached_ph_obj[k] = phobj
             s._mpisppy_model.EF_Obj.activate()
 
         teeme = (
@@ -114,7 +114,7 @@ class CrossScenarioExtension(Extension):
 
         for k,s in opt.local_subproblems.items():
             s._mpisppy_model.EF_Obj.deactivate()
-            chached_ph_obj[k].activate()
+            cached_ph_obj[k].activate()
 
     def pre_iter0(self):
         if self.opt.multistage:
@@ -271,7 +271,6 @@ class CrossScenarioExtension(Extension):
                 ((self.iter_since_last_check%self.check_bound_iterations == 0) and self.opt.spcomm.new_cuts))
                 # if there hasn't been OB movement, check every so often if we have new cuts
         if check:
-            global_toc(f"Attempting to update Best Bound with CrossScenarioExtension")
             self._check_bound()
             self.opt.spcomm.new_cuts = False
             self.iter_since_last_check = 0
