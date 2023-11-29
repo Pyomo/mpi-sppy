@@ -112,7 +112,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 # the function names correspond to function names in mpisppy
 
 def attach_Ws_and_prox(Ag, sname, scenario):
-    # this is farmer specific, so we know there is not a W already, e.g.
+    # this is AMPL farmer specific, so we know there is not a W already, e.g.
     # Attach W's and rho to the guest scenario (mutable params).
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gd = scenario._agnostic_dict
@@ -194,6 +194,17 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     profitobj.drop()
     gs.eval(objstr)
     currentobj = gs.get_current_objective()
+    # see _copy_Ws_...  see also the gams version
+    WParamDatas = list(gs.get_parameter("W").instance
+    xbarsParamDatas = list(gs.get_parameter("xbars").instance
+    rhoParamDatas = list(gs.get_parameter("rho").instance
+    gd["ph"] = {
+        "W" : {("ROOT",i) : v[1] for i,v in enumerate(WParamDatas)},
+        "xbars" : {("ROOT",i) : v[1] for i,v in enumerate(xbarsParamDatas)},
+        "rho" : {("ROOT",i) : v[1] for i,v in enumerate(rhoParamDatas)},
+        "obj" : currentobj,
+    }
+                  
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
@@ -285,13 +296,14 @@ def _copy_Ws_xbars_rho_from_host(s):
         pass
     for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
-            c = gd["nonant_names"][ndn_i][1]
-            parm.set(c, s._mpisppy_model.W[ndn_i].value)
+            W = gd["W"][ndn_i][1]
+            parm.set(W, s._mpisppy_model.W[ndn_i].value)  # delete this comment on sight
         else:
             # presumably an xhatter; we should check, I suppose
             pass
-        gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])   xxxx
-        gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i]) xxxx
+        # xxxxx tbd after W works; then do GAMS
+        ####gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])   xxxx
+        ####gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i]) xxxx
 
 
 # local helper
