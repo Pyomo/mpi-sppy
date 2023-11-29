@@ -77,7 +77,7 @@ release = '0.12.dev0'
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -97,29 +97,9 @@ numfig = True
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-#html_theme = 'alabaster'
-on_rtd = os.environ.get('READTHEDOCS', None) == 'True'
+html_theme = 'sphinx_rtd_theme'
 
-if not on_rtd:  # only import and set the theme if we're building docs locally
-    import sphinx_rtd_theme
-    html_theme = 'sphinx_rtd_theme'
-    html_theme_path = [sphinx_rtd_theme.get_html_theme_path()]
-    # Override default css to get a larger width for local build
-    def setup(app):
-        app.add_css_file('theme_overrides.css')
-    html_context = {
-        'css_files': [
-            '_static/theme_overrides.css',
-        ],
-    }
-else:
-    html_context = {
-        'css_files': [
-            'https://media.readthedocs.org/css/sphinx_rtd_theme.css',
-            'https://media.readthedocs.org/css/readthedocs-doc-embed.css',
-            '_static/theme_overrides.css',
-        ],
-    }
+
 
 # Theme options are theme-specific and customize the look and feel of a theme
 # further.  For a list of options available for each theme, see the

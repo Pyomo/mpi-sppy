@@ -17,5 +17,4 @@ sphinx:
 # we need mpi-sppy for automodule
 python:
   install:
-    - method: setuptools
-      path: .
+    - requirements: requirements-doc.txt
