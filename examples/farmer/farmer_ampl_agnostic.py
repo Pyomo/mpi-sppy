@@ -115,18 +115,20 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     # this is AMPL farmer specific, so we know there is not a W already, e.g.
     # Attach W's and rho to the guest scenario (mutable params).
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    hs = scenario  # host scenario handle
     gd = scenario._agnostic_dict
     # (there must be some way to create and assign *mutable* params in on call to AMPL)
     gs.eval("param W_on;")
     gs.eval("let W_on := 0;")
     gs.eval("param prox_on;")
     gs.eval("let prox_on := 0;")
-    # we are trusing the order to match the nonant indexes
+    # we are trusting the order to match the nonant indexes
     gs.eval("param W{Crops};")
-    # should use set_values instead of let
+    # Note: we should probably use set_values instead of let
     gs.eval("let {c in Crops}  W[c] := 0;")
+    # start with rho at zero, but update before solve
     gs.eval("param rho{Crops};")
-    gs.eval(f"let {c in Crops}  rho[c] := {s._mpisppy_model.rho.value};")
+    gs.eval("let {c in Crops}  rho[c] := 0;")
 
     
 def _disable_prox(Ag, scenario):
@@ -195,16 +197,16 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     gs.eval(objstr)
     currentobj = gs.get_current_objective()
     # see _copy_Ws_...  see also the gams version
-    WParamDatas = list(gs.get_parameter("W").instance
-    xbarsParamDatas = list(gs.get_parameter("xbars").instance
-    rhoParamDatas = list(gs.get_parameter("rho").instance
-    gd["ph"] = {
-        "W" : {("ROOT",i) : v[1] for i,v in enumerate(WParamDatas)},
-        "xbars" : {("ROOT",i) : v[1] for i,v in enumerate(xbarsParamDatas)},
-        "rho" : {("ROOT",i) : v[1] for i,v in enumerate(rhoParamDatas)},
-        "obj" : currentobj,
+    WParamDatas = list(gs.get_parameter("W").instances())
+    xbarsParamDatas = list(gs.get_parameter("xbars").instances())
+    rhoParamDatas = list(gs.get_parameter("rho").instances())
+    # not v[1] for parms
+    gd["PH"] = {
+        "W": {("ROOT",i): v for i,v in enumerate(WParamDatas)},
+        "xbars": {("ROOT",i): v for i,v in enumerate(xbarsParamDatas)},
+        "rho": {("ROOT",i): v for i,v in enumerate(rhoParamDatas)},
+        "obj": currentobj,
     }
-                  
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
@@ -294,16 +296,20 @@ def _copy_Ws_xbars_rho_from_host(s):
     except:
         # presumably an xhatter
         pass
+    
+    # AMPL params are tuples (index, value), which are immutable
+    # TBD: we should be using set_values rather than a loop
     for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
-            W = gd["W"][ndn_i][1]
-            parm.set(W, s._mpisppy_model.W[ndn_i].value)  # delete this comment on sight
+            print(f"   Doind W, rho, and xbars {global_rank =}")
+            W_param = gd["PH"]["W"][ndn_i]
+            W_param = (W_param[0], s._mpisppy_model.W[ndn_i].value)
+            rho_param = gd["PH"]["rho"][ndn_i]
+            rho_param = (rho_param[0], s._mpisppy_model.rho[ndn_i].value)
+            xbars_param = gd["PH"]["xbars"][ndn_i]
+            xbars_param = (xbars_param[0], s._mpisppy_model.xbars[ndn_i].value)
         else:
-            # presumably an xhatter; we should check, I suppose
-            pass
-        # xxxxx tbd after W works; then do GAMS
-        ####gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])   xxxx
-        ####gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i]) xxxx
+            pass  # presumably an xhatter; we should check, I suppose
 
 
 # local helper

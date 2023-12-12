@@ -119,14 +119,17 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
 
-    # The host has xbars and computes without involving the guest language
-    xbars = scenario._mpisppy_model.xbars
+    ### The host has xbars and computes without involving the guest language
+    ### xbars = scenario._mpisppy_model.xbars
+    ### but instead, we are going to make guest xbars like other guests
+    
 
     gd = scenario._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
     nonant_idx = list(gd["nonants"].keys())    
     objfct = gs.Total_Cost_Objective  # we know this is farmer...
     ph_term = 0
+    gs.xbars = pyo.Param(nonant_idx, mutable=True)
     # Dual term (weights W)
     if add_duals:
         gs.WExpr = pyo.Expression(expr= sum(gs.W[ndn_i] * xvar for ndn_i,xvar in gd["nonants"].items()))
@@ -144,7 +147,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
                 else:
                     xvarsqrd = xvar**2
                 prox_expr += (gs.rho[ndn_i] / 2.0) * \
-                    (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+                    (xvarsqrd - 2.0 * gs.xbars[ndn_i] * xvar + gs.xbars[ndn_i]**2)
             gs.ProxExpr = pyo.Expression(expr=prox_expr)
             ph_term += gs.prox_on * gs.ProxExpr
                     
@@ -239,16 +242,15 @@ def _copy_Ws_xbars_rho_from_host(s):
     gs = gd["scenario"]  # guest scenario handle
     for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        assert hasattr(s, "_mpisppy_model"), 
-            print(f"what the heck!! no _mpisppy_model {s.name =} {global_rank =}")
+        assert hasattr(s, "_mpisppy_model"),\
+            f"what the heck!! no _mpisppy_model {s.name =} {global_rank =}"
         if hasattr(s._mpisppy_model, "W"):
             gs.W[ndn_i] = pyo.value(s._mpisppy_model.W[ndn_i])
-            print(f"{gs.W[ndn_i].value =}")
+            gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])
+            gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i])
         else:
             # presumably an xhatter
             pass
-        gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])
-        gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i])
 
 
 # local helper
