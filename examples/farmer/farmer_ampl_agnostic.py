@@ -158,7 +158,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     # The host has xbars and computes without involving the guest language
     gd = scenario._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
-    gs.eval("param xbars{Crops} := 0;")
+    gs.eval("param xbars{Crops};")
 
     # Dual term (weights W)
     try:
@@ -194,13 +194,13 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     objstr = objstr[:-1] + "+ (" + phobjstr + ");"
     objstr = objstr.replace("minimize minus_profit", "minimize phobj")
     profitobj.drop()
+    print(f"{objstr =}")
     gs.eval(objstr)
     currentobj = gs.get_current_objective()
     # see _copy_Ws_...  see also the gams version
     WParamDatas = list(gs.get_parameter("W").instances())
     xbarsParamDatas = list(gs.get_parameter("xbars").instances())
     rhoParamDatas = list(gs.get_parameter("rho").instances())
-    # not v[1] for parms
     gd["PH"] = {
         "W": {("ROOT",i): v for i,v in enumerate(WParamDatas)},
         "xbars": {("ROOT",i): v for i,v in enumerate(xbarsParamDatas)},
@@ -224,6 +224,16 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
+    #### start debugging
+    if global_rank == 0:
+        WParamDatas = list(gs.get_parameter("W").instances())
+        print(f" in _solve_one {WParamDatas =} {global_rank =}")
+        xbarsParamDatas = list(gs.get_parameter("xbars").instances())
+        print(f" in _solve_one {xbarsParamDatas =} {global_rank =}")
+        rhoParamDatas = list(gs.get_parameter("rho").instances())
+        print(f" in _solve_one {rhoParamDatas =} {global_rank =}")
+    #### stop debugging
+    
     solver_name = s._solver_plugin.name
     gs.set_option("solver", solver_name)    
     if 'persistent' in solver_name:
@@ -250,8 +260,6 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     s._mpisppy_data.scenario_feasible = True
     # For AMPL mips, we need to use the gap option to compute bounds
     # https://amplmp.readthedocs.io/rst/features-guide.html
-    """ Meanwhile I am having trouble matching the LB reported to PH
-    in the Pyomo example. It sort of doesn't matter, but it bothers me"""
     objval = gs.get_objective("minus_profit").value()  # use this?
     ###phobjval = gs.get_objective("phobj").value()   # use this???
     if gd["sense"] == pyo.minimize:
@@ -298,10 +306,20 @@ def _copy_Ws_xbars_rho_from_host(s):
         pass
     
     # AMPL params are tuples (index, value), which are immutable
+    if hasattr(s._mpisppy_model, "W"):
+        Wlist = [pyo.value(v) for v in s._mpisppy_model.W.values()]
+        gs.get_parameter("W").set_values(Wlist)
+        rholist = [pyo.value(v) for v in s._mpisppy_model.rho.values()]
+        gs.get_parameter("rho").set_values(rholist)
+        xbarslist = [pyo.value(v) for v in s._mpisppy_model.xbars.values()]
+        gs.get_parameter("xbars").set_values(xbarslist)
+    else:
+        pass  # presumably an xhatter; we should check, I suppose
+        
+    """
     # TBD: we should be using set_values rather than a loop
     for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
-            print(f"   Doind W, rho, and xbars {global_rank =}")
             W_param = gd["PH"]["W"][ndn_i]
             W_param = (W_param[0], s._mpisppy_model.W[ndn_i].value)
             rho_param = gd["PH"]["rho"][ndn_i]
@@ -310,7 +328,7 @@ def _copy_Ws_xbars_rho_from_host(s):
             xbars_param = (xbars_param[0], s._mpisppy_model.xbars[ndn_i].value)
         else:
             pass  # presumably an xhatter; we should check, I suppose
-
+    """
 
 # local helper
 def _copy_nonants_from_host(s):

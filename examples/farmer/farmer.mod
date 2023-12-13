@@ -80,6 +80,7 @@ param TotalArea := 500;
 ##    corn     2.4     3.0   3.6
 ##    beets   16.0    20.0  24.0;
 
+# Average Scenario
 param RandomYield := 
     wheat    2.5
     corn     3.0
