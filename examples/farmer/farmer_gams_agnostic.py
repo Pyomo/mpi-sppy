@@ -1,5 +1,6 @@
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, GAMS is the guest language.
+# NOTE: unlike everywhere else, we are using xbar instead of xbars (no biggy)
 
 """
 This file tries to show many ways to do things in gams,
@@ -50,10 +51,9 @@ def scenario_creator(
             Default is None.
         seedoffset (int): used by confidence interval code
 
-    NOTE: for ampl, the names will be tuples name, index
     """
 
-    assert crops_multiplier == 1, "for AMPL, just getting started with 3 crops"
+    assert crops_multiplier == 1, "just getting started with 3 crops"
 
     ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
 
@@ -175,10 +175,8 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 def attach_Ws_and_prox(Ag, sname, scenario):
     # TODO: the current version has this hardcoded in the GAMS model
-    # give rho a value
-    gd = scenario._agnostic_dict
-    for ndn_i, gxvar in gd["nonants"].items():
-        gd["ph"]["ph_rho"][ndn_i].set_value(scenario._mpisppy_model.rho.value)
+    # (W, rho, and xbar all get values right before the solve)
+    pass
 
 
 def _disable_prox(Ag, scenario):
@@ -213,7 +211,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
-    _copy_Ws_xbars_rho_from_host(s)
+    _copy_Ws_xbar_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
@@ -271,7 +269,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
 
 # local helper
-def _copy_Ws_xbars_rho_from_host(s):
+def _copy_Ws_xbar_rho_from_host(s):
     # special for farmer
     # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
@@ -279,11 +277,11 @@ def _copy_Ws_xbars_rho_from_host(s):
     for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
             gd["ph"]["ph_W"][ndn_i].set_value(s._mpisppy_model.W[ndn_i].value)
+            gd["ph"]["rho"][ndn_i].set_value(s._mpisppy_model.rho[ndn_i].value)
+            gd["ph"]["xbar"][ndn_i].set_value(s._mpisppy_model.xbars[ndn_i].value)
         else:
             # presumably an xhatter; we should check, I suppose
             pass
-        gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])   xxxx
-        gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i]) xxxx
 
 
 # local helper
