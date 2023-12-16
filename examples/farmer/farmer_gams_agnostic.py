@@ -8,7 +8,7 @@ but not necessarily the best ways in any case.
 """
 
 import os
-import sys
+import time
 import gams
 import gamspy_base
 
@@ -201,10 +201,11 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
 
 
 def solve_one(Ag, s, solve_keyword_args, gripe, tee):
+    # s is the host scenario
     # This needs to attach stuff to s (see solve_one in spopt.py)
     # Solve the guest language version, then copy values to the host scenario
 
-    # This function needs to  W on the guest right before the solve
+    # This function needs to put W on the guest right before the solve
 
     # We need to operate on the guest scenario, not s; however, attach things to s (the host scenario)
     # and copy to s. If you are working on a new guest, you should not have to edit the s side of things
@@ -215,7 +216,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
-    solver_name = s._solver_plugin.name
+    solver_name = s._solver_plugin.name   # not used?
 
     solver_exception = None
     try:
@@ -223,7 +224,9 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     except Exception as e:
         results = None
         solver_exception = e
-
+    print(f"debug {gs.model_status =}")
+    time.sleep(1)  # just hoping this helps...
+    
     solve_ok = (1, 2, 7, 8, 15, 16, 17)
 
     if gs.model_status not in solve_ok:
@@ -261,8 +264,12 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
                 "was not communicated to the subproblem solver. ")
 
         s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.get_level()
+        if global_rank == 0:  # debugging
+            print(f"solve_one: {s.name =}, {ndn_i =}, {gxvar.get_level() =}")
 
-    # the next line ignore bundling
+    print(f"   {objval =}")
+
+    # the next line ignores bundling
     s._mpisppy_data._obj_from_agnostic = objval
 
     # TBD: deal with other aspects of bundling (see solve_one in spopt.py)

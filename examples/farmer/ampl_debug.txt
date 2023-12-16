@@ -2,3 +2,7 @@
 - iter0 matches pyomo as guest and the W's and xbar match, but then W diverges at iter 2
 - the objective function looks OK in the code
 - maybe there are issues with variable order?
+- look at this just before xsqbars (line 80)
+            print(f"in phbase.py {nonants_array =} {k =}")
+            scen1 looks good, but in scenarios 0 and 2, all 500 acres go to corn...
+

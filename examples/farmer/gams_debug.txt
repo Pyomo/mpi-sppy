@@ -1,0 +1,14 @@
+GAMS debug starting Dec 15, 2023
+
+for Iter0, once in a blue moon everything is OK, but most times the objectives
+are all OK but some of the scens (or sometimes just one of them)
+have 6.426 E246 for the level of the third nonant even though the obj is
+correct.  Other times all three scenarios have bad levels for the third var.
+The bad levels obviously cause a lot of trouble.
+
+sleeps do not seem to help
+
+see /home/woodruff/software/gams45.3_linux_x64_64_sfx/api/python/examples/control/benders_2stage.py
+
+Iter1 solves fail (I think always, but I can't get iter0 to succeed
+again to check) with a status of 6
