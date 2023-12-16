@@ -298,21 +298,21 @@ def _copy_Ws_xbars_rho_from_host(s):
     # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
-    # could/should use set values
-    try:
-        parm = gs.get_parameter("W")
-    except:
-        # presumably an xhatter
-        pass
-    
+
+    # We can't use a simple list because of indexes, we have to use a dict
+    # NOTE that we know that W is indexed by crops for this problem
+    #  and the nonant_names are tuple with the index in the 1 slot
     # AMPL params are tuples (index, value), which are immutable
     if hasattr(s._mpisppy_model, "W"):
-        Wlist = [pyo.value(v) for v in s._mpisppy_model.W.values()]
-        gs.get_parameter("W").set_values(Wlist)
-        rholist = [pyo.value(v) for v in s._mpisppy_model.rho.values()]
-        gs.get_parameter("rho").set_values(rholist)
-        xbarslist = [pyo.value(v) for v in s._mpisppy_model.xbars.values()]
-        gs.get_parameter("xbars").set_values(xbarslist)
+        Wdict = {gd["nonant_names"][ndn_i][1]:\
+                 pyo.value(v) for ndn_i, v in s._mpisppy_model.W.items()}
+        gs.get_parameter("W").set_values(Wdict)
+        rhodict = {gd["nonant_names"][ndn_i][1]:\
+                   pyo.value(v) for ndn_i, v in s._mpisppy_model.rho.items()}
+        gs.get_parameter("rho").set_values(rhodict)
+        xbarsdict = {gd["nonant_names"][ndn_i][1]:\
+                   pyo.value(v) for ndn_i, v in s._mpisppy_model.xbars.items()}
+        gs.get_parameter("xbars").set_values(xbarsdict)
     else:
         pass  # presumably an xhatter; we should check, I suppose
         

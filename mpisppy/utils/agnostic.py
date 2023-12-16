@@ -103,6 +103,8 @@ class Agnostic():
 
         sputils.attach_root_node(s, s.Obj, [s.nonantVars])
 
+        s._mpisppy_probability = gd["probability"]
+        
         return s
 
 

@@ -5,4 +5,45 @@
 - look at this just before xsqbars (line 80)
             print(f"in phbase.py {nonants_array =} {k =}")
             scen1 looks good, but in scenarios 0 and 2, all 500 acres go to corn...
+16 Dec
 
+Pyomo:
+in phbase.py nonants_array =array([100.,  25., 375.]) k ='scen0'
+in phbase.py nonants_array =array([120.,  80., 300.]) k ='scen1'
+in phbase.py nonants_array =array([183.33333333,  66.66666667, 250.        ]) k ='scen2'
+ in _solve_one  global_rank =0
+W : Size=3, Index=W_index, Domain=Any, Default=None, Mutable=True
+    Key         : Value
+    ('ROOT', 0) : -34.44444444444443
+    ('ROOT', 1) : -32.22222222222222
+    ('ROOT', 2) :  66.66666666666669
+
+AMPL:
+in phbase.py nonants_array =array([375.,  25., 100.]) k ='scen0'
+in phbase.py nonants_array =array([300.,  80., 120.]) k ='scen1'
+in phbase.py nonants_array =array([250.        ,  66.66666667, 183.33333333]) k ='scen2'
+ in _solve_one WParamDatas =[('beets', -32.22222222222222), ('corn', 66.66666666666669), ('wheat', -34.44444444444443)] global_rank =0
+
+**** The variable order does not match between the Pyomo guest and the
+AMPL guest, it might not match between AMPL and the host!
+(AMPL is alph order)
+Look at the x,W pairing: for pyomo (100,-34), (25, -32), (375, 66.6)
+                         for ampl (375, -32), (25, 66), (100, -34)
+     ! The AMPL pairing is messed up!
+
+The trouble is in agnostic.py
+        sputils.attach_root_node(s, s.Obj, [s.nonantVars])
+uses Pyomo ordering
+
+... but why are the var values correct in ampl? A: they are correct in
+AMPL for AMPL iter 0 by definition, they are probably mismatched when
+they get to the host.
+
+Solution ideas: can the host use the order from the guest? or does
+everyone need to sort? Or can the guest assign using the indexes?
+
+I am going to use the fact that I know the crop indexes. For more
+general work, everything needs to be done with ndn_i indexes, I think.
+
+It is working now, but would need more work for a fully general interface that
+is not farmer specific
