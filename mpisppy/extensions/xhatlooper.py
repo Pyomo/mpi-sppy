@@ -39,6 +39,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             restore_nonants (bool): if True, restores the nonants to their original
                                     values in all scenarios. If False, leaves the
                                     nonants as they are in the tried scenario
+                                    You want true; False would be a bug!
         Returns:
             xhojbective (float or None), sname (string): the objective function
                 or None if one could not be obtained.

@@ -69,7 +69,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         obj = self.xhatter._try_one(snamedict,
                                     solver_options = self.solver_options,
                                     verbose=False,
-                                    restore_nonants=False,
+                                    restore_nonants=True,
                                     stage2EFsolvern=stage2EFsolvern,
                                     branching_factors=branching_factors)
         def _vb(msg): 
