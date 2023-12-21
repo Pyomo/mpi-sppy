@@ -75,7 +75,6 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         wheel.spin()
         if wheel.global_rank == 1:
             xhat_object = wheel.spcomm.opt
-            print(f"{xhat_object._TestExtension_who_is_called =}")
             self.assertIn('post_solve', xhat_object._TestExtension_who_is_called)
 
 
@@ -126,7 +125,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 1:
             xhat_object = wheel.spcomm.opt
             for idx,v in xhat_object._TestHelperExtension_checked.items():
-                print(f"{idx =}, {v =}")
+                self.assertNotEqual(v[0], v[1], f"xhatshuffle does not seem to change things for {idx} (and maybe others)")
 
 
     @unittest.skipIf(not solver_available,
