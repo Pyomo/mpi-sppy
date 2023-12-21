@@ -139,6 +139,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 # update the caches
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
+                
+                scenario_cycler.begin_epoch()
 
             next_scendict = scenario_cycler.get_next()
             if next_scendict is not None:
@@ -147,8 +149,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 if update:
                     _vb(f"   Updating best to {next_scendict}")
                     scenario_cycler.best = next_scendict
-            else:
-                scenario_cycler.begin_epoch()
 
             #_vb(f"    scenario_cycler._scenarios_this_epoch {scenario_cycler._scenarios_this_epoch}")
 
@@ -174,6 +174,7 @@ class ScenarioCycler:
         self._shuffled_scenarios = shuffled_scenarios
         self._num_scenarios = len(shuffled_scenarios)
         
+        self._cycle_idx = 0
         self._begin_normal_epoch()
         
         self._best = None
@@ -249,7 +250,6 @@ class ScenarioCycler:
             self._reversed = False
         self._shuffled_snames = [s[1] for s in self._shuffled_scenarios]
         self._original_order = [s[0] for s in self._shuffled_scenarios]
-        self._cycle_idx = 0
         self._cur_ROOTscen = self._shuffled_snames[0]
         self.create_nodescen_dict()
         
@@ -259,7 +259,6 @@ class ScenarioCycler:
         self._reversed = True
         self._shuffled_snames = [s[1] for s in reversed(self._shuffled_scenarios)]
         self._original_order = [s[0] for s in reversed(self._shuffled_scenarios)]
-        self._cycle_idx = 0
         self._cur_ROOTscen = self._shuffled_snames[0]
         self.create_nodescen_dict()
         
