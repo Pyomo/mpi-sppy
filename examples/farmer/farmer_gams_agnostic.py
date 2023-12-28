@@ -57,7 +57,8 @@ def scenario_creator(
 
     ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
 
-    job = ws.add_job_from_file("GAMS/farmer_augmented.gms")
+    ####job = ws.add_job_from_file("GAMS/farmer_augmented.gms")
+    job = ws.add_job_from_file("GAMS/farmer_linear_augmented.gms")
     job.run()
 
     cp = ws.add_checkpoint()
@@ -76,7 +77,7 @@ def scenario_creator(
     W_on = mi.sync_db.add_parameter("W_on", 0, "activate w term")
     prox_on = mi.sync_db.add_parameter("prox_on", 0, "activate prox term")
 
-    mi.instantiate("simple min negprofit using nlp",
+    mi.instantiate("simple min negprofit using lp",
         [
             gams.GamsModifier(y),
             gams.GamsModifier(ph_W),
@@ -280,7 +281,7 @@ def _copy_Ws_xbar_rho_from_host(s):
     # special for farmer
     # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
-    # could/should use set values
+    # could/should use set values, but then use a dict to get the indexes right
     for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
             gd["ph"]["ph_W"][ndn_i].set_value(s._mpisppy_model.W[ndn_i].value)
