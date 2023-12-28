@@ -316,19 +316,6 @@ def _copy_Ws_xbars_rho_from_host(s):
     else:
         pass  # presumably an xhatter; we should check, I suppose
         
-    """
-    # TBD: we should be using set_values rather than a loop
-    for ndn_i, gxvar in gd["nonants"].items():
-        if hasattr(s._mpisppy_model, "W"):
-            W_param = gd["PH"]["W"][ndn_i]
-            W_param = (W_param[0], s._mpisppy_model.W[ndn_i].value)
-            rho_param = gd["PH"]["rho"][ndn_i]
-            rho_param = (rho_param[0], s._mpisppy_model.rho[ndn_i].value)
-            xbars_param = gd["PH"]["xbars"][ndn_i]
-            xbars_param = (xbars_param[0], s._mpisppy_model.xbars[ndn_i].value)
-        else:
-            pass  # presumably an xhatter; we should check, I suppose
-    """
 
 # local helper
 def _copy_nonants_from_host(s):
@@ -351,14 +338,18 @@ def _restore_nonants(Ag, s):
 
     
 def _restore_original_fixedness(Ag, s):
+    # The host has restored already
+    #  Note that this also takes values from the host, which should be OK
     _copy_nonants_from_host(s)
 
 
 def _fix_nonants(Ag, s):
+    # the host has already fixed
     _copy_nonants_from_host(s)
 
 
 def _fix_root_nonants(Ag, s):
+    # the host has already fixed
     _copy_nonants_from_host(s)
 
     
