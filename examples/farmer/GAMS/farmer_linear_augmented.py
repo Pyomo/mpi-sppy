@@ -1,4 +1,4 @@
-# to assist with debugging
+# to assist with debugging (a lot of stuff here is really needed)
 import os
 import sys
 import gams
@@ -69,19 +69,21 @@ def create_model(scennum = 2):
         y.add_record("sugarbeets").value = 24.0
 
     mi.solve()
-    areaVarDatas = list( mi.sync_db["x"] )
+    areaVarDatas = list(mi.sync_db["x"])
 
     print(f"after simple solve for scenario {scennum}")
     for i,v in enumerate(areaVarDatas):
         print(f"{i =}, {v.get_level() =}")
 
     # In general, be sure to process variables in the same order has the guest does (so indexes match)
+    nonant_names_dict = {("ROOT",i): ("x", v.key(0)) for i, v in enumerate(areaVarDatas)}
     gd = {
         "scenario": mi,
         "nonants": {("ROOT",i): v for i,v in enumerate(areaVarDatas)},
         "nonant_fixedness": {("ROOT",i): v.get_lower() == v.get_upper() for i,v in enumerate(areaVarDatas)},
         "nonant_start": {("ROOT",i): v.get_level() for i,v in enumerate(areaVarDatas)},
-        "nonant_names": {("ROOT",i): ("x", v.key(0)) for i, v in enumerate(areaVarDatas)},
+        "nonant_names": nonant_names_dict,
+        "nameset": {nt[0] for nt in nonant_names_dict.values()},
         "probability": "uniform",
         "sense": None,
         "BFs": None,
@@ -109,4 +111,16 @@ if __name__ == "__main__":
     print(f"after solve in main for scenario {scennum}")
     for ndn_i,gxvar in gd["nonants"].items():
         print(f"{ndn_i =}, {gxvar.get_level() =}")
+    print("That was bad, but if we do sync_db in the right way, it will be cool")
+    ###mi.sync_db["x"]  # not good enough, we need to make the list for some reason
+    # the set of names will be just x for farmer 
+    print(f"{gd['nameset'] =}")
+    for n in gd["nameset"]:    
+        list(mi.sync_db[n])
+    # But maybe the objects are the objects, so the sync has been done... yes!
+    for ndn_i,gxvar in gd["nonants"].items():
+        print(f"{ndn_i =}, {gxvar.get_level() =}")
+    print("was that good?")
+    # I don't really understand this sync_db thing
+    
     
