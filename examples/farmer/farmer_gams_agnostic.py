@@ -117,12 +117,14 @@ def scenario_creator(
     areaVarDatas = list( mi.sync_db["x"] ) 
 
     # In general, be sure to process variables in the same order has the guest does (so indexes match)
+    nonant_names_dict = {("ROOT",i): ("x", v.key(0)) for i, v in enumerate(areaVarDatas)}    
     gd = {
         "scenario": mi,
         "nonants": {("ROOT",i): v for i,v in enumerate(areaVarDatas)},
         "nonant_fixedness": {("ROOT",i): v.get_lower() == v.get_upper() for i,v in enumerate(areaVarDatas)},
         "nonant_start": {("ROOT",i): v.get_level() for i,v in enumerate(areaVarDatas)},
-        "nonant_names": {("ROOT",i): ("x", v.key(0)) for i, v in enumerate(areaVarDatas)},
+        "nonant_names": nonant_names_dict,
+        "nameset": {nt[0] for nt in nonant_names_dict.values()},
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None,
@@ -248,6 +250,8 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     # copy the nonant x values from gs to s so mpisppy can use them in s
     # in general, we need more checks (see the pyomo agnostic guest example)
+    for n in gd["nameset"]:    
+        list(gs.sync_db[n])   # needed to get current solution, I guess    
     for ndn_i, gxvar in gd["nonants"].items():
         try:   # not sure this is needed
             float(gxvar.get_level())
