@@ -130,20 +130,27 @@ if __name__ == "__main__":
         list(mi.sync_db[n])
     for ndn_i,gxvar in gd["nonants"].items():
         print(f"{ndn_i =}, {gxvar.get_level() =}")
-
     print(f" after repeat iter 0 solve {mi.model_status =}")
+    
+    print("Here is where the trouble starts")
     print("\n Now let's try to simulate an iter 1 solve")
-    gd["ph"]["prox_on"].set_value(1)
+    print(f'{gd["ph"]["prox_on"] =}')
+    print(f'{mi.sync_db["prox_on"].find_record() =}')
+    #gd["ph"]["prox_on"].set_value(1)
+    gd["ph"]["prox_on"].value = 1
     for ndn_i in gd["nonants"]:
-        gd["ph"]["rho"][ndn_i].set_value(1)
-        gd["ph"]["xbar"][ndn_i].set_value(100)
+        print(f'{gd["ph"]["rho"][ndn_i] =}')
+        #gd["ph"]["rho"][ndn_i].set_value(1)
+        #gd["ph"]["rho"][ndn_i].value = 1
+        ###gd["ph"]["xbar"][ndn_i].set_value(100)
     mi.solve()
     print(f"  regular iter {mi.model_status =}")
     print(f"Note that the levels do not update with status of 19")
+    """
     for n in gd["nameset"]:    
         list(mi.sync_db[n])
     for ndn_i,gxvar in gd["nonants"].items():
         print(f"{ndn_i =}, {gxvar.get_level() =}")
-    
+    """
     
     

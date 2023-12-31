@@ -104,7 +104,10 @@ req(cropr)..   yld(cropr) + y(cropr) - sum(sameas(cropx,cropr),w(cropx)) =g= min
 beets..        w('beets1') + w('beets2') =l= yld('sugarbeets');
 
 PenLeft(crop).. sqr(xbar(crop)) + xbar(crop)*0 + xbar(crop) * x(crop) + land * x(crop) =g= PHpenalty(crop);
-PenRight(crop).. sqr(xbar(crop)) - xbar(crop)*land - xbar(crop)*x(crop) + land * x(crop) =g= PHpenalty(crop); 
+PenRight(crop).. sqr(xbar(crop)) - xbar(crop)*land - xbar(crop)*x(crop) + land * x(crop) =g= PHpenalty(crop);
+
+PHpenalty.lo(crop) = 0;
+PHpenalty.up(crop) = max(sqr(xbar(crop) - 0), sqr(land - xbar(crop)));
 
 w.up('beets1') = maxbeets1;
 

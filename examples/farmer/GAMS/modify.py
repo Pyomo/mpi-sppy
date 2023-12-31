@@ -47,12 +47,15 @@ crop_ext = model.out_db.get_set("crop")
 for c in crop_ext:
     name = c.key(0)
     ph_W.find_record(name).value = 500
-    xbar.find_record(name).value = 1000
+    xbar.find_record(name).value = 200
     rho.find_record(name).value = 10
 
 mi.solve(output=sys.stdout)
 
-prox_on.find_record().value = 0.0
-W_on.find_record().value = 0.0
+###prox_on.find_record().value = 0.0
+###W_on.find_record().value = 0.0
+prox_on.find_record().set_value(0.0)
+W_on.find_record().set_value(0.0)
 
 mi.solve(output=sys.stdout)
+print(f"{prox_on.find_record() =}")
