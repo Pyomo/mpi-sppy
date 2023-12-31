@@ -251,7 +251,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # copy the nonant x values from gs to s so mpisppy can use them in s
     # in general, we need more checks (see the pyomo agnostic guest example)
     for n in gd["nameset"]:    
-        list(gs.sync_db[n])   # needed to get current solution, I guess    
+        list(gs.sync_db[n])   # needed to get current solution, I guess (the iterator seems to have a side-effect because list is needed)
     for ndn_i, gxvar in gd["nonants"].items():
         try:   # not sure this is needed
             float(gxvar.get_level())
