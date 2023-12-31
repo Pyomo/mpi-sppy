@@ -12,6 +12,8 @@ import time
 import gams
 import gamspy_base
 
+LINEARIZED = True   # False means quadratic prox (hack)
+
 this_dir = os.path.dirname(os.path.abspath(__file__))
 gamspy_base_dir = gamspy_base.__path__[0]
 
@@ -57,8 +59,10 @@ def scenario_creator(
 
     ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
 
-    ####job = ws.add_job_from_file("GAMS/farmer_augmented.gms")
-    job = ws.add_job_from_file("GAMS/farmer_linear_augmented.gms")
+    if LINEARIZED:
+        job = ws.add_job_from_file("GAMS/farmer_linear_augmented.gms")
+    else:
+        job = ws.add_job_from_file("GAMS/farmer_augmented.gms")
     job.run()
 
     cp = ws.add_checkpoint()
@@ -77,16 +81,19 @@ def scenario_creator(
     W_on = mi.sync_db.add_parameter("W_on", 0, "activate w term")
     prox_on = mi.sync_db.add_parameter("prox_on", 0, "activate prox term")
 
-    mi.instantiate("simple min negprofit using lp",
-        [
+    glist = [
             gams.GamsModifier(y),
             gams.GamsModifier(ph_W),
             gams.GamsModifier(xbar),
             gams.GamsModifier(rho),
             gams.GamsModifier(W_on),
             gams.GamsModifier(prox_on),
-        ],
-    )
+        ]
+
+    if LINEARIZED:
+        mi.instantiate("simple min negprofit using lp", glist)
+    else:
+        mi.instantiate("simple min negprofit using nlp", glist)
 
     # initialize W, rho, xbar, W_on, prox_on
     crops = [ "wheat", "corn", "sugarbeets" ]
