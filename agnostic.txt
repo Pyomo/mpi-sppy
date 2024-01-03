@@ -4,6 +4,17 @@ newest notes on top
 host means mpisppy
 guest means whatever the guest language is (which can even be Pyomo, of course)
 
+
+Jan 3 2024: We are going to require that the guest takes care of
+               bundling and presents the host with "proper" bundles
+	       that look to the host like regular scenarios.
+   We have AMPL and Pyomo working as guests and GAMS seems to work OK,
+   except that there are file contention issues that can probably be solved
+   easily (I think they have an example with parallel execution)
+
+-------------------------
+
+
 Aug 27
 
 
@@ -11,7 +22,7 @@ The example is now farmer_agnostic.py and agnostic_cylinders.py (ag.bash)
 in the farmer example directory.
 
 HEY::: who updates W? Let's do it right before the solve so we don't have to care...
-       this is a little dangerous at present because we are being silent whe
+       this is a little dangerous at present because we are being silent when
        they are not there because of xhatters
  
 
