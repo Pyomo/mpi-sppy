@@ -642,7 +642,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             if 'initial_proximal_cut_count' in self.options:
                 initial_prox_cuts = self.options['initial_proximal_cut_count']
             else:
-                initial_prox_cuts = 2
+                initial_prox_cuts = 0
         else:
             self._prox_approx = False
 

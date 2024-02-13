@@ -95,6 +95,7 @@ def ph_hub(
     options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
+    options["initial_proximal_cut_count"] = cfg.initial_proximal_cut_count
 
     if _hasit(cfg, "cross_scenario_cuts") and cfg.cross_scenario_cuts:
         hub_class = CrossScenarioHub

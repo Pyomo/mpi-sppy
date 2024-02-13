@@ -48,21 +48,19 @@ class _ProxApproxManager:
         self.lb = value(xvar.lb)
         self.ub = value(xvar.ub)
 
-    def _get_additional_points(self, initial_cut_quantity):
+    def _get_additional_points(self, additional_cut_quantity):
         '''
         calculate additional points for initial cuts
         '''
-        # we add 2 cuts at the bound
-        if initial_cut_quantity <= 2:
+        if additional_cut_quantity <= 0:
             return ()
 
         lb, ub = self.lb, self.ub
         bound_range = ub - lb
         # n+1 points is n hyperplanes,
-        # but we've already added the bounds
-        delta = bound_range / (initial_cut_quantity-1)
+        delta = bound_range / (additional_cut_quantity+1)
 
-        return (lb + i*delta for i in range(1,initial_cut_quantity-1))
+        return (lb + i*delta for i in range(additional_cut_quantity))
 
     def _create_initial_cuts(self, initial_cut_quantity):
         '''
@@ -83,6 +81,11 @@ class _ProxApproxManager:
         x_pnt = self.xvar.value
         y_pnt = self.xvarsqrd.value
         f_val = x_pnt**2
+
+        if y_pnt is None:
+            self.add_cut(x_pnt, persistent_solver)
+            #print(f"var {self.xvar.name}, total cuts: {self.cut_index}")
+            return True
 
         #print(f"y-distance: {actual_val - measured_val})")
 
@@ -105,8 +108,11 @@ class _ProxApproxManager:
                 #print(f"next_val: {next_val}")
                 this_val = next_val
                 next_val = _newton_step(this_val, x_pnt, y_pnt)
-            #self.add_cut(x_pnt, persistent_solver)
+            # This cut seems to help the bound / convergence the most
+            self.add_cut(x_pnt, persistent_solver)
+            # Whereas this one helps the incumbent the most
             self.add_cut(next_val, persistent_solver)
+            #print(f"var {self.xvar.name}, total cuts: {self.cut_index}")
             return True
         return False
 
@@ -114,11 +120,16 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
 
     def _create_initial_cuts(self, initial_cut_quantity):
 
+        if initial_cut_quantity <= 0:
+            return
+
         lb, ub = self.lb, self.ub
 
         # we get zero for free
         if lb != 0.:
             self.add_cut(lb)
+            if self.cut_index >= initial_cut_quantity:
+                return
 
         if lb == ub:
             # var is fixed
@@ -126,8 +137,10 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
 
         if ub != 0.:
             self.add_cut(ub)
+            if self.cut_index >= initial_cut_quantity:
+                return
 
-        additional_points = self._get_additional_points(initial_cut_quantity)
+        additional_points = self._get_additional_points(initial_cut_quantity - self.cut_index)
         for ptn in additional_points:
             self.add_cut(ptn)
 
@@ -169,6 +182,10 @@ def _compute_mb(val):
 class ProxApproxManagerDiscrete(_ProxApproxManager):
 
     def _create_initial_cuts(self, initial_cut_quantity):
+
+        if initial_cut_quantity <= 0:
+            return
+
         lb, ub = self.lb, self.ub
 
         if lb == ub:
@@ -178,13 +195,18 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         #print(f"adding cut for lb {lb}")
         self.add_cut(lb)
+        if self.cut_index >= initial_cut_quantity:
+            return
+
         #print(f"adding cut for ub {ub}")
         self.add_cut(ub)
+        if self.cut_index >= initial_cut_quantity:
+            return
 
         # there's a left and right cut associated with each discrete point
         # so there's only half the points we cut on total
         # This rounds down, e.g., 7 cuts specified becomes 6
-        additional_points = self._get_additional_points(initial_cut_quantity//2+1)
+        additional_points = self._get_additional_points((initial_cut_quantity - self.cut_index)//2+1)
         for ptn in additional_points:
             self.add_cut(ptn)
 
@@ -225,6 +247,8 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
                 persistent_solver.add_constraint(self.cuts[self.var_index, val])
             cuts_added += 1
 
+        self.cut_index += cuts_added
+
         return cuts_added
 
 if __name__ == '__main__':
@@ -243,7 +267,7 @@ if __name__ == '__main__':
     m.xsqrdobj = pyo.Constraint([0], pyo.Integers)
 
     s = pyo.SolverFactory('gurobi_persistent')
-    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.xsqrdobj, 0, 2)
+    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.xsqrdobj, 0, 0)
     s.set_instance(m)
     m.pprint()
     new_cuts = True
@@ -251,8 +275,8 @@ if __name__ == '__main__':
     while new_cuts:
         print("")
         s.solve(m,tee=False)
-        print(f"x: {pyo.value(m.x)}")
-        new_cuts = prox_manager.check_tol_add_cut(1e-1, persistent_solver=s)
+        print(f"x: {pyo.value(m.x)}, x**2: {pyo.value(m.xsqrd)}")
+        new_cuts = prox_manager.check_tol_add_cut(1e-2, persistent_solver=s)
         #m.pprint()
         iter_cnt += 1
 

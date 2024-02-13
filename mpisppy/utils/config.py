@@ -235,6 +235,13 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.e-1)
 
+        self.add_to_config("initial_proximal_cut_count",
+                            description="For PH, when linearizing proximal terms, "
+                            "the is the number of additional proximal cuts initially "
+                            "added (default 0)",
+                            domain=int,
+                            default=0)
+
     def make_parser(self, progname=None, num_scens_reqd=False):
         raise RuntimeError("make_parser is no longer used. See comments at top of config.py")
 
