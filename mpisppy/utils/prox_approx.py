@@ -146,10 +146,12 @@ class _ProxApproxManager:
                 #print(f"next_val: {next_val}")
                 this_val = next_val
                 next_val = _newton_step(this_val, x_pnt, y_pnt)
-            # This cut seems to help the bound / convergence the most
-            self.add_cut(x_pnt, persistent_solver)
-            # Whereas this one helps the incumbent the most
+            # This cut seems to help the incumbent the most
             self.add_cut(next_val, persistent_solver)
+            # This cut seems to help the bound / convergence the most
+            # But do not add nearly parallel cuts
+            if abs(y_pnt-next_val*next_val) > tolerance:
+                self.add_cut(x_pnt, persistent_solver)
             #print(f"var {self.xvar.name}, total cuts: {self.cut_index}")
             return True
         return False

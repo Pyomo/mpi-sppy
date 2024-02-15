@@ -232,10 +232,11 @@ class Config(pyofig.ConfigDict):
                             description="For PH, when linearizing proximal terms, "
                             "a cut will be added if the proximal term approximation "
                             "is looser than this value (default 1e-3). Setting this "
-                            "value lower than the square of the subproblem solver's "
-                            "feasibility tolerance will likely have a deleterious effect.",
+                            "value (much) lower than the square root of the subproblem "
+                            "solver's feasibility tolerance will likely have a "
+                            "deleterious effect.",
                             domain=float,
-                            default=1.e-3)
+                            default=1.e-4)
 
         self.add_to_config("initial_proximal_cut_count",
                             description="For PH, when linearizing proximal terms, "
