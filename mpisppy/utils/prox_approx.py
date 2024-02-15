@@ -1,8 +1,9 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 
+from collections import defaultdict
 from math import isclose
-from pyomo.environ import value
+from pyomo.environ import value, Constraint
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
@@ -16,6 +17,43 @@ def _d2f(val, x_pnt, y_pnt):
 
 def _newton_step(val, x_pnt, y_pnt):
     return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
+
+
+class ProxApproxCuts(Constraint):
+
+    _inactive_cut_iters = 10
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._keep_indices = set()
+        self._inactive_iter_count = defaultdict(int)
+
+    def cut_manager(self, tol, persistent_solver):
+        for idx, c in self.items():
+            if c.active:
+                # if the constraint is inactive in the solution, deactivate it
+                if (c.body() - c.lb) > tol*100 and idx not in self._keep_indices:
+                    self._inactive_iter_count[idx] += 1
+                    if self._inactive_iter_count[idx] > self._inactive_cut_iters:
+                        c.deactivate()
+                        #print(f"deactivating prox constraint {idx}, slack: {(c.body() - c.lb)}")
+                        if persistent_solver is not None:
+                            persistent_solver.remove_constraint(c)
+                else:
+                    self._inactive_iter_count[idx] = 0
+            else: # inactive constraint, see if it needs to be re-added
+                if (c.body() - c.lb) < -tol:
+                    # if it does need to be re-added, make sure it doesn't
+                    # fall out again to prevent cycling
+                    #print(f"re-activating prox constraint {idx}, slack: {(c.body() - c.lb)}")
+                    c.activate()
+                    self._keep_indices.add(idx)
+                    if persistent_solver is not None:
+                        persistent_solver.add_constraint(c)
+
+        #total_active = sum( 1 for c in self.values() if c.active )
+        #print(f"total active prox cuts: {total_active}")
+
 
 class ProxApproxManager:
     __slots__ = ()
@@ -157,10 +195,10 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         ## f(x) >= f(a) + f'(a)(x - a)
         ## f(x) >= f'(a) x + (f(a) - f'(a)a)
         ## (0 , f(x) - f'(a) x - (f(a) - f'(a)a) , None)
-        expr = LinearExpression( linear_coefs=[1, -f_p_a],
+        expr = LinearExpression( linear_coefs=[1.0, -f_p_a],
                                  linear_vars=[self.xvarsqrd, self.xvar],
-                                 constant=-const )
-        self.cuts[self.var_index, self.cut_index] = (0, expr, None)
+                                 constant=0.0)
+        self.cuts[self.var_index, self.cut_index] = (const, expr, None)
         if persistent_solver is not None:
             persistent_solver.add_constraint(self.cuts[self.var_index, self.cut_index])
         self.cut_index += 1
@@ -225,11 +263,11 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
         ## which is indexed by 4
         if (*self.var_index, val+1) not in self.cuts and val < self.ub:
             m,b = _compute_mb(val)
-            expr = LinearExpression( linear_coefs=[1, -m],
+            expr = LinearExpression( linear_coefs=[1.0, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
-                                     constant=-b )
+                                     constant=0.0 )
             #print(f"adding cut for {(val, val+1)}")
-            self.cuts[self.var_index, val+1] = (0, expr, None)
+            self.cuts[self.var_index, val+1] = (b, expr, None)
             if persistent_solver is not None:
                 persistent_solver.add_constraint(self.cuts[self.var_index, val+1])
             cuts_added += 1
@@ -238,11 +276,11 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
         ## which is indexed by 3
         if (*self.var_index, val) not in self.cuts and val > self.lb:
             m,b = _compute_mb(val-1)
-            expr = LinearExpression( linear_coefs=[1, -m],
+            expr = LinearExpression( linear_coefs=[1.0, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
-                                     constant=-b )
+                                     constant=0.0 )
             #print(f"adding cut for {(val-1, val)}")
-            self.cuts[self.var_index, val] = (0, expr, None)
+            self.cuts[self.var_index, val] = (b, expr, None)
             if persistent_solver is not None:
                 persistent_solver.add_constraint(self.cuts[self.var_index, val])
             cuts_added += 1

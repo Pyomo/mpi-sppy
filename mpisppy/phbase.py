@@ -12,7 +12,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spopt
 
-from mpisppy.utils.prox_approx import ProxApproxManager
+from mpisppy.utils.prox_approx import ProxApproxManager, ProxApproxCuts
 from mpisppy import global_toc
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
@@ -581,6 +581,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         tol = self.prox_approx_tol
         for sn, s in self.local_scenarios.items():
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
+            s._mpisppy_model.xsqvar_cuts.cut_manager(tol, persistent_solver)
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
 
@@ -662,7 +663,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 # Define the first cut to be _xsqvar >= 0
                 scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False,
                                             within=pyo.NonNegativeReals)
-                scenario._mpisppy_model.xsqvar_cuts = pyo.Constraint(scenario._mpisppy_data.nonant_indices, pyo.Integers)
+                scenario._mpisppy_model.xsqvar_cuts = ProxApproxCuts(scenario._mpisppy_data.nonant_indices, pyo.Integers)
                 scenario._mpisppy_data.xsqvar_prox_approx = {}
             else:
                 scenario._mpisppy_model.xsqvar = None
