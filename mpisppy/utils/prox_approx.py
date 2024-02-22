@@ -39,6 +39,17 @@ class _ProxApproxManager:
         self.var_index = ndn_i
         self.cuts = xsqvar_cuts
         self.cut_index = 0
+        self._store_bounds()
+
+    def _store_bounds(self):
+        if self.xvar.lb is None:
+            self.lb = -float("inf")
+        else:
+            self.lb = self.xvar.lb
+        if self.xvar.ub is None:
+            self.ub = float("inf")
+        else:
+            self.ub = self.xvar.ub
 
     def add_cut(self, val, persistent_solver=None):
         '''
@@ -58,7 +69,8 @@ class _ProxApproxManager:
         #print(f"y-distance: {actual_val - measured_val})")
         if y_pnt is None:
             self.add_cut(x_pnt, persistent_solver)
-            self.add_cut(2*x_bar - x_pnt, persistent_solver)
+            if not isclose(x_pnt, x_bar, abs_tol=1e-6):
+                self.add_cut(2*x_bar - x_pnt, persistent_solver)
             return True
 
 
@@ -82,7 +94,8 @@ class _ProxApproxManager:
                 this_val = next_val
                 next_val = _newton_step(this_val, x_pnt, y_pnt)
             self.add_cut(next_val, persistent_solver)
-            self.add_cut(2*x_bar - next_val, persistent_solver)
+            if not isclose(next_val, x_bar, abs_tol=1e-6):
+                self.add_cut(2*x_bar - next_val, persistent_solver)
             return True
         return False
 
@@ -92,7 +105,9 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         '''
         create a cut at val using a taylor approximation
         '''
-        #print(f"adding cut for {val}")
+        # handled by bound
+        if val == 0:
+            return 0
         # f'(a) = 2*val
         # f(a) - f'(a)a = val*val - 2*val*val
         f_p_a = 2*val
@@ -108,6 +123,7 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         if persistent_solver is not None:
             persistent_solver.add_constraint(self.cuts[self.var_index, self.cut_index])
         self.cut_index += 1
+        print(f"added continuous cut for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
 
         return 1
 
@@ -138,7 +154,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## So, a cut to the RIGHT of the point 3 is the cut for (3,4),
         ## which is indexed by 4
-        if (*self.var_index, val+1) not in self.cuts:
+        if (*self.var_index, val+1) not in self.cuts and val < self.ub:
             m,b = _compute_mb(val)
             expr = LinearExpression( linear_coefs=[1, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
@@ -151,7 +167,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## Similarly, a cut to the LEFT of the point 3 is the cut for (2,3),
         ## which is indexed by 3
-        if (*self.var_index, val) not in self.cuts:
+        if (*self.var_index, val) not in self.cuts and val > self.lb:
             m,b = _compute_mb(val-1)
             expr = LinearExpression( linear_coefs=[1, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
@@ -161,6 +177,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
             if persistent_solver is not None:
                 persistent_solver.add_constraint(self.cuts[self.var_index, val])
             cuts_added += 1
+        print(f"added {cuts_added} integer cut(s) for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
 
         return cuts_added
 
