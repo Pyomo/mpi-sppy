@@ -639,10 +639,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
-            if 'initial_proximal_cut_count' in self.options:
-                initial_prox_cuts = self.options['initial_proximal_cut_count']
-            else:
-                initial_prox_cuts = 2
         else:
             self._prox_approx = False
 
@@ -688,7 +684,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     elif self._prox_approx:
                         xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
                         scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, scenario._mpisppy_model.xsqvar_cuts, ndn_i, initial_prox_cuts)
+                                ProxApproxManager(xvar, xvarsqrd, xbars[ndn_i], scenario._mpisppy_model.xsqvar_cuts, ndn_i)
                     else:
                         xvarsqrd = xvar**2
                     prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \

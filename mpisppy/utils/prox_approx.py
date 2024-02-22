@@ -20,11 +20,11 @@ def _newton_step(val, x_pnt, y_pnt):
 class ProxApproxManager:
     __slots__ = ()
 
-    def __new__(cls, xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity=2):
+    def __new__(cls, xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i):
         if xvar.is_integer():
-            return ProxApproxManagerDiscrete(xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity)
+            return ProxApproxManagerDiscrete(xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i)
         else:
-            return ProxApproxManagerContinuous(xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity)
+            return ProxApproxManagerContinuous(xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i)
 
 class _ProxApproxManager:
     '''
@@ -32,43 +32,13 @@ class _ProxApproxManager:
     '''
     __slots__ = ()
 
-    def __init__(self, xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity):
+    def __init__(self, xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i):
         self.xvar = xvar
         self.xvarsqrd = xvarsqrd
+        self.xbar = xbar
         self.var_index = ndn_i
         self.cuts = xsqvar_cuts
         self.cut_index = 0
-        self._verify_store_bounds(xvar)
-        self._create_initial_cuts(initial_cut_quantity)
-
-    def _verify_store_bounds(self, xvar):
-        if not (xvar.has_lb() and xvar.has_ub()):
-            raise RuntimeError(f"linearize_nonbinary_proximal_terms requires all "
-                                "nonanticipative variables to have bounds")
-        self.lb = value(xvar.lb)
-        self.ub = value(xvar.ub)
-
-    def _get_additional_points(self, initial_cut_quantity):
-        '''
-        calculate additional points for initial cuts
-        '''
-        # we add 2 cuts at the bound
-        if initial_cut_quantity <= 2:
-            return ()
-
-        lb, ub = self.lb, self.ub
-        bound_range = ub - lb
-        # n+1 points is n hyperplanes,
-        # but we've already added the bounds
-        delta = bound_range / (initial_cut_quantity-1)
-
-        return (lb + i*delta for i in range(1,initial_cut_quantity-1))
-
-    def _create_initial_cuts(self, initial_cut_quantity):
-        '''
-        create initial cuts at val
-        '''
-        pass
 
     def add_cut(self, val, persistent_solver=None):
         '''
@@ -81,10 +51,16 @@ class _ProxApproxManager:
         add a cut if the tolerance is not satified
         '''
         x_pnt = self.xvar.value
+        x_bar = self.xbar.value
         y_pnt = self.xvarsqrd.value
         f_val = x_pnt**2
 
         #print(f"y-distance: {actual_val - measured_val})")
+        if y_pnt is None:
+            self.add_cut(x_pnt, persistent_solver)
+            self.add_cut(2*x_bar - x_pnt, persistent_solver)
+            return True
+
 
         if (f_val - y_pnt) > tolerance:
             '''
@@ -105,31 +81,12 @@ class _ProxApproxManager:
                 #print(f"next_val: {next_val}")
                 this_val = next_val
                 next_val = _newton_step(this_val, x_pnt, y_pnt)
-            #self.add_cut(x_pnt, persistent_solver)
             self.add_cut(next_val, persistent_solver)
+            self.add_cut(2*x_bar - next_val, persistent_solver)
             return True
         return False
 
 class ProxApproxManagerContinuous(_ProxApproxManager):
-
-    def _create_initial_cuts(self, initial_cut_quantity):
-
-        lb, ub = self.lb, self.ub
-
-        # we get zero for free
-        if lb != 0.:
-            self.add_cut(lb)
-
-        if lb == ub:
-            # var is fixed
-            return
-
-        if ub != 0.:
-            self.add_cut(ub)
-
-        additional_points = self._get_additional_points(initial_cut_quantity)
-        for ptn in additional_points:
-            self.add_cut(ptn)
 
     def add_cut(self, val, persistent_solver=None):
         '''
@@ -168,26 +125,6 @@ def _compute_mb(val):
 
 class ProxApproxManagerDiscrete(_ProxApproxManager):
 
-    def _create_initial_cuts(self, initial_cut_quantity):
-        lb, ub = self.lb, self.ub
-
-        if lb == ub:
-            # var is fixed
-            self.create_cut(lb)
-            return
-
-        #print(f"adding cut for lb {lb}")
-        self.add_cut(lb)
-        #print(f"adding cut for ub {ub}")
-        self.add_cut(ub)
-
-        # there's a left and right cut associated with each discrete point
-        # so there's only half the points we cut on total
-        # This rounds down, e.g., 7 cuts specified becomes 6
-        additional_points = self._get_additional_points(initial_cut_quantity//2+1)
-        for ptn in additional_points:
-            self.add_cut(ptn)
-
     def add_cut(self, val, persistent_solver=None):
         '''
         create up to two cuts at val, exploiting integrality
@@ -201,7 +138,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## So, a cut to the RIGHT of the point 3 is the cut for (3,4),
         ## which is indexed by 4
-        if (*self.var_index, val+1) not in self.cuts and val < self.ub:
+        if (*self.var_index, val+1) not in self.cuts:
             m,b = _compute_mb(val)
             expr = LinearExpression( linear_coefs=[1, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
@@ -214,7 +151,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
 
         ## Similarly, a cut to the LEFT of the point 3 is the cut for (2,3),
         ## which is indexed by 3
-        if (*self.var_index, val) not in self.cuts and val > self.lb:
+        if (*self.var_index, val) not in self.cuts:
             m,b = _compute_mb(val-1)
             expr = LinearExpression( linear_coefs=[1, -m],
                                      linear_vars=[self.xvarsqrd, self.xvar],
@@ -236,14 +173,14 @@ if __name__ == '__main__':
     #m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
     m.xsqrd = pyo.Var(within=pyo.NonNegativeReals)
 
-    zero = -73.2
+    m.zero = pyo.Param(initialize=-73.2, mutable=True)
     ## ( x - zero )^2 = x^2 - 2 x zero + zero^2
-    m.obj = pyo.Objective( expr = m.xsqrd - 2*zero*m.x + zero**2 )
+    m.obj = pyo.Objective( expr = m.xsqrd - 2*m.zero*m.x + m.zero**2 )
 
     m.xsqrdobj = pyo.Constraint([0], pyo.Integers)
 
-    s = pyo.SolverFactory('gurobi_persistent')
-    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.xsqrdobj, 0, 2)
+    s = pyo.SolverFactory('xpress_persistent')
+    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.zero, m.xsqrdobj, 0)
     s.set_instance(m)
     m.pprint()
     new_cuts = True
