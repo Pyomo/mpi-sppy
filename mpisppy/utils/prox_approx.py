@@ -202,11 +202,10 @@ if __name__ == '__main__':
     new_cuts = True
     iter_cnt = 0
     while new_cuts:
-        print("")
         s.solve(m,tee=False)
         print(f"x: {pyo.value(m.x)}")
         new_cuts = prox_manager.check_tol_add_cut(1e-1, persistent_solver=s)
         #m.pprint()
         iter_cnt += 1
 
-    print(f"objval: {pyo.value(m.obj)}, x: {pyo.value(m.x)}, iters: {iter_cnt}")
+    print(f"objval: {pyo.value(m.obj)}, x: {pyo.value(m.x)}, cuts: {len(m.xsqrdobj)}, iters: {iter_cnt}")
