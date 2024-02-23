@@ -73,7 +73,6 @@ class _ProxApproxManager:
                 self.add_cut(2*x_bar - x_pnt, persistent_solver)
             return True
 
-
         if (f_val - y_pnt) > tolerance:
             '''
             In this case, we project the point x_pnt, y_pnt onto
@@ -123,7 +122,7 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         if persistent_solver is not None:
             persistent_solver.add_constraint(self.cuts[self.var_index, self.cut_index])
         self.cut_index += 1
-        print(f"added continuous cut for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
+        #print(f"added continuous cut for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
 
         return 1
 
@@ -177,7 +176,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
             if persistent_solver is not None:
                 persistent_solver.add_constraint(self.cuts[self.var_index, val])
             cuts_added += 1
-        print(f"added {cuts_added} integer cut(s) for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
+        #print(f"added {cuts_added} integer cut(s) for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
 
         return cuts_added
 
