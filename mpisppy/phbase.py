@@ -581,7 +581,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         tol = self.prox_approx_tol
         for sn, s in self.local_scenarios.items():
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
-            print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
+            #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
 
