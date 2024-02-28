@@ -342,6 +342,10 @@ class Hub(SPCommunicator):
         self.has_w_spokes = len(self.w_spoke_indices) > 0
         self.has_bounds_only_spokes = len(self.bounds_only_indices) > 0
 
+        # Not all opt classes may have extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.initialize_spoke_indices()
+
     def make_windows(self):
         if self._windows_constructed:
             # different parts of the hub may call make_windows,
@@ -497,6 +501,8 @@ class PHHub(Hub):
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
             )
+        if self.opt.extensions is not None:
+            self.opt.extobject.setup_hub()
 
     def sync(self):
         """
@@ -512,6 +518,8 @@ class PHHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        if self.opt.extensions is not None:
+            self.opt.extobject.sync_with_spokes()
 
     def sync_with_spokes(self):
         self.sync()
@@ -645,6 +653,9 @@ class LShapedHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        # in case LShaped ever gets extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.sync_with_spokes()
 
     def is_converged(self):
         """ Returns a boolean. If True, then LShaped will terminate
