@@ -544,6 +544,16 @@ class SPBase:
             raise RuntimeError("SPBase.spcomm should only be set once")
 
 
+    def allreduce_or(self, val):
+        local_val = np.array([val], dtype='int8')
+        global_val = np.zeros(1, dtype='int8')
+        self.mpicomm.Allreduce(local_val, global_val, op=MPI.LOR)
+        if global_val[0] > 0:
+            return True
+        else:
+            return False
+
+
     def gather_var_values_to_rank0(self, get_zero_prob_values=False):
         """ Gather the values of the nonanticipative variables to the root of
         the `mpicomm` for the cylinder
