@@ -1,7 +1,6 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 from mpisppy.extensions.extension import Extension
-from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
 from mpisppy import global_toc
@@ -74,7 +73,7 @@ class CrossScenarioExtension(Extension):
         cached_ph_obj = dict()
 
         for k,s in opt.local_subproblems.items():
-            phobj = find_active_objective(s)
+            phobj = opt.saved_objectives[k]
             phobj.deactivate()
             cached_ph_obj[k] = phobj
             s._mpisppy_model.EF_Obj.activate()
@@ -157,7 +156,7 @@ class CrossScenarioExtension(Extension):
         
         for k,s in opt.local_subproblems.items():
 
-            obj = find_active_objective(s)
+            obj = opt.saved_objectives[k]
 
             repn = generate_standard_repn(obj.expr, quadratic=True)
             if len(repn.nonlinear_vars) > 0:

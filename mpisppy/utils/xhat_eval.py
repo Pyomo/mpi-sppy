@@ -88,14 +88,11 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
 
         if compute_val_at_nonant:
-            if self.bundling:
-                objfct = self.saved_objs[k]    
-            else:
-                objfct = sputils.find_active_objective(s)
-                if self.verbose:
-                    print ("caller", inspect.stack()[1][3])
-                    print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                           .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+            objfct = self.saved_objectives[k]
+            if self.verbose:
+                print ("caller", inspect.stack()[1][3])
+                print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
+                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
             self.objs_dict[k] = pyo.value(objfct)
         return(pyomo_solve_time)
 
