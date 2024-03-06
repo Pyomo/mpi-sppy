@@ -1066,8 +1066,6 @@ class APH(ph_base.PHBase):
                     objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
-        
-        self.subproblem_creation(self.options["verbose"])
 
         trivial_bound = self.Iter0()
 

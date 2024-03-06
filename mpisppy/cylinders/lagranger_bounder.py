@@ -18,7 +18,6 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         # Scenarios are created here
         self.opt.PH_Prep(attach_prox=False)
         self.opt._reenable_W()
-        self.opt.subproblem_creation(verbose)
         self.opt._create_solvers()
         if "lagranger_rho_rescale_factors_json" in self.opt.options and\
             self.opt.options["lagranger_rho_rescale_factors_json"] is not None:

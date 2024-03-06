@@ -49,6 +49,7 @@ class SPOpt(SPBase):
             variable_probability=variable_probability,
         )
         self._save_active_objectives()
+        self._subproblem_creation(options.get("verbose", False))
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -796,7 +797,7 @@ class SPOpt(SPBase):
         return EF_instance
 
 
-    def subproblem_creation(self, verbose=False):
+    def _subproblem_creation(self, verbose=False):
         """ Create local subproblems (not local scenarios).
 
         If bundles are specified, this function creates the bundles.
