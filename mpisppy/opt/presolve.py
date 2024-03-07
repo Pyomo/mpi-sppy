@@ -19,6 +19,7 @@ from pyomo.common.errors import InfeasibleConstraintException
 from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
+from mpisppy import global_toc
 
 
 class _SPPresolver(abc.ABC):
@@ -186,6 +187,8 @@ class SPIntervalTightener(_SPPresolver):
                         if ub - lb <= -feas_tol:
                             msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
                             raise InfeasibleConstraintException(msg)
+                        if (lb, ub) != var.bounds:
+                            global_toc(f"Tightening bounds on nonant {var.name} from {var.bounds} to {(lb, ub)}")
                         var.bounds = (lb, ub)
 
         return update
