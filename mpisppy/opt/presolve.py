@@ -15,6 +15,7 @@ import weakref
 
 import numpy as np
 
+from pyomo.common.errors import InfeasibleConstraintException
 from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
@@ -28,6 +29,7 @@ class _SPPresolver(abc.ABC):
     """
 
     def __init__(self, spbase):
+        self._opt = None
         self.opt = spbase
 
     @abc.abstractmethod
@@ -48,20 +50,20 @@ class _SPPresolver(abc.ABC):
             raise RuntimeError("SPPresolve.opt should only be set once")
 
 
-class SPIntervalTightener:
+class SPIntervalTightener(_SPPresolver):
     """Interval Tightener (feasibility-based bounds tightening)
     TODO: enable options
     """
 
     def __init__(self, spbase):
-        super().__init__(self, spbase)
+        super().__init__(spbase)
 
         self.subproblem_tighteners = {}
         for k, s in self.opt.local_subproblems.items():
             self.subproblem_tighteners[k] = it = IntervalTightener()
             # ideally, we'd be able to share the `_cmodel`
             # here between interfaces, etc.
-            it.set_instance(k)
+            it.set_instance(s)
 
     def presolve(self):
         """Run the interval tightener (FBBT):
@@ -97,7 +99,7 @@ class SPIntervalTightener:
             global_lower_bounds = {}
             global_upper_bounds = {}
 
-            tighter_nonant_bounds = False
+            same_nonant_bounds = True
             for k, s in self.opt.local_scenarios.items():
                 for node in s._mpisppy_node_list:
                     ndn = node.name
@@ -109,20 +111,19 @@ class SPIntervalTightener:
                         dtype=float,
                         count=nlen,
                     )
-                    if ndn not in local_lower_bounds:
-                        local_lower_bounds[ndn] = scenario_node_lower_bounds
-                        global_lower_bounds[ndn] = np.zeros(nlen, dtype=float)
-                    else:
+                    if ndn in local_lower_bounds:
                         np.maximum(
                             local_lower_bounds[ndn],
                             scenario_node_lower_bounds,
                             out=local_lower_bounds[ndn],
                         )
-                        if not tighter_nonant_bounds:
-                            if not np.allclose(
+                        if same_nonant_bounds:
+                            same_nonant_bounds = np.allclose(
                                 local_lower_bounds[ndn], scenario_node_lower_bounds
-                            ):
-                                tighter_nonant_bounds = True
+                            )
+                    else:
+                        local_lower_bounds[ndn] = scenario_node_lower_bounds
+                        global_lower_bounds[ndn] = np.zeros(nlen, dtype=float)
 
                     # gather upper bounds
                     scenario_node_upper_bounds = np.fromiter(
@@ -130,20 +131,19 @@ class SPIntervalTightener:
                         dtype=float,
                         count=nlen,
                     )
-                    if ndn not in local_upper_bounds:
-                        local_upper_bounds[ndn] = scenario_node_upper_bounds
-                        global_upper_bounds[ndn] = np.zeros(nlen, dtype=float)
-                    else:
+                    if ndn in local_upper_bounds:
                         np.minimum(
                             local_upper_bounds[ndn],
                             scenario_node_upper_bounds,
                             out=local_upper_bounds[ndn],
                         )
-                        if not tighter_nonant_bounds:
-                            if not np.allclose(
+                        if same_nonant_bounds:
+                            same_nonant_bounds = np.allclose(
                                 local_upper_bounds[ndn], scenario_node_upper_bounds
-                            ):
-                                tighter_nonant_bounds = True
+                            )
+                    else:
+                        local_upper_bounds[ndn] = scenario_node_upper_bounds
+                        global_upper_bounds[ndn] = np.zeros(nlen, dtype=float)
 
             # reduce lower bounds
             for ndn, local_bounds in local_lower_bounds.items():
@@ -152,9 +152,8 @@ class SPIntervalTightener:
                     [global_lower_bounds[ndn], MPI.DOUBLE],
                     op=MPI.MAX,
                 )
-                if not tighter_nonant_bounds:
-                    if not np.allclose(global_lower_bounds[ndn], local_bounds):
-                        tighter_nonant_bounds = True
+                if same_nonant_bounds:
+                    same_nonant_bounds = np.allclose(global_lower_bounds[ndn], local_bounds)
 
             # reduce upper bounds
             for ndn, local_bounds in local_upper_bounds.items():
@@ -163,20 +162,20 @@ class SPIntervalTightener:
                     [global_upper_bounds[ndn], MPI.DOUBLE],
                     op=MPI.MIN,
                 )
-                if not tighter_nonant_bounds:
-                    if not np.allclose(global_upper_bounds[ndn], local_bounds):
-                        tighter_nonant_bounds = True
+                if same_nonant_bounds:
+                    same_nonant_bounds = np.allclose(global_upper_bounds[ndn], local_bounds)
 
             # At this point, we've either proved that
             # there are tighter bounds or not.
             # If not, we can quit
             # Reduce here for safety in case of numerical gremlins
-            tighter_nonant_bounds = self.opt.allreduce_or(tighter_nonant_bounds)
-            if not tighter_nonant_bounds:
+            same_nonant_bounds = not self.opt.allreduce_or(not same_nonant_bounds)
+            if same_nonant_bounds:
                 break
 
             # otherwise, update the bounds and go to the top
-            for k, s in self.opt.local_scenarios.items():
+            for sub_n, _, _, s in self.opt.subproblem_scenario_generator():
+                feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
                 for node in s._mpisppy_node_list:
                     for var, lb, ub in zip(
                         node.nonant_vardata_list,
@@ -184,6 +183,9 @@ class SPIntervalTightener:
                         global_upper_bounds[node.name],
                         strict=True,
                     ):
+                        if ub - lb <= -feas_tol:
+                            msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
+                            raise InfeasibleConstraintException(msg)
                         var.bounds = (lb, ub)
 
         return update
@@ -193,21 +195,19 @@ def _lb_generator(var_iterable):
     for v in var_iterable:
         lb = v.lb
         if lb is None:
-            return -np.inf
-        else:
-            return lb
+            yield -np.inf
+        yield lb
 
 
 def _ub_generator(var_iterable):
     for v in var_iterable:
         ub = v.ub
         if ub is None:
-            return np.inf
-        else:
-            return lb
+            yield np.inf
+        yield ub
 
 
-class SPPresolve:
+class SPPresolve(_SPPresolver):
     """Default a presolver for distributed stochastic optimization problems
 
     Args:
