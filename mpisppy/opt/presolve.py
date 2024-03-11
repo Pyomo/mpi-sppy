@@ -79,6 +79,7 @@ class SPIntervalTightener(_SPPresolver):
                 # https://github.com/Pyomo/pyomo/issues/3002
                 # https://github.com/Pyomo/pyomo/issues/3184
                 # https://github.com/Pyomo/pyomo/issues/1864#issuecomment-1989164335
+                del self.subproblem_tighteners[k]
                 return
 
     def presolve(self):
