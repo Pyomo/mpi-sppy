@@ -64,7 +64,15 @@ class SPIntervalTightener(_SPPresolver):
             self.subproblem_tighteners[k] = it = IntervalTightener()
             # ideally, we'd be able to share the `_cmodel`
             # here between interfaces, etc.
-            it.set_instance(s)
+            try:
+                it.set_instance(s)
+            except:
+                # TODO: IntervalTightener won't handle
+                # every Pyomo model smoothly, see:
+                # https://github.com/Pyomo/pyomo/issues/3002
+                # https://github.com/Pyomo/pyomo/issues/3184
+                # https://github.com/Pyomo/pyomo/issues/1864#issuecomment-1989164335
+                self.subproblem_tighteners[k] = None
 
     def presolve(self):
         """Run the interval tightener (FBBT):
@@ -78,6 +86,9 @@ class SPIntervalTightener(_SPPresolver):
         while True:
             big_iters = 0.0
             for k, it in self.subproblem_tighteners.items():
+                # if the `set_instance` failed in __init__, bail out
+                if it is None:
+                    return False
                 n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
                 # get the number of constraints after we do
                 # FBBT so we get any updates on the subproblem
