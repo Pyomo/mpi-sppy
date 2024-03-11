@@ -12,6 +12,7 @@ except ImportError:
     SUM = _np.sum
     MAX = _np.max 
     MIN = _np.min
+    LOR = _np.logical_or
     DOUBLE = _np.double
     INT = _np.intc
     _haveMPI = False
