@@ -12,7 +12,6 @@ import mpisppy
 import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolverStatus
-from mpisppy.utils.sputils import find_active_objective
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
@@ -866,7 +865,7 @@ class APH(ph_base.PHBase):
 
         if self.plot_trace_prefix is not None:
             for k,s in self.local_scenarios.items():
-                objval = pyo.value(find_active_objective(s))
+                objval = pyo.value(self.saved_objectives[k])
                 with open(f"trace_{k}_{self.conv_trace_filename}", "a") as fil:
                     fil.write(f"{self._PHIter},{objval}")
                     for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
@@ -1038,7 +1037,7 @@ class APH(ph_base.PHBase):
                                          initialize = 0.0,
                                          mutable = True)
                 
-            objfct = find_active_objective(scenario)
+            objfct = self.saved_objectives[sname]
                 
             if self.use_lag:
                 assert not scenario._mpisppy_data.has_variable_probability
@@ -1067,8 +1066,6 @@ class APH(ph_base.PHBase):
                     objfct.expr +=  scenario._mpisppy_model.W_on * scenario._mpisppy_model.W[ndn,i] * xvar
 
         # End APH-specific Prep
-        
-        self.subproblem_creation(self.options["verbose"])
 
         trivial_bound = self.Iter0()
 

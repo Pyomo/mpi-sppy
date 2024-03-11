@@ -13,7 +13,6 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         # Scenarios are created here
         self.opt.PH_Prep(attach_prox=False)
         self.opt._reenable_W()
-        self.opt.subproblem_creation(verbose)
         self.opt._create_solvers()
 
     def lagrangian(self):

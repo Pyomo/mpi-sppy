@@ -48,6 +48,8 @@ class SPOpt(SPBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
+        self._save_active_objectives()
+        self._subproblem_creation(options.get("verbose", False))
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -322,10 +324,7 @@ class SPOpt(SPBase):
         """
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if self.bundling:
-                objfct = self.saved_objs[k]
-            else:
-                objfct = sputils.find_active_objective(s)
+            objfct = self.saved_objectives[k]
             local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -736,6 +735,14 @@ class SPOpt(SPBase):
                     persistent_solver.update_var(vardata)
 
 
+    def _save_active_objectives(self):
+        """ Save the active objectives for use in PH, bundles, and calculation """
+        self.saved_objectives = dict()
+
+        for sname, scenario_instance in self.local_scenarios.items():
+            self.saved_objectives[sname] = sputils.find_active_objective(scenario_instance)
+
+
     def FormEF(self, scen_dict, EF_name=None):
         """ Make the EF for a list of scenarios.
 
@@ -773,6 +780,8 @@ class SPOpt(SPBase):
         Note:
             Objectives are scaled (normalized) by _mpisppy_probability
         """
+        # The individual scenario instances are sub-blocks of the binding
+        # instance. Needed to facilitate bundles + persistent solvers
         if len(scen_dict) == 0:
             raise RuntimeError("Empty scenario list for EF")
 
@@ -783,22 +792,12 @@ class SPOpt(SPBase):
                 print ("MAJOR WARNING: a bundle of size one encountered; if you try to compute bounds it might crash (Feb 2019)")
             return scenario_instance
 
-        # The individual scenario instances are sub-blocks of the binding
-        # instance. Needed to facilitate bundles + persistent solvers
-        if not hasattr(self, "saved_objs"): # First bundle
-             self.saved_objs = dict()
-
-        for sname, scenario_instance in scen_dict.items():
-            if sname not in self.local_scenarios:
-                raise RuntimeError("EF scen not in local_scenarios="+sname)
-            self.saved_objs[sname] = sputils.find_active_objective(scenario_instance)
-
         EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
                         nonant_for_fixed_vars=False)
         return EF_instance
 
 
-    def subproblem_creation(self, verbose=False):
+    def _subproblem_creation(self, verbose=False):
         """ Create local subproblems (not local scenarios).
 
         If bundles are specified, this function creates the bundles.

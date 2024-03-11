@@ -651,7 +651,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             """
             if ((not add_duals) and (not add_prox)):
                 return
-            objfct = sputils.find_active_objective(scenario)
+            objfct = self.saved_objectives[sname]
             is_min_problem = objfct.is_minimizing()
 
             xbars = scenario._mpisppy_model.xbars
