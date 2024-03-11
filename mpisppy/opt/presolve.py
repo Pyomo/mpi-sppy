@@ -15,7 +15,7 @@ import weakref
 
 import numpy as np
 
-from pyomo.common.errors import InfeasibleConstraintException
+from pyomo.common.errors import InfeasibleConstraintException, DeferredImportError
 from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
@@ -61,12 +61,19 @@ class SPIntervalTightener(_SPPresolver):
 
         self.subproblem_tighteners = {}
         for k, s in self.opt.local_subproblems.items():
-            self.subproblem_tighteners[k] = it = IntervalTightener()
+            try:
+                self.subproblem_tighteners[k] = it = IntervalTightener()
+            except DeferredImportError:
+                # User may not have extension built
+                # TODO: we should print a message --
+                #       especially if it needs to be
+                #       specifically enabled
+                self.subproblem_tighteners[k] = None
             # ideally, we'd be able to share the `_cmodel`
             # here between interfaces, etc.
             try:
                 it.set_instance(s)
-            except:
+            except KeyError:
                 # TODO: IntervalTightener won't handle
                 # every Pyomo model smoothly, see:
                 # https://github.com/Pyomo/pyomo/issues/3002
@@ -165,7 +172,9 @@ class SPIntervalTightener(_SPPresolver):
                     op=MPI.MAX,
                 )
                 if same_nonant_bounds:
-                    same_nonant_bounds = np.allclose(global_lower_bounds[ndn], local_bounds)
+                    same_nonant_bounds = np.allclose(
+                        global_lower_bounds[ndn], local_bounds
+                    )
 
             # reduce upper bounds
             for ndn, local_bounds in local_upper_bounds.items():
@@ -175,7 +184,9 @@ class SPIntervalTightener(_SPPresolver):
                     op=MPI.MIN,
                 )
                 if same_nonant_bounds:
-                    same_nonant_bounds = np.allclose(global_upper_bounds[ndn], local_bounds)
+                    same_nonant_bounds = np.allclose(
+                        global_upper_bounds[ndn], local_bounds
+                    )
 
             # At this point, we've either proved that
             # there are tighter bounds or not.
@@ -199,7 +210,9 @@ class SPIntervalTightener(_SPPresolver):
                             msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
                             raise InfeasibleConstraintException(msg)
                         if (lb, ub) != var.bounds:
-                            global_toc(f"Tightening bounds on nonant {var.name} from {var.bounds} to {(lb, ub)}")
+                            global_toc(
+                                f"Tightening bounds on nonant {var.name} from {var.bounds} to {(lb, ub)}"
+                            )
                         var.bounds = (lb, ub)
 
         return update
