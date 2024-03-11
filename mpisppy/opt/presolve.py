@@ -68,7 +68,7 @@ class SPIntervalTightener(_SPPresolver):
                 # TODO: we should print a message --
                 #       especially if it needs to be
                 #       specifically enabled
-                self.subproblem_tighteners[k] = None
+                return
             # ideally, we'd be able to share the `_cmodel`
             # here between interfaces, etc.
             try:
@@ -79,7 +79,7 @@ class SPIntervalTightener(_SPPresolver):
                 # https://github.com/Pyomo/pyomo/issues/3002
                 # https://github.com/Pyomo/pyomo/issues/3184
                 # https://github.com/Pyomo/pyomo/issues/1864#issuecomment-1989164335
-                self.subproblem_tighteners[k] = None
+                return
 
     def presolve(self):
         """Run the interval tightener (FBBT):
