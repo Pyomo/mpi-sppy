@@ -205,7 +205,7 @@ class SPIntervalTightener(_SPPresolver):
                         node.nonant_vardata_list,
                         global_lower_bounds[node.name],
                         global_upper_bounds[node.name],
-                        strict=True,
+                        # strict=True, # TODO: this is a Python 3.10+ feature
                     ):
                         if ub - lb <= -feas_tol:
                             msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
