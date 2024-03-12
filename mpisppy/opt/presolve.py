@@ -73,7 +73,7 @@ class SPIntervalTightener(_SPPresolver):
             # here between interfaces, etc.
             try:
                 it.set_instance(s)
-            except KeyError:
+            except (KeyError, AttributeError):
                 # TODO: IntervalTightener won't handle
                 # every Pyomo model smoothly, see:
                 # https://github.com/Pyomo/pyomo/issues/3002
