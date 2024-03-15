@@ -63,24 +63,23 @@ class SPIntervalTightener(_SPPresolver):
         for k, s in self.opt.local_subproblems.items():
             try:
                 self.subproblem_tighteners[k] = it = IntervalTightener()
-            except DeferredImportError:
+            except DeferredImportError as e:
                 # User may not have extension built
-                # TODO: we should print a message --
-                #       especially if it needs to be
-                #       specifically enabled
-                return
+                raise ImportError(f"presolve needs the APPSI extensions for pyomo: {e}")
+
             # ideally, we'd be able to share the `_cmodel`
             # here between interfaces, etc.
             try:
                 it.set_instance(s)
-            except (KeyError, AttributeError):
+            except Exception as e:
                 # TODO: IntervalTightener won't handle
                 # every Pyomo model smoothly, see:
                 # https://github.com/Pyomo/pyomo/issues/3002
                 # https://github.com/Pyomo/pyomo/issues/3184
                 # https://github.com/Pyomo/pyomo/issues/1864#issuecomment-1989164335
-                del self.subproblem_tighteners[k]
-                return
+                raise Exception(
+                    f"Issue with IntervalTightener; cannot apply presolve to this problem. Error: {e}"
+                )
 
     def presolve(self):
         """Run the interval tightener (FBBT):
@@ -94,9 +93,6 @@ class SPIntervalTightener(_SPPresolver):
         while True:
             big_iters = 0.0
             for k, it in self.subproblem_tighteners.items():
-                # if the `set_instance` failed in __init__, bail out
-                if it is None:
-                    return False
                 n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
                 # get the number of constraints after we do
                 # FBBT so we get any updates on the subproblem
