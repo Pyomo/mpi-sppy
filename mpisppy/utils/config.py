@@ -213,6 +213,12 @@ class Config(pyofig.ConfigDict):
                             domain=str,
                             default='')
 
+        self.add_to_config("presolve",
+                           description="Run the distributed presolver. "
+                           "Currently only does distributed feasibility-based bounds tightening.",
+                           domain=bool,
+                           default=False)
+
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
                               description="For PH, linearize the proximal terms for "

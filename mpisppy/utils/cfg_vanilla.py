@@ -52,6 +52,7 @@ def shared_options(cfg):
         "iterk_solver_options": dict(),
         "tee-rank0-solves": cfg.tee_rank0_solves,
         "trace_prefix" : cfg.trace_prefix,
+        "presolve" : cfg.presolve,
     }
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
