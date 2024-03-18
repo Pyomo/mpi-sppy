@@ -10,10 +10,40 @@
 '''
 
 class Extension:
-    """ Abstract base class for extensions to general SPOpt objects.
+    """ Abstract base class for extensions to general SPOpt/SPCommunicator objects.
     """
     def __init__(self, spopt_object):
         self.opt = spopt_object
+
+    def setup_hub(self):
+        '''
+        Method called when the Hub SPCommunicator is set up (if used)
+
+        Returns
+        -------
+        None
+        '''
+        pass
+
+    def initialize_spoke_indices(self):
+        '''
+        Method called when the Hub SPCommunicator initializes its spoke indices
+
+        Returns
+        -------
+        None
+        '''
+        pass
+
+    def sync_with_spokes(self):
+        '''
+        Method called when the Hub SPCommunicator syncs with spokes
+
+        Returns
+        -------
+        None
+        '''
+        pass
 
     def pre_solve(self, subproblem):
         '''
@@ -122,6 +152,18 @@ class MultiExtension(Extension):
         for constr in ext_classes:
             name = constr.__name__
             self.extdict[name] = constr(ph)
+
+    def setup_hub(self):
+        for lobject in self.extdict.values():
+            lobject.setup_hub()
+
+    def initialize_spoke_indices(self):
+        for lobject in self.extdict.values():
+            lobject.initialize_spoke_indices()
+
+    def sync_with_spokes(self):
+        for lobject in self.extdict.values():
+            lobject.sync_with_spokes()
 
     def pre_solve(self, subproblem):
         for lobject in self.extdict.values():

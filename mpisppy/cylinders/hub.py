@@ -342,6 +342,10 @@ class Hub(SPCommunicator):
         self.has_w_spokes = len(self.w_spoke_indices) > 0
         self.has_bounds_only_spokes = len(self.bounds_only_indices) > 0
 
+        # Not all opt classes may have extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.initialize_spoke_indices()
+
     def make_windows(self):
         if self._windows_constructed:
             # different parts of the hub may call make_windows,
@@ -497,6 +501,8 @@ class PHHub(Hub):
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
             )
+        if self.opt.extensions is not None:
+            self.opt.extobject.setup_hub()
 
     def sync(self):
         """
@@ -512,6 +518,8 @@ class PHHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        if self.opt.extensions is not None:
+            self.opt.extobject.sync_with_spokes()
 
     def sync_with_spokes(self):
         self.sync()
@@ -645,6 +653,9 @@ class LShapedHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        # in case LShaped ever gets extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.sync_with_spokes()
 
     def is_converged(self):
         """ Returns a boolean. If True, then LShaped will terminate
@@ -689,74 +700,6 @@ class LShapedHub(Hub):
             self.hub_to_spoke(nonant_send_buffer, idx)
 
 class APHHub(PHHub):
-    def setup_hub(self):
-        """ Must be called after make_windows(), so that
-            the hub knows the sizes of all the spokes windows
-        """
-        if not self._windows_constructed:
-            raise RuntimeError(
-                "Cannot call setup_hub before memory windows are constructed"
-            )
-
-        self.initialize_spoke_indices()
-        self.initialize_bound_values()
-
-        if self.has_outerbound_spokes:
-            ###raise RuntimeError("APH not ready for outer bound spokes yet")
-            self.initialize_outer_bound_buffers()
-        if self.has_innerbound_spokes:
-            self.initialize_inner_bound_buffers()
-        if self.has_w_spokes:
-            ###raise RuntimeError("APH not ready for W spokes")
-            self.initialize_ws()
-        if self.has_nonant_spokes:
-            self.initialize_nonants()
-
-        ## Do some checking for things we currently don't support
-        if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke providing both inner and outer "
-                "bounds is currently unsupported"
-            )
-        if len(self.w_spoke_indices & self.nonant_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke needing both Ws and nonants is currently unsupported"
-            )
-
-        ## Generate some warnings if nothing is giving bounds
-        if not self.has_outerbound_spokes:
-            logger.warn(
-                "No OuterBound Spokes defined, this converger "
-                "will not cause the hub to terminate"
-            )
-
-        if not self.has_innerbound_spokes:
-            logger.warn(
-                "No InnerBound Spokes defined, this converger "
-                "will not cause the hub to terminate"
-            )
-
-
-    def sync(self):
-        """
-            Manages communication with Spokes
-        """
-        if self.has_w_spokes:
-            self.send_ws()
-        if self.has_nonant_spokes:
-            self.send_nonants()
-        if self.has_outerbound_spokes:
-            self.receive_outerbounds()
-        if self.has_innerbound_spokes:
-            self.receive_innerbounds()
-
-
-    def sync_with_spokes(self):
-        self.sync()
-
-    def current_iteration(self):
-        """ Return the current APH iteration."""
-        return self.opt._PHIter
 
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """
