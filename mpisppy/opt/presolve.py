@@ -137,6 +137,8 @@ class SPIntervalTightener(_SPPresolver):
             )
 
             if same_nonant_bounds:
+                # The nonant bounds did not change, so it is unlikely
+                # that further rounds of FBBT will do any good.
                 break
 
         if update:
