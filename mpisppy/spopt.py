@@ -276,8 +276,6 @@ class SPOpt(SPBase):
         _vb("Entering solve_loop function.")
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
-        if self._presolver is not None:
-            self._presolver.presolve()
         if self.extensions is not None:
                 self.extobject.pre_solve_loop()
 
