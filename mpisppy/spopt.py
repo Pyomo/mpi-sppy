@@ -54,7 +54,8 @@ class SPOpt(SPBase):
         self._subproblem_creation(options.get("verbose", False))
         if options.get("presolve", False):
             self._presolver = SPPresolve(self)
-            self._presolver.presolve()
+        else:
+            self._presolver = None
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -275,6 +276,8 @@ class SPOpt(SPBase):
         _vb("Entering solve_loop function.")
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
+        if self._presolver is not None:
+            self._presolver.presolve()
         if self.extensions is not None:
                 self.extobject.pre_solve_loop()
 
@@ -836,7 +839,10 @@ class SPOpt(SPBase):
                 self.local_subproblems[sname].scen_list = [sname]
 
 
-    def _create_solvers(self):
+    def _create_solvers(self, presolve=True):
+
+        if self._presolver is not None and presolve:
+            self._presolver.presolve()
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
         local_sit = [] # Local set instance time for time tracking

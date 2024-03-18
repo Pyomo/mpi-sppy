@@ -55,14 +55,13 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         )
         
         self.verbose = self.options['verbose']
-        
         self._subproblems_solvers_created = False
-        
+
 
     def _lazy_create_solvers(self):
         if self._subproblems_solvers_created:
             return
-        self._create_solvers()
+        self._create_solvers(presolve=False)
         self._subproblems_solvers_created = True
 
 
