@@ -26,7 +26,6 @@ from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
-from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
@@ -96,13 +95,8 @@ def ph_hub(
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
 
-    if _hasit(cfg, "cross_scenario_cuts") and cfg.cross_scenario_cuts:
-        hub_class = CrossScenarioHub
-    else:
-        hub_class = PHHub
-
     hub_dict = {
-        "hub_class": hub_class,
+        "hub_class": PHHub,
         "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},

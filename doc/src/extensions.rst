@@ -13,7 +13,7 @@ or modification will remain available. Perhaps more important, the
 extension can be included in some applications, but not others.
 
 There are a number of extensions, particularly for PH, that are provided
-with ``mpi-sspy`` and they provide examples that can be used for the
+with ``mpi-sppy`` and they provide examples that can be used for the
 creation of more. Extensions can be found in ``mpisppy.extensions``.
 
 Multiple Extensions
@@ -41,8 +41,15 @@ PH extensions
 Some of these can be used with other hubs. An extension object can be
 passed to the PH constructor and it is assumed to have methods defined
 for all the callout points in PH (so all of the examples do). To see 
-the callout points look at ``phbase.py``.  If you
-want to use more than one extension, define a main extension that has
+the callout points look at ``phbase.py``. Extensions can also specify
+callout points in the `Hub` `SPCommunicator` object: these callout points
+are especially useful for writing custom `Spoke` objects which can then
+interact with the hub PH object. To see the callout points look at
+``cylinders/hub.py``; an example of such an extension is the
+"cross-scenario cut" extension defined in ``extensions/cross_scen_extension.py``
+and associated spoke object defined in ``cylinders/cross_scen_spoke.py``.
+
+If you want to use more than one extension, define a main extension that has
 a reference to the other extensions and can call their methods in the
 appropriate order. Extensions typically access low level elements of
 ``mpi-sppy`` so writing your extensions is an advanced topic. We will
@@ -120,6 +127,12 @@ mult_rho_updater
 ^^^^^^^^^^^^^^^^
 
 This extension does a simple multiplicative update of rho.
+
+cross-scenario cuts
+^^^^^^^^^^^^^^^^^^^
+Two-stage models only. This extension adds cross scenario cuts as calculated
+by the cross-scenario cut spoke. See the implementation paper for details.
+An example of its use is shown in ``examples/farmer/cs_farmer.py``.
 
 
 variable_probability
