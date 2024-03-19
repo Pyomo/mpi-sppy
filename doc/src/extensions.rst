@@ -135,6 +135,35 @@ by the cross-scenario cut spoke. See the implementation paper for details.
 An example of its use is shown in ``examples/farmer/cs_farmer.py``.
 
 
+Distributed Subproblem Presolve
+===============================
+This functionality is available for all Hub and Spoke algorithms which inherit from
+``SPBase``. It can be enabled by passing ``presolve=True`` into the constructor.
+
+Leveraging the existing feasibility-based bounds tightening (FBBT) available in Pyomo, this
+presolver will tighten the bounds on all variables, including the non-anticipative variables.
+If the non-anticipative variables have different bounds, the bounds among the non-anticipative
+variables will be synchronized to utilize the tightest available bound.
+
+In its current state, the user might opt-in to presolve for two reasons:
+
+1. For problems without relatively complete recourse, utilizing the tighter bounds on the
+   non-anticipative variables and speed convergence and improve primal and dual bounds. In
+   rare cases it might also detect infeasibility.
+
+2. For problems where a "fixer" extension or spoke is used, determining tight bounds on the
+   non-anticipative variables may improve the fixer's performance.
+
+.. Note::
+   This capability requires the auto-persistent pyomo solver interface (APPSI) extensions
+   for Pyomo to be built on your system. This can be achieved by running ``pyomo build-extensions``
+   at the command line.
+
+.. Note::
+   The APPSI capability in Pyomo is under active development. As a result, the presolver
+   may not work for all Pyomo models.
+
+
 variable_probability
 ====================
 

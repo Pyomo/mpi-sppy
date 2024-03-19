@@ -18,6 +18,8 @@ from mpisppy import global_toc
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
 
+from mpisppy.opt.presolve import SPPresolve
+
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
 
@@ -50,6 +52,10 @@ class SPOpt(SPBase):
         )
         self._save_active_objectives()
         self._subproblem_creation(options.get("verbose", False))
+        if options.get("presolve", False):
+            self._presolver = SPPresolve(self)
+        else:
+            self._presolver = None
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -831,7 +837,10 @@ class SPOpt(SPBase):
                 self.local_subproblems[sname].scen_list = [sname]
 
 
-    def _create_solvers(self):
+    def _create_solvers(self, presolve=True):
+
+        if self._presolver is not None and presolve:
+            self._presolver.presolve()
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
         local_sit = [] # Local set instance time for time tracking
@@ -861,6 +870,18 @@ class SPOpt(SPBase):
                 print("Set instance times:")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(asit), np.mean(asit), np.max(asit)))
+
+
+    def subproblem_scenario_generator(self):
+        """
+        Iterate over every scenario, yielding the
+        subproblem_name, subproblem, scenario_name, scenario.
+
+        Useful for managing bundles
+        """
+        for sub_name, sub in self.local_subproblems.items():
+            for s_name in sub.scen_list:
+                yield sub_name, sub, s_name, self.local_scenarios[s_name]
 
 
 # these parameters should eventually be promoted to a non-PH
