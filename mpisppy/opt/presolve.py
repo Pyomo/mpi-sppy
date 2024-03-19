@@ -90,6 +90,7 @@ class SPIntervalTightener(_SPPresolver):
         3. If the bounds are updated, go to (1)
         """
 
+        printed_warning = False
         update = False
 
         same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
@@ -102,7 +103,7 @@ class SPIntervalTightener(_SPPresolver):
                 update = True
 
                 # update the bounds if changed
-                for sub_n, _, _, s in self.opt.subproblem_scenario_generator():
+                for sub_n, _, k, s in self.opt.subproblem_scenario_generator():
                     feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
                     for node in s._mpisppy_node_list:
                         for var, lb, ub in zip(
@@ -114,6 +115,22 @@ class SPIntervalTightener(_SPPresolver):
                             if ub - lb <= -feas_tol:
                                 msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
                                 raise InfeasibleConstraintException(msg)
+                            if (
+                                (lb, ub) != var.bounds
+                                and (node_comm.Get_rank() == 0)
+                                and (
+                                    self.opt.spcomm is None
+                                    or self.opt.spcomm.strata_rank == 0
+                                )
+                            ):
+                                if printed_warning:
+                                    print(
+                                        f"WARNING: SPFBBT found different bounds on nonanticipative variables from different scenarios. See below."
+                                    )
+                                    printed_warning = True
+                                print(
+                                    f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
+                                )
                             var.bounds = (lb, ub)
 
             # Now do FBBT
@@ -308,7 +325,8 @@ class SPIntervalTightener(_SPPresolver):
                 if ndn in printed_nodes:
                     continue
                 node_comm = self.opt.comms[ndn]
-                for lower_bound_move, var in zip(
+                for original_lower_bound, lower_bound_move, var in zip(
+                    self._lower_bound_cache[k, ndn],
                     global_lower_bound_movement[ndn],
                     node.nonant_vardata_list,
                 ):
@@ -320,9 +338,10 @@ class SPIntervalTightener(_SPPresolver):
                         )
                     ):
                         print(
-                            f"Tightened lower bound for {var.name} from {var.lb - lower_bound_move} to {var.lb}"
+                            f"Tightened lower bound for {var.name} from {original_lower_bound} to {var.lb}"
                         )
-                for upper_bound_move, var in zip(
+                for original_upper_bound, upper_bound_move, var in zip(
+                    self._upper_bound_cache[k, ndn],
                     global_upper_bound_movement[ndn],
                     node.nonant_vardata_list,
                 ):
@@ -334,7 +353,7 @@ class SPIntervalTightener(_SPPresolver):
                         )
                     ):
                         print(
-                            f"Tightened upper bound for {var.name} from {var.ub + upper_bound_move} to {var.ub}"
+                            f"Tightened upper bound for {var.name} from {original_upper_bound} to {var.ub}"
                         )
 
                 printed_nodes.add(ndn)
