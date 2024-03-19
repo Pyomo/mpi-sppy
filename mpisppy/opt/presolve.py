@@ -28,9 +28,10 @@ class _SPPresolver(abc.ABC):
         spbase (SPBase): an SPBase object
     """
 
-    def __init__(self, spbase):
+    def __init__(self, spbase, verbose=False):
         self._opt = None
         self.opt = spbase
+        self.verbose = verbose
 
     @abc.abstractmethod
     def presolve(self) -> bool:
@@ -55,8 +56,8 @@ class SPIntervalTightener(_SPPresolver):
     TODO: enable options
     """
 
-    def __init__(self, spbase):
-        super().__init__(spbase)
+    def __init__(self, spbase, verbose=False):
+        super().__init__(spbase, verbose)
 
         self.subproblem_tighteners = {}
         for k, s in self.opt.local_subproblems.items():
@@ -106,6 +107,7 @@ class SPIntervalTightener(_SPPresolver):
                 for sub_n, _, k, s in self.opt.subproblem_scenario_generator():
                     feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
                     for node in s._mpisppy_node_list:
+                        node_comm = self.opt.comms[node.name]
                         for var, lb, ub in zip(
                             node.nonant_vardata_list,
                             global_lower_bounds[node.name],
@@ -116,21 +118,25 @@ class SPIntervalTightener(_SPPresolver):
                                 msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
                                 raise InfeasibleConstraintException(msg)
                             if (
-                                (lb, ub) != var.bounds
+                                (not printed_warning or self.verbose)
+                                and (lb, ub) != var.bounds
                                 and (node_comm.Get_rank() == 0)
                                 and (
                                     self.opt.spcomm is None
                                     or self.opt.spcomm.strata_rank == 0
                                 )
                             ):
-                                if printed_warning:
-                                    print(
-                                        f"WARNING: SPFBBT found different bounds on nonanticipative variables from different scenarios. See below."
-                                    )
+                                if not printed_warning:
+                                    msg = "WARNING: SPIntervalTightener found different bounds on nonanticipative variables from different scenarios."
+                                    if self.verbose:
+                                        print(msg + " See below.")
+                                    else:
+                                        print(msg + " Use verbose=True to see details.")
                                     printed_warning = True
-                                print(
-                                    f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
-                                )
+                                if self.verbose:
+                                    print(
+                                        f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
+                                    )
                             var.bounds = (lb, ub)
 
             # Now do FBBT
@@ -382,10 +388,10 @@ class SPPresolve(_SPPresolver):
         spbase (SPBase): an SPBase object
     """
 
-    def __init__(self, spbase):
-        super().__init__(spbase)
+    def __init__(self, spbase, verbose=False):
+        super().__init__(spbase, verbose)
 
-        self.interval_tightener = SPIntervalTightener(spbase)
+        self.interval_tightener = SPIntervalTightener(spbase, verbose)
 
     def presolve(self):
         return self.interval_tightener.presolve()
