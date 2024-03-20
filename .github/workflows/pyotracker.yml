@@ -39,7 +39,7 @@ jobs:
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install .
 
       - name: Test EF/PH
         run: |
