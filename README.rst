@@ -40,8 +40,8 @@ an error message, mpi-sppy may still execute and return correct
 results. Per the comment below, the run-times may just be 
 unnecessarily inflated.
 
-Installing
-^^^^^^^^^^
+Installing mpi-sppy
+^^^^^^^^^^^^^^^^^^^
 
 It is possible to pip install mpi-sppy; however, most users are better off
 getting the software from github because it is under active development.
