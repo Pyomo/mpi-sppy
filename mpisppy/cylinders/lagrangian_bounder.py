@@ -81,13 +81,7 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
                 self.dk_iter += 1
 
     def finalize(self):
-        '''
-        Do one final lagrangian pass with the final
-        PH weights. Useful for when PH convergence
-        and/or iteration limit is the cause of termination
-        '''
-        self.final_bound = self._set_weights_and_solve()
-        self.bound = self.final_bound
+        self.final_bound = self.bound
         if self.opt.extensions is not None and \
             hasattr(self.opt.extobject, 'post_everything'):
             self.opt.extobject.post_everything()
