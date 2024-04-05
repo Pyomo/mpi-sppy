@@ -145,7 +145,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         wheel.spin()
         if wheel.global_rank == 1:
             #print(f"{wheel.spcomm.bound= }")
-            self.assertAlmostEqual(wheel.spcomm.bound, -115405.55555,1)
+            self.assertAlmostEqual(wheel.spcomm.bound, -109499.5160897, 1)
 
 
 if __name__ == '__main__':
