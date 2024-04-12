@@ -4,7 +4,7 @@ mpi-sppy
 Optimization under uncertainty for `Pyomo <https://pyomo.org>`_ models.
 
 `Documentation is available at readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>`_ and
-a there is a `paper <https://rdcu.be/dB11w>`_
+a there is a `paper <https://link.springer.com/article/10.1007/s12532-023-00247-3>`_
 
 Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -48,7 +48,7 @@ getting the software from github because it is under active development.
 
 Citing mpi-sppy
 ^^^^^^^^^^^^^^^
-If you find mpi-sppy useful in your work, we kindly request that you cite the following `paper <https://rdcu.be/dB11w>`_:
+If you find mpi-sppy useful in your work, we kindly request that you cite the following `paper <https://link.springer.com/article/10.1007/s12532-023-00247-3>`_:
 
 ::
 
