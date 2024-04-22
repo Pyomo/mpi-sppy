@@ -212,7 +212,7 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
 
     EF_instance = _create_EF_from_scen_dict(scen_dict,
                                             EF_name=EF_name,
-                                            nonant_for_fixed_vars=True)
+                                            nonant_for_fixed_vars=nonant_for_fixed_vars)
     return EF_instance
 
 def _create_EF_from_scen_dict(scen_dict, EF_name=None,
