@@ -159,8 +159,8 @@ class SPBase:
                 if ndn not in local_node_nonant_lengths:
                     local_node_nonant_lengths[ndn] = mylen
                 elif local_node_nonant_lengths[ndn] != mylen:
-                    raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
-                            f"variables between scenarios {mylen} vs. {local_node_nonant_lengths[ndn]}")
+                    raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
+                            f"variables: {mylen} vs. {local_node_nonant_lengths[ndn]}")
 
         # compute node values(reduction)
         for ndn, val in local_node_nonant_lengths.items():
@@ -171,8 +171,8 @@ class SPBase:
                                       op=MPI.MAX)
 
             if val != int(max_val[0]):
-                raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
-                        f"variables between scenarios {val} vs. max {max_val[0]}")
+                raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
+                        f"variables: {val} vs. max {max_val[0]}")
                 
     def _check_nodenames(self):
         for ndn in self.all_nodenames:
