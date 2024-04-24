@@ -63,21 +63,34 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         rho_setter = None
         if hasattr(self.opt, 'rho_setter'):
             rho_setter = self.opt.rho_setter
+        extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
 
+        if extensions:
+            self.opt.extobject.pre_iter0()
         self.dk_iter = 1
         self.trivial_bound = self.lagrangian()
+        if extensions:
+            self.opt.extobject.post_iter0()
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
         self.bound = self.trivial_bound
+        if extensions:
+            self.opt.extobject.post_iter0_after_sync()
 
         while not self.got_kill_signal():
             if self.new_Ws:
+                if extensions:
+                    self.opt.extobject.miditer()
                 bound = self._set_weights_and_solve()
+                if extensions:
+                    self.opt.extobject.enditer()
                 if bound is not None:
                     self.bound = bound
+                if extensions:
+                    self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
 
     def finalize(self):

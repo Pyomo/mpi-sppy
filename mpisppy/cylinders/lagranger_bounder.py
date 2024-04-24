@@ -75,11 +75,14 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
 
     def _update_weights_and_solve(self, iternum):
         # Work with the nonants that we have (and we might not have any yet).
+        extensions = self.opt.extensions is not None
         self.opt._put_nonant_cache(self.localnonants)
         self.opt._restore_nonants()
         verbose = self.opt.options["verbose"]
         self.opt.Compute_Xbar(verbose=verbose)
         self.opt.Update_W(verbose=verbose)
+        if extensions:
+            self.opt.extobject.miditer()
         ## writes Ws here
         self._write_W_and_xbar(iternum)
         return self._lagrangian(iternum)
@@ -89,19 +92,32 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         rho_setter = None
         if hasattr(self.opt, 'rho_setter'):
             rho_setter = self.opt.rho_setter
+        extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
 
+        if extensions:
+            self.opt.extobject.pre_iter0()
         self.A_iter = 1
         self.trivial_bound = self._lagrangian(0)
+        if extensions:
+            self.opt.extobject.post_iter0()
 
         self.bound = self.trivial_bound
+        if extensions:
+            self.opt.extobject.post_iter0_after_sync()
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
         while not self.got_kill_signal():
             # because of aph, do not check for new data, just go for it
-            self.bound = self._update_weights_and_solve(self.A_iter)
+            bound = self._update_weights_and_solve(self.A_iter)
+            if extensions:
+                self.opt.extobject.enditer()
+            if bound is not None:
+                self.bound = bound
+            if extensions:
+                self.opt.extobject.enditer_after_sync()
             self.A_iter += 1
 
     def finalize(self):
