@@ -21,6 +21,7 @@ def _parse_args():
     cfg.ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
+    cfg.subgradient_args()
     cfg.xhatshuffle_args()
     cfg.slammax_args()
     cfg.cross_scenario_cuts_args()
@@ -45,6 +46,7 @@ def main():
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
+    subgradient = cfg.subgradient
     slammax = cfg.slammax
     cross_scenario_cuts = cfg.cross_scenario_cuts
 
@@ -84,6 +86,11 @@ def main():
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
+
+    if subgradient:
+        subgradient_spoke = vanilla.subgradient_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = None)
         
     # xhat looper bound spoke
     if xhatlooper:
@@ -106,6 +113,8 @@ def main():
         list_of_spoke_dict.append(fw_spoke)
     if lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
+    if subgradient:
+        list_of_spoke_dict.append(subgradient_spoke)
     if xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:

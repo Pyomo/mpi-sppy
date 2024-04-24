@@ -460,6 +460,29 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
 
+    def subgradient_args(self):
+
+        self.add_to_config('subgradient',
+                              description="have a subgradient spoke",
+                              domain=bool,
+                              default=False)
+
+        self.add_to_config("subgradient_iter0_mipgap",
+                            description="lgr. iter0 solver option mipgap (default None)",
+                            domain=float,
+                            default=None)
+
+        self.add_to_config("subgradient_iterk_mipgap",
+                            description="lgr. iterk solver option mipgap (default None)",
+                            domain=float,
+                            default=None)
+
+        self.add_to_config("subgradient_rho_multiplier",
+                           description="rescale rho (update step size) by this factor",
+                           domain=float,
+                           default=None)
+
+
     def ph_ob_args(self):
 
         self.add_to_config("ph_ob",
