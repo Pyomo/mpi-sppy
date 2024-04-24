@@ -14,11 +14,16 @@ directory name or probability distribution information.  The
 instance. I.e., it either creates a `ConcreteModel` or else it creates
 and instantiates an `AbstractModel`.
 
+Scenario Tree Information
+-------------------------
+
 The `scenario_creator` function somehow needs to create a list of
 non-leaf tree node objects that are constructed by calling
 `scenario_tree.ScenarioNode` which is not very hard for two stage
 problems, because there is only one non-leaf node and it must be
-called "ROOT".  If there are other scenario tree nodes, their names,
+called "ROOT". There is a helper function ``mpisppy.sputils.attach_root_node``
+
+When there are other scenario tree nodes, their names,
 although strings, must indicates their position in the tree, 
 like "ROOT_3_0_1". A given non-root node, which is the child number `k` of
 a node with name `parentname`, should be named `parentname_k`.
@@ -35,8 +40,11 @@ arguments:
 
 This node list must be attached to the scenario model instance under
 the name `model._mpisppy_node_list`.
-  
-In the `farmer.py` example, the `scenario_creator` function is called
+
+Examples
+--------
+
+In the `farmer.py` example, the `scenario_creator` function calls
 `pysp2_callback` and in this example, the scenario name is presumed to
 be of the form "scen" with a trailing number. The trailing number is
 used in a problem-specific way to create a "farmer" problem
@@ -61,6 +69,9 @@ illustrated in the netdes example:
    
    # Add all index of model.x using wild cards
    sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
+
+Scenario Probability
+--------------------
 
 The scenario probability should be attached by `scenario_creator` as
 ``_mpisppy_probability``. However, if you don't attach it, the scenarios are
