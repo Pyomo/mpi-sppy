@@ -37,22 +37,7 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
             on the fact that the OPT thread is solving the same
             models, and hence would detect both of those things on its
             own--the Lagrangian spoke doesn't need to check again.  '''
-
-        # Compute the resulting bound, checking to be sure
-        # the weights came from the same PH iteration
-        serial_number = self.get_serial_number()
-        bound, extra_sums  = self.opt.Ebound(verbose, extra_sum_terms=[serial_number])
-        serial_number_sum = int(round(extra_sums[0]))
-
-        total = int(self.cylinder_comm.Get_size())*serial_number
-        if total == serial_number_sum:
-            return bound
-        elif self.cylinder_rank == 0:
-            # TODO: this whole check can probably be removed as its done
-            #       within `got_kill_signal`. Leaving it for now as an
-            #       additional check.
-            raise RuntimeError("Lagrangian spokes unexpectly out of snyc")
-        return None
+        return self.opt.Ebound(verbose)
 
     def _set_weights_and_solve(self):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
