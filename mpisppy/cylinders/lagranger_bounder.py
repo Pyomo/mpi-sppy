@@ -7,18 +7,16 @@ import time
 import json
 import csv
 import mpisppy.cylinders.spoke
+from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 
-class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
+class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
     """Indepedent Lagrangian that takes x values as input and updates its own W.
     """
     converger_spoke_char = 'A'
 
     def lagrangian_prep(self):
-        verbose = self.opt.options['verbose']
         # Scenarios are created here
-        self.opt.PH_Prep(attach_prox=False)
-        self.opt._reenable_W()
-        self.opt._create_solvers()
+        super().lagrangian_prep()
         if "lagranger_rho_rescale_factors_json" in self.opt.options and\
             self.opt.options["lagranger_rho_rescale_factors_json"] is not None:
             with open(self.opt.options["lagranger_rho_rescale_factors_json"], "r") as fin:
@@ -35,21 +33,7 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
         if self.rho_rescale_factors is not None\
            and iternum in self.rho_rescale_factors:
             self._rescale_rho(self.rho_rescale_factors[iternum])
-        teeme = False
-        if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == 0:
-            teeme = self.opt.options['tee-rank0-solves']
-
-        self.opt.solve_loop(
-            solver_options=self.opt.current_solver_options,
-            dtiming=False,
-            gripe=True,
-            tee=teeme,
-            verbose=verbose
-        )
-
-        # Compute the resulting bound
-        return self.opt.Ebound(verbose)
-
+        return self.lagrangian()
 
     def _rescale_rho(self,rf):
         # IMPORTANT: the scalings accumulate.
@@ -103,16 +87,3 @@ class LagrangerOuterBound(mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
             # because of aph, do not check for new data, just go for it
             self.bound = self._update_weights_and_solve(self.A_iter)
             self.A_iter += 1
-
-    def finalize(self):
-        '''
-        Do one final lagrangian pass with the final
-        PH weights. Useful for when PH convergence
-        and/or iteration limit is the cause of termination
-        '''
-        self.final_bound = self._update_weights_and_solve(self.A_iter)
-        self.bound = self.final_bound
-        if self.opt.extensions is not None and \
-            hasattr(self.opt.extobject, 'post_everything'):
-            self.opt.extobject.post_everything()
-        return self.final_bound

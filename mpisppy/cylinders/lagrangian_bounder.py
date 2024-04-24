@@ -2,9 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 import mpisppy.cylinders.spoke
 
-class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
-
-    converger_spoke_char = 'L'
+class _LagrangianMixin:
 
     def lagrangian_prep(self):
         verbose = self.opt.options['verbose']
@@ -39,6 +37,17 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
             own--the Lagrangian spoke doesn't need to check again.  '''
         return self.opt.Ebound(verbose)
 
+    def finalize(self):
+        self.final_bound = self.bound
+        if self.opt.extensions is not None and \
+            hasattr(self.opt.extobject, 'post_everything'):
+            self.opt.extobject.post_everything()
+        return self.final_bound
+
+class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
+
+    converger_spoke_char = 'L'
+
     def _set_weights_and_solve(self):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
         return self.lagrangian()
@@ -64,10 +73,3 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
                 if bound is not None:
                     self.bound = bound
                 self.dk_iter += 1
-
-    def finalize(self):
-        self.final_bound = self.bound
-        if self.opt.extensions is not None and \
-            hasattr(self.opt.extobject, 'post_everything'):
-            self.opt.extobject.post_everything()
-        return self.final_bound
