@@ -18,6 +18,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
+from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
 from mpisppy.cylinders.ph_ob import PhOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
@@ -439,6 +440,39 @@ def lagranger_spoke(
             = cfg.lagranger_rho_rescale_factors_json
     add_ph_tracking(lagranger_spoke, cfg, spoke=True)
     return lagranger_spoke
+
+
+def subgradient_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+):
+    subgradient_spoke = _PHBase_spoke_foundation(
+        SubgradientOuterBound,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+    )
+    if cfg.subgradient_iter0_mipgap is not None:
+        subgradient_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
+            ["mipgap"] = cfg.subgradient_iter0_mipgap
+    if cfg.subgradient_iterk_mipgap is not None:
+        subgradient_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
+            ["mipgap"] = cfg.subgradient_iterk_mipgap
+    if cfg.subgradient_rho_multiplier is not None:
+        subgradient_spoke["opt_kwargs"]["options"]["subgradient_rho_multiplier"]\
+            = cfg.subgradient_rho_multiplier
+    add_ph_tracking(subgradient_spoke, cfg, spoke=True)
+
+    return subgradient_spoke
 
 
 def xhatlooper_spoke(
