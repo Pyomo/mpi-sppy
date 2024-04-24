@@ -148,7 +148,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 update = self.try_scenario_dict(next_scendict)
                 if update:
                     _vb(f"   Updating best to {next_scendict}")
-                    scenario_cycler.best = next_scendict
+                    scenario_cycler.best = next_scendict["ROOT"]
 
             #_vb(f"    scenario_cycler._scenarios_this_epoch {scenario_cycler._scenarios_this_epoch}")
 
@@ -175,9 +175,9 @@ class ScenarioCycler:
         self._num_scenarios = len(shuffled_scenarios)
         
         self._cycle_idx = 0
+        self._best = None
         self._begin_normal_epoch()
         
-        self._best = None
 
     @property
     def best(self):
@@ -250,7 +250,7 @@ class ScenarioCycler:
             self._reversed = False
         self._shuffled_snames = [s[1] for s in self._shuffled_scenarios]
         self._original_order = [s[0] for s in self._shuffled_scenarios]
-        self._cur_ROOTscen = self._shuffled_snames[0]
+        self._cur_ROOTscen = self._shuffled_snames[0] if self.best is None else self.best
         self.create_nodescen_dict()
         
         self._scenarios_this_epoch = set()
@@ -259,7 +259,7 @@ class ScenarioCycler:
         self._reversed = True
         self._shuffled_snames = [s[1] for s in reversed(self._shuffled_scenarios)]
         self._original_order = [s[0] for s in reversed(self._shuffled_scenarios)]
-        self._cur_ROOTscen = self._shuffled_snames[0]
+        self._cur_ROOTscen = self._shuffled_snames[0] if self.best is None else self.best
         self.create_nodescen_dict()
         
         self._scenarios_this_epoch = set()
