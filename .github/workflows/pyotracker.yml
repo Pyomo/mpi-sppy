@@ -1,6 +1,6 @@
 # Pyomo tracker --- dynamically imports pyomo main
 
-name: pyomo tracker
+name: pyo tracker
 
 on:
   schedule:
