@@ -1,82 +1,93 @@
+# This code sits between the guest model file and mpi-sppy
 # Pyomo is the guest language. Started by DLW April 2024
 """
 For other guest languages, the corresponding module is
 still written in Python, it just needs to interact
 with the guest language
 """
+"""
+The guest model file (not this file) provides a scenario creator in the guest
+language that attaches to each scenario a scenario probability (or "uniform")
+and the following items to populate the guest dict (aka gd):
+  name
+  conditional probability
+  stage number
+  nonant var list
 
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 
+The guest model file also needs to somehow (it might depend on the language)
+provide hooks to:
+  scenario_creator_kwargs
+  scenario_names_creator
+  scenario_denouement
+
+"""
 # for debuggig
 from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-def scenario_creator(
-    scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
-        num_scens=None, seedoffset=0
-):
-    """ Create a scenario for the (scalable) farmer example, but
-   but pretend that Pyomo is a guest language.
-    
-    Args:
-        scenario_name (str):
-            Name of the scenario to construct.
-        use_integer (bool, optional):
-            If True, restricts variables to be integer. Default is False.
-        sense (int, optional):
-            Model sense (minimization or maximization). Must be either
-            pyo.minimize or pyo.maximize. Default is pyo.minimize.
-        crops_multiplier (int, optional):
-            Factor to control scaling. There will be three times this many
-            crops. Default is 1.
-        num_scens (int, optional):
-            Number of scenarios. We use it to compute _mpisppy_probability. 
-            Default is None.
-        seedoffset (int): used by confidence interval code
+class Pyomo_guest():
     """
-    s = farmer.scenario_creator(scenario_name, use_integer, sense, crops_multiplier,
-        num_scens, seedoffset)
-    # In general, be sure to process variables in the same order has the guest does (so indexes match)
-    gd = {
-        "scenario": s,
-        "nonants": {("ROOT",i): v for i,v in enumerate(s.DevotedAcreage.values())},
-        "nonant_fixedness": {("ROOT",i): v.is_fixed() for i,v in enumerate(s.DevotedAcreage.values())},
-        "nonant_start": {("ROOT",i): v._value for i,v in enumerate(s.DevotedAcreage.values())},
-        "nonant_names": {("ROOT",i): v.name for i, v in enumerate(s.DevotedAcreage.values())},
-        "probability": "uniform",
-        "sense": pyo.minimize,
-        "BFs": None
-        }
-    return gd
-    
-#=========
-def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
+    Provide an interface to a model file for a Pyomo guest
+    """
+    def __init__(self, model_file_name):
+        self.model_module = sputils.module_name_to_module(model_file_name)
 
 
-#=========
-def inparser_adder(cfg):
-    farmer.inparser_adder(cfg)
+    def scenario_creator(self, scenario_name, **kwargs):
+    ):
+        """ Wrap the guest (Pyomo in this case) scenario creator
 
-    
-#=========
-def kw_creator(cfg):
-    # creates keywords for scenario creator
-    return farmer.kw_creator(cfg)
+        Args:
+            scenario_name (str):
+                Name of the scenario to construct.
+        """
+        s = self.model_module.scenario_creator(scenario_name, **kwargs)
+        ### TBD: assert that this is minimization
+        nonant_vars = s._nonant_vars  # a list of vars
+        # In general, be sure to process variables in the same order has the guest does (so indexes match)
+        gd = {
+            "scenario": s,
+            "nonants": {("ROOT",i): v for i,v in enumerate(nonant_vars)},
+            "nonant_fixedness": {("ROOT",i): v.is_fixed() for i,v in enumerate(nonant_vars)},
+            "nonant_start": {("ROOT",i): v._value for i,v in enumerate(nonant_vars)},
+            "nonant_names": {("ROOT",i): v.name for i, v in enumerate(nonant_vars)},
+            "probability": s._scenario_probability,
+            "sense": pyo.minimize,
+            "BFs": None
+            }
+        xxxx don't we need to attach nonants to s??? (or is that done elsewhere
+        return gd
 
-# This is not needed for PH
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                                           given_scenario, **scenario_creator_kwargs)
+    #=========
+    def scenario_names_creator(self, num_scens,start=None):
+        return farmer.scenario_names_creator(num_scens,start)
 
-#============================
-def scenario_denouement(rank, scenario_name, scenario):
-    pass
-    # (the fct in farmer won't work because the Var names don't match)
-    #farmer.scenario_denouement(rank, scenario_name, scenario)
+
+    #=========
+    def inparser_adder(self, cfg):
+        farmer.inparser_adder(cfg)
+
+
+    #=========
+    def kw_creator(self, cfg):
+        # creates keywords for scenario creator
+        return farmer.kw_creator(cfg)
+
+    # This is not needed for PH
+    def sample_tree_scen_creator(self, sname, stage, sample_branching_factors, seed,
+                                 given_scenario=None, **scenario_creator_kwargs):
+        return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                                               given_scenario, **scenario_creator_kwargs)
+
+    #============================
+    def scenario_denouement(self, rank, scenario_name, scenario):
+        pass
+        # (the fct in farmer won't work because the Var names don't match)
+        #farmer.scenario_denouement(rank, scenario_name, scenario)
 
 
 

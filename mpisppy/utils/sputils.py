@@ -993,7 +993,15 @@ def number_of_nodes(branching_factors):
     #How many nodes does a tree with a given branching_factors have ?
     last_node_stage_num = [i-1 for i in branching_factors]
     return node_idx(last_node_stage_num, branching_factors)
-    
+   
+
+def module_name_to_module(module_name):
+    if inspect.ismodule(module_name):
+        module = module_name
+    else:
+        module = importlib.import_module(module_name)
+    return module
+
 
 if __name__ == "__main__":
     branching_factors = [2,2,2,3]
@@ -1013,3 +1021,4 @@ if __name__ == "__main__":
         print(ndn, v)
     print(f"slices: {slices}")
     check4losses(numscens, branching_factors, sntr, slices, ranks_per_scenario)
+

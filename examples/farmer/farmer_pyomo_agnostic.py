@@ -21,7 +21,7 @@ def scenario_creator(
         num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example, but
-   but pretend that Pyomo is a guest language.
+   but treat Pyomo as a guest language.
     
     Args:
         scenario_name (str):
