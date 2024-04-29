@@ -87,7 +87,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
-            elif self.opt.options.get("subgradient_while_waiting", True):
+            elif self.opt.options.get("subgradient_while_waiting", False):
                 # compute a subgradient step
                 self.opt.Compute_Xbar(verbose)
                 self.opt.Update_W(verbose)
