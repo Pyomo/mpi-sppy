@@ -59,7 +59,7 @@ class Pyomo_guest():
             "sense": pyo.minimize,
             "BFs": None
             }
-        xxxx don't we need to attach nonants to s??? (or is that done elsewhere
+        # we don't need to attach nonants to s; the agnostic class does it
         return gd
 
     #=========
@@ -97,13 +97,17 @@ class Pyomo_guest():
 # the function names correspond to function names in mpisppy
 
 def attach_Ws_and_prox(Ag, sname, scenario):
-    # this is farmer specific, so we know there is not a W already, e.g.
     # Attach W's and prox to the guest scenario.
+    # Use the nonant index as the index set
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     nonant_idx = list(scenario._agnostic_dict["nonants"].keys())
+    assert not hasattr(gs, "W")
     gs.W = pyo.Param(nonant_idx, initialize=0.0, mutable=True)
+    assert not hasattr(gs, "W_on")
     gs.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
+    assert not hasattr(gs, "prox_on")
     gs.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
+    assert not hasattr(gs, "rho")
     gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
 
 
@@ -124,7 +128,7 @@ def _reenable_W(Ag, scenario):
     
     
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
-    # Deal with prox linearization and approximation later,
+    # TBD: Deal with prox linearization and approximation later,
     # i.e., just do the quadratic version
 
     ### The host has xbars and computes without involving the guest language
@@ -134,8 +138,10 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
 
     gd = scenario._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
-    nonant_idx = list(gd["nonants"].keys())    
-    objfct = gs.Total_Cost_Objective  # we know this is farmer...
+    nonant_idx = list(gd["nonants"].keys())
+    # for Pyomo, we can just ask what is the active objective function
+    # (from some guests, maybe we will have to put the obj function on gd
+    objfct = sputils.find_active_objective(gs)
     ph_term = 0
     gs.xbars = pyo.Param(nonant_idx, mutable=True)
     # Dual term (weights W)
@@ -171,7 +177,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False):
     # This needs to attach stuff to s (see solve_one in spopt.py)
     # Solve the guest language version, then copy values to the host scenario
 
-    # This function needs to  W on the guest right before the solve
+    # This function needs to update W on the guest right before the solve
 
     # We need to operate on the guest scenario, not s; however, attach things to s (the host scenario)
     # and copy to s. If you are working on a new guest, you should not have to edit the s side of things
