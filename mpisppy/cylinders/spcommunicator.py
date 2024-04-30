@@ -18,6 +18,13 @@ import time
 from mpisppy import MPI
 
 
+def communicator_array(size):
+    arr = np.empty(size+1)
+    arr[:] = np.nan
+    arr[-1] = 0
+    return arr
+
+
 class SPCommunicator:
     """ Notes: TODO
     """
@@ -110,5 +117,6 @@ class SPCommunicator:
         size = MPI.DOUBLE.size * (length + 1)
         window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
         buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())
+        buff[:] = np.nan
         buff[-1] = 0. # Initialize the write number to zero
         return window, buff
