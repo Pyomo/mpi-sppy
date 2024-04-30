@@ -173,7 +173,9 @@ class _BoundSpoke(Spoke):
             look for a kill signal
         """
         self._make_windows(1, 2) # kill signals are accounted for in _make_window
-        self._locals = np.zeros(0 + 3) # hub outer/inner bounds and kill signal
+        self._locals = np.empty(0 + 3) # hub outer/inner bounds and kill signal
+        self._locals[:] = np.nan
+        self._locals[-1] = 0
         self._bound = np.zeros(1 + 1) # spoke bound + kill signal
 
     @property
@@ -232,7 +234,9 @@ class _BoundNonantLenSpoke(_BoundSpoke):
             vbuflen += len(s._mpisppy_data.nonant_indices)
 
         self._make_windows(1, vbuflen)
-        self._locals = np.zeros(vbuflen + 1)
+        self._locals = np.empty(vbuflen + 1)
+        self._locals[:] = np.nan
+        self._locals[-1] = 0
         self._bound = np.zeros(1 + 1)
 
 class InnerBoundSpoke(_BoundSpoke):
