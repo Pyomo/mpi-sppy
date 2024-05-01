@@ -1,5 +1,4 @@
-# special for ph debugging DLW Dec 2018
-# unlimited crops
+# The farmer example for general agnostic with Pyomo as guest language
 # ALL INDEXES ARE ZERO-BASED
 #  ___________________________________________________________________________
 #
@@ -11,7 +10,6 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 #
-# special scalable farmer for stress-testing
 
 import pyomo.environ as pyo
 import numpy as np
@@ -75,7 +73,7 @@ def scenario_creator(
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
     varlist = [model.DevotedAcreage]
-    sputils.attach_root_node(model, model.FirstStageCost, varlist)    
+    s._nonant_vars = varlist
     
     #Add the probability of the scenario
     if num_scens is not None :
@@ -225,8 +223,7 @@ def pysp_instance_creation_callback(
 
     return model
 
-# begin functions not needed by farmer_cylinders
-# (but needed by special codes such as confidence intervals)
+# begin helper functions
 #=========
 def scenario_names_creator(num_scens,start=None):
     # (only for Amalgamator): return the full list of num_scens scenario names
@@ -283,7 +280,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     return scenario_creator(sname, **sca)
 
 
-# end functions not needed by farmer_cylinders
+# end helper functions
 
 
 #============================
