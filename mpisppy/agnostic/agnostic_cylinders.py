@@ -11,13 +11,20 @@ import sys
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.utils.agnostic as agnostic
+import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
+
+from pyomo_guest import Pyomo_guest
 
 
 def _parse_args(m):
     # m is the model file module
     cfg = config.Config()
+    cfg.add_to_config(name="module_name",
+                      description="file name that has scenario creator, etc.",
+                      domain=str,
+                      default=None,
+                      argparse=True)
 
     assert hasattr(m, "inparser_adder"), "The model file must have an inparser_adder function"
     m.inparser_adder(cfg)
@@ -37,20 +44,22 @@ def _parse_args(m):
 
 
 if __name__ == "__main__":
-    if len(sys.argv) < 2:
-        print("need the python model file name")
-        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py examples/farmer4agnostic.py" --help)
+    if len(sys.argv) == 1:
+        print("need the python model file module name (no .py)")
+        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py --module-name farmer4agnostic" --help)
         quit()
 
-    model_fname = sys.argv[1]
+    model_fname = sys.argv[2]
 
     module = sputils.module_name_to_module(model_fname)
 
     cfg = _parse_args(module)
 
-    # xxxx now I need the pyomo_guest wrapper, then feed that to agnostic
-    xxx
-    Ag = agnostic.Agnostic(module, cfg)
+    # now I need the pyomo_guest wrapper, then feed that to agnostic
+    pg = Pyomo_guest(model_fname)
+    Ag = agnostic.Agnostic(pg, cfg)
+    print("quitting")
+    quit()
 
     scenario_creator = Ag.scenario_creator
     assert hasattr(m, "scenario_denouement"), "The model file must have a scenario_denouement function"
