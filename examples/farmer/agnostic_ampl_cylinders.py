@@ -5,7 +5,7 @@ import farmer_ampl_agnostic
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.utils.agnostic as agnostic
+import mpisppy.agnostic.agnostic as agnostic
 
 def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING
