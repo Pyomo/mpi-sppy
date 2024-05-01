@@ -1,3 +1,4 @@
+###xxxx allow for getting vars from root node for pyomo models???
 # This code sits between the guest model file and mpi-sppy
 # Pyomo is the guest language. Started by DLW April 2024
 """
@@ -38,7 +39,6 @@ class Pyomo_guest():
 
 
     def scenario_creator(self, scenario_name, **kwargs):
-    ):
         """ Wrap the guest (Pyomo in this case) scenario creator
 
         Args:
@@ -46,7 +46,7 @@ class Pyomo_guest():
                 Name of the scenario to construct.
         """
         s = self.model_module.scenario_creator(scenario_name, **kwargs)
-        ### TBD: assert that this is minimization
+        ### TBD: assert that this is minimization?
         nonant_vars = s._nonant_vars  # a list of vars
         # In general, be sure to process variables in the same order has the guest does (so indexes match)
         gd = {
