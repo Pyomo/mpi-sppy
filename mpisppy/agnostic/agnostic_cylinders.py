@@ -44,14 +44,12 @@ if __name__ == "__main__":
 
     model_fname = sys.argv[1]
 
-    print("A")
     module = sputils.module_name_to_module(model_fname)
 
-    print("B")
     cfg = _parse_args(module)
-    print("C")
-    quit()
-    # xxxx now I need the pyomo_guest wrapper, the feed that to agnostic
+
+    # xxxx now I need the pyomo_guest wrapper, then feed that to agnostic
+    xxx
     Ag = agnostic.Agnostic(module, cfg)
 
     scenario_creator = Ag.scenario_creator
