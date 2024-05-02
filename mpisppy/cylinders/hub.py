@@ -8,7 +8,7 @@ import mpisppy.log
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spcommunicator import SPCommunicator, communicator_array
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
@@ -242,8 +242,8 @@ class Hub(SPCommunicator):
         """
         self.outerbound_receive_buffers = dict()
         for idx in self.outerbound_spoke_indices:
-            self.outerbound_receive_buffers[idx] = np.zeros(
-                self.remote_lengths[idx - 1] + 1
+            self.outerbound_receive_buffers[idx] = communicator_array(
+                self.remote_lengths[idx - 1]
             )
 
     def initialize_inner_bound_buffers(self):
@@ -251,8 +251,8 @@ class Hub(SPCommunicator):
         """
         self.innerbound_receive_buffers = dict()
         for idx in self.innerbound_spoke_indices:
-            self.innerbound_receive_buffers[idx] = np.zeros(
-                self.remote_lengths[idx - 1] + 1
+            self.innerbound_receive_buffers[idx] = communicator_array(
+                self.remote_lengths[idx - 1]
             )
 
     def initialize_nonants(self):
@@ -263,7 +263,7 @@ class Hub(SPCommunicator):
         for idx in self.nonant_spoke_indices:
             if self.nonant_send_buffer is None:
                 # for hub outer/inner bounds and kill signal
-                self.nonant_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+                self.nonant_send_buffer = communicator_array(self.local_lengths[idx - 1])
             elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
                 raise RuntimeError("Nonant buffers disagree on size")
 
@@ -274,7 +274,7 @@ class Hub(SPCommunicator):
         self.boundsout_send_buffer = None
         for idx in self.bounds_only_indices:
             if self.boundsout_send_buffer is None:
-                self.boundsout_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+                self.boundsout_send_buffer = communicator_array(self.local_lengths[idx - 1])
             if self.local_lengths[idx - 1] != 2:
                 raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
 
@@ -591,7 +591,7 @@ class PHHub(Hub):
         self.w_send_buffer = None
         for idx in self.w_spoke_indices:
             if self.w_send_buffer is None:
-                self.w_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+                self.w_send_buffer = communicator_array(self.local_lengths[idx - 1])
             elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
                 raise RuntimeError("W buffers disagree on size")
 
