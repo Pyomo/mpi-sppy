@@ -3,7 +3,6 @@
     Must use the PH object for this to work
 '''
 import ast
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
@@ -408,6 +407,9 @@ class PHTracker(Extension):
     def plot_gaps(self, var):
         ''' plot the gaps; Assumes gaps are saved in a csv file
         '''
+        # only import this if needed so we
+        # don't create a hard dependency
+        import matplotlib.pyplot as plt
 
 
         df = pd.read_csv(self.track_dict[var].fname, sep=',')
