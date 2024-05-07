@@ -33,6 +33,7 @@ setup(
         'numpy',
         'scipy',
         'pyomo>=6.4',
+        'pandas', # should probably remove
     ],
     extras_require={
         'doc': [
