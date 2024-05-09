@@ -2,7 +2,7 @@
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy
-
+import warnings
 
 def _consensus_vars_number_creator(consensus_vars):
     """associates to each consensus vars the number of time it appears
@@ -124,17 +124,20 @@ class ADMM_PH():
                 else:
                     if v is None: 
                         # This var will not be indexed but that might not matter??
-                        #Going to replace the brackets
-                        v2str = vstr.replace("[","__").replace("]","__") #
+                        # Going to replace the brackets
+                        v2str = vstr.replace("[","__").replace("]","__") # To distinguish the consensus_vars fixed at 0
                         v = pyo.Var()
-                        setattr(s, v2str, v)
+                        
+                        ### Lines equivalent to setattr(s, v2str, v) without warning
+                        s.del_component(v2str)
+                        s.add_component(v2str, v)
+
                         v.fix(0)
                         self.varprob_dict[s].append((id(v),0))
                     else:
                         error_list2.append((sname,vstr))
                 if v is not None: #if None the error is trapped earlier
                     varlist.append(v)
-
             objfunc = sputils.find_active_objective(s)
             #this will overwrite the nonants already there
             sputils.attach_root_node(s, objfunc, varlist) 

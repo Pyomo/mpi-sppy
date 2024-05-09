@@ -42,7 +42,7 @@ class TestADMMPH(unittest.TestCase):
         for i in range(3,5):
             self._make_admm(i)
 
-    def test_variable_probability(self):
+    def test_variable_probability(self):        
         admm = self._make_admm(3)
         q = dict()
         for sname, s in admm.local_scenarios.items():
@@ -61,20 +61,14 @@ class TestADMMPH(unittest.TestCase):
         return f"y[{dummy_node}]"
 
     def test_assign_variable_probs_error1(self):
-        print ("**************** test_assign_variable_probs_error1 ********************")
-        print("Pyomo warning is expected")
-
         admm = self._make_admm(3)
         admm.consensus_vars["Region1"].append(self._slack_name("DC2DC3"))
-        self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
+        self.assertRaises(RuntimeError, admm.assign_variable_probs)
         
     def test_assign_variable_probs_error2(self):
-        print ("**************** test_assign_variable_probs_error2 ********************")
-        print("Pyomo warning is expected")
-
         admm = self._make_admm(3)
         admm.consensus_vars["Region1"].remove(self._slack_name("DC3_1DC1"))
-        self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
+        self.assertRaises(RuntimeError, admm.assign_variable_probs)
 
 
 if __name__ == '__main__':
