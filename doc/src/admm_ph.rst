@@ -69,26 +69,13 @@ It should be provided in ``consensus_vars``.
 
     Every variable in ``consensus_vars[subproblem]`` should also appear as a variable of the subproblem.
 
-Solving methods in config
-++++++++++++++++++++++++++++++
+Using the config system
++++++++++++++++++++++++
 
 In addition to the previously presented data, the driver also requires arguments to
 create the PH Model and solve it. These arguments are asked to the user via config.
 .. TBD add external link on precedent line
 
-The user must specify the solver name with ``--solver-name (str)``.
-
-The number of cylinders used for progressive hedging must be specified with ``-np (int)``.
-
-If the config argument ``run_async`` is used, the method used will be asynchronous projective hedging instead of ph.
-
-.. In the following line add link to config page
-The other arguments are detailed in config. They include:
-* ``config.popular_args()``: the popular arguments, note that ``default_rho`` is needed
-* ``xhatxbar``, ``lagrangian``, ``ph_ob``, ``fwph`` each of them create a new cylinder
-* ``two_sided_args`` these optionnal arguments include give stopping conditions: ``rel_gap``, ``abs_gap`` for
-relative or absolute termination gap and ``max_stalled_iters`` for maximum iterations with no reduction in gap
-* ``ph_args`` and ``aph_args`` which are specific arguments required when using PH or APH
 
 Direct solver of the extensive form
 +++++++++++++++++++++++++++++++++++
@@ -169,6 +156,18 @@ The function ``consensus_vars_creator`` creates the required ``consensus_vars`` 
 
 .. autofunction:: distr.consensus_vars_creator
 
+Constructing the driver
++++++++++++++++++++++++
+
+If the config argument ``run_async`` is used, the method used will be asynchronous projective hedging instead of ph.
+
+.. In the following line add link to config page
+The other arguments are detailed in config. They include:
+* ``config.popular_args()``: the popular arguments, note that ``default_rho`` is needed
+* ``xhatxbar``, ``lagrangian``, ``ph_ob``, ``fwph`` each of them create a new cylinder
+* ``two_sided_args`` these optionnal arguments include give stopping conditions: ``rel_gap``, ``abs_gap`` for
+relative or absolute termination gap and ``max_stalled_iters`` for maximum iterations with no reduction in gap
+* ``ph_args`` and ``aph_args`` which are specific arguments required when using PH or APH
 
 Non local solvers
 +++++++++++++++++
