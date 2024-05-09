@@ -27,7 +27,6 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
-    cfg.wxbar_read_write_args()
     cfg.tracking_args()
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",

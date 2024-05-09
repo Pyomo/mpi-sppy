@@ -393,10 +393,10 @@ def kw_creator(cfg):
     kwargs = {"num_scens" : cfg.get('num_scens', None),
               }
     if not kwargs["num_scens"] in [2, 3, 4]:
-        RuntimeError (f"unexpected number of regions {cfg.num_scens}, whould be in  [2, 3, 4]")
+        RuntimeError (f"unexpected number of regions {cfg.num_scens}, should be in  [2, 3, 4]")
     return kwargs
 
 
-def rser_adder(cfg):
+def inparser_adder(cfg):
     #requires the user to give the number of scenarios
     cfg.num_scens_required()

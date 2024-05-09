@@ -5,7 +5,8 @@ Helper functions in the model file
 
 The `scenario_creator function <scenario_creator>`_ is required but some modules also need helper functions in the model file.
 
-All these functions can be found in the example ``examples.distr.distr.py`` and are documented in `the admm ph documentation <admm_ph>`_
+All these functions can be found in the example ``examples.distr.distr.py`` and 
+are documented in `the admm ph documentation <admm_ph.rst#sectiondatafordriver>`_
 
 .. py:function:: kw_creator(cfg)
 

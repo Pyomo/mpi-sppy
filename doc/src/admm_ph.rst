@@ -133,6 +133,7 @@ Once the local_dict is created, the Pyomo model can be created thanks to ``min_c
 
 .. autofunction:: distr.min_cost_distr_problem
 
+.. _sectiondatafordriver:
 Transforming data for the driver
 ++++++++++++++++++++++++++++++++
 The driver requires five elements given by the model: ``all_scenario_names``, ``scenario_creator``, ``scenario_creator_kwargs``,
@@ -159,6 +160,7 @@ The function ``consensus_vars_creator`` creates the required ``consensus_vars`` 
 Constructing the driver
 +++++++++++++++++++++++
 
+
 If the config argument ``run_async`` is used, the method used will be asynchronous projective hedging instead of ph.
 
 .. In the following line add link to config page
@@ -168,6 +170,13 @@ The other arguments are detailed in config. They include:
 * ``two_sided_args`` these optionnal arguments include give stopping conditions: ``rel_gap``, ``abs_gap`` for
 relative or absolute termination gap and ``max_stalled_iters`` for maximum iterations with no reduction in gap
 * ``ph_args`` and ``aph_args`` which are specific arguments required when using PH or APH
+* ``tracking_args``: if required, prints additional information from PH on the screen
+
+.. note::
+
+    Some methods, such as ``run_async`` and all the methods creating new cylinders
+    not only need to be added in the ``_parse_args()`` method, but also need to be called later in the driver.
+
 
 Non local solvers
 +++++++++++++++++
@@ -176,14 +185,16 @@ The file ``globalmodel.py`` and ``distr_ef.py`` are used for debugging. They don
 problem without decomposition.
 
 * ``globalmodel.py``
+
     In ``globalmodel.py``,  ``global_dict_creator`` merges the data into a global dictionary
-    thanks to the inter-region dictionary, without creating dummy nodes. It then creates the model (as if there was 
-    only one region without dummy nodes) and solves it.
+    thanks to the inter-region dictionary, without creating dummy nodes. Then model is created (as if there was 
+    only one region without dummy nodes) and solved.
 
     However this file strongly depends on the structure of the problem and doesn't decompose the problems. It may be difficultly adpated
     and inefficient.
 
 * ``distr_ef.py``
+
     As presented previously solves the extensive form. 
     The arguments are the same as ``distr_admm_cylinders.py``, the method doesn't need to be adapted with the model.
 
