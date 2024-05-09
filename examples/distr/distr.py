@@ -139,7 +139,7 @@ def region_dict_creator(scenario_name):
     """ Create a scenario for the inter-region max profit distribution example.
 
         The convention for node names is: 
-            Symbol + number of the region (+ _ + number of the example if needed), \n
+            Symbol + number of the region (+ _ + number of the example if needed),
             with symbols DC for distribution centers, F for factory nodes, B for buyer nodes. \n
             For instance: F3_1 is the 1st factory node of region 3. \n
 
@@ -149,7 +149,7 @@ def region_dict_creator(scenario_name):
 
     Returns:
         region_dict (dict): contains all the information in the given region to create the model. It is composed of:\n
-            "nodes" (list of str): all the nodes. The following subsets are also nodes: \n
+            "nodes" (list of str): all the nodes. The following subsets are also nodes:
             "factory nodes", "buyer nodes", "distribution center nodes", \n
             "arcs" (list of 2 tuples of str) : (node, node) pairs\n
             "supply" (dict[n] of float): supply; keys are nodes (negative for demand)\n
@@ -397,6 +397,6 @@ def kw_creator(cfg):
     return kwargs
 
 
-def inparser_adder(cfg):
+def rser_adder(cfg):
     #requires the user to give the number of scenarios
     cfg.num_scens_required()

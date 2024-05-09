@@ -32,6 +32,7 @@ MPI is used.
    grad_rho.rst
    w_rho.rst
    admm_ph.rst
+   helper_functions.rst
    contributors.rst
    internals.rst
    api.rst

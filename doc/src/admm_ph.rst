@@ -19,7 +19,7 @@ object which will solve the subproblems in a parallel way, insuring that merging
 Data needed in the driver
 +++++++++++++++++++++++++
 
-The driver file requires a function which creates the model for each scenario.
+The driver file requires the `scenario_creator function <scenario_creator>`_ which creates the model for each scenario.
 
 .. py:function:: scenario_creator(scenario_name)
 
@@ -32,14 +32,14 @@ The driver file requires a function which creates the model for each scenario.
     Returns:
         Pyomo ConcreteModel: the instantiated model
 
-The driver file also requires helper arguments that are used in mpi-sppy. Here is a summary:
-.. TBD add hyperlink on precedent line
+The driver file also requires helper arguments that are used in mpi-sppy. They are detailed `in helper_functions <helper_functions>`_.
+Here is a summary:
 
 * ``scenario_creator_kwargs``(dict[str]): key words arguments needed in ``scenario_creator``
         
 * ``all_scenario_names`` (list of str): the subproblem names
 
-* A function that prints the results once the problem is solved
+* A function that is called at termination in some modules (e.g. PH)
     .. py:function:: scenario_denouement
 
         Args:
@@ -109,7 +109,7 @@ Distribution example
 ``distr.py`` is an example of model creator in admm_ph for a (linear) inter-region minimal cost distribution problem.
 ``distr_admm_cylinders.py`` is the driver.
 
-Original data dictionnaries
+Original data dictionaries
 +++++++++++++++++++++++++++
 
 In the example the ``inter_region_dict_creator`` creates the inter-region information.
@@ -137,8 +137,7 @@ The purpose of ``distr.dummy_nodes_generator`` is to do that.
 
 .. note::
 
-    In our example we have chosen to split equally among the regions 
-    the cost of transport from a region source to a region target equally.
+    In the example the cost of transport is chosen to be split equally in the region source and the region target.
 
     We here represent the flow problem with a directed graph. If a flow from DC2 to DC1 were to be authorized we would create
     a dummy node DC2DC1.
@@ -149,7 +148,8 @@ Once the local_dict is created, the Pyomo model can be created thanks to ``min_c
 
 Transforming data for the driver
 ++++++++++++++++++++++++++++++++
-The driver requires three essential elements: ``all_scenario_names``, ``scenario_creator`` and ``consensus_vars``.
+The driver requires five elements given by the model: ``all_scenario_names``, ``scenario_creator``, ``scenario_creator_kwargs``,
+``inparser_adder`` and ``consensus_vars``.
 
 ``all_scenario_names`` (see above) is given by ``scenario_names_creator``
 
@@ -157,16 +157,17 @@ The driver requires three essential elements: ``all_scenario_names``, ``scenario
 
 .. autofunction:: distr.scenario_creator
 
-The function ``consensus_vars_creator`` creates the required ``consensus_vars`` dictionary.
-
-.. autofunction:: distr.consensus_vars_creator
-
 The dictionary ``scenario_creator_kwargs`` is created with
 
 .. autofunction:: distr.kw_creator
 
-The function ``inparser_adder`` requires the user to give ``num_scens`` during the config.
+The function ``inparser_adder`` requires the user to give ``num_scens`` (the number of regions) during the configuration.
+.. autofunction:: distr.inparser_adder
 
+Contrary to the other helper functions, ``consensus_vars_creator`` is specific to admm_ph.
+The function ``consensus_vars_creator`` creates the required ``consensus_vars`` dictionary.
+
+.. autofunction:: distr.consensus_vars_creator
 
 
 Non local solvers
