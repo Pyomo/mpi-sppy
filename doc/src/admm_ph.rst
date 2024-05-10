@@ -4,7 +4,7 @@ ADMM PH
 =======
 
 **ADMM_PH** uses progressive hedging implemented in mpi-sppy 
-to solve a non-stochastic problem by breaking them into subproblems.
+to solve consensus admm problems.
 
 An example of usage is given below.
 
@@ -24,7 +24,7 @@ The driver file requires the `scenario_creator function <scenario_creator>`_ whi
 .. py:function:: scenario_creator(scenario_name)
 
     Creates the model, which should include the consensus variables.
-    However, this function should not create any tree.
+    However, this function should not create a scenario tree.
 
     Args:
         scenario_name (str): the name of the scenario that will be created.
@@ -59,11 +59,12 @@ Here is a summary:
 
 
 The driver also needs global information to link the subproblems.
-It should be provided in ``consensus_vars``. 
+It should be provided in a dictionary called ``consensus_vars``,
+which is returned by the helper function ``consensus_vars_creator``.
 
 ``consensus_vars`` (dictionary): 
     * Keys are the subproblems 
-    * Values are the list of consensus variables
+    * Values are the list of consensus variable names
 
 .. note::
 
@@ -89,7 +90,7 @@ as it doesn't decompose the problem.
 
 .. note::
 
-    ``admm_ph`` doesn't collect instanciation time.
+    ``admm_ph`` doesn't collect instantiation time.
 
 Distribution example
 --------------------
@@ -110,7 +111,7 @@ The ``region_dict_creator`` creates the information specific to a region regardl
 Adapting the data to create the model
 +++++++++++++++++++++++++++++++++++++
 
-To solve the regions independantly we must make sure that the constraints (in our example flow balance) would still be respected if the
+To solve the regions independently we must make sure that the constraints (in our example flow balance) would still be respected if the
 models were merged. To impose this, dummy nodes are introduced. 
 
 In our example a consensus variable is the slack variable on a dummy node. \\
@@ -178,8 +179,8 @@ relative or absolute termination gap and ``max_stalled_iters`` for maximum itera
     not only need to be added in the ``_parse_args()`` method, but also need to be called later in the driver.
 
 
-Non local solvers
-+++++++++++++++++
+Solving without decomposition
++++++++++++++++++++++++++++++
 
 The file ``globalmodel.py`` and ``distr_ef.py`` are used for debugging. They don't rely on ph or admm, they simply solve the
 problem without decomposition.
