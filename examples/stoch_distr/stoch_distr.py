@@ -2,14 +2,10 @@
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
-# In this file, we create a (linear) inter-region minimal cost distribution problem.
+# In this file, we create a stochastic (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
 # and amongst the different regions in inter_region_dict_creator
 # The data slightly differs depending on the number of regions (num_scens) which is created for 2, 3 or 4 regions
-
-# Note: regions in our model will be represented in mpi-sppy by scenarios and to ensure the inter-region constraints
-#       we will use dummy-nodes, which will be represented in mpi-sppy by non-anticipative variables
-#       The following association of terms are made: regions = scenarios, and dummy-nodes = nonants = consensus-vars
 
 ### The following functions create the data 
 
