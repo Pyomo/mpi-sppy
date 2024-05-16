@@ -2,7 +2,6 @@
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy
-import warnings
 
 def _consensus_vars_number_creator(consensus_vars):
     """associates to each consensus vars the number of time it appears
@@ -66,11 +65,11 @@ class ADMM_PH():
         scenario_names_to_rank, _rank_slices, _scenario_slices =\
                 scenario_tree.scen_names_to_ranks(ranks_per_cylinder)
 
-        cylinder_rank = mpicomm.Get_rank() % ranks_per_cylinder
-        
+        self.cylinder_rank = mpicomm.Get_rank() % ranks_per_cylinder
+        self.all_scenario_names = all_scenario_names
         #taken from spbase
         self.local_scenario_names = [
-            all_scenario_names[i] for i in _rank_slices[cylinder_rank]
+            all_scenario_names[i] for i in _rank_slices[self.cylinder_rank]
         ]
         for sname in self.local_scenario_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
@@ -102,7 +101,7 @@ class ADMM_PH():
 
         #we collect the consensus variables
         allvars_list = list()
-        for sname,s in self.local_scenarios.items():
+        for sname in self.all_scenario_names:
             for var in self.consensus_vars[sname]:
                 if not var in allvars_list:
                     allvars_list.append(var)
