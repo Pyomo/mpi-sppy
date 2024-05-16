@@ -1,17 +1,19 @@
 # Network Flow - various formulations
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.scenario_tree as scenario_tree
-import numpy as np
 
-# In this file, we create a stochastic (linear) inter-region minimal cost distribution problem.
+# In this file, we create a (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
 # and amongst the different regions in inter_region_dict_creator
 # The data slightly differs depending on the number of regions (num_scens) which is created for 2, 3 or 4 regions
 
+# Note: regions in our model will be represented in mpi-sppy by scenarios and to ensure the inter-region constraints
+#       we will use dummy-nodes, which will be represented in mpi-sppy by non-anticipative variables
+#       The following association of terms are made: regions = scenarios, and dummy-nodes = nonants = consensus-vars
+
 ### The following functions create the data 
 
-def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scenarios in this example
+def inter_region_dict_creator(num_scens):
     """Creates the oriented arcs between the regions, with their capacities and costs. \n
     This dictionary represents the inter-region constraints and flows. It indicates where to add dummy nodes.
 
@@ -25,12 +27,12 @@ def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scen
     """
     inter_region_dict={}
 
-    if num_admm_subproblems == 2:
+    if num_scens == 2:
         inter_region_dict["arcs"]=[(("Region1","DC1"),("Region2","DC2"))]
         inter_region_dict["costs"]={(("Region1","DC1"),("Region2","DC2")): 100}
         inter_region_dict["capacities"]={(("Region1","DC1"),("Region2","DC2")): 70}
 
-    elif num_admm_subproblems == 3:
+    elif num_scens == 3:
         inter_region_dict["arcs"] = [(("Region1","DC1"),("Region2","DC2")),(("Region2","DC2"),("Region1","DC1")),\
                                     (("Region1","DC1"),("Region3","DC3_1")),(("Region3","DC3_1"),("Region1","DC1")),\
                                     (("Region2","DC2"),("Region3","DC3_2")),(("Region3","DC3_2"),("Region2","DC2")),\
@@ -44,7 +46,7 @@ def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scen
                                     (("Region2","DC2"),("Region3","DC3_2")): 50, (("Region3","DC3_2"),("Region2","DC2")): 50,\
                                         }
     
-    elif num_admm_subproblems == 4:
+    elif num_scens == 4:
         inter_region_dict["arcs"] = [(("Region1","DC1"),("Region2","DC2")),(("Region2","DC2"),("Region1","DC1")),\
                                  (("Region1","DC1"),("Region3","DC3_1")),(("Region3","DC3_1"),("Region1","DC1")),\
                                  (("Region2","DC2"),("Region3","DC3_2")),(("Region3","DC3_2"),("Region2","DC2")),\
@@ -67,7 +69,7 @@ def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scen
     return inter_region_dict
 
 
-def dummy_nodes_generator(region_dict, inter_region_dict): 
+def dummy_nodes_generator(region_dict, inter_region_dict):
     """This function creates a new dictionary ``local_dict similar`` to ``region_dict`` with the dummy nodes and their constraints
 
     Args:
@@ -133,11 +135,11 @@ def _is_partition(L, *lists):
     
     return True
 
-def region_dict_creator(admm_subproblem_name): #in this precise example region_dict doesn't depend on the scenario
+def region_dict_creator(scenario_name):
     """ Create a scenario for the inter-region max profit distribution example.
 
         The convention for node names is: 
-            Symbol + number of the region (+ _ + number of the example if needed),
+            Symbol + number of the region (+ _ + number of the example if needed), \n
             with symbols DC for distribution centers, F for factory nodes, B for buyer nodes. \n
             For instance: F3_1 is the 1st factory node of region 3. \n
 
@@ -147,7 +149,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
 
     Returns:
         region_dict (dict): contains all the information in the given region to create the model. It is composed of:\n
-            "nodes" (list of str): all the nodes. The following subsets are also nodes:
+            "nodes" (list of str): all the nodes. The following subsets are also nodes: \n
             "factory nodes", "buyer nodes", "distribution center nodes", \n
             "arcs" (list of 2 tuples of str) : (node, node) pairs\n
             "supply" (dict[n] of float): supply; keys are nodes (negative for demand)\n
@@ -156,7 +158,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
             "flow costs" (dict[a] of float) : costs per unit flow on each arc \n
             "flow capacities" (dict[a] of floats) : upper bound capacities of each arc \n
     """
-    if admm_subproblem_name == "Region1" :
+    if scenario_name == "Region1" :
         # Creates data for Region1
         region_dict={"name": "Region1"}
         region_dict["nodes"] = ["F1_1", "F1_2", "DC1", "B1_1", "B1_2"]
@@ -176,7 +178,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["flow costs"] = {("F1_1","DC1"): 300, ("F1_2","DC1"): 500, ("DC1","B1_1"): 200,
             ("DC1","B1_2"): 400, ("F1_1","B1_1"): 700,  ("F1_2","B1_2"): 1000}
         
-    elif admm_subproblem_name == "Region2":
+    elif scenario_name=="Region2":
         # Creates data for Region2
         region_dict={"name": "Region2"}
         region_dict["nodes"] = ["DC2", "B2_1", "B2_2", "B2_3"]
@@ -191,7 +193,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["flow capacities"] = {("DC2","B2_1"): 200, ("DC2","B2_2"): 150, ("DC2","B2_3"): 100}
         region_dict["flow costs"] = {("DC2","B2_1"): 100, ("DC2","B2_2"): 200, ("DC2","B2_3"): 300}
 
-    elif admm_subproblem_name == "Region3" :
+    elif scenario_name == "Region3" :
         # Creates data for Region3
         region_dict={"name": "Region3"}
         region_dict["nodes"] = ["F3_1", "F3_2", "DC3_1", "DC3_2", "B3_1", "B3_2"]
@@ -209,7 +211,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["flow costs"] = {("F3_1","DC3_1"): 100, ("F3_2","DC3_2"): 100, ("DC3_1","B3_1"): 201,
             ("DC3_2","B3_2"): 200, ("DC3_1","DC3_2"): 100, ("DC3_2","DC3_1"): 100}
     
-    elif admm_subproblem_name == "Region4":
+    elif scenario_name == "Region4":
         # Creates data for Region4
         region_dict={"name": "Region4"}
         region_dict["nodes"] = ["F4_1", "F4_2", "DC4", "B4_1", "B4_2"]
@@ -225,15 +227,15 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
         region_dict["flow costs"] = {("F4_1","DC4"): 100, ("F4_2","DC4"): 80, ("DC4","B4_1"): 90, ("DC4","B4_2"): 70}
         
     else:
-        raise RuntimeError (f"unknown Region name {admm_subproblem_name}")
+        raise RuntimeError (f"unknown Region name {scenario_name}")
 
     assert _is_partition(region_dict["nodes"], region_dict["factory nodes"], region_dict["buyer nodes"], region_dict["distribution center nodes"])
 
     return region_dict
 
 
-###Creates the model when local_dict is given, local_dict depends on the subproblem
-def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minimize):
+###Creates the model when local_dict is given
+def min_cost_distr_problem(local_dict, sense=pyo.minimize):
     """ Create an arcs formulation of network flow
 
     Args:
@@ -243,9 +245,6 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
     Returns:
         model (Pyomo ConcreteModel) : the instantiated model
     """
-    #print(f"***************** {stoch_scenario_name} ***********************")
-    # Define the percentage of loss at production
-    scennum   = sputils.extract_num(stoch_scenario_name)
     # Assert sense == pyo.minimize, "sense should be equal to pyo.minimize"
     # First, make the special In, Out arc lists for each node
     arcsout = {n: list() for n in local_dict["nodes"]}
@@ -272,17 +271,14 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
             return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
-    
+        
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
-    model.FirstStageCost = pyo.Expression(expr=\
-                    sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
-    
-    model.SecondStageCost = pyo.Expression(expr=\
+    model.MinCost = pyo.Objective(expr=\
                     sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
-                    + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]))
-
-    model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost, sense=sense)
+                    + sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]) \
+                    + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) ,
+                      sense=sense)
     
     def FlowBalance_rule(m, n):
         #we change the definition of the slack for target dummy nodes so that we have the slack from the source and from the target equal
@@ -290,11 +286,6 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
             - m.y[n] == local_dict["supply"][n]
-        elif n in local_dict["factory nodes"]:
-            np.random.seed((scennum+hash(n))%2**32)
-            return sum(m.flow[a] for a in arcsout[n])\
-            - sum(m.flow[a] for a in arcsin[n])\
-            == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
         else:
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
@@ -304,44 +295,8 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
     return model
 
 
-###Functions required in other files, which constructions are specific to the problem
-
-def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
-    """for each scenario prints its name and the final variable values
-
-    Args:
-        rank (int): not used here, but could be helpful to know the location
-        scenario_name (str): name of the scenario
-        scenario (Pyomo ConcreteModel): the instantiated model
-    """
-    print(f"flow values for {admm_stoch_subproblem_scenario_name}")
-    scenario.flow.pprint()
-    print(f"slack values for {admm_stoch_subproblem_scenario_name}")
-    scenario.y.pprint()
-
-
-#=============================================================================
-def MakeNodesforStochScen(model, local_dict): #in our example the Branching factors are common because there is only two stages
-    """ Make just those scenario tree nodes needed by a stochastic scenario.
-        Return them as a list.
-        NOTE: the nodes depend on the scenario model and are, in some sense,
-              local to it.
-        Args:
-            BFs (list of int): branching factors
-    """
-    retval = [scenario_tree.ScenarioNode("ROOT",
-                                         1.0,
-                                         1,
-                                         model.FirstStageCost,
-                                        [model.y[n] for n in  local_dict["factory nodes"]], ### MASSIVE PROBLEM !!!! NOT ONLY IN REGION
-                                         model)
-              ]
-    return retval
-# The original tree has only 2 stages
-
-
 ###Creates the scenario
-def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
+def scenario_creator(scenario_name, num_scens=None):
     """Creates the model, which should include the consensus variables. \n
     However, this function shouldn't attach the consensus variables to root nodes, as it is done in admm_ph.
 
@@ -352,26 +307,37 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     Returns:
         Pyomo ConcreteModel: the instantiated model
     """
-    cfg = kwargs.get("cfg")
-    # assert(cfg.num_admm_subproblems is not None)
-    # assert (cfg.num_stoch_scens is not None)
-    admm_subproblem_name, stoch_scenario_name = split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name)
-
-    inter_region_dict = inter_region_dict_creator(cfg.num_admm_subproblems)
-    region_dict = region_dict_creator(admm_subproblem_name)
-
+    assert (num_scens is not None)
+    inter_region_dict = inter_region_dict_creator(num_scens)
+    region_dict = region_dict_creator(scenario_name)
     # Adding dummy nodes and associated features
     local_dict = dummy_nodes_generator(region_dict, inter_region_dict)
     # Generating the model
-    model = min_cost_distr_problem(local_dict, stoch_scenario_name, cfg)
-
-    model._mpisppy_node_list = MakeNodesforStochScen(model, local_dict) 
-    model._mpisppy_probability = 1/cfg.num_stoch_scens
-
+    model = min_cost_distr_problem(local_dict)
+    
+    varlist = list()
+    sputils.attach_root_node(model, model.MinCost, varlist)    
+    
     return model
 
 
-def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs):
+###Functions required in other files, which constructions are specific to the problem
+
+def scenario_denouement(rank, scenario_name, scenario):
+    """for each scenario prints its name and the final variable values
+
+    Args:
+        rank (int): not used here, but could be helpful to know the location
+        scenario_name (str): name of the scenario
+        scenario (Pyomo ConcreteModel): the instantiated model
+    """
+    print(f"flow values for {scenario_name}")
+    scenario.flow.pprint()
+    print(f"slack values for {scenario_name}")
+    scenario.y.pprint()
+
+
+def consensus_vars_creator(num_scens):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admm_ph.
 
@@ -383,7 +349,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs):
         present in the region
     """
     # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
-    inter_region_dict = inter_region_dict_creator(len(admm_subproblem_names))
+    inter_region_dict = inter_region_dict_creator(num_scens)
     consensus_vars = {}
     for arc in inter_region_dict["arcs"]:
         source,target = arc
@@ -395,67 +361,25 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs):
         #adds dummy_node in the source region
         if not region_source in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
-        consensus_vars[region_source].append((vstr,2))
+        consensus_vars[region_source].append(vstr)
 
         #adds dummy_node in the target region
         if not region_target in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
-        consensus_vars[region_target].append((vstr,2))
-    # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
-    # then we go through the models (created by scenario creator) for all the admm_stoch_subproblem_scenario 
-    # which have this scenario as an ancestor (parent) in the tree
-    for admm_subproblem_name in admm_subproblem_names:
-        admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
-        model = scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs)
-        for node in model._mpisppy_node_list:
-            for var in node.nonant_list:
-                #print(f"{admm_subproblem_name=}")
-                #print(f"{var.name=}")
-                if not var.name in consensus_vars[admm_subproblem_name]:
-                    consensus_vars[admm_subproblem_name].append((var.name, node.stage))
+        consensus_vars[region_target].append(vstr)
     return consensus_vars
 
 
-def stoch_scenario_names_creator(num_stoch_scens):
+def scenario_names_creator(num_scens):
     """Creates the name of every scenario.
 
     Args:
         num_scens (int): number of scenarios
 
     Returns:
-        list (str): the list of scenario names
+        list (str): the list of names
     """
-    return [f"StochasticScenario{i+1}" for i in range(num_stoch_scens)]
-
-
-def admm_subproblem_names_creator(num_admm_subproblems):
-    """Creates the name of every subproblem.
-
-    Args:
-        num_subproblems (int): number of subproblems
-
-    Returns:
-        list (str): the list of subproblem names
-    """
-    return [f"Region{i+1}" for i in range(num_admm_subproblems)]
-
-
-def combining_names(admm_subproblem_name,stoch_scenario_name):
-    return f"ADMM_STOCH_{admm_subproblem_name}_{stoch_scenario_name}"
-
-def admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names):
-    return [combining_names(admm_subproblem_name,stoch_scenario_name) \
-            for admm_subproblem_name in admm_subproblem_names \
-                for stoch_scenario_name in stoch_scenario_names]
-
-
-def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name):
-    # Method specific to our example and because the admm_subproblem_name and stoch_scenario_name don't include "_"
-    splitted = admm_stoch_subproblem_scenario_name.split('_')
-    assert (len(splitted) == 4), f"no underscore should be attached to admm_subproblem_name nor stoch_scenario_name"
-    admm_subproblem_name = splitted[2]
-    stoch_scenario_name = splitted[3]
-    return admm_subproblem_name, stoch_scenario_name
+    return [f"Region{i+1}" for i in range(num_scens)]
 
 
 def kw_creator(cfg):
@@ -466,36 +390,13 @@ def kw_creator(cfg):
     Returns:
         dict (str): the kwargs that are used in distr.scenario_creator, here {"num_scens": num_scens}
     """
-    kwargs = {
-        "cfg": cfg
-    }
+    kwargs = {"num_scens" : cfg.get('num_scens', None),
+              }
+    if not kwargs["num_scens"] in [2, 3, 4]:
+        RuntimeError (f"unexpected number of regions {cfg.num_scens}, whould be in  [2, 3, 4]")
     return kwargs
 
 
 def inparser_adder(cfg):
     #requires the user to give the number of scenarios
-    cfg.add_to_config(
-            "num_stoch_scens",
-            description="Number of stochastic scenarios (default None)",
-            domain=int,
-            default=None,
-            argparse_args = {"required": True}
-        )
-
-    cfg.add_to_config(
-            "num_admm_subproblems",
-            description="Number of admm subproblems per stochastic scenario (default None)",
-            domain=int,
-            default=None,
-            argparse_args = {"required": True}
-        )
-
-    cfg.add_to_config("spm",
-                      description="mean percentage of scrap loss at the production",
-                      domain=float,
-                      default=5)
-    
-    cfg.add_to_config("cv",
-                      description="coefficient of variation of the loss at the production",
-                      domain=float,
-                      default=20)
+    cfg.num_scens_required()

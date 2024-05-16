@@ -1,0 +1,222 @@
+#creating the class stochastic_admm_ph
+import mpisppy.utils.sputils as sputils
+import pyomo.environ as pyo
+import mpisppy
+import mpisppy.scenario_tree as scenario_tree
+import numpy as np
+
+def _consensus_vars_number_creator(consensus_vars):
+    """associates to each consensus vars the number of time it appears
+
+    Args:
+        consensus_vars (dict): dictionary which keys are the subproblems and values are the list of consensus variables 
+        present in the subproblem
+
+    Returns:
+        consensus_vars_number (dict): dictionary whose keys are the consensus variables 
+        and values are the number of subproblems the variable is linked to.
+    """
+    consensus_vars_number={}
+    for subproblem in consensus_vars:
+        for var_stage_tuple in consensus_vars[subproblem]:
+            var = var_stage_tuple[0]
+            if not var in consensus_vars_number: # instanciates consensus_vars_number[var]
+                consensus_vars_number[var] = 0
+            consensus_vars_number[var] += 1
+    return consensus_vars_number
+
+class STOCH_ADMM_PH(): #add scenario_tree
+    """ Defines an interface to all strata (hubs and spokes)
+
+        Args:
+            options (dict): options
+            all_scenario_names (list): all scenario names
+            scenario_creator (fct): returns a concrete model with special things
+            consensus_vars (dict): dictionary which keys are the subproblems and values are the list of consensus variables 
+            present in the subproblem
+            n_cylinder (int): number of cylinders that will ultimately be used
+            mpicomm (MPI comm): creates communication
+            scenario_creator_kwargs (dict): kwargs passed directly to scenario_creator.
+            verbose (boolean): if True gives extra debugging information
+
+        Attributes:
+          local_scenarios (dict of scenario objects): concrete models with 
+                extra data, key is name
+          local_scenario_names (list): names of locals 
+    """
+    def __init__(self,
+            options,
+            all_admm_stoch_subproblem_scenario_names,
+            split_admm_stoch_subproblem_scenario_name,
+            admm_subproblem_names,
+            stoch_scenario_names,
+            scenario_creator, #supplied by the user/ modeller, used only here
+            consensus_vars,
+            n_cylinders,
+            mpicomm,
+            scenario_creator_kwargs=None,
+            verbose=None,
+            depth=3, #hardcoded to modify
+    ):
+        assert len(options) == 0, "no options supported by admm_ph"
+        # We need local_scenarios
+        self.local_admm_stoch_subproblem_scenarios = {}
+        scen_tree = sputils._ScenTree(["ROOT"], all_admm_stoch_subproblem_scenario_names)
+        assert mpicomm.Get_size() % n_cylinders == 0, \
+            f"{mpicomm.Get_size()=} and {n_cylinders=}, but {mpicomm.Get_size() % n_cylinders=} should be 0"
+        ranks_per_cylinder = mpicomm.Get_size() // n_cylinders
+        
+        scenario_names_to_rank, _rank_slices, _scenario_slices =\
+                scen_tree.scen_names_to_ranks(ranks_per_cylinder)
+
+        cylinder_rank = mpicomm.Get_rank() % ranks_per_cylinder
+        
+        # taken from spbase
+        self.local_admm_stoch_subproblem_scenarios_names = [
+            all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
+        ]
+        for sname in self.local_admm_stoch_subproblem_scenarios_names:
+            s = scenario_creator(sname, **scenario_creator_kwargs)
+            self.local_admm_stoch_subproblem_scenarios[sname] = s
+        # we are not collecting instantiation time
+
+        self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
+        self.consensus_vars = consensus_vars
+        self.verbose = verbose
+        self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+        self.admm_subproblem_names = admm_subproblem_names
+        self.stoch_scenario_names = stoch_scenario_names
+        self.number_admm_subproblems = len(self.admm_subproblem_names)
+        self.all_nodenames = ["ROOT"]
+        self.depth = depth
+        self.assign_variable_probs(verbose=self.verbose)
+
+
+    def var_prob_list_fct(self, s):
+        """Associates probabilities to variables and raises exceptions if the model doesn't match the dictionary consensus_vars
+
+        Args:
+            s (Pyomo ConcreteModel): scenario
+
+        Returns:
+            list: list of pairs (variables id (int), probabilities (float)). The order of variables is invariant with the scenarios.
+                If the consensus variable is present in the scenario it is associated with a probability 1/#subproblem
+                where it is present. Otherwise it has a probability 0.
+        """
+        return self.varprob_dict[s]
+    
+
+    def assign_variable_probs(self, verbose=False):
+        self.varprob_dict = {}
+
+        #we collect the consensus variables
+        all_consensus_vars_list = list()
+        for sname,s in self.local_admm_stoch_subproblem_scenarios.items():
+            admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
+            for var_stage_tuple in self.consensus_vars[admm_subproblem_name]: 
+                if not var_stage_tuple in all_consensus_vars_list:
+                    all_consensus_vars_list.append(var_stage_tuple)
+        error_list1 = []
+        error_list2 = []
+        for sname,s in self.local_admm_stoch_subproblem_scenarios.items():
+            if verbose:
+                print(f"admm_ph.assign_variable_probs is processing scenario: {sname}")
+            admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
+            # varlist[stage] will contain the variables at each stage
+            depth = len(s._mpisppy_node_list)+1
+            varlist = [[] for _ in range(depth)]
+
+            self.varprob_dict[s] = list()
+            for var_stage_tuple in all_consensus_vars_list:
+                vstr, stage = var_stage_tuple
+                v = s.find_component(vstr)
+                if var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
+                    if v is not None:
+                        #variables that should be on the model
+                        if stage == depth: 
+                            # The node is a stochastic scenario, the probability at this node has not yet been defined 
+                            cond_prob = 1.
+                        else:
+                            prob_node = np.prod([s._mpisppy_node_list[ancestor_stage-1].cond_prob for ancestor_stage in range(1,stage+1)])
+                            # conditional probability of the scenario at the node (without considering the leaves as probabilities)
+                            cond_prob = s._mpisppy_probability/prob_node 
+                        self.varprob_dict[s].append((id(v),cond_prob/(self.consensus_vars_number[vstr])))
+                        # s._mpisppy_probability has not yet been divided by the number of subproblems, it the probability of the
+                        # stochastic scenario
+                    else:
+                        error_list1.append((sname,vstr))
+                else:
+                    if v is None:
+                        # This var will not be indexed but that might not matter??
+                        # Going to replace the brackets
+                        v2str = vstr.replace("[","__").replace("]","__") # To distinguish the consensus_vars fixed at 0
+                        v = pyo.Var()
+                        
+                        ### Lines equivalent to setattr(s, v2str, v) without warning
+                        #s.del_component(v2str) UNUSEFUL
+                        s.add_component(v2str, v) 
+                        #is the consensus variable should be earlier, then its not added in the good place, or is it?
+
+                        v.fix(0)
+                        self.varprob_dict[s].append((id(v),0))
+                    else:
+                        error_list2.append((sname,vstr))
+                if v is not None: #if None the error is trapped earlier
+                    varlist[stage-1].append(v)
+
+            # Create the new scenario tree node for admm_consensus
+            assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
+            parent = s._mpisppy_node_list[-1]
+            objfunc = pyo.Expression(expr=0) # The cost is spread on the branches which are the subproblems
+            admm_subproblem_name, stoch_scenario_name = self.split_admm_stoch_subproblem_scenario_name(sname)
+            node_name = parent.name + '_' + str(self.stoch_scenario_names.index(stoch_scenario_name)) 
+            #could be more efficient with a dictionary rather than index
+            if not node_name in self.all_nodenames:
+                self.all_nodenames.append(node_name)
+            s._mpisppy_node_list.append(scenario_tree.ScenarioNode(
+                node_name,
+                1/self.number_admm_subproblems, #branching probability at this node
+                parent.stage + 1, # The stage is the stage of the previous leaves
+                objfunc * self.number_admm_subproblems,
+                varlist[depth-1],
+                s)
+            )
+            assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
+            s._mpisppy_probability /= self.number_admm_subproblems
+
+            leaf_name = node_name + '_' + str(self.admm_subproblem_names.index(admm_subproblem_name)) 
+            # underscores have a special signification in the tree
+            self.all_nodenames.append(leaf_name)
+            for stage in range(1, depth):
+                old_node = s._mpisppy_node_list[stage-1]
+                s._mpisppy_node_list[stage-1] = scenario_tree.ScenarioNode(
+                old_node.name,
+                old_node.cond_prob,
+                old_node.stage,
+                old_node.cost_expression * self.number_admm_subproblems,
+                varlist[stage-1],
+                s)
+
+            self.local_admm_stoch_subproblem_scenarios[sname] = s # I don't know whether this changes anything
+
+        if len(error_list1) + len(error_list2) > 0:
+            raise RuntimeError (f"for each pair (scenario, variable) of the following list, the variable appears"
+                                f"in consensus_vars, but not in the model:\n {error_list1} \n"
+                                f"for each pair (scenario, variable) of the following list, the variable appears "
+                                f"in the model, but not in consensus var: \n {error_list2}")
+
+
+    def admm_ph_scenario_creator(self, admm_stoch_subproblem_scenario_name):
+        #this is the function the user will supply for all cylinders   
+        admm_stoch_subproblem_scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
+
+        # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
+        #objectives = admm_stoch_subproblem_scenario.component_objects(pyo.Objective, active=True)
+        #count = 0
+        #for obj in objectives:
+        #    count += 1
+        #assert count == 1, f"only one objective function is authorized, there are {count}"
+        #obj.expr = obj.expr * self.number_admm_subproblems
+
+        return admm_stoch_subproblem_scenario
+    

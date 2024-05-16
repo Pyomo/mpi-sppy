@@ -1,10 +1,8 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
-# general example driver for stoch_distr with cylinders
-
-# Driver file for stochastic admm
-import mpisppy.utils.stoch_admm_ph as stoch_admm_ph
-import stoch_distr
+# general example driver for distr with cylinders
+import mpisppy.utils.admm_ph as admm_ph
+import distr
 import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -14,12 +12,13 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
+
 write_solution = True
 
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    stoch_distr.inparser_adder(cfg)
+    distr.inparser_adder(cfg)
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
@@ -28,13 +27,14 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
+    cfg.wxbar_read_write_args()
     cfg.tracking_args()
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)
 
-    cfg.parse_command_line("stoch_distr_admm_cylinders")
+    cfg.parse_command_line("distr_admm_cylinders")
     return cfg
 
 
@@ -57,37 +57,28 @@ def main():
     ph_converger = None
 
     options = {}
-
-    admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens)
-    all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
-    split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
-    
-    scenario_creator = stoch_distr.scenario_creator
-    scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
-    stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
-    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs)
+    all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
+    scenario_creator = distr.scenario_creator
+    scenario_creator_kwargs = distr.kw_creator(cfg)  
+    consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
     n_cylinders = _count_cylinders(cfg)
-    admm = stoch_admm_ph.STOCH_ADMM_PH(options,
-                           all_admm_stoch_subproblem_scenario_names,
-                           split_admm_stoch_subproblem_scenario_name,
-                           admm_subproblem_names,
-                           stoch_scenario_names,
+    admm = admm_ph.ADMM_PH(options,
+                           all_scenario_names, 
                            scenario_creator,
                            consensus_vars,
                            n_cylinders=n_cylinders,
                            mpicomm=MPI.COMM_WORLD,
                            scenario_creator_kwargs=scenario_creator_kwargs,
                            )
-    # Things needed for vanilla cylinders
-    scenario_creator = admm.admm_ph_scenario_creator # scenario_creator on a local scale
-    scenario_creator_kwargs = None
-    scenario_denouement = stoch_distr.scenario_denouement
-    #note that the stoch_admm_ph scenario_creator wrapper doesn't take any arguments
-    variable_probability = admm.var_prob_list_fct
-    all_nodenames = admm.all_nodenames
 
-    beans = (cfg, scenario_creator, scenario_denouement, all_admm_stoch_subproblem_scenario_names)
+    # Things needed for vanilla cylinders
+    scenario_creator = admm.admm_ph_scenario_creator ##change needed because of the wrapper
+    scenario_creator_kwargs = None
+    scenario_denouement = distr.scenario_denouement
+    #note that the admm_ph scenario_creator wrapper doesn't take any arguments
+    variable_probability = admm.var_prob_list_fct
+
+    beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     if cfg.run_async:
         # Vanilla APH hub
@@ -95,8 +86,7 @@ def main():
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=None,
                                    rho_setter = None,
-                                   variable_probability=variable_probability,
-                                   all_nodenames=all_nodenames) #needs to be modified, all_nodenames is None only for 2 stage problems
+                                   variable_probability=variable_probability)
 
     else:
         # Vanilla PH hub
@@ -105,8 +95,7 @@ def main():
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter=None,
-                                  variable_probability=variable_probability,
-                                  all_nodenames=all_nodenames)
+                                  variable_probability=variable_probability)
 
 
     # FWPH spoke
@@ -146,14 +135,15 @@ def main():
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
-    print("yeah")
+
     if write_solution:
-        wheel.write_first_stage_solution('stoch_distr_soln.csv')
-        wheel.write_first_stage_solution('stoch_distr_cyl_nonants.npy',
+        wheel.write_first_stage_solution('distr_soln.csv')
+        wheel.write_first_stage_solution('distr_cyl_nonants.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution('stoch_distr_full_solution')
+        wheel.write_tree_solution('distr_full_solution')
+    
     if global_rank == 0:
-        best_objective = wheel.spcomm.BestInnerBound * len(all_admm_stoch_subproblem_scenario_names)
+        best_objective = wheel.spcomm.BestInnerBound * len(all_scenario_names)
         print(f"{best_objective=}")
 
 
