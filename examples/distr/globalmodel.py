@@ -1,3 +1,4 @@
+# Distribution example without decomposition
 import pyomo.environ as pyo
 import distr
 from mpisppy.utils import config
