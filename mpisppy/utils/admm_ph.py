@@ -2,6 +2,8 @@
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy
+from mpisppy import MPI
+global_rank = MPI.COMM_WORLD.Get_rank()
 
 def _consensus_vars_number_creator(consensus_vars):
     """associates to each consensus vars the number of time it appears
@@ -65,7 +67,8 @@ class ADMM_PH():
         scenario_names_to_rank, _rank_slices, _scenario_slices =\
                 scenario_tree.scen_names_to_ranks(ranks_per_cylinder)
 
-        self.cylinder_rank = mpicomm.Get_rank() % ranks_per_cylinder
+        self.cylinder_rank = mpicomm.Get_rank() // n_cylinders
+        #self.cylinder_rank = mpicomm.Get_rank() % ranks_per_cylinder
         self.all_scenario_names = all_scenario_names
         #taken from spbase
         self.local_scenario_names = [
@@ -149,7 +152,9 @@ class ADMM_PH():
 
 
     def admm_ph_scenario_creator(self, sname):
-        #this is the function the user will supply for all cylinders   
+        #this is the function the user will supply for all cylinders 
+        assert sname in self.local_scenario_names, f"{global_rank=} {sname=} \n {self.local_scenario_names=}"
+        #should probably be deleted as it takes time
         scenario = self.local_scenarios[sname]
 
         # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
