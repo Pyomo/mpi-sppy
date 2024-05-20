@@ -512,7 +512,8 @@ def xhatxbar_spoke(
         all_scenario_names,
         scenario_creator_kwargs=None,
         variable_probability=None,
-        ph_extensions=None
+        ph_extensions=None,
+        all_nodenames=None,
 ):
     xhatxbar_dict = _Xhat_Eval_spoke_foundation(
         XhatXbarInnerBound,
@@ -522,6 +523,7 @@ def xhatxbar_spoke(
         all_scenario_names,
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
+        all_nodenames=all_nodenames,
     )
 
     xhatxbar_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
