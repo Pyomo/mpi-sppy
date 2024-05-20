@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # general example driver for distr with cylinders
 import mpisppy.utils.admm_ph as admm_ph
 import distr
@@ -99,14 +97,14 @@ def main():
 
     # FWPH spoke
     if cfg.fwph:
+        print("May not give the expected result due to variable probability")
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None,
-                                              variable_probability=variable_probability)
+                                              rho_setter = None)
 
 
     # ph outer bounder spoke
@@ -142,7 +140,7 @@ def main():
         wheel.write_tree_solution('distr_full_solution')
     
     if global_rank == 0:
-        best_objective = wheel.spcomm.BestInnerBound * len(all_scenario_names)
+        best_objective = wheel.spcomm.BestInnerBound
         print(f"{best_objective=}")
 
 
