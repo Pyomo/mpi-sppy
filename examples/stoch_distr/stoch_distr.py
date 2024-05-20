@@ -7,7 +7,7 @@ import numpy as np
 # In this file, we create a stochastic (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
 # and amongst the different regions in inter_region_dict_creator
-# The data slightly differs depending on the number of regions (num_scens) which is created for 2, 3 or 4 regions
+# The data slightly differs depending on the number of regions (num_admm_subproblems) which is created for 2, 3 or 4 regions
 
 ### The following functions create the data 
 
@@ -16,7 +16,7 @@ def inter_region_dict_creator(num_admm_subproblems): #doesn't depend on the scen
     This dictionary represents the inter-region constraints and flows. It indicates where to add dummy nodes.
 
     Args:
-        num_scens (int): select the number of scenarios (regions) wanted
+        num_admm_subproblems (int): select the number of subproblems (regions) wanted
 
     Returns:
         dict: 
@@ -118,10 +118,10 @@ def dummy_nodes_generator(region_dict, inter_region_dict):
     return local_dict
 
 def _is_partition(L, *lists):
+    # Verification that the node list is a partition of the other nodes lists
     # Step 1: Verify that the union of all sublists contains all elements of L
     if set(L) != set().union(*lists):
         return False
-    
     # Step 2: Ensure each element in L appears in exactly one sublist
     for item in L:
         count = 0
@@ -130,16 +130,16 @@ def _is_partition(L, *lists):
                 count += 1
         if count != 1:
             return False
-    
     return True
 
 def region_dict_creator(admm_subproblem_name): #in this precise example region_dict doesn't depend on the scenario
     """ Create a scenario for the inter-region max profit distribution example.
+    In this precise example region_dict doesn't depend on the  stochastic scenario
 
-        The convention for node names is: 
-            Symbol + number of the region (+ _ + number of the example if needed),
-            with symbols DC for distribution centers, F for factory nodes, B for buyer nodes. \n
-            For instance: F3_1 is the 1st factory node of region 3. \n
+    The convention for node names is: 
+        Symbol + number of the region (+ _ + number of the example if needed),
+        with symbols DC for distribution centers, F for factory nodes, B for buyer nodes. \n
+        For instance: F3_1 is the 1st factory node of region 3. \n
 
     Args:
         scenario_name (str):
@@ -234,18 +234,19 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
 
 ###Creates the model when local_dict is given, local_dict depends on the subproblem
 def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minimize):
-    """ Create an arcs formulation of network flow
+    """ Create an arcs formulation of network flow for the region and stochastic scenario considered.
 
     Args:
         local_dict (dict): dictionary representing a region including the dummy nodes \n
+        stoch_scenario_name (str): name of the stochastic scenario \n
+        cfg (): config argument used here for the random parameters \n
         sense (=pyo.minimize): we aim to minimize the cost, this should always be minimize
 
     Returns:
         model (Pyomo ConcreteModel) : the instantiated model
     """
-    #print(f"***************** {stoch_scenario_name} ***********************")
-    # Define the percentage of loss at production
-    scennum   = sputils.extract_num(stoch_scenario_name)
+    # Helps to define pseudo randomly the percentage of loss at production
+    scennum = sputils.extract_num(stoch_scenario_name)
     # Assert sense == pyo.minimize, "sense should be equal to pyo.minimize"
     # First, make the special In, Out arc lists for each node
     arcsout = {n: list() for n in local_dict["nodes"]}
@@ -291,7 +292,8 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
             - sum(m.flow[a] for a in arcsin[n])\
             - m.y[n] == local_dict["supply"][n]
         elif n in local_dict["factory nodes"]:
-            np.random.seed((scennum+hash(n))%2**32)
+            # We generate pseudo randomly the loss on each factory node
+            np.random.seed((scennum+hash(n)+cfg.initial_seed)%2**32)
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
             == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
@@ -307,46 +309,26 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
 ###Functions required in other files, which constructions are specific to the problem
 
 def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
-    """for each scenario prints its name and the final variable values
+    """For each admm stochastic scenario subproblem prints its name and the final variable values
 
     Args:
-        rank (int): not used here, but could be helpful to know the location
-        scenario_name (str): name of the scenario
+        rank (int): rank in which the scenario is placed
+        admm_stoch_subproblem_scenario_name (str): name of the admm stochastic scenario subproblem
         scenario (Pyomo ConcreteModel): the instantiated model
     """
-    print(f"flow values for {admm_stoch_subproblem_scenario_name}")
+    print(f"flow values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.flow.pprint()
-    print(f"slack values for {admm_stoch_subproblem_scenario_name}")
+    print(f"slack values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.y.pprint()
-
-
-#=============================================================================
-def MakeNodesforStochScen(model, local_dict): #in our example the Branching factors are common because there is only two stages
-    """ Make just those scenario tree nodes needed by a stochastic scenario.
-        Return them as a list.
-        NOTE: the nodes depend on the scenario model and are, in some sense,
-              local to it.
-        Args:
-            BFs (list of int): branching factors
-    """
-    retval = [scenario_tree.ScenarioNode("ROOT",
-                                         1.0,
-                                         1,
-                                         model.FirstStageCost,
-                                        [model.y[n] for n in  local_dict["factory nodes"]], ### MASSIVE PROBLEM !!!! NOT ONLY IN REGION
-                                         model)
-              ]
-    return retval
-# The original tree has only 2 stages
 
 
 ###Creates the scenario
 def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     """Creates the model, which should include the consensus variables. \n
-    However, this function shouldn't attach the consensus variables to root nodes, as it is done in admm_ph.
+    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in admm_ph.
 
     Args:
-        scenario_name (str): the name of the scenario that will be created. Here is of the shape f"Region{i}" with 1<=i<=num_scens \n
+        admm_stoch_subproblem_scenario_name (str): the name given to the admm problem for the stochastic scenario. \n
         num_scens (int): number of scenarios (regions). Useful to create the corresponding inter-region dictionary
 
     Returns:
@@ -365,9 +347,8 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     # Generating the model
     model = min_cost_distr_problem(local_dict, stoch_scenario_name, cfg)
 
-    model._mpisppy_node_list = MakeNodesforStochScen(model, local_dict) 
-    model._mpisppy_probability = 1/cfg.num_stoch_scens
-
+    sputils.attach_root_node(model, model.FirstStageCost, [model.y[n] for n in  local_dict["factory nodes"]])
+    
     return model
 
 
@@ -376,11 +357,14 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs):
     This dictionary has redundant information, but is useful for admm_ph.
 
     Args:
-        num_scens (int): select the number of scenarios (regions) wanted
+        admm_subproblem_names (list of str): name of the admm subproblems (regions) \n
+        stoch_scenario_name (str): name of any stochastic_scenario, it is only used 
+        in this example to access the non anticipative variables (which are common to 
+        every stochastic scenario) and their stage.
     
     Returns:
-        dict: dictionary which keys are the regions and values are the list of consensus variables 
-        present in the region
+        dict: dictionary which keys are the subproblems and values are the list of 
+        pairs (consensus_variable_name (str), stage (int)).
     """
     # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
     inter_region_dict = inter_region_dict_creator(len(admm_subproblem_names))
@@ -417,39 +401,60 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs):
 
 
 def stoch_scenario_names_creator(num_stoch_scens):
-    """Creates the name of every scenario.
+    """Creates the name of every stochastic scenario.
 
     Args:
-        num_scens (int): number of scenarios
+        num_stoch_scens (int): number of stochastic scenarios
 
     Returns:
-        list (str): the list of scenario names
+        list (str): the list of stochastic scenario names
     """
     return [f"StochasticScenario{i+1}" for i in range(num_stoch_scens)]
 
 
 def admm_subproblem_names_creator(num_admm_subproblems):
-    """Creates the name of every subproblem.
+    """Creates the name of every admm subproblem.
 
     Args:
-        num_subproblems (int): number of subproblems
+        num_subproblems (int): number of admm subproblems
 
     Returns:
-        list (str): the list of subproblem names
+        list (str): the list of admm subproblem names
     """
     return [f"Region{i+1}" for i in range(num_admm_subproblems)]
 
 
 def combining_names(admm_subproblem_name,stoch_scenario_name):
+    # Used to create the admm_stoch_subproblem_scenario_name
     return f"ADMM_STOCH_{admm_subproblem_name}_{stoch_scenario_name}"
 
 def admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names):
+    """ Creates the list of the admm stochastic subproblem scenarios, which are the admm subproblems given a scenario
+
+    Args:
+        admm_subproblem_names (list of str): names of the admm subproblem
+        stoch_scenario_names (list of str): names of the stochastic scenario
+
+    Returns:
+        list of str: name of the admm stochastic subproblem scenarios
+    """
+    ### The order is important, we may want all the subproblems to appear consecutively in a scenario
     return [combining_names(admm_subproblem_name,stoch_scenario_name) \
-            for admm_subproblem_name in admm_subproblem_names \
-                for stoch_scenario_name in stoch_scenario_names]
+            for stoch_scenario_name in stoch_scenario_names \
+                for admm_subproblem_name in admm_subproblem_names ]
 
 
 def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name):
+    """ Gives the admm_subproblem_name and the stoch_scenario_name given an admm_stoch_subproblem_scenario_name.
+    This function, specific to the problem, is the reciprocal function of ``combining_names`` which creates the 
+    admm_stoch_subproblem_scenario_name given the admm_subproblem_name and the stoch_scenario_name.
+
+    Args:
+        admm_stoch_subproblem_scenario_name (str)
+
+    Returns:
+        (str,str): admm_subproblem_name, stoch_scenario_name
+    """
     # Method specific to our example and because the admm_subproblem_name and stoch_scenario_name don't include "_"
     splitted = admm_stoch_subproblem_scenario_name.split('_')
     assert (len(splitted) == 4), f"no underscore should be attached to admm_subproblem_name nor stoch_scenario_name"
@@ -461,10 +466,10 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
 def kw_creator(cfg):
     """
     Args:
-        cfg (config): specifications for the problem. We only look at the number of scenarios
+        cfg (config): specifications for the problem given on the command line
 
     Returns:
-        dict (str): the kwargs that are used in distr.scenario_creator, here {"num_scens": num_scens}
+        dict (str): the kwargs that are used in distr.scenario_creator, chich are included in cfg.
     """
     kwargs = {
         "cfg": cfg
@@ -473,7 +478,12 @@ def kw_creator(cfg):
 
 
 def inparser_adder(cfg):
-    #requires the user to give the number of scenarios
+    """Adding to the config argument, specific elements to our problems. In this case the numbers of stochastic scenarios 
+    and admm subproblems which are required. And elements used for random number generations.
+
+    Args:
+        cfg (config): specifications for the problem given on the command line
+    """
     cfg.add_to_config(
             "num_stoch_scens",
             description="Number of stochastic scenarios (default None)",
@@ -499,3 +509,8 @@ def inparser_adder(cfg):
                       description="coefficient of variation of the loss at the production",
                       domain=float,
                       default=20)
+    
+    cfg.add_to_config("initial_seed",
+                      description="initial seed for generating the loss",
+                      domain=int,
+                      default=0)

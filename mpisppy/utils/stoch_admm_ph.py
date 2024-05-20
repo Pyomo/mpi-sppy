@@ -56,7 +56,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
             mpicomm,
             scenario_creator_kwargs=None,
             verbose=None,
-            depth=3, #hardcoded to modify
+            BFs=None,
     ):
         assert len(options) == 0, "no options supported by admm_ph"
         # We need local_scenarios
@@ -69,7 +69,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
         scenario_names_to_rank, _rank_slices, _scenario_slices =\
                 scen_tree.scen_names_to_ranks(ranks_per_cylinder)
 
-        cylinder_rank = mpicomm.Get_rank() % ranks_per_cylinder
+        cylinder_rank = mpicomm.Get_rank() // n_cylinders
         
         # taken from spbase
         self.local_admm_stoch_subproblem_scenarios_names = [
@@ -87,9 +87,21 @@ class STOCH_ADMM_PH(): #add scenario_tree
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
         self.number_admm_subproblems = len(self.admm_subproblem_names)
-        self.all_nodenames = ["ROOT"]
-        self.depth = depth
+        self.all_nodenames = self.create_node_names(num_admm_subproblems=len(admm_subproblem_names), num_stoch_scens=len(stoch_scenario_names),BFs=BFs)
         self.assign_variable_probs(verbose=self.verbose)
+    
+
+    def create_node_names(self, num_admm_subproblems, num_stoch_scens, BFs=None):
+        if BFs is not None: # already multi-stage problem initially
+            all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
+        else: # 2-stage problem initially
+            all_node_names_0 = ["ROOT"]
+            all_node_names_1 = ["ROOT_" + str(i) for i in range(num_stoch_scens)]
+            all_node_names_2 = [parent + "_" + str(j) \
+                                for parent in all_node_names_1 \
+                                    for j in range(num_admm_subproblems)]
+            all_nodenames = all_node_names_0 + all_node_names_1 + all_node_names_2
+        return all_nodenames
 
 
     def var_prob_list_fct(self, s):
@@ -104,15 +116,14 @@ class STOCH_ADMM_PH(): #add scenario_tree
                 where it is present. Otherwise it has a probability 0.
         """
         return self.varprob_dict[s]
-    
+
 
     def assign_variable_probs(self, verbose=False):
         self.varprob_dict = {}
 
         #we collect the consensus variables
         all_consensus_vars_list = list()
-        for sname,s in self.local_admm_stoch_subproblem_scenarios.items():
-            admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
+        for admm_subproblem_name in self.admm_subproblem_names:
             for var_stage_tuple in self.consensus_vars[admm_subproblem_name]: 
                 if not var_stage_tuple in all_consensus_vars_list:
                     all_consensus_vars_list.append(var_stage_tuple)
@@ -125,6 +136,8 @@ class STOCH_ADMM_PH(): #add scenario_tree
             # varlist[stage] will contain the variables at each stage
             depth = len(s._mpisppy_node_list)+1
             varlist = [[] for _ in range(depth)]
+            if s._mpisppy_probability == "uniform": #if there is a two-stage scenario defined by sputils.attach_root_node
+                s._mpisppy_probability = 1/len(self.stoch_scenario_names)
 
             self.varprob_dict[s] = list()
             for var_stage_tuple in all_consensus_vars_list:
@@ -171,8 +184,6 @@ class STOCH_ADMM_PH(): #add scenario_tree
             admm_subproblem_name, stoch_scenario_name = self.split_admm_stoch_subproblem_scenario_name(sname)
             node_name = parent.name + '_' + str(self.stoch_scenario_names.index(stoch_scenario_name)) 
             #could be more efficient with a dictionary rather than index
-            if not node_name in self.all_nodenames:
-                self.all_nodenames.append(node_name)
             s._mpisppy_node_list.append(scenario_tree.ScenarioNode(
                 node_name,
                 1/self.number_admm_subproblems, #branching probability at this node
@@ -184,9 +195,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
             assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
             s._mpisppy_probability /= self.number_admm_subproblems
 
-            leaf_name = node_name + '_' + str(self.admm_subproblem_names.index(admm_subproblem_name)) 
             # underscores have a special signification in the tree
-            self.all_nodenames.append(leaf_name)
             for stage in range(1, depth):
                 old_node = s._mpisppy_node_list[stage-1]
                 s._mpisppy_node_list[stage-1] = scenario_tree.ScenarioNode(
@@ -207,16 +216,8 @@ class STOCH_ADMM_PH(): #add scenario_tree
 
 
     def admm_ph_scenario_creator(self, admm_stoch_subproblem_scenario_name):
-        #this is the function the user will supply for all cylinders   
-        admm_stoch_subproblem_scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
+        # There is no need to multiply the objective function by the number of admm_subproblems as it is done earlier.
 
-        # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
-        #objectives = admm_stoch_subproblem_scenario.component_objects(pyo.Objective, active=True)
-        #count = 0
-        #for obj in objectives:
-        #    count += 1
-        #assert count == 1, f"only one objective function is authorized, there are {count}"
-        #obj.expr = obj.expr * self.number_admm_subproblems
+        return self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 
-        return admm_stoch_subproblem_scenario
     

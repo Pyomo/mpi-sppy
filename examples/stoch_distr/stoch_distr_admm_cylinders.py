@@ -78,6 +78,8 @@ def main():
                            n_cylinders=n_cylinders,
                            mpicomm=MPI.COMM_WORLD,
                            scenario_creator_kwargs=scenario_creator_kwargs,
+                           verbose=None,
+                           BFs=None,
                            )
     # Things needed for vanilla cylinders
     scenario_creator = admm.admm_ph_scenario_creator # scenario_creator on a local scale
@@ -86,7 +88,8 @@ def main():
     #note that the stoch_admm_ph scenario_creator wrapper doesn't take any arguments
     variable_probability = admm.var_prob_list_fct
     all_nodenames = admm.all_nodenames
-
+    print(f"-----------------------{all_nodenames=}------------------------")
+    print(f"++++++++++++++++++++++++++++ end of ADMM PH for {global_rank=} ++++++++++++++++++++++++++++++")
     beans = (cfg, scenario_creator, scenario_denouement, all_admm_stoch_subproblem_scenario_names)
 
     if cfg.run_async:
@@ -108,7 +111,6 @@ def main():
                                   variable_probability=variable_probability,
                                   all_nodenames=all_nodenames)
 
-
     # FWPH spoke
     if cfg.fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -117,8 +119,7 @@ def main():
     if cfg.lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None,
-                                              variable_probability=variable_probability)
+                                              rho_setter = None)
 
 
     # ph outer bounder spoke
@@ -130,7 +131,7 @@ def main():
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
-        xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs, all_nodenames=all_nodenames)
 
     list_of_spoke_dict = list()
     if cfg.fwph:
@@ -142,18 +143,18 @@ def main():
     if cfg.xhatxbar:
         list_of_spoke_dict.append(xhatxbar_spoke)
 
-    assert n_cylinders == 1 + len(list_of_spoke_dict), f"n_cylinders = {n_cylinders}, len(list_of_spoke_dict) = {len(list_of_spoke_dict)}"
+    assert n_cylinders == 1 + len(list_of_spoke_dict), f"{n_cylinders=},{len(list_of_spoke_dict)=}"
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+
     wheel.spin()
-    print("yeah")
     if write_solution:
         wheel.write_first_stage_solution('stoch_distr_soln.csv')
         wheel.write_first_stage_solution('stoch_distr_cyl_nonants.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
         wheel.write_tree_solution('stoch_distr_full_solution')
     if global_rank == 0:
-        best_objective = wheel.spcomm.BestInnerBound * len(all_admm_stoch_subproblem_scenario_names)
+        best_objective = wheel.spcomm.BestInnerBound #* len(all_admm_stoch_subproblem_scenario_names)
         print(f"{best_objective=}")
 
 
