@@ -706,7 +706,7 @@ class _TreeNode():
             self.kids = []
         else:
             if len(desc_leaf_dict) < numscens:  
-                raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}, {global_rank=}, {desc_leaf_dict=}")
+                raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
             # make children
             first = scenfirst
             self.kids = list()

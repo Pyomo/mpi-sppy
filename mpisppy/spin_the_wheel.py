@@ -130,8 +130,8 @@ class WheelSpinner:
         # to ensure the messages below are True
         cylinder_comm.Barrier()
         global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
-        global_toc(f"Spoke {sp_class.__name__} finalized at {cylinder_rank=},{strata_rank=}, {global_rank=}", (cylinder_rank == 0 and strata_rank != 0))
-    
+        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0)) 
+          
         fullcomm.Barrier()
     
         ## give the hub the chance to catch new values
