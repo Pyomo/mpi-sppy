@@ -149,8 +149,8 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
 
 
 def main():
-    assert cfg.fwph_args is None, "fwph does not support variable probability"
     cfg = _parse_args()
+    assert cfg.fwph_args is not None, "fwph does not support variable probability"
 
     if cfg.default_rho is None: # and rho_setter is None
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")

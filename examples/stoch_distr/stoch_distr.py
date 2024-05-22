@@ -1,8 +1,8 @@
 # Network Flow - various formulations
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.scenario_tree as scenario_tree
 import numpy as np
+import re
 
 # In this file, we create a stochastic (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
@@ -293,7 +293,10 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, sense=pyo.minim
             - m.y[n] == local_dict["supply"][n]
         elif n in local_dict["factory nodes"]:
             # We generate pseudo randomly the loss on each factory node
-            np.random.seed((scennum+hash(n)+cfg.initial_seed)%2**32)
+            numbers = re.findall(r'\d+', n)
+            # Concatenate the numbers together
+            node_num = int(''.join(numbers))
+            np.random.seed(scennum+node_num+cfg.initial_seed)
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
             == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss

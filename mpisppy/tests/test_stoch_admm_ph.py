@@ -4,6 +4,7 @@ import mpisppy.utils.stoch_admm_ph as stoch_admm_ph
 import examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
+import math
 
 class TestSTOCHADMMPH(unittest.TestCase):
     def setUp(self):
@@ -62,13 +63,20 @@ class TestSTOCHADMMPH(unittest.TestCase):
         self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
 
     def test_values(self):
-        command_line = "mpiexec -np 1 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4--default-rho 10 --solver-name cplex_direct --max-iterations 10 --lagrangian"
+        command_line = "mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name cplex_direct --max-iterations 10 --xhatxbar --lagrangian"
         command = command_line.split()
-        print(command)
-        
+        #command = ["bash examples/stoch_distr/bash_script_test.sh"]
         # Execute the command
         result = subprocess.run(command, capture_output=True, text=True)
-        print(result)
+        result_by_line = result.stdout.strip().split('\n')
+        for i in range(len(result_by_line)):
+            if "best_objective" in result_by_line[-i-1]: #should be on line 2 but we can check
+                decomposed_line = result_by_line[-i-1].split('=')
+                best_objective = math.ceil(float(decomposed_line[1]))
+                print(f"{best_objective=}")
+                assert best_objective == -27305, f"the script doesn't return the expected value {-27305} but rather {best_objective}"
+                return
+        return RuntimeError, "no 'best_objective' found in the output"
 
 
 if __name__ == '__main__':

@@ -263,7 +263,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
-
+        print(f"!!!!!!!!!! in spbase, for {self.cylinder_rank=}: {variable_probability=}")
         global_toc("Initializing PHBase")
 
         # Note that options can be manipulated from outside on-the-fly.

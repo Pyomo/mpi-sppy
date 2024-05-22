@@ -99,7 +99,7 @@ def get_objs(scenario_instance, allow_none=False):
         raise RuntimeError(f"Scenario {scenario_instance.name} has no active "
                            "objective functions.")
     if (len(scenario_objs) > 1):
-        print("WARNING: Scenario", sname, "has multiple active "
+        print("WARNING: Scenario", scenario_instance.name, "has multiple active "
               "objectives. Selecting the first objective.")
     return scenario_objs
 
@@ -705,8 +705,8 @@ class _TreeNode():
             self.is_leaf = True
             self.kids = []
         else:
-            if len(desc_leaf_dict) < numscens:                
-                raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
+            if len(desc_leaf_dict) < numscens:  
+                raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}, {global_rank=}, {desc_leaf_dict=}")
             # make children
             first = scenfirst
             self.kids = list()
