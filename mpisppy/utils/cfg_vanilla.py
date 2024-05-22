@@ -35,6 +35,7 @@ from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.utils.wxbarreader import WXBarReader
 from mpisppy.utils.wxbarwriter import WXBarWriter
 
+
 def _hasit(cfg, argname):
     # aside: Config objects act like a dict or an object TBD: so why the and?
     return cfg.get(argname) is not None and cfg[argname] is not None
@@ -396,6 +397,7 @@ def lagrangian_spoke(
         rho_setter=rho_setter,
         all_nodenames=all_nodenames,
     )
+
     if cfg.lagrangian_iter0_mipgap is not None:
         lagrangian_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
             ["mipgap"] = cfg.lagrangian_iter0_mipgap
@@ -525,7 +527,6 @@ def xhatxbar_spoke(
         ph_extensions=ph_extensions,
         all_nodenames=all_nodenames,
     )
-
     xhatxbar_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
     xhatxbar_dict["opt_kwargs"]["options"]["xhat_xbar_options"] = {
         "xhat_solver_options": xhatxbar_dict["opt_kwargs"]["options"]["iterk_solver_options"],
@@ -705,6 +706,7 @@ def ph_ob_spoke(
     scenario_creator_kwargs=None,
     rho_setter=None,
     all_nodenames = None,
+    variable_probability=None,
 ):
     shoptions = shared_options(cfg)
     ph_ob_spoke = {
@@ -717,9 +719,11 @@ def ph_ob_spoke(
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,
             "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames
+            "all_nodenames": all_nodenames,
+            "variable_probability": variable_probability,
         }
     }
+
     if cfg.ph_ob_rho_rescale_factors_json is not None:
         ph_ob_spoke["opt_kwargs"]["options"]\
             ["ph_ob_rho_rescale_factors_json"]\

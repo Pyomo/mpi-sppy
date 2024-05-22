@@ -4,6 +4,7 @@
 
 # Driver file for stochastic admm
 import mpisppy.utils.stoch_admm_ph as stoch_admm_ph
+# import stoch_distr ## It is necessary for the test to have the full direction
 import stoch_distr
 import mpisppy.cylinders
 
@@ -47,15 +48,7 @@ def _count_cylinders(cfg):
     return count
 
 
-def main():
-
-    cfg = _parse_args()
-
-    if cfg.default_rho is None: # and rho_setter is None
-        raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
-
-    ph_converger = None
-
+def _make_admm(cfg, n_cylinders,verbose=None,BFs=None):
     options = {}
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
@@ -67,7 +60,6 @@ def main():
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
     consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs)
-    n_cylinders = _count_cylinders(cfg)
     admm = stoch_admm_ph.STOCH_ADMM_PH(options,
                            all_admm_stoch_subproblem_scenario_names,
                            split_admm_stoch_subproblem_scenario_name,
@@ -78,20 +70,18 @@ def main():
                            n_cylinders=n_cylinders,
                            mpicomm=MPI.COMM_WORLD,
                            scenario_creator_kwargs=scenario_creator_kwargs,
-                           verbose=None,
+                           verbose=verbose,
                            BFs=None,
                            )
-    # Things needed for vanilla cylinders
-    scenario_creator = admm.admm_ph_scenario_creator # scenario_creator on a local scale
-    scenario_creator_kwargs = None
-    scenario_denouement = stoch_distr.scenario_denouement
-    #note that the stoch_admm_ph scenario_creator wrapper doesn't take any arguments
-    variable_probability = admm.var_prob_list_fct
-    all_nodenames = admm.all_nodenames
-    print(f"-----------------------{all_nodenames=}------------------------")
-    print(f"++++++++++++++++++++++++++++ end of ADMM PH for {global_rank=} ++++++++++++++++++++++++++++++")
-    beans = (cfg, scenario_creator, scenario_denouement, all_admm_stoch_subproblem_scenario_names)
+    return admm, all_admm_stoch_subproblem_scenario_names
+    
 
+def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names, scenario_creator_kwargs=None): #the wrapper doesn't need any kwarg
+    ph_converger = None
+    #Things needed for vanilla cylinders
+    scenario_denouement = stoch_distr.scenario_denouement
+
+    beans = (cfg, scenario_creator, scenario_denouement, all_admm_stoch_subproblem_scenario_names)
     if cfg.run_async:
         # Vanilla APH hub
         hub_dict = vanilla.aph_hub(*beans,
@@ -111,27 +101,34 @@ def main():
                                   variable_probability=variable_probability,
                                   all_nodenames=all_nodenames)
 
-    # FWPH spoke
-    if cfg.fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+    # FWPH spoke doesn't work with variable probability
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None)
+                                              rho_setter = None,
+                                              all_nodenames=all_nodenames)
 
+    # FWPH spoke : does not work here but may be called in global model.
+    if cfg.fwph:
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     # ph outer bounder spoke
     if cfg.ph_ob:
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
                                           rho_setter = None,
+                                          all_nodenames=all_nodenames,
                                           variable_probability=variable_probability)
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
-        xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs, all_nodenames=all_nodenames)
+        xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
+                                                scenario_creator_kwargs=scenario_creator_kwargs,
+                                                all_nodenames=all_nodenames,
+                                                variable_probability=variable_probability)
+
 
     list_of_spoke_dict = list()
     if cfg.fwph:
@@ -146,6 +143,26 @@ def main():
     assert n_cylinders == 1 + len(list_of_spoke_dict), f"{n_cylinders=},{len(list_of_spoke_dict)=}"
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
+
+    return wheel
+
+
+
+def main():
+    assert cfg.fwph_args is None, "fwph does not support variable probability"
+    cfg = _parse_args()
+
+    if cfg.default_rho is None: # and rho_setter is None
+        raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
+
+    n_cylinders = _count_cylinders(cfg)
+    admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders)
+    
+    scenario_creator = admm.admm_ph_scenario_creator # scenario_creator on a local scale
+    #note that the stoch_admm_ph scenario_creator wrapper doesn't take any arguments
+    variable_probability = admm.var_prob_list_fct
+    all_nodenames = admm.all_nodenames
+    wheel = _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names)
 
     wheel.spin()
     if write_solution:

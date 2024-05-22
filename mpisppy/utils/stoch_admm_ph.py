@@ -216,8 +216,15 @@ class STOCH_ADMM_PH(): #add scenario_tree
 
 
     def admm_ph_scenario_creator(self, admm_stoch_subproblem_scenario_name):
-        # There is no need to multiply the objective function by the number of admm_subproblems as it is done earlier.
+        scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 
-        return self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
+        # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
+        # Although every stage is already multiplied earlier, we still must multiply the overall objective function
+        objectives = scenario.component_objects(pyo.Objective, active=True)
+        count = 0
+        for obj in objectives:
+            count += 1
+        assert count == 1, f"only one objective function is authorized, there are {count}"
+        obj.expr = obj.expr * self.number_admm_subproblems
 
-    
+        return scenario

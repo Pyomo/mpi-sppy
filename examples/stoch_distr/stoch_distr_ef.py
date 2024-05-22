@@ -3,8 +3,8 @@
 # general example driver for distr with cylinders
 
 # Solves the stochastic distribution problem 
-import mpisppy.utils.admm_ph as admm_ph
-import distr
+import stoch_distr
+import stoch_distr_admm_cylinders
 import mpisppy.cylinders
 import pyomo.environ as pyo
 
@@ -19,7 +19,7 @@ write_solution = True
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    distr.inparser_adder(cfg)
+    stoch_distr.inparser_adder(cfg)
     cfg.add_to_config("solver_name",
                          description="Choice of the solver",
                          domain=str,
@@ -30,11 +30,11 @@ def _parse_args():
 
 
 def solve_EF_directly(admm,solver_name):
-    scenario_names = admm.local_scenario_names
+    local_scenario_names = admm.local_admm_stoch_subproblem_scenarios_names
     scenario_creator = admm.admm_ph_scenario_creator
 
     ef = sputils.create_EF(
-        scenario_names,
+        local_scenario_names,
         scenario_creator,
         nonant_for_fixed_vars=False,
     )
@@ -50,21 +50,8 @@ def main():
 
     cfg = _parse_args()
 
-    options = {}
-    all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
-    scenario_creator = distr.scenario_creator
-    scenario_creator_kwargs = distr.kw_creator(cfg)  
-    consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
-
-    n_cylinders = 1
-    admm = admm_ph.ADMM_PH(options,
-                           all_scenario_names, 
-                           scenario_creator,
-                           consensus_vars,
-                           n_cylinders=n_cylinders,
-                           mpicomm=MPI.COMM_WORLD,
-                           scenario_creator_kwargs=scenario_creator_kwargs,
-                           )
+    n_cylinders = 1 # There is no spoke so we only use one cylinder
+    admm, _ = stoch_distr_admm_cylinders._make_admm(cfg, n_cylinders) 
 
     solved_ef = solve_EF_directly(admm, cfg.solver_name)
     with open("ef.txt", "w") as f:
@@ -73,7 +60,7 @@ def main():
     solution_file_name = "solution_distr.txt"
     sputils.write_ef_first_stage_solution(solved_ef,
                                 solution_file_name,)
-    print(f"ef solution written to {solution_file_name}")
+    print(f"EF solution written to {solution_file_name}")
     print(f"EF objective: {pyo.value(solved_ef.EF_Obj)}")
 
 
