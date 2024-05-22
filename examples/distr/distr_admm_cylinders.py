@@ -22,7 +22,6 @@ def _parse_args():
     cfg.ph_args()
     cfg.aph_args()
     cfg.xhatxbar_args()
-    cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
     cfg.tracking_args()
@@ -37,7 +36,7 @@ def _parse_args():
 
 def _count_cylinders(cfg):
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob", "fwph"] #all the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] #all the cfg arguments that create a new cylinders
     for cylname in cfglist:
         if cfg[cylname]:
             count += 1
@@ -94,11 +93,7 @@ def main():
                                   rho_setter=None,
                                   variable_probability=variable_probability)
 
-
-    # FWPH spoke
-    if cfg.fwph:
-        print("May not give the expected result due to variable probability")
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+    # FWPH spoke DOES NOT WORK with variable probability
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
@@ -119,8 +114,6 @@ def main():
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
-    if cfg.fwph:
-        list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_ob:

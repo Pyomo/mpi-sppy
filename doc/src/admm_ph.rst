@@ -72,8 +72,8 @@ It should be provided in ``consensus_vars``.
 Using the config system
 +++++++++++++++++++++++
 
-In addition to the previously presented data, the driver also requires arguments to
-create the PH Model and solve it. These arguments are asked to the user via config.
+In addition to the previously presented data, the driver also requires arguments tocreate the PH Model and solve it. 
+Some arguments may be passed to the user via config, but the cylinders need to be added.
 .. TBD add external link on precedent line
 
 
@@ -157,24 +157,17 @@ The function ``consensus_vars_creator`` creates the required ``consensus_vars`` 
 
 .. autofunction:: distr.consensus_vars_creator
 
-Constructing the driver
-+++++++++++++++++++++++
+Understanding the driver
+++++++++++++++++++++++++
+In the example the driver gets argument from the command line through the function ``_parse_args``
 
+.. py:function:: _parse_args()
+    Gets argument from the command line and add them to a config argument. Some arguments are required.
 
-If the config argument ``run_async`` is used, the method used will be asynchronous projective hedging instead of ph.
-
-.. In the following line add link to config page
-The other arguments are detailed in config. They include:
-* ``config.popular_args()``: the popular arguments, note that ``default_rho`` is needed
-* ``xhatxbar``, ``lagrangian``, ``ph_ob``, ``fwph`` each of them create a new cylinder
-* ``two_sided_args`` these optionnal arguments include give stopping conditions: ``rel_gap``, ``abs_gap`` for
-relative or absolute termination gap and ``max_stalled_iters`` for maximum iterations with no reduction in gap
-* ``ph_args`` and ``aph_args`` which are specific arguments required when using PH or APH
-* ``tracking_args``: if required, prints additional information from PH on the screen
 
 .. note::
 
-    Some methods, such as ``run_async`` and all the methods creating new cylinders
+    Some arguments, such as ``cfg.run_async`` and all the methods creating new cylinders
     not only need to be added in the ``_parse_args()`` method, but also need to be called later in the driver.
 
 
