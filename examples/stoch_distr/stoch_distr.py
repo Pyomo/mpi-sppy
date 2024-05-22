@@ -3,6 +3,8 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import numpy as np
 import re
+import mpisppy.scenario_tree as scenario_tree
+
 
 # In this file, we create a stochastic (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
@@ -325,6 +327,33 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
     scenario.y.pprint()
 
 
+# Only if 3-stage problem for the example
+def MakeNodesforScen(model, BFs, scennum, local_dict):
+    """ Make just those scenario tree nodes needed by a scenario.
+        Return them as a list.
+        NOTE: the nodes depend on the scenario model and are, in some sense,
+              local to it.
+        Args:
+            BFs (list of int): branching factors
+    """
+    ndn = "ROOT_"+str((scennum-1) // BFs[0]) # scennum is one-based
+    objfunc = pyo.Expression(expr=0) # Nothing is done so there is no cost
+    retval = [scenario_tree.ScenarioNode("ROOT",
+                                         1.0,
+                                         1,
+                                         model.FirstStageCost,
+                                         [model.y[n] for n in  local_dict["factory nodes"]],
+                                         model),
+              scenario_tree.ScenarioNode(ndn,
+                                         1.0/BFs[0],
+                                         2,
+                                         objfunc, 
+                                         [], # No consensus_variable for now to simplify the model
+                                         model,
+                                         parent_name="ROOT")
+              ]
+    return retval
+
 ###Creates the scenario
 def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     """Creates the model, which should include the consensus variables. \n
@@ -517,3 +546,8 @@ def inparser_adder(cfg):
                       description="initial seed for generating the loss",
                       domain=int,
                       default=0)
+    
+    cfg.add_to_config("num_stage",
+                      description="choice of the number of stages for the example, by default two-stage",
+                      domain=int,
+                      default=2)
