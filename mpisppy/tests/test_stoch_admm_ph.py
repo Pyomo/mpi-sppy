@@ -73,7 +73,6 @@ class TestSTOCHADMMPH(unittest.TestCase):
             if "best_objective" in result_by_line[-i-1]: #should be on line 2 but we can check
                 decomposed_line = result_by_line[-i-1].split('=')
                 best_objective = math.ceil(float(decomposed_line[1]))
-                print(f"{best_objective=}")
                 assert best_objective == -27305, f"the script doesn't return the expected value {-27305} but rather {best_objective}"
                 return
         return RuntimeError, "no 'best_objective' found in the output"
