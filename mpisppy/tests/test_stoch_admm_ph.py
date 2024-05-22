@@ -1,4 +1,5 @@
 import unittest
+import subprocess
 import mpisppy.utils.stoch_admm_ph as stoch_admm_ph
 import examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import examples.stoch_distr.stoch_distr as stoch_distr
@@ -60,7 +61,14 @@ class TestSTOCHADMMPH(unittest.TestCase):
         admm.consensus_vars["Region1"].remove((self._slack_name("DC3_1DC1"),2))
         self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
 
-    def test_values
+    def test_values(self):
+        command_line = "mpiexec -np 1 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4--default-rho 10 --solver-name cplex_direct --max-iterations 10 --lagrangian"
+        command = command_line.split()
+        print(command)
+        
+        # Execute the command
+        result = subprocess.run(command, capture_output=True, text=True)
+        print(result)
 
 
 if __name__ == '__main__':
