@@ -303,14 +303,26 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
     
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
+    if demand is not None: # 3-stage example, defining exportation
+        def export_bounds(m,i):
+            return (0,10)
+        model.export = pyo.Var(local_dict["buyer nodes"], bounds=export_bounds)
+
     model.FirstStageCost = pyo.Expression(expr=\
                     sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
     
-    model.SecondStageCost = pyo.Expression(expr=\
+    if demand is not None: # 3-stage example
+        model.SecondStageCost = pyo.Expression(expr=\
+                        sum(-810*model.export[n] for n in local_dict["buyer nodes"]))
+    
+    model.LastStageCost = pyo.Expression(expr=\
                     sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                     + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]))
 
-    model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost, sense=sense)
+    if demand is not None: # 3-stage example
+        model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost +model.LastStageCost, sense=sense)
+    else: # 2-stage example
+        model.MinCost = pyo.Objective(expr=model.FirstStageCost +model.LastStageCost, sense=sense)
     
     def FlowBalance_rule(m, n):
         #we change the definition of the slack for target dummy nodes so that we have the slack from the source and from the target equal
@@ -327,6 +339,10 @@ def min_cost_distr_problem(local_dict, stoch_scenario_name, cfg, demand=None, se
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
             == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
+        elif n in local_dict["buyer nodes"] and demand is not None: # for a 3-stage scenario the export changes the flow balance
+            return sum(m.flow[a] for a in arcsout[n])\
+            - sum(m.flow[a] for a in arcsin[n])\
+            + m.y[n] == local_dict["supply"][n] - m.export[n]
         else:
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
@@ -350,6 +366,8 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
     scenario.flow.pprint()
     print(f"slack values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.y.pprint()
+    print(f"export values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
+    scenario.export.pprint()
 
 
 # Only if 3-stage problem for the example
@@ -363,7 +381,7 @@ def MakeNodesforScen(model, BFs, scennum, local_dict):
     """
     ndn = "ROOT_"+str((scennum-0) // BFs[1]) # scennum is 0-based, 
     # In a more general way we should divide by: BFs[1:]
-    objfunc = pyo.Expression(expr=0) # Nothing is done so there is no cost
+    #objfunc = pyo.Expression(expr=0) # Nothing is done so there is no cost
     retval = [scenario_tree.ScenarioNode("ROOT",
                                          1.0,
                                          1,
@@ -373,8 +391,8 @@ def MakeNodesforScen(model, BFs, scennum, local_dict):
               scenario_tree.ScenarioNode(ndn,
                                          1.0/BFs[0],
                                          2,
-                                         objfunc, 
-                                         [], # No consensus_variable for now to simplify the model
+                                         model.FirstStageCost, 
+                                         [model.export[n] for n in  local_dict["buyer nodes"]], # No consensus_variable for now to simplify the model
                                          model,
                                          parent_name="ROOT")
               ]
