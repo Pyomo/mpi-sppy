@@ -48,18 +48,20 @@ def _count_cylinders(cfg):
     return count
 
 
-def _make_admm(cfg, n_cylinders,verbose=None,BFs=None):
+def _make_admm(cfg, n_cylinders,verbose=None):
     options = {}
+    
+    BFs = stoch_distr.branching_factors_creator(cfg.num_stoch_scens, cfg.num_stage)
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens)
+    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens, num_stage=cfg.num_stage)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
     scenario_creator = stoch_distr.scenario_creator
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
-    stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
-    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs)
+    stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario to create consensus_vars
+    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs, num_stage=cfg.num_stage)
     admm = stoch_admm_ph.STOCH_ADMM_PH(options,
                            all_admm_stoch_subproblem_scenario_names,
                            split_admm_stoch_subproblem_scenario_name,
@@ -71,7 +73,7 @@ def _make_admm(cfg, n_cylinders,verbose=None,BFs=None):
                            mpicomm=MPI.COMM_WORLD,
                            scenario_creator_kwargs=scenario_creator_kwargs,
                            verbose=verbose,
-                           BFs=None,
+                           BFs=BFs,
                            )
     return admm, all_admm_stoch_subproblem_scenario_names
     

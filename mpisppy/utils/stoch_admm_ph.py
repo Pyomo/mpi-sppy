@@ -86,14 +86,16 @@ class STOCH_ADMM_PH(): #add scenario_tree
         self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
+        self.BFs = BFs
         self.number_admm_subproblems = len(self.admm_subproblem_names)
-        self.all_nodenames = self.create_node_names(num_admm_subproblems=len(admm_subproblem_names), num_stoch_scens=len(stoch_scenario_names),BFs=BFs)
+        self.all_nodenames = self.create_node_names(num_admm_subproblems=len(admm_subproblem_names), num_stoch_scens=len(stoch_scenario_names))
         self.assign_variable_probs(verbose=self.verbose)
     
 
-    def create_node_names(self, num_admm_subproblems, num_stoch_scens, BFs=None):
-        if BFs is not None: # already multi-stage problem initially
-            all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
+    def create_node_names(self, num_admm_subproblems, num_stoch_scens):
+        if self.BFs is not None: # already multi-stage problem initially
+            self.BFs.append(num_admm_subproblems) # Adds the last stage with admm_subproblems
+            all_nodenames = sputils.create_nodenames_from_branching_factors(self.BFs)
         else: # 2-stage problem initially
             all_node_names_0 = ["ROOT"]
             all_node_names_1 = ["ROOT_" + str(i) for i in range(num_stoch_scens)]
@@ -182,7 +184,13 @@ class STOCH_ADMM_PH(): #add scenario_tree
             parent = s._mpisppy_node_list[-1]
             objfunc = pyo.Expression(expr=0) # The cost is spread on the branches which are the subproblems
             admm_subproblem_name, stoch_scenario_name = self.split_admm_stoch_subproblem_scenario_name(sname)
-            node_name = parent.name + '_' + str(self.stoch_scenario_names.index(stoch_scenario_name)) 
+            num_scen = self.stoch_scenario_names.index(stoch_scenario_name)
+            if self.BFs is not None:
+                node_num = num_scen % self.BFs[-2] #BFs has already been updated to include the last rank with the leaves
+            else:
+                node_num = num_scen
+            node_name = parent.name + '_' + str(node_num) 
+
             #could be more efficient with a dictionary rather than index
             s._mpisppy_node_list.append(scenario_tree.ScenarioNode(
                 node_name,
