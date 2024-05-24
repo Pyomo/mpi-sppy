@@ -184,7 +184,8 @@ def MakeNodesforScen(model, BFs, scennum):
         Args:
             BFs (list of int): branching factors
     """
-    ndn = "ROOT_"+str((scennum-1) // BFs[0]) # scennum is one-based
+    # In general divide by the product of the branching factors that come after the node (here prod(BFs[1:])=BFs[1])
+    ndn = "ROOT_"+str((scennum-1) // BFs[1]) # scennum is one-based
     retval = [scenario_tree.ScenarioNode("ROOT",
                                          1.0,
                                          1,
