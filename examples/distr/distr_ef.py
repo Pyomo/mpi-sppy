@@ -1,7 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
 # general example driver for distr with cylinders
-import mpisppy.utils.admm_ph as admm_ph
+import mpisppy.utils.admmWrapper as admmWrapper
 import distr
 import mpisppy.cylinders
 import pyomo.environ as pyo
@@ -29,7 +29,7 @@ def _parse_args():
 
 def solve_EF_directly(admm,solver_name):
     scenario_names = admm.local_scenario_names
-    scenario_creator = admm.admm_ph_scenario_creator
+    scenario_creator = admm.admmWrapper_scenario_creator
 
     ef = sputils.create_EF(
         scenario_names,
@@ -55,7 +55,7 @@ def main():
     consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
 
     n_cylinders = 1
-    admm = admm_ph.ADMM_PH(options,
+    admm = admmWrapper.AdmmWrapper(options,
                            all_scenario_names, 
                            scenario_creator,
                            consensus_vars,

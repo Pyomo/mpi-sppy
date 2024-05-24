@@ -1,4 +1,5 @@
-# Network Flow - various formulations
+# This file is used in the tests and should not be modified!
+
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
@@ -298,7 +299,7 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
 ###Creates the scenario
 def scenario_creator(scenario_name, num_scens=None):
     """Creates the model, which should include the consensus variables. \n
-    However, this function shouldn't attach the consensus variables to root nodes, as it is done in admm_ph.
+    However, this function shouldn't attach the consensus variables to root nodes, as it is done in admmWrapper.
 
     Args:
         scenario_name (str): the name of the scenario that will be created. Here is of the shape f"Region{i}" with 1<=i<=num_scens \n
@@ -339,7 +340,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 def consensus_vars_creator(num_scens):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
-    This dictionary has redundant information, but is useful for admm_ph.
+    This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         num_scens (int): select the number of scenarios (regions) wanted

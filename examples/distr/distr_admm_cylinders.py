@@ -1,5 +1,5 @@
 # general example driver for distr with cylinders
-import mpisppy.utils.admm_ph as admm_ph
+import mpisppy.utils.admmWrapper as admmWrapper
 import distr
 import mpisppy.cylinders
 
@@ -34,9 +34,11 @@ def _parse_args():
     return cfg
 
 
-def _count_cylinders(cfg):
+# This need to be executed long before the cylinders are created
+def _count_cylinders(cfg): 
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] #all the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] # All the cfg arguments that create a new cylinders
+    # Add to this list any cfg attribute that would create a spoke
     for cylname in cfglist:
         if cfg[cylname]:
             count += 1
@@ -58,7 +60,7 @@ def main():
     scenario_creator_kwargs = distr.kw_creator(cfg)  
     consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
     n_cylinders = _count_cylinders(cfg)
-    admm = admm_ph.ADMM_PH(options,
+    admm = admmWrapper.AdmmWrapper(options,
                            all_scenario_names, 
                            scenario_creator,
                            consensus_vars,
@@ -68,11 +70,11 @@ def main():
                            )
 
     # Things needed for vanilla cylinders
-    scenario_creator = admm.admm_ph_scenario_creator ##change needed because of the wrapper
+    scenario_creator = admm.admmWrapper_scenario_creator ##change needed because of the wrapper
     scenario_creator_kwargs = None
     scenario_denouement = distr.scenario_denouement
-    #note that the admm_ph scenario_creator wrapper doesn't take any arguments
-    variable_probability = admm.var_prob_list_fct
+    #note that the admmWrapper scenario_creator wrapper doesn't take any arguments
+    variable_probability = admm.var_prob_list
 
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 

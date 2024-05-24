@@ -1,10 +1,10 @@
 import unittest
-import mpisppy.utils.admm_ph as admm_ph
+import mpisppy.utils.admmWrapper as admmWrapper
 import examples.distr as distr
 from mpisppy.utils import config
 from mpisppy import MPI
 
-class TestADMMPH(unittest.TestCase):
+class TestAdmmWrapper(unittest.TestCase):
     def setUp(self):
         pass
 
@@ -27,7 +27,7 @@ class TestADMMPH(unittest.TestCase):
         scenario_creator_kwargs = distr.kw_creator(cfg)
         consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
         n_cylinders = 1 #distr_admm_cylinders._count_cylinders(cfg)
-        return admm_ph.ADMM_PH(options,
+        return admmWrapper.AdmmWrapper(options,
                             all_scenario_names, 
                             scenario_creator,
                             consensus_vars,
@@ -46,14 +46,14 @@ class TestADMMPH(unittest.TestCase):
         admm = self._make_admm(3)
         q = dict()
         for sname, s in admm.local_scenarios.items():
-            q[sname] = admm.var_prob_list_fct(s)
+            q[sname] = admm.var_prob_list(s)
         self.assertEqual(q["Region1"][0][1], 0.5)
         self.assertEqual(q["Region3"][0][1], 0)
 
-    def test_admm_ph_scenario_creator(self):
+    def test_admmWrapper_scenario_creator(self):
         admm = self._make_admm(3)
         sname = "Region3"
-        q = admm.admm_ph_scenario_creator(sname)
+        q = admm.admmWrapper_scenario_creator(sname)
         self.assertTrue(q.y__DC1DC2__.is_fixed())
         self.assertFalse(q.y["DC3_1DC1"].is_fixed())
     

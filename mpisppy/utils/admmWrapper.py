@@ -1,7 +1,8 @@
-#creating the class admm_ph
+#creating the class AdmmWrapper
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 import mpisppy
+from collections import OrderedDict
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -27,8 +28,8 @@ def _consensus_vars_number_creator(consensus_vars):
             print(f"The consensus variable {var} appears in a single subproblem")
     return consensus_vars_number
 
-class ADMM_PH():
-    """ Defines an interface to all strata (hubs and spokes)
+class AdmmWrapper():
+    """ This class assigns variable probabilities and creates wrapper for the scenario creator
 
         Args:
             options (dict): options
@@ -56,7 +57,7 @@ class ADMM_PH():
             scenario_creator_kwargs=None,
             verbose=None,
     ):
-        assert len(options) == 0, "no options supported by admm_ph"
+        assert len(options) == 0, "no options supported by AdmmWrapper"
         # We need local_scenarios
         self.local_scenarios = {}
         scenario_tree = sputils._ScenTree(["ROOT"], all_scenario_names)
@@ -86,7 +87,7 @@ class ADMM_PH():
         self.assign_variable_probs(verbose=self.verbose)
         self.number_of_scenario = len(all_scenario_names)
 
-    def var_prob_list_fct(self, s):
+    def var_prob_list(self, s):
         """Associates probabilities to variables and raises exceptions if the model doesn't match the dictionary consensus_vars
 
         Args:
@@ -103,19 +104,18 @@ class ADMM_PH():
         self.varprob_dict = {}
 
         #we collect the consensus variables
-        allvars_list = list()
+        allvars_dict = OrderedDict()
         for sname in self.all_scenario_names:
-            for var in self.consensus_vars[sname]:
-                if not var in allvars_list:
-                    allvars_list.append(var)
+            for var_name in self.consensus_vars[sname]:
+                allvars_dict[var_name] = None
         error_list1 = []
         error_list2 = []
         for sname,s in self.local_scenarios.items():
             if verbose:
-                print(f"admm_ph.assign_variable_probs is processing scenario: {sname}")
+                print(f"AdmmWrapper.assign_variable_probs is processing scenario: {sname}")
             varlist = list()
             self.varprob_dict[s] = list()
-            for vstr in allvars_list:
+            for vstr in allvars_dict.keys():
                 v = s.find_component(vstr)
                 if vstr in self.consensus_vars[sname]:
                     if v is not None:
@@ -151,18 +151,14 @@ class ADMM_PH():
                                 f"in the model, but not in consensus var: \n {error_list2}")
 
 
-    def admm_ph_scenario_creator(self, sname):
+    def admmWrapper_scenario_creator(self, sname):
         #this is the function the user will supply for all cylinders 
         assert sname in self.local_scenario_names, f"{global_rank=} {sname=} \n {self.local_scenario_names=}"
         #should probably be deleted as it takes time
         scenario = self.local_scenarios[sname]
 
         # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
-        objectives = scenario.component_objects(pyo.Objective, active=True)
-        count = 0
-        for obj in objectives:
-            count += 1
-        assert count == 1, f"only one objective function is authorized, there are {count}"
+        obj = sputils.find_active_objective(scenario)
         obj.expr = obj.expr * self.number_of_scenario
 
         return scenario

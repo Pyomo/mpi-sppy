@@ -1,7 +1,7 @@
-.. _admm_ph:
+.. _admmWrapper:
 
-ADMM PH
-=======
+AdmmWrapper
+===========
 
 **ADMM_PH** uses progressive hedging implemented in mpi-sppy 
 to solve a non-stochastic problem by breaking them into subproblems.
@@ -11,9 +11,9 @@ An example of usage is given below.
 Usage
 -----
 
-The driver (in the example ``distr_admm_cylinders.py``) calls ``admm_ph.py``,
+The driver (in the example ``distr_admm_cylinders.py``) calls ``admmWrapper.py``,
 thanks to the formated data provided by the model (in the example ``distr.py``).
-The file ``admm_ph.py`` returns variable probabilities that can be used in the driver to create the PH (or APH) 
+The file ``admmWrapper.py`` returns variable probabilities that can be used in the driver to create the PH (or APH) 
 object which will solve the subproblems in a parallel way, insuring that merging conditions are respected.
 
 Data needed in the driver
@@ -80,20 +80,20 @@ Some arguments may be passed to the user via config, but the cylinders need to b
 Direct solver of the extensive form
 +++++++++++++++++++++++++++++++++++
 ``distr_ef.py`` can be used as a verification or debugging tool for small instances.
-It directly solves the extensive form using the wrapper ``scenario_creator`` from ``admm_ph``.
+It directly solves the extensive form using the wrapper ``scenario_creator`` from ``admmWrapper``.
 It has the advantage of requiring the same arguments as ``distr_admm_cylinders`` because both solve the extensive form.
 
-This method offers a verification for small instances, but is slower than ``admm_ph``
+This method offers a verification for small instances, but is slower than ``admmWrapper``
 as it doesn't decompose the problem.
 
 
 .. note::
 
-    ``admm_ph`` doesn't collect instanciation time.
+    ``admmWrapper`` doesn't collect instanciation time.
 
 Distribution example
 --------------------
-``distr.py`` is an example of model creator in admm_ph for a (linear) inter-region minimal cost distribution problem.
+``distr.py`` is an example of model creator in admmWrapper for a (linear) inter-region minimal cost distribution problem.
 ``distr_admm_cylinders.py`` is the driver.
 
 Original data dictionaries
@@ -152,7 +152,7 @@ The dictionary ``scenario_creator_kwargs`` is created with
 The function ``inparser_adder`` requires the user to give ``num_scens`` (the number of regions) during the configuration.
 .. autofunction:: distr.inparser_adder
 
-Contrary to the other helper functions, ``consensus_vars_creator`` is specific to admm_ph.
+Contrary to the other helper functions, ``consensus_vars_creator`` is specific to admmWrapper.
 The function ``consensus_vars_creator`` creates the required ``consensus_vars`` dictionary.
 
 .. autofunction:: distr.consensus_vars_creator
