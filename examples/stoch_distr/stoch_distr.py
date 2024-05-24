@@ -366,8 +366,9 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
     scenario.flow.pprint()
     print(f"slack values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.y.pprint()
-    print(f"export values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
-    scenario.export.pprint()
+    if hasattr(scenario,"export"): # ie 3-stage problem
+        print(f"export values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
+        scenario.export.pprint()
 
 
 # Only if 3-stage problem for the example
