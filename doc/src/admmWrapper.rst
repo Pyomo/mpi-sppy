@@ -12,7 +12,7 @@ Usage
 -----
 
 The driver (in the example ``distr_admm_cylinders.py``) calls ``admmWrapper.py``,
-thanks to the formated data provided by the model (in the example ``distr.py``).
+thanks to the formated data provided by the model (in the example ``examples.distr.distr.py``).
 The file ``admmWrapper.py`` returns variable probabilities that can be used in the driver to create the PH (or APH) 
 object which will solve the subproblems in a parallel way, insuring that merging conditions are respected.
 
@@ -32,7 +32,8 @@ The driver file requires the `scenario_creator function <scenario_creator>`_ whi
     Returns:
         Pyomo ConcreteModel: the instantiated model
 
-The driver file also requires helper arguments that are used in mpi-sppy. They are detailed `in helper_functions <helper_functions>`_.
+The driver file also requires helper arguments that are used in mpi-sppy. They are detailed `in helper_functions <helper_functions>`_
+and in the example below.
 Here is a summary:
 
 * ``scenario_creator_kwargs``(dict[str]): key words arguments needed in ``scenario_creator``
@@ -93,7 +94,7 @@ as it doesn't decompose the problem.
 
 Distribution example
 --------------------
-``distr.py`` is an example of model creator in admmWrapper for a (linear) inter-region minimal cost distribution problem.
+``examples.distr.distr.py`` is an example of model creator in admmWrapper for a (linear) inter-region minimal cost distribution problem.
 ``distr_admm_cylinders.py`` is the driver.
 
 Original data dictionaries
@@ -101,11 +102,11 @@ Original data dictionaries
 
 In the example the ``inter_region_dict_creator`` creates the inter-region information.
 
-.. autofunction:: distr.inter_region_dict_creator
+.. autofunction:: examples.distr.distr.inter_region_dict_creator
 
 The ``region_dict_creator`` creates the information specific to a region regardless of the other regions.
 
-.. autofunction:: distr.region_dict_creator
+.. autofunction:: examples.distr.distr.region_dict_creator
 
 Adapting the data to create the model
 +++++++++++++++++++++++++++++++++++++
@@ -118,9 +119,9 @@ If ``inter-region-dict`` indicates that an arc exists from the node DC1 (distrub
 node DC1DC2 stored both in Region1's local_dict["dummy node source"] and in Region2's local_dict["dummy node target"], with a slack whose
 only constraint is to be lower than the flow possible from DC1 to DC2. PH then insures that the slacks are equal.
 
-The purpose of ``distr.dummy_nodes_generator`` is to do that.
+The purpose of ``examples.distr.distr.dummy_nodes_generator`` is to do that.
 
-.. autofunction:: distr.dummy_nodes_generator
+.. autofunction:: examples.distr.distr.dummy_nodes_generator
 
 .. note::
 
@@ -131,11 +132,13 @@ The purpose of ``distr.dummy_nodes_generator`` is to do that.
 
 Once the local_dict is created, the Pyomo model can be created thanks to ``min_cost_distr_problem``.
 
-.. autofunction:: distr.min_cost_distr_problem
+.. autofunction:: examples.distr.distr.min_cost_distr_problem
 
 .. _sectiondatafordriver:
+
 Transforming data for the driver
 ++++++++++++++++++++++++++++++++
+
 The driver requires five elements given by the model: ``all_scenario_names``, ``scenario_creator``, ``scenario_creator_kwargs``,
 ``inparser_adder`` and ``consensus_vars``.
 
@@ -143,25 +146,26 @@ The driver requires five elements given by the model: ``all_scenario_names``, ``
 
 ``scenario_creator`` is created thanks to the previous functions.
 
-.. autofunction:: distr.scenario_creator
+.. autofunction:: examples.distr.distr.scenario_creator
 
 The dictionary ``scenario_creator_kwargs`` is created with
 
-.. autofunction:: distr.kw_creator
+.. autofunction:: examples.distr.distr.kw_creator
 
 The function ``inparser_adder`` requires the user to give ``num_scens`` (the number of regions) during the configuration.
-.. autofunction:: distr.inparser_adder
+.. autofunction:: examples.distr.distr.inparser_adder
 
 Contrary to the other helper functions, ``consensus_vars_creator`` is specific to admmWrapper.
 The function ``consensus_vars_creator`` creates the required ``consensus_vars`` dictionary.
 
-.. autofunction:: distr.consensus_vars_creator
+.. autofunction:: examples.distr.distr.consensus_vars_creator
 
 Understanding the driver
 ++++++++++++++++++++++++
 In the example the driver gets argument from the command line through the function ``_parse_args``
 
 .. py:function:: _parse_args()
+
     Gets argument from the command line and add them to a config argument. Some arguments are required.
 
 

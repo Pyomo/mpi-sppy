@@ -11,7 +11,7 @@ from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
 
-write_solution = True
+write_solution = False
 
 def _parse_args():
     # create a config object and parse
