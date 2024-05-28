@@ -3,7 +3,7 @@
 # general example driver for stoch_distr with cylinders
 
 # Driver file for stochastic admm
-import mpisppy.utils.stoch_admm_ph as stoch_admm_ph
+import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 # import stoch_distr ## It is necessary for the test to have the full direction
 import stoch_distr
 import mpisppy.cylinders
@@ -15,7 +15,7 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
-write_solution = True
+write_solution = False
 
 def _parse_args():
     # create a config object and parse
@@ -62,7 +62,7 @@ def _make_admm(cfg, n_cylinders,verbose=None):
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario to create consensus_vars
     consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs, num_stage=cfg.num_stage)
-    admm = stoch_admm_ph.STOCH_ADMM_PH(options,
+    admm = stoch_admmWrapper.STOCH_ADMM_PH(options,
                            all_admm_stoch_subproblem_scenario_names,
                            split_admm_stoch_subproblem_scenario_name,
                            admm_subproblem_names,
@@ -150,8 +150,7 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
 
 
 
-def main():
-    cfg = _parse_args()
+def main(cfg):
     assert cfg.fwph_args is not None, "fwph does not support variable probability"
 
     if cfg.default_rho is None: # and rho_setter is None
@@ -160,8 +159,8 @@ def main():
     n_cylinders = _count_cylinders(cfg)
     admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders)
     
-    scenario_creator = admm.admm_ph_scenario_creator # scenario_creator on a local scale
-    #note that the stoch_admm_ph scenario_creator wrapper doesn't take any arguments
+    scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
+    #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
     variable_probability = admm.var_prob_list_fct
     all_nodenames = admm.all_nodenames
     wheel = _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names)
@@ -178,4 +177,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    cfg = _parse_args()
+    main(cfg)

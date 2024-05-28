@@ -1,10 +1,15 @@
 import unittest
 import subprocess
-import mpisppy.utils.stoch_admm_ph as stoch_admm_ph
+import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 import examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
 import math
+from mpisppy.tests.utils import get_solver
+from mpisppy.utils import config
+from unittest.mock import patch
+
+solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 class TestSTOCHADMMPH(unittest.TestCase):
     def setUp(self):
@@ -28,6 +33,17 @@ class TestSTOCHADMMPH(unittest.TestCase):
         admm, all_admm_stoch_subproblem_scenario_names = stoch_distr_admm_cylinders._make_admm(cfg,n_cylinders=1,verbose=verbose)
         return admm
 
+    def _get_base_options(self):
+        cfg = config.Config()
+        cfg.quick_assign("run_async", bool, False)
+        cfg.quick_assign("EF_solver_name", str, solver_name)
+        cfg.quick_assign("use_integer", bool, False)
+        cfg.quick_assign("crops_multiplier", int, 1)
+        cfg.quick_assign("num_scens", int, 12)
+        cfg.quick_assign("EF_2stage", bool, True)
+        cfg.quick_assign("num_batches", int, 2)
+        cfg.quick_assign("batch_size", int, 10)
+
     
     def test_constructor(self):
         for num_stoch_scens in range(3,5):
@@ -42,10 +58,10 @@ class TestSTOCHADMMPH(unittest.TestCase):
         self.assertEqual(q["ADMM_STOCH_Region1_StochasticScenario1"][0][1], 0.5)
         self.assertEqual(q["ADMM_STOCH_Region3_StochasticScenario1"][0][1], 0)
 
-    def test_admm_ph_scenario_creator(self):
+    def test_admmWrapper_scenario_creator(self):
         admm = self._make_admm(4,3)
         sname = "ADMM_STOCH_Region3_StochasticScenario1"
-        q = admm.admm_ph_scenario_creator(sname)
+        q = admm.admmWrapper_scenario_creator(sname)
         self.assertTrue(q.y__DC1DC2__.is_fixed())
         self.assertFalse(q.y["DC3_1DC1"].is_fixed())
     
@@ -62,11 +78,19 @@ class TestSTOCHADMMPH(unittest.TestCase):
         admm.consensus_vars["Region1"].remove((self._slack_name("DC3_1DC1"),2))
         self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
 
-    def test_values(self):
-        command_line = "mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name cplex_direct --max-iterations 10 --xhatxbar --lagrangian"
+    
+    """@patch('stoch_distr_admm_cylinders.best_objective', new_callable=list)
+    def test_values_2(self):
+        cfg = self._get_base_options()
+        stoch_distr_admm_cylinders.main(cfg)
+        assert stoch_distr_admm_cylinders.best_objective == -27305"""
+    
+    def test_values_1(self):
+        command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 10 --xhatxbar --lagrangian"
         command = command_line.split()
         #command = ["bash examples/stoch_distr/bash_script_test.sh"]
         # Execute the command
+        
         result = subprocess.run(command, capture_output=True, text=True)
         result_by_line = result.stdout.strip().split('\n')
         for i in range(len(result_by_line)):
@@ -76,6 +100,7 @@ class TestSTOCHADMMPH(unittest.TestCase):
                 assert best_objective == -27305, f"the script doesn't return the expected value {-27305} but rather {best_objective}"
                 return
         return RuntimeError, "no 'best_objective' found in the output"
+        
 
 
 if __name__ == '__main__':

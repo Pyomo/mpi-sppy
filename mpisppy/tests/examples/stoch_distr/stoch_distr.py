@@ -328,7 +328,7 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
 ###Creates the scenario
 def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     """Creates the model, which should include the consensus variables. \n
-    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in admm_ph.
+    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in admmWrapper.
 
     Args:
         admm_stoch_subproblem_scenario_name (str): the name given to the admm problem for the stochastic scenario. \n
@@ -357,7 +357,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
 
 def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
-    This dictionary has redundant information, but is useful for admm_ph.
+    This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         admm_subproblem_names (list of str): name of the admm subproblems (regions) \n
