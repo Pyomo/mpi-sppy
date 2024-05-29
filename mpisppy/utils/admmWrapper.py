@@ -104,10 +104,7 @@ class AdmmWrapper():
         self.varprob_dict = {}
 
         #we collect the consensus variables
-        allvars_dict = OrderedDict()
-        for sname in self.all_scenario_names:
-            for var_name in self.consensus_vars[sname]:
-                allvars_dict[var_name] = None
+        all_consensus_vars = {var_stage_tuple: None for admm_subproblem_names in self.consensus_vars for var_stage_tuple in self.consensus_vars[admm_subproblem_names]}
         error_list1 = []
         error_list2 = []
         for sname,s in self.local_scenarios.items():
@@ -115,7 +112,7 @@ class AdmmWrapper():
                 print(f"AdmmWrapper.assign_variable_probs is processing scenario: {sname}")
             varlist = list()
             self.varprob_dict[s] = list()
-            for vstr in allvars_dict.keys():
+            for vstr in all_consensus_vars.keys():
                 v = s.find_component(vstr)
                 if vstr in self.consensus_vars[sname]:
                     if v is not None:
