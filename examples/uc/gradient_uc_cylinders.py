@@ -9,7 +9,6 @@
 import sys
 import json
 import uc_funcs as uc
-import os
 
 import mpisppy.utils.sputils as sputils
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -18,12 +17,10 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
-from mpisppy.extensions.gradient_extension import Gradient_rho_extension
+from mpisppy.extensions.gradient_extension import Gradient_extension
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
-
-track_ws=False
 
 def _parse_args():
     cfg = config.Config()
@@ -35,13 +32,11 @@ def _parse_args():
     cfg.fixer_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
-    cfg.lagranger_args()
     cfg.xhatlooper_args()
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
     cfg.gradient_args()
-    cfg.grad_rho_args()
-    cfg.ph_ob_args()
+    cfg.rho_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
@@ -60,7 +55,7 @@ def _parse_args():
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)        
-    cfg.parse_command_line("uc_cylinders")
+    cfg.parse_command_line("gradient_uc_cylinders")
     return cfg
 
 
@@ -106,8 +101,6 @@ def main():
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
                                   rho_setter = rho_setter)
-    hub_dict['opt_kwargs']['extensions'] = MultiExtension  # DLW: ???? (seems to not matter)
-
         
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
@@ -118,22 +111,8 @@ def main():
     if cfg.xhat_closest_tree:
         ext_classes.append(XhatClosest)
     
-    if track_ws:
-        results_dir_name="gradient_uc_cylinders_tracking_W"
-        create_dir_structure(results_dir_name, hub_dict)
-
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                            scenario_creator_kwargs=scenario_creator_kwargs,
-                                            rho_setter = rho_setter)
-        if track_ws:
-            create_dir_structure(results_dir_name, ph_ob_spoke, "ph_ob")
-            # this is necessary to write Ws and xbars (old code)
-            ph_ob_spoke['opt_kwargs']['options']['ph_ob_write_W'] = True
-            ph_ob_spoke['opt_kwargs']['options']['ph_ob_write_xbar'] = True
-    
-    if cfg.grad_rho_setter:
-        ext_classes.append(Gradient_rho_extension)
+    if cfg.rho_setter:
+        ext_classes.append(Gradient_extension)
         
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cross_scenario_cuts:
@@ -152,12 +131,8 @@ def main():
             "keep_solution" : True
         }
 
-    if cfg.grad_rho_setter:
-        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': cfg}
-        if cfg.default_rho is None:
-            # since we are using a rho_setter anyway
-            hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
-            ### end ph spoke ###
+    if cfg.rho_setter:
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
 
     if cfg.ph_mipgaps_json is not None:
         with open(cfg.ph_mipgaps_json) as fin:
@@ -170,6 +145,10 @@ def main():
         "mipgapdict": mipgapdict
         }
         
+    if cfg.default_rho is None:
+        # since we are using a rho_setter anyway
+        hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
+    ### end ph spoke ###
     
     # FWPH spoke
     if fwph:
@@ -180,18 +159,6 @@ def main():
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
-        if track_ws:
-            create_dir_structure(results_dir_name, lagrangian_spoke, "lagrangian")
-
-    if cfg.lagranger:
-        lagranger_spoke = vanilla.lagranger_spoke(*beans,
-                                                  scenario_creator_kwargs=scenario_creator_kwargs,
-                                                  rho_setter = rho_setter)
-        if track_ws:
-            create_dir_structure(results_dir_name,lagranger_spoke,"lagranger")
-            # this is necessary to write Ws and xbars (old code)
-            lagranger_spoke['opt_kwargs']['options']['lagranger_write_W'] = True
-            lagranger_spoke['opt_kwargs']['options']['lagranger_write_xbar'] = True
 
     # xhat looper bound spoke
     if xhatlooper:
@@ -216,10 +183,6 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cuts_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)
-    if cfg.lagranger:
-        list_of_spoke_dict.append(lagranger_spoke)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
@@ -230,6 +193,5 @@ def main():
     wheel.write_first_stage_solution('uc_cyl_nonants.npy',
             first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
 
-
 if __name__ == "__main__":
-    main()
+    main()    

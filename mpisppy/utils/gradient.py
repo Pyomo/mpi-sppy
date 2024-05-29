@@ -141,17 +141,18 @@ class Find_Grad():
         self.find_grad_cost()
         comm = self.ph_object.comms['ROOT']
         if (self.ph_object.cylinder_rank == 0):
-            with open(self.cfg.grad_cost_file, 'a') as f:
+            print("GRAD COST FILE=",self.cfg.grad_cost_file)
+            with open(self.cfg.grad_cost_file, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['#grad cost values'])
                 for (key, val) in self.c.items():
                     sname, vname = key[0], key[1]
                     row = ','.join([sname, vname, str(val)]) + '\n'
                     f.write(row)
-        comm.Barrier()
-
 
 #====================================================================================
+
+# TBD -  why are these two here at all? SHOULD NOT BE IN THE "GRADIENT" FILE
 
     def find_grad_rho(self):
         """Writes gradient cost for all variables.
@@ -173,12 +174,15 @@ class Find_Grad():
            The cfg object should contain a grad_cost_file.
 
         """
+         print("WRITING GRAD RHO:")
          if self.cfg.grad_rho_file == '':
+             print("PASSING - NO GRAD RHO FILE")
              pass
          else:
+             print("WRITING TO FILE=",self.cfg.grad_rho_file)
              rho_data = self.find_grad_rho()
              if self.ph_object.cylinder_rank == 0:
-                 with open(self.cfg.grad_rho_file, 'a', newline='') as file:
+                 with open(self.cfg.grad_rho_file, 'w', newline='') as file:
                      writer = csv.writer(file)
                      writer.writerow(['#grad rho values'])
                      for (vname, rho) in rho_data.items():

@@ -60,6 +60,8 @@ class Find_Rho():
         self.cfg = cfg
         self.c = dict()
 
+        return # TBD - stuff below is garfing
+
         if cfg.get("rho_file", ifmissing='')  == ''\
            and cfg.get("grad_rho_file", ifmissing='')  == '': 
             pass
