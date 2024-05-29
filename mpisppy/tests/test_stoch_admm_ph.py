@@ -36,10 +36,9 @@ class TestSTOCHADMMPH(unittest.TestCase):
     def _get_base_options(self):
         cfg = config.Config()
         cfg.quick_assign("run_async", bool, False)
-        cfg.quick_assign("EF_solver_name", str, solver_name)
-        cfg.quick_assign("use_integer", bool, False)
-        cfg.quick_assign("crops_multiplier", int, 1)
-        cfg.quick_assign("num_scens", int, 12)
+        cfg.quick_assign("num_stoch_scens", int, 4)
+        cfg.quick_assign("num_admm_subproblems", int, 2)
+        cfg.quick_assign("default_rho", int, 10)
         cfg.quick_assign("EF_2stage", bool, True)
         cfg.quick_assign("num_batches", int, 2)
         cfg.quick_assign("batch_size", int, 10)
@@ -79,17 +78,9 @@ class TestSTOCHADMMPH(unittest.TestCase):
         self.assertRaises(RuntimeError, admm.assign_variable_probs, admm)
 
     
-    """@patch('stoch_distr_admm_cylinders.best_objective', new_callable=list)
-    def test_values_2(self):
-        cfg = self._get_base_options()
-        stoch_distr_admm_cylinders.main(cfg)
-        assert stoch_distr_admm_cylinders.best_objective == -27305"""
-    
-    def test_values_1(self):
+    def test_values(self):
         command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 10 --xhatxbar --lagrangian"
         command = command_line.split()
-        #command = ["bash examples/stoch_distr/bash_script_test.sh"]
-        # Execute the command
         
         result = subprocess.run(command, capture_output=True, text=True)
         result_by_line = result.stdout.strip().split('\n')
