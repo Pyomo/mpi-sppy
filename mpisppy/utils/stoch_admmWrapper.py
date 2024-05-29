@@ -124,12 +124,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         self.varprob_dict = {}
 
         #we collect the consensus variables
-        all_consensus_vars = OrderedDict()
-        for admm_subproblem_name in self.admm_subproblem_names:
-            for var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
-                var_name, stage = var_stage_tuple
-                all_consensus_vars[var_name] = stage
-        #all_consensus_vars = {var_stage_tuple[0]: var_stage_tuple[1] for admm_subproblem_names in self.consensus_vars for var_stage_tuple in self.consensus_vars[admm_subproblem_names]}
+        all_consensus_vars = {var_stage_tuple[0]: var_stage_tuple[1] for admm_subproblem_names in self.consensus_vars for var_stage_tuple in self.consensus_vars[admm_subproblem_names]}
         error_list1 = []
         error_list2 = []
         for sname,s in self.local_admm_stoch_subproblem_scenarios.items():
