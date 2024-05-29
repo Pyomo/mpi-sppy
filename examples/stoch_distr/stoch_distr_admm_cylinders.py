@@ -50,19 +50,17 @@ def _count_cylinders(cfg):
 
 def _make_admm(cfg, n_cylinders,verbose=None):
     options = {}
-    
-    BFs = stoch_distr.branching_factors_creator(cfg.num_stoch_scens, cfg.num_stage)
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens, num_stage=cfg.num_stage)
+    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
     scenario_creator = stoch_distr.scenario_creator
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
-    stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario to create consensus_vars
-    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs, num_stage=cfg.num_stage)
-    admm = stoch_admmWrapper.STOCH_ADMM_PH(options,
+    stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
+    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs)
+    admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,
                            all_admm_stoch_subproblem_scenario_names,
                            split_admm_stoch_subproblem_scenario_name,
                            admm_subproblem_names,
@@ -73,7 +71,7 @@ def _make_admm(cfg, n_cylinders,verbose=None):
                            mpicomm=MPI.COMM_WORLD,
                            scenario_creator_kwargs=scenario_creator_kwargs,
                            verbose=verbose,
-                           BFs=BFs,
+                           BFs=None,
                            )
     return admm, all_admm_stoch_subproblem_scenario_names
     
@@ -161,7 +159,7 @@ def main(cfg):
     
     scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
-    variable_probability = admm.var_prob_list_fct
+    variable_probability = admm.var_prob_list
     all_nodenames = admm.all_nodenames
     wheel = _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names)
 

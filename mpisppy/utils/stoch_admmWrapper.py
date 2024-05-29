@@ -1,7 +1,7 @@
-#creating the class stochastic_admm_ph
+#creating the class stoch_admmWrapper
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
-import mpisppy
+from collections import OrderedDict
 import mpisppy.scenario_tree as scenario_tree
 import numpy as np
 
@@ -25,7 +25,7 @@ def _consensus_vars_number_creator(consensus_vars):
             consensus_vars_number[var] += 1
     return consensus_vars_number
 
-class STOCH_ADMM_PH(): #add scenario_tree
+class Stoch_AdmmWrapper(): #add scenario_tree
     """ Defines an interface to all strata (hubs and spokes)
 
         Args:
@@ -58,7 +58,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
             verbose=None,
             BFs=None,
     ):
-        assert len(options) == 0, "no options supported by admm_ph"
+        assert len(options) == 0, "no options supported by stoch_admmWrapper"
         # We need local_scenarios
         self.local_admm_stoch_subproblem_scenarios = {}
         scen_tree = sputils._ScenTree(["ROOT"], all_admm_stoch_subproblem_scenario_names)
@@ -106,7 +106,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
         return all_nodenames
 
 
-    def var_prob_list_fct(self, s):
+    def var_prob_list(self, s):
         """Associates probabilities to variables and raises exceptions if the model doesn't match the dictionary consensus_vars
 
         Args:
@@ -124,16 +124,17 @@ class STOCH_ADMM_PH(): #add scenario_tree
         self.varprob_dict = {}
 
         #we collect the consensus variables
-        all_consensus_vars_list = list()
+        all_consensus_vars = OrderedDict()
         for admm_subproblem_name in self.admm_subproblem_names:
-            for var_stage_tuple in self.consensus_vars[admm_subproblem_name]: 
-                if not var_stage_tuple in all_consensus_vars_list:
-                    all_consensus_vars_list.append(var_stage_tuple)
+            for var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
+                var_name, stage = var_stage_tuple
+                all_consensus_vars[var_name] = stage
+        #all_consensus_vars = {var_stage_tuple[0]: var_stage_tuple[1] for admm_subproblem_names in self.consensus_vars for var_stage_tuple in self.consensus_vars[admm_subproblem_names]}
         error_list1 = []
         error_list2 = []
         for sname,s in self.local_admm_stoch_subproblem_scenarios.items():
             if verbose:
-                print(f"admm_ph.assign_variable_probs is processing scenario: {sname}")
+                print(f"stoch_admmWrapper.assign_variable_probs is processing scenario: {sname}")
             admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
             # varlist[stage] will contain the variables at each stage
             depth = len(s._mpisppy_node_list)+1
@@ -142,12 +143,13 @@ class STOCH_ADMM_PH(): #add scenario_tree
                 s._mpisppy_probability = 1/len(self.stoch_scenario_names)
 
             self.varprob_dict[s] = list()
-            for var_stage_tuple in all_consensus_vars_list:
-                vstr, stage = var_stage_tuple
+            for vstr in all_consensus_vars.keys():
+                stage = all_consensus_vars[vstr]
                 v = s.find_component(vstr)
+                var_stage_tuple = vstr, stage
                 if var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
                     if v is not None:
-                        #variables that should be on the model
+                        # variables that should be on the model
                         if stage == depth: 
                             # The node is a stochastic scenario, the probability at this node has not yet been defined 
                             cond_prob = 1.
@@ -176,8 +178,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
                         self.varprob_dict[s].append((id(v),0))
                     else:
                         error_list2.append((sname,vstr))
-                if v is not None: #if None the error is trapped earlier
-                    varlist[stage-1].append(v)
+                varlist[stage-1].append(v)
 
             # Create the new scenario tree node for admm_consensus
             assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
@@ -205,6 +206,7 @@ class STOCH_ADMM_PH(): #add scenario_tree
 
             # underscores have a special signification in the tree
             for stage in range(1, depth):
+                #print(f"{stage, varlist[stage-1], sname=}")
                 old_node = s._mpisppy_node_list[stage-1]
                 s._mpisppy_node_list[stage-1] = scenario_tree.ScenarioNode(
                 old_node.name,
@@ -223,16 +225,12 @@ class STOCH_ADMM_PH(): #add scenario_tree
                                 f"in the model, but not in consensus var: \n {error_list2}")
 
 
-    def admm_ph_scenario_creator(self, admm_stoch_subproblem_scenario_name):
+    def admmWrapper_scenario_creator(self, admm_stoch_subproblem_scenario_name):
         scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 
+        # Although every stage is already multiplied earlier, we must still multiply the overall objective function
         # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
-        # Although every stage is already multiplied earlier, we still must multiply the overall objective function
-        objectives = scenario.component_objects(pyo.Objective, active=True)
-        count = 0
-        for obj in objectives:
-            count += 1
-        assert count == 1, f"only one objective function is authorized, there are {count}"
+        obj = sputils.find_active_objective(scenario)
         obj.expr = obj.expr * self.number_admm_subproblems
 
         return scenario

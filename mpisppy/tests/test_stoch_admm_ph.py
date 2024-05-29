@@ -54,7 +54,7 @@ class TestSTOCHADMMPH(unittest.TestCase):
         admm = self._make_admm(4,3)
         q = dict()
         for sname, s in admm.local_admm_stoch_subproblem_scenarios.items():
-            q[sname] = admm.var_prob_list_fct(s)
+            q[sname] = admm.var_prob_list(s)
         self.assertEqual(q["ADMM_STOCH_Region1_StochasticScenario1"][0][1], 0.5)
         self.assertEqual(q["ADMM_STOCH_Region3_StochasticScenario1"][0][1], 0)
 
