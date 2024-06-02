@@ -250,6 +250,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         rho_setter=None,
         variable_probability=None,
     ):
+        self._PHIter = 0  # moved to _init June 2024 so extensions can see it
         """ PHBase constructor. """
         super().__init__(
             options,

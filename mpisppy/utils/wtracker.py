@@ -12,7 +12,6 @@
 import numpy as np
 import pandas as pd
 import mpisppy.opt.ph
-import pyomo.environ as pyo
 import mpisppy.MPI as MPI
 
 class WTracker():
@@ -38,6 +37,8 @@ class WTracker():
             self.ph_iter = self.PHB._PHIter
         elif hasattr(self.PHB, 'A_iter'):
             self.ph_iter = self.PHB.A_iter
+        else:
+            raise RuntimeError("WTracker created before its PHBase object has _PHIter")
 
         
     def grab_local_Ws(self):
@@ -145,7 +146,7 @@ class WTracker():
 
         """
         cI = self.ph_iter
-        #self.grab_local_Ws()
+        self.grab_local_Ws()
         self.local_Ws[-1] = self.local_Ws[0]
         global_diff = np.zeros(1)
         local_diff = np.zeros(1)

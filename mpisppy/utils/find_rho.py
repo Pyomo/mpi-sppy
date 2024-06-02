@@ -66,10 +66,10 @@ class Find_Rho():
            and cfg.get("grad_rho_file", ifmissing='')  == '': 
             pass
         else:
-            assert self.cfg.grad_whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
-            if (not os.path.exists(self.cfg.grad_whatpath)):
-                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_whatpath))
-            with open(self.cfg.grad_whatpath, 'r') as f:
+            assert self.cfg.whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
+            if (not os.path.exists(self.cfg.whatpath)):
+                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.whatpath))
+            with open(self.cfg.whatpath, 'r') as f:
                 for line in f:
                     if (line.startswith('#')):
                         continue

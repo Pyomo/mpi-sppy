@@ -164,7 +164,7 @@ class Find_Grad():
         assert self.cfg.grad_cost_file != '', "to compute rho you have to give the name of a csv file (using --grad-cost-file) where grad cost will be written"
         if (not os.path.exists(self.cfg.grad_cost_file)):
             raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_cost_file))
-        self.cfg.grad_whatpath = self.cfg.grad_cost_file
+        self.cfg.whatpath = self.cfg.grad_cost_file
         return find_rho.Find_Rho(self.ph_object, self.cfg).compute_rho()
 
     def write_grad_rho(self):

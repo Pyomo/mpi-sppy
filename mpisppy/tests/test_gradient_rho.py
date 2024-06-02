@@ -155,7 +155,7 @@ class Test_find_rho_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
         self.ph_object = self._create_ph_farmer()
-        self.cfg.grad_whatpath = './examples/rho_test_data/grad_cost.csv'
+        self.cfg.whatpath = './examples/rho_test_data/grad_cost.csv'
         self.cfg.grad_rho_file= './_test_rho.csv'
         self.cfg.grad_order_stat = 0.4
 
@@ -164,7 +164,7 @@ class Test_find_rho_farmer(unittest.TestCase):
     
     def test_w_denom(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.grad_whatpath = self.cfg.grad_cost_file
+        self.cfg.whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]        
         denom = {node.name: self.rho_object._w_denom(s0, node) for node in s0._mpisppy_node_list}
@@ -172,7 +172,7 @@ class Test_find_rho_farmer(unittest.TestCase):
 
     def test_prox_denom(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.grad_whatpath = self.cfg.grad_cost_file
+        self.cfg.whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]
         denom = {node.name: self.rho_object._prox_denom(s0, node) for node in s0._mpisppy_node_list}
@@ -180,7 +180,7 @@ class Test_find_rho_farmer(unittest.TestCase):
 
     def test_grad_denom(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.grad_whatpath = self.cfg.grad_cost_file
+        self.cfg.whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         denom = self.rho_object._grad_denom()
         self.assertAlmostEqual(denom[0], 21.48148148148148) 
@@ -194,7 +194,7 @@ class Test_find_rho_farmer(unittest.TestCase):
 
     def test_compute_rho(self):
         self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.grad_whatpath = self.cfg.grad_cost_file
+        self.cfg.whatpath = self.cfg.grad_cost_file
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         rho = self.rho_object.compute_rho(indep_denom=True)
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689654)
