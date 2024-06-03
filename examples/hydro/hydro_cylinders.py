@@ -45,6 +45,7 @@ def main():
         raise RuntimeError("Hydro is a three stage problem, so it needs 2 BFs")
 
     xhatshuffle = cfg["xhatshuffle"]
+    assert xhatshuffle is not None
     lagrangian = cfg["lagrangian"]
 
     # This is multi-stage, so we need to supply node names
@@ -91,7 +92,7 @@ def main():
     if xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
-    if cfg.stage2EFsolvern is not None:
+    if cfg.stage2EFsolvern is not None and xhatshuffle:
         xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
         xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
