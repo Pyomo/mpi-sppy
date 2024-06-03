@@ -92,6 +92,7 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
     if cfg.stage2EFsolvern is not None:
+        assert xhatshuffle is not None, "xhatshuffle is required for stage2EFsolvern"
         xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
         xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
