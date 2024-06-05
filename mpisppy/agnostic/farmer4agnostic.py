@@ -13,7 +13,6 @@
 
 import pyomo.environ as pyo
 import numpy as np
-import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 
@@ -69,11 +68,10 @@ def scenario_creator(
         crops_multiplier=crops_multiplier,
     )
 
-    # Create the list of nodes associated with the scenario (for two stage,
-    # there is only one node associated with the scenario--leaf nodes are
-    # ignored).
+    # create a varlist, which is used to create a vardata list
+    # (This list needs to whatever the guest needs, not what Pyomo needs)
     varlist = [model.DevotedAcreage]
-    s._nonant_vars = varlist
+    model._nonant_vardata_list = sputils.build_vardatalist(model, varlist)
     
     #Add the probability of the scenario
     if num_scens is not None :
@@ -286,6 +284,9 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     sname = scenario_name
+    print("denouement needs work")
+    scenario.pprint()
+    return
     s = scenario
     if sname == 'scen0':
         print("Arbitrary sanity checks:")

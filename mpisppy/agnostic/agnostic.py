@@ -47,7 +47,7 @@ class Agnostic():
             fct = getattr(self.module, fname, None)
             if fct is None:
                 raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing function {fname}")
-            fct(self, **kwargs)
+            fct(Ag=self, **kwargs)
             return True
         else:
             return False

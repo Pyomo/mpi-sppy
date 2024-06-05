@@ -30,6 +30,8 @@ provide hooks to:
   the nonant varlist as _nonant_vars to the scenario when it is created.
 """
 import mpisppy.utils.sputils as sputils
+import pyomo.environ as pyo
+from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 
 # for debuggig
 from mpisppy import MPI
@@ -58,6 +60,8 @@ class Pyomo_guest():
         elif hasattr(s, "_mpisppy_node_list"):
             assert len(s._mpisppy_node_list) == 1, "multi-stage agnostic with Pyomo as guest not yet supported."
             nonant_vars = s._mpisppy_node_list[0].nonant_vardata_list
+        else:
+            raise RuntimeError("Scenario must have either _mpisppy_node_list or _nonant_vardata_list")
         # In general, be sure to process variables in the same order has the guest does (so indexes match)
         gd = {
             "scenario": s,
@@ -65,7 +69,7 @@ class Pyomo_guest():
             "nonant_fixedness": {("ROOT",i): v.is_fixed() for i,v in enumerate(nonant_vars)},
             "nonant_start": {("ROOT",i): v._value for i,v in enumerate(nonant_vars)},
             "nonant_names": {("ROOT",i): v.name for i, v in enumerate(nonant_vars)},
-            "probability": s._scenario_probability,
+            "probability": s._mpisppy_probability,
             "sense": pyo.minimize,
             "BFs": None
             }
@@ -74,30 +78,30 @@ class Pyomo_guest():
 
     #=========
     def scenario_names_creator(self, num_scens,start=None):
-        return farmer.scenario_names_creator(num_scens,start)
+        return self.model_module.scenario_names_creator(num_scens,start)
 
 
     #=========
     def inparser_adder(self, cfg):
-        farmer.inparser_adder(cfg)
+        self.model_module.inparser_adder(cfg)
 
 
     #=========
     def kw_creator(self, cfg):
         # creates keywords for scenario creator
-        return farmer.kw_creator(cfg)
+        return self.model_module.kw_creator(cfg)
 
     # This is not needed for PH
     def sample_tree_scen_creator(self, sname, stage, sample_branching_factors, seed,
                                  given_scenario=None, **scenario_creator_kwargs):
-        return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+        return self.model_module.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                                                given_scenario, **scenario_creator_kwargs)
 
     #============================
     def scenario_denouement(self, rank, scenario_name, scenario):
         pass
         # (the fct in farmer won't work because the Var names don't match)
-        #farmer.scenario_denouement(rank, scenario_name, scenario)
+        #self.model_module.scenario_denouement(rank, scenario_name, scenario)
 
 
     ############################################################################
@@ -105,7 +109,8 @@ class Pyomo_guest():
     # NOTE: the callouts all take the Ag object as their first argument, mainly to see cfg if needed
     # the function names correspond to function names in mpisppy
 
-    def attach_Ws_and_prox(Ag, sname, scenario):        
+    def attach_Ws_and_prox(self, Ag, sname, scenario):
+        print("We are here!!!!!!!!!!")
         # Attach W's and prox to the guest scenario.
         # Use the nonant index as the index set
         gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
@@ -120,23 +125,23 @@ class Pyomo_guest():
         gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
 
 
-    def _disable_prox(Ag, scenario):
+    def _disable_prox(self, Ag, scenario):
         scenario._agnostic_dict["scenario"].prox_on._value = 0
 
 
-    def _disable_W(Ag, scenario):
+    def _disable_W(self, Ag, scenario):
         scenario._agnostic_dict["scenario"].W_on._value = 0
 
 
-    def _reenable_prox(Ag, scenario):
+    def _reenable_prox(self, Ag, scenario):
         scenario._agnostic_dict["scenario"].prox_on._value = 1
 
 
-    def _reenable_W(Ag, scenario):
+    def _reenable_W(self, Ag, scenario):
         scenario._agnostic_dict["scenario"].W_on._value = 1
 
 
-    def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
+    def attach_PH_to_objective(self, Ag, sname, scenario, add_duals, add_prox):
         # TBD: Deal with prox linearization and approximation later,
         # i.e., just do the quadratic version
 
@@ -182,7 +187,7 @@ class Pyomo_guest():
                     raise RuntimeError(f"Unknown sense {gd['sense'] =}")
 
 
-    def solve_one(Ag, s, solve_keyword_args, gripe, tee=False):
+    def solve_one(self, Ag, s, solve_keyword_args, gripe, tee=False):
         # This needs to attach stuff to s (see solve_one in spopt.py)
         # Solve the guest language version, then copy values to the host scenario
 
@@ -193,7 +198,7 @@ class Pyomo_guest():
 
         # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
-        _copy_Ws_xbars_rho_from_host(s)
+        self._copy_Ws_xbars_rho_from_host(s)
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
 
@@ -262,7 +267,7 @@ class Pyomo_guest():
 
 
     # local helper
-    def _copy_Ws_xbars_rho_from_host(s):
+    def _copy_Ws_xbars_rho_from_host(self, s):
         # This is an important function because it allows us to capture whatever the host did
         # print(f"   {s.name =}, {global_rank =}")
         gd = s._agnostic_dict
@@ -281,7 +286,7 @@ class Pyomo_guest():
 
 
     # local helper
-    def _copy_nonants_from_host(s):
+    def _copy_nonants_from_host(self, s):
         # values and fixedness; 
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
@@ -296,20 +301,22 @@ class Pyomo_guest():
                 guestVar._value = hostVar._value
 
 
-    def _restore_nonants(Ag, s):
+    def _restore_nonants(self, Ag, s):
         # the host has already restored
-        _copy_nonants_from_host(s)
+        self._copy_nonants_from_host(s)
 
 
-    def _restore_original_fixedness(Ag, s):
-        _copy_nonants_from_host(s)
+    def _restore_original_fixedness(self, Ag, s):
+        self._copy_nonants_from_host(s)
 
 
-    def _fix_nonants(Ag, s):
-        _copy_nonants_from_host(s)
+    def _fix_nonants(self, Ag, s):
+        # We are assuming the host did the fixing
+        self._copy_nonants_from_host(s)
 
 
-    def _fix_root_nonants(Ag, s):
-        _copy_nonants_from_host(s)
+    def _fix_root_nonants(self, Ag, s):
+        # We are assuming the host did the fixing
+        self._copy_nonants_from_host(s)
 
 

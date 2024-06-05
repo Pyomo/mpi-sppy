@@ -6,41 +6,8 @@ import logging
 logger = logging.getLogger('mpisppy.scenario_tree')
 
 import pyomo.environ as pyo
-from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
+import mpisppy.utils.sputils as sputils
 
-def build_vardatalist(self, model, varlist=None):
-    """
-    Convert a list of pyomo variables to a list of SimpleVar and _GeneralVarData. If varlist is none, builds a
-    list of all variables in the model. Written by CD Laird
-
-    Parameters
-    ----------
-    model: ConcreteModel
-    varlist: None or list of pyo.Var
-    """
-    vardatalist = None
-
-    # if the varlist is None, then assume we want all the active variables
-    if varlist is None:
-        raise RuntimeError("varlist is None in scenario_tree.build_vardatalist")
-        vardatalist = [v for v in model.component_data_objects(pyo.Var, active=True, sort=True)]
-    elif isinstance(varlist, (pyo.Var, IndexedComponent_slice)):
-        # user provided a variable, not a list of variables. Let's work with it anyway
-        varlist = [varlist]
-
-    if vardatalist is None:
-        # expand any indexed components in the list to their
-        # component data objects
-        vardatalist = list()
-        for v in varlist:
-            if isinstance(v, IndexedComponent_slice):
-                vardatalist.extend(v.__iter__())
-            elif v.is_indexed():
-                vardatalist.extend((v[i] for i in sorted(v.keys())))
-            else:
-                vardatalist.append(v)
-    return vardatalist
-    
 class ScenarioNode:
     """Store a node in the scenario tree.
 
@@ -80,7 +47,7 @@ class ScenarioNode:
         self.parent_name = parent_name # None for ROOT
         # now make the vardata lists
         if self.nonant_list is not None:
-            self.nonant_vardata_list = build_vardatalist(self,
+            self.nonant_vardata_list = sputils.build_vardatalist(
                                                          scen_model,
                                                          self.nonant_list)
         else:
@@ -89,7 +56,7 @@ class ScenarioNode:
             self.nonant_vardata_list = []
 
         if self.nonant_ef_suppl_list is not None:
-            self.nonant_ef_suppl_vardata_list = build_vardatalist(self,
+            self.nonant_ef_suppl_vardata_list = sputils.build_vardatalist(
                                                          scen_model,
                                                          self.nonant_ef_suppl_list)
         else:
