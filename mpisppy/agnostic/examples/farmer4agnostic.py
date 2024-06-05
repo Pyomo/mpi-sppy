@@ -73,7 +73,7 @@ def scenario_creator(
     # there is only one node associated with the scenario--leaf nodes are
     # ignored).
     varlist = [model.DevotedAcreage]
-    s._nonant_vars = varlist
+    s._nonant_vardata_list = varlist
     
     #Add the probability of the scenario
     if num_scens is not None :

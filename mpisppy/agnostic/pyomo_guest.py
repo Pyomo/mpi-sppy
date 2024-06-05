@@ -1,4 +1,3 @@
-###xxxx allow for getting vars from root node for pyomo models???
 # This code sits between the guest model file and mpi-sppy
 # Pyomo is the guest language. Started by DLW April 2024
 """
@@ -25,6 +24,11 @@ provide hooks to:
   scenario_denouement
 
 """
+"""
+  Note: we already have a lot of two-stage models in Pyomo that would
+  be handy for testing. All that needs to be done, is to attach
+  the nonant varlist as _nonant_vars to the scenario when it is created.
+"""
 import mpisppy.utils.sputils as sputils
 
 # for debuggig
@@ -49,7 +53,11 @@ class Pyomo_guest():
         """
         s = self.model_module.scenario_creator(scenario_name, **kwargs)
         ### TBD: assert that this is minimization?
-        nonant_vars = s._nonant_vars  # a list of vars
+        if hasattr(s, "_nonant_vardata_list"): 
+            nonant_vars = s._nonant_vardata_list  # a list of vars
+        elif hasattr(s, "_mpisppy_node_list"):
+            assert len(s._mpisppy_node_list) == 1, "multi-stage agnostic with Pyomo as guest not yet supported."
+            nonant_vars = s._mpisppy_node_list[0].nonant_vardata_list
         # In general, be sure to process variables in the same order has the guest does (so indexes match)
         gd = {
             "scenario": s,

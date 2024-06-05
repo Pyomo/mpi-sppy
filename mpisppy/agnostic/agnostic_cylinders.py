@@ -2,10 +2,10 @@
 # Started by dlw April 2024: General agnostic cylinder driver.
 """
 We need to get the module from the command line, then construct
-the X_guest (e.g. Pyomo_guest) class to wrap the module
+the X_guest (e.g. Pyomo_guest, AMPL_guest) class to wrap the module
 and feed it to the Agnostic object.
 
-I think it can be a fully general cylinders program?
+I think it can be a pretty general cylinders program?
 """
 import sys
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -58,11 +58,9 @@ if __name__ == "__main__":
     # now I need the pyomo_guest wrapper, then feed that to agnostic
     pg = Pyomo_guest(model_fname)
     Ag = agnostic.Agnostic(pg, cfg)
-    print("quitting")
-    quit()
 
     scenario_creator = Ag.scenario_creator
-    assert hasattr(m, "scenario_denouement"), "The model file must have a scenario_denouement function"
+    assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement   # should we go though Ag?
     all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
 
