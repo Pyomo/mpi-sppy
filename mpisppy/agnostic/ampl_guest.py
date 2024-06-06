@@ -1,10 +1,5 @@
 # This code sits between the guest model file and mpi-sppy
-# Pyomo is the guest language. Started by DLW April 2024
-"""
-For other guest languages, the corresponding module is
-still written in Python, it just needs to interact
-with the guest language
-"""
+# AMPL is the guest language. Started by DLW June 2024
 """
 The guest model file (not this file) provides a scenario creator in the guest
 language that attaches to each scenario a scenario probability (or "uniform")

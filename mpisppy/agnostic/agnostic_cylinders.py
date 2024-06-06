@@ -25,10 +25,13 @@ def _parse_args(m):
                       domain=str,
                       default=None,
                       argparse=True)
-
     assert hasattr(m, "inparser_adder"), "The model file must have an inparser_adder function"
     m.inparser_adder(cfg)
-
+    cfg.add_to_config(name="guest_language",
+                      description="The language in which the modle is written (e.g. Pyomo or AMPL)",
+                      domain=str,
+                      default="None",
+                      argparse=True)
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
@@ -55,9 +58,17 @@ if __name__ == "__main__":
 
     cfg = _parse_args(module)
 
-    # now I need the pyomo_guest wrapper, then feed that to agnostic
-    pg = Pyomo_guest(model_fname)
-    Ag = agnostic.Agnostic(pg, cfg)
+    supported_guests = {"Pyomo", "AMPL"}
+    if cfg.guest_language not in supported_guests:
+        raise ValueError(f"Not a supported guest language: {cfg.guest_language}\n"
+                         f"   supported guests: {supported_guests}")
+    if cfg.guest_language == "Pyomo":
+        # now I need the pyomo_guest wrapper, then feed that to agnostic
+        pg = Pyomo_guest(model_fname)
+        Ag = agnostic.Agnostic(pg, cfg)
+    elif cfg.guest_language == "AMPL":
+        print("not yet...")
+        quit()
 
     scenario_creator = Ag.scenario_creator
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
