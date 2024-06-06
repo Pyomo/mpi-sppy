@@ -32,6 +32,11 @@ def _parse_args(m):
                       domain=str,
                       default="None",
                       argparse=True)
+    cfg.add_to_config(name="ampl_model_file",
+                      description="The .m file needed if the language is AMPL",
+                      domain=str,
+                      default=None,
+                      argparse=True)
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
@@ -67,8 +72,9 @@ if __name__ == "__main__":
         pg = Pyomo_guest(model_fname)
         Ag = agnostic.Agnostic(pg, cfg)
     elif cfg.guest_language == "AMPL":
-        print("not yet...")
-        quit()
+        assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you and ampl-model-file"
+        guest = AMPL_guest(model_fname, cfg.ampl_model_file)
+        Ag = agnostic.Agnostic(guest, Ag)
 
     scenario_creator = Ag.scenario_creator
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"

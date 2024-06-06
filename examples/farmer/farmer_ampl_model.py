@@ -1,12 +1,5 @@
-# <special for agnostic debugging DLW Aug 2023>
 # In this example, AMPL is the guest language.
-# This is a special example where this file serves
-# the rolls of ampl_guest.py and the model file.
-
-"""
-This file tries to show many ways to do things in AMPLpy,
-but not necessarily the best ways in all cases.
-"""
+# This is the python model file for AMPL farmer.
 
 from amplpy import AMPL
 import pyomo.environ as pyo
@@ -23,8 +16,9 @@ from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-def scenario_creator(
-    scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
+# the first two args are in every scenario_creator for an AMPL model
+def scenario_creator(scenario_name, ampl_file_name,
+        use_integer=False, sense=pyo.minimize, crops_multiplier=1,
         num_scens=None, seedoffset=0
 ):
     """ Create a scenario for the (scalable) farmer example
@@ -32,6 +26,9 @@ def scenario_creator(
     Args:
         scenario_name (str):
             Name of the scenario to construct.
+        ampl_file_name (str):
+            The name of the ampl model file (with AMPL in it)
+            (This adds flexibility that maybe we don't need; it could be hardwired)
         use_integer (bool, optional):
             If True, restricts variables to be integer. Default is False.
         sense (int, optional):
@@ -46,13 +43,18 @@ def scenario_creator(
         seedoffset (int): used by confidence interval code
 
     NOTE: for ampl, the names will be tuples name, index
+    
+    Returns:
+        prob (float or "uniform"): the scenario probability
+        nonant_var_data_list (list of AMPL variables): the nonants
+        ampl_model (AMPL object): the AMPL model
     """
 
     assert crops_multiplier == 1, "for AMPL, just getting started with 3 crops"
 
     ampl = AMPL()
 
-    ampl.read("farmer.mod")
+    ampl.read(ampl_file_name)
 
     # scenario specific data applied
     scennum = sputils.extract_num(scenario_name)
@@ -77,7 +79,7 @@ def scenario_creator(
         "BFs": None
     }
 
-    return gd
+    return "uniform", areaVarDatas, ampl
     
 #=========
 def scenario_names_creator(num_scens,start=None):

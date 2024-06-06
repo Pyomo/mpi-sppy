@@ -1,26 +1,31 @@
 # This code sits between the guest model file and mpi-sppy
 # AMPL is the guest language. Started by DLW June 2024
 """
-The guest model file (not this file) provides a scenario creator in the guest
-language that attaches to each scenario a scenario probability (or "uniform")
+The guest model file (not this file) provides a scenario creator in Python
+that attaches to each scenario a scenario probability (or "uniform")
 and the following items to populate the guest dict (aka gd):
   name
   conditional probability
   stage number
   nonant var list
 
-The guest model file also needs to somehow (it might depend on the language)
-provide hooks to:
+(As of June 2024, we are going to be two-stage only...)
+
+The guest model file (which is in Python) also needs to provide:
   scenario_creator_kwargs
   scenario_names_creator
   scenario_denouement
 
+The signature for the scenario creator in the Python model file for an
+AMPL guest is the scenario_name, an ampl model file name, and then
+keyword args. It is up to the function to instantiate the model
+in the guest language and to make sure the data is correct for the
+given scenario name and kwargs.
+
+For AMPL, the _nonant_varadata_list should contain objects obtained
+from something like the get_variable method of an AMPL model object.
 """
-"""
-  Note: we already have a lot of two-stage models in Pyomo that would
-  be handy for testing. All that needs to be done, is to attach
-  the nonant varlist as _nonant_vars to the scenario when it is created.
-"""
+from amplpy import AMPL
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
@@ -30,43 +35,46 @@ from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-class Pyomo_guest():
+class AMPL_guest():
     """
-    Provide an interface to a model file for a Pyomo guest
+    Provide an interface to a model file for an AMPL guest.
+    
+    Args:
+        model_file_name (str): name of Python file that has functions like scenario_creator
+        ampl_file_name (str): name of AMPL file that is passed to the model file
     """
-    def __init__(self, model_file_name):
+    def __init__(self, model_file_name, ampl_file_name):
+        self.model_file_name = model_file_name
         self.model_module = sputils.module_name_to_module(model_file_name)
+        self.ampl_file_name = ampl_file_name
 
 
     def scenario_creator(self, scenario_name, **kwargs):
-        """ Wrap the guest (Pyomo in this case) scenario creator
+        """ Wrap the guest (AMPL in this case) scenario creator
 
         Args:
             scenario_name (str):
                 Name of the scenario to construct.
         """
-        s = self.model_module.scenario_creator(scenario_name, **kwargs)
+        prob, nonant_var_data_list, s = self.model_module.scenario_creator(scenario_name,
+                                                                     self.ampl_file_name,
+                                                                     **kwargs)
         ### TBD: assert that this is minimization?
-        if hasattr(s, "_nonant_vardata_list"): 
-            nonant_vars = s._nonant_vardata_list  # a list of vars
-        elif hasattr(s, "_mpisppy_node_list"):
-            assert len(s._mpisppy_node_list) == 1, "multi-stage agnostic with Pyomo as guest not yet supported."
-            nonant_vars = s._mpisppy_node_list[0].nonant_vardata_list
-        else:
-            raise RuntimeError("Scenario must have either _mpisppy_node_list or _nonant_vardata_list")
         # In general, be sure to process variables in the same order has the guest does (so indexes match)
+        nonant_vars = nonant_vardata_list  # typing aid
         gd = {
             "scenario": s,
-            "nonants": {("ROOT",i): v for i,v in enumerate(nonant_vars)},
-            "nonant_fixedness": {("ROOT",i): v.is_fixed() for i,v in enumerate(nonant_vars)},
-            "nonant_start": {("ROOT",i): v._value for i,v in enumerate(nonant_vars)},
-            "nonant_names": {("ROOT",i): v.name for i, v in enumerate(nonant_vars)},
-            "probability": s._mpisppy_probability,
+            "nonants": {("ROOT",i): v[1] for i,v in enumerate(areaVarDatas)},
+            "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(areaVarDatas)},
+            "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(areaVarDatas)},
+            "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(areaVarDatas)},
+            "probability": prob,
             "sense": pyo.minimize,
             "BFs": None
-            }
-        # we don't need to attach nonants to s; the agnostic class does it
+        }
+
         return gd
+
 
     #=========
     def scenario_names_creator(self, num_scens,start=None):
