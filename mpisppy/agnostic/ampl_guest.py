@@ -56,7 +56,7 @@ class AMPL_guest():
             scenario_name (str):
                 Name of the scenario to construct.
         """
-        prob, nonant_vardata_list, s = self.model_module.scenario_creator(scenario_name,
+        s, prob, nonant_vardata_list, obj_fct = self.model_module.scenario_creator(scenario_name,
                                                                      self.ampl_file_name,
                                                                      **kwargs)
         ### TBD: assert that this is minimization?
@@ -69,6 +69,7 @@ class AMPL_guest():
             "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(nonant_vars)},
             "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(nonant_vars)},
             "probability": prob,
+            "obj_fct": obj_fct,
             "sense": pyo.minimize,
             "BFs": None
         }
@@ -109,21 +110,27 @@ class AMPL_guest():
     # NOTE: the callouts all take the Ag object as their first argument, mainly to see cfg if needed
     # the function names correspond to function names in mpisppy
 
-    def attach_Ws_and_prox(self, Ag, sname, scenario):
-        print("We are here!!!!!!!!!!")
-        # Attach W's and prox to the guest scenario.
-        # Use the nonant index as the index set
-        gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
-        nonant_idx = list(scenario._agnostic_dict["nonants"].keys())
-        assert not hasattr(gs, "W")
-        gs.W = pyo.Param(nonant_idx, initialize=0.0, mutable=True)
-        assert not hasattr(gs, "W_on")
-        gs.W_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
-        assert not hasattr(gs, "prox_on")
-        gs.prox_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
-        assert not hasattr(gs, "rho")
-        gs.rho = pyo.Param(nonant_idx, mutable=True, default=Ag.cfg.default_rho)
-
+    def attach_Ws_and_prox(Ag, sname, scenario):
+    # this is AMPL farmer specific, so we know there is not a W already, e.g.
+    # Attach W's and rho to the guest scenario (mutable params).
+    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+    hs = scenario  # host scenario handle
+    gd = scenario._agnostic_dict
+    # (there must be some way to create and assign *mutable* params in on call to AMPL)
+    gs.eval("param W_on;")
+    gs.eval("let W_on := 0;")
+    gs.eval("param prox_on;")
+    gs.eval("let prox_on := 0;")
+    # we are trusting the order to match the nonant indexes
+    xxxx should we create a nonant_indices set in AMPL?
+    # TBD xxxxx check for W on the model already
+    gs.eval("param W{nonant_indices};")
+    # Note: we should probably use set_values instead of let
+    gs.eval("let {i in nonant_indices}  W[i] := 0;")
+    # start with rho at zero, but update before solve
+    # TBD xxxxx check for rho on the model already
+    gs.eval("param rho{nonant_indices};")
+    gs.eval("let {i in nonant_indices}  rho[i] := 0;")
 
     def _disable_prox(self, Ag, scenario):
         scenario._agnostic_dict["scenario"].prox_on._value = 0
@@ -145,10 +152,7 @@ class AMPL_guest():
         # TBD: Deal with prox linearization and approximation later,
         # i.e., just do the quadratic version
 
-        ### The host has xbars and computes without involving the guest language
-        ### xbars = scenario._mpisppy_model.xbars
-        ### but instead, we are going to make guest xbars like other guests
-
+        # The host has xbars and computes without involving the guest language
 
         gd = scenario._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle

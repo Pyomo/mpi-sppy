@@ -107,7 +107,6 @@ class Pyomo_guest():
     # the function names correspond to function names in mpisppy
 
     def attach_Ws_and_prox(self, Ag, sname, scenario):
-        print("We are here!!!!!!!!!!")
         # Attach W's and prox to the guest scenario.
         # Use the nonant index as the index set
         gs = scenario._agnostic_dict["scenario"]  # guest scenario handle

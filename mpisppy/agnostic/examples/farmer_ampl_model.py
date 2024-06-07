@@ -1,5 +1,6 @@
 # In this example, AMPL is the guest language.
 # This is the python model file for AMPL farmer.
+# It will work with farmer.mod and slight deviations.
 
 from amplpy import AMPL
 import pyomo.environ as pyo
@@ -45,9 +46,10 @@ def scenario_creator(scenario_name, ampl_file_name,
     NOTE: for ampl, the names will be tuples name, index
     
     Returns:
+        ampl_model (AMPL object): the AMPL model
         prob (float or "uniform"): the scenario probability
         nonant_var_data_list (list of AMPL variables): the nonants
-        ampl_model (AMPL object): the AMPL model
+        obj_fct (AMPL Objective function): the objective function
     """
 
     assert crops_multiplier == 1, "for AMPL, just getting started with 3 crops"
@@ -67,19 +69,14 @@ def scenario_creator(scenario_name, ampl_file_name,
 
     areaVarDatas = list(ampl.get_variable("area").instances())
 
-    # In general, be sure to process variables in the same order has the guest does (so indexes match)
-    gd = {
-        "scenario": ampl,
-        "nonants": {("ROOT",i): v[1] for i,v in enumerate(areaVarDatas)},
-        "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(areaVarDatas)},
-        "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(areaVarDatas)},
-        "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(areaVarDatas)},
-        "probability": "uniform",
-        "sense": pyo.minimize,
-        "BFs": None
-    }
-
-    return "uniform", areaVarDatas, ampl
+    try:
+        obj_fct = ampl.get_objective("minus_profit")
+    except:
+        print("big troubles!!; we can't find the objective function")
+        print("doing export to _export.mod")
+        gs.export_model("_export.mod")
+        raise
+    return ampl, "uniform", areaVarDatas, obj_fct
     
 #=========
 def scenario_names_creator(num_scens,start=None):

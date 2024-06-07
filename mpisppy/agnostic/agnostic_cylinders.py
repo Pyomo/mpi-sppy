@@ -20,6 +20,7 @@ from ampl_guest import AMPL_guest
 
 def _parse_args(m):
     # m is the model file module
+    # NOTE: try to avoid adding features here that are not supported for agnostic
     cfg = config.Config()
     cfg.add_to_config(name="module_name",
                       description="file name that has scenario creator, etc.",

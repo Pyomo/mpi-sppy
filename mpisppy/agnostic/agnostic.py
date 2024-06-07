@@ -69,6 +69,7 @@ class Agnostic():
             gd["nonant_fixedness"]: dict [(ndn,i)]: indicator of fixed variable
             gd["nonant_start"]: dict [(ndn,i)]: float with starting value
             gd["probability"]: float prob or str "uniform"
+            gd["obj_fct"]: the objective function from the guest
             gd["sense"]: pyo.minimize or pyo.maximize
             gd["BFs"]: scenario tree branching factors list or None
             (for two stage models, the only value of ndn is "ROOT";
