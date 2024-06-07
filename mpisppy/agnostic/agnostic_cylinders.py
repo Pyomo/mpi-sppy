@@ -15,6 +15,7 @@ import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
 
 from pyomo_guest import Pyomo_guest
+from ampl_guest import AMPL_guest
 
 
 def _parse_args(m):
@@ -74,7 +75,7 @@ if __name__ == "__main__":
     elif cfg.guest_language == "AMPL":
         assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you and ampl-model-file"
         guest = AMPL_guest(model_fname, cfg.ampl_model_file)
-        Ag = agnostic.Agnostic(guest, Ag)
+        Ag = agnostic.Agnostic(guest, cfg)
 
     scenario_creator = Ag.scenario_creator
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"

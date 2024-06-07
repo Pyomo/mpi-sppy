@@ -4,7 +4,7 @@
 from amplpy import AMPL
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import farmer
+import mpisppy.agnostic.examples.farmer as farmer
 import numpy as np
 
 # If you need random numbers, use this random stream:

@@ -56,7 +56,7 @@ class AMPL_guest():
             scenario_name (str):
                 Name of the scenario to construct.
         """
-        prob, nonant_var_data_list, s = self.model_module.scenario_creator(scenario_name,
+        prob, nonant_vardata_list, s = self.model_module.scenario_creator(scenario_name,
                                                                      self.ampl_file_name,
                                                                      **kwargs)
         ### TBD: assert that this is minimization?
@@ -64,10 +64,10 @@ class AMPL_guest():
         nonant_vars = nonant_vardata_list  # typing aid
         gd = {
             "scenario": s,
-            "nonants": {("ROOT",i): v[1] for i,v in enumerate(areaVarDatas)},
-            "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(areaVarDatas)},
-            "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(areaVarDatas)},
-            "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(areaVarDatas)},
+            "nonants": {("ROOT",i): v[1] for i,v in enumerate(nonant_vars)},
+            "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(nonant_vars)},
+            "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(nonant_vars)},
+            "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(nonant_vars)},
             "probability": prob,
             "sense": pyo.minimize,
             "BFs": None
