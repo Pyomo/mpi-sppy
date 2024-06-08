@@ -73,6 +73,8 @@ class AMPL_guest():
             "sense": pyo.minimize,
             "BFs": None
         }
+        ##?xxxxx ? create nonant vars and put them on the ampl model,
+        ##?xxxxx create constraints to make them equal to the original nonants
 
         return gd
 
@@ -110,27 +112,30 @@ class AMPL_guest():
     # NOTE: the callouts all take the Ag object as their first argument, mainly to see cfg if needed
     # the function names correspond to function names in mpisppy
 
-    def attach_Ws_and_prox(Ag, sname, scenario):
-    # this is AMPL farmer specific, so we know there is not a W already, e.g.
-    # Attach W's and rho to the guest scenario (mutable params).
-    gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
-    hs = scenario  # host scenario handle
-    gd = scenario._agnostic_dict
-    # (there must be some way to create and assign *mutable* params in on call to AMPL)
-    gs.eval("param W_on;")
-    gs.eval("let W_on := 0;")
-    gs.eval("param prox_on;")
-    gs.eval("let prox_on := 0;")
-    # we are trusting the order to match the nonant indexes
-    xxxx should we create a nonant_indices set in AMPL?
-    # TBD xxxxx check for W on the model already
-    gs.eval("param W{nonant_indices};")
-    # Note: we should probably use set_values instead of let
-    gs.eval("let {i in nonant_indices}  W[i] := 0;")
-    # start with rho at zero, but update before solve
-    # TBD xxxxx check for rho on the model already
-    gs.eval("param rho{nonant_indices};")
-    gs.eval("let {i in nonant_indices}  rho[i] := 0;")
+    def attach_Ws_and_prox(self, Ag, sname, scenario):
+        # Attach W's and rho to the guest scenario (mutable params).
+        print("Enter attach_Ws_and_prox")
+        gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
+        hs = scenario  # host scenario handle
+        gd = scenario._agnostic_dict
+        nonants = gd["nonants"]
+        # (there must be some way to create and assign *mutable* params in on call to AMPL)
+        gs.eval("param W_on;")
+        gs.eval("let W_on := 0;")
+        gs.eval("param prox_on;")
+        gs.eval("let prox_on := 0;")
+        # we are trusting the order to match the nonant indexes
+        #create a nonant_indices set in AMPL
+        # This should exactly match the nonant_vars.keys()
+        gs.eval(f"set nonant_indices := {{0..{len(nonants)}-1}};")
+        # TBD xxxxx check for W on the model already
+        gs.eval("param W{nonant_indices};")
+        # Note: we should probably use set_values instead of let
+        gs.eval("let {i in nonant_indices}  W[i] := 0;")
+        # start with rho at zero, but update before solve
+        # TBD xxxxx check for rho on the model already
+        gs.eval("param rho{nonant_indices};")
+        gs.eval("let {i in nonant_indices}  rho[i] := 0;")
 
     def _disable_prox(self, Ag, scenario):
         scenario._agnostic_dict["scenario"].prox_on._value = 0
@@ -151,44 +156,42 @@ class AMPL_guest():
     def attach_PH_to_objective(self, Ag, sname, scenario, add_duals, add_prox):
         # TBD: Deal with prox linearization and approximation later,
         # i.e., just do the quadratic version
+        # Assume that nonant_indices is on the AMPL model
 
         # The host has xbars and computes without involving the guest language
 
         gd = scenario._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
-        nonant_idx = list(gd["nonants"].keys())
-        # for Pyomo, we can just ask what is the active objective function
-        # (from some guests, maybe we will have to put the obj function on gd
-        objfct = sputils.find_active_objective(gs)
-        ph_term = 0
-        gs.xbars = pyo.Param(nonant_idx, mutable=True)
-        # Dual term (weights W)
+        gs.eval("param xbars{nonant_indices};")
+        obj_fct = xxxx
+        objstr = str(obj_fct)
+
+        # Dual term (weights W)        
+        phobjstr = ""
         if add_duals:
-            gs.WExpr = pyo.Expression(expr= sum(gs.W[ndn_i] * xvar for ndn_i,xvar in gd["nonants"].items()))
-            ph_term += gs.W_on * gs.WExpr
+            phobjstr += " + W_on * sum{i in nonant_indices} (W[i] * nonantxxxx[i])"
 
-            # Prox term (quadratic)
-            if (add_prox):
-                prox_expr = 0.
-                for ndn_i, xvar in gd["nonants"].items():
-                    # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
-                    # x**2 is the only qradratic term, which might be
-                    # dealt with differently depending on user-set options
-                    if xvar.is_binary():
-                        xvarsqrd = xvar
-                    else:
-                        xvarsqrd = xvar**2
-                    prox_expr += (gs.rho[ndn_i] / 2.0) * \
-                        (xvarsqrd - 2.0 * gs.xbars[ndn_i] * xvar + gs.xbars[ndn_i]**2)
-                gs.ProxExpr = pyo.Expression(expr=prox_expr)
-                ph_term += gs.prox_on * gs.ProxExpr
-
-                if gd["sense"] == pyo.minimize:
-                    objfct.expr += ph_term
-                elif gd["sense"] == pyo.maximize:
-                    objfct.expr -= ph_term
-                else:
-                    raise RuntimeError(f"Unknown sense {gd['sense'] =}")
+        # Prox term (quadratic)
+        ####### _see copy_nonants_from_host
+        if add_prox:
+            phobjstr += " + prox_on * sum{i in nonant_indices} ((rho[i]/2.0) * (nonantxxxx[i] * nonantxxxx[i] "+\
+                        " - 2.0 * xbars[i] * nonantxxxx[i] + xbars[i]^2))"
+        objstr = objstr[:-1] + "+ (" + phobjstr + ");"
+        objstr = objstr.replace(f"minimize {objstr}", "minimize phobj")
+        profitobj.drop()
+        print(f"{objstr =}")
+        gs.eval(objstr)
+        currentobj = gs.get_current_objective()
+        # see _copy_Ws_...  see also the gams version
+        WParamDatas = list(gs.get_parameter("W").instances())
+        xbarsParamDatas = list(gs.get_parameter("xbars").instances())
+        rhoParamDatas = list(gs.get_parameter("rho").instances())
+        gd["PH"] = {
+            "W": {("ROOT",i): v for i,v in enumerate(WParamDatas)},
+            "xbars": {("ROOT",i): v for i,v in enumerate(xbarsParamDatas)},
+            "rho": {("ROOT",i): v for i,v in enumerate(rhoParamDatas)},
+            "obj": currentobj,
+        }
 
 
     def solve_one(self, Ag, s, solve_keyword_args, gripe, tee=False):
@@ -291,18 +294,17 @@ class AMPL_guest():
 
     # local helper
     def _copy_nonants_from_host(self, s):
-        # values and fixedness; 
+        # values and fixedness;
         gd = s._agnostic_dict
-        gs = gd["scenario"]  # guest scenario handle
         for ndn_i, gxvar in gd["nonants"].items():
             hostVar = s._mpisppy_data.nonant_indices[ndn_i]
             guestVar = gd["nonants"][ndn_i]
-            if guestVar.is_fixed():
-                guestVar.fixed = False
+            if guestVar.astatus() == "fixed":
+                guestVar.unfix()
             if hostVar.is_fixed():
                 guestVar.fix(hostVar._value)
             else:
-                guestVar._value = hostVar._value
+                guestVar.set_value(hostVar._value)
 
 
     def _restore_nonants(self, Ag, s):
