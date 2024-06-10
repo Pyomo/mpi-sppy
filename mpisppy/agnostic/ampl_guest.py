@@ -242,14 +242,13 @@ class AMPL_guest():
         solver_name = s._solver_plugin.name
         gs.set_option("solver", solver_name)    
         if 'persistent' in solver_name:
-            raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
+            raise RuntimeError("Persistent solvers are not currently supported in AMPL agnostic.")
         gs.set_option("presolve", 0)
 
         solver_exception = None
         try:
             gs.solve()
         except Exception as e:
-            results = None
             solver_exception = e
 
         if gs.solve_result != "solved":
@@ -257,12 +256,17 @@ class AMPL_guest():
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.solve_result =}")
+            s._mpisppy_data._obj_from_agnostic = None
+            return
+
+        else:
+            s._mpisppy_data.scenario_feasible = True
+
 
         if solver_exception is not None:
             raise solver_exception
 
 
-        s._mpisppy_data.scenario_feasible = True
         # For AMPL mips, we need to use the gap option to compute bounds
         # https://amplmp.readthedocs.io/rst/features-guide.html
         objval = gs.get_objective("minus_profit").value()  # use this?
