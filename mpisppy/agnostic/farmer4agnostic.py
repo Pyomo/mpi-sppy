@@ -1,5 +1,4 @@
-# special for ph debugging DLW Dec 2018
-# unlimited crops
+# The farmer example for general agnostic with Pyomo as guest language
 # ALL INDEXES ARE ZERO-BASED
 #  ___________________________________________________________________________
 #
@@ -11,11 +10,9 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 #
-# special scalable farmer for stress-testing
 
 import pyomo.environ as pyo
 import numpy as np
-import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 
@@ -71,11 +68,10 @@ def scenario_creator(
         crops_multiplier=crops_multiplier,
     )
 
-    # Create the list of nodes associated with the scenario (for two stage,
-    # there is only one node associated with the scenario--leaf nodes are
-    # ignored).
+    # create a varlist, which is used to create a vardata list
+    # (This list needs to whatever the guest needs, not what Pyomo needs)
     varlist = [model.DevotedAcreage]
-    sputils.attach_root_node(model, model.FirstStageCost, varlist)    
+    model._nonant_vardata_list = sputils.build_vardatalist(model, varlist)
     
     #Add the probability of the scenario
     if num_scens is not None :
@@ -225,8 +221,7 @@ def pysp_instance_creation_callback(
 
     return model
 
-# begin functions not needed by farmer_cylinders
-# (but needed by special codes such as confidence intervals)
+# begin helper functions
 #=========
 def scenario_names_creator(num_scens,start=None):
     # (only for Amalgamator): return the full list of num_scens scenario names
@@ -283,12 +278,15 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     return scenario_creator(sname, **sca)
 
 
-# end functions not needed by farmer_cylinders
+# end helper functions
 
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     sname = scenario_name
+    print("denouement needs work")
+    scenario.pprint()
+    return
     s = scenario
     if sname == 'scen0':
         print("Arbitrary sanity checks:")
