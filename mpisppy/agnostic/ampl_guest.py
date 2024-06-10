@@ -25,6 +25,15 @@ given scenario name and kwargs.
 For AMPL, the _nonant_varadata_list should contain objects obtained
 from something like the get_variable method of an AMPL model object.
 """
+"""
+Not concerning indexes: 
+To keep it simple and completely generic, we are throwing away a lot
+of index information. This will probably slow down instantantion of 
+the objective fuction (see attach_PH_to_objective)
+See farmer_ample_agnostic.py for an example where indexes are retained.
+
+"""
+
 from amplpy import AMPL
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
@@ -114,7 +123,6 @@ class AMPL_guest():
 
     def attach_Ws_and_prox(self, Ag, sname, scenario):
         # Attach W's and rho to the guest scenario (mutable params).
-        print("Enter attach_Ws_and_prox")
         gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
         hs = scenario  # host scenario handle
         gd = scenario._agnostic_dict
@@ -138,19 +146,19 @@ class AMPL_guest():
         gs.eval("let {i in nonant_indices}  rho[i] := 0;")
 
     def _disable_prox(self, Ag, scenario):
-        scenario._agnostic_dict["scenario"].prox_on._value = 0
+        scenario._agnostic_dict["scenario"].get_parameter("prox_on").set(0)
 
 
     def _disable_W(self, Ag, scenario):
-        scenario._agnostic_dict["scenario"].W_on._value = 0
+        scenario._agnostic_dict["scenario"].get_parameter("W_on").set(0)
 
 
     def _reenable_prox(self, Ag, scenario):
-        scenario._agnostic_dict["scenario"].prox_on._value = 1
+        scenario._agnostic_dict["scenario"].get_parameter("prox_on").set(1)
 
 
     def _reenable_W(self, Ag, scenario):
-        scenario._agnostic_dict["scenario"].W_on._value = 1
+        scenario._agnostic_dict["scenario"].get_parameter("W_on").set(1)
 
 
     def attach_PH_to_objective(self, Ag, sname, scenario, add_duals, add_prox):
@@ -160,26 +168,39 @@ class AMPL_guest():
 
         # The host has xbars and computes without involving the guest language
 
+        def _vname(i):
+            vtuple = gd['nonant_names'][('ROOT',i)]
+            return f"{vtuple[0]}" if vtuple[1] == "" else f"{vtuple[0]}['{vtuple[1]}']"
+        
         gd = scenario._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
         gs.eval("param xbars{nonant_indices};")
-        obj_fct = xxxx
+        obj_fct = gd["obj_fct"]
         objstr = str(obj_fct)
 
-        # Dual term (weights W)        
+        # Dual term (weights W) (This is where indexes are an issue)
         phobjstr = ""
         if add_duals:
-            phobjstr += " + W_on * sum{i in nonant_indices} (W[i] * nonantxxxx[i])"
-
+            phobjstr += "W_on * ("
+            for i in range(len(gd["nonants"])):
+                vname = _vname(i)
+                phobjstr += f"W[{i}] * {vname} + "
+            phobjstr = phobjstr[:-3] + ")"
         # Prox term (quadratic)
         ####### _see copy_nonants_from_host
         if add_prox:
-            phobjstr += " + prox_on * sum{i in nonant_indices} ((rho[i]/2.0) * (nonantxxxx[i] * nonantxxxx[i] "+\
-                        " - 2.0 * xbars[i] * nonantxxxx[i] + xbars[i]^2))"
+            ###phobjstr += f" + prox_on * sum{i in nonant_indices} ((rho[i]/2.0) * {gd['nonant_names'][('ROOT',i)]} * {gd['nonant_names'][('ROOT',i)]} "+\
+            " - 2.0 * xbars[i] * {gd['nonant_names'][('ROOT',i)]} + xbars[i]^2))"
+            phobjstr += " + prox_on * ("
+            for i in range(len(gd["nonants"])):
+                vname = _vname(i)
+                phobjstr += f"(rho[{i}]/2.0) * {vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2 + "
+            phobjstr = phobjstr[:-3] + ")"
         objstr = objstr[:-1] + "+ (" + phobjstr + ");"
-        objstr = objstr.replace(f"minimize {objstr}", "minimize phobj")
-        profitobj.drop()
-        print(f"{objstr =}")
+        objparts = objstr.split()
+        objname = objparts[1]  # has the colon, too
+        objstr = objstr.replace(f"minimize {objname}", "minimize phobj:")
+        obj_fct.drop()
         gs.eval(objstr)
         currentobj = gs.get_current_objective()
         # see _copy_Ws_...  see also the gams version
@@ -208,69 +229,70 @@ class AMPL_guest():
         self._copy_Ws_xbars_rho_from_host(s)
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
-
-        print(f" in _solve_one  {global_rank =}")
+        #### start debugging
         if global_rank == 0:
-            print(f"{gs.W.pprint() =}")
-            print(f"{gs.xbars.pprint() =}")
+            WParamDatas = list(gs.get_parameter("W").instances())
+            print(f" in _solve_one {WParamDatas =} {global_rank =}")
+            xbarsParamDatas = list(gs.get_parameter("xbars").instances())
+            print(f" in _solve_one {xbarsParamDatas =} {global_rank =}")
+            rhoParamDatas = list(gs.get_parameter("rho").instances())
+            print(f" in _solve_one {rhoParamDatas =} {global_rank =}")
+        #### stop debugging
+
         solver_name = s._solver_plugin.name
-        solver = pyo.SolverFactory(solver_name)
+        gs.set_option("solver", solver_name)    
         if 'persistent' in solver_name:
             raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
-            ###solver.set_instance(ef, symbolic_solver_labels=True)
-            ###solver.solve(tee=True)
-        else:
-            solver_exception = None
-            try:
-                results = solver.solve(gs, tee=tee, symbolic_solver_labels=True,load_solutions=False)
-            except Exception as e:
-                results = None
-                solver_exception = e
+        gs.set_option("presolve", 0)
 
-        if (results is None) or (len(results.solution) == 0) or \
-                (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-                (results.solver.termination_condition == TerminationCondition.unbounded):
+        solver_exception = None
+        try:
+            gs.solve()
+        except Exception as e:
+            results = None
+            solver_exception = e
 
+        if gs.solve_result != "solved":
             s._mpisppy_data.scenario_feasible = False
-
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
-                if results is not None:
-                    print ("status=", results.solver.status)
-                    print ("TerminationCondition=",
-                           results.solver.termination_condition)
+                print(f"{gs.solve_result =}")
 
-            if solver_exception is not None:
-                raise solver_exception
+        if solver_exception is not None:
+            raise solver_exception
 
+
+        s._mpisppy_data.scenario_feasible = True
+        # For AMPL mips, we need to use the gap option to compute bounds
+        # https://amplmp.readthedocs.io/rst/features-guide.html
+        objval = gs.get_objective("minus_profit").value()  # use this?
+        ###phobjval = gs.get_objective("phobj").value()   # use this???
+        if gd["sense"] == pyo.minimize:
+            s._mpisppy_data.outer_bound = objval
         else:
-            s._mpisppy_data.scenario_feasible = True
-            if gd["sense"] == pyo.minimize:
-                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-            else:
-                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-            gs.solutions.load_from(results)
-            # copy the nonant x values from gs to s so mpisppy can use them in s
-            for ndn_i, gxvar in gd["nonants"].items():
-                # courtesy check for staleness on the guest side before the copy
-                if not gxvar.fixed and gxvar.stale:
-                    try:
-                        float(pyo.value(gxvar))
-                    except:
-                        raise RuntimeError(
-                            f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
-                            "reported as stale. This usually means this variable "
-                            "did not appear in any (active) components, and hence "
-                            "was not communicated to the subproblem solver. ")
+            s._mpisppy_data.outer_bound = objval
 
-                s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
+        # copy the nonant x values from gs to s so mpisppy can use them in s
+        # in general, we need more checks (see the pyomo agnostic guest example)
+        for ndn_i, gxvar in gd["nonants"].items():
+            try:   # not sure this is needed
+                float(gxvar.value())
+            except:
+                raise RuntimeError(
+                    f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
+                    "had no value. This usually means this variable "
+                    "did not appear in any (active) components, and hence "
+                    "was not communicated to the subproblem solver. ")
+            if gxvar.astatus() == "pre":
+                raise RuntimeError(
+                    f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
+                    "was presolved out. This usually means this variable "
+                    "did not appear in any (active) components, and hence "
+                    "was not communicated to the subproblem solver. ")
 
-            # the next line ignore bundling
-            s._mpisppy_data._obj_from_agnostic = pyo.value(gs.Total_Cost_Objective)
+            s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
-        # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
+        s._mpisppy_data._obj_from_agnostic = objval
 
 
     # local helper
@@ -279,18 +301,18 @@ class AMPL_guest():
         # print(f"   {s.name =}, {global_rank =}")
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
-        for ndn_i, gxvar in gd["nonants"].items():
-            hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-            assert hasattr(s, "_mpisppy_model"),\
-                f"what the heck!! no _mpisppy_model {s.name =} {global_rank =}"
-            if hasattr(s._mpisppy_model, "W"):
-                gs.W[ndn_i] = pyo.value(s._mpisppy_model.W[ndn_i])
-                gs.rho[ndn_i] = pyo.value(s._mpisppy_model.rho[ndn_i])
-                gs.xbars[ndn_i] = pyo.value(s._mpisppy_model.xbars[ndn_i])
-            else:
-                # presumably an xhatter
-                pass
-
+        # AMPL params are tuples (index, value), which are immutable
+        # ndn_i is a tuple (name, index)
+        if hasattr(s._mpisppy_model, "W"):
+            Wdict = {ndn_i[1]: pyo.value(v) for ndn_i, v in s._mpisppy_model.W.items()}
+            gs.get_parameter("W").set_values(Wdict)
+            rhodict = {ndn_i[1]: pyo.value(v) for ndn_i, v in s._mpisppy_model.rho.items()}
+            gs.get_parameter("rho").set_values(rhodict)
+            xbarsdict = {ndn_i[1]: pyo.value(v) for ndn_i, v in s._mpisppy_model.xbars.items()}
+            gs.get_parameter("xbars").set_values(xbarsdict)
+        else:
+            pass  # presumably an xhatter; we should check, I suppose
+        
 
     # local helper
     def _copy_nonants_from_host(self, s):

@@ -1,7 +1,7 @@
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, AMPL is the guest language.
-# This is a special example where this file serves
-# the rolls of ampl_guest.py and the python model file.
+# ***This is a special example where this file serves
+# the rolls of ampl_guest.py and the python model file.***
 
 """
 This file tries to show many ways to do things in AMPLpy,
