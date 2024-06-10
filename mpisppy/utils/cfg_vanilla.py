@@ -18,6 +18,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
+from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
 from mpisppy.cylinders.ph_ob import PhOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
@@ -26,7 +27,6 @@ from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
-from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
@@ -52,6 +52,7 @@ def shared_options(cfg):
         "iterk_solver_options": dict(),
         "tee-rank0-solves": cfg.tee_rank0_solves,
         "trace_prefix" : cfg.trace_prefix,
+        "presolve" : cfg.presolve,
     }
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
@@ -96,13 +97,8 @@ def ph_hub(
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
 
-    if _hasit(cfg, "cross_scenario_cuts") and cfg.cross_scenario_cuts:
-        hub_class = CrossScenarioHub
-    else:
-        hub_class = PHHub
-
     hub_dict = {
-        "hub_class": hub_class,
+        "hub_class": PHHub,
         "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
@@ -444,6 +440,39 @@ def lagranger_spoke(
             = cfg.lagranger_rho_rescale_factors_json
     add_ph_tracking(lagranger_spoke, cfg, spoke=True)
     return lagranger_spoke
+
+
+def subgradient_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+):
+    subgradient_spoke = _PHBase_spoke_foundation(
+        SubgradientOuterBound,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+    )
+    if cfg.subgradient_iter0_mipgap is not None:
+        subgradient_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
+            ["mipgap"] = cfg.subgradient_iter0_mipgap
+    if cfg.subgradient_iterk_mipgap is not None:
+        subgradient_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
+            ["mipgap"] = cfg.subgradient_iterk_mipgap
+    if cfg.subgradient_rho_multiplier is not None:
+        subgradient_spoke["opt_kwargs"]["options"]["subgradient_rho_multiplier"]\
+            = cfg.subgradient_rho_multiplier
+    add_ph_tracking(subgradient_spoke, cfg, spoke=True)
+
+    return subgradient_spoke
 
 
 def xhatlooper_spoke(

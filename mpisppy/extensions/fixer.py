@@ -131,7 +131,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def iter0(self, local_scenarios):
 
         # first, do some persistent solver with bundles gymnastics        
-        have_bundles = hasattr(self.ph, "saved_objs") # indicates bundles
+        have_bundles = self.ph.bundling # indicates bundles
         if have_bundles:
             subpname = next(iter(self.ph.local_subproblems))
             subp = self.ph.local_subproblems[subpname]
@@ -227,7 +227,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         """ Before iter k>1 solves, but after x-bar update.
         """
         # first, do some persistent solver with bundles gymnastics        
-        have_bundles = hasattr(self.ph, "saved_objs") # indicates bundles
+        have_bundles = self.ph.bundling # indicates bundles
         if have_bundles:
             subpname = next(iter(self.ph.local_subproblems))
             subp = self.ph.local_subproblems[subpname]

@@ -19,7 +19,6 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.hub import PHHub 
-from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.opt.lshaped import LShapedMethod
 
@@ -94,7 +93,7 @@ if __name__ == "__main__":
 
     # PH hub
     hub_dict = {
-        "hub_class": CrossScenarioHub,
+        "hub_class": PHHub,
         "hub_kwargs": dict(),
         "opt_class": PH,
         "opt_kwargs": {

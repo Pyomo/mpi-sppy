@@ -159,8 +159,8 @@ class SPBase:
                 if ndn not in local_node_nonant_lengths:
                     local_node_nonant_lengths[ndn] = mylen
                 elif local_node_nonant_lengths[ndn] != mylen:
-                    raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
-                            f"variables between scenarios {mylen} vs. {local_node_nonant_lengths[ndn]}")
+                    raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
+                            f"variables: {mylen} vs. {local_node_nonant_lengths[ndn]}")
 
         # compute node values(reduction)
         for ndn, val in local_node_nonant_lengths.items():
@@ -171,8 +171,8 @@ class SPBase:
                                       op=MPI.MAX)
 
             if val != int(max_val[0]):
-                raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
-                        f"variables between scenarios {val} vs. max {max_val[0]}")
+                raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
+                        f"variables: {val} vs. max {max_val[0]}")
                 
     def _check_nodenames(self):
         for ndn in self.all_nodenames:
@@ -542,6 +542,16 @@ class SPBase:
             self._spcomm = weakref.ref(value)
         else:
             raise RuntimeError("SPBase.spcomm should only be set once")
+
+
+    def allreduce_or(self, val):
+        local_val = np.array([val], dtype='int8')
+        global_val = np.zeros(1, dtype='int8')
+        self.mpicomm.Allreduce(local_val, global_val, op=MPI.LOR)
+        if global_val[0] > 0:
+            return True
+        else:
+            return False
 
 
     def gather_var_values_to_rank0(self, get_zero_prob_values=False):

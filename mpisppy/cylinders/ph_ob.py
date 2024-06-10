@@ -24,7 +24,6 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         # Scenarios are created here
         self.opt.PH_Prep(attach_prox=True)
         self.opt._reenable_W()
-        self.opt.subproblem_creation(verbose)
         self.opt._create_solvers()
         self.default_rescale_rho = True
         if "ph_ob_rho_rescale_factors_json" in self.opt.options and\

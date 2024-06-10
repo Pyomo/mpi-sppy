@@ -2,9 +2,7 @@
 # This software is distributed under the 3-clause BSD License.
 import mpisppy.cylinders.spoke
 
-class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
-
-    converger_spoke_char = 'L'
+class _LagrangianMixin:
 
     def lagrangian_prep(self):
         verbose = self.opt.options['verbose']
@@ -13,7 +11,6 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         # Scenarios are created here
         self.opt.PH_Prep(attach_prox=False)
         self.opt._reenable_W()
-        self.opt.subproblem_creation(verbose)
         self.opt._create_solvers()
 
     def lagrangian(self):
@@ -38,22 +35,18 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
             on the fact that the OPT thread is solving the same
             models, and hence would detect both of those things on its
             own--the Lagrangian spoke doesn't need to check again.  '''
+        return self.opt.Ebound(verbose)
 
-        # Compute the resulting bound, checking to be sure
-        # the weights came from the same PH iteration
-        serial_number = self.get_serial_number()
-        bound, extra_sums  = self.opt.Ebound(verbose, extra_sum_terms=[serial_number])
-        serial_number_sum = int(round(extra_sums[0]))
+    def finalize(self):
+        self.final_bound = self.bound
+        if self.opt.extensions is not None and \
+            hasattr(self.opt.extobject, 'post_everything'):
+            self.opt.extobject.post_everything()
+        return self.final_bound
 
-        total = int(self.cylinder_comm.Get_size())*serial_number
-        if total == serial_number_sum:
-            return bound
-        elif self.cylinder_rank == 0:
-            # TODO: this whole check can probably be removed as its done
-            #       within `got_kill_signal`. Leaving it for now as an
-            #       additional check.
-            raise RuntimeError("Lagrangian spokes unexpectly out of snyc")
-        return None
+class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundWSpoke):
+
+    converger_spoke_char = 'L'
 
     def _set_weights_and_solve(self):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
@@ -64,32 +57,32 @@ class LagrangianOuterBound(mpisppy.cylinders.spoke.OuterBoundWSpoke):
         rho_setter = None
         if hasattr(self.opt, 'rho_setter'):
             rho_setter = self.opt.rho_setter
+        extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
 
+        if extensions:
+            self.opt.extobject.pre_iter0()
         self.dk_iter = 1
         self.trivial_bound = self.lagrangian()
+        if extensions:
+            self.opt.extobject.post_iter0()
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
         self.bound = self.trivial_bound
+        if extensions:
+            self.opt.extobject.post_iter0_after_sync()
 
         while not self.got_kill_signal():
             if self.new_Ws:
+                if extensions:
+                    self.opt.extobject.miditer()
                 bound = self._set_weights_and_solve()
+                if extensions:
+                    self.opt.extobject.enditer()
                 if bound is not None:
                     self.bound = bound
+                if extensions:
+                    self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
-
-    def finalize(self):
-        '''
-        Do one final lagrangian pass with the final
-        PH weights. Useful for when PH convergence
-        and/or iteration limit is the cause of termination
-        '''
-        self.final_bound = self._set_weights_and_solve()
-        self.bound = self.final_bound
-        if self.opt.extensions is not None and \
-            hasattr(self.opt.extobject, 'post_everything'):
-            self.opt.extobject.post_everything()
-        return self.final_bound

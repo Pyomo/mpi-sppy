@@ -21,7 +21,7 @@ long_description = (this_directory / "README.rst").read_text()
 # intentionally leaving out mpi4py to help readthedocs
 setup(
     name='mpi-sppy',
-    version='0.12.dev0',
+    version='0.12.2.dev0',
     description="mpi-sppy",
     long_description=long_description,
     url='https://github.com/Pyomo/mpi-sppy',

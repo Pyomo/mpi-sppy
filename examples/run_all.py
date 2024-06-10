@@ -58,7 +58,7 @@ def egret_avail():
 def do_one(dirname, progname, np, argstring):
     """ return the code"""
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
+    runstring = "mpiexec {} -np {} python -u -m mpi4py {} {}".\
                 format(mpiexec_arg, np, progname, argstring)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
@@ -242,7 +242,7 @@ do_one("farmer",
 
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
-       "--solver-name={} --rel-gap=0.0 --default-rho=1 "
+       "--solver-name={} --rel-gap=0.0 --default-rho=1 --presolve "
        "--slammax --lagrangian --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
 
 # sizes is slow for xpress so try linearizing the proximal term.
@@ -278,8 +278,9 @@ do_one("sslp",
        4,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
        "--max-iterations=5 --default-rho=1 "
-       "--lagrangian --xhatshuffle --fwph "
+       "--subgradient --xhatshuffle --fwph "
        "--linearize-proximal-terms "
+       "--rel-gap=0.0 "
        "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
 
 do_one("hydro", "hydro_cylinders.py", 3,

@@ -27,6 +27,7 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.xhatshuffle_args()
+    cfg.subgradient_args()
     cfg.parse_command_line("sslp_cylinders")
     return cfg
 
@@ -47,6 +48,7 @@ def main():
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
+    subgradient = cfg.subgradient
 
     if cfg.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
@@ -86,6 +88,10 @@ def main():
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
+    if subgradient:
+        subgradient_spoke = vanilla.subgradient_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = None)
         
     # xhat looper bound spoke
     if xhatlooper:
@@ -100,6 +106,8 @@ def main():
         list_of_spoke_dict.append(fw_spoke)
     if lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
+    if subgradient:
+        list_of_spoke_dict.append(subgradient_spoke)
     if xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:

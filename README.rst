@@ -4,18 +4,7 @@ mpi-sppy
 Optimization under uncertainty for `Pyomo <https://pyomo.org>`_ models.
 
 `Documentation is available at readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>`_ and
-a technical report is on `OOL <http://www.optimization-online.org/DB_HTML/2020/11/8088.html>`_
-
-NOTICE
-^^^^^^
-
-There was a disruptive change on August 11, 2022 concerning how
-options are accessed. See the file ``disruptions.txt`` for more
-information. If you are a new user, this will not affect you,
-regardless of how you install. If you are an
-existing user, you should consider the disruption before updating to
-the latest mpi-sppy. The documentation on readthedocs
-probably refers to the newest version.
+a there is a `paper <https://link.springer.com/article/10.1007/s12532-023-00247-3>`_
 
 Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -51,17 +40,27 @@ an error message, mpi-sppy may still execute and return correct
 results. Per the comment below, the run-times may just be 
 unnecessarily inflated.
 
+Installing mpi-sppy
+^^^^^^^^^^^^^^^^^^^
+
+It is possible to pip install mpi-sppy; however, most users are better off
+getting the software from github because it is under active development.
+
 Citing mpi-sppy
 ^^^^^^^^^^^^^^^
-If you find mpi-sppy useful in your work, we kindly request that you cite the following `pre-print <http://www.optimization-online.org/DB_HTML/2020/11/8088.html>`_:
+If you find mpi-sppy useful in your work, we kindly request that you cite the following `paper <https://link.springer.com/article/10.1007/s12532-023-00247-3>`_:
 
 ::
 
-   @misc{knueven2020parallel,
+   @article{mpi-sppy,
      title={A Parallel Hub-and-Spoke System for Large-Scale Scenario-Based Optimization Under Uncertainty},
-     author={Knueven, Bernard and Mildebrath, David and Muir, Christopher and Siirola, John D and Watson, Jean-Paul and Woodruff, David L},
-     year={2020}
+     author={Bernard Knueven  and David Mildebrath and Christopher Muir  and John D Siirola  and Jean-Paul Watson  and David L Woodruff},
+     journal = {Math. Prog. Comp.},
+     volume = {15}, 
+     pages = {591-–619},
+     year={2023}
    }
+
 
 
 AN IMPORTANT NOTE FOR MPICH USERS ON HPC PLATFORMS
@@ -83,3 +82,15 @@ apparently being treated as blocking.
 Further, without this setting and in situations with a large number of
 ranks (e.g., >> 10), we have observed mpi-sppy stalling once scenario
 instances are created.
+
+2022 NOTICE
+^^^^^^^^^^^
+
+There was a disruptive change on August 11, 2022 concerning how
+options are accessed. See the file ``disruptions.txt`` for more
+information. If you are a new user, this will not affect you,
+regardless of how you install. If you are an
+existing user, you should consider the disruption before updating to
+the latest mpi-sppy. The documentation on readthedocs
+probably refers to the newest version.
+

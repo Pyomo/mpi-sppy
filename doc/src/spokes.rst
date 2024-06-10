@@ -31,6 +31,13 @@ hedging algorithm for stochastic mixed-integer programs` by Gade et al
 [gade2016]_. It takes W values from the hub and uses them to compute a bound.
 
 
+Subgradient
+^^^^^^^^^^^
+
+This bound is based on the subgradient method. It computes its own W values
+based on the Lagrangian relaxation and reports a bound to the hub.
+
+
 Lagranger
 ^^^^^^^^^
 

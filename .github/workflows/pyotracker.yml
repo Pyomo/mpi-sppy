@@ -1,6 +1,6 @@
 # Pyomo tracker --- dynamically imports pyomo main
 
-name: pyomo tracker
+name: pyo tracker
 
 on:
   schedule:
@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyomo-version: [6.4.2, main]
+        pyomo-version: [6.7.1, main]
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -39,7 +39,7 @@ jobs:
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: Test EF/PH
         run: |

@@ -213,6 +213,12 @@ class Config(pyofig.ConfigDict):
                             domain=str,
                             default='')
 
+        self.add_to_config("presolve",
+                           description="Run the distributed presolver. "
+                           "Currently only does distributed feasibility-based bounds tightening.",
+                           domain=bool,
+                           default=False)
+
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
                               description="For PH, linearize the proximal terms for "
@@ -452,6 +458,29 @@ class Config(pyofig.ConfigDict):
                             description="json file: rho rescale factors (default None)",
                             domain=str,
                             default=None)
+
+
+    def subgradient_args(self):
+
+        self.add_to_config('subgradient',
+                              description="have a subgradient spoke",
+                              domain=bool,
+                              default=False)
+
+        self.add_to_config("subgradient_iter0_mipgap",
+                            description="lgr. iter0 solver option mipgap (default None)",
+                            domain=float,
+                            default=None)
+
+        self.add_to_config("subgradient_iterk_mipgap",
+                            description="lgr. iterk solver option mipgap (default None)",
+                            domain=float,
+                            default=None)
+
+        self.add_to_config("subgradient_rho_multiplier",
+                           description="rescale rho (update step size) by this factor",
+                           domain=float,
+                           default=None)
 
 
     def ph_ob_args(self):

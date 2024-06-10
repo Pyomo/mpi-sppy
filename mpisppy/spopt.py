@@ -18,6 +18,8 @@ from mpisppy import global_toc
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
 
+from mpisppy.opt.presolve import SPPresolve
+
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
 
@@ -48,6 +50,12 @@ class SPOpt(SPBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
+        self._save_active_objectives()
+        self._subproblem_creation(options.get("verbose", False))
+        if options.get("presolve", False):
+            self._presolver = SPPresolve(self)
+        else:
+            self._presolver = None
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -335,17 +343,13 @@ class SPOpt(SPBase):
         """
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if self.bundling:
-                objfct = self.saved_objs[k]
-            else:
-                objfct = sputils.find_active_objective(s)
+            objfct = self.saved_objectives[k]  # if bundling?
             Ag = getattr(self, "Ag", None)
             if Ag is None:
                 local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             else:
                 # Agnostic will have attached the objective (and doesn't bundle as of Aug 2023)
                 local_Eobjs.append(s._mpisppy_probability * s._mpisppy_data._obj_from_agnostic)              
-                
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
@@ -768,6 +772,14 @@ class SPOpt(SPBase):
                     persistent_solver.update_var(vardata)
 
 
+    def _save_active_objectives(self):
+        """ Save the active objectives for use in PH, bundles, and calculation """
+        self.saved_objectives = dict()
+
+        for sname, scenario_instance in self.local_scenarios.items():
+            self.saved_objectives[sname] = sputils.find_active_objective(scenario_instance)
+
+
     def FormEF(self, scen_dict, EF_name=None):
         """ Make the EF for a list of scenarios.
 
@@ -805,6 +817,8 @@ class SPOpt(SPBase):
         Note:
             Objectives are scaled (normalized) by _mpisppy_probability
         """
+        # The individual scenario instances are sub-blocks of the binding
+        # instance. Needed to facilitate bundles + persistent solvers
         if len(scen_dict) == 0:
             raise RuntimeError("Empty scenario list for EF")
 
@@ -815,22 +829,12 @@ class SPOpt(SPBase):
                 print ("MAJOR WARNING: a bundle of size one encountered; if you try to compute bounds it might crash (Feb 2019)")
             return scenario_instance
 
-        # The individual scenario instances are sub-blocks of the binding
-        # instance. Needed to facilitate bundles + persistent solvers
-        if not hasattr(self, "saved_objs"): # First bundle
-             self.saved_objs = dict()
-
-        for sname, scenario_instance in scen_dict.items():
-            if sname not in self.local_scenarios:
-                raise RuntimeError("EF scen not in local_scenarios="+sname)
-            self.saved_objs[sname] = sputils.find_active_objective(scenario_instance)
-
         EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
                         nonant_for_fixed_vars=False)
         return EF_instance
 
 
-    def subproblem_creation(self, verbose=False):
+    def _subproblem_creation(self, verbose=False):
         """ Create local subproblems (not local scenarios).
 
         If bundles are specified, this function creates the bundles.
@@ -864,7 +868,10 @@ class SPOpt(SPBase):
                 self.local_subproblems[sname].scen_list = [sname]
 
 
-    def _create_solvers(self):
+    def _create_solvers(self, presolve=True):
+
+        if self._presolver is not None and presolve:
+            self._presolver.presolve()
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
         local_sit = [] # Local set instance time for time tracking
@@ -894,6 +901,18 @@ class SPOpt(SPBase):
                 print("Set instance times:")
                 print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(asit), np.mean(asit), np.max(asit)))
+
+
+    def subproblem_scenario_generator(self):
+        """
+        Iterate over every scenario, yielding the
+        subproblem_name, subproblem, scenario_name, scenario.
+
+        Useful for managing bundles
+        """
+        for sub_name, sub in self.local_subproblems.items():
+            for s_name in sub.scen_list:
+                yield sub_name, sub, s_name, self.local_scenarios[s_name]
 
 
 # these parameters should eventually be promoted to a non-PH

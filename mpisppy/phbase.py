@@ -593,6 +593,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         tol = self.prox_approx_tol
         for sn, s in self.local_scenarios.items():
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
+            #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
 
@@ -653,10 +654,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
-            if 'initial_proximal_cut_count' in self.options:
-                initial_prox_cuts = self.options['initial_proximal_cut_count']
-            else:
-                initial_prox_cuts = 2
         else:
             self._prox_approx = False
 
@@ -665,7 +662,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             """
             if ((not add_duals) and (not add_prox)):
                 return
-            objfct = sputils.find_active_objective(scenario)
+            objfct = self.saved_objectives[sname]
             is_min_problem = objfct.is_minimizing()
 
             xbars = scenario._mpisppy_model.xbars
@@ -674,8 +671,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 # set-up pyomo IndexVar, but keep it sparse
                 # since some nonants might be binary
                 # Define the first cut to be _xsqvar >= 0
-                scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False,
-                                            within=pyo.NonNegativeReals)
+                scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False, bounds=(0, None))
                 scenario._mpisppy_model.xsqvar_cuts = pyo.Constraint(scenario._mpisppy_data.nonant_indices, pyo.Integers)
                 scenario._mpisppy_data.xsqvar_prox_approx = {}
             else:
@@ -702,7 +698,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     elif self._prox_approx:
                         xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
                         scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, scenario._mpisppy_model.xsqvar_cuts, ndn_i, initial_prox_cuts)
+                                ProxApproxManager(xvar, xvarsqrd, xbars[ndn_i], scenario._mpisppy_model.xsqvar_cuts, ndn_i)
                     else:
                         xvarsqrd = xvar**2
                     prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
