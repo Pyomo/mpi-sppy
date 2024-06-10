@@ -32,7 +32,6 @@ file might as well contain the model specification as well so
 there typically is only one file.)
 
 
-
 From the developers perspective
 -------------------------------
 
@@ -43,3 +42,15 @@ interface in Python for it (see, e.g., ampl_guest.py or
 pyomo_guest.py) and you need to add/edit a few lines in
 ``mpisppy.agnostic.agnostic_cylinders.py`` to allow end-users to
 access it.
+
+
+Special Note for developers
+---------------------------
+
+The general-purpose guest interfaces might not be the fastest possible
+for many guest languages because they don't use indexes from the
+original model when updating the objective function. If this is an issue,
+you might want to write a problem-specific module to replace the guest
+interface and the model wrapper with a single module. For an example, see
+``examples.farmer.farmer_xxxx_agnostic``, where xxxx is replaced,
+e.g., by ampl. 
