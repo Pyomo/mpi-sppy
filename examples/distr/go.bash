@@ -4,6 +4,8 @@
 # Execute with "bash go.bash scalable" for the scalable example
 # Execute with "bash go.bash anything" otherwise
 
+# Right now, chosing between the version with dummy nodes and without dummy nodes is hardwired in distr_admm_cylinders.py
+
 # This file runs either a scalable example or a non scalable example
 if [ ${1} = "scalable" ]
 then
