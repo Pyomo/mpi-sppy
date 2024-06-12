@@ -1,6 +1,7 @@
 # Distribution example without decomposition
 import pyomo.environ as pyo
 import distr
+import distr_data
 from mpisppy.utils import config
 
 def _parse_args():
@@ -77,11 +78,11 @@ def global_dict_creator(num_scens, start=0):
     Returns:
         dict: dictionary with the information to create a min cost distribution problem
     """
-    inter_region_dict = distr.inter_region_dict_creator(num_scens)
+    inter_region_dict = distr_data.inter_region_dict_creator(num_scens)
     global_dict={}
     for i in range(start,start+num_scens):
         scenario_name=f"Region{i+1}"
-        region_dict = distr.region_dict_creator(scenario_name)
+        region_dict = distr_data.region_dict_creator(scenario_name)
         for key in region_dict:
             if key in ["nodes","factory nodes", "buyer nodes", "distribution center nodes", "arcs"]:
                 if i == start:

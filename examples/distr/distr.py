@@ -170,10 +170,10 @@ def scenario_denouement(rank, scenario_name, scenario):
         scenario_name (str): name of the scenario
         scenario (Pyomo ConcreteModel): the instantiated model
     """
-    #print(f"flow values for {scenario_name}")
-    #scenario.flow.pprint()
-    #print(f"slack values for {scenario_name}")
-    #scenario.y.pprint()
+    print(f"flow values for {scenario_name}")
+    scenario.flow.pprint()
+    print(f"slack values for {scenario_name}")
+    scenario.y.pprint()
     pass
 
 

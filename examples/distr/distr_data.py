@@ -202,6 +202,13 @@ import re
 import numpy as np
 
 def parse_node_name(name):
+    """ decomposes the name, for example "DC1_2 gives" "DC",1,2
+    Args:
+        name (str): name of the node
+
+    Returns:
+        triplet (str, int, int): type of node ("DC", "F" or "B"), number of the region, and number of the node
+    """
     # Define the regular expression pattern
     pattern = r'^([A-Za-z]+)(\d+)(?:_(\d+))?$'
     
@@ -220,10 +227,29 @@ def parse_node_name(name):
 
 
 def _node_num(max_node_per_region, node_type, region_num, count):
+    """
+    Args:
+        max_node_per_region (int): maximum number of node per region per type
+
+    Returns:
+        int: a number specific to the node. This allows to have unrelated seeds
+    """
     node_types = ["DC", "F", "B"] #no need to include the dummy nodes as they are added automatically
     return (max_node_per_region * region_num + count) * len(node_types) + node_types.index(node_type)
 
 def _pseudo_random_arc(node_1, node_2, prob, cfg, intra=True): #in a Region
+    """decides pseudo_randomly whether an arc will be created based on the two nodes 
+
+    Args:
+        node_1 (str): name of the source node
+        node_2 (str): name of the target node
+        prob (float): probability that the arc is created
+        cfg (pyomo config): the config arguments
+        intra (bool, optional): True if the arcs are inside a region, false if the arc is between different regions. Defaults to True.
+
+    Returns:
+        _type_: _description_
+    """
     max_node_per_region = cfg.mnpr
     node_type1, region_num1, count1 = parse_node_name(node_1)
     node_type2, region_num2, count2 = parse_node_name(node_2)     
@@ -243,6 +269,18 @@ def _pseudo_random_arc(node_1, node_2, prob, cfg, intra=True): #in a Region
 
 
 def _intra_arc_creator(my_dict, node_1, node_2, cfg, arc, arc_params, my_seed, intra=True):
+    """if the arc is chosen randomly to be constructed, it is added to the dictionary with its cost and capacity
+
+    Args:
+        my_dict (dict): either a region_dict if intra=True, otherwise the inter_region_dict
+        node_1 (str): name of the source node
+        node_2 (str): name of the target node
+        cfg (pyomo config): the config arguments
+        arc (pair of pair of strings): of the shape source,target with source = region_source, node_source
+        arc_params (dict of bool): parameters for random cost and capacity
+        my_seed (int): unique number used as seed
+        intra (bool, optional): True if the arcs are inside a region, false if the arc is between different regions. Defaults to True.
+    """
     prob = arc_params["prob"]
     mean_cost = arc_params["mean cost"]
     cv_cost = arc_params["cv cost"]
@@ -262,7 +300,7 @@ def _intra_arc_creator(my_dict, node_1, node_2, cfg, arc, arc_params, my_seed, i
         my_dict[capacity_name][arc] = max(np.random.normal(mean_capacity,cv_capacity),0)
 
 
-def scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params):
+def scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params): # same as inter_region_dict_creator but the scalable version
     inter_region_arc_params = data_params["inter_region_arc"]
     inter_region_dict={}
     inter_region_dict["arcs"] = list()
@@ -282,6 +320,14 @@ def scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params):
 
 
 def all_nodes_dict_creator(cfg, data_params):
+    """
+    Args:
+        cfg (pyomo config): configuration arguments
+        data_params (nested dict): allows to construct the random probabilities
+
+    Returns:
+        (dict of str): the keys are regions containing all their nodes.
+    """
     all_nodes_dict = {}
     num_scens = cfg.num_scens
     max_node_per_region = cfg.mnpr # maximum node node of a certain type in any region
@@ -332,7 +378,7 @@ def all_nodes_dict_creator(cfg, data_params):
     return all_nodes_dict
 
 
-def scalable_region_dict_creator(scenario_name, all_nodes_dict=None, cfg=None, data_params=None):
+def scalable_region_dict_creator(scenario_name, all_nodes_dict=None, cfg=None, data_params=None): # same as region_dict_creator but the scalable version
     assert all_nodes_dict is not None
     assert cfg is not None
     assert data_params is not None
