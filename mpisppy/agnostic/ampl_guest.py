@@ -189,12 +189,10 @@ class AMPL_guest():
         # Prox term (quadratic)
         ####### _see copy_nonants_from_host
         if add_prox:
-            ###phobjstr += f" + prox_on * sum{i in nonant_indices} ((rho[i]/2.0) * {gd['nonant_names'][('ROOT',i)]} * {gd['nonant_names'][('ROOT',i)]} "+\
-            " - 2.0 * xbars[i] * {gd['nonant_names'][('ROOT',i)]} + xbars[i]^2))"
             phobjstr += " + prox_on * ("
             for i in range(len(gd["nonants"])):
                 vname = _vname(i)
-                phobjstr += f"(rho[{i}]/2.0) * {vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2 + "
+                phobjstr += f"(rho[{i}]/2.0) * ({vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2) + "
             phobjstr = phobjstr[:-3] + ")"
         objstr = objstr[:-1] + "+ (" + phobjstr + ");"
         objparts = objstr.split()
