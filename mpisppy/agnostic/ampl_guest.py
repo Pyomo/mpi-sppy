@@ -194,7 +194,7 @@ class AMPL_guest():
             phobjstr += " + prox_on * ("
             for i in range(len(gd["nonants"])):
                 vname = _vname(i)
-                phobjstr += f"(rho[{i}]/2.0) * {vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2 + "
+                phobjstr += f"(rho[{i}]/2.0) * ( {vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2 ) + "
             phobjstr = phobjstr[:-3] + ")"
         objstr = objstr[:-1] + "+ (" + phobjstr + ");"
         objparts = objstr.split()

@@ -22,7 +22,7 @@ Assuming support has been added for the desired AML, the modeler supplies
 two files:
 
 - a model file with the model written in the guest AML (AMPL example: ``mpisppy.agnostic.examples.farmer.mod``)
-- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``
+- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``)
 
 There can be a little confusion if there are error messages because
 both files are sometimes refered to as the `model file.`
