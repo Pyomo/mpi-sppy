@@ -64,14 +64,17 @@ def main():
     options = {
         "solver_name": "ipopt",
         "PHIterLimit": 200,
-        "defaultPHrho": 1,
-        "convthresh": 1e-7,
-        "verbose": False,
+        "defaultPHrho": 10,
+        "convthresh": 1e-5,
+        "verbose": True,
         "display_progress": True,
-        "display_timing": True,
+        "display_timing": False,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
-        "display_convergence_detail": True
+        "display_convergence_detail": True,
+        "smoothed": True,
+        "defaultPHp": .1,
+        "defaultPHbeta": .1
     }
     all_scenario_names = ["good", "average", "bad"]
     ph = PH(
