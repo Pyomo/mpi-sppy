@@ -49,7 +49,11 @@ class PH(mpisppy.phbase.PHBase):
             You need an xhat finder either in denoument or in an extension.
         """
         verbose = self.options['verbose']
-        self.PH_Prep()
+        smoothed = self.options['smoothed']
+        if smoothed:
+            self.PH_smoothed_Prep()
+        else:
+            self.PH_Prep()
 
         if (verbose):
             print('Calling PH Iter0 on global rank {}'.format(global_rank))
