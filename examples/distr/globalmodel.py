@@ -1,4 +1,9 @@
-# Distribution example without decomposition
+# Distribution example without decomposition, this file is only written to execute the non-scalable example
+
+### This code line can execute the script for a certain example
+# python globalmodel.py --solver-name cplex_direct --num-scens 3
+
+
 import pyomo.environ as pyo
 import distr
 import distr_data
@@ -17,55 +22,6 @@ def _parse_args():
     cfg.parse_command_line("globalmodel")
     
     return cfg
-
-
-##we need to create a new model solver, to avoid dummy nodes
-def min_cost_distr_problem(region_dict, sense=pyo.minimize):
-    """ Create an arcs formulation of network flow, the function is the simplification without dummy nodes of this function in distr
-
-    Arg: 
-        region_dict (dict): given by region_dict_creator with test_without_dummy=True so that there is no dummy node
-
-    Returns:
-        model (Pyomo ConcreteModel) : the instantiated model
-    """
-    # First, make the special In, Out arc lists for each node
-    arcsout = {n: list() for n in region_dict["nodes"]}
-    arcsin = {n: list() for n in region_dict["nodes"]}
-    for a in region_dict["arcs"]:
-        arcsout[a[0]].append(a)
-        arcsin[a[1]].append(a)
-
-    model = pyo.ConcreteModel(name='MinCostFlowArcs')
-    def flowBounds_rule(model, i,j):
-        return (0, region_dict["flow capacities"][(i,j)])
-    model.flow = pyo.Var(region_dict["arcs"], bounds=flowBounds_rule)  # x
-
-    def slackBounds_rule(model, n):
-        if n in region_dict["factory nodes"]:
-            return (0, region_dict["supply"][n])
-        elif n in region_dict["buyer nodes"]:
-            return (region_dict["supply"][n], 0)
-        elif n in region_dict["distribution center nodes"]:
-            return (0,0)
-        else:
-            raise ValueError(f"unknown node type for node {n}")
-        
-    model.y = pyo.Var(region_dict["nodes"], bounds=slackBounds_rule)
-
-    model.MinCost = pyo.Objective(expr=\
-                                  sum(region_dict["flow costs"][a]*model.flow[a] for a in region_dict["arcs"]) \
-                                + sum(region_dict["production costs"][n]*(region_dict["supply"][n]-model.y[n]) for n in region_dict["factory nodes"]) \
-                                + sum(region_dict["revenues"][n]*(region_dict["supply"][n]-model.y[n])for n in region_dict["buyer nodes"]) ,
-                                  sense=sense)
-    
-    def FlowBalance_rule(m, n):
-        return sum(m.flow[a] for a in arcsout[n])\
-            - sum(m.flow[a] for a in arcsin[n])\
-            + m.y[n] == region_dict["supply"][n]
-    model.FlowBalance= pyo.Constraint(region_dict["nodes"], rule=FlowBalance_rule)
-
-    return model
 
 
 def global_dict_creator(num_scens, start=0):
@@ -114,7 +70,8 @@ def main():
         do all the work
     """
     cfg = _parse_args()
-    model = min_cost_distr_problem(global_dict_creator(num_scens=cfg.num_scens))
+    assert cfg.scalable is False, "the global model example has not been adapted for the scalable example"
+    model = distr.min_cost_distr_problem(global_dict_creator(num_scens=cfg.num_scens))
 
     solver_name = cfg.solver_name
     opt = pyo.SolverFactory(solver_name)

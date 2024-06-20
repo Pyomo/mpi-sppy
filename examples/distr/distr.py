@@ -10,12 +10,11 @@ import time
 # The data slightly differs depending on the number of regions (num_scens) which is created for 2, 3 or 4 regions
 
 # Note: regions in our model will be represented in mpi-sppy by scenarios and to ensure the inter-region constraints
-#       we will use dummy-nodes, which will be represented in mpi-sppy by non-anticipative variables
-#       The following association of terms are made: regions = scenarios, and dummy-nodes = nonants = consensus-vars
+#       we will impose the inter-region arcs to be consensus-variables. They will be represented as non-ants in mpi-sppy
 
 
-def dummy_nodes_generator(region_dict, inter_region_dict):
-    """This function creates a new dictionary ``local_dict similar`` to ``region_dict`` with the dummy nodes and their constraints
+def inter_arcs_adder(region_dict, inter_region_dict):
+    """This function adds to the region_dict the inter-region arcs 
 
     Args:
         region_dict (dict): dictionary for the current scenario \n
@@ -24,53 +23,32 @@ def dummy_nodes_generator(region_dict, inter_region_dict):
     Returns:
         local_dict (dict): 
             This dictionary copies region_dict, completes the already existing fields of 
-            region_dict to represent the dummy nodes, and adds the following keys:\n
-            dummy nodes source (resp. target): the list of dummy nodes for which the source (resp. target) 
-            is in the considered region. \n
-            dummy nodes source (resp. target) slack bounds: dictionary on dummy nodes source (resp. target)
+            region_dict to represent the inter-region arcs and their capcities and costs
     """
     ### Note: The cost of the arc is here chosen to be split equally between the source region and target region
 
     # region_dict is renamed as local_dict because it no longer contains only information about the region
-    # but also contains local information that can be linked to the other scenarios (with dummy nodes)
+    # but also contains local information that can be linked to the other scenarios (with inter-region arcs)
     local_dict = region_dict
-    local_dict["dummy nodes source"] = list()
-    local_dict["dummy nodes target"] = list()
-    local_dict["dummy nodes source slack bounds"] = {}
-    local_dict["dummy nodes target slack bounds"] = {}
-    for arc in inter_region_dict["arcs"]:
-        source,target = arc
+    for inter_arc in inter_region_dict["arcs"]:
+        source,target = inter_arc
         region_source,node_source = source
         region_target,node_target = target
 
-        if region_source == region_dict["name"]:
-            dummy_node=node_source+node_target
-            local_dict["nodes"].append(dummy_node)
-            local_dict["supply"][dummy_node] = 0
-            local_dict["dummy nodes source"].append(dummy_node)
-            local_dict["arcs"].append((node_source, dummy_node))
-            local_dict["flow costs"][(node_source, dummy_node)] = inter_region_dict["costs"][(source, target)]/2 #should be adapted to model
-            local_dict["flow capacities"][(node_source, dummy_node)] = inter_region_dict["capacities"][(source, target)]
-            local_dict["dummy nodes source slack bounds"][dummy_node] = inter_region_dict["capacities"][(source, target)]
-
-        if region_target == local_dict["name"]:
-            dummy_node = node_source + node_target
-            local_dict["nodes"].append(dummy_node)
-            local_dict["supply"][dummy_node] = 0
-            local_dict["dummy nodes target"].append(dummy_node)
-            local_dict["arcs"].append((dummy_node, node_target))
-            local_dict["flow costs"][(dummy_node, node_target)] = inter_region_dict["costs"][(source, target)]/2 #should be adapted to model
-            local_dict["flow capacities"][(dummy_node, node_target)] = inter_region_dict["capacities"][(source, target)]
-            local_dict["dummy nodes target slack bounds"][dummy_node] = inter_region_dict["capacities"][(source, target)]
+        if region_source == region_dict["name"] or region_target == region_dict["name"]:
+            arc = node_source, node_target
+            local_dict["arcs"].append(arc)
+            local_dict["flow capacities"][arc] = inter_region_dict["capacities"][inter_arc]
+            local_dict["flow costs"][arc] = inter_region_dict["costs"][inter_arc]/2
+    #print(f"scenario name = {region_dict['name']} \n {local_dict=}  ")
     return local_dict
-
 
 ###Creates the model when local_dict is given
 def min_cost_distr_problem(local_dict, sense=pyo.minimize):
     """ Create an arcs formulation of network flow
 
     Args:
-        local_dict (dict): dictionary representing a region including the dummy nodes \n
+        local_dict (dict): dictionary representing a region including the inter region arcs \n
         sense (=pyo.minimize): we aim to minimize the cost, this should always be minimize
 
     Returns:
@@ -81,8 +59,10 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
     arcsout = {n: list() for n in local_dict["nodes"]}
     arcsin = {n: list() for n in local_dict["nodes"]}
     for a in local_dict["arcs"]:
-        arcsout[a[0]].append(a)
-        arcsin[a[1]].append(a)
+        if a[0] in local_dict["nodes"]:
+            arcsout[a[0]].append(a)
+        if a[1] in local_dict["nodes"]:
+            arcsin[a[1]].append(a)
 
     model = pyo.ConcreteModel(name='MinCostFlowArcs')
     def flowBounds_rule(model, i,j):
@@ -94,10 +74,6 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
             return (0, local_dict["supply"][n])
         elif n in local_dict["buyer nodes"]:
             return (local_dict["supply"][n], 0)
-        elif n in local_dict["dummy nodes source"]: 
-            return (0,local_dict["dummy nodes source slack bounds"][n])
-        elif n in local_dict["dummy nodes target"]: #this slack will respect the opposite flow balance rule
-            return (0,local_dict["dummy nodes target slack bounds"][n])
         elif n in local_dict["distribution center nodes"]:
             return (0,0)
         else:
@@ -112,16 +88,10 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
                       sense=sense)
     
     def FlowBalance_rule(m, n):
-        #we change the definition of the slack for target dummy nodes so that we have the slack from the source and from the target equal
-        if n in local_dict["dummy nodes target"]:
-            return sum(m.flow[a] for a in arcsout[n])\
-            - sum(m.flow[a] for a in arcsin[n])\
-            - m.y[n] == local_dict["supply"][n]
-        else:
-            return sum(m.flow[a] for a in arcsout[n])\
-            - sum(m.flow[a] for a in arcsin[n])\
-            + m.y[n] == local_dict["supply"][n]
-    model.FlowBalance= pyo.Constraint(local_dict["nodes"], rule=FlowBalance_rule)
+        return sum(m.flow[a] for a in arcsout[n])\
+        - sum(m.flow[a] for a in arcsin[n])\
+        + m.y[n] == local_dict["supply"][n]
+    model.FlowBalance = pyo.Constraint(local_dict["nodes"], rule=FlowBalance_rule)
 
     return model
 
@@ -149,13 +119,13 @@ def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_param
         print(f"time for creating region {scenario_name}: {region_creation_end_time - region_creation_starting_time}")   
     else:
         region_dict = distr_data.region_dict_creator(scenario_name)
-    # Adding dummy nodes and associated features
-    local_dict = dummy_nodes_generator(region_dict, inter_region_dict)
+    # Adding inter region arcs nodes and associated features
+    local_dict = inter_arcs_adder(region_dict, inter_region_dict)
     # Generating the model
     model = min_cost_distr_problem(local_dict)
-    
-    varlist = list()
-    sputils.attach_root_node(model, model.MinCost, varlist)    
+
+    #varlist = list()
+    #sputils.attach_root_node(model, model.MinCost, varlist)    
     
     return model
 
@@ -190,19 +160,19 @@ def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
     """
     # Due to the small size of inter_region_dict, it is not given as argument but rather created. 
     consensus_vars = {}
-    for arc in inter_region_dict["arcs"]:
-        source,target = arc
+    for inter_arc in inter_region_dict["arcs"]:
+        source,target = inter_arc
         region_source,node_source = source
         region_target,node_target = target
-        dummy_node = node_source + node_target
-        vstr = f"y[{dummy_node}]" #variable name as string, y is the slack
+        arc = node_source, node_target
+        vstr = f"flow[{arc}]" #variable name as string, y is the slack
 
-        #adds dummy_node in the source region
+        #adds inter region arcs in the source region
         if not region_source in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
         consensus_vars[region_source].append(vstr)
 
-        #adds dummy_node in the target region
+        #adds inter region arcs in the target region
         if not region_target in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append(vstr)
