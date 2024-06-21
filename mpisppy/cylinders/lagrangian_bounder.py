@@ -58,6 +58,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
         if hasattr(self.opt, 'rho_setter'):
             rho_setter = self.opt.rho_setter
         extensions = self.opt.extensions is not None
+        verbose = self.opt.options['verbose']
 
         self.lagrangian_prep()
 
@@ -86,3 +87,10 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
+            elif self.opt.options.get("subgradient_while_waiting", False):
+                # compute a subgradient step
+                self.opt.Compute_Xbar(verbose)
+                self.opt.Update_W(verbose)
+                bound = self.lagrangian()
+                if bound is not None:
+                    self.bound = bound
