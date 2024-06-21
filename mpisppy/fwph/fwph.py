@@ -64,6 +64,7 @@ class FWPH(mpisppy.phbase.PHBase):
         scenario_creator_kwargs=None,
         ph_converger=None,
         rho_setter=None,
+        variable_probability=None,
     ):
         super().__init__(
             PH_options, 
@@ -77,8 +78,8 @@ class FWPH(mpisppy.phbase.PHBase):
             extension_kwargs=None,
             ph_converger=ph_converger,
             rho_setter=rho_setter,
-        )
-
+        )      
+        assert (variable_probability == None), "variable probability is not allowed with fwph"
         self._init(FW_options)
 
     def _init(self, FW_options):
