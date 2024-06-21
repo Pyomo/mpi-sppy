@@ -31,6 +31,8 @@ MPI is used.
    pickledbundles.rst
    grad_rho.rst
    w_rho.rst
+   admmWrapper.rst
+   helper_functions.rst
    contributors.rst
    internals.rst
    api.rst
