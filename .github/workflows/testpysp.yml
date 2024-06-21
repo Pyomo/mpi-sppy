@@ -29,11 +29,10 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
           pip install pyomo xpress cplex
-          pip install numpy
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: run pysp model tests
         timeout-minutes: 100

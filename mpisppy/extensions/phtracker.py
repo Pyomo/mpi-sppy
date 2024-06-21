@@ -61,7 +61,10 @@ class TrackedData():
         self.seen_iters.add(row_iter)
         # since append is deprecated
         new_dict = pd.DataFrame([row], columns=self.columns)
-        self.df = pd.concat([self.df, new_dict], ignore_index=True)
+        if len(self.df) == 0:
+            self.df = new_dict
+        else:
+            self.df = pd.concat([self.df, new_dict], ignore_index=True)
 
     def write_out_data(self):
         """ Write out the cached data to csv file and clear the cache
