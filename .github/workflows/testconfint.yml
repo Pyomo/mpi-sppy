@@ -31,7 +31,7 @@ jobs:
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: run farmer tests
         timeout-minutes: 10

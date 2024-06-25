@@ -31,12 +31,12 @@ jobs:
         pip install git+https://github.com/pyutilib/pyutilib.git
         git clone https://github.com/pyomo/pyomo.git
         cd pyomo/
-        python setup.py develop
+        pip install -e .
         pyomo download-extensions
         pyomo build-extensions
         cd ../
         pip install git+https://github.com/parapint/parapint.git
-        python setup.py develop
+        pip install -e .
     - name: Test with nose
       run: |
         nosetests -v mpisppy/tests/test_sc.py

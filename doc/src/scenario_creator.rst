@@ -23,23 +23,7 @@ non-leaf tree node objects that are constructed by calling
 problems, because there is only one non-leaf node and it must be
 called "ROOT". There is a helper function ``mpisppy.sputils.attach_root_node``
 
-When there are other scenario tree nodes, their names,
-although strings, must indicates their position in the tree, 
-like "ROOT_3_0_1". A given non-root node, which is the child number `k` of
-a node with name `parentname`, should be named `parentname_k`.
-The node constructor takes as
-arguments:
-
-* name,
-* conditional probability,
-* stage number,
-* stage cost expression,
-* list of scenario names at the node (optional and not used)
-* list of Vars subject to non-anticipativity at the node (I think slicing is allowed)
-* the concrete model instance.
-
-This node list must be attached to the scenario model instance under
-the name `model._mpisppy_node_list`.
+Multi-stage problems are discussed below.
 
 Examples
 --------
@@ -87,6 +71,27 @@ multipliers by algorithms such as PH, but will be given non-anticipativity
 constraints when an EF is formed, either to solve the EF or when bundles are
 formed. For some problems, with the appropriate solver, adding redundant nonanticipativity constraints
 for auxilliary variables to the bundle/EF will result in a (much) smaller pre-solved model.
+
+Multi-stage
+-----------
+
+When there are scenario tree nodes other than root, their names,
+although strings, must indicates their position in the tree, 
+like "ROOT_3_0_1". A given non-root node, which is the child number `k` of
+a node with name `parentname`, should be named `parentname_k`.
+The node constructor, ``scenario_tree.ScenarioNode`` takes as
+arguments:
+
+* name,
+* conditional probability,
+* stage number,
+* stage cost expression,
+* list of scenario names at the node (optional and not used)
+* list of Vars subject to non-anticipativity at the node (I think slicing is allowed)
+* the concrete model instance.
+
+This node list must be attached to the scenario model instance under
+the name `model._mpisppy_node_list`. See, e.g., the AirCond example.
 
 
 
