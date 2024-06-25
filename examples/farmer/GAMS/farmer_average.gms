@@ -81,6 +81,9 @@ req(cropr)..   yld(cropr) + y(cropr) - sum(sameas(cropx,cropr),w(cropx)) =g= min
 beets..        w('beets1') + w('beets2') =l= yld('sugarbeets');
 
 w.up('beets1') = maxbeets1;
+$onText
+__InsertPH__here_Model_defined_three_lines_letter
+$offText
 
 Model simple / profitdef, landuse, req, beets, ylddef /;
 
