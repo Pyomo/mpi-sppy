@@ -1,8 +1,8 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # general example driver for distr with cylinders
-import mpisppy.utils.admm_ph as admm_ph
+import mpisppy.utils.admmWrapper as admmWrapper
+import distr_data
 import distr
+#import distr_no_dummy as distr
 import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -12,8 +12,9 @@ import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
+import time
 
-write_solution = True
+write_solution = False
 
 def _parse_args():
     # create a config object and parse
@@ -24,7 +25,6 @@ def _parse_args():
     cfg.ph_args()
     cfg.aph_args()
     cfg.xhatxbar_args()
-    cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
     cfg.wxbar_read_write_args()
@@ -38,9 +38,11 @@ def _parse_args():
     return cfg
 
 
-def _count_cylinders(cfg):
+# This need to be executed long before the cylinders are created
+def _count_cylinders(cfg): 
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob", "fwph"] #all the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] # All the cfg arguments that create a new cylinders
+    # Add to this list any cfg attribute that would create a spoke
     for cylname in cfglist:
         if cfg[cylname]:
             count += 1
@@ -54,15 +56,35 @@ def main():
     if cfg.default_rho is None: # and rho_setter is None
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
+    if cfg.scalable:
+        import json
+        json_file_path = "data_params.json"
+
+        # Read the JSON file
+        with open(json_file_path, 'r') as file:
+            start_time_creating_data = time.time()
+
+            data_params = json.load(file)
+            all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+            all_DC_nodes = [DC_node for region in all_nodes_dict for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+            inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+            end_time_creating_data = time.time()
+            creating_data_time = end_time_creating_data - start_time_creating_data
+            print(f"{creating_data_time=}")
+    else:
+        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
+        all_nodes_dict = None
+        data_params = None
+
     ph_converger = None
 
     options = {}
     all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
     scenario_creator = distr.scenario_creator
-    scenario_creator_kwargs = distr.kw_creator(cfg)  
-    consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
+    scenario_creator_kwargs = distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)  
+    consensus_vars = distr.consensus_vars_creator(cfg.num_scens, inter_region_dict, all_scenario_names)
     n_cylinders = _count_cylinders(cfg)
-    admm = admm_ph.ADMM_PH(options,
+    admm = admmWrapper.AdmmWrapper(options,
                            all_scenario_names, 
                            scenario_creator,
                            consensus_vars,
@@ -72,11 +94,11 @@ def main():
                            )
 
     # Things needed for vanilla cylinders
-    scenario_creator = admm.admm_ph_scenario_creator ##change needed because of the wrapper
+    scenario_creator = admm.admmWrapper_scenario_creator ##change needed because of the wrapper
     scenario_creator_kwargs = None
     scenario_denouement = distr.scenario_denouement
-    #note that the admm_ph scenario_creator wrapper doesn't take any arguments
-    variable_probability = admm.var_prob_list_fct
+    #note that the admmWrapper scenario_creator wrapper doesn't take any arguments
+    variable_probability = admm.var_prob_list
 
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
@@ -97,17 +119,13 @@ def main():
                                   rho_setter=None,
                                   variable_probability=variable_probability)
 
-
-    # FWPH spoke
-    if cfg.fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+    # FWPH spoke DOES NOT WORK with variable probability
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None,
-                                              variable_probability=variable_probability)
+                                              rho_setter = None)
 
 
     # ph outer bounder spoke
@@ -122,8 +140,6 @@ def main():
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
     list_of_spoke_dict = list()
-    if cfg.fwph:
-        list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_ob:
@@ -143,7 +159,7 @@ def main():
         wheel.write_tree_solution('distr_full_solution')
     
     if global_rank == 0:
-        best_objective = wheel.spcomm.BestInnerBound * len(all_scenario_names)
+        best_objective = wheel.spcomm.BestInnerBound
         print(f"{best_objective=}")
 
 

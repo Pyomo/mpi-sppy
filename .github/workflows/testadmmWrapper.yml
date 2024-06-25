@@ -1,6 +1,6 @@
 # aph (pyomo released)
 
-name: admm_ph tests
+name: admmWrapper tests
 
 on:
   push:
@@ -32,11 +32,11 @@ jobs:
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: run tests
         timeout-minutes: 100
         run: |
           cd mpisppy/tests
           # envall does nothing
-          python test_admm_ph.py
+          python test_admmWrapper.py

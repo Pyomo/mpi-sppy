@@ -78,7 +78,7 @@ class FWPH(mpisppy.phbase.PHBase):
             extension_kwargs=None,
             ph_converger=ph_converger,
             rho_setter=rho_setter,
-        )
+        )      
         assert (variable_probability == None), "variable probability is not allowed with fwph"
         self._init(FW_options)
 
@@ -104,7 +104,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (check):
                 self._check_initial_points()
             self._create_solvers()
-            self._use_rho_setter(self.vb and self.cylinder_rank==0)
+            self._use_rho_setter(verbose and self.cylinder_rank==0)
             self._initialize_MIP_var_values()
             best_bound = -np.inf if self.is_minimizing else np.inf
         else:
