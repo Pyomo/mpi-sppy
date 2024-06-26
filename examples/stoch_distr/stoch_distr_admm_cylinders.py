@@ -4,7 +4,8 @@
 
 # Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
-# import stoch_distr ## It is necessary for the test to have the full direction
+
+import examples.distr.distr_data as distr_data
 import stoch_distr
 import mpisppy.cylinders
 
@@ -41,14 +42,15 @@ def _parse_args():
 
 def _count_cylinders(cfg):
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob", "fwph"] #all the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] # All the cfg arguments that create a new cylinders
+    # Add to this list any cfg attribute that would create a spoke
     for cylname in cfglist:
         if cfg[cylname]:
             count += 1
     return count
 
 
-def _make_admm(cfg, n_cylinders,verbose=None):
+def _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params, verbose=None):
     options = {}
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
@@ -57,9 +59,9 @@ def _make_admm(cfg, n_cylinders,verbose=None):
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
     scenario_creator = stoch_distr.scenario_creator
-    scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
+    scenario_creator_kwargs = stoch_distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
-    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs)
+    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
     admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,
                            all_admm_stoch_subproblem_scenario_names,
                            split_admm_stoch_subproblem_scenario_name,
@@ -124,6 +126,7 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
+        print("be careful, xhatxbar may not work here")
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                 scenario_creator_kwargs=scenario_creator_kwargs,
                                                 all_nodenames=all_nodenames,
@@ -147,15 +150,37 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
     return wheel
 
 
-
 def main(cfg):
     assert cfg.fwph_args is not None, "fwph does not support variable probability"
 
     if cfg.default_rho is None: # and rho_setter is None
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
+    if cfg.scalable:
+        import json
+        json_file_path = "../distr/data_params.json"
+
+        # Read the JSON file
+        with open(json_file_path, 'r') as file:
+
+            data_params = json.load(file)
+            # In distr_data num_admm_subproblems is called num_scens
+            cfg.add_to_config("num_scens",
+                      description="num admm subproblems",
+                      domain=int,
+                      default=cfg.num_admm_subproblems)
+            
+            all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+            all_DC_nodes = [DC_node for region in all_nodes_dict for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+            inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+
+    else:
+        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_admm_subproblems)
+        all_nodes_dict = None
+        data_params = None
+
     n_cylinders = _count_cylinders(cfg)
-    admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders)
+    admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params)
     
     scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments

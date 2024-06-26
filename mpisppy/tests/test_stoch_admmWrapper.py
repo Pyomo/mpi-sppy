@@ -11,7 +11,7 @@ from unittest.mock import patch
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
-class TestSTOCHADMMPH(unittest.TestCase):
+class TestStochAdmmWrapper(unittest.TestCase):
     def setUp(self):
         pass
 

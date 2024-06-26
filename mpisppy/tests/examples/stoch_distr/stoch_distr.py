@@ -1,3 +1,5 @@
+# This file is used in the tests and should not be modified!
+
 # Network Flow - various formulations
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
@@ -418,7 +420,7 @@ def branching_factors_creator(num_stoch_scens, num_stage):
 ###Creates the scenario
 def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     """Creates the model, which should include the consensus variables. \n
-    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in admm_ph.
+    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in admmWrapper.
 
     Args:
         admm_stoch_subproblem_scenario_name (str): the name given to the admm problem for the stochastic scenario. \n
@@ -569,7 +571,7 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     """
     # Method specific to our example and because the admm_subproblem_name and stoch_scenario_name don't include "_"
     splitted = admm_stoch_subproblem_scenario_name.split('_')
-    # The next line would require adding the argument num_stage and transferring it to stoch_admm_ph
+    # The next line would require adding the argument num_stage and transferring it to stoch_admmWrapper
     #assert (len(splitted) == num_stage+2), f"appart from the 'ADMM_STOCH_' prefix, underscore should only separate stages"
     admm_subproblem_name = splitted[2]
     stoch_scenario_name = '_'.join(splitted[3:])
