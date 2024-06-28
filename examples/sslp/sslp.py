@@ -15,6 +15,10 @@ import mpisppy.extensions.fixer as fixer
 
 import model.ReferenceModel as ref
 
+
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+
+
 def scenario_creator(scenario_name, data_dir=None):
     """ The callback needs to create an instance and then attach
         the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
@@ -101,7 +105,7 @@ if __name__ == "__main__":
     start_time = dt.datetime.now()
 
     options = {}
-    options["solver_name"] = "gurobi_persistent"
+    options["solver_name"] = "xpress_persistent"
     options["PHIterLimit"] = maxit
     options["defaultPHrho"] = rho
     options["convthresh"] = -1
@@ -109,8 +113,15 @@ if __name__ == "__main__":
     options["verbose"] = False
     options["display_timing"] = False
     options["display_progress"] = True
+
+    options["primal_dual_converger_options"] = {"tol" : 1e-8}
+    options["display_convergence_detail"] = True
+    options["smoothed"] = True
+    options["defaultPHp"] = .5
+    options["defaultPHbeta"] = 0.1
+
     ### async section ###
-    options["asynchronous"] = True
+    options["asynchronous"] = False
     options["async_frac_needed"] = 0.5
     options["async_sleep_secs"] = 1
     ### end asyn section ###
@@ -145,6 +156,7 @@ if __name__ == "__main__":
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"data_dir": data_dir},
+        ph_converger = PrimalDualConverger
     )
 
     if ph.cylinder_rank == 0:
