@@ -341,7 +341,7 @@ class SPBase:
         # check the node names given by the scenarios
         for nodename in nonleafnodes:
             if nodename not in self.all_nodenames:
-                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames}")
+                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames} for {self.global_rank=}")
 
         # loop over all nodes and make the comms (split requires all ranks)
         # make sure we loop in the same order, so every rank iterate over

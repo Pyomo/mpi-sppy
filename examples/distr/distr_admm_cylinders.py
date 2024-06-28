@@ -2,7 +2,6 @@
 import mpisppy.utils.admmWrapper as admmWrapper
 import distr_data
 import distr
-#import distr_no_dummy as distr
 import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -27,6 +26,7 @@ def _parse_args():
     cfg.xhatxbar_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
+    cfg.wxbar_read_write_args()
     cfg.tracking_args()
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",

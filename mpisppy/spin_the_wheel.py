@@ -44,7 +44,6 @@ class WheelSpinner:
 
         hub_dict = self.hub_dict
         list_of_spoke_dict = self.list_of_spoke_dict
-
         # Confirm that the provided dictionaries specifying
         # the hubs and spokes contain the appropriate keys
         if "hub_class" not in hub_dict:
@@ -131,8 +130,8 @@ class WheelSpinner:
         # to ensure the messages below are True
         cylinder_comm.Barrier()
         global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
-        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
-    
+        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0)) 
+          
         fullcomm.Barrier()
     
         ## give the hub the chance to catch new values
