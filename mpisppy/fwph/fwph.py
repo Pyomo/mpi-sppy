@@ -90,7 +90,6 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def fw_prep(self):
         self.PH_Prep(attach_duals=True, attach_prox=False)
-        self.subproblem_creation(self.options['verbose'])
         self._output_header()
 
         if ('point_creator' in self.FW_options):

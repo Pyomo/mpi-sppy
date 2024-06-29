@@ -102,7 +102,7 @@ def pysp_instance_creation_callback(
     scengroupnum = sputils.extract_num(scenario_name)
     scenario_base_name = scenario_name.rstrip("0123456789")
     
-    model = pyo.ConcreteModel()
+    model = pyo.ConcreteModel(scenario_name)
 
     def crops_init(m):
         retval = []

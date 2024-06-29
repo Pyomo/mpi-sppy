@@ -2,6 +2,10 @@
 # This software is distributed under the 3-clause BSD License.
 
 from pyomo.common.timing import TicTocTimer as _TTT
+# Register numpy types in Pyomo, see https://github.com/Pyomo/pyomo/issues/3091
+from pyomo.common.dependencies import numpy_available as _np_avail
+bool(_np_avail)
+
 from mpisppy.MPI import COMM_WORLD, _haveMPI as haveMPI
 
 tt_timer = _TTT()

@@ -18,6 +18,13 @@ import time
 from mpisppy import MPI
 
 
+def communicator_array(size):
+    arr = np.empty(size+1)
+    arr[:] = np.nan
+    arr[-1] = 0
+    return arr
+
+
 class SPCommunicator:
     """ Notes: TODO
     """
@@ -73,13 +80,7 @@ class SPCommunicator:
         pass
 
     def allreduce_or(self, val):
-        local_val = np.array([val], dtype='int8')
-        global_val = np.zeros(1, dtype='int8')
-        self.cylinder_comm.Allreduce(local_val, global_val, op=MPI.LOR)
-        if global_val[0] > 0:
-            return True
-        else:
-            return False
+        return self.opt.allreduce_or(val)
 
     def free_windows(self):
         """
@@ -116,5 +117,6 @@ class SPCommunicator:
         size = MPI.DOUBLE.size * (length + 1)
         window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
         buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())
+        buff[:] = np.nan
         buff[-1] = 0. # Initialize the write number to zero
         return window, buff

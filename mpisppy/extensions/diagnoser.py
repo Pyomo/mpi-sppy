@@ -11,7 +11,6 @@ import datetime as dt
 import os
 import pyomo.environ as pyo
 import mpisppy.extensions.xhatbase
-from mpisppy.utils.sputils import find_active_objective
 
 class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -42,12 +41,10 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
             fname = self.dirname+os.sep+sname+".dag"
             with open(fname, "a") as f:
                 f.write(str(self.ph._PHIter)+",")
-                if not bundling:
-                    objfct = find_active_objective(s)
-                    f.write(str(pyo.value(objfct)))
-                else:
+                objfct = self.ph.saved_objectives[sname]
+                if bundling:
                     f.write("Bundling"+",")
-                    f.write(str(pyo.value(self.ph.saved_objs[sname])))
+                f.write(str(pyo.value(objfct)))
                 f.write("\n")
 
     def pre_iter0(self):

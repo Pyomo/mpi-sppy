@@ -33,14 +33,14 @@ jobs:
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: run pysp model tests
         timeout-minutes: 100
         run: |
           cd mpisppy/tests
           # envall does nothing
-          python test_pysp_model.py 
+          python test_pysp_model.py
 
       - name: run pysp unit tests
         timeout-minutes: 100

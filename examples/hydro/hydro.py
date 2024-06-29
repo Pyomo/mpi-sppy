@@ -228,6 +228,7 @@ def scenario_creator(scenario_name, branching_factors=None, data_path=None):
     instance = model.create_instance(fname, name=scenario_name)
 
     instance._mpisppy_node_list = MakeNodesforScen(instance, branching_factors, snum)
+    model._mpisppy_probability = "uniform"
     return instance
 
 #=============================================================================

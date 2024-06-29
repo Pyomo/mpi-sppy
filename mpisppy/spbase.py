@@ -51,7 +51,7 @@ class SPBase:
             mpicomm=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
-            E1_tolerance=1e-5
+            E1_tolerance=1e-5,
     ):
         # TODO add missing and private attributes (JP)
         # TODO add a class attribute called ROOTNODENAME = "ROOT"
@@ -159,8 +159,8 @@ class SPBase:
                 if ndn not in local_node_nonant_lengths:
                     local_node_nonant_lengths[ndn] = mylen
                 elif local_node_nonant_lengths[ndn] != mylen:
-                    raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
-                            f"variables between scenarios {mylen} vs. {local_node_nonant_lengths[ndn]}")
+                    raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
+                            f"variables: {mylen} vs. {local_node_nonant_lengths[ndn]}")
 
         # compute node values(reduction)
         for ndn, val in local_node_nonant_lengths.items():
@@ -171,8 +171,8 @@ class SPBase:
                                       op=MPI.MAX)
 
             if val != int(max_val[0]):
-                raise RuntimeError(f"Tree node {ndn} has different number of non-anticipative "
-                        f"variables between scenarios {val} vs. max {max_val[0]}")
+                raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
+                        f"variables: {val} vs. max {max_val[0]}")
                 
     def _check_nodenames(self):
         for ndn in self.all_nodenames:
@@ -516,7 +516,7 @@ class SPBase:
             if pspec is None or pspec == "uniform":
                 prob = 1./len(self.all_scenario_names)
                 if self.cylinder_rank == 0 and pspec is None:
-                    print(f"Did not find _mpisppy_probability, assuming uniform probability {prob}")
+                    print(f"Did not find _mpisppy_probability, assuming uniform probability {prob} (avoid this message by assigning a probability or the string 'uniform' to _mpisppy_probability on the scenario model object)")
                 scenario._mpisppy_probability = prob
             if not hasattr(scenario, "_mpisppy_node_list"):
                 raise RuntimeError(f"_mpisppy_node_list not found on scenario {sname}")
@@ -542,6 +542,16 @@ class SPBase:
             self._spcomm = weakref.ref(value)
         else:
             raise RuntimeError("SPBase.spcomm should only be set once")
+
+
+    def allreduce_or(self, val):
+        local_val = np.array([val], dtype='int8')
+        global_val = np.zeros(1, dtype='int8')
+        self.mpicomm.Allreduce(local_val, global_val, op=MPI.LOR)
+        if global_val[0] > 0:
+            return True
+        else:
+            return False
 
 
     def gather_var_values_to_rank0(self, get_zero_prob_values=False):
