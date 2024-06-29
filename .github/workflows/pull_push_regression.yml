@@ -44,7 +44,7 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent
+          python afew.py xpress_persistent --oversubscribe
 
       - name: Test docs
         run: |
