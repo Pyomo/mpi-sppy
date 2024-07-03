@@ -65,7 +65,7 @@ def main():
         xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(1 + i*branching_factors[1])
 
     scenario_creator_kwargs = {
-        "convex_relaxation": True,
+        "convex_relaxation": False,
         "epath": egret_path_to_data,
     }
     if scenario_creator_kwargs["convex_relaxation"]:
@@ -126,15 +126,19 @@ def main():
         options["iter0_solver_options"] = None
         options["iterk_solver_options"] = None
     options["PHIterLimit"] = PHIterLimit
-    options["defaultPHrho"] = 1
+    options["defaultPHrho"] = 1000
     options["convthresh"] = 0.001
     options["subsolvedirectives"] = None
     options["verbose"] = False
     options["display_timing"] = False
     options["display_progress"] = True
-    options["iter0_solver_options"] = None
-    options["iterk_solver_options"] = None
+    options["iter0_solver_options"] = {"bound_relax_factor": 0.0}
+    options["iterk_solver_options"] = {"bound_relax_factor": 0.0}
     options["branching_factors"] = branching_factors
+
+    options["smoothed"] = True
+    options["defaultPHp"] = 5000
+    options["defaultPHbeta"] = .05
 
     # try to do something interesting for bundles per rank
     if scenperbun > 0:
@@ -167,7 +171,7 @@ def main():
 
 
     # PH hub
-    options["tee-rank0-solves"] = True
+    options["tee-rank0-solves"] = False
     hub_dict = {
         "hub_class": PHHub,
         "hub_kwargs": {"options": None},
@@ -176,9 +180,9 @@ def main():
             "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": pysp2_callback,
-            'scenario_denouement': scenario_denouement,
+            # 'scenario_denouement': scenario_denouement,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "rho_setter": rho_setter.ph_rhosetter_callback,
+            # "rho_setter": rho_setter.ph_rhosetter_callback,
             "extensions": None,
             "all_nodenames":all_nodenames,
         }
