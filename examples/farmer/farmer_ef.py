@@ -24,7 +24,7 @@ def main_no_cfg():
     solver_name = sys.argv[3]
     
     scenario_creator_kwargs = {
-        "use_integer": False,
+        "use_integer": True,
         "crops_multiplier": crops_multiplier,
     }
 
