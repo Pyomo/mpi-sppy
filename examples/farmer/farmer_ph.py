@@ -1,13 +1,14 @@
 from mpisppy.opt.ph import PH
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 
 def build_model(yields):
     model = pyo.ConcreteModel()
 
     # Variables
-    model.X = pyo.Var(["WHEAT", "CORN", "BEETS"], within=pyo.NonNegativeReals)
+    model.X = pyo.Var(["WHEAT", "CORN", "BEETS"], within=pyo.NonNegativeIntegers)
     model.Y = pyo.Var(["WHEAT", "CORN"], within=pyo.NonNegativeReals)
     model.W = pyo.Var(
         ["WHEAT", "CORN", "BEETS_FAVORABLE", "BEETS_UNFAVORABLE"],
@@ -61,26 +62,29 @@ def scenario_creator(scenario_name):
 
 
 def main():
+    mainrho = 3
     options = {
-        "solver_name": "ipopt",
-        "PHIterLimit": 200,
-        "defaultPHrho": 10,
-        "convthresh": 1e-5,
-        "verbose": True,
+        "solver_name": "xpress_direct",
+        "PHIterLimit": 500,
+        "defaultPHrho": mainrho,
+        "convthresh": -1e-8,
+        "verbose": False,
         "display_progress": True,
         "display_timing": False,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
         "display_convergence_detail": True,
-        "smoothed": True,
+        "smoothed": 0,
         "defaultPHp": .1,
-        "defaultPHbeta": .1
+        "defaultPHbeta": 0.1,
+        "primal_dual_converger_options" : {"tol" : 1e-6}
     }
     all_scenario_names = ["good", "average", "bad"]
     ph = PH(
         options,
         all_scenario_names,
         scenario_creator,
+        ph_converger = PrimalDualConverger
     )
     ph.ph_main()
     variables = ph.gather_var_values_to_rank0()
