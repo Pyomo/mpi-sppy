@@ -114,7 +114,7 @@ if __name__ == "__main__":
     options["display_timing"] = False
     options["display_progress"] = True
 
-    options["primal_dual_converger_options"] = {"tol" : 1e-8}
+    options["primal_dual_converger_options"] = {"tol" : 1e-6}
     options["display_convergence_detail"] = True
     options["smoothed"] = True
     options["defaultPHp"] = .5
