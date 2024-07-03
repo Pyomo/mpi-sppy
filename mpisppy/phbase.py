@@ -1010,7 +1010,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                                  (xvarsqrd - 2.0 * scenario._mpisppy_model.z[ndn_i] * xvar \
                                   + scenario._mpisppy_model.z[ndn_i]**2)
                 scenario._mpisppy_model.SmoothExpr = pyo.Expression(expr=smooth_expr)
-                ph_term += scenario._mpisppy_model.z_on * scenario._mpisppy_model.SmoothExpr
+                ph_term += scenario._mpisppy_model.prox_on * (scenario._mpisppy_model.z_on * scenario._mpisppy_model.SmoothExpr)
 
             if (is_min_problem):
                 objfct.expr += ph_term
@@ -1100,7 +1100,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.options["display_convergence_detail"] = False
         # Smoothed is optional, not required
         if "smoothed" not in self.options:
-            self.options["smoothed"] = False
+            self.options["smoothed"] = 0
 
 
     def Iter0(self):
@@ -1125,7 +1125,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
-        smoothed = self.options["smoothed"]
+        smoothed = bool(self.options["smoothed"])
+        smooth_type = self.options["smoothed"]
         have_extensions = self.extensions is not None
         have_converger = self.ph_converger is not None
 
@@ -1195,6 +1196,13 @@ class PHBase(mpisppy.spopt.SPOpt):
             else:
                 self._use_rho_setter(False)
 
+        ## If ratio: Add reset p according to rho
+        if smooth_type == 2:
+            print("Using p_ratio!!!")
+            for _, scenario in self.local_scenarios.items():
+                for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
+                        scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
+
         converged = False
         if have_converger:
             # Call the constructor of the converger object
@@ -1246,7 +1254,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
-        smoothed = self.options["smoothed"]
+        smoothed = bool(self.options["smoothed"])
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
