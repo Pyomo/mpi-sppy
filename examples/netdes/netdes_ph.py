@@ -5,6 +5,8 @@
 from netdes import scenario_creator, scenario_denouement
 from mpisppy.opt.ph import PH
 from netdes_extension import NetworkDesignTracker
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+
 
 def main():
     solver_name = 'gurobi'
@@ -15,16 +17,21 @@ def main():
 
     ''' Now solve with PH to see what happens (very little, I imagine) '''
     PH_options = {
-        'solver_name'           : 'gurobi_persistent',
-        'PHIterLimit'          : 20,
-        'defaultPHrho'         : 10000,
-        'convthresh'           : 1e-8,
-        'verbose'              : False,
-        'display_progress'     : False,
+        'solver_name'           : 'xpress_persistent',
+        'PHIterLimit'          : 200,
+        'defaultPHrho'         : 100000,
+        'convthresh'           : -1e-8,
+        'verbose'              : True,
+        'display_progress'     : True,
         'display_timing'       : False,
         'iter0_solver_options' : dict(),
         'iterk_solver_options' : dict(),
         'bundles_per_rank'     : 2, # 0 = no bundles
+        "display_convergence_detail": False,
+        "smoothed": False,
+        "defaultPHp": 1000,
+        "defaultPHbeta": 0.1,
+        "primal_dual_converger_options" : {"tol" : 1e-6}
     }
     
     ph = PH(
@@ -32,7 +39,8 @@ def main():
         scenario_names,
         scenario_creator,
         scenario_denouement,
-        extensions=NetworkDesignTracker,
+        # extensions=NetworkDesignTracker,
+        ph_converger = PrimalDualConverger,
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
     conv, obj, triv = ph.ph_main()
