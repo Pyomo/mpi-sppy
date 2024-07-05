@@ -25,7 +25,7 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.extensions.gradient_extension import Gradient_rho_extension
+from mpisppy.extensions.gradient_extension import Gradient_extension
 
 write_solution = False
 
@@ -105,7 +105,7 @@ def main():
 
     ext_classes = []
     if cfg.grad_rho_setter:
-        ext_classes.append(Gradient_rho_extension)
+        ext_classes.append(Gradient_extension)
 
     if cfg.run_async:
         raise RuntimeError("APH not supported in this example.")

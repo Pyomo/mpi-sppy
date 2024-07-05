@@ -29,10 +29,10 @@ import mpisppy.utils.find_rho as find_rho
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.extensions.gradient_extension import Gradient_rho_extension
+from mpisppy.extensions.gradient_extension import Gradient_extension
 from mpisppy.extensions.extension import MultiExtension
 
-__version__ = 0.2
+__version__ = 0.21
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -72,7 +72,7 @@ class Test_gradient_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
-        self.cfg.grad_cost_file = '_test_grad_cost.csv'
+        self.cfg.grad_cost_file_out = '_test_grad_cost.csv'
         self.cfg.grad_rho_file= './_test_grad_rho.csv'
         self.cfg.grad_order_stat = 0.5
         self.cfg.max_iterations = 0
@@ -97,28 +97,28 @@ class Test_gradient_farmer(unittest.TestCase):
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
         self.grad_object.write_grad_cost()
         try:
-            os.remove(self.cfg.grad_cost_file)
+            os.remove(self.cfg.grad_cost_file_out)
         except:
             raise RuntimeError('gradient.write_grad_cost() did not write a csv file')
     
     def test_find_grad_rho(self):
-        self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
         rho = self.grad_object.find_grad_rho()
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 3.375)
     
-    def test_write_grad_rho(self):
-        self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
+    def test_compute_and_write_grad_rho(self):
+        self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
-        self.grad_object.write_grad_rho()
+        self.grad_object.compute_and_write_grad_rho()
         try:
             os.remove(self.cfg.grad_rho_file)
         except:
-            raise RuntimeError('gradient.write_grad_rho() did not write a csv file')
+            raise RuntimeError('gradient.compute_and_write_grad_rho() did not write a csv file')
 
     def test_grad_cost_and_rho(self):
         grad.grad_cost_and_rho('examples.farmer', self.cfg)
-        with open(self.cfg.grad_cost_file, 'r') as f:
+        with open(self.cfg.grad_cost_file_out, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
             self.assertEqual(float(rows[1][2]), -150)
@@ -126,7 +126,7 @@ class Test_gradient_farmer(unittest.TestCase):
             read = csv.reader(f)
             rows = list(read)
             self.assertAlmostEqual(float(rows[3][1]), 2.0616161616161617)
-        os.remove(self.cfg.grad_cost_file)
+        os.remove(self.cfg.grad_cost_file_out)
         os.remove(self.cfg.grad_rho_file)
     
 
@@ -155,7 +155,7 @@ class Test_find_rho_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
         self.ph_object = self._create_ph_farmer()
-        self.cfg.whatpath = './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_cost_file_in = './examples/rho_test_data/grad_cost.csv'
         self.cfg.grad_rho_file= './_test_rho.csv'
         self.cfg.grad_order_stat = 0.4
 
@@ -163,24 +163,24 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
     
     def test_w_denom(self):
-        self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]        
         denom = {node.name: self.rho_object._w_denom(s0, node) for node in s0._mpisppy_node_list}
         self.assertAlmostEqual(denom["ROOT"][0], 25.0) 
 
     def test_prox_denom(self):
-        self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]
         denom = {node.name: self.rho_object._prox_denom(s0, node) for node in s0._mpisppy_node_list}
         self.assertAlmostEqual(denom["ROOT"][0], 1250.0)
 
     def test_grad_denom(self):
-        self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         denom = self.rho_object._grad_denom()
         self.assertAlmostEqual(denom[0], 21.48148148148148) 
@@ -193,25 +193,25 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.assertAlmostEqual(rho, 2.6)
 
     def test_compute_rho(self):
-        self.cfg.grad_cost_file= './examples/rho_test_data/grad_cost.csv'
-        self.cfg.whatpath = self.cfg.grad_cost_file
+        self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
+        self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         rho = self.rho_object.compute_rho(indep_denom=True)
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689654)
         rho = self.rho_object.compute_rho()
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 8.163805471726114)
 
-    def test_write_rho(self):
+    def test_compute_and_write_grad_rho(self):
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
-        self.rho_object.write_rho()
+        self.rho_object.compute_and_write_grad_rho()
         try:
             os.remove(self.cfg.grad_rho_file)
         except:
-            raise RuntimeError('find_rho.write_rho() did not write a csv file')
+            raise RuntimeError('find_rho.compute_and_write_grad_rho() did not write a csv file')
 
     def test_rho_setter(self):
         self.cfg.grad_rho_setter = True
-        self.cfg.grad_rho_path = './examples/rho_test_data/rho.csv'
+        self.cfg.grad_rho_file = './examples/rho_test_data/rho.csv'
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         self.set_rho = find_rho.Set_Rho(self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]
@@ -231,7 +231,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
     writen by DLW Sept 2023 TBD: this code should be re-organized"""
 
     def _run_ph_farmer(self):
-        ext_classes = [Gradient_rho_extension]
+        ext_classes = [Gradient_extension]
         
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator
@@ -246,7 +246,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
         hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
 
 
-        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': self.cfg}
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': self.cfg}
         hub_dict['opt_kwargs']['extensions'] = MultiExtension
         
         list_of_spoke_dict = list()

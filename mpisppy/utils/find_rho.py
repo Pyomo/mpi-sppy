@@ -44,6 +44,7 @@ logger = logging.getLogger("mpisppy.utils.find_rho")"""
 
 class Find_Rho():
     """ Interface to compute rhos from Ws for a given ph object and write them in a file
+    DLW July 2024 ? Is it from W's or from costs?
 
     Args:
        ph_object (PHBase): ph object
@@ -60,16 +61,15 @@ class Find_Rho():
         self.cfg = cfg
         self.c = dict()
 
-        return # TBD - stuff below is garfing
+        #### return # TBD - stuff below is garfing
+        #### dlw july 2024: the constructor reads the file and grabs the costs
 
-        if cfg.get("rho_file", ifmissing='')  == ''\
-           and cfg.get("grad_rho_file", ifmissing='')  == '': 
-            pass
+        if cfg.get("grad_rho_file_in", ifmissing='')  == '': 
+            raise RuntimeError("Find_Rho constructor called without grad_rho_file_in")
         else:
-            assert self.cfg.whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
-            if (not os.path.exists(self.cfg.whatpath)):
-                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.whatpath))
-            with open(self.cfg.whatpath, 'r') as f:
+            if (not os.path.exists(self.cfg.grad_cost_file_in)):
+                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_cost_file_in))
+            with open(self.cfg.grad_cost_file_in, 'r') as f:
                 for line in f:
                     if (line.startswith('#')):
                         continue
@@ -224,7 +224,7 @@ class Find_Rho():
             return rho
 
 
-    def write_rho(self):
+    def write_grad_rho(self):
         """ Write the computed rhos in the file --rho-file.
         """
         if self.cfg.grad_rho_file == '': pass
@@ -260,8 +260,8 @@ class Set_Rho():
 
         """
         assert self.cfg != None, "you have to give the rho_setter a cfg"
-        assert self.cfg.grad_rho_path != '', "use --rho-path to give the path of your rhos file"
-        rhofile = self.cfg.grad_rho_path
+        assert self.cfg.grad_rho_file != '', "use --grad-rho-file to give the path of your rhos file"
+        rhofile = self.cfg.grad_rho_file
         rho_list = list()
         with open(rhofile) as infile:
             reader = csv.reader(infile)
@@ -348,4 +348,4 @@ def get_rho_from_W(mname, original_cfg):
 
 
 if __name__ == "__main__":
-    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos")
+    print("call find_rho.get_rho_from_W(modulename, cfg) and use --grad_cost_file_in --rho-file to compute and write rhos")

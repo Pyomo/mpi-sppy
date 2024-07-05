@@ -31,13 +31,11 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
         self.cfg = opt.options["gradient_extension_options"]["cfg"]
-        self.cfg_args_cache = {'grad_cost_file': self.cfg.grad_cost_file,
+        self.cfg_args_cache = {'grad_cost_file_out': self.cfg.grad_cost_file_out,
                                'grad_rho_file': self.cfg.grad_rho_file,
-                               'rho_path': self.cfg.rho_path,
-                               'rho_setter': self.cfg.rho_setter}
-        self.cfg.grad_cost_file = './_temp_grad_cost_file.csv'
+                               'rho_setter': self.cfg.grad_rho_setter}
+        self.cfg.grad_cost_file_out = './_temp_grad_cost_file.csv'
         self.cfg.grad_rho_file = './_temp_grad_rho_file.csv'
-        self.cfg.rho_path = './_temp_grad_rho_file.csv'
         self.grad_object = grad.Find_Grad(opt, self.cfg)
         self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter
         self.primal_conv_cache = []
@@ -102,8 +100,7 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
     def post_everything(self):
         if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_rho_file):
             os.remove(self.cfg.grad_rho_file)
-        if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_cost_file):
-            os.remove(self.cfg.grad_cost_file)
-        self.cfg.grad_cost_file = self.cfg_args_cache['grad_cost_file']
+        if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_cost_file_out):
+            os.remove(self.cfg.grad_cost_file_out)
+        self.cfg.grad_cost_file_out = self.cfg_args_cache['grad_cost_file_out']
         self.cfg.grad_rho_file = self.cfg_args_cache['grad_rho_file']
-        self.cfg.rho_path = self.cfg_args_cache['rho_path']

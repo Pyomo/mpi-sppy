@@ -662,8 +662,8 @@ class Config(pyofig.ConfigDict):
                            description="path to npy file with xhat",
                            domain=str,
                            default='')
-        self.add_to_config("grad_cost_file",
-                           description="name of the gradient cost file (must be csv)",
+        self.add_to_config("grad_cost_file_out",
+                           description="name of the gradient cost file for output (will be csv)",
                            domain=str,
                            default='')
         self.add_to_config("grad_rho_file",
@@ -691,28 +691,31 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.5)
 
-    def rho_args(self):
-        self.add_to_config("whatpath",
-                           description="path to csv file with what",
+    def grad_rho_args(self):
+        self.add_to_config("grad_cost_file_in",
+                           description="path to csv file with (grad based?) costs",
                            domain=str,
                            default='')
-        self.add_to_config("rho_file",
+        self.add_to_config("grad_rho_file_",
                            description="name of the rho file (must be csv)",
                            domain=str,
                            default='')
-        self.add_to_config('rho_setter',
+        self.add_to_config('grad_rho_setter',
                            description="use rho setter from a rho file",
                            domain=bool,
                            default=False)
+        """
+        all occurances of rho_path converted to grad_rho_file July 2024
         self.add_to_config("rho_path",
                            description="csv file for the rho setter",
                            domain=str,
                            default='')
-        self.add_to_config("order_stat",
+        """
+        self.add_to_config("grad_order_stat",
                            description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
                            domain=float,
                            default=-1.0)
-        self.add_to_config("rho_relative_bound",
+        self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
                            default=1e3)

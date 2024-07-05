@@ -97,38 +97,38 @@ class Find_Grad():
            The cfg object should contain an xhat path corresponding to the xhat file.
 
         """
-        if self.cfg.grad_cost_file == '': pass
-        else:
-            assert self.cfg.xhatpath != '', "to compute gradient cost, you have to give an xhat path using --xhatpath"
-            
-            self.ph_object.disable_W_and_prox()
-            xhatfile = self.cfg.xhatpath
-            xhat = ciutils.read_xhat(xhatfile)
-            xhat_one = xhat["ROOT"]
-            self.ph_object._save_nonants()
-            self.ph_object._fix_nonants(xhat)
-            self.ph_object.solve_loop()
-            for (sname, scenario) in self.ph_object.local_scenarios.items():
-                for node in scenario._mpisppy_node_list:
-                    for v in node.nonant_vardata_list:
-                        v.unfix()
+        print("\n Calling find_grad_costs; note that it will not write them\n")
+        
+        assert self.cfg.xhatpath != '', "to compute gradient cost, you have to give an xhat path using --xhatpath"
 
-            grad_dict = {sname: self.compute_grad(sname, scenario)
-                         for sname, scenario in self.ph_object.local_scenarios.items()}
-            local_costs = {(sname, var.name): grad_dict[sname][node.name, ix]
-                           for (sname, scenario) in self.ph_object.local_scenarios.items()
-                           for node in scenario._mpisppy_node_list
-                           for (ix, var) in enumerate(node.nonant_vardata_list)}
-            comm = self.ph_object.comms['ROOT']
-            costs = comm.gather(local_costs, root=0)
-            rank = self.ph_object.cylinder_rank
-            if (self.ph_object.cylinder_rank == 0):
-                self.c = {key: val 
-                          for cost in costs
-                          for key, val in cost.items()}
-            comm.Barrier()
-            self.ph_object._restore_nonants()
-            self.ph_object.reenable_W_and_prox()
+        self.ph_object.disable_W_and_prox()
+        xhatfile = self.cfg.xhatpath
+        xhat = ciutils.read_xhat(xhatfile)
+        xhat_one = xhat["ROOT"]
+        self.ph_object._save_nonants()
+        self.ph_object._fix_nonants(xhat)
+        self.ph_object.solve_loop()
+        for (sname, scenario) in self.ph_object.local_scenarios.items():
+            for node in scenario._mpisppy_node_list:
+                for v in node.nonant_vardata_list:
+                    v.unfix()
+
+        grad_dict = {sname: self.compute_grad(sname, scenario)
+                     for sname, scenario in self.ph_object.local_scenarios.items()}
+        local_costs = {(sname, var.name): grad_dict[sname][node.name, ix]
+                       for (sname, scenario) in self.ph_object.local_scenarios.items()
+                       for node in scenario._mpisppy_node_list
+                       for (ix, var) in enumerate(node.nonant_vardata_list)}
+        comm = self.ph_object.comms['ROOT']
+        costs = comm.gather(local_costs, root=0)
+        rank = self.ph_object.cylinder_rank
+        if (self.ph_object.cylinder_rank == 0):
+            self.c = {key: val 
+                      for cost in costs
+                      for key, val in cost.items()}
+        comm.Barrier()
+        self.ph_object._restore_nonants()
+        self.ph_object.reenable_W_and_prox()
 
 
     def write_grad_cost(self):
@@ -141,8 +141,8 @@ class Find_Grad():
         self.find_grad_cost()
         comm = self.ph_object.comms['ROOT']
         if (self.ph_object.cylinder_rank == 0):
-            print("GRAD COST FILE=",self.cfg.grad_cost_file)
-            with open(self.cfg.grad_cost_file, 'w') as f:
+            print("GRAD COST FILE=",self.cfg.grad_cost_file_out)
+            with open(self.cfg.grad_cost_file_out, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['#grad cost values'])
                 for (key, val) in self.c.items():
@@ -152,34 +152,29 @@ class Find_Grad():
 
 #====================================================================================
 
-# TBD -  why are these two here at all? SHOULD NOT BE IN THE "GRADIENT" FILE
+# TBD from JPW-  why are these two here at all? SHOULD NOT BE IN THE "GRADIENT" FILE
 
     def find_grad_rho(self):
-        """Writes gradient cost for all variables.
+        """computes rho based on cost file for all variables (does not write ????).
 
         ASSUMES:
-           The cfg object should contain a grad_cost_file.
+           The cfg object should contain a grad_cost_file_in.
 
         """
-        assert self.cfg.grad_cost_file != '', "to compute rho you have to give the name of a csv file (using --grad-cost-file) where grad cost will be written"
-        if (not os.path.exists(self.cfg.grad_cost_file)):
-            raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_cost_file))
-        self.cfg.whatpath = self.cfg.grad_cost_file
         return find_rho.Find_Rho(self.ph_object, self.cfg).compute_rho()
 
-    def write_grad_rho(self):
+    def compmute_and_write_grad_rho(self):
          """Writes gradient rho for all variables.
 
         ASSUMES:
-           The cfg object should contain a grad_cost_file.
+           The cfg object should contain a grad_cost_file_in.
 
         """
          print("WRITING GRAD RHO:")
-         if self.cfg.grad_rho_file == '':
-             print("PASSING - NO GRAD RHO FILE")
-             pass
+         if self.cfg.grad_rho_file_out == '':
+             raise RuntimeError("write_grad_rho with grad_rho_file_out")
          else:
-             print("WRITING TO FILE=",self.cfg.grad_rho_file)
+             print("WRITING TO FILE=",self.cfg.grad_rho_file_out)
              rho_data = self.find_grad_rho()
              if self.ph_object.cylinder_rank == 0:
                  with open(self.cfg.grad_rho_file, 'w', newline='') as file:
@@ -223,7 +218,7 @@ def grad_cost_and_rho(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
-    if  (original_cfg.grad_rho_file == '') and (original_cfg.grad_cost_file == ''): return
+    if  (original_cfg.grad_rho_file == '') and (original_cfg.grad_cost_file == ''): raise RuntimeError ("TBD: work not finished")
 
     try:
         model_module = importlib.import_module(mname)

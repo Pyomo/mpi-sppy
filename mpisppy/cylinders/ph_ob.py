@@ -45,9 +45,8 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             self.cfg = self.opt.options["ph_ob_gradient_rho"]["cfg"]
             if "rho_denom" in  self.opt.options["ph_ob_gradient_rho"]:
                 self.cfg.grad_rho_denom = self.opt.options["ph_ob_gradient_rho"]["rho_denom"]
-            self.cfg.grad_cost_file = '_temp_grad_cost_file_ph_ob.csv'
+            self.cfg.grad_cost_file_out = '_temp_grad_cost_file_ph_ob.csv'
             self.cfg.grad_rho_file = '_temp_grad_rho_file_ph_ob.csv'
-            self.cfg.rho_path = '_temp_grad_rho_file_ph_ob.csv'
             # the xhat used here is the same as in the hub
             self.grad_object = grad.Find_Grad(self.opt, self.cfg)
             self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter
