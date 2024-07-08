@@ -36,7 +36,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             self.rho_rescale_factors = None
 
         # use gradient rho
-        self.use_gradient_rho = False
+        self.use_gradient_rho = False  # ??? xxxx TBD: what?
         if "ph_ob_gradient_rho" in self.opt.options:
             assert self.opt.options["ph_ob_gradient_rho"]["cfg"] != None, "You need to give a cfg to use gradient rho."
             self.default_rescale_rho = False            
@@ -46,7 +46,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             if "rho_denom" in  self.opt.options["ph_ob_gradient_rho"]:
                 self.cfg.grad_rho_denom = self.opt.options["ph_ob_gradient_rho"]["rho_denom"]
             self.cfg.grad_cost_file_out = '_temp_grad_cost_file_ph_ob.csv'
-            self.cfg.grad_rho_file = '_temp_grad_rho_file_ph_ob.csv'
+            self.cfg.grad_rho_file_out = '_temp_grad_rho_file_ph_ob.csv'  # out??? xxxx tbd
             # the xhat used here is the same as in the hub
             self.grad_object = grad.Find_Grad(self.opt, self.cfg)
             self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter

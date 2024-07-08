@@ -163,7 +163,7 @@ class Find_Grad():
         """
         return find_rho.Find_Rho(self.ph_object, self.cfg).compute_rho()
 
-    def compmute_and_write_grad_rho(self):
+    def compute_and_write_grad_rho(self):
          """Writes gradient rho for all variables.
 
         ASSUMES:
@@ -172,12 +172,12 @@ class Find_Grad():
         """
          print("WRITING GRAD RHO:")
          if self.cfg.grad_rho_file_out == '':
-             raise RuntimeError("write_grad_rho with grad_rho_file_out")
+             raise RuntimeError("write_grad_rho without grad_rho_file_out")
          else:
              print("WRITING TO FILE=",self.cfg.grad_rho_file_out)
              rho_data = self.find_grad_rho()
              if self.ph_object.cylinder_rank == 0:
-                 with open(self.cfg.grad_rho_file, 'w', newline='') as file:
+                 with open(self.cfg.grad_rho_file_out, 'w', newline='') as file:
                      writer = csv.writer(file)
                      writer.writerow(['#grad rho values'])
                      for (vname, rho) in rho_data.items():
@@ -218,6 +218,7 @@ def grad_cost_and_rho(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
+    raise RuntimeError("xxxx")
     if  (original_cfg.grad_rho_file == '') and (original_cfg.grad_cost_file == ''): raise RuntimeError ("TBD: work not finished")
 
     try:
@@ -257,6 +258,7 @@ def grad_cost_and_rho(mname, original_cfg):
 
 
 if __name__ == "__main__":
-    print("call gradient.grad_cost_and_rho(modulename, cfg) and use --xhatpath --grad-cost-file --grad-rho-file to compute and write gradient cost and rho") 
+    #### not valid as of July 2024: print("call gradient.grad_cost_and_rho(modulename, cfg) and use --xhatpath --grad-cost-file --grad-rho-file to compute and write gradient cost and rho")
+    print("no main")
     
     

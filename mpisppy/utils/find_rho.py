@@ -64,8 +64,8 @@ class Find_Rho():
         #### return # TBD - stuff below is garfing
         #### dlw july 2024: the constructor reads the file and grabs the costs
 
-        if cfg.get("grad_rho_file_in", ifmissing='')  == '': 
-            raise RuntimeError("Find_Rho constructor called without grad_rho_file_in")
+        if cfg.get("grad_cost_file_in", ifmissing='')  == '': 
+            raise RuntimeError("Find_Rho constructor called without grad_cost_file_in")
         else:
             if (not os.path.exists(self.cfg.grad_cost_file_in)):
                 raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_cost_file_in))
@@ -227,11 +227,12 @@ class Find_Rho():
     def write_grad_rho(self):
         """ Write the computed rhos in the file --rho-file.
         """
-        if self.cfg.grad_rho_file == '': pass
+        if self.cfg.grad_rho_file_out == '':
+            raise RuntimeError("write_grad_rho called without grad_rho_file_out")
         else:
             rho_data = self.compute_rho()
             if self.ph_object.cylinder_rank == 0:
-                with open(self.cfg.grad_rho_file, 'w') as file:
+                with open(self.cfg.grad_rho_file_out, 'w') as file:
                     writer = csv.writer(file)
                     writer.writerow(['#Rho values'])
                     for (vname, rho) in rho_data.items():
@@ -260,8 +261,8 @@ class Set_Rho():
 
         """
         assert self.cfg != None, "you have to give the rho_setter a cfg"
-        assert self.cfg.grad_rho_file != '', "use --grad-rho-file to give the path of your rhos file"
-        rhofile = self.cfg.grad_rho_file
+        assert self.cfg.rho_file_in != '', "use --rho-file-in to give the path of your rhos file"
+        rhofile = self.cfg.rho_file_in
         rho_list = list()
         with open(rhofile) as infile:
             reader = csv.reader(infile)
@@ -297,7 +298,6 @@ def _parser_setup():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
-    cfg.grad_rho_args()
 
     return cfg
 
@@ -310,7 +310,7 @@ def get_rho_from_W(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
-    if  (original_cfg.grad_rho_file == ''): return
+    assert original_cfg.grad_rho_file != ''
 
     try:
         model_module = importlib.import_module(mname)

@@ -44,7 +44,6 @@ def _parse_args():
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
     cfg.gradient_args() #required to use gradient
-    cfg.grad_rho_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
