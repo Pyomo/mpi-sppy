@@ -43,7 +43,6 @@ def _create_cfg():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
-    cfg.grad_rho_args()
     cfg.gradient_args()
     cfg.solver_name = solver_name
     cfg.default_rho = 1
@@ -73,7 +72,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg = _create_cfg()
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.grad_cost_file_out = '_test_grad_cost.csv'
-        self.cfg.grad_rho_file= './_test_grad_rho.csv'
+        self.cfg.grad_rho_file_out = './_test_grad_rho.csv'
         self.cfg.grad_order_stat = 0.5
         self.cfg.max_iterations = 0
         self.ph_object = self._create_ph_farmer()
@@ -112,7 +111,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
         self.grad_object.compute_and_write_grad_rho()
         try:
-            os.remove(self.cfg.grad_rho_file)
+            os.remove(self.cfg.grad_rho_file_out)
         except:
             raise RuntimeError('gradient.compute_and_write_grad_rho() did not write a csv file')
 
@@ -122,12 +121,12 @@ class Test_gradient_farmer(unittest.TestCase):
             read = csv.reader(f)
             rows = list(read)
             self.assertEqual(float(rows[1][2]), -150)
-        with open(self.cfg.grad_rho_file, 'r') as f:
+        with open(self.cfg.rho_file_out, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
             self.assertAlmostEqual(float(rows[3][1]), 2.0616161616161617)
         os.remove(self.cfg.grad_cost_file_out)
-        os.remove(self.cfg.grad_rho_file)
+        os.remove(self.cfg.grad_rho_file_out)
     
 
 
@@ -156,7 +155,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.cfg = _create_cfg()
         self.ph_object = self._create_ph_farmer()
         self.cfg.grad_cost_file_in = './examples/rho_test_data/grad_cost.csv'
-        self.cfg.grad_rho_file= './_test_rho.csv'
+        self.cfg.grad_rho_file_out = './_test_rho.csv'
         self.cfg.grad_order_stat = 0.4
 
     def test_grad_rho_init(self):
@@ -202,16 +201,20 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 8.163805471726114)
 
     def test_compute_and_write_grad_rho(self):
+        pass
+        """
+        removed from rho object July 2024
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         self.rho_object.compute_and_write_grad_rho()
         try:
-            os.remove(self.cfg.grad_rho_file)
+            os.remove(self.cfg.grad_rho_file_out)
         except:
             raise RuntimeError('find_rho.compute_and_write_grad_rho() did not write a csv file')
+        """
 
     def test_rho_setter(self):
         self.cfg.grad_rho_setter = True
-        self.cfg.grad_rho_file = './examples/rho_test_data/rho.csv'
+        self.cfg.rho_file_in = './examples/rho_test_data/rho.csv'
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         self.set_rho = find_rho.Set_Rho(self.cfg)
         k0, s0 = list(self.rho_object.ph_object.local_scenarios.items())[0]

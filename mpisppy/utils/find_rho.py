@@ -68,7 +68,7 @@ class Find_Rho():
             raise RuntimeError("Find_Rho constructor called without grad_cost_file_in")
         else:
             if (not os.path.exists(self.cfg.grad_cost_file_in)):
-                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_cost_file_in))
+                raise RuntimeError(f'Could not find file {self.cfg.grad_cost_file_in}')
             with open(self.cfg.grad_cost_file_in, 'r') as f:
                 for line in f:
                     if (line.startswith('#')):
@@ -226,6 +226,7 @@ class Find_Rho():
 
     def write_grad_rho(self):
         """ Write the computed rhos in the file --rho-file.
+            Note: this file was originally opened for append access
         """
         if self.cfg.grad_rho_file_out == '':
             raise RuntimeError("write_grad_rho called without grad_rho_file_out")
