@@ -51,7 +51,7 @@ class Find_Rho():
        cfg (Config): config object
 
     Attributes:
-       c (dict): a dictionnary {(scenario name, nonant indice): c value}
+       c (dict): a dictionary {(scenario name, nonant indice): c value}
        corresponding to the cost vector in the PH algorithm
 
     """
@@ -309,6 +309,8 @@ def get_rho_from_W(mname, original_cfg):
     Args:
        mname (str): module name
        original_cfg (Config object): config object
+    NOTE: as of July 2024, this function is never called and would not work due
+          to the call to Find_Rho.rhos() (and perhaps other things)
 
     """
     assert original_cfg.grad_rho_file != ''

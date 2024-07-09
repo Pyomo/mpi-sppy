@@ -153,6 +153,7 @@ class Find_Grad():
 #====================================================================================
 
 # TBD from JPW-  why are these two here at all? SHOULD NOT BE IN THE "GRADIENT" FILE
+#   (partial answer, the ph_object is needed; but maybe the code could be untangled)
 
     def find_grad_rho(self):
         """computes rho based on cost file for all variables (does not write ????).
@@ -163,8 +164,8 @@ class Find_Grad():
         """
         return find_rho.Find_Rho(self.ph_object, self.cfg).compute_rho()
 
-    def compute_and_write_grad_rho(self):
-         """Writes gradient rho for all variables.
+    def write_grad_rho(self):
+         """Writes gradient rho for all variables. (Does not compute it)
 
         ASSUMES:
            The cfg object should contain a grad_cost_file_in.
@@ -218,8 +219,7 @@ def grad_cost_and_rho(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
-    raise RuntimeError("xxxx")
-    if  (original_cfg.grad_rho_file == '') and (original_cfg.grad_cost_file == ''): raise RuntimeError ("TBD: work not finished")
+    if  (original_cfg.grad_rho_file_out == '') and (original_cfg.grad_cost_file_out == ''): raise RuntimeError ("TBD: work not finished")
 
     try:
         model_module = importlib.import_module(mname)
