@@ -165,7 +165,7 @@ def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
         region_source,node_source = source
         region_target,node_target = target
         arc = node_source, node_target
-        vstr = f"flow[{arc}]" #variable name as string, y is the slack
+        vstr = f"flow[{arc}]" #variable name as string
 
         #adds inter region arcs in the source region
         if not region_source in consensus_vars: #initiates consensus_vars[region_source]

@@ -3,7 +3,7 @@
 AdmmWrapper
 ===========
 
-**ADMM_PH** uses progressive hedging implemented in mpi-sppy 
+**AdmmWrapper** uses progressive hedging implemented in mpi-sppy 
 to solve a non-stochastic problem by breaking them into subproblems.
 
 An example of usage is given below.
