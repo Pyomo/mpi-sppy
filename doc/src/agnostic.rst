@@ -22,12 +22,21 @@ Assuming support has been added for the desired AML, the modeler supplies
 two files:
 
 - a model file with the model written in the guest AML (AMPL example: ``mpisppy.agnostic.examples.farmer.mod``)
+<<<<<<< HEAD
 - a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``)
+=======
+- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``). This thin python wrapper is model specific.
+>>>>>>> 5f90ae1cd48ed2b4c91339724cfd4f78914e1c1a
 
 There can be a little confusion if there are error messages because
 both files are sometimes refered to as the `model file.`
 
-(An exception is when the guest is in Python, then the wrapper
+Most modelers will probably want to import the deterministic guest model into their
+python wrapper for the model and the scenario_creator function in the wrapper
+modifies the stochastic paramaters to have values that depend on the scenario
+name argument to the scenario_creator function.
+
+(An exception is when the guest is in Pyomo, then the wrapper
 file might as well contain the model specification as well so
 there typically is only one file.)
 
