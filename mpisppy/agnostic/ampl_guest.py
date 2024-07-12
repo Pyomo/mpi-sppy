@@ -1,4 +1,4 @@
-# This code sits between the guest model file and mpi-sppy
+# This code sits between the guest model file wrapper and mpi-sppy
 # AMPL is the guest language. Started by DLW June 2024
 """
 The guest model file (not this file) provides a scenario creator in Python
@@ -34,6 +34,7 @@ See farmer_ample_agnostic.py for an example where indexes are retained.
 
 """
 
+import re
 from amplpy import AMPL
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
@@ -68,15 +69,20 @@ class AMPL_guest():
         s, prob, nonant_vardata_list, obj_fct = self.model_module.scenario_creator(scenario_name,
                                                                      self.ampl_file_name,
                                                                      **kwargs)
+        if len(nonant_vardata_list) == 0:
+            raise RuntimeError(f"model file {self.model_file_name} has an empty "
+                               f" nonant_vardata_list for {scenario_name =}")
         ### TBD: assert that this is minimization?
         # In general, be sure to process variables in the same order has the guest does (so indexes match)
         nonant_vars = nonant_vardata_list  # typing aid
+        def _vname(v):
+            return v[1].name().split('[')[0]
         gd = {
             "scenario": s,
             "nonants": {("ROOT",i): v[1] for i,v in enumerate(nonant_vars)},
             "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(nonant_vars)},
             "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(nonant_vars)},
-            "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(nonant_vars)},
+            "nonant_names": {("ROOT",i): (_vname(v), v[0]) for i, v in enumerate(nonant_vars)},
             "probability": prob,
             "obj_fct": obj_fct,
             "sense": pyo.minimize,
@@ -189,12 +195,10 @@ class AMPL_guest():
         # Prox term (quadratic)
         ####### _see copy_nonants_from_host
         if add_prox:
-            ###phobjstr += f" + prox_on * sum{i in nonant_indices} ((rho[i]/2.0) * {gd['nonant_names'][('ROOT',i)]} * {gd['nonant_names'][('ROOT',i)]} "+\
-            " - 2.0 * xbars[i] * {gd['nonant_names'][('ROOT',i)]} + xbars[i]^2))"
             phobjstr += " + prox_on * ("
             for i in range(len(gd["nonants"])):
                 vname = _vname(i)
-                phobjstr += f"(rho[{i}]/2.0) * ( {vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2 ) + "
+                phobjstr += f"(rho[{i}]/2.0) * ({vname} * {vname} - 2.0 * xbars[{i}] * {vname} + xbars[{i}]^2) + "
             phobjstr = phobjstr[:-3] + ")"
         objstr = objstr[:-1] + "+ (" + phobjstr + ");"
         objparts = objstr.split()
