@@ -50,7 +50,7 @@ access it.
 
 
 Special Note for developers
----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The general-purpose guest interfaces might not be the fastest possible
 for many guest languages because they don't use indexes from the
@@ -59,3 +59,27 @@ you might want to write a problem-specific module to replace the guest
 interface and the model wrapper with a single module. For an example, see
 ``examples.farmer.farmer_xxxx_agnostic``, where xxxx is replaced,
 e.g., by ampl. 
+
+Architecture
+^^^^^^^^^^^^
+The following picture presents the architecture of the files. 
+
+.. image:: images/agnostic_architecture.png
+   :alt: Architecture of the agnostic files
+   :width: 700px
+   :align: center
+
+We note "xxxx" the specific problem, for instance farmer. We note "yyyy" the guest language, for instance "ampl".
+Two methods are presented. Either a method specific to the problem, or a generic method.
+Regardless of the method, the file ``agnostic.py`` and ``xxxx.yyyy`` need to be used. 
+``agnostic.py`` is already implemented and must not be modified as all the files presented above the line "developer".
+``xxxx.yyyy`` is the model in the guest language and must be given by the modeler such as all the files under the line "modeler".
+
+The files ``agnostic_yyyy_cylinders.py`` and ``agnostic_cylinders.py`` are equivalent.
+The file ``xxxx_yyyy_agnostic.py`` for the specific case is split into ``yyyy_guest.py`` and ``xxxx_yyyy_model.py`` for the generic case.
+
+
+It is worth noting that the scenario creator is defined in 3 files.
+It is first defined in the file specific to the problem and the guest language ``xxxx_yyyy_model.py``. At this point it may not return a scenario.
+It is then wrapped in a file only specific to the language ``yyyy_guest.py``. At chich point it returns the dictionary ``gd`` which indludes the scenario.
+Finally the tree structure is attached in ``agnostic.py``.
