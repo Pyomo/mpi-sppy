@@ -97,7 +97,7 @@ if __name__ == "__main__":
         print(msg, "\n    bad max iterations=", sys.argv[3])
         quit()
     try:
-        rho = int(sys.argv[4])
+        rho = float(sys.argv[4])
     except:
         print(msg, "\n    bad rho=", sys.argv[4])
         quit()
@@ -118,41 +118,23 @@ if __name__ == "__main__":
     options["convthresh"] = -1
     options["subsolvedirectives"] = None
     options["verbose"] = False
-    options["display_timing"] = False
+    options["display_timing"] = True
     options["display_progress"] = True
 
-    options["primal_dual_converger_options"] = {"tol" : 1e-4}
-    options["display_convergence_detail"] = True
+    options["primal_dual_converger_options"] = {"tol" : 1e-5}
+    options["display_convergence_detail"] = False
     options["smoothed"] = smooth_type
     options["defaultPHp"] = pvalue
     options["defaultPHbeta"] = beta
     options['xhat_closest_options'] = {'xhat_solver_options': {}, 'keep_solution':True}
 
-    ### async section ###
-    options["asynchronous"] = False
-    options["async_frac_needed"] = 0.5
-    options["async_sleep_secs"] = 1
-    ### end asyn section ###
     # one way to set up sub-problem solver options
-    options["iter0_solver_options"] = {"mipgap": 0.01}
+    options["iter0_solver_options"] = {"mipgap": 0.01, "threads": 1}
     # another way
-    options["iterk_solver_options"] = {"mipgap": 0.02, "threads": 4}
+    options["iterk_solver_options"] = {"mipgap": 0.02, "threads": 1}
     options["xhat_solver_options"] = options["iterk_solver_options"]
     if bunper > 0:
         options["bundles_per_rank"] = bunper
-    options["append_file_name"] = "sslp.app"
-
-    fixoptions = {}
-    fixoptions["verbose"] = True
-    fixoptions["boundtol"] = 0.01
-    fixoptions["id_fix_list_fct"] = id_fix_list_fct
-
-    options["fixeroptions"] = fixoptions
-
-    options["gapperoptions"] = {
-        "verbose": True,
-        "mipgapdict": {0: 0.02, 1: 0.02, 5: 0.01, 10: 0.005},
-    }
 
     all_scenario_names = list()
     for sn in range(ScenCount):
