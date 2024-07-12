@@ -682,18 +682,11 @@ class Config(pyofig.ConfigDict):
                            description="display rho during gradient calcs (default True)",
                            domain=bool,
                            default=True)
-        self.add_to_config("grad_primal_thresh",
-                           description="primal threshold for diff during gradient calcs",
-                           domain=float,
-                           default=0.001)
-        self.add_to_config("grad_dual_thresh",
-                           description="dual threshold for abs norm during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_pd_thresh",
-                           description="threshold for dual/primal during gradient calcs",
-                           domain=float,
-                           default=0.1)
+        # likely unused presently
+#        self.add_to_config("grad_pd_thresh",
+#                           description="threshold for dual/primal during gradient calcs",
+#                           domain=float,
+#                           default=0.1)
 
         self.add_to_config('grad_rho_setter',
                            description="use rho setter from a rho file",
@@ -714,6 +707,30 @@ class Config(pyofig.ConfigDict):
                            description="factor that bounds rho/cost",
                            domain=float,
                            default=1e3)
+
+    def dynamic_gradient_args(self): # AKA adaptive
+
+        self.gradient_args()
+
+        self.add_to_config('grad_dynamic_primal_crit',
+                           description="Use dynamic gradient-based primal criterion for update",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('grad_dynamic_dual_crit',
+                           description="Use dynamic gradient-based primal criterion for update",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("grad_dynamic_primal_thresh",
+                           description="primal threshold for diff during gradient calcs",
+                           domain=float,
+                           default=0.001)
+        
+        self.add_to_config("grad_dynamic_dual_thresh",
+                           description="dual threshold for abs norm during gradient calcs",
+                           domain=float,
+                           default=0.1)        
 
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",

@@ -73,17 +73,21 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
             print(sname, 'W values: ', W_list)
             break
 
+
     def _update_rho_primal_based(self):
         curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
         primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
-        return (primal_diff <= 0.05)
+        return (primal_diff <= self.cfg.grad_dynamic_primal_thresh)
 
     def _update_rho_dual_based(self):
         curr_conv, last_conv = self.dual_conv_cache[-1], self.dual_conv_cache[-2]
         dual_diff =  np.abs((last_conv - curr_conv) / last_conv) if last_conv != 0 else 0
         #print(f'{dual_diff =}')
-        return (dual_diff <= 0.05)
+        return (dual_diff <= self.cfg.grad_dynamic_dual_thresh)
 
+    def _update_recommended(self):
+        return (self.cfg.grad_dynamic_primal_crit and self._update_rho_primal_based()) or \
+               (self.cfg.grad_dynamic_dual_crit and self._update_rho_dual_based())
 
     def pre_iter0(self):
         pass
@@ -99,7 +103,8 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         self.dual_conv_cache.append(self.wt.W_diff())
         if self.opt._PHIter == 1:
             self.grad_object.write_grad_cost()
-        if self._update_rho_dual_based():
+        if self._update_recommended():
+            print("UPDATE WAS RECOMMENDED")
             self.grad_object.write_grad_rho()
             rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
                                 if 'rho_setter_kwargs' in self.opt.options \

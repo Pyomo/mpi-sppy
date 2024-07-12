@@ -35,7 +35,7 @@ def _parse_args():
     cfg.xhatlooper_args()
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
-    cfg.gradient_args()
+    cfg.dynamic_gradient_args() # gets you gradient_args for free
     cfg.ph_ob_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
