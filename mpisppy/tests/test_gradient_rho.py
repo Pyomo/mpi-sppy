@@ -234,6 +234,16 @@ class Test_grad_extension_farmer(unittest.TestCase):
     See also: farmer_rho_demo.py
     writen by DLW Sept 2023 TBD: this code should be re-organized"""
 
+    def setUp(self):
+        print("test grad setup")
+        self.cfg = _create_cfg()
+        self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
+        self.cfg.grad_cost_file_out = '_test_grad_cost.csv'
+        self.cfg.grad_rho_file_out = './_test_grad_rho.csv'
+        self.cfg.grad_order_stat = 0.5
+        self.cfg.max_iterations = 0
+    
+
     def _run_ph_farmer(self):
         ext_classes = [Gradient_extension]
         
@@ -260,12 +270,10 @@ class Test_grad_extension_farmer(unittest.TestCase):
             ph_object = wheel.spcomm.opt
             return ph_object
 
-    def setUp(self):
-        self.cfg = _create_cfg()
-
     def test_grad_extensions(self):
         print("** test grad extensions **")
         self.cfg.grad_rho_file_out = './_test_rho.csv'
+        self.cfg.grad_cost_file_in = './examples/rho_test_data/grad_cost.csv'
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.max_iterations = 4
         self.ph_object = self._run_ph_farmer()

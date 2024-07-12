@@ -35,7 +35,12 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
                                'rho_file_in': self.cfg.rho_file_in,
                                'rho_setter': self.cfg.grad_rho_setter}
         self.cfg.grad_cost_file_out = './_temp_grad_cost_file.csv'
-        self.cfg.rho_file_in = './_temp_rho_file.csv'
+        if self.cfg.get("grad_rho_file_out", ifmissing="") == "":            
+            self.cfg.rho_file_in = './_temp_rho_file.csv'
+            self.cfg.grad_rho_file_out = self.cfg.rho_file_in
+        else:
+            self.cfg.rho_file_in = self.cfg.grad_rho_file_out
+            
         self.grad_object = grad.Find_Grad(opt, self.cfg)
         self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter
         self.primal_conv_cache = []
