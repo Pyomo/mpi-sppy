@@ -273,7 +273,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
     def test_grad_extensions(self):
         print("** test grad extensions **")
         self.cfg.grad_rho_file_out = './_test_rho.csv'
-        self.cfg.grad_cost_file_in = './examples/rho_test_data/grad_cost.csv'
+        #self.cfg.grad_cost_file_in = './examples/rho_test_data/grad_cost.csv'
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.max_iterations = 4
         self.ph_object = self._run_ph_farmer()

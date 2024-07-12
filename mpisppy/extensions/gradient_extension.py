@@ -31,16 +31,29 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
         self.cfg = opt.options["gradient_extension_options"]["cfg"]
-        self.cfg_args_cache = {'grad_cost_file_out': self.cfg.grad_cost_file_out,
-                               'rho_file_in': self.cfg.rho_file_in,
+        # This is messy because we want to be able to use or give rhos as requested.
+        # (e.g., if the user gave us an input file, use that)
+        # TBD: stop using files
+        # TBD: restore the rho_setter?
+        self.cfg_args_cache = {'rho_file_in': self.cfg.rho_file_in,
+                               'grad_rho_file_out': self.cfg.grad_rho_file_out,
                                'rho_setter': self.cfg.grad_rho_setter}
-        self.cfg.grad_cost_file_out = './_temp_grad_cost_file.csv'
-        if self.cfg.get("grad_rho_file_out", ifmissing="") == "":            
-            self.cfg.rho_file_in = './_temp_rho_file.csv'
-            self.cfg.grad_rho_file_out = self.cfg.rho_file_in
+        if self.cfg.get('grad_cost_file_out', ifmissing="") == "":
+            self.cfg.grad_cost_file_out = './_temp_grad_cost_file.csv'
         else:
-            self.cfg.rho_file_in = self.cfg.grad_rho_file_out
-            
+            self.cfg_args_cache["grad_cost_file_out"] = self.cfg.grad_cost_file_out
+        if self.cfg.get('grad_cost_file_in', ifmissing="") == "":
+            self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out  # write then read
+        # from the perspective of this extension, we really should not have both
+        if self.cfg.get('rho_file_in', ifmissing="") == "":
+            if self.cfg.get("grad_rho_file_out", ifmissing="") == "":
+                # we don't have either, but will write then read
+                self.cfg.grad_rho_file_out = './_temp_rho_file.csv'
+                self.cfg.rho_file_in = self.cfg.grad_rho_file_out  
+            else:
+                # we don't have an in, but we have an out, still write then read
+                self.cfg.rho_file_in = self.cfg.grad_rho_file_out
+
         self.grad_object = grad.Find_Grad(opt, self.cfg)
         self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter
         self.primal_conv_cache = []
@@ -103,9 +116,12 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         pass
 
     def post_everything(self):
-        if self.cylinder_rank == 0 and os.path.exists(self.cfg.rho_file_in):
+        # if we are using temp files, deal with it
+        if self.cylinder_rank == 0 and os.path.exists(self.cfg.rho_file_in)\
+           and self.cfg.rho_file_in != self.cfg_args_cache['rho_file_in']:
             os.remove(self.cfg.rho_file_in)
-        if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_cost_file_out):
+            self.cfg.rho_file_in = self.cfg_args_cache['rho_file_in']  # namely ""
+        if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_cost_file_out)\
+           and self.cfg.grad_cost_file_out != self.cfg_args_cache['grad_cost_file_out']:
             os.remove(self.cfg.grad_cost_file_out)
         self.cfg.grad_cost_file_out = self.cfg_args_cache['grad_cost_file_out']
-        self.cfg.rho_file_in = self.cfg_args_cache['rho_file_in']
