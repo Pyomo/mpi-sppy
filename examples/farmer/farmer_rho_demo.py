@@ -120,8 +120,8 @@ def main():
 
     #gradient extension kwargs
     if cfg.grad_rho_setter:
-        ext_classes.append(Gradient_rho_extension)        
-        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': cfg}
+        ext_classes.append(Gradient_extension)        
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
     
     ## Gabe's (way pre-pandemic) adaptive rho
     if cfg.use_norm_rho_updater:
