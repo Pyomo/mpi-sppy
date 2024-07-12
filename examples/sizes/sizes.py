@@ -30,7 +30,7 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 
-def _rho_setter(scen):
+def _rho_setter(scen, **kwargs):
     """ rho values for the scenario.
     Args:
         scen (pyo.ConcreteModel): the scenario
@@ -39,6 +39,10 @@ def _rho_setter(scen):
     """
     retlist = []
     RF = 0.001  # a factor for rho, if you like
+
+    if "RF" in kwargs and isinstance(kwargs["RF"], float):
+        RF = kwargs["RF"]
+        
     cutrho = scen.UnitReductionCost * RF
 
     for i in scen.ProductSizes:
