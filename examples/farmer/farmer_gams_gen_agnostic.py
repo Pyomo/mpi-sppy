@@ -80,15 +80,14 @@ def scenario_creator(
     ph_W_dict = {}
     xbar_dict = {}
     rho_dict = {}
-    W_on_dict = {}
-    prox_on_dict = {}
+
     for nonants_support_set_name in nonants_support_set_list:
         ph_W_dict[nonants_support_set_name] = mi.sync_db.add_parameter_dc(f"ph_W_{nonants_support_set_name}", [nonants_support_set_name,], "ph weight")
         xbar_dict[nonants_support_set_name] = mi.sync_db.add_parameter_dc(f"xbar_{nonants_support_set_name}", [nonants_support_set_name,], "ph average")
         rho_dict[nonants_support_set_name] = mi.sync_db.add_parameter_dc(f"rho_{nonants_support_set_name}", [nonants_support_set_name,], "ph rho")
 
-        W_on_dict[nonants_support_set_name] = mi.sync_db.add_parameter(f"W_on_{nonants_support_set_name}", 0, "activate w term")
-        prox_on_dict[nonants_support_set_name] = mi.sync_db.add_parameter(f"prox_on_{nonants_support_set_name}", 0, "activate prox term")
+    W_on = mi.sync_db.add_parameter(f"W_on", 0, "activate w term")
+    prox_on = mi.sync_db.add_parameter(f"prox_on", 0, "activate prox term")
 
     """nonant_variables_def_eq = mi.sync_db.add_equation("nonant_variables_def")
     PenLeft_eq = mi.sync_db.add_equation("PenLeft")
@@ -96,11 +95,11 @@ def scenario_creator(
     objective_ph_def_eq = mi.sync_db.add_equation("objective_ph_def")"""
 
     glist = [gams.GamsModifier(y)] \
-        + [ph_W_dict[nonants_support_set_name] for nonants_support_set_name in nonants_support_set_list] \
-        + [xbar_dict[nonants_support_set_name] for nonants_support_set_name in nonants_support_set_list] \
-        + [rho_dict[nonants_support_set_name] for nonants_support_set_name in nonants_support_set_list] \
-        + [W_on_dict[nonants_support_set_name] for nonants_support_set_name in nonants_support_set_list] \
-        + [prox_on_dict[nonants_support_set_name] for nonants_support_set_name in nonants_support_set_list]
+        + [gams.GamsModifier(ph_W_dict[nonants_support_set_name]) for nonants_support_set_name in nonants_support_set_list] \
+        + [gams.GamsModifier(xbar_dict[nonants_support_set_name]) for nonants_support_set_name in nonants_support_set_list] \
+        + [gams.GamsModifier(rho_dict[nonants_support_set_name]) for nonants_support_set_name in nonants_support_set_list] \
+        + [gams.GamsModifier(W_on)] \
+        + [gams.GamsModifier(prox_on)]
         
     """gams.GamsModifier(nonant_variables_def_eq),
             gams.GamsModifier(PenLeft_eq),
@@ -126,8 +125,8 @@ def scenario_creator(
             ph_W_dict[nonants_support_set_name].add_record(c).value = 0
             xbar_dict[nonants_support_set_name].add_record(c).value = 0
             rho_dict[nonants_support_set_name].add_record(c).value = 0
-        W_on_dict[nonants_support_set_name].add_record().value = 0
-        prox_on_dict[nonants_support_set_name].add_record().value = 0
+    W_on.add_record().value = 0
+    prox_on.add_record().value = 0
 
     # scenario specific data applied
     scennum = sputils.extract_num(scenario_name)
@@ -147,7 +146,8 @@ def scenario_creator(
 
     mi.solve()
     nonant_variable_list = list( mi.sync_db[f"{nonant_variables_name}"] ) 
-    my_dict = {("ROOT",i): p for i,p in enumerate(ph_W)}
+    my_dict = {("ROOT",i): p for nonants_support_set_name in nonants_support_set_list for i,p in enumerate(ph_W_dict[nonants_support_set_name]) }
+    #my_dict = {("ROOT",i): p for i,p in enumerate(ph_W)}
     # In general, be sure to process variables in the same order has the guest does (so indexes match)
     nonant_names_dict = {("ROOT",i): (f"{nonant_variables_name}", v.key(0)) for i, v in enumerate(nonant_variable_list)}    
     gd = {
@@ -318,7 +318,9 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
     """
 
     parameter_definition = ""
-    scalar_definition = ""
+    scalar_definition = f"""
+   W_on      'activate w term'    /    0 /
+   prox_on   'activate prox term' /    0 /"""
     variable_definition = ""
     equation_definition = ""
     objective_ph_excess = ""
@@ -334,10 +336,6 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
    xbar_{nonants_support_set}({nonants_support_set})        'ph average'                  /set.{nonants_support_set} 0/
    rho_{nonants_support_set}({nonants_support_set})         'ph rho'                      /set.{nonants_support_set} 0/"""
         
-        scalar_definition += f"""
-   W_on_{nonants_support_set}      'activate w term'    /    0 /
-   prox_on_{nonants_support_set}   'activate prox term' /    0 /"""
-        
         variable_definition += f"""
    PHpenalty_{nonants_support_set}({nonants_support_set}) 'linearized prox penalty'"""
         
@@ -346,8 +344,8 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
    PenRight_{nonants_support_set}({nonants_support_set}) 'right side of linearized PH penalty'"""
 
         objective_ph_excess += f"""
-                +  W_on_{nonants_support_set} * sum({nonants_support_set}, ph_W_{nonants_support_set}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
-                +  prox_on_{nonants_support_set} * sum({nonants_support_set}, 0.5 * rho_{nonants_support_set}({nonants_support_set}) * PHpenalty_{nonants_support_set}({nonants_support_set}))"""
+                +  W_on * sum({nonants_support_set}, ph_W_{nonants_support_set}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
+                +  prox_on * sum({nonants_support_set}, 0.5 * rho_{nonants_support_set}({nonants_support_set}) * PHpenalty_{nonants_support_set}({nonants_support_set}))"""
 
         equation_expression += f"""
 PenLeft_{nonants_support_set}({nonants_support_set}).. sqr(xbar_{nonants_support_set}({nonants_support_set})) + xbar_{nonants_support_set}({nonants_support_set})*0 + xbar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});

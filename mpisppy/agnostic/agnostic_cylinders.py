@@ -14,9 +14,6 @@ import mpisppy.utils.config as config
 import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
 
-from pyomo_guest import Pyomo_guest
-from ampl_guest import AMPL_guest
-
 
 def _parse_args(m):
     # m is the model file module
@@ -71,10 +68,12 @@ if __name__ == "__main__":
                          f"   supported guests: {supported_guests}")
     if cfg.guest_language == "Pyomo":
         # now I need the pyomo_guest wrapper, then feed that to agnostic
+        from pyomo_guest import Pyomo_guest
         pg = Pyomo_guest(model_fname)
         Ag = agnostic.Agnostic(pg, cfg)
     elif cfg.guest_language == "AMPL":
         assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you and ampl-model-file"
+        from ampl_guest import AMPL_guest
         guest = AMPL_guest(model_fname, cfg.ampl_model_file)
         Ag = agnostic.Agnostic(guest, cfg)
 
