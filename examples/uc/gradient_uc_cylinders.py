@@ -36,7 +36,6 @@ def _parse_args():
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
     cfg.gradient_args()
-    cfg.rho_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
@@ -85,7 +84,7 @@ def main():
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
-    rho_setter = uc._rho_setter
+#    rho_setter = uc._rho_setter
     
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -95,12 +94,12 @@ def main():
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=MultiExtension,
-                                   rho_setter = rho_setter)
+                                   rho_setter = None)
     else:
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
-                                  rho_setter = rho_setter)
+                                  rho_setter = None)
         
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
@@ -111,7 +110,7 @@ def main():
     if cfg.xhat_closest_tree:
         ext_classes.append(XhatClosest)
     
-    if cfg.rho_setter:
+    if cfg.grad_rho_setter:
         ext_classes.append(Gradient_extension)
         
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
@@ -131,7 +130,7 @@ def main():
             "keep_solution" : True
         }
 
-    if cfg.rho_setter:
+    if cfg.grad_rho_setter:
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
 
     if cfg.ph_mipgaps_json is not None:
@@ -157,8 +156,8 @@ def main():
     # Standard Lagrangian bound spoke
     if lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter)
+                                                    scenario_creator_kwargs=scenario_creator_kwargs,
+                                                    rho_setter = None)
 
     # xhat looper bound spoke
     if xhatlooper:
