@@ -6,23 +6,25 @@ import sys
 
 
 def main():
-    if len(sys.argv) != 6 and len(sys.argv) != 9:
-        print("usage python farmer_ph_multi.py {crops_multiplier} {scen_count} {rho} {itermax} {solver_name}")
-        print("e.g., python farmer_ph_multi.py 1 3 1 300 xpress")
-        print("or python farmer_ph_multi.py {crops_multiplier} {scen_count} {rho} {itermax} {smooth_type} {pvalue_or_pratio} {beta} {solver_name}")
-        print("e.g., python farmer_ph_multi.py 1 3 1 300 1 0.1 0.1 xpress")
-        print("Your length:", len(sys.argv))
+    if len(sys.argv) != 7 and len(sys.argv) != 10:
+        print("usage python farmer_ph_multi.py {crops_multiplier} {scen_count} {use_int} {rho} "
+              "{itermax} {solver_name} ")
+        print("e.g., python farmer_ph_multi.py 1 3 0 1 300 xpress")
+        print("or python farmer_ph_multi.py {crops_multiplier} {scen_count} {use_int} {rho} "
+              "{itermax} {smooth_type} {pvalue_or_pratio} {beta} {solver_name}")
+        print("e.g., python farmer_ph_multi.py 1 3 0 1 300 1 0.1 0.1 xpress")
         quit()
     crops_multiplier = int(sys.argv[1])
     num_scen = int(sys.argv[2])
-    rho = float(sys.argv[3])
-    itermax = int(sys.argv[4])
+    use_int = bool(int(sys.argv[3]))
+    rho = float(sys.argv[4])
+    itermax = int(sys.argv[5])
     solver_name = sys.argv[-1]
-    if len(sys.argv) == 9:
-        smooth_type = int(sys.argv[5])
-        pvalue = float(sys.argv[6])
-        beta = float(sys.argv[7])
-    elif len(sys.argv) == 6:
+    if len(sys.argv) == 10:
+        smooth_type = int(sys.argv[6])
+        pvalue = float(sys.argv[7])
+        beta = float(sys.argv[8])
+    elif len(sys.argv) == 7:
         smooth_type = 0
         pvalue = 0.0
         beta = 0.0
@@ -40,14 +42,14 @@ def main():
         "smoothed": smooth_type,
         "defaultPHp": pvalue,
         "defaultPHbeta": beta,
-        "primal_dual_converger_options" : {"tol" : 1e-4},
+        "primal_dual_converger_options" : {"tol" : 1e-5},
         'xhat_closest_options': {'xhat_solver_options': {}, 'keep_solution':True}
     }
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
     all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
     scenario_creator_kwargs = {
-        'use_integer': False,
+        'use_integer': use_int,
         "crops_multiplier": crops_multiplier,
     }
     ph = PH(
