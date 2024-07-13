@@ -43,7 +43,7 @@ def _create_cfg():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
-    cfg.gradient_args()
+    cfg.dynamic_gradient_args()
     cfg.solver_name = solver_name
     cfg.default_rho = 1
     return cfg
