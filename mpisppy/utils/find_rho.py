@@ -61,9 +61,6 @@ class Find_Rho():
         self.cfg = cfg
         self.c = dict()
 
-        #### return # TBD - stuff below is garfing
-        #### dlw july 2024: the constructor reads the file and grabs the costs
-
         if cfg.get("grad_cost_file_in", ifmissing='')  == '': 
             raise RuntimeError("Find_Rho constructor called without grad_cost_file_in")
         else:
@@ -91,7 +88,7 @@ class Find_Rho():
            w_denom (numpy array): denominator
 
         """
-        assert node.name == "ROOT", "compute rho only works for two stage for now"
+        assert node.name == "ROOT", "gradient-based compute rho only works for two stage for now"
         nlen = s._mpisppy_data.nlens[node.name]
         xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
         nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
@@ -156,76 +153,97 @@ class Find_Rho():
             return g_denom
 
 
-    def _order_stat(self, rho_list, prob_list):
-        """ Computes a scenario independant rho from a list of rhos.
-
-        Args:
-           rho_list (list): list of rhos
-
-        Returns:
-           rho (float): rho value
-        """
-        alpha = self.cfg.grad_order_stat
-        assert (alpha >= 0 and alpha <= 1), f"0 is the min, 0.5 the average, 1 the max for grad_order_stat; {alpha=} in invalid."
-        rho_mean = np.dot(rho_list, prob_list)
-        rho_min, rho_max = np.min(rho_list), np.max(rho_list)
-        if alpha == 0.5:
-            return rho_mean
-        if alpha < 0.5:
-            return (rho_min + alpha * 2 * (rho_mean - rho_min))
-        if alpha > 0.5:
-            return (2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)
-
     def compute_rho(self, indep_denom=False):
         """ Computes rhos for each scenario and each variable using the WW heuristic
         and first order condition.
 
         Returns:
-           arranged_rho (dict): dict {variable name: list of rhos for this variable}
+           rhos (dict): dict {variable name: list of rhos for this variable}
         """
         all_snames = self.ph_object.all_scenario_names
-        all_vnames = []
+        local_snames = self.ph_object.local_scenario_names
+        vnames = []  # TBD: why not just use c.keys()
         for (sname, vname) in self.c.keys():
-            if vname not in all_vnames:all_vnames.append(vname)
+            if vname not in vnames: vnames.append(vname)
         k0, s0 = list(self.ph_object.local_scenarios.items())[0]
+        # TBD: drop vname_to_idx and use the map already provided
         vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
         cost = {k : np.array([self.c[k, vname]
-                for vname in all_vnames])
-                for k in all_snames}
+                for vname in vnames])
+                for k in local_snames}
         if indep_denom:
             grad_denom = self._grad_denom()
-            denom = {k: grad_denom for k in all_snames}
+            loc_denom = {k: grad_denom for k in all_snames}
         else:
-            loc_denom = {k: self._w_denom(s, node)
-                           for k, s in self.ph_object.local_scenarios.items()
-                           for node in s._mpisppy_node_list}
-            global_denom = self.ph_object.comms['ROOT'].gather(loc_denom, root=0)
+            # two-stage only for now
+            loc_denom = {k: self._w_denom(s, s._mpisppy_node_list[0])
+                           for k, s in self.ph_object.local_scenarios.items()}
+            """ dropped by DLW July 2024
+            global_denom = self.ph_object.comms['ROOT'].gather(loc_denom, root=0)  # cylinder 0
             denom = dict()
             if self.ph_object.cylinder_rank == 0:
                 for loc_denom in global_denom:
                     denom.update(loc_denom)
         if self.ph_object.cylinder_rank == 0:
-            prob_list = [s._mpisppy_data.prob_coeff[node.name]
-                         for s in self.ph_object.local_scenarios.values()
-                         for node in s._mpisppy_node_list]
-            w = dict()
-            for k, scenario in self.ph_object.local_scenarios.items():
-                w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
-                                 for ndn_i in scenario._mpisppy_data.nonant_indices])
-            rho = {k : np.abs(np.divide(cost[k] - w[k], denom[k])) for k in all_snames}
-            arranged_rho = {vname: [rho_list[idx] for _, rho_list in rho.items()]
-                            for vname, idx in vname_to_idx.items()}
-            rho = {vname: self._order_stat(rho_list, prob_list) for (vname, rho_list) in arranged_rho.items()}
-            #change null rho to min
-            min_rho = min(r for r in rho.values() if (r > 0))
-            for vname, r in rho.items():
-                if r == 0.0:
-                    rho[vname] = min_rho
-            return rho
+            """
+        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
+                     for s in self.ph_object.local_scenarios.values()]
+        w = dict()
+        for k, scenario in self.ph_object.local_scenarios.items():
+            w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
+                             for ndn_i in scenario._mpisppy_data.nonant_indices])
+        rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in all_snames}
+        local_rhos = {vname: [rho_list[idx] for _, rho_list in rho.items()]
+                        for vname, idx in vname_to_idx.items()}
+        """
+        # dlw changed the order stat to be fully global (but on a triangular dist)
+        rho = {vname: self._order_stat(rho_list, prob_list) for (vname, rho_list) in arranged_rho.items()}
+        #change zero rho to min (dlw: maybe too fragile due to use of references and maybe the wrong place)
+        min_rho = min(r for r in rho.values() if (r > 0))
+        for vname, r in rho.items():
+            if r == 0.0:
+                rho[vname] = min_rho
+        """
+        # Compute a scenario independant rho from a list of rhos using a triangular distribution.
+        alpha = self.cfg.grad_order_stat
+        assert (alpha >= 0 and alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {alpha=} is invalid."
+        rhos = dict()
+        rho_min = np.empty(1, dtype='d')
+        rho_max = np.empty(1, dtype='d')
+        rho_mean = np.empty(1, dtype='d')
+        for vname, rho_vals in local_rhos.items():
+            rho_list = np.array(rho_vals)
+            print(f"{rho_vals =}")
+            self.ph_object.comms["ROOT"].Allreduce([np.min(rho_list), MPI.DOUBLE],
+                                                   [rho_min, MPI.DOUBLE],
+                                                   op=MPI.MIN)
+            self.ph_object.comms["ROOT"].Allreduce([np.max(rho_list), MPI.DOUBLE],
+                                                   [rho_max, MPI.DOUBLE],
+                                                   op=MPI.MAX)
+            local_mean = np.dot(rho_list, prob_list)
+            local_prob = np.sum(prob_list)
+            local_wgted_mean = local_prob * local_mean
+            self.ph_object.comms["ROOT"].Allreduce([local_wgted_mean, MPI.DOUBLE],
+                                                   [rho_mean, MPI.DOUBLE],
+                                                   op=MPI.MAX)
+            if alpha == 0.5:
+                rhos[vname] = float(rho_mean)
+            elif alpha == 0.0:
+                rhos[vname] = float(rho_min)
+            elif alpha == 1.0:
+                rhos[vname] = float(rho_max)
+            elif alpha < 0.5:
+                rhos[vname] = float(rho_min + alpha * 2 * (rho_mean - rho_min))
+            elif alpha > 0.5:
+                rhos[vname] = float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)
+            else:
+                raise RuntimeError("Coding error.")
+
+        return rhos
 
 
     def write_grad_rho(self):
-        """ Write the computed rhos in the file --rho-file.
+        """ Write the computed rhos in the file --grad-rho-file-out.
             Note: this file was originally opened for append access
         """
         if self.cfg.grad_rho_file_out == '':

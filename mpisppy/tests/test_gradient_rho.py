@@ -185,13 +185,6 @@ class Test_find_rho_farmer(unittest.TestCase):
         denom = self.rho_object._grad_denom()
         self.assertAlmostEqual(denom[0], 21.48148148148148) 
 
-    def test_order_stat(self):
-        self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
-        test_list = [4, 3, 1, 5, 2]
-        proba_list = [0.1, 0.1, 0.2, 0.3, 0.3]
-        rho = self.rho_object._order_stat(test_list, proba_list)
-        self.assertAlmostEqual(rho, 2.6)
-
     def test_compute_rho(self):
         self.cfg.grad_cost_file_out= './examples/rho_test_data/grad_cost.csv'
         self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out
