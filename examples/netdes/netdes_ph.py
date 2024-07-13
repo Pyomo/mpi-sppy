@@ -32,13 +32,13 @@ def main():
         'PHIterLimit'          : int(sys.argv[2]),
         'defaultPHrho'         : float(sys.argv[3]),
         'convthresh'           : -1e-8,
-        'verbose'              : True,
+        'verbose'              : False,
         'display_progress'     : True,
         'display_timing'       : True,
-        'iter0_solver_options' : dict(),
-        'iterk_solver_options' : dict(),
+        'iter0_solver_options' : {"threads": 1},
+        'iterk_solver_options' : {"threads": 1},
         'bundles_per_rank'     : 0, # 0 = no bundles
-        "display_convergence_detail": True,
+        "display_convergence_detail": False,
         'xhat_closest_options' : {'xhat_solver_options': {}, 'keep_solution':True},
         "smoothed": int(sys.argv[4]),
         "defaultPHp": float(sys.argv[5]),
@@ -65,7 +65,7 @@ def main():
     #          f'(conv = {conv:.1e})')
     
     # ph.post_solve_bound(verbose=False)
-    
+
     variables = ph.gather_var_values_to_rank0()
     for (scenario_name, variable_name) in variables:
         variable_value = variables[scenario_name, variable_name]
