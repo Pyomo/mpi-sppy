@@ -206,7 +206,7 @@ class Pyomo_guest():
         solver_name = s._solver_plugin.name
         solver = pyo.SolverFactory(solver_name)
         if 'persistent' in solver_name:
-            raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
+            raise RuntimeError("Persistent solvers are not currently supported in the pyomo agnostic example.")
             ###solver.set_instance(ef, symbolic_solver_labels=True)
             ###solver.solve(tee=True)
         else:
@@ -258,7 +258,7 @@ class Pyomo_guest():
                 s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
             # the next line ignore bundles (other than proper bundles)
-            s._mpisppy_data._obj_from_agnostic = pyo.value(sputils.get_objs(s)[0])
+            s._mpisppy_data._obj_from_agnostic = pyo.value(sputils.get_objs(gs)[0])
 
 
     # local helper
