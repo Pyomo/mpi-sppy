@@ -65,6 +65,10 @@ if __name__ == "__main__":
 
     cfg = _parse_args(module)
 
+    # special hack to support bundles
+    if hasattr(module, "bundle_hack"):
+        module.bundle_hack(cfg)
+
     supported_guests = {"Pyomo", "AMPL"}
     if cfg.guest_language not in supported_guests:
         raise ValueError(f"Not a supported guest language: {cfg.guest_language}\n"

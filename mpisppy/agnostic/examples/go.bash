@@ -1,7 +1,11 @@
 #!/bin/bash
-python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 6 --solver-name cplex --guest-language Pyomo --bundle-size 3
+python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 6 --solver-name cplex --guest-language Pyomo
 
-mpiexec -np 3 python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 6 --solver-name cplex --guest-language Pyomo --bundle-size 3 --xhatshuffle --lagrangian --max-iterations 10 --rel-gap .01
+python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 6 --solver-name cplex --guest-language Pyomo --bundle-size 3 
+
+#mpiexec -np 3 python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 6 --solver-name cplex --guest-language Pyomo --xhatshuffle --lagrangian --max-iterations 10 --rel-gap .01
+
+#mpiexec -np 3 python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 6 --solver-name cplex --guest-language Pyomo --bundle-size 3 --xhatshuffle --lagrangian --max-iterations 10 --rel-gap .01
 
 #python ../agnostic_cylinders.py --module-name farmer4agnostic --default-rho 1 --num-scens 3 --solver-name cplex --guest-language Pyomo
 # NOTE: you need the AMPL solvers!!!

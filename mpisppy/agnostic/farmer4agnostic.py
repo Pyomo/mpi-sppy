@@ -87,6 +87,7 @@ def scenario_creator(
         return model
     
     elif "bund" == scenario_name[:4] or "Bund" == scenario_name[:4]:
+        print("making a bundle")
         firstnum = int(sname.split("_")[1])
         lastnum = int(sname.split("_")[2])
         bunsize = (lastnum-firstnum+1)
@@ -268,8 +269,11 @@ def scenario_names_creator(num_scens,start=None):
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+    if bunsize == 0:
+        return [f"scen{i}" for i in range(start,start+num_scens)]
+    else:
+        # The hack should have changed the value of num_scens to be a fib!
+        return [f"bundle{i}" for i in range(start,start+num_scens)]
 
 
 #=========
@@ -348,7 +352,9 @@ def bundle_hack(cfg):
     if cfg.bundle_size > 1:
         assert cfg.num_scens % cfg.bundle_size == 0,\
             "Due to laziness, the bundle size must divide the number of scenarios"
+        global bunsize, numbuns
         bunsize = cfg.bundle_size
-        numbus = cfg.num_scens // cfg.bundle_size
+        numbuns = cfg.num_scens // cfg.bundle_size
+        cfg.num_scens = numbuns
 
         
