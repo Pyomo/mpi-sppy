@@ -257,10 +257,8 @@ class Pyomo_guest():
 
                 s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
-            # the next line ignore bundling
-            s._mpisppy_data._obj_from_agnostic = pyo.value(gs.Total_Cost_Objective)
-
-        # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
+            # the next line ignore bundles (other than proper bundles)
+            s._mpisppy_data._obj_from_agnostic = pyo.value(sputils.get_objs(s)[0])
 
 
     # local helper

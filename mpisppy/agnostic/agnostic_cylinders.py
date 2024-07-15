@@ -69,7 +69,6 @@ if __name__ == "__main__":
     if hasattr(module, "bundle_hack"):
         module.bundle_hack(cfg)
         # num_scens is now really numbuns
-        print(f"__main__ {cfg.num_scens=}")
 
     supported_guests = {"Pyomo", "AMPL"}
     if cfg.guest_language not in supported_guests:
