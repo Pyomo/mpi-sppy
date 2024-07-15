@@ -90,6 +90,7 @@ def scenario_creator(
         print("making a bundle")
         firstnum = int(sname.split("_")[1])
         lastnum = int(sname.split("_")[2])
+        print(f"{lastnum=}, {firstnum=}")
         bunsize = (lastnum-firstnum+1)
         assert num_scens % bunsize != 0, "Due to laziness, we need equal sized bundeles"
         snames = [f"scen{i}" for i in range(firstnum, lastnum+1)]
@@ -116,7 +117,7 @@ def scenario_creator(
         nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]
         attach_root_node(bundle, 0, nonantlist)
         # scenarios are equally likely so bundles are too
-        bundle._mpisppy_probability = "uniform"  # also assumed for scenarios for now
+        bundle._mpisppy_probability = 1/numbuns
         return bundle
     else:
         raise RuntimeError (f"Scenario name does not have scen or bund: {sname}")       
@@ -267,12 +268,14 @@ def pysp_instance_creation_callback(
 def scenario_names_creator(num_scens,start=None):
     # return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
+    print(f"names_creator {bunsize=}")
     if (start is None) :
         start=0
     if bunsize == 0:
         return [f"scen{i}" for i in range(start,start+num_scens)]
     else:
         # The hack should have changed the value of num_scens to be a fib!
+        xxxx
         return [f"bundle{i}" for i in range(start,start+num_scens)]
 
 
@@ -349,6 +352,7 @@ def bundle_hack(cfg):
     # Hack to put bundle information in global variables to be used by
     # the names creator.  (only relevant for bundles)
     # numbuns and bunsize are globals with default value 0
+    print(f"hack {cfg.bundle_size=}")
     if cfg.bundle_size > 1:
         assert cfg.num_scens % cfg.bundle_size == 0,\
             "Due to laziness, the bundle size must divide the number of scenarios"
