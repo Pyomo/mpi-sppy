@@ -198,10 +198,11 @@ class Pyomo_guest():
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
 
-        print(f" in _solve_one  {global_rank =}")
+        # print(f" in _solve_one  {global_rank =}")
         if global_rank == 0:
-            print(f"{gs.W.pprint() =}")
-            print(f"{gs.xbars.pprint() =}")
+            #print(f"{gs.W.pprint() =}")
+            #print(f"{gs.xbars.pprint() =}")
+            pass
         solver_name = s._solver_plugin.name
         solver = pyo.SolverFactory(solver_name)
         if 'persistent' in solver_name:

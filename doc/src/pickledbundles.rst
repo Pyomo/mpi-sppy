@@ -1,3 +1,5 @@
+.. _Pickled-Bundles:
+
 Pickled Bundles
 ===============
 
