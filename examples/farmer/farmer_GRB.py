@@ -65,7 +65,11 @@ m.addConstr(sell['beets'] + sell_excess <= Random_Yield['beets'] * area['beets']
 
 m.optimize()
 
+m.write('two_stage_farmer_model.lp')
+
+"""
 for v in m.getVars():
     print(f'{v.varName}: {v.x}')
 print(f'Optimal objective value: {m.objVal}')
+"""
 
