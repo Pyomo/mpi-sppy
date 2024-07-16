@@ -6,14 +6,13 @@
 This file tries to show many ways to do things in gams,
 but not necessarily the best ways in any case.
 """
-
 import os
 import time
 import gams
 import gamspy_base
 import shutil
 
-LINEARIZED = True   # False means quadratic prox (hack)
+LINEARIZED = False   # False means quadratic prox (hack)
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 gamspy_base_dir = gamspy_base.__path__[0]
@@ -55,6 +54,7 @@ def scenario_creator(
         seedoffset (int): used by confidence interval code
 
     """
+    print(f"******************************** {scenario_name=}")
     nonants_support_set_list = [nonants_support_set_name] # should be given
     nonant_variables_list = [nonant_variables_name]
 
@@ -62,11 +62,15 @@ def scenario_creator(
 
     ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
 
-    new_file_name = "GAMS/farmer_average_ph.gms"
+    if LINEARIZED:
+        new_file_name = "GAMS/farmer_average_ph_linearized"
+    else:
+        new_file_name = "GAMS/farmer_average_ph_quadratic"
 
     job = ws.add_job_from_file(new_file_name)
 
-    job.run()
+    job.run() # at this point the model is solved, it creates the file _gams_py_gjo0.lst
+    print("!!!!!!!!!!!!! first unuseful solve done")
 
     cp = ws.add_checkpoint()
     mi = cp.add_modelinstance()
@@ -109,7 +113,10 @@ def scenario_creator(
     if LINEARIZED:
         mi.instantiate("simple using lp minimizing objective_ph", glist)
     else:
-        mi.instantiate("simple min negprofit using nlp", glist)
+        mi.instantiate("simple using qcp minimizing objective_ph", glist)
+        #mi.instantiate("simple using cplex minimizing objective_ph", glist)
+
+    mi.solve()
 
     # initialize W, rho, xbar, W_on, prox_on
     """for param in [ph_W, xbar, rho]:
@@ -172,6 +179,19 @@ def scenario_creator(
             "nonant_ubs" : {("ROOT",i): v.get_upper() for i,v in enumerate(nonant_variable_list)},
         },
     }
+
+    """
+    # Read and print the contents of the Gurobi log file
+    with open(f"gurobi_{scenario_name}.log", "r") as log_file:
+        gurobi_log = log_file.read()
+        print("Gurobi Log File Content:\n")
+        print(gurobi_log)
+
+    # Read and print the contents of the Gurobi LP model file
+    with open(f"my_model_{scenario_name}.lp", "r") as lp_file:
+        lp_model = lp_file.read()
+        print("\nGurobi LP Model File Content:\n")
+        print(lp_model)"""
 
     return gd
     
@@ -247,7 +267,10 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
     assert ext == ".gms", "the original data file should be a gms file"
     
     # Create the new filename
-    new_filename = f"{name}_ph{ext}"
+    if LINEARIZED:
+        new_filename = f"{name}_ph_linearized{ext}"
+    else:
+        new_filename = f"{name}_ph_quadratic{ext}"
     new_file_path = os.path.join(directory, new_filename)
     
     # Copy the original file
@@ -257,7 +280,7 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
     with open(new_file_path, 'r') as file:
         lines = file.readlines()
     
-    keyword = "__InsertPH__here_Model_defined_three_lines_letter"
+    keyword = "__InsertPH__here_Model_defined_three_lines_later"
     line_number = None
 
     # Insert the new text 3 lines before the end
@@ -276,13 +299,14 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
     model_line_stripped = model_line.strip().lower()
 
     model_line_text = ""
-    for nonants_support_set in nonants_support_set_list:
-        model_line_text += f", PenLeft_{nonants_support_set}, PenRight_{nonants_support_set}"
+    if LINEARIZED:
+        for nonants_support_set in nonants_support_set_list:
+            model_line_text += f", PenLeft_{nonants_support_set}, PenRight_{nonants_support_set}"
 
     assert "model" in model_line_stripped and "/" in model_line_stripped and model_line_stripped.endswith("/;"), "this is not "
     lines[insert_position + 1] = model_line[:-4] + model_line_text + ", objective_ph_def" + model_line[-4:]
     
-    my_text = f"""
+    my_old_text_linearized = f"""
 
 Alias(nonants_support_set,{nonants_support_set});
 
@@ -322,9 +346,9 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
    W_on      'activate w term'    /    0 /
    prox_on   'activate prox term' /    0 /"""
     variable_definition = ""
-    equation_definition = ""
+    linearized_inequation_definition = ""
     objective_ph_excess = ""
-    equation_expression = ""
+    linearized_equation_expression = ""
 
     for i in range(len(nonants_support_set_list)):
         nonants_support_set = nonants_support_set_list[i]
@@ -339,19 +363,27 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
         variable_definition += f"""
    PHpenalty_{nonants_support_set}({nonants_support_set}) 'linearized prox penalty'"""
         
-        equation_definition += f"""
+        if LINEARIZED:
+            linearized_inequation_definition += f"""
    PenLeft_{nonants_support_set}({nonants_support_set}) 'left side of linearized PH penalty'
    PenRight_{nonants_support_set}({nonants_support_set}) 'right side of linearized PH penalty'"""
 
+        if LINEARIZED:
+            PHpenalty = f"PHpenalty_{nonants_support_set}({nonants_support_set})"
+        else:
+            PHpenalty = f"(x({nonants_support_set}) - xbar_{nonants_support_set}({nonants_support_set}))*(x({nonants_support_set}) - xbar_{nonants_support_set}({nonants_support_set}))"
         objective_ph_excess += f"""
                 +  W_on * sum({nonants_support_set}, ph_W_{nonants_support_set}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
-                +  prox_on * sum({nonants_support_set}, 0.5 * rho_{nonants_support_set}({nonants_support_set}) * PHpenalty_{nonants_support_set}({nonants_support_set}))"""
+                +  prox_on * sum({nonants_support_set}, 0.5 * rho_{nonants_support_set}({nonants_support_set}) * {PHpenalty})"""
 
-        equation_expression += f"""
+        if LINEARIZED:
+            linearized_equation_expression += f"""
 PenLeft_{nonants_support_set}({nonants_support_set}).. sqr(xbar_{nonants_support_set}({nonants_support_set})) + xbar_{nonants_support_set}({nonants_support_set})*0 + xbar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});
 PenRight_{nonants_support_set}({nonants_support_set}).. sqr(xbar_{nonants_support_set}({nonants_support_set})) - xbar_{nonants_support_set}({nonants_support_set})*land - xbar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});
-"""
 
+PHpenalty_{nonants_support_set}.lo({nonants_support_set}) = 0;
+PHpenalty_{nonants_support_set}.up({nonants_support_set}) = max(sqr(xbar_{nonants_support_set}({nonants_support_set}) - 0), sqr(land - xbar_{nonants_support_set}({nonants_support_set})));
+"""
 
     my_text = f"""
 
@@ -362,12 +394,12 @@ Scalar{scalar_definition};
 Variable{variable_definition}
    objective_ph 'final objective augmented with ph cost';
 
-Equation{equation_definition}
+Equation{linearized_inequation_definition}
    objective_ph_def 'defines objective_ph';
 
 objective_ph_def..    objective_ph =e= - profit {objective_ph_excess};
 
-{equation_expression}
+{linearized_equation_expression}
     """
 
     lines.insert(insert_position, my_text)
@@ -419,6 +451,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         if gripe:
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
             print(f"{gs.model_status =}")
+            raise RuntimeError
             
     if solver_exception is not None:
         raise solver_exception

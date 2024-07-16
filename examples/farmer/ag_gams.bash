@@ -1,6 +1,6 @@
 #!/bin/bash
 
-SOLVERNAME=gurobi
+SOLVERNAME=cplex
 
 #python agnostic_cylinders.py --help
 
