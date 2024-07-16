@@ -12,7 +12,7 @@ import gams
 import gamspy_base
 import shutil
 
-LINEARIZED = False   # False means quadratic prox (hack)
+LINEARIZED = True   # False means quadratic prox (hack) which is not accessible with community license
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 gamspy_base_dir = gamspy_base.__path__[0]
@@ -54,9 +54,7 @@ def scenario_creator(
         seedoffset (int): used by confidence interval code
 
     """
-    print(f"******************************** {scenario_name=}")
-    nonants_support_set_list = [nonants_support_set_name] # should be given
-    nonant_variables_list = [nonant_variables_name]
+    nonants_name_pairs = [(nonants_support_set_name, nonant_variables_name)]
 
     assert crops_multiplier == 1, "just getting started with 3 crops"
 
@@ -69,13 +67,12 @@ def scenario_creator(
 
     job = ws.add_job_from_file(new_file_name)
 
-    job.run() # at this point the model is solved, it creates the file _gams_py_gjo0.lst
-    print("!!!!!!!!!!!!! first unuseful solve done")
+    #job.run() # at this point the model is solved, it creates the file _gams_py_gjo0.lst
 
     cp = ws.add_checkpoint()
     mi = cp.add_modelinstance()
 
-    job.run(checkpoint=cp)
+    job.run(checkpoint=cp) # at this point the model is solved, it creates the file _gams_py_gjo0.lst
 
     crop = mi.sync_db.add_set("crop", 1, "crop type")
 
@@ -85,55 +82,38 @@ def scenario_creator(
     xbar_dict = {}
     rho_dict = {}
 
-    for nonants_support_set_name in nonants_support_set_list:
-        ph_W_dict[nonants_support_set_name] = mi.sync_db.add_parameter_dc(f"ph_W_{nonants_support_set_name}", [nonants_support_set_name,], "ph weight")
-        xbar_dict[nonants_support_set_name] = mi.sync_db.add_parameter_dc(f"xbar_{nonants_support_set_name}", [nonants_support_set_name,], "ph average")
-        rho_dict[nonants_support_set_name] = mi.sync_db.add_parameter_dc(f"rho_{nonants_support_set_name}", [nonants_support_set_name,], "ph rho")
+    for nonants_name_pair in nonants_name_pairs:
+        nonants_support_set_name, nonant_variables_name = nonants_name_pair
+        ph_W_dict[nonants_name_pair] = mi.sync_db.add_parameter_dc(f"ph_W_{nonants_support_set_name}", [nonants_support_set_name,], "ph weight")
+        xbar_dict[nonants_name_pair] = mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar_{nonants_support_set_name}", [nonants_support_set_name,], "ph average")
+        rho_dict[nonants_name_pair] = mi.sync_db.add_parameter_dc(f"rho_{nonants_support_set_name}", [nonants_support_set_name,], "ph rho")
 
     W_on = mi.sync_db.add_parameter(f"W_on", 0, "activate w term")
     prox_on = mi.sync_db.add_parameter(f"prox_on", 0, "activate prox term")
 
-    """nonant_variables_def_eq = mi.sync_db.add_equation("nonant_variables_def")
-    PenLeft_eq = mi.sync_db.add_equation("PenLeft")
-    PenRight_eq = mi.sync_db.add_equation("PenRight")
-    objective_ph_def_eq = mi.sync_db.add_equation("objective_ph_def")"""
-
     glist = [gams.GamsModifier(y)] \
-        + [gams.GamsModifier(ph_W_dict[nonants_support_set_name]) for nonants_support_set_name in nonants_support_set_list] \
-        + [gams.GamsModifier(xbar_dict[nonants_support_set_name]) for nonants_support_set_name in nonants_support_set_list] \
-        + [gams.GamsModifier(rho_dict[nonants_support_set_name]) for nonants_support_set_name in nonants_support_set_list] \
+        + [gams.GamsModifier(ph_W_dict[nonants_name_pair]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(xbar_dict[nonants_name_pair]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(rho_dict[nonants_name_pair]) for nonants_name_pair in nonants_name_pairs] \
         + [gams.GamsModifier(W_on)] \
         + [gams.GamsModifier(prox_on)]
-        
-    """gams.GamsModifier(nonant_variables_def_eq),
-            gams.GamsModifier(PenLeft_eq),
-            gams.GamsModifier(PenRight_eq),
-            gams.GamsModifier(objective_ph_def_eq),"""
 
     if LINEARIZED:
         mi.instantiate("simple using lp minimizing objective_ph", glist)
     else:
         mi.instantiate("simple using qcp minimizing objective_ph", glist)
-        #mi.instantiate("simple using cplex minimizing objective_ph", glist)
 
     mi.solve()
 
     # initialize W, rho, xbar, W_on, prox_on
-    """for param in [ph_W, xbar, rho]:
-        for rec in param:
-            print("1111111111111111111111111111111111111111")
-            value = rec.value  # This reads the value from the GAMS file
-            param.add_record(rec.keys).value = value
-    for scalar in [W_on, prox_on]:
-        scalar.add_record().value = 0"""
     crops = ["wheat", "corn", "sugarbeets"]
-    for nonants_support_set_name in nonants_support_set_list:
+    for nonants_name_pair in nonants_name_pairs:
         for c in crops:
-            ph_W_dict[nonants_support_set_name].add_record(c).value = 0
-            xbar_dict[nonants_support_set_name].add_record(c).value = 0
-            rho_dict[nonants_support_set_name].add_record(c).value = 0
-    W_on.add_record().value = 0
-    prox_on.add_record().value = 0
+            ph_W_dict[nonants_name_pair].add_record(c).value = 0
+            xbar_dict[nonants_name_pair].add_record(c).value = 0
+            rho_dict[nonants_name_pair].add_record(c).value = 1
+    W_on.add_record().value = 1
+    prox_on.add_record().value = 1
 
     # scenario specific data applied
     scennum = sputils.extract_num(scenario_name)
@@ -153,9 +133,8 @@ def scenario_creator(
 
     mi.solve()
     nonant_variable_list = list( mi.sync_db[f"{nonant_variables_name}"] ) 
-    my_dict = {("ROOT",i): p for nonants_support_set_name in nonants_support_set_list for i,p in enumerate(ph_W_dict[nonants_support_set_name]) }
-    #my_dict = {("ROOT",i): p for i,p in enumerate(ph_W)}
-    # In general, be sure to process variables in the same order has the guest does (so indexes match)
+
+    # In general, be sure to process variables in the same order as the guest does (so indexes match)
     nonant_names_dict = {("ROOT",i): (f"{nonant_variables_name}", v.key(0)) for i, v in enumerate(nonant_variable_list)}    
     gd = {
         "scenario": mi,
@@ -168,9 +147,9 @@ def scenario_creator(
         "sense": pyo.minimize,
         "BFs": None,
         "ph" : {
-            "ph_W" : {("ROOT",i): p for nonants_support_set_name in nonants_support_set_list for i,p in enumerate(ph_W_dict[nonants_support_set_name])},
-            "xbar" : {("ROOT",i): p for nonants_support_set_name in nonants_support_set_list for i,p in enumerate(xbar_dict[nonants_support_set_name])},
-            "rho" : {("ROOT",i): p for nonants_support_set_name in nonants_support_set_list for i,p in enumerate(rho_dict[nonants_support_set_name])},
+            "ph_W" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(ph_W_dict[nonants_name_pair])},
+            "xbar" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(xbar_dict[nonants_name_pair])},
+            "rho" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(rho_dict[nonants_name_pair])},
             "W_on" : W_on.first_record(),
             "prox_on" : prox_on.first_record(),
             #"obj" : mi.sync_db["negprofit"].find_record(),
@@ -179,19 +158,6 @@ def scenario_creator(
             "nonant_ubs" : {("ROOT",i): v.get_upper() for i,v in enumerate(nonant_variable_list)},
         },
     }
-
-    """
-    # Read and print the contents of the Gurobi log file
-    with open(f"gurobi_{scenario_name}.log", "r") as log_file:
-        gurobi_log = log_file.read()
-        print("Gurobi Log File Content:\n")
-        print(gurobi_log)
-
-    # Read and print the contents of the Gurobi LP model file
-    with open(f"my_model_{scenario_name}.lp", "r") as lp_file:
-        lp_model = lp_file.read()
-        print("\nGurobi LP Model File Content:\n")
-        print(lp_model)"""
 
     return gd
     
@@ -305,41 +271,8 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
 
     assert "model" in model_line_stripped and "/" in model_line_stripped and model_line_stripped.endswith("/;"), "this is not "
     lines[insert_position + 1] = model_line[:-4] + model_line_text + ", objective_ph_def" + model_line[-4:]
-    
-    my_old_text_linearized = f"""
 
-Alias(nonants_support_set,{nonants_support_set});
-
-Parameter
-   ph_W(nonants_support_set)        'ph weight'                   /set.nonants_support_set 0/
-   xbar(nonants_support_set)        'ph average'                  /set.nonants_support_set 0/
-   rho(nonants_support_set)         'ph rho'                      /set.nonants_support_set 0/;
-
-Scalar
-   W_on      'activate w term'    /    0 /
-   prox_on   'activate prox term' /    0 /;
-
-Variable
-   nonant_variables(nonants_support_set) 'the nonant_variables'
-   PHpenalty(nonants_support_set) 'linearized prox penalty'
-   objective_ph 'objective variable with ph included';
-
-Equation
-   nonant_variables_def(nonants_support_set) 'getting the values of the nonant_variables'
-   PenLeft(nonants_support_set) 'left side of linearized PH penalty'
-   PenRight(nonants_support_set) 'right side of linearized PH penalty'
-   objective_ph_def 'objective augmented with ph cost';
-
-nonant_variables_def(nonants_support_set).. nonant_variables(nonants_support_set) =e= {nonant_variables}(nonants_support_set);
-
-objective_ph_def..    objective_ph =e= - profit
-                       +  W_on * sum(nonants_support_set, ph_W(nonants_support_set)*nonant_variables(nonants_support_set))
-                       +  prox_on * sum(nonants_support_set, 0.5 * rho(nonants_support_set) * PHpenalty(nonants_support_set));
-
-PenLeft(nonants_support_set).. sqr(xbar(nonants_support_set)) + xbar(nonants_support_set)*0 + xbar(nonants_support_set) * nonant_variables(nonants_support_set) + land * nonant_variables(nonants_support_set) =g= PHpenalty(nonants_support_set);
-PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_support_set)*land - xbar(nonants_support_set)*nonant_variables(nonants_support_set) + land * nonant_variables(nonants_support_set) =g= PHpenalty(nonants_support_set);
-
-    """
+    ### TBD differenciate if there is written "/ all /" in the gams model
 
     parameter_definition = ""
     scalar_definition = f"""
@@ -357,7 +290,7 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
 
         parameter_definition += f"""
    ph_W_{nonants_support_set}({nonants_support_set})        'ph weight'                   /set.{nonants_support_set} 0/
-   xbar_{nonants_support_set}({nonants_support_set})        'ph average'                  /set.{nonants_support_set} 0/
+   {nonant_variables}bar_{nonants_support_set}({nonants_support_set})        'ph average'                  /set.{nonants_support_set} 0/
    rho_{nonants_support_set}({nonants_support_set})         'ph rho'                      /set.{nonants_support_set} 0/"""
         
         variable_definition += f"""
@@ -371,18 +304,18 @@ PenRight(nonants_support_set).. sqr(xbar(nonants_support_set)) - xbar(nonants_su
         if LINEARIZED:
             PHpenalty = f"PHpenalty_{nonants_support_set}({nonants_support_set})"
         else:
-            PHpenalty = f"(x({nonants_support_set}) - xbar_{nonants_support_set}({nonants_support_set}))*(x({nonants_support_set}) - xbar_{nonants_support_set}({nonants_support_set}))"
+            PHpenalty = f"({nonant_variables}({nonants_support_set}) - {nonant_variables}bar_{nonants_support_set}({nonants_support_set}))*({nonant_variables}({nonants_support_set}) - {nonant_variables}bar_{nonants_support_set}({nonants_support_set}))"
         objective_ph_excess += f"""
                 +  W_on * sum({nonants_support_set}, ph_W_{nonants_support_set}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
                 +  prox_on * sum({nonants_support_set}, 0.5 * rho_{nonants_support_set}({nonants_support_set}) * {PHpenalty})"""
-
+        
         if LINEARIZED:
             linearized_equation_expression += f"""
-PenLeft_{nonants_support_set}({nonants_support_set}).. sqr(xbar_{nonants_support_set}({nonants_support_set})) + xbar_{nonants_support_set}({nonants_support_set})*0 + xbar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});
-PenRight_{nonants_support_set}({nonants_support_set}).. sqr(xbar_{nonants_support_set}({nonants_support_set})) - xbar_{nonants_support_set}({nonants_support_set})*land - xbar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});
+PenLeft_{nonants_support_set}({nonants_support_set}).. sqr({nonant_variables}bar_{nonants_support_set}({nonants_support_set})) + {nonant_variables}bar_{nonants_support_set}({nonants_support_set})*0 + {nonant_variables}bar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});
+PenRight_{nonants_support_set}({nonants_support_set}).. sqr({nonant_variables}bar_{nonants_support_set}({nonants_support_set})) - {nonant_variables}bar_{nonants_support_set}({nonants_support_set})*land - {nonant_variables}bar_{nonants_support_set}({nonants_support_set}) * {nonant_variables}({nonants_support_set}) + land * {nonant_variables}({nonants_support_set}) =g= PHpenalty_{nonants_support_set}({nonants_support_set});
 
 PHpenalty_{nonants_support_set}.lo({nonants_support_set}) = 0;
-PHpenalty_{nonants_support_set}.up({nonants_support_set}) = max(sqr(xbar_{nonants_support_set}({nonants_support_set}) - 0), sqr(land - xbar_{nonants_support_set}({nonants_support_set})));
+PHpenalty_{nonants_support_set}.up({nonants_support_set}) = max(sqr({nonant_variables}bar_{nonants_support_set}({nonants_support_set}) - 0), sqr(land - {nonant_variables}bar_{nonants_support_set}({nonants_support_set})));
 """
 
     my_text = f"""
@@ -400,14 +333,9 @@ Equation{linearized_inequation_definition}
 objective_ph_def..    objective_ph =e= - profit {objective_ph_excess};
 
 {linearized_equation_expression}
-    """
+"""
 
     lines.insert(insert_position, my_text)
-    #lines[-3] = ""
-    #lines[-3] = "Model simple / profitdef, landuse, req, beets, ylddef, PenLeft, PenRight, objective_ph_def /;"
-
-    #lines[-1] = "solve simple using lp minimizing objective_ph;"
-    #lines[-1] = ""
 
     # Write the modified content back to the new file
     with open(new_file_path, 'w') as file:
