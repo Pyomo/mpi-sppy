@@ -154,6 +154,7 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
         admm_stoch_subproblem_scenario_name (str): name of the admm stochastic scenario subproblem
         scenario (Pyomo ConcreteModel): the instantiated model
     """
+    return
     print(f"flow values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.flow.pprint()
     print(f"slack values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
@@ -334,7 +335,7 @@ def inparser_adder(cfg):
     
     ### For the scalable example
     cfg.add_to_config("scalable",
-                      description="decides whether a sclale model is used",
+                      description="decides whether a scalable model is used",
                       domain=bool,
                       default=False)
 
