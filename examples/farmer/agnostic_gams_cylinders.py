@@ -1,7 +1,7 @@
 # This software is distributed under the 3-clause BSD License.
 # Started by dlw Aug 2023
 
-import farmer_gams_gen_agnostic as farmer_gams_agnostic
+import farmer_gams_gen_agnostic2 as farmer_gams_agnostic
 #import farmer_gams_agnostic
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
@@ -41,10 +41,13 @@ if __name__ == "__main__":
     original_file = "GAMS/farmer_average.gms"
     nonants_support_set_name = "crop"
     nonant_variables_name = "x"
+    nonants_name_pairs = [(nonants_support_set_name, nonant_variables_name)]
+
+
     if global_rank == 0:
         # Code for rank 0 to execute the task
         print("Global rank 0 is executing the task.")
-        farmer_gams_agnostic.create_ph_model(original_file, nonants_support_set_name, nonant_variables_name)
+        farmer_gams_agnostic.create_ph_model(original_file, nonants_name_pairs)
         print("Global rank 0 has completed the task.")
 
     # Broadcast a signal from rank 0 to all other ranks indicating the task is complete

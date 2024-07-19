@@ -14,7 +14,7 @@ import gamspy_base
 import shutil
 
 LINEARIZED = True   # False means quadratic prox (hack) which is not accessible with community license
-VERBOSE = 0
+VERBOSE = -1
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 gamspy_base_dir = gamspy_base.__path__[0]
@@ -33,8 +33,9 @@ from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
+# For now nonants_name_pairs is a default otherwise things get tricky as we need to ask a list of pairs to cfg
 def scenario_creator(
-    scenario_name,  nonants_support_set_name="crop", nonant_variables_name="x", use_integer=False, sense=pyo.minimize, crops_multiplier=1,
+    scenario_name,  nonants_name_pairs=[("crop","x")], use_integer=False, sense=pyo.minimize, crops_multiplier=1,
         num_scens=None, seedoffset=0,
 ):
     """ Create a scenario for the (scalable) farmer example.
@@ -56,7 +57,6 @@ def scenario_creator(
         seedoffset (int): used by confidence interval code
 
     """
-    nonants_name_pairs = [(nonants_support_set_name, nonant_variables_name)]
 
     assert crops_multiplier == 1, "just getting started with 3 crops"
 
@@ -74,7 +74,7 @@ def scenario_creator(
     cp = ws.add_checkpoint()
     mi = cp.add_modelinstance()
 
-    if VERBOSE == 0:
+    if VERBOSE == 3:
         db = ws.add_database()
         # Step 3: Set up options for LST file generation
         opt = ws.add_options()
@@ -140,66 +140,42 @@ def scenario_creator(
     elif scennum == 2: # above
         y.add_record("wheat").value = 3.0
         y.add_record("corn").value = 3.6
-        y.add_record("sugarbeets").value = 24.0
-
-    """variable1 = job.out_db["PHpenalty_crop"]
-    variable2 = job.out_db["x"]
-    variables = [variable1, variable2]
-    for variable in variables:
-        for rec in variable:
-            index = rec.keys  # This will be a tuple if the variable is multi-dimensional
-            level = rec.level
-            lower = rec.lower
-            upper = rec.upper
-            marginal = rec.marginal
-            print(f"{variable.name, index,level,lower, upper, marginal, scenario_name=}")"""
-    
+        y.add_record("sugarbeets").value = 24.0    
 
     mi.solve()
     #print(f'{mi.sync_db[f"{nonant_variables_name}"]=}')
     nonant_variable_list = list( mi.sync_db[f"{nonant_variables_name}"] )
     nonant_names_dict = {("ROOT",i): (f"{nonant_variables_name}", v.key(0)) for i, v in enumerate(nonant_variable_list)}
 
-    if VERBOSE == 1:
-        # In general, be sure to process variables in the same order as the guest does (so indexes match)    
-        dict={("ROOT",i): (v, v.get_keys(), v.get_level()) for i,v in enumerate(nonant_variable_list)}
-        print(f'{dict=}')
-
-        print(f"{mi.sync_db['objective_ph'].find_record().get_level()=}")
-
     gd = {
         "scenario": mi,
-        "nonants": {("ROOT",i): v for i,v in enumerate(nonant_variable_list)},
+        "nonants": {("ROOT",i): 0 for i,v in enumerate(nonant_variable_list)},
         "nonant_fixedness": {("ROOT",i): v.get_lower() == v.get_upper() for i,v in enumerate(nonant_variable_list)},
         "nonant_start": {("ROOT",i): v.get_level() for i,v in enumerate(nonant_variable_list)},
-        "nonant_names": nonant_names_dict,
+        #"nonant_names": nonant_names_dict,
         "nameset": {nt[0] for nt in nonant_names_dict.values()},
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None,
-        "ph" : {
-            "ph_W" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(ph_W_dict[nonants_name_pair])},
-            "xbar" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(xbar_dict[nonants_name_pair])},
-            "rho" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(rho_dict[nonants_name_pair])},
-            "W_on" : W_on.first_record(),
-            "prox_on" : prox_on.first_record(),
-            "obj" : mi.sync_db["objective_ph"].find_record(),
-            "nonant_lbs" : {("ROOT",i): v.get_lower() for i,v in enumerate(nonant_variable_list)},
-            "nonant_ubs" : {("ROOT",i): v.get_upper() for i,v in enumerate(nonant_variable_list)},
-        },
-        "PHpenalty_crop": list( mi.sync_db["PHpenalty_crop"] ),
-        "job": (job, ws, db),
+
+        ### Everything added in ph is records. The problem is that the GamsSymbolRecord are only a snapshot of
+        # the model. Moreover, once the record is detached from the model, setting the record to have a value
+        # won't change the database. Therefore, I have chosen to obtain at each iteration the parameter directly
+        # from the synchronized database.
+        # The other option might have been to redefine gd at each iteration. But even if this is done, I doubt
+        # that some functions such as _reenable_W could be done easily.
+
+        #"ph" : {
+            #"ph_W" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(ph_W_dict[nonants_name_pair])},
+            #"xbar" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(xbar_dict[nonants_name_pair])},
+            #"rho" : {("ROOT",i): p for nonants_name_pair in nonants_name_pairs for i,p in enumerate(rho_dict[nonants_name_pair])},
+            #"W_on" : W_on.first_record(),
+            #"prox_on" : prox_on.first_record(),
+            #"obj" : mi.sync_db["objective_ph"].find_record(),
+            #"nonant_lbs" : {("ROOT",i): v.get_lower() for i,v in enumerate(nonant_variable_list)},
+            #"nonant_ubs" : {("ROOT",i): v.get_upper() for i,v in enumerate(nonant_variable_list)},
+        #},
     }
-    if VERBOSE == 0:
-
-        x = mi.sync_db.get_variable('x')
-        print(f"\n {x=} \n")
-        for record in x:
-            print(f"{scenario_name=}, {record.get_keys()=}, {record.get_level()=}")
-
-        for ndn_i, gxvar in gd["nonants"].items():
-            if global_rank == 0:  # debugging
-                print(f"{scenario_name =}, {ndn_i =}, {gxvar.get_keys()=}, {gxvar.get_level() =}")
     return gd
     
 #=========
@@ -215,7 +191,9 @@ def inparser_adder(cfg):
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator
-    return farmer.kw_creator(cfg)
+    kwargs = farmer.kw_creator(cfg)
+    #kwargs["nonants_name_pairs"] = cfg.nonants_name_pairs
+    return kwargs
 
 # This is not needed for PH
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
@@ -243,19 +221,19 @@ def attach_Ws_and_prox(Ag, sname, scenario):
 
 
 def _disable_prox(Ag, scenario):
-    scenario._agnostic_dict["ph"]["prox_on"].set_value(0)
+    scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 0
 
     
 def _disable_W(Ag, scenario):
-    scenario._agnostic_dict["ph"]["W_on"].set_value(0)
+    scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 0
 
     
 def _reenable_prox(Ag, scenario):
-    scenario._agnostic_dict["ph"]["prox_on"].set_value(1)
+    scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 1
 
     
 def _reenable_W(Ag, scenario):
-    scenario._agnostic_dict["ph"]["W_on"].set_value(1)
+    scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 1
     
     
 def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
@@ -263,9 +241,8 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     pass
 
 
-def create_ph_model(original_file, nonants_support_set, nonant_variables):
-    nonants_support_set_list = [nonants_support_set] # should be given
-    nonant_variables_list = [nonant_variables]
+def create_ph_model(original_file, nonants_name_pairs):
+    #nonants_support_set_list = [nonants_support_set] # should be given
 
     # Get the directory and filename
     directory, filename = os.path.split(original_file)
@@ -307,7 +284,8 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
 
     model_line_text = ""
     if LINEARIZED:
-        for nonants_support_set in nonants_support_set_list:
+        for nonants_name_pair in nonants_name_pairs:
+            nonants_support_set, _ = nonants_name_pair
             model_line_text += f", PenLeft_{nonants_support_set}, PenRight_{nonants_support_set}"
 
     assert "model" in model_line_stripped and "/" in model_line_stripped and model_line_stripped.endswith("/;"), "this is not "
@@ -324,20 +302,22 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
     objective_ph_excess = ""
     linearized_equation_expression = ""
 
-    for i in range(len(nonants_support_set_list)):
-        nonants_support_set = nonants_support_set_list[i]
-        print(f"{nonants_support_set}")
-        nonant_variables = nonant_variables_list[i]
+    #for i in range(len(nonants_support_set_list)):
+    for nonant_name_pair in nonants_name_pairs:
+        nonants_support_set, nonant_variables = nonant_name_pair
+        #nonants_support_set = nonants_support_set_list[i]
+        #print(f"{nonants_support_set}")
+        #nonant_variables = nonant_variables_list[i]
 
         parameter_definition += f"""
    ph_W_{nonants_support_set}({nonants_support_set})        'ph weight'                   /set.{nonants_support_set} 1/
    {nonant_variables}bar_{nonants_support_set}({nonants_support_set})        'ph average'                  /set.{nonants_support_set} 0/
    rho_{nonants_support_set}({nonants_support_set})         'ph rho'                      /set.{nonants_support_set} 1/"""
         
-        if LINEARIZED:
-            parameter_definition += f"""
-   x_upper(crop)          'upper bound for x'           /set.crop 500/
-   x_lower(crop)          'lower bound for x'           /set.crop 0/"""
+        #if LINEARIZED:
+        #    parameter_definition += f"""
+   #x_upper(crop)          'upper bound for x'           /set.crop 500/
+   #x_lower(crop)          'lower bound for x'           /set.crop 0/"""
         
         variable_definition += f"""
    PHpenalty_{nonants_support_set}({nonants_support_set}) 'linearized prox penalty'"""
@@ -357,8 +337,8 @@ def create_ph_model(original_file, nonants_support_set, nonant_variables):
         
         if LINEARIZED:
             linearized_equation_expression += f"""
-PenLeft_crop(crop).. PHpenalty_crop(crop) =g= (x.up(crop) - xbar_crop(crop)) * (x(crop) - xbar_crop(crop));
-PenRight_crop(crop).. PHpenalty_crop(crop) =g= (xbar_crop(crop) - x_lower(crop)) * (xbar_crop(crop) - x(crop));
+PenLeft_{nonants_support_set}({nonants_support_set}).. PHpenalty_{nonants_support_set}({nonants_support_set}) =g= ({nonant_variables}.up({nonants_support_set}) - {nonant_variables}bar_{nonants_support_set}({nonants_support_set})) * ({nonant_variables}({nonants_support_set}) - {nonant_variables}bar_{nonants_support_set}({nonants_support_set}));
+PenRight_{nonants_support_set}({nonants_support_set}).. PHpenalty_{nonants_support_set}({nonants_support_set}) =g= ({nonant_variables}bar_{nonants_support_set}({nonants_support_set}) - {nonant_variables}.lo({nonants_support_set})) * ({nonant_variables}bar_{nonants_support_set}({nonants_support_set}) - {nonant_variables}(crop));
 """
             
             unuseful_text = f"""
@@ -446,23 +426,19 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     s._mpisppy_data.scenario_feasible = True
 
     if VERBOSE == 0:
-        # Step 1: Synchronize changes from the model instance back to the database
-
-        job, ws, db = gd["job"]
-        #print(f"{gs.sync_db=}")
-        #print(f"{dir(gs.sync_db)=}")
         x = gs.sync_db.get_variable('x')
-        x2 = gs.sync_db['x']
-        print(f"\n {x=} \n")
+        print(f"\n For scenario {s.name} \n")
         for record in x:
-            print(f"{s.name=}, {record.get_keys()=}, {record.get_level()=}")
-        for record in x2:
             print(f"{s.name=}, {record.get_keys()=}, {record.get_level()=}")
 
 
 
     ## TODO: how to get lower bound??
-    objval = gd["ph"]["obj"].get_level()  # use this?
+    #objval0 = gd["ph"]["obj"].get_level()  # use this?
+    #print(f"{objval0=}")
+    objval1 = gs.sync_db.get_variable('objective_ph').find_record().get_level()
+    print(f"{objval1=}")
+    objval = objval1
     ###phobjval = gs.get_objective("phobj").value()   # use this???
     s._mpisppy_data.outer_bound = objval
 
@@ -470,46 +446,53 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # in general, we need more checks (see the pyomo agnostic guest example)
     for n in gd["nameset"]:    
         list(gs.sync_db[n])   # needed to get current solution, I guess (the iterator seems to have a side-effect because list is needed)
-    for ndn_i, gxvar in gd["nonants"].items():
-        try:   # not sure this is needed
-            float(gxvar.get_level())
-        except:
-            raise RuntimeError(
-                f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
-                "had no value. This usually means this variable "
-                "did not appear in any (active) components, and hence "
-                "was not communicated to the subproblem solver. ")
-        if False: # needed?
-            raise RuntimeError(
-                f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
-                "was presolved out. This usually means this variable "
-                "did not appear in any (active) components, and hence "
-                "was not communicated to the subproblem solver. ")
-
-        s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.get_level()
-        print(f"{gxvar=}")
+    
+    x = gs.sync_db.get_variable('x')
+    i = 0
+    for record in x:
+        ndn_i = ('ROOT', i)
+        s._mpisppy_data.nonant_indices[ndn_i]._value = record.get_level()
+        i += 1
+    
+    if s.name == "scen0" and global_rank == 0 and VERBOSE == 0:
+        printing_penalties = f"solve_one: {s.name =}, linearized_penalty_crop.get_level()... "
         if global_rank == 0:  # debugging
-            """print(f"{dir(gxvar)=}")
-            print(f"{gxvar.key=}")
-            try:
-                print(f"{gxvar.get_keys()=}")
-            except:
-                raise RuntimeError"""
-            print(f"solve_one: {s.name =}, {ndn_i =}, {gxvar.get_level() =}")
+            for penalty_crop in gs.sync_db.get_variable('PHpenalty_crop'):
+                printing_penalties +=f" {penalty_crop.get_level()}, "
+            print(printing_penalties)
+        xbar_dict = {}
+        x_dict = {}
+        x_up_dict = {}
+        ph_W_dict = {}
+        for xbar_record in gs.sync_db.get_parameter('xbar_crop'):
+            xbar_dict[xbar_record.get_keys()[0]] = xbar_record.get_value()
+        for x_record in gs.sync_db.get_variable('x'):
+            x_dict[x_record.get_keys()[0]] = x_record.get_level()
+            x_up_dict[x_record.get_keys()[0]] = x_record.get_upper()
+        for ph_W_record in gs.sync_db.get_parameter('ph_W_crop'):
+            ph_W_dict[ph_W_record.get_keys()[0]] = ph_W_record.get_value()
+        print(f"{xbar_dict =}\n {x_dict =} \n {x_up_dict=}")
 
-    if global_rank == 0:  # debugging
-        for ndn_i, gxbarvar in gd["ph"]["xbar"].items():
-            print(f"solve_one: {s.name =}, {ndn_i =}, {gxbarvar.value =}")
+        linearized_penalty = 0
+        squared_penalty = 0
+        sum_W = 0
+        for rho_record in gs.sync_db.get_parameter('xbar_crop'):
+            crop_name = rho_record.get_keys()[0]
+            linearized_penalty += 0.5 * rho_record.get_value() * (x_up_dict[crop_name] - xbar_dict[crop_name]) * (x_dict[crop_name] - xbar_dict[crop_name])
+            squared_penalty += 0.5 * rho_record.get_value() * (x_dict[crop_name] - xbar_dict[crop_name]) * (x_dict[crop_name] - xbar_dict[crop_name])
+            sum_W += ph_W_dict[crop_name]*x_dict[crop_name]
+        print(f"{linearized_penalty=}")
+        print(f"{squared_penalty=}")
+        print(f"{sum_W=}")
+        #print(f"{dir(gs.sync_db.get_variable('profit'))=}")
 
-    printing_penalties = f"solve_one: {s.name =}, penalty_crop.get_level()... "
-    if global_rank == 0:  # debugging
-        for penalty_crop in gd['PHpenalty_crop']:
-            #printing_penalties += f"{penalty_crop.get_keys()[0]}:"
-            printing_penalties +=f" {penalty_crop.get_level()}, "
-    print(printing_penalties)
+        profit = gs.sync_db.get_variable('profit').first_record().get_level()
+        print(f"{profit=}")
+        print(f"{-profit + sum_W + linearized_penalty =}")
 
-
-    print(f"   {objval =}")
+        print(f"   {objval =}")
+    profit = gs.sync_db.get_variable('profit').first_record().get_level()
+    print(f"{profit=}")
 
     # the next line ignores bundling
     s._mpisppy_data._obj_from_agnostic = objval
@@ -521,33 +504,66 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 def _copy_Ws_xbar_rho_from_host(s):
     # special for farmer
     # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
+
     gd = s._agnostic_dict
     # could/should use set values, but then use a dict to get the indexes right
-    for ndn_i, gxvar in gd["nonants"].items():
+    gs = gd["scenario"]
+    """for ndn_i, gxvar in gd["nonants"].items():
         if hasattr(s._mpisppy_model, "W"):
+            print(f'{gd["ph"]["ph_W"][ndn_i]=} ++++++++++++++++++++++++++++++++++')
+
             gd["ph"]["ph_W"][ndn_i].set_value(s._mpisppy_model.W[ndn_i].value)
             gd["ph"]["rho"][ndn_i].set_value(s._mpisppy_model.rho[ndn_i].value)
             gd["ph"]["xbar"][ndn_i].set_value(s._mpisppy_model.xbars[ndn_i].value)
+
         else:
             # presumably an xhatter; we should check, I suppose
-            pass
+            pass"""
+    if hasattr(s._mpisppy_model, "W"):
+        i = 0
+        for record in gs.sync_db["ph_W_crop"]:
+            ndn_i = ('ROOT', i)
+            #print(f"{record=}")
+            #print(f"{s._mpisppy_model.W[ndn_i].value=}")
+            record.set_value(s._mpisppy_model.W[ndn_i].value)
+            i += 1
+        i = 0
+        for record in gs.sync_db["rho_crop"]:
+            ndn_i = ('ROOT', i)
+            record.set_value(s._mpisppy_model.rho[ndn_i].value)
+            i += 1
+        i = 0
+        for record in gs.sync_db["xbar_crop"]:
+            ndn_i = ('ROOT', i)
+            record.set_value(s._mpisppy_model.xbars[ndn_i].value)
+            i += 1
+        
+
+
 
 
 # local helper
 def _copy_nonants_from_host(s):
     # values and fixedness; 
     gd = s._agnostic_dict
-    raise RuntimeError
-    for ndn_i, gxvar in gd["nonants"].items():
+    """for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        guestVar = gd["nonants"][ndn_i]
-        guestVar.set_level(hostVar._value)
+        guestVar = gd["nonants"][ndn_i]"""
+
+    guestVar = gd["scenario"].sync_db.get_variable("x")
+    i = 0
+    for record_guestVar in guestVar:
+        ndn_i = ("ROOT", i)
+        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+        record_guestVar.set_level(hostVar._value)
         if hostVar.is_fixed():
-            guestVar.set_lower(hostVar._value)
-            guestVar.set_upper(hostVar._value)
+            record_guestVar.set_lower(hostVar._value)
+            record_guestVar.set_upper(hostVar._value)
         else:
-            guestVar.set_lower(gd["ph"]["nonant_lbs"][ndn_i])
-            guestVar.set_upper(gd["ph"]["nonant_ubs"][ndn_i])
+            pass
+            #raise RuntimeError("I don't understand why it would be useful to set the lower bound to its actual value")
+            #guestVar.set_lower(gd["ph"]["nonant_lbs"][ndn_i])
+            #guestVar.set_upper(gd["ph"]["nonant_ubs"][ndn_i])
 
 
 def _restore_nonants(Ag, s):
