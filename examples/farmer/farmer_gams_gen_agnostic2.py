@@ -202,6 +202,12 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
+    print("DEEEEEEEEEEEENOOOOOOOOOUUUUUUUEEEEEEEEEEEMMMMMMMMMEEEEEEENNNNNNNTTTTTTTTTTT")
+    if global_rank == 1:
+        x_dict = {}
+        for x_record in scenario._agnostic_dict["scenario"].sync_db.get_variable('x'):
+            x_dict[x_record.get_keys()[0]] = x_record.get_level()
+        print(f"In {scenario_name}: {x_dict}")
     pass
     # (the fct in farmer won't work because the Var names don't match)
     #farmer.scenario_denouement(rank, scenario_name, scenario)
@@ -220,18 +226,22 @@ def attach_Ws_and_prox(Ag, sname, scenario):
 
 
 def _disable_prox(Ag, scenario):
+    print(f"In {global_rank=} for {scenario.name}: disabling prox")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 0
 
     
 def _disable_W(Ag, scenario):
+    print(f"In {global_rank=} for {scenario.name}: disabling W")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 0
 
     
 def _reenable_prox(Ag, scenario):
+    print(f"In {global_rank=} for {scenario.name}: reenabling prox")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 1
 
     
 def _reenable_W(Ag, scenario):
+    print(f"In {global_rank=} for {scenario.name}: reenabling W")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 1
     
     
@@ -520,6 +530,11 @@ def _copy_Ws_xbar_rho_from_host(s):
             ndn_i = ('ROOT', i)
             record.set_value(s._mpisppy_model.xbars[ndn_i].value)
             i += 1
+    else:
+        """print(f"in {global_rank=}: {s} has no attribute W !!!!!!!!!!! ")
+        print(f"{hasattr(s._mpisppy_model, 'rho')=}")
+        print(f"{hasattr(s._mpisppy_model, 'xbars')=}")"""
+        pass
         
 
 # local helper
@@ -539,20 +554,30 @@ def _copy_nonants_from_host(s):
             record_guestVar.set_level(hostVar._value)
             #record_guestVar.set_lower(hostVar.lb)
             #record_guestVar.set_lower(hostVar.ub)
+        i += 1
+
+    """x_dict = {}
+    for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
+        x_dict[x_record.get_keys()[0]] = x_record.get_level()
+    print(f"In {s.name}, copiing nonants from host: {x_dict}")"""
 
 
 def _restore_nonants(Ag, s):
     # the host has already restored
+    print(f"In {global_rank=} for {s.name}: Restoring nonants")
     _copy_nonants_from_host(s)
 
     
 def _restore_original_fixedness(Ag, s):
+    print(f"In {global_rank=} for {s.name}: Restoring nonants original fixedness")
     _copy_nonants_from_host(s)
 
 
 def _fix_nonants(Ag, s):
+    print(f"In {global_rank=} for {s.name}: Fixing nonants")
     _copy_nonants_from_host(s)
 
 
 def _fix_root_nonants(Ag, s):
+    print(f"In {global_rank=} for {s.name}: Fixing root nonants")
     _copy_nonants_from_host(s)
