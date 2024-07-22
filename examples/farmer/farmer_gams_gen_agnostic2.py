@@ -119,12 +119,11 @@ def scenario_creator(
     variable_x = job.out_db["x"]
     for nonants_name_pair in nonants_name_pairs:
         for c in crops:
-            ph_W_dict[nonants_name_pair].add_record(c).value = 1
-            #print(variable_x[c].level)
-            xbar_dict[nonants_name_pair].add_record(c).value = variable_x[c].level
+            ph_W_dict[nonants_name_pair].add_record(c).value = 0
+            xbar_dict[nonants_name_pair].add_record(c).value = 0
             rho_dict[nonants_name_pair].add_record(c).value = 1
-    W_on.add_record().value = 1
-    prox_on.add_record().value = 1
+    W_on.add_record().value = 0
+    prox_on.add_record().value = 0
 
     # scenario specific data applied
     scennum = sputils.extract_num(scenario_name)
@@ -153,7 +152,7 @@ def scenario_creator(
         "nonant_fixedness": {("ROOT",i): v.get_lower() == v.get_upper() for i,v in enumerate(nonant_variable_list)},
         "nonant_start": {("ROOT",i): v.get_level() for i,v in enumerate(nonant_variable_list)},
         #"nonant_names": nonant_names_dict,
-        "nameset": {nt[0] for nt in nonant_names_dict.values()},
+        #"nameset": {nt[0] for nt in nonant_names_dict.values()}, ### TBD should be modified to carry nonants_name_pairs
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None,
@@ -407,8 +406,8 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         solver_exception = e
         print(f"{solver_exception=}")
 
-    print(f"debug {gs.model_status =}")
-    print(f"debug {gs.solver_status =}")
+    #print(f"debug {gs.model_status =}")
+    #print(f"debug {gs.solver_status =}")
     #time.sleep(0.5)  # just hoping this helps...
     
     solve_ok = (1, 2, 7, 8, 15, 16, 17)
@@ -434,18 +433,15 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
 
     ## TODO: how to get lower bound??
-    #objval0 = gd["ph"]["obj"].get_level()  # use this?
-    #print(f"{objval0=}")
-    objval1 = gs.sync_db.get_variable('objective_ph').find_record().get_level()
-    print(f"{objval1=}")
-    objval = objval1
-    ###phobjval = gs.get_objective("phobj").value()   # use this???
-    s._mpisppy_data.outer_bound = objval
+    objval = gs.sync_db.get_variable('objective_ph').find_record().get_level()
+
+    if gd["sense"] == pyo.minimize:
+        s._mpisppy_data.outer_bound = objval
+    else:
+        s._mpisppy_data.outer_bound = objval
 
     # copy the nonant x values from gs to s so mpisppy can use them in s
     # in general, we need more checks (see the pyomo agnostic guest example)
-    for n in gd["nameset"]:    
-        list(gs.sync_db[n])   # needed to get current solution, I guess (the iterator seems to have a side-effect because list is needed)
     
     x = gs.sync_db.get_variable('x')
     i = 0
@@ -491,8 +487,6 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         print(f"{-profit + sum_W + linearized_penalty =}")
 
         print(f"   {objval =}")
-    profit = gs.sync_db.get_variable('profit').first_record().get_level()
-    print(f"{profit=}")
 
     # the next line ignores bundling
     s._mpisppy_data._obj_from_agnostic = objval
@@ -508,17 +502,6 @@ def _copy_Ws_xbar_rho_from_host(s):
     gd = s._agnostic_dict
     # could/should use set values, but then use a dict to get the indexes right
     gs = gd["scenario"]
-    """for ndn_i, gxvar in gd["nonants"].items():
-        if hasattr(s._mpisppy_model, "W"):
-            print(f'{gd["ph"]["ph_W"][ndn_i]=} ++++++++++++++++++++++++++++++++++')
-
-            gd["ph"]["ph_W"][ndn_i].set_value(s._mpisppy_model.W[ndn_i].value)
-            gd["ph"]["rho"][ndn_i].set_value(s._mpisppy_model.rho[ndn_i].value)
-            gd["ph"]["xbar"][ndn_i].set_value(s._mpisppy_model.xbars[ndn_i].value)
-
-        else:
-            # presumably an xhatter; we should check, I suppose
-            pass"""
     if hasattr(s._mpisppy_model, "W"):
         i = 0
         for record in gs.sync_db["ph_W_crop"]:
@@ -539,17 +522,10 @@ def _copy_Ws_xbar_rho_from_host(s):
             i += 1
         
 
-
-
-
 # local helper
 def _copy_nonants_from_host(s):
     # values and fixedness; 
     gd = s._agnostic_dict
-    """for ndn_i, gxvar in gd["nonants"].items():
-        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        guestVar = gd["nonants"][ndn_i]"""
-
     guestVar = gd["scenario"].sync_db.get_variable("x")
     i = 0
     for record_guestVar in guestVar:
@@ -560,10 +536,9 @@ def _copy_nonants_from_host(s):
             record_guestVar.set_lower(hostVar._value)
             record_guestVar.set_upper(hostVar._value)
         else:
-            pass
-            #raise RuntimeError("I don't understand why it would be useful to set the lower bound to its actual value")
-            #guestVar.set_lower(gd["ph"]["nonant_lbs"][ndn_i])
-            #guestVar.set_upper(gd["ph"]["nonant_ubs"][ndn_i])
+            record_guestVar.set_level(hostVar._value)
+            #record_guestVar.set_lower(hostVar.lb)
+            #record_guestVar.set_lower(hostVar.ub)
 
 
 def _restore_nonants(Ag, s):
