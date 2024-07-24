@@ -13,6 +13,19 @@ import re
 # Note: regions in our model will be represented in mpi-sppy by scenarios and to ensure the inter-region constraints
 #       we will impose the inter-region arcs to be consensus-variables. They will be represented as non anticipative variables in mpi-sppy
 
+def max_revenue(admm_subproblem_names, all_nodes_dict=None, cfg=None, data_params=None):
+    max_rev = 0
+    for admm_subproblem_name in admm_subproblem_names:
+        if cfg.scalable:
+            region_dict = distr_data.scalable_region_dict_creator(admm_subproblem_name, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
+        else:
+            region_dict = distr_data.scalable_region_dict_creator(admm_subproblem_name)  
+        max_rev = max(max_rev, max([region_dict['revenues'][key] for key in region_dict['revenues']]))
+    print(f"{max_rev=}")
+    return max_rev
+
+
+
 
 def inter_arcs_adder(region_dict, inter_region_dict):
     """This function adds to the region_dict the inter-region arcs 
@@ -46,7 +59,7 @@ def inter_arcs_adder(region_dict, inter_region_dict):
 
 
 ###Creates the model when local_dict is given, local_dict depends on the subproblem
-def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize):
+def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None):
     """ Create an arcs formulation of network flow for the region and stochastic scenario considered.
 
     Args:
@@ -78,7 +91,11 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize):
         elif n in local_dict["buyer nodes"]:
             return (local_dict["supply"][n], 0)
         elif n in local_dict["distribution center nodes"]:
-            return (0,0)
+            if cfg.ensure_xhat_feas:
+                # Should be (0,0) but to avoid infeasibility we add a negative slack variable
+                return (None, 0)
+            else:
+                return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
     
@@ -87,9 +104,17 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize):
     model.FirstStageCost = pyo.Expression(expr=\
                     sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
     
-    model.SecondStageCost = pyo.Expression(expr=\
-                    sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
-                    + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]))
+    if cfg.ensure_xhat_feas:
+        model.SecondStageCost = pyo.Expression(expr=\
+                        sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
+                        + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
+                        + sum(2*max_revenue*(-model.y[n]) for n in local_dict["distribution center nodes"]) # too big penalty to allow the stack to be non-zero
+                            )
+    else:
+        model.SecondStageCost = pyo.Expression(expr=\
+                        sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
+                        + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
+                            )
 
     model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost, sense=sense)
     
@@ -114,7 +139,7 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize):
 ###Functions required in other files, which constructions are specific to the problem
 
 ###Creates the scenario
-def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):
+def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None, max_revenue=None):
     """Creates the model, which should include the consensus variables. \n
     However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in stoch_admmWrapper.
 
@@ -139,7 +164,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None
     # Adding inter region arcs nodes and associated features
     local_dict = inter_arcs_adder(region_dict, inter_region_dict)
     # Generating the model
-    model = min_cost_distr_problem(local_dict, cfg)
+    model = min_cost_distr_problem(local_dict, cfg, max_revenue=max_revenue)
 
     sputils.attach_root_node(model, model.FirstStageCost, [model.y[n] for n in  local_dict["factory nodes"]])
     
@@ -154,6 +179,10 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
         admm_stoch_subproblem_scenario_name (str): name of the admm stochastic scenario subproblem
         scenario (Pyomo ConcreteModel): the instantiated model
     """
+    print(f"slack values for the distribution centers for {admm_stoch_subproblem_scenario_name=} at {rank=}")
+    for var in scenario.y:
+        if 'DC' in var:
+            scenario.y[var].pprint()
     return
     print(f"flow values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.flow.pprint()
@@ -161,7 +190,7 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
     scenario.y.pprint()
 
 
-def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):
+def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None, max_revenue=None):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admmWrapper.
 
@@ -205,7 +234,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
     # which have this scenario as an ancestor (parent) in the tree
     for admm_subproblem_name in admm_subproblem_names:
         admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
-        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)
+        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict, max_revenue=max_revenue)
         for node in model._mpisppy_node_list:
             for var in node.nonant_list:
                 if not var.name in consensus_vars[admm_subproblem_name]:
@@ -277,7 +306,7 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     return admm_subproblem_name, stoch_scenario_name
 
 
-def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
+def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params, max_revenue=None):
     """
     Args:
         cfg (config): specifications for the problem given on the command line
@@ -291,6 +320,9 @@ def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
         "cfg" : cfg,
         "data_params" : data_params,
               }
+    if cfg.ensure_xhat_feas:
+        assert max_revenue is not None, "max_revenue has to be added to ensure xhat feasibility"
+        kwargs["max_revenue"] = max_revenue
     return kwargs
 
 
@@ -343,3 +375,8 @@ def inparser_adder(cfg):
                       description="max number of nodes per region and per type",
                       domain=int,
                       default=4)
+    
+    cfg.add_to_config("ensure_xhat_feas",
+                      description="adds slacks with high costs to ensure the feasibility of xhat yet maintaining the optimal",
+                      domain=bool,
+                      default=False)
