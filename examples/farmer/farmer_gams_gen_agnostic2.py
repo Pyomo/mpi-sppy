@@ -36,7 +36,7 @@ global_rank = fullcomm.Get_rank()
 # For now nonants_name_pairs is a default otherwise things get tricky as we need to ask a list of pairs to cfg
 def scenario_creator(
     scenario_name,  nonants_name_pairs=[("crop","x")], use_integer=False, sense=pyo.minimize, crops_multiplier=1,
-        num_scens=None, seedoffset=0,
+        num_scens=None, seedoffset=0, cfg=None,
 ):
     """ Create a scenario for the (scalable) farmer example.
     
@@ -114,11 +114,16 @@ def scenario_creator(
         + [gams.GamsModifier(prox_on)] \
         + [gams.GamsModifier(x, gams.UpdateAction.Lower, xlo)] \
         + [gams.GamsModifier(x, gams.UpdateAction.Upper, xup)]
+        #+ [gams.GamsModifier(xlo)] \
+        #+ [gams.GamsModifier(xup)]
 
+    opt = ws.add_options()
+
+    opt.all_model_types = cfg.solver_name
     if LINEARIZED:
-        mi.instantiate("simple using lp minimizing objective_ph", glist)
+        mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
     else:
-        mi.instantiate("simple using qcp minimizing objective_ph", glist)
+        mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
 
     # initialize W, rho, xbar, W_on, prox_on
     crops = ["wheat", "corn", "sugarbeets"]
@@ -127,17 +132,21 @@ def scenario_creator(
         for c in crops:
             ph_W_dict[nonants_name_pair].add_record(c).value = 0
             xbar_dict[nonants_name_pair].add_record(c).value = 0
-            rho_dict[nonants_name_pair].add_record(c).value = 1
+            if cfg is None:
+                print("WARNING, cfg is not transmitted !!!!!")
+                rho_dict[nonants_name_pair].add_record(c).value = 1
+            else:
+                rho_dict[nonants_name_pair].add_record(c).value = cfg.default_rho
     W_on.add_record().value = 0
     prox_on.add_record().value = 0
 
     """j=0
     for rec in x:
-        print("something")
         xlo.add_record(rec.keys).value = rec.get_lower()
         xup.add_record(rec.keys).value = rec.get_upper()
     if j == 0:
         print("x is EMPTY !!!!!!!!!!!!!!!!!!!!!!!!")"""
+
     for c in crops:
         xlo.add_record(c).value = 0
         xup.add_record(c).value = 500
@@ -173,6 +182,7 @@ def scenario_creator(
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None,
+        "glist":glist,
 
         ### Everything added in ph is records. The problem is that the GamsSymbolRecord are only a snapshot of
         # the model. Moreover, once the record is detached from the model, setting the record to have a value
@@ -208,6 +218,7 @@ def inparser_adder(cfg):
 def kw_creator(cfg):
     # creates keywords for scenario creator
     kwargs = farmer.kw_creator(cfg)
+    kwargs["cfg"] = cfg
     #kwargs["nonants_name_pairs"] = cfg.nonants_name_pairs
     return kwargs
 
@@ -315,7 +326,7 @@ def create_ph_model(original_file, nonants_name_pairs):
             model_line_text += f", PenLeft_{nonants_support_set}, PenRight_{nonants_support_set}"
 
     assert "model" in model_line_stripped and "/" in model_line_stripped and model_line_stripped.endswith("/;"), "this is not "
-    lines[insert_position + 1] = model_line[:-4] + model_line_text + ", objective_ph_def" + ", lo_def" + ", up_def" + model_line[-4:]
+    lines[insert_position + 1] = model_line[:-4] + model_line_text + ", objective_ph_def" + ", lo_def" + ", up_def" + model_line[-4:] #add + ", lo_def" + ", up_def" 
 
     ### TBD differenciate if there is written "/ all /" in the gams model
 
@@ -409,8 +420,6 @@ objective_ph_def..    objective_ph =e= - profit {objective_ph_excess};
     print(f"Modified file saved as: {new_filename}")
     return f"{name}_ph"
 
-
-import traceback
 import inspect
 
 def check_xhat_in_stack():
@@ -436,23 +445,21 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
-    if check_xhat_in_stack():
-        x_dict = {}
-        for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
-            x_dict[x_record.get_keys()[0]] = (x_record.get_level(), x_record.get_lower(), x_record.get_upper())
-        #print(f"In {global_rank=}, for {s.name}, before solve after checking xbar: {x_dict}")
+    x_dict = {}
+    for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
+        x_dict[x_record.get_keys()[0]] = (x_record.get_level(), x_record.get_lower(), x_record.get_upper())
+    #print(f"In {global_rank=}, for {s.name}, before solve: {x_dict}")
 
 
     solver_name = s._solver_plugin.name   # not used?
 
     solver_exception = None
 
-
     try:
         if VERBOSE==2:
             gs.solve(output=sys.stdout)
         else:
-            gs.solve()
+            gs.solve()#update_type=2)
     except Exception as e:
         results = None
         solver_exception = e
@@ -460,6 +467,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     
     solve_ok = (1, 2, 7, 8, 15, 16, 17)
 
+    #print(f"{gs.model_status=}, {gs.solver_status=}")
     if gs.model_status not in solve_ok:
         s._mpisppy_data.scenario_feasible = False
         if gripe:
@@ -481,13 +489,12 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     ## TODO: how to get lower bound??
     objval = gs.sync_db.get_variable('objective_ph').find_record().get_level()
-
+    #print(f"In {global_rank=}, for {s.name}, after solve: {objval=}")
     #print(f"for {global_rank=} {s.name}: comes from x hat  = {check_xhat_in_stack()} and {objval=}")
-    """if check_xhat_in_stack():
-        x_dict = {}
-        for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
-            x_dict[x_record.get_keys()[0]] = (x_record.get_level(), x_record.get_lower(), x_record.get_upper())
-        print(f"In {global_rank=}, for {s.name}, after solve after checking xbar: {x_dict}")"""
+    x_dict = {}
+    for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
+        x_dict[x_record.get_keys()[0]] = (x_record.get_level(), x_record.get_lower(), x_record.get_upper())
+    #print(f"In {global_rank=}, for {s.name}, after solve: {objval=}, {x_dict}")
 
     if gd["sense"] == pyo.minimize:
         s._mpisppy_data.outer_bound = objval
@@ -501,15 +508,17 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     i = 0
     for record in x:
         ndn_i = ('ROOT', i)
+        #print(f"BEFORE in {global_rank=} {s._mpisppy_data.nonant_indices[ndn_i]._value =}")
         s._mpisppy_data.nonant_indices[ndn_i]._value = record.get_level()
+        #print(f"AFTER in {global_rank=} {s._mpisppy_data.nonant_indices[ndn_i]._value =}")
         i += 1
     
-    if s.name == "scen0" and global_rank == 0 and VERBOSE == 0:
+    if s.name == "scen0" and global_rank == 1 and VERBOSE == 0:
         printing_penalties = f"solve_one: {s.name =}, linearized_penalty_crop.get_level()... "
         if global_rank == 0:  # debugging
             for penalty_crop in gs.sync_db.get_variable('PHpenalty_crop'):
                 printing_penalties +=f" {penalty_crop.get_level()}, "
-            print(printing_penalties)
+            print(f"{printing_penalties=}")
         xbar_dict = {}
         x_dict = {}
         x_up_dict = {}
@@ -538,9 +547,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
         profit = gs.sync_db.get_variable('profit').first_record().get_level()
         print(f"{profit=}")
-        print(f"{-profit + sum_W + linearized_penalty =}")
-
-        print(f"   {objval =}")
+        print(f"{-profit + sum_W + linearized_penalty =} {objval=}")
 
     # the next line ignores bundling
     s._mpisppy_data._obj_from_agnostic = objval
@@ -577,19 +584,46 @@ def _copy_Ws_xbar_rho_from_host(s):
 # local helper
 def _copy_nonants_from_host(s):
     # values and fixedness; 
+    #print(f"copiing nonants from host in {s.name}")
     gs = s._agnostic_dict["scenario"]
     guest_var = gs.sync_db.get_variable("x")
+
     i = 0
+    gs.sync_db.get_parameter("xlo").clear()
+    gs.sync_db.get_parameter("xup").clear()
+    hostvar_dict = {}
     for rec in guest_var:
         ndn_i = ("ROOT", i)
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        rec.set_level(hostVar._value)
+        #print(f"for {global_rank=}, in {s.name}, for {rec.keys=}: {hostVar._value=}")
+        #rec.set_level(hostVar._value)
         if hostVar.is_fixed():
-            gs.sync_db.get_parameter("xlo").find_record(rec.keys).set_value(hostVar._value)
-            gs.sync_db.get_parameter("xup").find_record(rec.keys).set_value(hostVar._value)
+            #print(f"FIXING for {global_rank=}, in {s.name}, for {rec.keys=}: {hostVar._value=}")
+            gs.sync_db.get_parameter("xlo").add_record(rec.keys[0]).set_value(hostVar._value)
+            gs.sync_db.get_parameter("xup").add_record(rec.keys[0]).set_value(hostVar._value)
+            #assert(gs.sync_db.get_parameter("xlo").find_record(rec.keys[0]).get_value() == hostVar._value)
+            #assert(gs.sync_db.get_variable("x").find_record(rec.keys[0]).get_lower() == hostVar._value)
+            hostvar_dict[rec.keys[0]] = hostVar._value
         else:
             rec.set_level(hostVar._value)
         i += 1
+    #if global_rank == 1:
+        #print(f"{hostvar_dict=}")
+    
+    """if global_rank == 1:
+        i = 0
+        bounds = [gs.sync_db.get_parameter("xlo"), gs.sync_db.get_parameter("xup")]
+        for bound in bounds:
+            for rec in bound:
+                ndn_i = ("ROOT", i)
+                hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+                rec.set_value(hostVar._value)
+    else:
+        for rec in guest_var:
+            ndn_i = ("ROOT", i)
+            hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+            rec.set_level(hostVar._value)
+    i += 1"""
 
 
 def _restore_nonants(Ag, s):
