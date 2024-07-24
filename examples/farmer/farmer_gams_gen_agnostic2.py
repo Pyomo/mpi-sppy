@@ -57,7 +57,7 @@ def scenario_creator(
         seedoffset (int): used by confidence interval code
 
     """
-
+    assert cfg is not None, "cfg needs to be transmitted"
     assert crops_multiplier == 1, "just getting started with 3 crops"
 
     ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
@@ -133,19 +133,11 @@ def scenario_creator(
             ph_W_dict[nonants_name_pair].add_record(c).value = 0
             xbar_dict[nonants_name_pair].add_record(c).value = 0
             if cfg is None:
-                print("WARNING, cfg is not transmitted !!!!!")
                 rho_dict[nonants_name_pair].add_record(c).value = 1
             else:
                 rho_dict[nonants_name_pair].add_record(c).value = cfg.default_rho
     W_on.add_record().value = 0
     prox_on.add_record().value = 0
-
-    """j=0
-    for rec in x:
-        xlo.add_record(rec.keys).value = rec.get_lower()
-        xup.add_record(rec.keys).value = rec.get_upper()
-    if j == 0:
-        print("x is EMPTY !!!!!!!!!!!!!!!!!!!!!!!!")"""
 
     for c in crops:
         xlo.add_record(c).value = 0
@@ -168,7 +160,6 @@ def scenario_creator(
         y.add_record("sugarbeets").value = 24.0    
 
     mi.solve()
-    #print(f'{mi.sync_db[f"{nonant_variables_name}"]=}')
     nonant_variable_list = list( mi.sync_db[f"{nonant_variables_name}"] )
     nonant_names_dict = {("ROOT",i): (f"{nonant_variables_name}", v.key(0)) for i, v in enumerate(nonant_variable_list)}
 
@@ -230,7 +221,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
-    #print("DEEEEEEEEEEEENOOOOOOOOOUUUUUUUEEEEEEEEEEEMMMMMMMMMEEEEEEENNNNNNNTTTTTTTTTTT")
+    # doesn't seem to be called
     if global_rank == 1:
         x_dict = {}
         for x_record in scenario._agnostic_dict["scenario"].sync_db.get_variable('x'):
@@ -254,22 +245,22 @@ def attach_Ws_and_prox(Ag, sname, scenario):
 
 
 def _disable_prox(Ag, scenario):
-    print(f"In {global_rank=} for {scenario.name}: disabling prox")
+    #print(f"In {global_rank=} for {scenario.name}: disabling prox")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 0
 
     
 def _disable_W(Ag, scenario):
-    print(f"In {global_rank=} for {scenario.name}: disabling W")
+    #print(f"In {global_rank=} for {scenario.name}: disabling W")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 0
 
     
 def _reenable_prox(Ag, scenario):
-    print(f"In {global_rank=} for {scenario.name}: reenabling prox")
+    #print(f"In {global_rank=} for {scenario.name}: reenabling prox")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("prox_on").first_record().value = 1
 
     
 def _reenable_W(Ag, scenario):
-    print(f"In {global_rank=} for {scenario.name}: reenabling W")
+    #print(f"In {global_rank=} for {scenario.name}: reenabling W")
     scenario._agnostic_dict["scenario"].sync_db.get_parameter("W_on").first_record().value = 1
     
     
