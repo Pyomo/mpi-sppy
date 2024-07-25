@@ -26,12 +26,12 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py numpy setuptools
+          conda install mpi4py "numpy<2" setuptools
           pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: run pickled bundles tests
         timeout-minutes: 10
