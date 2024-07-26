@@ -57,15 +57,16 @@ def _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params,
     stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     
-    if cfg.ensure_xhat_feas:
-        max_revenue = stoch_distr.max_revenue(admm_subproblem_names, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
+    """if cfg.ensure_xhat_feas:
+        max_revenue = data_params["max revenue"]
+        #max_revenue = stoch_distr.max_revenue(admm_subproblem_names, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
     else:
-        max_revenue = None
+        max_revenue = None"""
     
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
     scenario_creator = stoch_distr.scenario_creator
-    scenario_creator_kwargs = stoch_distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params, max_revenue=max_revenue)
+    scenario_creator_kwargs = stoch_distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
     consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
     admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,

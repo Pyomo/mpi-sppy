@@ -353,7 +353,10 @@ def all_nodes_dict_creator(cfg, data_params):
             node_base_num = _node_num(max_node_per_region, node_type, i, 1) #the first node that will be created will have this number
             # That helps us to have a seed, thanks to that we choose an integer which will be the number of nodes of this type
             np.random.seed(node_base_num)
-            m = np.random.randint(0, max_node_per_region)
+            if node_type == "F" or node_type == "B":
+                m = np.random.randint(0, max_node_per_region)
+            else:
+                m = np.random.randint(1, int(np.sqrt(max_node_per_region))+1)
             all_nodes_dict[region_name][association_types[node_type]] = [node_type + str(i) + "_" +str(j) for j in range(1, m+1)]
             all_nodes_dict[region_name]["nodes"] += all_nodes_dict[region_name][association_types[node_type]]
             if node_type == "F":
@@ -368,7 +371,7 @@ def all_nodes_dict_creator(cfg, data_params):
                 count = 1
                 for node_name in all_nodes_dict[region_name][association_types[node_type]]:
                     np.random.seed(_node_num(max_node_per_region, node_type, i, count) + 2**28)
-                    all_nodes_dict[region_name]["revenues"][node_name] = max(0, np.random.normal(revenues_mean,revenues_cv))
+                    all_nodes_dict[region_name]["revenues"][node_name] = min(max(0, np.random.normal(revenues_mean,revenues_cv)), data_params["max revenue"])
                     np.random.seed(_node_num(max_node_per_region, node_type, i, count) + 2*2**28)
                     all_nodes_dict[region_name]["supply"][node_name] = - max(0, np.random.normal(supply_buyer_mean,supply_buyer_cv)) #negative
                     count += 1

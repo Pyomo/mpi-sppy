@@ -13,7 +13,7 @@ import re
 # Note: regions in our model will be represented in mpi-sppy by scenarios and to ensure the inter-region constraints
 #       we will impose the inter-region arcs to be consensus-variables. They will be represented as non anticipative variables in mpi-sppy
 
-def max_revenue(admm_subproblem_names, all_nodes_dict=None, cfg=None, data_params=None):
+"""def max_revenue(admm_subproblem_names, all_nodes_dict=None, cfg=None, data_params=None):
     max_rev = 0
     for admm_subproblem_name in admm_subproblem_names:
         if cfg.scalable:
@@ -22,7 +22,7 @@ def max_revenue(admm_subproblem_names, all_nodes_dict=None, cfg=None, data_param
             region_dict = distr_data.scalable_region_dict_creator(admm_subproblem_name)  
         max_rev = max(max_rev, max([region_dict['revenues'][key] for key in region_dict['revenues']]))
     print(f"{max_rev=}")
-    return max_rev
+    return max_rev"""
 
 
 
@@ -139,7 +139,7 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
 ###Functions required in other files, which constructions are specific to the problem
 
 ###Creates the scenario
-def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None, max_revenue=None):
+def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):#, max_revenue=None):
     """Creates the model, which should include the consensus variables. \n
     However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in stoch_admmWrapper.
 
@@ -164,7 +164,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None
     # Adding inter region arcs nodes and associated features
     local_dict = inter_arcs_adder(region_dict, inter_region_dict)
     # Generating the model
-    model = min_cost_distr_problem(local_dict, cfg, max_revenue=max_revenue)
+    model = min_cost_distr_problem(local_dict, cfg, max_revenue=data_params["max revenue"])
 
     sputils.attach_root_node(model, model.FirstStageCost, [model.y[n] for n in  local_dict["factory nodes"]])
     
@@ -190,7 +190,7 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
     scenario.y.pprint()
 
 
-def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None, max_revenue=None):
+def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):#, max_revenue=None):
     """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admmWrapper.
 
@@ -234,7 +234,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
     # which have this scenario as an ancestor (parent) in the tree
     for admm_subproblem_name in admm_subproblem_names:
         admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
-        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict, max_revenue=max_revenue)
+        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)#, max_revenue=max_revenue)
         for node in model._mpisppy_node_list:
             for var in node.nonant_list:
                 if not var.name in consensus_vars[admm_subproblem_name]:
@@ -306,7 +306,7 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     return admm_subproblem_name, stoch_scenario_name
 
 
-def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params, max_revenue=None):
+def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):#, max_revenue=None):
     """
     Args:
         cfg (config): specifications for the problem given on the command line
@@ -320,9 +320,9 @@ def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params, max_revenue=
         "cfg" : cfg,
         "data_params" : data_params,
               }
-    if cfg.ensure_xhat_feas:
+    """if cfg.ensure_xhat_feas:
         assert max_revenue is not None, "max_revenue has to be added to ensure xhat feasibility"
-        kwargs["max_revenue"] = max_revenue
+        kwargs["max_revenue"] = max_revenue"""
     return kwargs
 
 
