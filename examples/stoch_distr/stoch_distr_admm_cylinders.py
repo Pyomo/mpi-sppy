@@ -133,7 +133,6 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
-        print("be careful, xhatxbar may not work here")
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                 scenario_creator_kwargs=scenario_creator_kwargs,
                                                 all_nodenames=all_nodenames,

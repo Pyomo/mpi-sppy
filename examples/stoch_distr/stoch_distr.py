@@ -171,7 +171,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None
     return model
 
 
-def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
+def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario, eps=10**(-6)):
     """For each admm stochastic scenario subproblem prints its name and the final variable values
 
     Args:
@@ -179,10 +179,13 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
         admm_stoch_subproblem_scenario_name (str): name of the admm stochastic scenario subproblem
         scenario (Pyomo ConcreteModel): the instantiated model
     """
-    print(f"slack values for the distribution centers for {admm_stoch_subproblem_scenario_name=} at {rank=}")
+    #print(f"slack values for the distribution centers for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     for var in scenario.y:
         if 'DC' in var:
-            scenario.y[var].pprint()
+            if (abs(scenario.y[var].value) > eps):
+                print(f"The penalty slack {scenario.y[var].name} is too big, its absolute value is {abs(scenario.y[var].value)}")
+            #assert (abs(scenario.y[var].value) < eps), "the penalty slack is too big"
+            #scenario.y[var].pprint()
     return
     print(f"flow values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.flow.pprint()
