@@ -93,7 +93,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # NaN will signal that the x values do not agree in
         # every scenario, we can't extract an expected reduced
         # cost
-        is_minimizing = self.opt.is_minimizing
         rc = np.zeros(self.nonant_length)
 
         for sub in self.opt.local_subproblems.values():
@@ -111,7 +110,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
-                    #print(f"{xvar.name}, rc: {pyo.value(sub.rc[xvar])}, val: {xvar.value}, lb: {xvar.lb}, ub: {xvar.ub} ")
                     # fixed by modeler
                     if ndn_i in self._modeler_fixed_nonants:
                         rc[ci] = np.nan
@@ -135,4 +133,3 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
         self.rc = rcg
-        #self._bound[1:1+self.nonant_length] = rcg
