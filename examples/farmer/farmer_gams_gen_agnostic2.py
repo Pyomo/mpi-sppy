@@ -35,12 +35,14 @@ global_rank = fullcomm.Get_rank()
 
 # For now nonants_name_pairs is a default otherwise things get tricky as we need to ask a list of pairs to cfg
 def scenario_creator(
-    scenario_name, nonants_name_pairs=[("crop","x")], cfg=None):
+    scenario_name, nonants_name_pairs=None, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
     
     Args:
         scenario_name (str):
             Name of the scenario to construct.
+        nonants_name_pairs (list of pairs of name):
+
         use_integer (bool, optional):
             If True, restricts variables to be integer. Default is False.
         sense (int, optional):
@@ -161,21 +163,11 @@ def scenario_creator(
         "nonants": {("ROOT",i): 0 for i,v in enumerate(nonant_variable_list)},
         "nonant_fixedness": {("ROOT",i): v.get_lower() == v.get_upper() for i,v in enumerate(nonant_variable_list)},
         "nonant_start": {("ROOT",i): v.get_level() for i,v in enumerate(nonant_variable_list)},
-        #"nonant_names": nonant_names_dict,
-        #"nameset": {nt[0] for nt in nonant_names_dict.values()}, ### TBD should be modified to carry nonants_name_pairs
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None,
         "nonants_name_pairs": nonants_name_pairs,
-        "set_element_names_dict": set_element_names_dict#{nonants_support_set_name: [] for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
-        #"crop": set_element_names_dict["crop"],
-
-        ### Everything added in ph is records. The problem is that the GamsSymbolRecord are only a snapshot of
-        # the model. Moreover, once the record is detached from the model, setting the record to have a value
-        # won't change the database. Therefore, I have chosen to obtain at each iteration the parameter directly
-        # from the synchronized database.
-        # The other option might have been to redefine gd at each iteration. But even if this is done, I doubt
-        # that some functions such as _reenable_W could be done easily.
+        "set_element_names_dict": set_element_names_dict
     }
     return gd
     
@@ -195,6 +187,7 @@ def kw_creator(cfg):
     #kwargs = farmer.kw_creator(cfg)
     kwargs = {}
     kwargs["cfg"] = cfg
+    kwargs["nonants_name_pairs"] = [("crop","x")]
     return kwargs
 
 # This is not needed for PH
@@ -390,14 +383,6 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
-    x_dict = {}
-    for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
-        x_dict[x_record.get_keys()[0]] = (x_record.get_level(), x_record.get_lower(), x_record.get_upper())
-    #print(f"In {global_rank=}, for {s.name}, before solve: {x_dict}")
-
-
-    solver_name = s._solver_plugin.name   # not used?
-
     solver_exception = None
 
     try:
@@ -418,21 +403,13 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         if gripe:
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
             print(f"{gs.model_status =}")
-            #raise RuntimeError
             
     if solver_exception is not None:
         raise solver_exception
 
     s._mpisppy_data.scenario_feasible = True
 
-    ## TODO: how to get lower bound??
     objval = gs.sync_db.get_variable('objective_ph').find_record().get_level()
-
-    ### For debugging
-    #x_dict = {}
-    #for x_record in s._agnostic_dict["scenario"].sync_db.get_variable('x'):
-    #    x_dict[x_record.get_keys()[0]] = (x_record.get_level(), x_record.get_lower(), x_record.get_upper())
-    #print(f"In {global_rank=}, for {s.name}, after solve: {objval=}, {x_dict}")
 
     if gd["sense"] == pyo.minimize:
         s._mpisppy_data.outer_bound = objval
@@ -442,14 +419,22 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     # copy the nonant x values from gs to s so mpisppy can use them in s
     # in general, we need more checks (see the pyomo agnostic guest example)
     
-    x = gs.sync_db.get_variable('x')
     i = 0
+    for nonants_set, nonants_var in gd["nonants_name_pairs"]:
+        for record in gs.sync_db.get_variable(nonants_var):
+            ndn_i = ('ROOT', i)
+            s._mpisppy_data.nonant_indices[ndn_i]._value = record.get_level()
+            i += 1
+
+    """
+    x = gs.sync_db.get_variable('x')
+    i=0
     for record in x:
         ndn_i = ('ROOT', i)
         #print(f"BEFORE in {global_rank=} {s._mpisppy_data.nonant_indices[ndn_i]._value =}")
         s._mpisppy_data.nonant_indices[ndn_i]._value = record.get_level()
         #print(f"AFTER in {global_rank=} {s._mpisppy_data.nonant_indices[ndn_i]._value =}")
-        i += 1
+        i += 1"""
 
     # the next line ignores bundling
     s._mpisppy_data._obj_from_agnostic = objval
@@ -482,23 +467,24 @@ def _copy_nonants_from_host(s):
     # values and fixedness; 
     #print(f"copiing nonants from host in {s.name}")
     gs = s._agnostic_dict["scenario"]
+    gd = s._agnostic_dict
     #crop_elements = s._agnostic_dict["crop"]
 
     i = 0
-    gs.sync_db.get_parameter("xlo").clear()
-    gs.sync_db.get_parameter("xup").clear()
     #for element in crop_elements:
-    for rec in gs.sync_db.get_variable("x"):
-        element = rec.keys[0]
-        ndn_i = ("ROOT", i)
-        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
-        if hostVar.is_fixed():
-            #print(f"FIXING for {global_rank=}, in {s.name}, for {rec.keys=}: {hostVar._value=}")
-            gs.sync_db.get_parameter("xlo").add_record(element).set_value(hostVar._value)
-            gs.sync_db.get_parameter("xup").add_record(element).set_value(hostVar._value)
-        else:
-            gs.sync_db.get_variable("x").find_record(element).set_level(hostVar._value)
-        i += 1
+    for nonants_set, nonants_var in gd["nonants_name_pairs"]:
+        gs.sync_db.get_parameter(f"{nonants_var}lo").clear()
+        gs.sync_db.get_parameter(f"{nonants_var}up").clear()
+        for element in gd["set_element_names_dict"][nonants_set]:
+            ndn_i = ("ROOT", i)
+            hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+            if hostVar.is_fixed():
+                #print(f"FIXING for {global_rank=}, in {s.name}, for {rec.keys=}: {hostVar._value=}")
+                gs.sync_db.get_parameter(f"{nonants_var}lo").add_record(element).set_value(hostVar._value)
+                gs.sync_db.get_parameter(f"{nonants_var}up").add_record(element).set_value(hostVar._value)
+            else:
+                gs.sync_db.get_variable(nonants_var).find_record(element).set_level(hostVar._value)
+            i += 1
 
 
 def _restore_nonants(Ag, s):
