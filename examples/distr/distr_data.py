@@ -309,13 +309,14 @@ def scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params): # same a
     count = 0
     for node_1 in all_DC_nodes: #although inter_region_dict["costs"] and ["capacities"] could be done with comprehension, "arcs" can't
         for node_2 in all_DC_nodes:
-            _, region_num1, _ = parse_node_name(node_1)
-            source = f"Region{region_num1}", node_1
-            _, region_num2, _ = parse_node_name(node_2)
-            target = f"Region{region_num2}", node_2
-            arc = source, target
-            _intra_arc_creator(inter_region_dict, node_1, node_2, cfg, arc, inter_region_arc_params, count, intra=False)
-            count += 1
+            if node_1 != node_2:
+                _, region_num1, _ = parse_node_name(node_1)
+                source = f"Region{region_num1}", node_1
+                _, region_num2, _ = parse_node_name(node_2)
+                target = f"Region{region_num2}", node_2
+                arc = source, target
+                _intra_arc_creator(inter_region_dict, node_1, node_2, cfg, arc, inter_region_arc_params, count, intra=False)
+                count += 1
     return inter_region_dict
 
 
@@ -394,13 +395,14 @@ def scalable_region_dict_creator(scenario_name, all_nodes_dict=None, cfg=None, d
     count = 2**30 # to have unrelated data with the production_costs
     for node_1 in local_nodes_dict["nodes"]: #although inter_region_dict["costs"] and ["capacities"] could be done with comprehension, "arcs" can't
         for node_2 in local_nodes_dict["nodes"]:
-            node_type1, _, _ = parse_node_name(node_1)
-            node_type2, _, _ = parse_node_name(node_2)
-            arcs_association = {("F","DC") : data_params["arc_F_DC"], ("DC", "B") : data_params["arc_DC_B"], ("F", "B") : data_params["arc_F_B"], ("DC", "DC"): data_params["arc_DC_DC"]}
-            arc_type = (node_type1, node_type2)
-            if arc_type in arcs_association:
-                arc_params = arcs_association[arc_type]
-                arc = (node_1, node_2)
-                _intra_arc_creator(region_dict, node_1, node_2, cfg, arc, arc_params, my_seed=count, intra=True)
-                count += 1
+            if node_1 != node_2:
+                node_type1, _, _ = parse_node_name(node_1)
+                node_type2, _, _ = parse_node_name(node_2)
+                arcs_association = {("F","DC") : data_params["arc_F_DC"], ("DC", "B") : data_params["arc_DC_B"], ("F", "B") : data_params["arc_F_B"], ("DC", "DC"): data_params["arc_DC_DC"]}
+                arc_type = (node_type1, node_type2)
+                if arc_type in arcs_association:
+                    arc_params = arcs_association[arc_type]
+                    arc = (node_1, node_2)
+                    _intra_arc_creator(region_dict, node_1, node_2, cfg, arc, arc_params, my_seed=count, intra=True)
+                    count += 1
     return region_dict
