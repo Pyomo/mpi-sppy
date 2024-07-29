@@ -75,15 +75,17 @@ def scenario_creator(
     job.run(checkpoint=cp) # at this point the model with bad values is solved, it creates the file _gams_py_gjo0.lst
 
     # Extract the elements (names) of the set into a list
-    #crop_elements = [record.keys[0] for record in job.out_db.get_set("crop")]
     nonants_support_sets_out = [job.out_db.get_set(nonants_support_set_name) for nonants_support_set_name, _ in nonants_name_pairs]
+    set_element_names_dict = {nonant_set.name: [record.keys[0] for record in nonant_set] for nonant_set in nonants_support_sets_out}
 
     nonants_support_sets = [mi.sync_db.add_set(nonant_set.name, nonant_set._dim, nonant_set.text) for nonant_set in nonants_support_sets_out]
-    set_elements_dict = {nonant_set.name: [record.keys[0] for record in nonant_set] for nonant_set in nonants_support_sets}
-    crop = nonants_support_sets[0]
-    #crop = mi.sync_db.add_set("crop", 1, "crop type")
 
+    ### This part is somehow specific to the model
+    crop = nonants_support_sets[0]
     y = mi.sync_db.add_parameter_dc("yield", [crop,], "tons per acre")
+    ### End of the specific part
+
+
     ### Could be done with dict comprehension
     ph_W_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"ph_W_{nonant_variables_name}", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
     xbar_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
@@ -98,6 +100,7 @@ def scenario_creator(
     W_on = mi.sync_db.add_parameter(f"W_on", 0, "activate w term")
     prox_on = mi.sync_db.add_parameter(f"prox_on", 0, "activate prox term")
 
+    # The first line is specific to the model
     glist = [gams.GamsModifier(y)] \
         + [gams.GamsModifier(ph_W_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
         + [gams.GamsModifier(xbar_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
@@ -110,24 +113,28 @@ def scenario_creator(
     opt = ws.add_options()
 
     opt.all_model_types = cfg.solver_name
+
+
+    ### This part is specific to the model
     if LINEARIZED:
         mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
     else:
         mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
+    ### End of the specific part
 
     for nonants_name_pair in nonants_name_pairs:
         nonants_support_set_name, nonant_variables_name = nonants_name_pair
-        for c in set_elements_dict[nonants_support_set_name]:
+        for c in set_element_names_dict[nonants_support_set_name]:
             ph_W_dict[nonant_variables_name].add_record(c).value = 0
             xbar_dict[nonant_variables_name].add_record(c).value = 0
             rho_dict[nonant_variables_name].add_record(c).value = cfg.default_rho
-            print(dir(x_out_dict[nonant_variables_name].find_record(c)))
             xlo_dict[nonant_variables_name].add_record(c).value = x_out_dict[nonant_variables_name].find_record(c).lower
             xup_dict[nonant_variables_name].add_record(c).value = x_out_dict[nonant_variables_name].find_record(c).upper
     W_on.add_record().value = 0
     prox_on.add_record().value = 0
 
-    # scenario specific data applied
+
+    ### This part is specific to the model
     scennum = sputils.extract_num(scenario_name)
     assert scennum < 3, "three scenarios hardwired for now"
     if scennum == 0:  # below
@@ -142,6 +149,8 @@ def scenario_creator(
         y.add_record("wheat").value = 3.0
         y.add_record("corn").value = 3.6
         y.add_record("sugarbeets").value = 24.0    
+    ### End of the specific part
+
 
     mi.solve()
     nonant_variable_list = [nonant_var for nonant_var in mi.sync_db.get_variable(nonants_name_pair[1]) for nonants_name_pair in nonants_name_pairs]
@@ -157,7 +166,9 @@ def scenario_creator(
         "probability": "uniform",
         "sense": pyo.minimize,
         "BFs": None,
-        #"crop": set_elements_dict["crop"],
+        "nonants_name_pairs": nonants_name_pairs,
+        "set_element_names_dict": set_element_names_dict#{nonants_support_set_name: [] for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+        #"crop": set_element_names_dict["crop"],
 
         ### Everything added in ph is records. The problem is that the GamsSymbolRecord are only a snapshot of
         # the model. Moreover, once the record is detached from the model, setting the record to have a value
@@ -455,21 +466,15 @@ def _copy_Ws_xbar_rho_from_host(s):
     # could/should use set values, but then use a dict to get the indexes right
     gs = gd["scenario"]
     if hasattr(s._mpisppy_model, "W"):
-        i = 0
-        for record in gs.sync_db["ph_W_x"]:
-            ndn_i = ('ROOT', i)
-            record.set_value(s._mpisppy_model.W[ndn_i].value)
-            i += 1
-        i = 0
-        for record in gs.sync_db["rho_x"]:
-            ndn_i = ('ROOT', i)
-            record.set_value(s._mpisppy_model.rho[ndn_i].value)
-            i += 1
-        i = 0
-        for record in gs.sync_db["xbar"]:
-            ndn_i = ('ROOT', i)
-            record.set_value(s._mpisppy_model.xbars[ndn_i].value)
-            i += 1
+        i=0
+        for nonants_set, nonants_var in gd["nonants_name_pairs"]:
+            for element in gd["set_element_names_dict"][nonants_set]:
+                ndn_i = ('ROOT', i)
+                
+                gs.sync_db[f"ph_W_{nonants_var}"].find_record(element).set_value(s._mpisppy_model.W[ndn_i].value)
+                gs.sync_db[f"rho_{nonants_var}"].find_record(element).set_value(s._mpisppy_model.rho[ndn_i].value)
+                gs.sync_db[f"{nonants_var}bar"].find_record(element).set_value(s._mpisppy_model.xbars[ndn_i].value)
+                i += 1
         
 
 # local helper
