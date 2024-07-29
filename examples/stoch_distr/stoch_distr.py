@@ -59,7 +59,7 @@ def inter_arcs_adder(region_dict, inter_region_dict):
 
 
 ###Creates the model when local_dict is given, local_dict depends on the subproblem
-def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None):
+def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minimize, max_revenue=None):
     """ Create an arcs formulation of network flow for the region and stochastic scenario considered.
 
     Args:
@@ -70,6 +70,8 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
     Returns:
         model (Pyomo ConcreteModel) : the instantiated model
     """
+    scennum = sputils.extract_num(stoch_scenario_name)
+
     # Assert sense == pyo.minimize, "sense should be equal to pyo.minimize"
     # First, make the special In, Out arc lists for each node
     arcsout = {n: list() for n in local_dict["nodes"]}
@@ -123,7 +125,7 @@ def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None
             # We generate pseudo randomly the loss on each factory node
             node_type, region_num, count = distr_data.parse_node_name(n)
             node_num = distr_data._node_num(cfg.mnpr, node_type, region_num, count)
-            np.random.seed(node_num+cfg.initial_seed+2**20) #2**20 avoids the correlation with the scalable example data
+            np.random.seed(node_num+cfg.initial_seed+(scennum+1)*2**20) #2**20 avoids the correlation with the scalable example data
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
             == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
@@ -164,7 +166,7 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None
     # Adding inter region arcs nodes and associated features
     local_dict = inter_arcs_adder(region_dict, inter_region_dict)
     # Generating the model
-    model = min_cost_distr_problem(local_dict, cfg, max_revenue=data_params["max revenue"])
+    model = min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, max_revenue=data_params["max revenue"])
 
     sputils.attach_root_node(model, model.FirstStageCost, [model.y[n] for n in  local_dict["factory nodes"]])
     
