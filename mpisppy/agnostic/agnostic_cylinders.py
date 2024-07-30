@@ -62,7 +62,7 @@ if __name__ == "__main__":
 
     cfg = _parse_args(module)
 
-    supported_guests = {"Pyomo", "AMPL"}
+    supported_guests = {"Pyomo", "AMPL", "GAMS"}
     if cfg.guest_language not in supported_guests:
         raise ValueError(f"Not a supported guest language: {cfg.guest_language}\n"
                          f"   supported guests: {supported_guests}")
@@ -70,11 +70,28 @@ if __name__ == "__main__":
         # now I need the pyomo_guest wrapper, then feed that to agnostic
         from pyomo_guest import Pyomo_guest
         pg = Pyomo_guest(model_fname)
+
         Ag = agnostic.Agnostic(pg, cfg)
     elif cfg.guest_language == "AMPL":
-        assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you and ampl-model-file"
+        assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you need ampl-model-file"
         from ampl_guest import AMPL_guest
         guest = AMPL_guest(model_fname, cfg.ampl_model_file)
+        Ag = agnostic.Agnostic(guest, cfg)
+
+    elif cfg.guest_language == "GAMS":
+        from mpisppy import MPI
+        fullcomm = MPI.COMM_WORLD
+        global_rank = fullcomm.Get_rank()
+        import gams_guest
+        if global_rank == 0:
+            # Code for rank 0 to execute the task
+            print("Global rank 0 is executing the task.")
+            original_file = cfg.original_file
+            ### TODO un-harcode this!!!
+            nonants_name_pairs = [("crop", "x")]
+            gams_guest.create_ph_model(original_file, nonants_name_pairs)
+            print("Global rank 0 has completed the task.")
+        guest = gams_guest.GAMS_guest(model_fname, cfg.ampl_model_file)
         Ag = agnostic.Agnostic(guest, cfg)
 
     scenario_creator = Ag.scenario_creator
