@@ -103,19 +103,27 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
     
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
+    def inventoryBounds_rule(model, n):
+        return (0,local_dict["supply"][n]) 
+        ### We can store everything to make sure it is feasible, but it will never be interesting
+
+    model.inventory = pyo.Var(local_dict["factory nodes"], bounds=inventoryBounds_rule)
+
     model.FirstStageCost = pyo.Expression(expr=\
                     sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]))
     
     if cfg.ensure_xhat_feas:
+        # too big penalty to allow the stack to be non-zero
         model.SecondStageCost = pyo.Expression(expr=\
                         sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                         + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
-                        + sum(2*max_revenue*(-model.y[n]) for n in local_dict["distribution center nodes"]) # too big penalty to allow the stack to be non-zero
-                            )
+                        + sum(2*max_revenue*(-model.y[n]) for n in local_dict["distribution center nodes"]) \
+                        - sum(local_dict["production costs"][n]/2*model.inventory[n] for n in local_dict["factory nodes"]))
     else:
         model.SecondStageCost = pyo.Expression(expr=\
                         sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                         + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
+                        - sum(local_dict["production costs"][n]/2*model.inventory[n] for n in local_dict["factory nodes"])
                             )
 
     model.MinCost = pyo.Objective(expr=model.FirstStageCost + model.SecondStageCost, sense=sense)
@@ -128,6 +136,7 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
             np.random.seed(node_num+cfg.initial_seed+(scennum+1)*2**20) #2**20 avoids the correlation with the scalable example data
             return sum(m.flow[a] for a in arcsout[n])\
             - sum(m.flow[a] for a in arcsin[n])\
+            + m.inventory[n] \
             == (local_dict["supply"][n] - m.y[n]) * min(1,max(0,1-np.random.normal(cfg.spm,cfg.cv)/100)) # We add the loss
         else:
             return sum(m.flow[a] for a in arcsout[n])\
@@ -186,6 +195,11 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario, eps
         if 'DC' in var:
             if (abs(scenario.y[var].value) > eps):
                 print(f"The penalty slack {scenario.y[var].name} is too big, its absolute value is {abs(scenario.y[var].value)}")
+            #assert (abs(scenario.y[var].value) < eps), "the penalty slack is too big"
+            #scenario.y[var].pprint()
+        if 'F' in var:
+            if (scenario.inventory[var].value > 10*eps):
+                print(f"The inventory {scenario.y[var].name} is big, its value is {scenario.inventory[var].value}")
             #assert (abs(scenario.y[var].value) < eps), "the penalty slack is too big"
             #scenario.y[var].pprint()
     return
