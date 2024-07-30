@@ -444,21 +444,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         for scenario in self.local_scenarios.values():
             scenario._mpisppy_model.W_on = 0
 
-    
-    def _disable_z(self):
-        for scenario in self.local_scenarios.values():
-            scenario._mpisppy_model.z_on = 0
-
 
     def disable_W_and_prox(self):
         self._disable_W()
         self._disable_prox()
-
-
-    def disable_W_prox_z(self):
-        self._disable_W()
-        self._disable_prox()
-        self._disable_z()
 
 
     def _reenable_prox(self):
@@ -471,21 +460,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.W_on = 1
 
-    
-    def _reenable_z(self):
-        for k, scenario in self.local_scenarios.items():
-            scenario._mpisppy_model.z_on = 1
-
 
     def reenable_W_and_prox(self):
         self._reenable_W()
         self._reenable_prox()
-
-
-    def reenable_W_prox_z(self):
-        self._reenable_W()
-        self._reenable_prox()
-        self._reenable_z()
 
 
     def post_solve_bound(self, solver_options=None, verbose=False):
@@ -533,59 +511,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         # A half-hearted attempt to restore the state
         self._reenable_prox()
-
-        if (verbose and self.cylinder_rank == 0):
-            print(f'Post-solve Lagrangian bound: {bound:.4f}')
-        return bound
-    
-
-    def post_solve_bound_smoothed(self, solver_options=None, verbose=False):
-        ''' Compute a bound Lagrangian bound using the existing weights.
-
-        Args:
-            solver_options (dict, optional):
-                Options for these solves.
-            verbose (boolean, optional):
-                If True, displays verbose output. Default False.
-
-        Returns:
-            float:
-                An outer bound on the optimal objective function value.
-
-        Note:
-            This function overwrites current variable values. This is only
-            suitable for use at the end of the solves, or if you really know
-            what you are doing.  It is not suitable as a general, per-iteration
-            Lagrangian bound solver.
-        '''
-        if (self.cylinder_rank == 0):
-            print('Warning: Lagrangian bounds might not be correct in certain '
-                  'cases where there are integers not subject to '
-                  'non-anticipativity and those integers do not reach integrality.')
-        if (verbose and self.cylinder_rank == 0):
-            print('Beginning post-solve Lagrangian bound computation')
-
-        if (self.W_disabled):
-            self._reenable_W()
-        self._disable_prox()
-        self._disable_z()
-
-        # Fixed variables can lead to an invalid lower bound
-        self._restore_original_fixedness()
-
-        # If dis_prox=True, they are enabled at the end, and Ebound returns
-        # the incorrect value (unless you explicitly disable them again)
-        self.solve_loop_smoothed(solver_options=solver_options,
-                        dis_prox=False, # Important
-                        gripe=True,
-                        tee=False,
-                        verbose=verbose)
-
-        bound = self.Ebound(verbose)
-
-        # A half-hearted attempt to restore the state
-        self._reenable_prox()
-        self._reenable_z()
 
         if (verbose and self.cylinder_rank == 0):
             print(f'Post-solve Lagrangian bound: {bound:.4f}')
@@ -668,95 +593,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         elif dis_prox:
             self._reenable_prox()
 
-    
-    def solve_loop_smoothed(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
-                   dtiming=False,
-                   dis_W=False,
-                   dis_prox=False,
-                   dis_z=False,
-                   gripe=False,
-                   disable_pyomo_signal_handling=False,
-                   tee=False,
-                   verbose=False):
-        """ Loop over `local_subproblems` and solve them in a manner
-        dicated by the arguments.
-
-        In addition to changing the Var values in the scenarios, this function
-        also updates the `_PySP_feas_indictor` to indicate which scenarios were
-        feasible/infeasible.
-
-        Args:
-            solver_options (dict, optional):
-                The scenario solver options.
-            use_scenarios_not_subproblems (boolean, optional):
-                If True, solves individual scenario problems, not subproblems.
-                This distinction matters when using bundling. Default is False.
-            dtiming (boolean, optional):
-                If True, reports solve timing information. Default is False.
-            dis_W (boolean, optional):
-                If True, duals weights (Ws) are disabled before solve, then
-                re-enabled after solve. Default is False.
-            dis_prox (boolean, optional):
-                If True, prox terms are disabled before solve, then
-                re-enabled after solve. Default is False.
-            dis_z (boolean, optional):
-                If True, smoothed terms are disabled before solve, then
-                re-enabled after solve. Default is False.
-            gripe (boolean, optional):
-                If True, output a message when a solve fails. Default is False.
-            disable_pyomo_signal_handling (boolean, optional):
-                True for asynchronous PH; ignored for persistent solvers.
-                Default False.
-            tee (boolean, optional):
-                If True, displays solver output. Default False.
-            verbose (boolean, optional):
-                If True, displays verbose output. Default False.
-        """
-
-        """ Developer notes:
-
-        This function assumes that every scenario already has a
-        `_solver_plugin` attached.
-
-        I am not sure what happens with solver_options None for a persistent
-        solver. Do options persist?
-
-        set_objective takes care of W and prox changes.
-        """
-        if dis_W and dis_prox and dis_z:
-            self.disable_W_prox_z()
-        elif dis_W and dis_prox:
-            self.disable_W_and_prox()
-        elif dis_W:
-            self._disable_W()
-        elif dis_prox:
-            self._disable_prox()
-        elif dis_z:
-            self._disable_z()
-
-        if self._prox_approx and (not self.prox_disabled):
-            self._update_prox_approx()
-
-        super().solve_loop(solver_options,
-                   use_scenarios_not_subproblems,
-                   dtiming,
-                   gripe,
-                   disable_pyomo_signal_handling,
-                   tee,
-                   verbose)
-
-        if dis_W and dis_prox and dis_z:
-            self.reenable_W_prox_z()
-        elif dis_W and dis_prox:
-            self.reenable_W_and_prox()
-        elif dis_W:
-            self._reenable_W()
-        elif dis_prox:
-            self._reenable_prox()
-        elif dis_z:
-            self._reenable_z()
-
 
     def _update_prox_approx(self):
         """
@@ -797,15 +633,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         """ Attach the smoothing terms to the models in `local_scenarios`.
         """
         for (sname, scenario) in self.local_scenarios.items():
-            # these are bound by index to the vardata list at the node
             scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         initialize=0.0,
                                         mutable=True)
 
-            # create ph objective terms, but disabled
-            scenario._mpisppy_model.z_on = pyo.Param(initialize=0, mutable=True, within=pyo.Binary)
-
-            # note that rho is per var and scenario here
             scenario._mpisppy_model.p = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.options["defaultPHp"])
@@ -827,13 +658,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
     
 
-    @property
-    def smoothed_disabled(self):
-        assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'z_on')
-        return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.z_on.value)
-
-
-    def attach_PH_to_objective(self, add_duals, add_prox):
+    def attach_PH_to_objective(self, add_duals, add_prox, add_smooth=0):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
 
@@ -890,107 +715,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             # Prox term (quadratic)
             if (add_prox):
                 prox_expr = 0.
-                for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                    # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
-                    # x**2 is the only qradratic term, which might be
-                    # dealt with differently depending on user-set options
-                    if xvar.is_binary() and (lin_bin_prox or self._prox_approx):
-                        xvarsqrd = xvar
-                    elif self._prox_approx:
-                        xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
-                        scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, xbars[ndn_i], scenario._mpisppy_model.xsqvar_cuts, ndn_i)
-                    else:
-                        xvarsqrd = xvar**2
-                    prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
-                                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
-                scenario._mpisppy_model.ProxExpr = pyo.Expression(expr=prox_expr)
-                ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.ProxExpr
-
-            if (is_min_problem):
-                objfct.expr += ph_term
-            else:
-                objfct.expr -= ph_term
-
-
-    def attach_smoothed_PH_to_objective(self, add_duals, add_prox, add_smooth):
-        """ Attach dual weight, prox terms, and smoothing terms to the objective 
-        function of the models in `local_scenarios`.
-
-        Args:
-            add_duals (boolean):
-                If True, adds dual weight (Ws) to the objective.
-            add_prox (boolean):
-                If True, adds the prox term to the objective.
-            add_smooth (boolean):
-                If True, adds the smoothing term to the objective.
-        """
-
-        if ('linearize_binary_proximal_terms' in self.options):
-            lin_bin_prox = self.options['linearize_binary_proximal_terms']
-        else:
-            lin_bin_prox = False
-
-        if ('linearize_proximal_terms' in self.options):
-            self._prox_approx = self.options['linearize_proximal_terms']
-            if 'proximal_linearization_tolerance' in self.options:
-                self.prox_approx_tol = self.options['proximal_linearization_tolerance']
-            else:
-                self.prox_approx_tol = 1.e-1
-        else:
-            self._prox_approx = False
-
-        for (sname, scenario) in self.local_scenarios.items():
-            """Attach the dual, prox terms and smoothing terms to the objective.
-            """
-            if ((not add_duals) and (not add_prox) and (not add_smooth)):
-                return
-            objfct = self.saved_objectives[sname]
-            is_min_problem = objfct.is_minimizing()
-
-            xbars = scenario._mpisppy_model.xbars
-
-            if self._prox_approx:
-                # set-up pyomo IndexVar, but keep it sparse
-                # since some nonants might be binary
-                # Define the first cut to be _xsqvar >= 0
-                scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False, bounds=(0, None))
-                scenario._mpisppy_model.xsqvar_cuts = pyo.Constraint(scenario._mpisppy_data.nonant_indices, pyo.Integers)
-                scenario._mpisppy_data.xsqvar_prox_approx = {}
-            else:
-                scenario._mpisppy_model.xsqvar = None
-                scenario._mpisppy_data.xsqvar_prox_approx = False
-
-            ph_term = 0
-            # Dual term (weights W)
-            if (add_duals):
-                scenario._mpisppy_model.WExpr = pyo.Expression(expr=\
-                        sum(scenario._mpisppy_model.W[ndn_i] * xvar \
-                            for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items()) )
-                ph_term += scenario._mpisppy_model.W_on * scenario._mpisppy_model.WExpr
-
-            # Prox term (quadratic)
-            if (add_prox):
-                prox_expr = 0.
-                for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
-                    # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
-                    # x**2 is the only qradratic term, which might be
-                    # dealt with differently depending on user-set options
-                    if xvar.is_binary() and (lin_bin_prox or self._prox_approx):
-                        xvarsqrd = xvar
-                    elif self._prox_approx:
-                        xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
-                        scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, xbars[ndn_i], scenario._mpisppy_model.xsqvar_cuts, ndn_i)
-                    else:
-                        xvarsqrd = xvar**2
-                    prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
-                                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
-                scenario._mpisppy_model.ProxExpr = pyo.Expression(expr=prox_expr)
-                ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.ProxExpr
-            
-            # Smoothing term (quadratic)
-            if (add_smooth):
                 smooth_expr = 0.
                 for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                     # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
@@ -998,19 +722,27 @@ class PHBase(mpisppy.spopt.SPOpt):
                     # dealt with differently depending on user-set options
                     if xvar.is_binary() and (lin_bin_prox or self._prox_approx):
                         xvarsqrd = xvar
-                    elif self._prox_approx: 
+                    elif self._prox_approx:
                         xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
-                        # Need a new cut here, to be modified 
                         scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, scenario._mpisppy_model.z[ndn_i], 
-                                                  scenario._mpisppy_model.xsqvar_cuts, ndn_i)
+                                ProxApproxManager(xvar, xvarsqrd, xbars[ndn_i], scenario._mpisppy_model.xsqvar_cuts, ndn_i)
                     else:
                         xvarsqrd = xvar**2
-                    smooth_expr += (scenario._mpisppy_model.p[ndn_i] / 2.0) * \
-                                 (xvarsqrd - 2.0 * scenario._mpisppy_model.z[ndn_i] * xvar \
-                                  + scenario._mpisppy_model.z[ndn_i]**2)
+                    prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
+                                 (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+                    
+                    # Computing smoothing term (quadratic)
+                    if (add_smooth):
+                        smooth_expr += (scenario._mpisppy_model.p[ndn_i] / 2.0) * \
+                                    (xvarsqrd - 2.0 * scenario._mpisppy_model.z[ndn_i] * xvar \
+                                    + scenario._mpisppy_model.z[ndn_i]**2)
+
+                scenario._mpisppy_model.ProxExpr = pyo.Expression(expr=prox_expr)
+                ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.ProxExpr
+
+                # Adding smoothing term
                 scenario._mpisppy_model.SmoothExpr = pyo.Expression(expr=smooth_expr)
-                ph_term += scenario._mpisppy_model.prox_on * (scenario._mpisppy_model.z_on * scenario._mpisppy_model.SmoothExpr)
+                ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.SmoothExpr
 
             if (is_min_problem):
                 objfct.expr += ph_term
@@ -1022,6 +754,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         self,
         attach_duals=True,
         attach_prox=True,
+        attach_smooth=0
     ):
         """ Set up PH objectives (duals and prox terms), and prepare
         extensions, if available.
@@ -1031,6 +764,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, adds dual weight (Ws) to the objective. Default True.
             add_prox (boolean, optional):
                 If True, adds prox terms to the objective. Default True.
+            attach_smooth (int, optional):
+                If 0, no smoothing; if 1, p_value is used; if 2, p_ratio is used. 
 
         Note:
             This function constructs an Extension object if one was specified
@@ -1039,35 +774,11 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
 
         self.attach_Ws_and_prox()
-        self.attach_PH_to_objective(attach_duals, attach_prox)
+        if attach_smooth:
+            self.attach_smoothing()
+        self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
 
     
-    def PH_smoothed_Prep(
-        self,
-        attach_duals=True,
-        attach_prox=True,
-        attach_smooth=True,
-    ):
-        """ Set up smoothed PH objectives (duals, prox terms, and smoothing terms), 
-        and prepare extensions, if available.
-
-        Args:
-            add_duals (boolean, optional):
-                If True, adds dual weight (Ws) to the objective. Default True.
-            add_prox (boolean, optional):
-                If True, adds prox terms to the objective. Default True.
-
-        Note:
-            This function constructs an Extension object if one was specified
-            at the time the PH object was created. It also calls the
-            `pre_iter0` method of the Extension object.
-        """
-
-        self.attach_Ws_and_prox()
-        self.attach_smoothing()
-        self.attach_smoothed_PH_to_objective(attach_duals, attach_prox, attach_smooth)
-
-
     def options_check(self):
         """ Check whether the options in the `options` attribute are
         acceptable.
@@ -1125,7 +836,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
-        smoothed = bool(self.options["smoothed"])
+        # smoothed = bool(self.options["smoothed"])
         smooth_type = self.options["smoothed"]
         have_extensions = self.extensions is not None
         have_converger = self.ph_converger is not None
@@ -1149,18 +860,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
         global_toc("Entering solve loop in PHBase.Iter0")
 
-        if smoothed:
-            self.solve_loop_smoothed(solver_options=self.current_solver_options,
-                                     dtiming=dtiming,
-                                     gripe=True,
-                                     tee=teeme,
-                                     verbose=verbose)
-        else:
-            self.solve_loop(solver_options=self.current_solver_options,
-                            dtiming=dtiming,
-                            gripe=True,
-                            tee=teeme,
-                            verbose=verbose)
+        self.solve_loop(solver_options=self.current_solver_options,
+                        dtiming=dtiming,
+                        gripe=True,
+                        tee=teeme,
+                        verbose=verbose)
 
         if self.options["verbose"]:
             print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
@@ -1198,7 +902,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         ## If ratio: Add reset p according to rho
         if smooth_type == 2:
-            print("Using p_ratio!!!")
             for _, scenario in self.local_scenarios.items():
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
                         scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
@@ -1222,10 +925,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         if dconvergence_detail:
             self.report_var_values_at_rank0(header="Convergence detail:")
 
-        if smoothed:
-            self.reenable_W_prox_z()
-        else:
-            self.reenable_W_and_prox()
+        self.reenable_W_and_prox()
 
         self.current_solver_options = self.options["iterk_solver_options"]
 
@@ -1303,24 +1003,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 and self.cylinder_rank == 0
             )
 
-            if smoothed:
-                self.solve_loop_smoothed(
-                    solver_options=self.current_solver_options,
-                    dtiming=dtiming,
-                    gripe=True,
-                    disable_pyomo_signal_handling=False,
-                    tee=teeme,
-                    verbose=verbose
-                )
-            else:
-                self.solve_loop(
-                    solver_options=self.current_solver_options,
-                    dtiming=dtiming,
-                    gripe=True,
-                    disable_pyomo_signal_handling=False,
-                    tee=teeme,
-                    verbose=verbose
-                )
+            self.solve_loop(
+                solver_options=self.current_solver_options,
+                dtiming=dtiming,
+                gripe=True,
+                disable_pyomo_signal_handling=False,
+                tee=teeme,
+                verbose=verbose
+            )
 
             if have_extensions:
                 self.extobject.enditer()
