@@ -50,10 +50,7 @@ class PH(mpisppy.phbase.PHBase):
         """
         verbose = self.options['verbose']
         smoothed = self.options['smoothed']
-        if smoothed:
-            self.PH_smoothed_Prep()
-        else:
-            self.PH_Prep()
+        self.PH_Prep(attach_smooth = smoothed)
 
         if (verbose):
             print('Calling PH Iter0 on global rank {}'.format(global_rank))
