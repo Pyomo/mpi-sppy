@@ -90,13 +90,11 @@ if __name__ == "__main__":
         import gams_guest
         original_file_path = cfg.gams_model_file
         new_file_path = gams_guest.file_name_creator(original_file_path)
-        ### TODO un-harcode this!!!
-        nonants_name_pairs = [("crop", "x")]
+        nonants_name_pairs = module.nonants_name_pairs_creator()
+        print(f"{nonants_name_pairs=}")
         if global_rank == 0:
-            # Code for rank 0 to execute the task
-            print("Global rank 0 is executing the task.")
             gams_guest.create_ph_model(original_file_path, new_file_path, nonants_name_pairs)
-            print("Global rank 0 has completed the task.")
+            print("Global rank 0 has created the new .gms model file")
         fullcomm.Barrier()
 
         guest = gams_guest.GAMS_guest(model_fname, new_file_path, nonants_name_pairs)

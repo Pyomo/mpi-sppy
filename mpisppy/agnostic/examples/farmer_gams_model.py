@@ -18,6 +18,9 @@ global_rank = fullcomm.Get_rank()
 from mpisppy.agnostic import gams_guest
 import mpisppy.agnostic.farmer4agnostic as farmer
 
+def nonants_name_pairs_creator():
+    return [("crop", "x")]
+
 
 def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
@@ -42,8 +45,6 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
     assert new_file_name is not None
 
     ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
-    print(f"{new_file_name=}")
-    print(f"{scenario_name=}")
     job = ws.add_job_from_file(new_file_name)
 
     cp = ws.add_checkpoint()
@@ -93,7 +94,7 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
         y.add_record("sugarbeets").value = 24.0    
     ### End of the specific part
 
-    return mi
+    return mi, nonants_name_pairs, set_element_names_dict
 
         
 #=========
@@ -112,7 +113,7 @@ def kw_creator(cfg):
     #kwargs = farmer.kw_creator(cfg)
     kwargs = {}
     kwargs["cfg"] = cfg
-    #kwargs["nonants_name_pairs"] = [("crop","x")]
+    #kwargs["nonants_name_pairs"] = nonants_name_pairs_creator()
     return kwargs
 
 # This is not needed for PH

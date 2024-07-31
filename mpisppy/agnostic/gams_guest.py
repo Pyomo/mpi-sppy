@@ -48,7 +48,6 @@ class GAMS_guest():
                 Name of the scenario to construct.
 
         """
-        print(f"{kwargs=}")
         mi, nonants_name_pairs, set_element_names_dict = self.model_module.scenario_creator(scenario_name,
                                                                      self.new_file_name,
                                                                      self.nonants_name_pairs,
@@ -69,6 +68,33 @@ class GAMS_guest():
         }
         return gd
 
+
+    #=========
+    def scenario_names_creator(self, num_scens,start=None):
+        return self.model_module.scenario_names_creator(num_scens,start)
+
+
+    #=========
+    def inparser_adder(self, cfg):
+        self.model_module.inparser_adder(cfg)
+
+
+    #=========
+    def kw_creator(self, cfg):
+        # creates keywords for scenario creator
+        return self.model_module.kw_creator(cfg)
+
+    # This is not needed for PH
+    def sample_tree_scen_creator(self, sname, stage, sample_branching_factors, seed,
+                                 given_scenario=None, **scenario_creator_kwargs):
+        return self.model_module.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                                               given_scenario, **scenario_creator_kwargs)
+
+    #============================
+    def scenario_denouement(self, rank, scenario_name, scenario):
+        pass
+        # (the fct in farmer won't work because the Var names don't match)
+        #self.model_module.scenario_denouement(rank, scenario_name, scenario)
 
     ##################################################################################################
     # begin callouts
@@ -339,7 +365,7 @@ objective_ph_def..    objective_ph =e= - profit {objective_ph_excess};
     with open(new_file_path, 'w') as file:
         file.writelines(lines)
     
-    print(f"Modified file saved as: {new_file_path}")
+    #print(f"Modified file saved as: {new_file_path}")
 
 
 def file_name_creator(original_file_path):
