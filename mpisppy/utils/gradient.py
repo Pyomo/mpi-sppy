@@ -74,7 +74,6 @@ class Find_Grad():
            grad_dict (dict): a dictionnary {nonant indice: -gradient}
 
         """
-        global_toc("gradient: relaxing integer variables")
         relax_int = pyo.TransformationFactory('core.relax_integer_vars')
         relax_int.apply_to(scenario)
         nlp = PyomoNLP(scenario)
