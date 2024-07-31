@@ -40,8 +40,8 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
                                'rho_setter': self.cfg.grad_rho_setter}
         if self.cfg.get('grad_cost_file_out', ifmissing="") == "":
             self.cfg.grad_cost_file_out = './_temp_grad_cost_file.csv'
-        else:
-            self.cfg_args_cache["grad_cost_file_out"] = self.cfg.grad_cost_file_out
+#        else:
+#            self.cfg_args_cache["grad_cost_file_out"] = self.cfg.grad_cost_file_out
         if self.cfg.get('grad_cost_file_in', ifmissing="") == "":
             self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out  # write then read
         # from the perspective of this extension, we really should not have both
@@ -123,9 +123,9 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         # if we are using temp files, deal with it
         if self.cylinder_rank == 0 and os.path.exists(self.cfg.rho_file_in)\
            and self.cfg.rho_file_in != self.cfg_args_cache['rho_file_in']:
-            os.remove(self.cfg.rho_file_in)
-            self.cfg.rho_file_in = self.cfg_args_cache['rho_file_in']  # namely ""
-        if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_cost_file_out)\
-           and self.cfg.grad_cost_file_out != self.cfg_args_cache['grad_cost_file_out']:
-            os.remove(self.cfg.grad_cost_file_out)
-        self.cfg.grad_cost_file_out = self.cfg_args_cache['grad_cost_file_out']
+             os.remove(self.cfg.rho_file_in)
+             self.cfg.rho_file_in = self.cfg_args_cache['rho_file_in']  # namely ""
+        if self.cylinder_rank == 0 and os.path.exists(self.cfg.grad_cost_file_out) and \
+           self.cfg.get('grad_cost_file_out', ifmissing="") == "":
+             os.remove(self.cfg.grad_cost_file_out)
+             self.cfg.grad_cost_file_out = self.cfg_args_cache['grad_cost_file_out']
