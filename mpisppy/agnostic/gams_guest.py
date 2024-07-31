@@ -34,10 +34,11 @@ class GAMS_guest():
         model_file_name (str): name of Python file that has functions like scenario_creator
         ampl_file_name (str): name of AMPL file that is passed to the model file
     """
-    def __init__(self, model_file_name, new_file_name):
+    def __init__(self, model_file_name, new_file_name, nonants_name_pairs):
         self.model_file_name = model_file_name
         self.model_module = sputils.module_name_to_module(model_file_name)
         self.new_file_name = new_file_name
+        self.nonants_name_pairs = nonants_name_pairs
 
     def scenario_creator(self, scenario_name, **kwargs):
         """ Wrap the guest (GAMS in this case) scenario creator
@@ -47,11 +48,11 @@ class GAMS_guest():
                 Name of the scenario to construct.
 
         """
+        print(f"{kwargs=}")
         mi, nonants_name_pairs, set_element_names_dict = self.model_module.scenario_creator(scenario_name,
                                                                      self.new_file_name,
                                                                      self.nonants_name_pairs,
                                                                      **kwargs)
-
         mi.solve()
         nonant_variable_list = [nonant_var  for (_, nonant_variables_name) in nonants_name_pairs for nonant_var in mi.sync_db.get_variable(nonant_variables_name)]
 
@@ -232,23 +233,10 @@ class GAMS_guest():
 
 ### This function creates a new gams model file including PH before anything else happens
 
-def create_ph_model(original_file, nonants_name_pairs):
-    # Get the directory and filename
-    directory, filename = os.path.split(original_file)
-    name, ext = os.path.splitext(filename)
-
-    assert ext == ".gms", "the original data file should be a gms file"
-    
-    # Create the new filename
-    if LINEARIZED:
-        new_filename = f"{name}_ph_linearized{ext}"
-    else:
-        print("WARNING: the normal quadratic PH has not been tested")
-        new_filename = f"{name}_ph_quadratic{ext}"
-    new_file_path = os.path.join(directory, new_filename)
+def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     
     # Copy the original file
-    shutil.copy2(original_file, new_file_path)
+    shutil.copy2(original_file_path, new_file_path)
     
     # Read the content of the new file
     with open(new_file_path, 'r') as file:
@@ -351,8 +339,24 @@ objective_ph_def..    objective_ph =e= - profit {objective_ph_excess};
     with open(new_file_path, 'w') as file:
         file.writelines(lines)
     
-    print(f"Modified file saved as: {new_filename}")
-    return f"{name}_ph"
+    print(f"Modified file saved as: {new_file_path}")
+
+
+def file_name_creator(original_file_path):
+        # Get the directory and filename
+    directory, filename = os.path.split(original_file_path)
+    name, ext = os.path.splitext(filename)
+
+    assert ext == ".gms", "the original data file should be a gms file"
+    
+    # Create the new filename
+    if LINEARIZED:
+        new_filename = f"{name}_ph_linearized{ext}"
+    else:
+        print("WARNING: the normal quadratic PH has not been tested")
+        new_filename = f"{name}_ph_quadratic{ext}"
+    new_file_path = os.path.join(directory, new_filename)
+    return new_file_path
 
 
 ### Generic functions called inside the specific scenario creator

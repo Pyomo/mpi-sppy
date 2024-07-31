@@ -36,6 +36,11 @@ def _parse_args(m):
                       domain=str,
                       default=None,
                       argparse=True)
+    cfg.add_to_config(name="gams_model_file",
+                      description="The original .gms file needed if the language is GAMS",
+                      domain=str,
+                      default=None,
+                      argparse=True)
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
@@ -83,15 +88,18 @@ if __name__ == "__main__":
         fullcomm = MPI.COMM_WORLD
         global_rank = fullcomm.Get_rank()
         import gams_guest
+        original_file_path = cfg.gams_model_file
+        new_file_path = gams_guest.file_name_creator(original_file_path)
+        ### TODO un-harcode this!!!
+        nonants_name_pairs = [("crop", "x")]
         if global_rank == 0:
             # Code for rank 0 to execute the task
             print("Global rank 0 is executing the task.")
-            original_file = cfg.original_file
-            ### TODO un-harcode this!!!
-            nonants_name_pairs = [("crop", "x")]
-            gams_guest.create_ph_model(original_file, nonants_name_pairs)
+            gams_guest.create_ph_model(original_file_path, new_file_path, nonants_name_pairs)
             print("Global rank 0 has completed the task.")
-        guest = gams_guest.GAMS_guest(model_fname, cfg.ampl_model_file)
+        fullcomm.Barrier()
+
+        guest = gams_guest.GAMS_guest(model_fname, new_file_path, nonants_name_pairs)
         Ag = agnostic.Agnostic(guest, cfg)
 
     scenario_creator = Ag.scenario_creator
