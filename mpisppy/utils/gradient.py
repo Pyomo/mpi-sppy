@@ -141,7 +141,6 @@ class Find_Grad():
         self.find_grad_cost()
         comm = self.ph_object.comms['ROOT']
         if (self.ph_object.cylinder_rank == 0):
-            print("GRAD COST FILE=",self.cfg.grad_cost_file_out)
             with open(self.cfg.grad_cost_file_out, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['#grad cost values'])
@@ -171,11 +170,9 @@ class Find_Grad():
            The cfg object should contain a grad_cost_file_in.
 
         """
-         print("WRITING GRAD RHO:")
          if self.cfg.grad_rho_file_out == '':
              raise RuntimeError("write_grad_rho without grad_rho_file_out")
          else:
-             print("WRITING TO FILE=",self.cfg.grad_rho_file_out)
              rho_data = self.find_grad_rho()
              if self.ph_object.cylinder_rank == 0:
                  with open(self.cfg.grad_rho_file_out, 'w', newline='') as file:

@@ -104,7 +104,6 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         if self.opt._PHIter == 1:
             self.grad_object.write_grad_cost()
         if self._update_recommended():
-            print("UPDATE WAS RECOMMENDED")
             self.grad_object.write_grad_rho()
             rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
                                 if 'rho_setter_kwargs' in self.opt.options \
