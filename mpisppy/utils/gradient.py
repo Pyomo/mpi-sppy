@@ -74,6 +74,17 @@ class Find_Grad():
            grad_dict (dict): a dictionnary {nonant indice: -gradient}
 
         """
+
+        # grab all discrete variables so they can be restored (out-of-place creation
+        # via pyomo transformations is barfing.
+        all_discrete_vars = []
+        for var in scenario.component_objects(pyo.Var, active=True):
+            for var_idx, var_data in var.items():
+                if var_data.domain is pyo.Binary:
+                    all_discrete_vars.append((var_data, pyo.Binary))
+                elif var_data.domain is pyo.Integers:
+                    all_discrete_vars.append((var_data, pyo.Integers))                    
+        
         relax_int = pyo.TransformationFactory('core.relax_integer_vars')
         relax_int.apply_to(scenario)
         nlp = PyomoNLP(scenario)
@@ -86,6 +97,10 @@ class Find_Grad():
         grad = nlp.evaluate_grad_objective()
         grad_dict = {ndn_i: -grad[ndn_i[1]]
                      for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
+
+        for (var_data, var_domain) in all_discrete_vars:
+            var_data.domain = var_domain
+
         return grad_dict
         
 
