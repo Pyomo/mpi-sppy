@@ -177,8 +177,8 @@ class Find_Rho():
             # two-stage only for now
             loc_denom = {k: self._w_denom(s, s._mpisppy_node_list[0])
                            for k, s in self.ph_object.local_scenarios.items()}
-         prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
-                     for s in self.ph_object.local_scenarios.values()]
+            prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
+                         for s in self.ph_object.local_scenarios.values()]
         w = dict()
         for k, scenario in self.ph_object.local_scenarios.items():
             w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
@@ -195,41 +195,35 @@ class Find_Rho():
         rho_maxes = np.empty(vcnt, dtype='d')
         rho_means = np.empty(vcnt, dtype='d')
 
-        local_rho_mins = np.fromiter((min(rho_vals) for rho_vals in local_rhos.values()))
-        local_rho_maxes = np.fromiter((max(rho_vals) for rho_vals in local_rhos.values()))
+        local_rho_mins = np.fromiter((min(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
+        local_rho_maxes = np.fromiter((max(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
         local_prob = np.sum(prob_list)
-        local_wgt_means = np.fromiter((np.dot(rho_list, prob_list) * local_prob for rho_vals in local_rhos.values())
+        local_wgted_means = np.fromiter((np.dot(rho_vals, prob_list) * local_prob for rho_vals in local_rhos.values()), dtype='d')
 
-        local_wgted_means = local_prob * local_mean
-        rho_list = np.array(rho_vals)
-            local_mean = np.dot(rho_list, prob_list)
-            local_prob = np.sum(prob_list)
-
-        local_rho_means = np.empty(vcnt, dtype='d')
-        self.ph_object.comms["ROOT"].Allreduce([np.min(rho_list), MPI.DOUBLE],
+        self.ph_object.comms["ROOT"].Allreduce([local_rho_mins, MPI.DOUBLE],
                                                [rho_mins, MPI.DOUBLE],
                                                op=MPI.MIN)
-        self.ph_object.comms["ROOT"].Allreduce([np.max(rho_list), MPI.DOUBLE],
+        self.ph_object.comms["ROOT"].Allreduce([local_rho_maxes, MPI.DOUBLE],
                                                [rho_maxes, MPI.DOUBLE],
                                                op=MPI.MAX)
 
         self.ph_object.comms["ROOT"].Allreduce([local_wgted_means, MPI.DOUBLE],
-                                                   [rho_means, MPI.DOUBLE],
-                                                   op=MPI.SUM)
+                                               [rho_means, MPI.DOUBLE],
+                                               op=MPI.SUM)
         if alpha == 0.5:
-            rhos = {vname: float(rho_mean) for vname, rho_mean in zip(local_rhos.keys(), rho_means)
+            rhos = {vname: float(rho_mean) for vname, rho_mean in zip(local_rhos.keys(), rho_means)}
         elif alpha == 0.0:
-            rhos = {vname: float(rho_min) for vname, rho_min in zip(local_rhos.keys(), rho_mins)
+            rhos = {vname: float(rho_min) for vname, rho_min in zip(local_rhos.keys(), rho_mins)}
         elif alpha == 1.0:
-            rhos = {vname: float(rho_max) for vname, rho_max in zip(local_rhos.keys(), rho_maxes)
+            rhos = {vname: float(rho_max) for vname, rho_max in zip(local_rhos.keys(), rho_maxes)}
         elif alpha < 0.5:
             rhos = {vname: float(rho_min + alpha * 2 * (rho_mean - rho_min))\
-                    for vname, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)
+                    for vname, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)}
         elif alpha > 0.5:
             rhos = {vname: float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)\
-                    for vname, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)
-         else:
-                raise RuntimeError("Coding error.")
+                    for vname, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)}
+        else:
+            raise RuntimeError("Coding error.")
 
         return rhos
 
