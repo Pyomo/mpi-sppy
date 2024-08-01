@@ -895,7 +895,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             iteration_start_time = time.time()
 
             if dprogress:
-                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
+                global_toc(f"Initiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # Compute xbar
             #global_toc('Rank: {} - Before Compute_Xbar'.format(self.cylinder_rank), True)
