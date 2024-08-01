@@ -103,7 +103,7 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         self.dual_conv_cache.append(self.wt.W_diff())
         if self.opt._PHIter == 1:
             self.grad_object.write_grad_cost()
-        if self._update_recommended():
+        if self.opt._PHIter == 1 or self._update_recommended():
             self.grad_object.write_grad_rho()
             rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
                                 if 'rho_setter_kwargs' in self.opt.options \
