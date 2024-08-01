@@ -151,7 +151,6 @@ class Find_Grad():
 
         """
         self.find_grad_cost()
-        comm = self.ph_object.comms['ROOT']
         if (self.ph_object.cylinder_rank == 0):
             with open(self.cfg.grad_cost_file_out, 'w') as f:
                 writer = csv.writer(f)
@@ -163,7 +162,7 @@ class Find_Grad():
 
         # all ranks rely on the existence of this file.
         # barrier perhaps should be imposed at the caller level.
-                    
+        comm = self.ph_object.comms['ROOT']                    
         comm.Barrier()
 
 #====================================================================================
@@ -198,6 +197,8 @@ class Find_Grad():
                      for (vname, rho) in rho_data.items():
                          writer.writerow([vname, rho_data[vname]])
 
+             comm = self.ph_object.comms['ROOT']                    
+             comm.Barrier()                         
 
 ###################################################################################
 
