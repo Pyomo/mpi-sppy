@@ -177,15 +177,7 @@ class Find_Rho():
             # two-stage only for now
             loc_denom = {k: self._w_denom(s, s._mpisppy_node_list[0])
                            for k, s in self.ph_object.local_scenarios.items()}
-            """ dropped by DLW July 2024
-            global_denom = self.ph_object.comms['ROOT'].gather(loc_denom, root=0)  # cylinder 0
-            denom = dict()
-            if self.ph_object.cylinder_rank == 0:
-                for loc_denom in global_denom:
-                    denom.update(loc_denom)
-        if self.ph_object.cylinder_rank == 0:
-            """
-        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
+         prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
                      for s in self.ph_object.local_scenarios.values()]
         w = dict()
         for k, scenario in self.ph_object.local_scenarios.items():
@@ -194,47 +186,49 @@ class Find_Rho():
         rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in local_snames}
         local_rhos = {vname: [rho_list[idx] for _, rho_list in rho.items()]
                         for vname, idx in vname_to_idx.items()}
-        """
-        # dlw changed the order stat to be fully global (but on a triangular dist)
-        rho = {vname: self._order_stat(rho_list, prob_list) for (vname, rho_list) in arranged_rho.items()}
-        #change zero rho to min (dlw: maybe too fragile due to use of references and maybe the wrong place)
-        min_rho = min(r for r in rho.values() if (r > 0))
-        for vname, r in rho.items():
-            if r == 0.0:
-                rho[vname] = min_rho
-        """
+
         # Compute a scenario independant rho from a list of rhos using a triangular distribution.
         alpha = self.cfg.grad_order_stat
         assert (alpha >= 0 and alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {alpha=} is invalid."
-        rhos = dict()
-        rho_min = np.empty(1, dtype='d')
-        rho_max = np.empty(1, dtype='d')
-        rho_mean = np.empty(1, dtype='d')
-        for vname, rho_vals in local_rhos.items():
-            rho_list = np.array(rho_vals)
-            self.ph_object.comms["ROOT"].Allreduce([np.min(rho_list), MPI.DOUBLE],
-                                                   [rho_min, MPI.DOUBLE],
-                                                   op=MPI.MIN)
-            self.ph_object.comms["ROOT"].Allreduce([np.max(rho_list), MPI.DOUBLE],
-                                                   [rho_max, MPI.DOUBLE],
-                                                   op=MPI.MAX)
+        vcnt = len(local_rhos)  # variable count
+        rho_mins = np.empty(vcnt, dtype='d')  # global
+        rho_maxes = np.empty(vcnt, dtype='d')
+        rho_means = np.empty(vcnt, dtype='d')
+
+        local_rho_mins = np.fromiter((min(rho_vals) for rho_vals in local_rhos.values()))
+        local_rho_maxes = np.fromiter((max(rho_vals) for rho_vals in local_rhos.values()))
+        local_prob = np.sum(prob_list)
+        local_wgt_means = np.fromiter((np.dot(rho_list, prob_list) * local_prob for rho_vals in local_rhos.values())
+
+        local_wgted_means = local_prob * local_mean
+        rho_list = np.array(rho_vals)
             local_mean = np.dot(rho_list, prob_list)
             local_prob = np.sum(prob_list)
-            local_wgted_mean = local_prob * local_mean
-            self.ph_object.comms["ROOT"].Allreduce([local_wgted_mean, MPI.DOUBLE],
-                                                   [rho_mean, MPI.DOUBLE],
-                                                   op=MPI.MAX)
-            if alpha == 0.5:
-                rhos[vname] = float(rho_mean)
-            elif alpha == 0.0:
-                rhos[vname] = float(rho_min)
-            elif alpha == 1.0:
-                rhos[vname] = float(rho_max)
-            elif alpha < 0.5:
-                rhos[vname] = float(rho_min + alpha * 2 * (rho_mean - rho_min))
-            elif alpha > 0.5:
-                rhos[vname] = float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)
-            else:
+
+        local_rho_means = np.empty(vcnt, dtype='d')
+        self.ph_object.comms["ROOT"].Allreduce([np.min(rho_list), MPI.DOUBLE],
+                                               [rho_mins, MPI.DOUBLE],
+                                               op=MPI.MIN)
+        self.ph_object.comms["ROOT"].Allreduce([np.max(rho_list), MPI.DOUBLE],
+                                               [rho_maxes, MPI.DOUBLE],
+                                               op=MPI.MAX)
+
+        self.ph_object.comms["ROOT"].Allreduce([local_wgted_means, MPI.DOUBLE],
+                                                   [rho_means, MPI.DOUBLE],
+                                                   op=MPI.SUM)
+        if alpha == 0.5:
+            rhos = {vname: float(rho_mean) for vname, rho_mean in zip(local_rhos.keys(), rho_means)
+        elif alpha == 0.0:
+            rhos = {vname: float(rho_min) for vname, rho_min in zip(local_rhos.keys(), rho_mins)
+        elif alpha == 1.0:
+            rhos = {vname: float(rho_max) for vname, rho_max in zip(local_rhos.keys(), rho_maxes)
+        elif alpha < 0.5:
+            rhos = {vname: float(rho_min + alpha * 2 * (rho_mean - rho_min))\
+                    for vname, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)
+        elif alpha > 0.5:
+            rhos = {vname: float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)\
+                    for vname, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)
+         else:
                 raise RuntimeError("Coding error.")
 
         return rhos
