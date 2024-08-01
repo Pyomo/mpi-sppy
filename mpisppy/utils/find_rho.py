@@ -212,7 +212,6 @@ class Find_Rho():
         rho_mean = np.empty(1, dtype='d')
         for vname, rho_vals in local_rhos.items():
             rho_list = np.array(rho_vals)
-            print(f"{rho_vals =}")
             self.ph_object.comms["ROOT"].Allreduce([np.min(rho_list), MPI.DOUBLE],
                                                    [rho_min, MPI.DOUBLE],
                                                    op=MPI.MIN)
