@@ -111,8 +111,6 @@ class Find_Grad():
            The cfg object should contain an xhat path corresponding to the xhat file.
 
         """
-        print("\n Calling find_grad_costs; note that it will not write them\n")
-        
         assert self.cfg.xhatpath != '', "to compute gradient cost, you have to give an xhat path using --xhatpath"
 
         self.ph_object.disable_W_and_prox()
