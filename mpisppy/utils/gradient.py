@@ -163,6 +163,11 @@ class Find_Grad():
                     row = ','.join([sname, vname, str(val)]) + '\n'
                     f.write(row)
 
+        # all ranks rely on the existence of this file.
+        # barrier perhaps should be imposed at the caller level.
+                    
+        comm.Barrier()
+
 #====================================================================================
 
 # TBD from JPW-  why are these two here at all? SHOULD NOT BE IN THE "GRADIENT" FILE
