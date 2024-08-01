@@ -96,7 +96,6 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
         global_toc("Using gradient-based rho setter")
         self.primal_conv_cache.append(self.opt.convergence_diff())
         self.dual_conv_cache.append(self.wt.W_diff())
-        self._display_rho_values()
 
     def miditer(self):
         self.primal_conv_cache.append(self.opt.convergence_diff())
@@ -113,8 +112,6 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
                 for (vid, rho) in rholist:
                     (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
                     scenario._mpisppy_model.rho[(ndn, i)] = rho
-            self._display_rho_values()
-
 
     def enditer(self):
         pass
