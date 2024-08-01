@@ -160,7 +160,6 @@ class Find_Rho():
         Returns:
            rhos (dict): dict {variable name: list of rhos for this variable}
         """
-        all_snames = self.ph_object.all_scenario_names
         local_snames = self.ph_object.local_scenario_names
         vnames = []  # TBD: why not just use c.keys()
         for (sname, vname) in self.c.keys():
@@ -173,7 +172,7 @@ class Find_Rho():
                 for k in local_snames}
         if indep_denom:
             grad_denom = self._grad_denom()
-            loc_denom = {k: grad_denom for k in all_snames}
+            loc_denom = {k: grad_denom for k in local_snames}
         else:
             # two-stage only for now
             loc_denom = {k: self._w_denom(s, s._mpisppy_node_list[0])
@@ -192,7 +191,7 @@ class Find_Rho():
         for k, scenario in self.ph_object.local_scenarios.items():
             w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
                              for ndn_i in scenario._mpisppy_data.nonant_indices])
-        rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in all_snames}
+        rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in local_snames}
         local_rhos = {vname: [rho_list[idx] for _, rho_list in rho.items()]
                         for vname, idx in vname_to_idx.items()}
         """
