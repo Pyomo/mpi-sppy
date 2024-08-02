@@ -24,6 +24,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
+import re
 
 
 class GAMS_guest():
@@ -48,7 +49,7 @@ class GAMS_guest():
                 Name of the scenario to construct.
 
         """
-        mi, nonants_name_pairs, set_element_names_dict = self.model_module.scenario_creator(scenario_name,
+        mi, nonants_name_pairs, nonant_set_sync_dict = self.model_module.scenario_creator(scenario_name,
                                                                      self.new_file_name,
                                                                      self.nonants_name_pairs,
                                                                      **kwargs)
@@ -64,7 +65,7 @@ class GAMS_guest():
             "sense": pyo.minimize,
             "BFs": None,
             "nonants_name_pairs": nonants_name_pairs,
-            "set_element_names_dict": set_element_names_dict
+            "nonant_set_sync_dict": nonant_set_sync_dict
         }
         return gd
 
@@ -202,7 +203,7 @@ class GAMS_guest():
         if hasattr(s._mpisppy_model, "W"):
             i=0
             for nonants_set, nonants_var in gd["nonants_name_pairs"]:
-                for element in gd["set_element_names_dict"][nonants_set]:
+                for element in gd["nonant_set_sync_dict"][nonants_set]:
                     ndn_i = ('ROOT', i)
                     
                     gs.sync_db[f"ph_W_{nonants_var}"].find_record(element).set_value(s._mpisppy_model.W[ndn_i].value)
@@ -217,14 +218,12 @@ class GAMS_guest():
         #print(f"copiing nonants from host in {s.name}")
         gs = s._agnostic_dict["scenario"]
         gd = s._agnostic_dict
-        #crop_elements = s._agnostic_dict["crop"]
 
         i = 0
-        #for element in crop_elements:
         for nonants_set, nonants_var in gd["nonants_name_pairs"]:
             gs.sync_db.get_parameter(f"{nonants_var}lo").clear()
             gs.sync_db.get_parameter(f"{nonants_var}up").clear()
-            for element in gd["set_element_names_dict"][nonants_set]:
+            for element in gd["nonant_set_sync_dict"][nonants_set]:
                 ndn_i = ("ROOT", i)
                 hostVar = s._mpisppy_data.nonant_indices[ndn_i]
                 if hostVar.is_fixed():
@@ -260,7 +259,6 @@ class GAMS_guest():
 ### This function creates a new gams model file including PH before anything else happens
 
 def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
-    
     # Copy the original file
     shutil.copy2(original_file_path, new_file_path)
     
@@ -268,17 +266,42 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     with open(new_file_path, 'r') as file:
         lines = file.readlines()
     
-    keyword = "__InsertPH__here_Model_defined_three_lines_later"
+    insert_keyword = "__InsertPH__here_Model_defined_three_lines_later"
     line_number = None
 
     # Insert the new text 3 lines before the end
     for i in range(len(lines)):
         index = len(lines)-1-i
         line = lines[index]
-        if keyword in line:
+        if line.startswith("solve"):
+            #print(f"{line=}")
+            #words = line.split()
+            words = re.findall(r'\b\w+\b', line)
+            print(f"{words=}")
+            if "minimizing" in words:
+                sense = "minimizing"
+                sign = "+"
+            elif "maximizing" in words:
+                print("WARNING: the objective function's sign has been changed")
+                sense = "maximizing"
+                sign = "-"
+            else:
+                raise RuntimeError(f"The line: {line}, doesn't include any sense")
+            # The word following the sense is the objective value
+            index_word = words.index(sense)
+            previous_objective = words[index_word + 1]
+            line = line.replace(sense, "minimizing")
+            lines[index] = line.replace(previous_objective, "objective_ph")
+            """"solve_line = line.replace(previous_objective, "objective_ph")
+            index_solve = index
+            print(f"{index_solve=}")"""
+            
+        if insert_keyword in line:
             line_number = index
+    
+    #lines[index_solve] = solve_line
 
-    assert line_number is not None, "the keyword is not used"
+    assert line_number is not None, "the insert_keyword is not used"
 
     insert_position = line_number + 2
 
@@ -292,10 +315,16 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
             nonants_support_set, nonant_variables = nonants_name_pair
             model_line_text += f", PenLeft_{nonant_variables}, PenRight_{nonant_variables}"
 
-    assert "model" in model_line_stripped and "/" in model_line_stripped and model_line_stripped.endswith("/;"), "this is not "
-    lines[insert_position + 1] = model_line[:-4] + model_line_text + ", objective_ph_def" + model_line[-4:]
-
-    ### TBD differenciate if there is written "/ all /" in the gams model
+    assert "model" in model_line_stripped and "/" in model_line_stripped and model_line_stripped.endswith("/;"), "this is not the model line"
+    all_words = [" all ", "/all ", " all/", "/all/"]
+    all_model = False
+    for word in all_words:
+        if word in model_line:
+            all_model = True
+    if all_model: # we still use all the equations
+        lines[insert_position + 1] = model_line 
+    else: # we have to specify which equations we use
+        lines[insert_position + 1] = model_line[:-4] + model_line_text + ", objective_ph_def" + model_line[-4:]
 
     parameter_definition = ""
     scalar_definition = f"""
@@ -305,18 +334,28 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     linearized_inequation_definition = ""
     objective_ph_excess = ""
     linearized_equation_expression = ""
+    parameter_initialization = ""
 
     for nonant_name_pair in nonants_name_pairs:
         nonants_support_set, nonant_variables = nonant_name_pair
 
         parameter_definition += f"""
-   ph_W_{nonant_variables}({nonants_support_set})        'ph weight'                   /set.{nonants_support_set} 1/
+   ph_W_{nonant_variables}({nonants_support_set})        'ph weight'
+   {nonant_variables}bar({nonants_support_set})        'ph average'
+   rho_{nonant_variables}({nonants_support_set})         'ph rho'"""
+        
+        parameter_definition2 = f"""
+   ph_W_{nonant_variables}({nonants_support_set})        'ph weight'                   /set.{nonants_support_set} 0/
    {nonant_variables}bar({nonants_support_set})        'ph average'                  /set.{nonants_support_set} 0/
-   rho_{nonant_variables}({nonants_support_set})         'ph rho'                      /set.{nonants_support_set} 1/"""
+   rho_{nonant_variables}({nonants_support_set})         'ph rho'                      /set.{nonants_support_set} 0/"""
         
         parameter_definition += f"""
-   {nonant_variables}up(crop)          'upper bound on {nonant_variables}'           /set.{nonants_support_set} 500/
-   {nonant_variables}lo(crop)          'lower bound on {nonant_variables}'           /set.{nonants_support_set} 0/"""
+   {nonant_variables}up({nonants_support_set})          'upper bound on {nonant_variables}'
+   {nonant_variables}lo({nonants_support_set})          'lower bound on {nonant_variables}'"""
+
+        parameter_definition2 += f"""
+   {nonant_variables}up({nonants_support_set})          'upper bound on {nonant_variables}'           /set.{nonants_support_set} 500/
+   {nonant_variables}lo({nonants_support_set})          'lower bound on {nonant_variables}'           /set.{nonants_support_set} 0/"""
         
         variable_definition += f"""
    PHpenalty_{nonant_variables}({nonants_support_set}) 'linearized prox penalty'"""
@@ -331,13 +370,24 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
         else:
             PHpenalty = f"({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}))*({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}))"
         objective_ph_excess += f"""
+                +  W_on * sum((i,j), ph_W_{nonant_variables}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
+                +  prox_on * sum((i,j), 0.5 * rho_{nonant_variables}({nonants_support_set}) * {PHpenalty})"""
+        
+        objective_ph_excess2 = f"""
                 +  W_on * sum({nonants_support_set}, ph_W_{nonant_variables}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
                 +  prox_on * sum({nonants_support_set}, 0.5 * rho_{nonant_variables}({nonants_support_set}) * {PHpenalty})"""
         
         if LINEARIZED:
             linearized_equation_expression += f"""
 PenLeft_{nonant_variables}({nonants_support_set}).. PHpenalty_{nonant_variables}({nonants_support_set}) =g= ({nonant_variables}.up({nonants_support_set}) - {nonant_variables}bar({nonants_support_set})) * ({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}));
-PenRight_{nonant_variables}({nonants_support_set}).. PHpenalty_{nonant_variables}({nonants_support_set}) =g= ({nonant_variables}bar({nonants_support_set}) - {nonant_variables}.lo({nonants_support_set})) * ({nonant_variables}bar({nonants_support_set}) - {nonant_variables}(crop));
+PenRight_{nonant_variables}({nonants_support_set}).. PHpenalty_{nonant_variables}({nonants_support_set}) =g= ({nonant_variables}bar({nonants_support_set}) - {nonant_variables}.lo({nonants_support_set})) * ({nonant_variables}bar({nonants_support_set}) - {nonant_variables}({nonants_support_set}));
+"""
+        parameter_initialization += f"""
+ph_W_{nonant_variables}({nonants_support_set}) = 0;
+{nonant_variables}bar({nonants_support_set}) = 0;
+rho_{nonant_variables}({nonants_support_set}) = 0;
+{nonant_variables}up({nonants_support_set}) = 0;
+{nonant_variables}lo({nonants_support_set}) = 0;
 """
 
     my_text = f"""
@@ -346,20 +396,22 @@ Parameter{parameter_definition};
 
 Scalar{scalar_definition};
 
+{parameter_initialization}
+
 Variable{variable_definition}
    objective_ph 'final objective augmented with ph cost';
 
 Equation{linearized_inequation_definition}
    objective_ph_def 'defines objective_ph';
 
-objective_ph_def..    objective_ph =e= - profit {objective_ph_excess};
+objective_ph_def..    objective_ph =e= {sign} {previous_objective} {objective_ph_excess};
 
 {linearized_equation_expression}
 """
 
     lines.insert(insert_position, my_text)
 
-    lines[-1] = "solve simple using lp minimizing objective_ph;"
+    #lines[-1] = "solve simple using lp minimizing objective_ph;"
 
     # Write the modified content back to the new file
     with open(new_file_path, 'w') as file:
@@ -387,7 +439,25 @@ def file_name_creator(original_file_path):
 
 ### Generic functions called inside the specific scenario creator
 
-def gamsmodifiers_for_PH(glist, mi, job, nonants_name_pairs):
+def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs):
+
+    ### First create the model instance
+    job = ws.add_job_from_file(new_file_name)
+    cp = ws.add_checkpoint()
+    mi = cp.add_modelinstance()
+
+    job.run(checkpoint=cp) # at this point the model with bad values is solved, it creates the file _gams_py_gjo0.lst
+
+    ### Add to the elements that should be modified the stochastic parameters
+    # The parameters don't exist yet in the model instance, so they need to be redefined thanks to the job
+    stoch_sets_out_dict = {param_name: job.out_db.get_set(set_name) for set_name, param_name in stoch_param_name_pairs for }
+    stoch_sets_sync_dict = {param_name: mi.sync_db.add_set(out_set.name, out_set._dim, out_set.text) for param_name, out_set in stoch_sets_out_dict.items()}
+    glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, [sync_set,])) for param_name, sync_set in stoch_sets_sync_dict.items()]
+
+    ### Gather the list of non-anticipative variables and their sets from the job, to modify them and add PH related parameters
+    nonants_sets_out = [job.out_db.get_set(nonants_support_set_name) for nonants_support_set_name, _ in nonants_name_pairs]
+    nonant_set_sync_dict = {nonant_set.name: [record.keys[0] for record in nonant_set] for nonant_set in nonants_sets_out}
+
     ph_W_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"ph_W_{nonant_variables_name}", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
     xbar_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
     rho_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"rho_{nonant_variables_name}", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
@@ -411,12 +481,42 @@ def gamsmodifiers_for_PH(glist, mi, job, nonants_name_pairs):
 
     all_ph_parameters_dicts = {"ph_W_dict": ph_W_dict, "xbar_dict": xbar_dict, "rho_dict": rho_dict, "W_on": W_on, "prox_on": prox_on}
 
-    return glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict
+    return mi, job, nonant_set_sync_dict, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict
 
-def adding_record_for_PH(nonants_name_pairs, set_element_names_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict):
+
+"""def gamsmodifiers_for_PH(glist, mi, job, nonants_name_pairs):
+    
+
+
+    ph_W_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"ph_W_{nonant_variables_name}", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+    xbar_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+    rho_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"rho_{nonant_variables_name}", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+
+    # x_out is necessary to add the x variables to the database as we need the type and dimension of x
+    x_out_dict = {nonant_variables_name: job.out_db.get_variable(f"{nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
+    x_dict = {nonant_variables_name: mi.sync_db.add_variable(f"{nonant_variables_name}", x_out_dict[nonant_variables_name]._dim, x_out_dict[nonant_variables_name].vartype) for _, nonant_variables_name in nonants_name_pairs}
+    xlo_dict = {nonant_variables_name: mi.sync_db.add_parameter(f"{nonant_variables_name}lo", x_out_dict[nonant_variables_name]._dim, f"lower bound on {nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
+    xup_dict = {nonant_variables_name: mi.sync_db.add_parameter(f"{nonant_variables_name}up", x_out_dict[nonant_variables_name]._dim, f"upper bound on {nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
+
+    W_on = mi.sync_db.add_parameter(f"W_on", 0, "activate w term")
+    prox_on = mi.sync_db.add_parameter(f"prox_on", 0, "activate prox term")
+
+    glist += [gams.GamsModifier(ph_W_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(xbar_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(rho_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(W_on)] \
+        + [gams.GamsModifier(prox_on)] \
+        + [gams.GamsModifier(x_dict[nonants_name_pair[1]], gams.UpdateAction.Lower, xlo_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(x_dict[nonants_name_pair[1]], gams.UpdateAction.Upper, xup_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs]
+
+    all_ph_parameters_dicts = {"ph_W_dict": ph_W_dict, "xbar_dict": xbar_dict, "rho_dict": rho_dict, "W_on": W_on, "prox_on": prox_on}
+
+    return glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict"""
+
+def adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict):
     for nonants_name_pair in nonants_name_pairs:
         nonants_support_set_name, nonant_variables_name = nonants_name_pair
-        for c in set_element_names_dict[nonants_support_set_name]:
+        for c in nonant_set_sync_dict[nonants_support_set_name]:
             all_ph_parameters_dicts["ph_W_dict"][nonant_variables_name].add_record(c).value = 0
             all_ph_parameters_dicts["xbar_dict"][nonant_variables_name].add_record(c).value = 0
             all_ph_parameters_dicts["rho_dict"][nonant_variables_name].add_record(c).value = cfg.default_rho

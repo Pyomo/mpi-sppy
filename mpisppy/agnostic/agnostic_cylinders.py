@@ -91,7 +91,6 @@ if __name__ == "__main__":
         original_file_path = cfg.gams_model_file
         new_file_path = gams_guest.file_name_creator(original_file_path)
         nonants_name_pairs = module.nonants_name_pairs_creator()
-        print(f"{nonants_name_pairs=}")
         if global_rank == 0:
             gams_guest.create_ph_model(original_file_path, new_file_path, nonants_name_pairs)
             print("Global rank 0 has created the new .gms model file")

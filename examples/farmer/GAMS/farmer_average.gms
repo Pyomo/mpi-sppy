@@ -1,4 +1,4 @@
-$title The Farmer's Problem formulated for GAMS/DECIS (FARM,SEQ=199)
+$title The Farmer s Problem formulated for GAMS/DECIS (FARM,SEQ=199)
 
 $onText
 This model helps a farmer to decide how to allocate

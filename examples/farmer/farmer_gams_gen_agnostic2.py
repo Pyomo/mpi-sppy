@@ -80,10 +80,13 @@ def scenario_creator(
     nonants_support_sets_out = [job.out_db.get_set(nonants_support_set_name) for nonants_support_set_name, _ in nonants_name_pairs]
     set_element_names_dict = {nonant_set.name: [record.keys[0] for record in nonant_set] for nonant_set in nonants_support_sets_out}
 
-    nonants_support_sets = [mi.sync_db.add_set(nonant_set.name, nonant_set._dim, nonant_set.text) for nonant_set in nonants_support_sets_out]
+    #nonants_support_sets = [mi.sync_db.add_set(nonant_set.name, nonant_set._dim, nonant_set.text) for nonant_set in nonants_support_sets_out]
 
     ### This part is somehow specific to the model
-    crop = nonants_support_sets[0]
+    #crop = nonants_support_sets[0]
+    stoch_param_set = job.out_db.get_set("crop")
+    crop = mi.sync_db.add_set(stoch_param_set.name, stoch_param_set._dim, stoch_param_set.text)
+    #crop = job.out_db.get_set("crop")
     y = mi.sync_db.add_parameter_dc("yield", [crop,], "tons per acre")
     ### End of the specific part
 
@@ -189,12 +192,6 @@ def kw_creator(cfg):
     kwargs["cfg"] = cfg
     kwargs["nonants_name_pairs"] = [("crop","x")]
     return kwargs
-
-# This is not needed for PH
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                                           given_scenario, **scenario_creator_kwargs)
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
@@ -412,6 +409,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     objval = gs.sync_db.get_variable('objective_ph').find_record().get_level()
 
     if gd["sense"] == pyo.minimize:
+        # TODO get the bounds
         s._mpisppy_data.outer_bound = objval
     else:
         s._mpisppy_data.outer_bound = objval

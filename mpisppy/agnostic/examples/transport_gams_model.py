@@ -16,14 +16,14 @@ fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 from mpisppy.agnostic import gams_guest
-import mpisppy.agnostic.farmer4agnostic as farmer
+import numpy as np
 
 def nonants_name_pairs_creator():
-    return [("crop", "x")]
+    return [("i,j", "x")]
 
 
 def stoch_param_name_pairs_creator():
-    return [("crop", "yield")]
+    return [("j", "b")]
 
 
 def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None):
@@ -49,72 +49,64 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
     assert new_file_name is not None
     stoch_param_name_pairs = stoch_param_name_pairs_creator()
 
-    ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
 
+    ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
+    
     ### Calling this function is required regardless of the model
     # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
-    mi, job, nonant_set_sync_dict, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = gams_guest.pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs)
+    mi, job, set_element_names_dict, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = gams_guest.pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs)
 
     opt = ws.add_options()
     opt.all_model_types = cfg.solver_name
     if LINEARIZED:
-        mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
+        mi.instantiate("transport using lp minimizing objective_ph", glist, opt)
     else:
-        mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
+        mi.instantiate("transport using qcp minimizing objective_ph", glist, opt)
 
     ### Calling this function is required regardless of the model
     # This functions initializes, by adding records (and values), all the parameters that appear due to PH
-    gams_guest.adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict)
+    gams_guest.adding_record_for_PH(nonants_name_pairs, set_element_names_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict)
 
-    ### This part is model specific, we define the values of the stochastic parameters depending on scenario_name
     scennum = sputils.extract_num(scenario_name)
-    assert scennum < 3, "three scenarios hardwired for now"
-    y = mi.sync_db.get_parameter("yield")
 
-    if scennum == 0:  # below
-        y.add_record("wheat").value = 2.0
-        y.add_record("corn").value = 2.4
-        y.add_record("sugarbeets").value = 16.0
-    elif scennum == 1: # average
-        y.add_record("wheat").value = 2.5
-        y.add_record("corn").value = 3.0
-        y.add_record("sugarbeets").value = 20.0
-    elif scennum == 2: # above
-        y.add_record("wheat").value = 3.0
-        y.add_record("corn").value = 3.6
-        y.add_record("sugarbeets").value = 24.0    
+    count = 0
+    b = mi.sync_db.get_parameter("b")
+    #j = stoch_sets_sync_dict["b"]
+    j = job.out_db.get_set("j")
+    for market in j:
+        np.random.seed(scennum * j.num_records + count)
+        b.add_record(market).value = np.random.normal(1,cfg.cv) * job.out_db.get_parameter("b").find_record(market).value
+        count += 1
 
-    return mi, nonants_name_pairs, nonant_set_sync_dict
+    return mi, nonants_name_pairs, set_element_names_dict
 
-        
+
 #=========
 def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
+    if (start is None) :
+        start=0
+    return [f"scen{i}" for i in range(start,start+num_scens)]
 
 
 #=========
 def inparser_adder(cfg):
-    farmer.inparser_adder(cfg)
+    # add options unique to transport
+    cfg.num_scens_required()
+    cfg.add_to_config("cv",
+                      description="covariance of the demand at the markets",
+                      domain=int,
+                      default=0.2)
 
     
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator
-    #kwargs = farmer.kw_creator(cfg)
     kwargs = {}
     kwargs["cfg"] = cfg
-    #kwargs["nonants_name_pairs"] = nonants_name_pairs_creator()
     return kwargs
 
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     # doesn't seem to be called
-    if global_rank == 1:
-        x_dict = {}
-        for x_record in scenario._agnostic_dict["scenario"].sync_db.get_variable('x'):
-            x_dict[x_record.get_keys()[0]] = x_record.get_level()
-        print(f"In {scenario_name}: {x_dict}")
     pass
-    # (the fct in farmer won't work because the Var names don't match)
-    #farmer.scenario_denouement(rank, scenario_name, scenario)
