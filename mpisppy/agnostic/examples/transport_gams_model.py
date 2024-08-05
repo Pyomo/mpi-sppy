@@ -65,20 +65,21 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
 
     ### Calling this function is required regardless of the model
     # This functions initializes, by adding records (and values), all the parameters that appear due to PH
-    gams_guest.adding_record_for_PH(nonants_name_pairs, set_element_names_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict)
+    nonant_set_sync_dict = gams_guest.adding_record_for_PH(nonants_name_pairs, set_element_names_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job, mi)
 
     scennum = sputils.extract_num(scenario_name)
 
     count = 0
     b = mi.sync_db.get_parameter("b")
-    #j = stoch_sets_sync_dict["b"]
     j = job.out_db.get_set("j")
+    value_dict = {}
     for market in j:
-        np.random.seed(scennum * j.num_records + count)
-        b.add_record(market).value = np.random.normal(1,cfg.cv) * job.out_db.get_parameter("b").find_record(market).value
+        np.random.seed(scennum * j.number_records + count)
+        value_dict[market.keys[0]] = np.random.normal(1,cfg.cv) * job.out_db.get_parameter("b").find_record(market.keys[0]).value
+        b.add_record(market.keys[0]).value = np.random.normal(1,cfg.cv) * job.out_db.get_parameter("b").find_record(market.keys[0]).value
         count += 1
-
-    return mi, nonants_name_pairs, set_element_names_dict
+    #print(f"For {scenario_name} the stochastic demands are: \n{value_dict}")
+    return mi, nonants_name_pairs, nonant_set_sync_dict
 
 
 #=========
@@ -94,7 +95,7 @@ def inparser_adder(cfg):
     cfg.num_scens_required()
     cfg.add_to_config("cv",
                       description="covariance of the demand at the markets",
-                      domain=int,
+                      domain=float,
                       default=0.2)
 
     

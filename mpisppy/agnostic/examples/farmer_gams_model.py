@@ -64,7 +64,7 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
 
     ### Calling this function is required regardless of the model
     # This functions initializes, by adding records (and values), all the parameters that appear due to PH
-    gams_guest.adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict)
+    nonant_set_sync_dict = gams_guest.adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job, mi)
 
     ### This part is model specific, we define the values of the stochastic parameters depending on scenario_name
     scennum = sputils.extract_num(scenario_name)

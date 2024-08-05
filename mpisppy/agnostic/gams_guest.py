@@ -8,7 +8,7 @@ but not necessarily the best ways in any case.
 """
 
 LINEARIZED = True
-
+import itertools
 import os
 import gams
 import gamspy_base
@@ -147,9 +147,11 @@ class GAMS_guest():
         gs = gd["scenario"]  # guest scenario handle
 
         solver_exception = None
-
+        #import sys
+        #print(f"SOLVING FOR {s.name}")
         try:
-            gs.solve()#update_type=2)
+            gs.solve()
+            #gs.solve(output=sys.stdout)#update_type=2)
         except Exception as e:
             results = None
             solver_exception = e
@@ -190,6 +192,7 @@ class GAMS_guest():
         s._mpisppy_data._obj_from_agnostic = objval
 
         # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
+        print(f"For {s.name} in {global_rank=}: {objval=}")
 
 
     # local helper
@@ -203,6 +206,7 @@ class GAMS_guest():
         if hasattr(s._mpisppy_model, "W"):
             i=0
             for nonants_set, nonants_var in gd["nonants_name_pairs"]:
+                #print(f'{gd["nonant_set_sync_dict"]}')
                 for element in gd["nonant_set_sync_dict"][nonants_set]:
                     ndn_i = ('ROOT', i)
                     
@@ -221,11 +225,17 @@ class GAMS_guest():
 
         i = 0
         for nonants_set, nonants_var in gd["nonants_name_pairs"]:
+            #print(f"1st LOOP!!!!")
+            #print(f"{nonants_set=}")
             gs.sync_db.get_parameter(f"{nonants_var}lo").clear()
             gs.sync_db.get_parameter(f"{nonants_var}up").clear()
+            #print(f'{gd["nonant_set_sync_dict"][nonants_set]=}')
+            #print(f'{gd["nonant_set_sync_dict"][nonants_set].name=}')
             for element in gd["nonant_set_sync_dict"][nonants_set]:
+                #print(f"ELEEEEEMEEEENT {element}")
                 ndn_i = ("ROOT", i)
                 hostVar = s._mpisppy_data.nonant_indices[ndn_i]
+                #print("WOOOOOOORRRKIING")
                 if hostVar.is_fixed():
                     #print(f"FIXING for {global_rank=}, in {s.name}, for {rec.keys=}: {hostVar._value=}")
                     gs.sync_db.get_parameter(f"{nonants_var}lo").add_record(element).set_value(hostVar._value)
@@ -233,6 +243,7 @@ class GAMS_guest():
                 else:
                     gs.sync_db.get_variable(nonants_var).find_record(element).set_level(hostVar._value)
                 i += 1
+        #print("LEAVING _copy_nonants")
 
 
     def _restore_nonants(self, Ag, s):
@@ -338,6 +349,10 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
 
     for nonant_name_pair in nonants_name_pairs:
         nonants_support_set, nonant_variables = nonant_name_pair
+        if "(" in nonants_support_set:
+            nonants_paranthesis_support_set = nonants_support_set
+        else:
+            nonants_paranthesis_support_set = f"({nonants_support_set})"
 
         parameter_definition += f"""
    ph_W_{nonant_variables}({nonants_support_set})        'ph weight'
@@ -370,8 +385,8 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
         else:
             PHpenalty = f"({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}))*({nonant_variables}({nonants_support_set}) - {nonant_variables}bar({nonants_support_set}))"
         objective_ph_excess += f"""
-                +  W_on * sum((i,j), ph_W_{nonant_variables}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
-                +  prox_on * sum((i,j), 0.5 * rho_{nonant_variables}({nonants_support_set}) * {PHpenalty})"""
+                +  W_on * sum({nonants_paranthesis_support_set}, ph_W_{nonant_variables}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
+                +  prox_on * sum({nonants_paranthesis_support_set}, 0.5 * rho_{nonant_variables}({nonants_support_set}) * {PHpenalty})"""
         
         objective_ph_excess2 = f"""
                 +  W_on * sum({nonants_support_set}, ph_W_{nonant_variables}({nonants_support_set})*{nonant_variables}({nonants_support_set}))
@@ -438,8 +453,82 @@ def file_name_creator(original_file_path):
 
 
 ### Generic functions called inside the specific scenario creator
+def _add_or_get_set(mi, out_set):
+    try:
+        return mi.sync_db.add_set(out_set.name, out_set._dim, out_set.text)
+    except gams.GamsException:
+        return mi.sync_db.get_set(out_set.name)
+def _add_or_get_set2(mi, out_set):
+    try:
+        sync_set = mi.sync_db.add_set(out_set.name, out_set._dim, out_set.text)
+        for record in out_set:
+            print(f"before {record=} ++++++++++++++++++++++")
+            #print(f"{dir(mi.sync_db.get_set(out_set.name))}")
+            mi.sync_db.get_set(out_set.name).add_record(record)
+        for record in mi.sync_db.get_set(out_set.name):
+            print(f" after {record=} +++++++++++++++")
+        return mi.sync_db.get_set(out_set.name)
+    except gams.GamsException:
+        #print(f"Set {out_set.name} already exists. Retrieving it.")
+        return mi.sync_db.get_set(out_set.name)
 
-def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs):
+def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs):    
+    ### First create the model instance
+    job = ws.add_job_from_file(new_file_name)
+    cp = ws.add_checkpoint()
+    mi = cp.add_modelinstance()
+
+    job.run(checkpoint=cp) # at this point the model with bad values is solved, it creates the file _gams_py_gjo0.lst
+
+    ### Add to the elements that should be modified the stochastic parameters
+    # The parameters don't exist yet in the model instance, so they need to be redefined thanks to the job
+    stoch_sets_out_dict = {param_name: [job.out_db.get_set(elementary_set) for elementary_set in set_name.split(",")] for set_name, param_name in stoch_param_name_pairs}
+    stoch_sets_sync_dict = {param_name: [_add_or_get_set(mi, out_elementary_set) for out_elementary_set in out_elementary_sets] for param_name, out_elementary_sets in stoch_sets_out_dict.items()}
+    glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, [sync_elementary_set for sync_elementary_set in sync_elementary_sets])) for param_name, sync_elementary_sets in stoch_sets_sync_dict.items()]
+
+    ### Gather the list of non-anticipative variables and their sets from the job, to modify them and add PH related parameters
+    #nonant_sets_out_dict = {nonant_set_name: [job.out_db.get_set(elementary_set) for elementary_set in nonant_set_name.split(",")] for nonant_set_name, param_name in nonants_name_pairs}
+    #new_set = _add_or_get_set(mi, job.out_db.get_set("crop"))
+    #record_list = [rec for rec in new_set]
+    #print(f"{new_set=}, {list(new_set)=}, {record_list=}")
+    #quit()
+    #for nonant_set in nonant_sets_out_dict.values():
+        #print(f"{nonant_set=}")
+        #for rec in nonant_set[0]:
+            #print(f"{dir(rec)=}")
+            #print(f"RECOOOOOOOOOOOORD: {rec.get_symbol()=}, {dir(rec.get_symbol())=}, {rec.keys[0]=}")
+    #cartesian_nonant_set_sync_dict = {nonant_set_name: itertools.product(*[list(_add_or_get_set(mi, out_elementary_set)) for out_elementary_set in out_elementary_sets]) for nonant_set_name, out_elementary_sets in nonant_sets_out_dict.items()}
+    #print(f"{cartesian_nonant_set_sync_dict=}")
+    #nonant_set_sync_dict2 = {nonant_set_name: [combination for combination in cartesian_product] for nonant_set_name, cartesian_product in cartesian_nonant_set_sync_dict.items()}
+    #print(f"{nonant_set_sync_dict2=}")
+    #nonant_set_sync_dict = {nonant_set_name: [rec.keys[0] for rec in combination] for nonant_set_name, combination in cartesian_nonant_set_sync_dict.items()}
+    #print(f"{nonant_set_sync_dict=}")
+    ph_W_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"ph_W_{nonant_variables_name}", nonants_support_set_name.split(","), "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+    xbar_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar", nonants_support_set_name.split(","), "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+    rho_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"rho_{nonant_variables_name}", nonants_support_set_name.split(","), "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
+
+    # x_out is necessary to add the x variables to the database as we need the type and dimension of x
+    x_out_dict = {nonant_variables_name: job.out_db.get_variable(f"{nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
+    x_dict = {nonant_variables_name: mi.sync_db.add_variable(f"{nonant_variables_name}", x_out_dict[nonant_variables_name]._dim, x_out_dict[nonant_variables_name].vartype) for _, nonant_variables_name in nonants_name_pairs}
+    xlo_dict = {nonant_variables_name: mi.sync_db.add_parameter(f"{nonant_variables_name}lo", x_out_dict[nonant_variables_name]._dim, f"lower bound on {nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
+    xup_dict = {nonant_variables_name: mi.sync_db.add_parameter(f"{nonant_variables_name}up", x_out_dict[nonant_variables_name]._dim, f"upper bound on {nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
+
+    W_on = mi.sync_db.add_parameter(f"W_on", 0, "activate w term")
+    prox_on = mi.sync_db.add_parameter(f"prox_on", 0, "activate prox term")
+
+    glist += [gams.GamsModifier(ph_W_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(xbar_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(rho_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(W_on)] \
+        + [gams.GamsModifier(prox_on)] \
+        + [gams.GamsModifier(x_dict[nonants_name_pair[1]], gams.UpdateAction.Lower, xlo_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
+        + [gams.GamsModifier(x_dict[nonants_name_pair[1]], gams.UpdateAction.Upper, xup_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs]
+
+    all_ph_parameters_dicts = {"ph_W_dict": ph_W_dict, "xbar_dict": xbar_dict, "rho_dict": rho_dict, "W_on": W_on, "prox_on": prox_on}
+    nonant_set_sync_dict = {"None": None}
+    return mi, job, nonant_set_sync_dict, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict
+
+def pre_instantiation_for_PH2(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs):
 
     ### First create the model instance
     job = ws.add_job_from_file(new_file_name)
@@ -450,13 +539,9 @@ def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_
 
     ### Add to the elements that should be modified the stochastic parameters
     # The parameters don't exist yet in the model instance, so they need to be redefined thanks to the job
-    stoch_sets_out_dict = {param_name: job.out_db.get_set(set_name) for set_name, param_name in stoch_param_name_pairs for }
-    stoch_sets_sync_dict = {param_name: mi.sync_db.add_set(out_set.name, out_set._dim, out_set.text) for param_name, out_set in stoch_sets_out_dict.items()}
-    glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, [sync_set,])) for param_name, sync_set in stoch_sets_sync_dict.items()]
-
-    ### Gather the list of non-anticipative variables and their sets from the job, to modify them and add PH related parameters
-    nonants_sets_out = [job.out_db.get_set(nonants_support_set_name) for nonants_support_set_name, _ in nonants_name_pairs]
-    nonant_set_sync_dict = {nonant_set.name: [record.keys[0] for record in nonant_set] for nonant_set in nonants_sets_out}
+    stoch_sets_out_dict = {param_name: [job.out_db.get_set(elementary_set) for elementary_set in set_name.split(",")] for set_name, param_name in stoch_param_name_pairs}
+    stoch_sets_sync_dict = {param_name: [mi.sync_db.add_set(out_elementary_set.name, out_elementary_set._dim, out_elementary_set.text) for out_elementary_set in out_elementary_sets] for param_name, out_elementary_sets in stoch_sets_out_dict.items()}
+    glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, [sync_elementary_set for sync_elementary_set in sync_elementary_sets])) for param_name, sync_elementary_sets in stoch_sets_sync_dict.items()]
 
     ph_W_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"ph_W_{nonant_variables_name}", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
     xbar_dict = {nonant_variables_name: mi.sync_db.add_parameter_dc(f"{nonant_variables_name}bar", [nonants_support_set_name,], "ph weight") for nonants_support_set_name, nonant_variables_name in nonants_name_pairs}
@@ -481,7 +566,7 @@ def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_
 
     all_ph_parameters_dicts = {"ph_W_dict": ph_W_dict, "xbar_dict": xbar_dict, "rho_dict": rho_dict, "W_on": W_on, "prox_on": prox_on}
 
-    return mi, job, nonant_set_sync_dict, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict
+    return mi, job, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict
 
 
 """def gamsmodifiers_for_PH(glist, mi, job, nonants_name_pairs):
@@ -513,10 +598,54 @@ def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_
 
     return glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict"""
 
-def adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict):
+def adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job, mi):
+    
+    ### Gather the list of non-anticipative variables and their sets from the job, to modify them and add PH related parameters
+    nonant_sets_out_dict = {nonant_set_name: [job.out_db.get_set(elementary_set) for elementary_set in nonant_set_name.split(",")] for nonant_set_name, param_name in nonants_name_pairs}
+    """new_set = _add_or_get_set(mi, job.out_db.get_set("crop"))
+    record_list = [rec for rec in job.out_db.get_set("crop")]
+    print(f"{new_set=}, {list(new_set)=}, {record_list=}")
+    quit()"""
+    """print(f"{[rec.keys[0] for rec in job.out_db.get_set('crop')]=}")
+
+    print(f"{list(job.out_db.get_set('crop'))}=")
+    for rec in list(job.out_db.get_set('crop')):
+        print(f"My{rec=}")
+        print(f"My{rec.keys[0]=}")
+    quit()"""
+
+    nonant_set_sync_dict = {nonant_set_name: [element for element in itertools.product(*[[rec.keys[0] for rec in out_elementary_set] for out_elementary_set in out_elementary_sets])] for nonant_set_name, out_elementary_sets in nonant_sets_out_dict.items()}
+    #print(f"{nonant_set_sync_dict=}")
+    """print(f"{cartesian_nonant_set_out_dict=}")
+    for prod in cartesian_nonant_set_out_dict["crop"]:
+        print(f"{prod=}")
+        for element in prod:
+            print(f"{element=}")
+            print(f"{element.keys[0]=}")
+    nonant_set_sync_dict = {nonant_set_name: [combination for combination in cartesian_product] for nonant_set_name, cartesian_product in cartesian_nonant_set_sync_dict.items()}
+    nonant_set_sync_dict2 = {nonant_set_name: [rec.keys[0] for rec in combination] for nonant_set_name, combination in cartesian_nonant_set_sync_dict.items()}
+    print(f"{nonant_set_sync_dict=}")
+    print(f"{nonant_set_sync_dict2=}")"""
+
     for nonants_name_pair in nonants_name_pairs:
-        nonants_support_set_name, nonant_variables_name = nonants_name_pair
-        for c in nonant_set_sync_dict[nonants_support_set_name]:
+        nonants_set_name, nonant_variables_name = nonants_name_pair
+
+        """set_list = nonant_set_sync_dict[nonants_set_name]
+
+        # Create a cartesian product of all sets in set_list
+        set_elements = [list(s) for s in set_list]
+        cartesian_product = itertools.product(*set_elements)
+        
+        # Add zero record for each combination in the cartesian product
+        for combination in cartesian_product:
+            record_name = [rec.keys[0] for rec in combination]
+            all_ph_parameters_dicts["ph_W_dict"][nonant_variables_name].add_record(record_name).value = 0
+            all_ph_parameters_dicts["xbar_dict"][nonant_variables_name].add_record(record_name).value = 0
+            all_ph_parameters_dicts["rho_dict"][nonant_variables_name].add_record(record_name).value = cfg.default_rho
+            xlo_dict[nonant_variables_name].add_record(record_name).value = x_out_dict[nonant_variables_name].find_record(record_name).lower
+            xup_dict[nonant_variables_name].add_record(record_name).value = x_out_dict[nonant_variables_name].find_record(record_name).upper"""
+
+        for c in nonant_set_sync_dict[nonants_set_name]:
             all_ph_parameters_dicts["ph_W_dict"][nonant_variables_name].add_record(c).value = 0
             all_ph_parameters_dicts["xbar_dict"][nonant_variables_name].add_record(c).value = 0
             all_ph_parameters_dicts["rho_dict"][nonant_variables_name].add_record(c).value = cfg.default_rho
@@ -524,3 +653,4 @@ def adding_record_for_PH(nonants_name_pairs, nonant_set_sync_dict, cfg, all_ph_p
             xup_dict[nonant_variables_name].add_record(c).value = x_out_dict[nonant_variables_name].find_record(c).upper
     all_ph_parameters_dicts["W_on"].add_record().value = 0
     all_ph_parameters_dicts["prox_on"].add_record().value = 0
+    return nonant_set_sync_dict
