@@ -16,7 +16,6 @@ from mpisppy import global_toc
 
 # for trapping numpy warnings
 import warnings
-warnings.filterwarnings('error')
 
 class Gradient_extension(mpisppy.extensions.extension.Extension):
     """
@@ -78,13 +77,16 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
 
 
     def _update_rho_primal_based(self):
-        curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
-        try:
-            primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
-        except Warning:
-            print(f"Warning from numpy encountered in gradient_extension._update_rho_primal_based - {last_conv=} {curr_conv=} - no update recommended")
-            return False
-        return (primal_diff <= self.cfg.grad_dynamic_primal_thresh)
+        with warnings.catch_warnings():
+            warnings.filterwarnings('error')
+            curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
+            try:
+                primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
+            except Warning:
+                if self.cylinder_rank == 0:
+                    print(f"Warning from numpy encountered in gradient_extension._update_rho_primal_based - {last_conv=} {curr_conv=} - no update recommended")
+                return False
+            return (primal_diff <= self.cfg.grad_dynamic_primal_thresh)
 
     def _update_rho_dual_based(self):
         curr_conv, last_conv = self.dual_conv_cache[-1], self.dual_conv_cache[-2]
