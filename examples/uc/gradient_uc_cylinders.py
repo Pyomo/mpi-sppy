@@ -54,7 +54,11 @@ def _parse_args():
     cfg.add_to_config("run_aph",
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
-                         default=False)        
+                         default=False)
+    cfg.add_to_config("use_cost_based_rho",
+                         description="Run with standard UC cost based rho setter (not gradient based)",
+                         domain=bool,
+                         default=False)            
     cfg.parse_command_line("gradient_uc_cylinders")
     return cfg
 
@@ -85,7 +89,8 @@ def main():
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
-#    rho_setter = uc._rho_setter
+    if cfg.use_cost_based_rho:
+        rho_setter = uc._rho_setter
     
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
