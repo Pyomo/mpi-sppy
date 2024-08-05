@@ -14,9 +14,6 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 
-# for trapping numpy warnings
-import warnings
-warnings.filterwarnings('error')
 
 class Gradient_extension(mpisppy.extensions.extension.Extension):
     """
@@ -79,11 +76,7 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
 
     def _update_rho_primal_based(self):
         curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
-        try:
-            primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
-        except Warning:
-            print(f"Warning from numpy encountered in gradient_extension._update_rho_primal_based - {last_conv=} {curr_conv=} - no update recommended")
-            return False
+        primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
         return (primal_diff <= self.cfg.grad_dynamic_primal_thresh)
 
     def _update_rho_dual_based(self):
@@ -114,21 +107,11 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
             rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
                                 if 'rho_setter_kwargs' in self.opt.options \
                                    else dict()
-
-            # sum/num is a total hack
-            sum_rho = 0.0
-            num_rhos = 0
             for sname, scenario in self.opt.local_scenarios.items():
                 rholist = self.rho_setter(scenario, **rho_setter_kwargs)
                 for (vid, rho) in rholist:
                     (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
                     scenario._mpisppy_model.rho[(ndn, i)] = rho
-                    sum_rho += rho
-                    num_rhos += 1
-
-            rho_avg = sum_rho / num_rhos
-            
-            global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
 
     def enditer(self):
         pass
