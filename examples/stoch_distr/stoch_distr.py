@@ -13,19 +13,6 @@ import re
 # Note: regions in our model will be represented in mpi-sppy by scenarios and to ensure the inter-region constraints
 #       we will impose the inter-region arcs to be consensus-variables. They will be represented as non anticipative variables in mpi-sppy
 
-"""def max_revenue(admm_subproblem_names, all_nodes_dict=None, cfg=None, data_params=None):
-    max_rev = 0
-    for admm_subproblem_name in admm_subproblem_names:
-        if cfg.scalable:
-            region_dict = distr_data.scalable_region_dict_creator(admm_subproblem_name, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
-        else:
-            region_dict = distr_data.scalable_region_dict_creator(admm_subproblem_name)  
-        max_rev = max(max_rev, max([region_dict['revenues'][key] for key in region_dict['revenues']]))
-    print(f"{max_rev=}")
-    return max_rev"""
-
-
-
 
 def inter_arcs_adder(region_dict, inter_region_dict):
     """This function adds to the region_dict the inter-region arcs 
@@ -65,7 +52,9 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
     Args:
         local_dict (dict): dictionary representing a region including the inter region arcs \n
         cfg (): config argument used here for the random parameters \n
-        sense (=pyo.minimize): we aim to minimize the cost, this should always be minimize
+        stoch_scenario_name(str): name of the stochastic scenario. In each region, the model is scenario dependant \n
+        sense (=pyo.minimize): we aim to minimize the cost, this should always be minimize \n
+        max_revenue (float, opt): higher than all the possible revenues, this value allows to add a penalty slack making sure that the optimal value of the new model is obtained with a 0 slack
 
     Returns:
         model (Pyomo ConcreteModel) : the instantiated model
@@ -150,12 +139,14 @@ def min_cost_distr_problem(local_dict, cfg, stoch_scenario_name, sense=pyo.minim
 ###Functions required in other files, which constructions are specific to the problem
 
 ###Creates the scenario
-def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):#, max_revenue=None):
+def scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):
     """Creates the model, which should include the consensus variables. \n
-    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in stoch_admmWrapper.
+    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in stoch_admmWrapper. 
+    Therefore, only the stochastic tree as it would be represented without the decomposition needs to be created.
 
     Args:
         admm_stoch_subproblem_scenario_name (str): the name given to the admm problem for the stochastic scenario. \n
+        inter_region_dict (dict): contains all the links between the regions
         num_scens (int): number of scenarios (regions). Useful to create the corresponding inter-region dictionary \n
         other parameters are key word arguments for scenario_creator
 
@@ -189,6 +180,7 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario, eps
         rank (int): rank in which the scenario is placed
         admm_stoch_subproblem_scenario_name (str): name of the admm stochastic scenario subproblem
         scenario (Pyomo ConcreteModel): the instantiated model
+        eps (float, opt): ensures that the dummy slack variables introduced have small values
     """
     #print(f"slack values for the distribution centers for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     for var in scenario.y:
@@ -199,9 +191,10 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario, eps
             #scenario.y[var].pprint()
         if 'F' in var:
             if (scenario.inventory[var].value > 10*eps):
-                print(f"The inventory {scenario.y[var].name} is big, its value is {scenario.inventory[var].value}")
-            #assert (abs(scenario.y[var].value) < eps), "the penalty slack is too big"
-            #scenario.y[var].pprint()
+                print(f"In {rank=} for {admm_stoch_subproblem_scenario_name}, the inventory {scenario.inventory[var].name} is big, its value is {scenario.inventory[var].value}. Although it is rare after convergence, it makes sense if in a scenario it is really interesting to produce.")
+                scenario.inventory[var].pprint()
+            #assert (abs(scenario.inventory[var].value) < eps), "the inventory is too big"
+            #scenario.inventory[var].pprint()
     return
     print(f"flow values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.flow.pprint()
@@ -209,15 +202,16 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario, eps
     scenario.y.pprint()
 
 
-def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):#, max_revenue=None):
-    """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
+def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_region_dict=None, cfg=None, data_params=None, all_nodes_dict=None):
+    """The following function creates the consensus variables dictionary thanks to the inter-region dictionary. \n
     This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
         admm_subproblem_names (list of str): name of the admm subproblems (regions) \n
         stoch_scenario_name (str): name of any stochastic_scenario, it is only used 
         in this example to access the non anticipative variables (which are common to 
-        every stochastic scenario) and their stage.
+        every stochastic scenario) and their stage. \n
+        kwargs (opt): necessary in this example to call the scenario creator
     
     Returns:
         dict: dictionary which keys are the subproblems and values are the list of 
@@ -253,7 +247,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
     # which have this scenario as an ancestor (parent) in the tree
     for admm_subproblem_name in admm_subproblem_names:
         admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
-        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)#, max_revenue=max_revenue)
+        model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)
         for node in model._mpisppy_node_list:
             for var in node.nonant_list:
                 if not var.name in consensus_vars[admm_subproblem_name]:
@@ -307,7 +301,7 @@ def admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_sce
 
 
 def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_name):
-    """ Gives the admm_subproblem_name and the stoch_scenario_name given an admm_stoch_subproblem_scenario_name.
+    """ Returns the admm_subproblem_name and the stoch_scenario_name given an admm_stoch_subproblem_scenario_name.
     This function, specific to the problem, is the reciprocal function of ``combining_names`` which creates the 
     admm_stoch_subproblem_scenario_name given the admm_subproblem_name and the stoch_scenario_name.
 
@@ -325,7 +319,7 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     return admm_subproblem_name, stoch_scenario_name
 
 
-def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):#, max_revenue=None):
+def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
     """
     Args:
         cfg (config): specifications for the problem given on the command line
@@ -339,9 +333,6 @@ def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):#, max_reven
         "cfg" : cfg,
         "data_params" : data_params,
               }
-    """if cfg.ensure_xhat_feas:
-        assert max_revenue is not None, "max_revenue has to be added to ensure xhat feasibility"
-        kwargs["max_revenue"] = max_revenue"""
     return kwargs
 
 
@@ -362,7 +353,7 @@ def inparser_adder(cfg):
     
     cfg.add_to_config(
             "num_admm_subproblems",
-            description="Number of admm subproblems per stochastic scenario (default None)",
+            description="Number of admm subproblems (regions)",
             domain=int,
             default=None,
             argparse_args = {"required": True}

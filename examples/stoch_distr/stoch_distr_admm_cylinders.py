@@ -57,12 +57,6 @@ def _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params,
     stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     
-    """if cfg.ensure_xhat_feas:
-        max_revenue = data_params["max revenue"]
-        #max_revenue = stoch_distr.max_revenue(admm_subproblem_names, all_nodes_dict=all_nodes_dict, cfg=cfg, data_params=data_params)
-    else:
-        max_revenue = None"""
-    
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
     scenario_creator = stoch_distr.scenario_creator
@@ -183,7 +177,7 @@ def main(cfg):
     else:
         inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_admm_subproblems)
         all_nodes_dict = None
-        data_params = None
+        data_params = {"max revenue": 1200} # hard-coded because the model is hard-coded
 
     n_cylinders = _count_cylinders(cfg)
     admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params)

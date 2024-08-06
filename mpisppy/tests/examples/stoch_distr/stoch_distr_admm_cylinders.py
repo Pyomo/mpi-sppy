@@ -167,7 +167,7 @@ def main(cfg):
     
     scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
-    variable_probability = admm.var_prob_list_fct
+    variable_probability = admm.var_prob_list
     all_nodenames = admm.all_nodenames
     wheel = _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names)
 

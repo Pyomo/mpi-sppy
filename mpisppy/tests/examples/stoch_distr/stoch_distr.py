@@ -366,6 +366,7 @@ def scenario_denouement(rank, admm_stoch_subproblem_scenario_name, scenario):
         admm_stoch_subproblem_scenario_name (str): name of the admm stochastic scenario subproblem
         scenario (Pyomo ConcreteModel): the instantiated model
     """
+    return
     print(f"flow values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
     scenario.flow.pprint()
     print(f"slack values for {admm_stoch_subproblem_scenario_name=} at {rank=}")
