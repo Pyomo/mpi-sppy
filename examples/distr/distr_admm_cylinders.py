@@ -73,7 +73,7 @@ def main():
     else:
         inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
         all_nodes_dict = None
-        data_params = None
+        data_params = {"max revenue": 1200} # hard-coded because the model is hard-coded
 
     ph_converger = None
 

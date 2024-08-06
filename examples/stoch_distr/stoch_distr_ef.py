@@ -71,7 +71,7 @@ def main():
     else:
         inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_admm_subproblems)
         all_nodes_dict = None
-        data_params = data_params = {"max revenue": 1200}
+        data_params = {"max revenue": 1200}
     
     n_cylinders = 1 # There is no spoke so we only use one cylinder
     admm, _ = stoch_distr_admm_cylinders._make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params) 
