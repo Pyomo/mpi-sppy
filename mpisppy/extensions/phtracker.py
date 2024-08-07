@@ -10,6 +10,7 @@ import pandas as pd
 from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 from mpisppy.cylinders.spoke import Spoke
+from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
 
 class TrackedData():
     ''' A class to manage the data for a single variable (e.g. gaps, bounds, etc.)
@@ -32,8 +33,8 @@ class TrackedData():
         name = name[:-4] if name.endswith('.csv') else name
 
         self.fname = os.path.join(self.folder, f'{name}.csv')
-        if self.plot:
-            self.plot_fname = os.path.join(self.folder, f'{name}.png')
+        #if self.plot:
+        self.plot_fname = os.path.join(self.folder, f'{name}.png')
 
     def initialize_df(self, columns):
         """ Initialize the dataframe for saving the data and write out the column names
@@ -113,7 +114,9 @@ class PHTracker(Extension):
             'xbars': {'track': self.add_xbars,
                       'finalize': self.plot_xbars_bounds_gaps},
             'scen_gaps': {'track': self.add_scen_gaps,
-                          'finalize': self.plot_nonants_sgaps_duals}
+                          'finalize': self.plot_nonants_sgaps_duals},
+            'reduced_costs': {'track': self.add_rc,
+                              'finalize': self.plot_rc}
         }
 
         # will initialize these after spcomm is initialized
@@ -130,7 +133,7 @@ class PHTracker(Extension):
         cylinder_name = self.tracker_options.get(
             "cylinder_name", type(self.spcomm).__name__)
         self.cylinder_folder = os.path.join(self.results_folder, cylinder_name)
-        track_types = ['gaps', 'bounds', 'nonants', 'duals', 'xbars', 'scen_gaps']
+        track_types = ['gaps', 'bounds', 'nonants', 'duals', 'xbars', 'scen_gaps', 'reduced_costs']
 
         self.track_dict = {}
         for t in track_types:
@@ -225,6 +228,8 @@ class PHTracker(Extension):
             df_columns = self.get_var_names(xbar=True)
         elif track_var == 'scen_gaps':
             df_columns = self.get_scen_colnames()
+        elif track_var == 'reduced_costs':
+            df_columns = self.get_var_names(xbar=True)
         else:
             raise RuntimeError("track_var not recognized")
 
@@ -276,6 +281,13 @@ class PHTracker(Extension):
             hub_inner_bound = self.spcomm.BestInnerBound
             hub_outer_bound = self.spcomm.BestOuterBound
         return hub_outer_bound, hub_inner_bound, spoke_bound
+    
+    def _get_rc(self):
+        if not isinstance(self.spcomm, ReducedCostsSpoke):
+            return None
+        reduced_costs = self.spcomm.rc
+        return reduced_costs
+
 
     def _ob_ib_process(self, ob, ib):
         """ process the outer and inner bounds
@@ -384,6 +396,24 @@ class PHTracker(Extension):
 
         self._add_data_and_write('nonants', nonants, gather=True, final=final)
 
+    def add_rc(self, final=False):
+        """ add iteration reduced costs to rpw
+        """
+        if self._rank != 0:
+            return
+
+        reduced_costs = self._get_rc()
+
+        if reduced_costs is None:
+            return
+        rc = {}
+        sname = list(self.opt.local_scenarios.keys())[0]
+        s = self.opt.local_scenarios[sname]
+        rc = {xvar.name: reduced_costs[ci]
+                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items())}
+
+        self._add_data_and_write('reduced_costs', rc, gather=False, final=final)
+
     def add_duals(self, final=False):
         """ add iteration duals to rpw
         """
@@ -491,6 +521,32 @@ class PHTracker(Extension):
             else:
                 if self.verbose:
                     print("WARNING: No nonzero gaps to compute threshold")
+
+        plt.xlabel('Iteration')
+        plt.ylabel(f'{var.capitalize()} values')
+        plt.title(f'{var.capitalize()} Over Iterations')
+        plt.legend()
+        plt.grid(True)
+        plt.savefig(self.track_dict[var].plot_fname)
+        plt.close()
+
+    def plot_rc(self, var):
+        if self._rank != 0:
+            return
+
+        if var not in ['reduced_costs']:
+            raise RuntimeError('var must be reduced_costs')
+
+        df = pd.read_csv(self.track_dict[var].fname, sep=',')
+        df = df.replace([np.inf, -np.inf], np.nan)
+        #df.dropna(inplace=True)
+
+        plt.figure(figsize=(10, 6))  # Adjust the figure size as needed
+        column_names = df.columns[1:]
+
+        for col in column_names:
+            if not np.isnan(df[col]).all():
+                plt.plot(df['iteration'], df[col], label=col.capitalize())
 
         plt.xlabel('Iteration')
         plt.ylabel(f'{var.capitalize()} values')

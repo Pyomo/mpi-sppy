@@ -469,11 +469,6 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=0.8)
         
-        self.add_to_config('rc_progressive_fix_fraction',
-                            description="increase fix fraction in each iteration",
-                            domain=bool,
-                            default=False)
-        
         self.add_to_config('rc_bound_tightening',
                             description="use reduced cost bound tightening",
                             domain=bool,
@@ -483,17 +478,6 @@ class Config(pyofig.ConfigDict):
                             description="tol to consider vars at bound",
                             domain=float,
                             default=1e-6)
-
-        self.add_to_config('rc_track_rc',
-                           description="track rc values, bounds and fixed vars",
-                           domain=bool,
-                           default=False)
-        
-        self.add_to_config('rc_track_prefix',
-                           description="where to store tracked values",
-                           domain=str,
-                           default='')
-    
 
 
     def lagranger_args(self):
@@ -820,6 +804,11 @@ class Config(pyofig.ConfigDict):
                             description="Adds scenario gap tracking (default 0)",
                             domain=int,
                             default=0)
+        self.add_to_config("track_reduced_costs",
+                            description="Adds reduced costs tracking (default 0)",
+                            domain=int,
+                            default=0)
+
 
     def wxbar_read_write_args(self):
         self.add_to_config("init_W_fname",

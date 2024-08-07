@@ -19,8 +19,7 @@ class ReducedCostsFixer(Extension):
         self.verbose = ph_options['verbose'] or rc_options['verbose']
 
         self._use_rc_bt = rc_options['use_rc_bt']
-        # reduced costs less than
-        # this in absolute value
+        # reduced costs less than this in absolute value
         # will be considered 0
         self.zero_rc_tol = rc_options['zero_rc_tol']
         self._use_rc_fixer = rc_options['use_rc_fixer']
@@ -29,7 +28,6 @@ class ReducedCostsFixer(Extension):
         # the `zero_rc_tol` in absolute value
         self._fix_fraction_target_iter0 = rc_options['fix_fraction_target_iter0']
         self._fix_fraction_target_iterK = rc_options['fix_fraction_target_iterK']
-        self._progressive_fix_fraction = rc_options['progressive_fix_fraction']
         self.fix_fraction_target = self._fix_fraction_target_iter0
 
         # TODO: This should be same as in rc spoke?
@@ -41,7 +39,6 @@ class ReducedCostsFixer(Extension):
 
         self._options = rc_options
 
-        # TODO: Initialize to 0
         self._last_serial_number = -1
         self._heuristic_fixed_vars = 0
 
@@ -57,12 +54,7 @@ class ReducedCostsFixer(Extension):
                 if xvar.is_integer():
                     self._integer_nonants.append(ndn_i)
             break
-    
-
-    def post_iter0(self):
-        #self.fix_fraction_target = self._fix_fraction_target_iterK
-        pass
-    
+        
     def post_iter0_after_sync(self):
         self.fix_fraction_target = self._fix_fraction_target_iterK
 
