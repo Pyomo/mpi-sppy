@@ -490,8 +490,12 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file: rho rescale factors (default None)",
+                            description="json file with {iternum: rho rescale factor} (default None)",
                             domain=str,
+                            default=None)
+        self.add_to_config("ph_ob_initial_rho_rescale_factor",
+                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
+                            domain=float,
                             default=None)
         self.add_to_config("ph_ob_gradient_rho",
                             description="use gradient-based rho in PH OB",

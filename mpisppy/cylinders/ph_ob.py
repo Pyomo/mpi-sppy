@@ -15,7 +15,7 @@ from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 
 class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
-    """Updates its own W and x.
+    """Updates its own W and x using its own rho.
     """
     converger_spoke_char = 'B'
 
@@ -36,7 +36,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             self.rho_rescale_factors = None
 
         # use gradient rho
-        self.use_gradient_rho = False  # ??? xxxx TBD: what?
+        self.use_gradient_rho = False
         if "ph_ob_gradient_rho" in self.opt.options:
             assert self.opt.options["ph_ob_gradient_rho"]["cfg"] != None, "You need to give a cfg to use gradient rho."
             self.default_rescale_rho = False            
@@ -85,7 +85,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         return self.opt.Ebound(verbose)
 
 
-    def _rescale_rho(self,rf):
+    def _rescale_rho(self, rf):
         # IMPORTANT: the scalings accumulate.
         # E.g., 0.5 then 2.0 gets you back where you started.
         for (sname, scenario) in self.opt.local_scenarios.items():
@@ -154,7 +154,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
 
         self.ph_ob_prep()
         if self.default_rescale_rho:
-            self._rescale_rho(0.1)
+            self._rescale_rho(self.opt.options["ph_ob_initial_rescale_factor"] )
 
         self.trivial_bound = self._phsolve(0)
         self.bound = self.trivial_bound

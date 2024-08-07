@@ -41,6 +41,9 @@ based on the Lagrangian relaxation and reports a bound to the hub.
 Lagranger
 ^^^^^^^^^
 
+This bounder is no longer recommended for use. It does not seem to work as well
+as others.
+
 This bound is a variant of the Lagrangian bound, but it takes x values from the
 hub and uses those to compute its own W values. It can modify the rho
 values (typically to use lower values). The modification is done
@@ -56,8 +59,30 @@ is a sample json file:
     "10": "1.2"
    }
 
+ph_ob
+^^^^^
 
+This bounder is similar to the Lagrangian bounder, except that it executes a PH
+algorithm to obtain its own W values. The idea is that it can use lower rho values
+so as to obtain better outer (lower when minimizing) bounds. It can also provide
+a Lagrangian bound even if the hub does not provide lagrangian multipliers.
 
+The easiest way to use ``ph_ob`` is via the vanilla ``ph_ob_spoke`` method
+as illustrated in ``examples.farmer_cylinders.py``. This method takes values
+from the config object (assuming the config object's ``ph_ob`` method
+was called as shown in the function ``examples.farmer_cylinders._parse_args``)
+and sets up the options for the spoke.
+
+The option ``ph-ob-initial-rho-rescale-factor`` defaults to 0.1, so if nothing
+other than ``--ph-ob`` is given on the command line, the ph_ob spoke will use
+one tenth the default rho (it might use one tenth of rho from
+a rho setter if one is configured in the cylinders program and passed to the ph_ob
+constructor). Additional control over rho values
+is provided by the ``phob-rho-rescale-factors-json`` option which is a json
+file that provides a dictionary with keys that are iteration numbers and values
+that are rescale factors. Note that all rescaling is cummulative. 
+
+As of August, 2024 use of a gradient based rho with ph_ob is untested.
 
 Inner Bounds
 ------------
@@ -66,8 +91,9 @@ For minimization problems, `inner bound` means `upper bound`. But more
 importantly, the bounds are based on a solution, whose value can be
 computed. In some sense, if you don't have this solution, you don't
 have anything (even if you think your hub algorithm has `converged` in
-some sense). We refer to this solution as xhat (:math:`\hat{x}`)
-
+some sense). We refer to this solution as xhat (:math:`\hat{x}`) or
+somes as an `incumbent` solution.
+`
 xhat_specific_bounder
 ^^^^^^^^^^^^^^^^^^^^^
 

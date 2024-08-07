@@ -722,6 +722,8 @@ def ph_ob_spoke(
         ph_ob_spoke["opt_kwargs"]["options"]\
             ["ph_ob_rho_rescale_factors_json"]\
             = cfg.ph_ob_rho_rescale_factors_json
+    ph_ob_spoke["opt_kwargs"]["options"]["ph_ob_initial_rho_rescale_factor"]\
+        = cfg.ph_ob_initial_rho_rescale_factor
     if cfg.ph_ob_gradient_rho:
         ph_ob_spoke["opt_kwargs"]["options"]\
             ["ph_ob_gradient_rho"]\
