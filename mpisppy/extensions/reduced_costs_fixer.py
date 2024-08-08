@@ -76,7 +76,7 @@ class ReducedCostsFixer(Extension):
             if self._use_rc_fixer:
                 self.reduced_costs_fixing(reduced_costs)
         else:
-            if self.opt.cylinder_rank == 0:
+            if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
 
 
