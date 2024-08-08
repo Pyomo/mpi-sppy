@@ -25,10 +25,8 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         self.opt.PH_Prep(attach_prox=True)
         self.opt._reenable_W()
         self.opt._create_solvers()
-        self.default_rescale_rho = True
         if "ph_ob_rho_rescale_factors_json" in self.opt.options and\
             self.opt.options["ph_ob_rho_rescale_factors_json"] is not None:
-            self.default_rescale_rho = False
             with open(self.opt.options["ph_ob_rho_rescale_factors_json"], "r") as fin:
                 din = json.load(fin)
             self.rho_rescale_factors = {int(i): float(din[i]) for i in din}
@@ -39,7 +37,6 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         self.use_gradient_rho = False
         if "ph_ob_gradient_rho" in self.opt.options:
             assert self.opt.options["ph_ob_gradient_rho"]["cfg"] != None, "You need to give a cfg to use gradient rho."
-            self.default_rescale_rho = False            
             self.use_gradient_rho = True
             print("PH Outer Bounder uses an iterative gradient-based rho setter")
             self.cfg = self.opt.options["ph_ob_gradient_rho"]["cfg"]
@@ -126,7 +123,6 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
     def _hack_set_rho(self):
         # HACK to set specific rho values
         rhoval = 0.002
-        self.default_rescale_rho = False
         for sname, scenario in self.opt.local_scenarios.items():
             for ndn_i in scenario._mpisppy_data.nonant_indices.keys():
                 scenario._mpisppy_model.rho[ndn_i] = rhoval
@@ -153,8 +149,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             rho_setter = self.opt.rho_setter
 
         self.ph_ob_prep()
-        if self.default_rescale_rho:
-            self._rescale_rho(self.opt.options["ph_ob_initial_rescale_factor"] )
+        self._rescale_rho(self.opt.options["ph_ob_initial_rho_rescale_factor"] )
 
         self.trivial_bound = self._phsolve(0)
         self.bound = self.trivial_bound

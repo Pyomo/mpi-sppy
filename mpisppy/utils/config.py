@@ -496,7 +496,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("ph_ob_initial_rho_rescale_factor",
                             description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
                             domain=float,
-                            default=None)
+                            default=0.1)
         self.add_to_config("ph_ob_gradient_rho",
                             description="use gradient-based rho in PH OB",
                             domain=bool,
