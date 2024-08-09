@@ -28,7 +28,7 @@ def _parse_args():
                          domain=str,
                          default=None)
 
-    cfg.parse_command_line("distr_ef2")
+    cfg.parse_command_line("stoch_distr_ef")
     return cfg
 
 

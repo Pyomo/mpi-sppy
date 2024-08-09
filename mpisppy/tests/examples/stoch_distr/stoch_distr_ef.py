@@ -30,7 +30,7 @@ def _parse_args():
                          domain=str,
                          default=None)
 
-    cfg.parse_command_line("distr_ef2")
+    cfg.parse_command_line("stoch_distr_ef")
     return cfg
 
 
@@ -62,9 +62,9 @@ def main():
     #with open("ef.txt", "w") as f:
     #    solved_ef.pprint(f)
     #print ("******* model written to ef.txt *******")
-    solution_file_name = "solution_distr.txt"
-    sputils.write_ef_first_stage_solution(solved_ef,
-                                solution_file_name,)
+    #solution_file_name = "solution_distr.txt"
+    #sputils.write_ef_first_stage_solution(solved_ef,
+    #                            solution_file_name,)
     #print(f"EF solution written to {solution_file_name}")
     print(f"EF objective: {pyo.value(solved_ef.EF_Obj)}")
 

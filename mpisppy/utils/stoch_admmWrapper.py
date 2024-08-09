@@ -134,6 +134,8 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             # varlist[stage] will contain the variables at each stage
             depth = len(s._mpisppy_node_list)+1
             varlist = [[] for _ in range(depth)]
+
+            assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
             if s._mpisppy_probability == "uniform": #if there is a two-stage scenario defined by sputils.attach_root_node
                 s._mpisppy_probability = 1/len(self.stoch_scenario_names)
 
@@ -178,7 +180,6 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             # Create the new scenario tree node for admm_consensus
             assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
             parent = s._mpisppy_node_list[-1]
-            objfunc = pyo.Expression(expr=0) # The cost is spread on the branches which are the subproblems
             admm_subproblem_name, stoch_scenario_name = self.split_admm_stoch_subproblem_scenario_name(sname)
             num_scen = self.stoch_scenario_names.index(stoch_scenario_name)
             if self.BFs is not None:
@@ -192,11 +193,10 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 node_name,
                 1/self.number_admm_subproblems, #branching probability at this node
                 parent.stage + 1, # The stage is the stage of the previous leaves
-                objfunc * self.number_admm_subproblems,
+                pyo.Expression(expr=0), # The cost is spread on the branches which are the subproblems
                 varlist[depth-1],
                 s)
             )
-            assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
             s._mpisppy_probability /= self.number_admm_subproblems
 
             # underscores have a special signification in the tree
