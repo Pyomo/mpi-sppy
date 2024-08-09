@@ -68,6 +68,10 @@ if __name__ == "__main__":
     cfg = _parse_args(module)
 
     supported_guests = {"Pyomo", "AMPL", "GAMS"}
+    # special hack to support bundles
+    if hasattr(module, "bundle_hack"):
+        module.bundle_hack(cfg)
+        # num_scens is now really numbuns
     if cfg.guest_language not in supported_guests:
         raise ValueError(f"Not a supported guest language: {cfg.guest_language}\n"
                          f"   supported guests: {supported_guests}")
@@ -102,7 +106,8 @@ if __name__ == "__main__":
     scenario_creator = Ag.scenario_creator
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement   # should we go though Ag?
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
+    # note that if you are bundling, cfg.num_scens will be a fib (numbuns)
+    all_scenario_names = module.scenario_names_creator(cfg.num_scens)
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

@@ -8,7 +8,7 @@ import pyomo.environ as pyo
 import mpisppy.opt.ph
 from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.utils.config as config
-import mpisppy.utils.agnostic as agnostic
+import mpisppy.agnostic.agnostic as agnostic
 
 sys.path.insert(0, '../../examples/farmer')
 import farmer_pyomo_agnostic

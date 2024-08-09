@@ -198,14 +198,15 @@ class Pyomo_guest():
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
 
-        print(f" in _solve_one  {global_rank =}")
+        # print(f" in _solve_one  {global_rank =}")
         if global_rank == 0:
-            print(f"{gs.W.pprint() =}")
-            print(f"{gs.xbars.pprint() =}")
+            #print(f"{gs.W.pprint() =}")
+            #print(f"{gs.xbars.pprint() =}")
+            pass
         solver_name = s._solver_plugin.name
         solver = pyo.SolverFactory(solver_name)
         if 'persistent' in solver_name:
-            raise RuntimeError("Persistent solvers are not currently supported in the farmer agnostic example.")
+            raise RuntimeError("Persistent solvers are not currently supported in the pyomo agnostic example.")
             ###solver.set_instance(ef, symbolic_solver_labels=True)
             ###solver.solve(tee=True)
         else:
@@ -256,10 +257,8 @@ class Pyomo_guest():
 
                 s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
-            # the next line ignore bundling
-            s._mpisppy_data._obj_from_agnostic = pyo.value(gs.Total_Cost_Objective)
-
-        # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
+            # the next line ignore bundles (other than proper bundles)
+            s._mpisppy_data._obj_from_agnostic = pyo.value(sputils.get_objs(gs)[0])
 
 
     # local helper
