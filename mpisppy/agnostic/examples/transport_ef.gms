@@ -1,4 +1,4 @@
-$title A Transportation Problem (TRNSPORT,SEQ=1)
+$title Extensive form of a Transportation Problem (TRNSPORT,SEQ=1)
 
 $onText
 This problem finds a least cost shipping schedule that meets
@@ -20,17 +20,27 @@ $offText
 
 Set
    i 'canning plants' / seattle,  san-diego /
-   j 'markets'        / new-york, chicago, topeka /;
+   j 'markets'        / new-york, chicago, topeka /
+   scens 'scenarios'  / bad,      average, good/;
 
 Parameter
    a(i) 'capacity of plant i in cases'
         / seattle    350
           san-diego  600 /
 
-   b(j) 'demand at market j in cases'
+   b_average(j) 'average demand at market j in cases'
         / new-york   325
           chicago    300
-          topeka     275 /;
+          topeka     275 /
+          
+   stoch_prop(scens) 'proportion of demand for a stochastic scenario'
+        / bad        0.8
+          average    1.0
+          good       1.2 /
+          
+   b_stoch(j, scens) 'demand at market j for the scenario scens';
+
+b_stoch(j,scens) = b_average(j)*stoch_prop(scens);
 
 Table d(i,j) 'distance in thousands of miles'
               new-york  chicago  topeka
@@ -47,23 +57,27 @@ cost_y(j) = 20;
 
 Variable
    x(i,j) 'shipment quantities in cases'
-   z      'total transportation and slack costs in thousands of dollars'
-   y(j)   'slack penalty for the demand not supplied';
+   z_stoch(scens) 'total transportation and slack costs in thousands of dollars for a scenario'
+   z_average      'total average transportation and slack costs in thousands of dollars'
+   y(j, scens)    'slack penalty for the demand not supplied';
 
 Positive Variable x;
 Positive Variable y;
 x.up(i,j) = 1000;
 
 Equation
-   cost      'define objective function'
+   cost_stoch(scens)      'define objective function for a scenario'
+   cost_average    'define average objective function'
    supply(i) 'observe supply limit at plant i'
-   demand(j) 'satisfy demand at market j';
+   demand(j, scens) 'satisfy demand at market j';
 
-cost..      z =e= sum((i,j), c(i,j)*x(i,j)) + sum(j, cost_y(j)*y(j));
+cost_stoch(scens)..      z_stoch(scens) =e= sum((i,j), c(i,j)*x(i,j)) + sum(j, cost_y(j)*y(j,scens));
+
+cost_average..      z_average =e= sum(scens, z_stoch(scens))/3;
 
 supply(i).. sum(j, x(i,j)) =l= a(i);
 
-demand(j).. sum(i, x(i,j)) + y(j) =e= b(j);
+demand(j, scens).. sum(i, x(i,j)) + y(j, scens) =e= b_stoch(j, scens);
 
 $onText
 __InsertPH__here_Model_defined_three_lines_later
@@ -71,4 +85,4 @@ $offText
 
 Model transport / all /;
 
-solve transport using lp minimizing z;
+solve transport using lp minimizing z_average;

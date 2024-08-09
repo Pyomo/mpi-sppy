@@ -19,10 +19,21 @@ from mpisppy.agnostic import gams_guest
 import numpy as np
 
 def nonants_name_pairs_creator():
+    """Mustn't take any argument. Is called in agnostic cylinders
+
+    Returns:
+        list of pairs (str, str): for each non-anticipative variable, the name of the support set must be given with the name of the parameter.
+        If the set is a cartesian set, there should be no paranthesis when given
+    """
     return [("i,j", "x")]
 
 
 def stoch_param_name_pairs_creator():
+    """
+    Returns:
+        list of pairs (str, str): for each stochastic parameter, the name of the support set must be given with the name of the variable.
+        If the set is a cartesian set, there should be no paranthesis when given
+    """
     return [("j", "b")]
 
 
@@ -32,19 +43,10 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
     Args:
         scenario_name (str):
             Name of the scenario to construct.
-        use_integer (bool, optional):
-            If True, restricts variables to be integer. Default is False.
-        sense (int, optional):
-            Model sense (minimization or maximization). Must be either
-            pyo.minimize or pyo.maximize. Default is pyo.minimize.
-        crops_multiplier (int, optional):
-            Factor to control scaling. There will be three times this many
-            crops. Default is 1.
-        num_scens (int, optional):
-            Number of scenarios. We use it to compute _mpisppy_probability. 
-            Default is None.
-        seedoffset (int): used by confidence interval code
-
+        new_file_name (str):
+            the gms file in which is created the gams model with the ph_objective
+        nonants_name_pairs (list of (str,str)): list of (non_ant_support_set_name, non_ant_variable_name)
+        cfg: pyomo config
     """
     assert new_file_name is not None
     stoch_param_name_pairs = stoch_param_name_pairs_creator()
@@ -54,7 +56,7 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
     
     ### Calling this function is required regardless of the model
     # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
-    mi, job, set_element_names_dict, stoch_sets_sync_dict, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = gams_guest.pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs)
+    mi, job, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = gams_guest.pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs)
 
     opt = ws.add_options()
     opt.all_model_types = cfg.solver_name
@@ -65,20 +67,20 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
 
     ### Calling this function is required regardless of the model
     # This functions initializes, by adding records (and values), all the parameters that appear due to PH
-    nonant_set_sync_dict = gams_guest.adding_record_for_PH(nonants_name_pairs, set_element_names_dict, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job, mi)
+    nonant_set_sync_dict = gams_guest.adding_record_for_PH(nonants_name_pairs, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job)
 
     scennum = sputils.extract_num(scenario_name)
 
     count = 0
     b = mi.sync_db.get_parameter("b")
     j = job.out_db.get_set("j")
-    value_dict = {}
     for market in j:
-        np.random.seed(scennum * j.number_records + count)
-        value_dict[market.keys[0]] = np.random.normal(1,cfg.cv) * job.out_db.get_parameter("b").find_record(market.keys[0]).value
+        # In order to be able to easily verify whether the EF matches with what is obtained with PH, we don't generate "random" demands
+        """np.random.seed(scennum * j.number_records + count)
         b.add_record(market.keys[0]).value = np.random.normal(1,cfg.cv) * job.out_db.get_parameter("b").find_record(market.keys[0]).value
-        count += 1
-    #print(f"For {scenario_name} the stochastic demands are: \n{value_dict}")
+        count += 1"""
+        b.add_record(market.keys[0]).value = (1+2*(scennum-1)/10) * job.out_db.get_parameter("b").find_record(market.keys[0]).value
+
     return mi, nonants_name_pairs, nonant_set_sync_dict
 
 
