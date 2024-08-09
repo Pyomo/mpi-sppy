@@ -80,7 +80,10 @@ a rho setter if one is configured in the cylinders program and passed to the ph_
 constructor). Additional control over rho values
 is provided by the ``phob-rho-rescale-factors-json`` option which is a json
 file that provides a dictionary with keys that are iteration numbers and values
-that are rescale factors. Note that all rescaling is cummulative. 
+that are rescale factors. Note that all rescaling is cummulative.
+
+See ``examples.uc.gradient_uc_cylinders.py`` for an example that uses a cost-based
+rho setter for the uc problem in the ph_ob cylinder.
 
 As of August, 2024 use of a gradient based rho with ph_ob is untested.
 
