@@ -1,6 +1,7 @@
 {
     "revenues mean": 1200,
     "revenues cv": 300,
+    "max revenue": 3000,
     "production costs mean": 400,
     "production costs cv": 100,
     "supply factory mean": 150,
@@ -36,8 +37,8 @@
         "cv capacity": 50
     },
     "inter_region_arc": {
-        "prob": 0.6,
-        "mean cost": 200,
+        "prob": 0.4,
+        "mean cost": 300,
         "cv cost": 50,
         "mean capacity": 40,
         "cv capacity": 10

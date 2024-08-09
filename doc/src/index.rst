@@ -33,6 +33,7 @@ MPI is used.
    w_rho.rst
    agnostic.rst
    admmWrapper.rst
+   stoch_admmWrapper.rst
    helper_functions.rst
    contributors.rst
    internals.rst
