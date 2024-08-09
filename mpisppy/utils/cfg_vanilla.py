@@ -63,6 +63,9 @@ def shared_options(cfg):
         shoptions["iter0_solver_options"]["mipgap"] = cfg.iter0_mipgap
     if _hasit(cfg, "iterk_mipgap"):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
+    if _hasit(cfg, "reduced_costs"):
+        shoptions["rc_bound_tol"] = cfg.rc_bound_tol
+
     return shoptions
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):

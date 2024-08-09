@@ -454,7 +454,7 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         
-        self.add_to_config('rc_zero_rc_tol',
+        self.add_to_config('rc_zero_tol',
                             description="vars with rc below tol will never be fixed",
                             domain=float,
                             default=1e-4)

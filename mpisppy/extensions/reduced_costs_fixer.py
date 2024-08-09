@@ -31,13 +31,13 @@ class ReducedCostsFixer(Extension):
         self.fix_fraction_target = self._fix_fraction_target_iter0
 
         # TODO: This should be same as in rc spoke?
-        self.bound_tol = rc_options['bound_tol']
+        self.bound_tol = rc_options['rc_bound_tol']
 
         if not (self._use_rc_bt or self._use_rc_fixer) and \
             self.opt.cylinder_rank == 0:
             print(f"Warning: ReducedCostsFixer will be idle. Enable use_rc_bt or use_rc_fixer in options.")
 
-        self._options = rc_options
+        #self._options = rc_options
 
         self._last_serial_number = -1
         self._heuristic_fixed_vars = 0

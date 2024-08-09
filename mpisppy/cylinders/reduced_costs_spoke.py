@@ -16,8 +16,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # TODO: bound_tol should be equal to option in rc fixer, for consistency
         # This doesn't seem to be available in the spokes - needs to be added to shared_options?
         # self.bound_tol = self.opt.options['rc_options']['bound_tol']
-        self.bound_tol = 1e-6
-        self.consensus_threshold = 1e-3
+        self.bound_tol = self.opt.options['rc_bound_tol']
+        self.consensus_threshold = np.sqrt(self.bound_tol)
         self.converger_spoke_char = 'R'
 
 

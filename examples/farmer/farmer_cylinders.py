@@ -138,14 +138,15 @@ def main():
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
 
     if reduced_costs:
+        # TODO: can this be moved elsewhere / standardized?
         hub_dict["opt_kwargs"]["options"]["rc_options"] = {
             "verbose": cfg.rc_verbose,
             "use_rc_fixer": cfg.rc_fixer,
-            "zero_rc_tol": cfg.rc_zero_rc_tol,
+            "zero_rc_tol": cfg.rc_zero_tol,
             "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterK,
             "use_rc_bt": cfg.rc_bound_tightening,
-            "bound_tol": cfg.rc_bound_tol,
+            "rc_bound_tol": cfg.rc_bound_tol,
         }
 
     # FWPH spoke
