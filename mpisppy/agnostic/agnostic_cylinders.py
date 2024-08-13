@@ -144,8 +144,8 @@ if __name__ == "__main__":
 
     write_solution = cfg.write_solution
     if write_solution:
-        wheel.write_first_stage_solution(f'{module_fname}.csv')
-        wheel.write_first_stage_solution(f'{module_fname}.npy',
+        wheel.write_first_stage_solution(f'{model_fname}.csv')
+        wheel.write_first_stage_solution(f'{model_fname}.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution(f'{module_fname}_solution')
+        wheel.write_tree_solution(f'{model_fname}_solution')
     
