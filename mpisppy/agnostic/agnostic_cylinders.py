@@ -41,6 +41,10 @@ def _parse_args(m):
                       domain=str,
                       default=None,
                       argparse=True)
+    cfg.add_to_config(name="write_solution",
+                      description="send write solution output to a csv, an npv file and a directory with names based on the module",
+                      domain=bool,
+                      default=False)
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
@@ -138,10 +142,10 @@ if __name__ == "__main__":
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
-    write_solution = False
+    write_solution = cfg.write_solution
     if write_solution:
-        wheel.write_first_stage_solution('farmer_plant.csv')
-        wheel.write_first_stage_solution('farmer_cyl_nonants.npy',
+        wheel.write_first_stage_solution(f'{module_fname}.csv')
+        wheel.write_first_stage_solution(f'{module_fname}.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution('farmer_full_solution')
+        wheel.write_tree_solution(f'{module_fname}_solution')
     
