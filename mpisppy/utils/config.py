@@ -449,6 +449,11 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         
+        self.add_to_config('rc_debug',
+                            description="debug output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
         self.add_to_config('rc_fixer',
                             description="use the reduced cost fixer",
                             domain=bool,
@@ -462,7 +467,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config('rc_fix_fraction_iter0',
                             description="target fix fraction for rc fixer in first iteration",
                             domain=float,
-                            default=0.8)
+                            default=0.0)
         
         self.add_to_config('rc_fix_fraction_iterK',
                             description="target fix fraction for rc fixer in subsequent iterations",

@@ -206,7 +206,20 @@ def add_reduced_costs_fixer(hub_dict,
                             ):
     #WARNING: Do not use without a reduced_costs_spoke spoke
     hub_dict = extension_adder(hub_dict, ReducedCostsFixer)
-    return hub_dict
+
+    hub_dict["opt_kwargs"]["options"]["rc_options"] = {
+            "verbose": cfg.rc_verbose,
+            "debug": cfg.rc_debug,
+            "use_rc_fixer": cfg.rc_fixer,
+            "zero_rc_tol": cfg.rc_zero_tol,
+            "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
+            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterK,
+            "use_rc_bt": cfg.rc_bound_tightening,
+            "rc_bound_tol": cfg.rc_bound_tol,
+        }
+
+
+#     return hub_dict
 
 def add_wxbar_read_write(hub_dict, cfg):
     """
@@ -438,6 +451,7 @@ def reduced_costs_spoke(
         rho_setter=rho_setter,
         all_nodenames=all_nodenames,
     )
+
     add_ph_tracking(rc_spoke, cfg, spoke=True)
 
     return rc_spoke

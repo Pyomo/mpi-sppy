@@ -259,7 +259,9 @@ class PHTracker(Extension):
         if gather:
             comm = self.opt.comms['ROOT']
             data = comm.gather(data, root=0)
-            data = data[0]
+    
+            if self._rank == 0:
+                data = data[0]
 
         if isinstance(data, dict):
             data['iteration'] = self.curr_iter
@@ -287,7 +289,6 @@ class PHTracker(Extension):
             return None
         reduced_costs = self.spcomm.rc
         return reduced_costs
-
 
     def _ob_ib_process(self, ob, ib):
         """ process the outer and inner bounds
@@ -551,7 +552,7 @@ class PHTracker(Extension):
         plt.xlabel('Iteration')
         plt.ylabel(f'{var.capitalize()} values')
         plt.title(f'{var.capitalize()} Over Iterations')
-        plt.legend()
+        plt.legend(bbox_to_anchor=(1, 1))
         plt.grid(True)
         plt.savefig(self.track_dict[var].plot_fname)
         plt.close()

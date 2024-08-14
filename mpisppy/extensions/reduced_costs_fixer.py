@@ -17,6 +17,7 @@ class ReducedCostsFixer(Extension):
         ph_options = spobj.options
         rc_options = ph_options['rc_options']
         self.verbose = ph_options['verbose'] or rc_options['verbose']
+        self.debug = rc_options['debug']
 
         self._use_rc_bt = rc_options['use_rc_bt']
         # reduced costs less than this in absolute value
@@ -117,7 +118,7 @@ class ReducedCostsFixer(Extension):
                                     xvar.setub(new_ub)
                                 else:
                                     xvar.setub(new_ub)
-                                if self.verbose and self.opt.cylinder_rank == 0:
+                                if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"tightening ub of var {xvar.name} to {new_ub} from {old_ub}; reduced cost is {this_expected_rc}")
                                 update_var = True
                                 bounds_reduced_this_iter += 1
@@ -132,7 +133,7 @@ class ReducedCostsFixer(Extension):
                                     xvar.setlb(new_lb)
                                 else:
                                     xvar.setlb(new_lb)
-                                if self.verbose and self.opt.cylinder_rank == 0:
+                                if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"tightening lb of var {xvar.name} to {new_lb} from {old_lb}; reduced cost is {this_expected_rc}")
                                 update_var = True
                                 bounds_reduced_this_iter += 1
@@ -149,7 +150,7 @@ class ReducedCostsFixer(Extension):
                                     xvar.setub(new_ub)
                                 else:
                                     xvar.setub(new_ub)
-                                if self.verbose and self.opt.cylinder_rank == 0:
+                                if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"tightening ub of var {xvar.name} to {new_ub} from {old_ub}; reduced cost is {this_expected_rc}")
                                 update_var = True
                                 bounds_reduced_this_iter += 1
@@ -163,7 +164,7 @@ class ReducedCostsFixer(Extension):
                                     xvar.setlb(new_lb)
                                 else:
                                     xvar.setlb(new_lb)
-                                if self.verbose and self.opt.cylinder_rank == 0:
+                                if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"tightening lb of var {xvar.name} to {new_lb} from {old_lb}; reduced cost is {this_expected_rc}")
                                 update_var = True
                                 bounds_reduced_this_iter += 1
@@ -186,13 +187,7 @@ class ReducedCostsFixer(Extension):
         # compute the quantile target
         abs_reduced_costs = np.abs(reduced_costs)
 
-        if self._progressive_fix_fraction:
-            # TODO: relies on heuristic_fixed_vars to be accurate
-            already_fixed_frac = np.minimum(self._heuristic_fixed_vars / self.nonant_length, 1)
-            additional_fix_frac = (1 - already_fixed_frac) * self.fix_fraction_target
-            fix_fraction_target = already_fixed_frac + additional_fix_frac
-        else:
-            fix_fraction_target = self.fix_fraction_target
+        fix_fraction_target = self.fix_fraction_target
 
         if fix_fraction_target > 0:
             target = np.nanquantile(abs_reduced_costs, 1 - fix_fraction_target, method="median_unbiased")
@@ -201,7 +196,7 @@ class ReducedCostsFixer(Extension):
         if target < self.zero_rc_tol:
             target = self.zero_rc_tol
 
-        if self.opt.cylinder_rank == 0:
+        if self.opt.cylinder_rank == 0 and self.verbose:
             print(f"Heuristic fixing reduced cost cutoff: {target}")
 
         raw_fixed_this_iter = 0
@@ -224,7 +219,7 @@ class ReducedCostsFixer(Extension):
                             update_var = True
                             raw_fixed_this_iter -= 1
                             fixed_this_scenario -= 1
-                            if self.verbose and self.opt.cylinder_rank == 0:
+                            if self.debug and self.opt.cylinder_rank == 0:
                                 print(f"unfixing var {xvar.name}; not converged in LP-LR")
                     else: # not nan, variable is converged in LP-LR
                         if xvar.fixed:
@@ -233,7 +228,7 @@ class ReducedCostsFixer(Extension):
                                 update_var = True
                                 raw_fixed_this_iter -= 1
                                 fixed_this_scenario -= 1
-                                if self.verbose and self.opt.cylinder_rank == 0:
+                                if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
 
                         else:
@@ -243,14 +238,14 @@ class ReducedCostsFixer(Extension):
                                     # TODO: First check can be simplified as abs(rc) is already checked above
                                     if (reduced_costs[ci] > 0 + self.zero_rc_tol) and (xb - xvar.lb <= self.bound_tol):
                                         xvar.fix(xvar.lb)
-                                        if self.verbose and self.opt.cylinder_rank == 0:
+                                        if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
                                         fixed_this_scenario += 1
                                     elif (reduced_costs[ci] < 0 - self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
                                         xvar.fix(xvar.ub)
-                                        if self.verbose and self.opt.cylinder_rank == 0:
+                                        if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
@@ -258,19 +253,18 @@ class ReducedCostsFixer(Extension):
                                     else:
                                         # rc is near 0 or 
                                         # xbar from MIP might differ from rc from relaxation
-                                        #print(f'unexpected rc value: scen {sn}, var {xvar.name}, rc = {reduced_costs[ci]}, {xvar.lb} <= {xb:.7f} <= {xvar.ub}')
                                         pass
                                 else:
                                     if (reduced_costs[ci] < 0 - self.zero_rc_tol) and (xb - xvar.lb <= self.bound_tol):
                                         xvar.fix(xvar.lb)
-                                        if self.verbose and self.opt.cylinder_rank == 0:
+                                        if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
                                         fixed_this_scenario += 1
                                     elif (reduced_costs[ci] > 0 + self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
                                         xvar.fix(xvar.ub)
-                                        if self.verbose and self.opt.cylinder_rank == 0:
+                                        if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
@@ -278,7 +272,6 @@ class ReducedCostsFixer(Extension):
                                     else:
                                         # rc is near 0 or 
                                         # xbar from MIP might differ from rc from relaxation
-                                        #print(f'unexpected rc value: scen {sn}, var {xvar.name}, rc = {reduced_costs[ci]}, {xvar.lb} <= {xb:.7f} <= {xvar.ub}')
                                         pass
                     
                     if update_var and persistent_solver:
