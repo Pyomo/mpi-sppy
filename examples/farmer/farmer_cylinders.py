@@ -67,7 +67,6 @@ def _parse_args():
 def main():
 
     cfg = _parse_args()
-    reduced_costs = cfg.reduced_costs
 
     num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
@@ -130,24 +129,10 @@ def main():
     #     extension_adder(hub_dict, NormRhoUpdater)
     #     hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
-    ext_classes =  [Gapper]
+    vanilla.extension_adder(hub_dict, Gapper)
 
-    if reduced_costs:
-        ext_classes.append(ReducedCostsFixer)
-
-    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
-
-    if reduced_costs:
-        # TODO: can this be moved elsewhere / standardized?
-        hub_dict["opt_kwargs"]["options"]["rc_options"] = {
-            "verbose": cfg.rc_verbose,
-            "use_rc_fixer": cfg.rc_fixer,
-            "zero_rc_tol": cfg.rc_zero_tol,
-            "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
-            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterK,
-            "use_rc_bt": cfg.rc_bound_tightening,
-            "rc_bound_tol": cfg.rc_bound_tol,
-        }
+    if cfg.reduced_costs:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
     # FWPH spoke
     if cfg.fwph:
@@ -178,7 +163,7 @@ def main():
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
     
-    if reduced_costs:
+    if cfg.reduced_costs:
         reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
@@ -196,7 +181,7 @@ def main():
         list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
-    if reduced_costs:
+    if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
