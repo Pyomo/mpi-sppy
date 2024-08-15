@@ -28,7 +28,11 @@ class ReducedCostsFixer(Extension):
         # to fix. We never fix varibles with reduced costs less than
         # the `zero_rc_tol` in absolute value
         self._fix_fraction_target_iter0 = rc_options['fix_fraction_target_iter0']
+        if self._fix_fraction_target_iter0 < 0 or self._fix_fraction_target_iter0 > 1:
+            raise ValueError("fix_fraction_target_iter0 must be between 0 and 1")
         self._fix_fraction_target_iterK = rc_options['fix_fraction_target_iterK']
+        if self._fix_fraction_target_iterK < 0 or self._fix_fraction_target_iterK > 1:
+            raise ValueError("fix_fraction_target_iterK must be between 0 and 1")
         self.fix_fraction_target = self._fix_fraction_target_iter0
 
         # TODO: This should be same as in rc spoke?
@@ -103,6 +107,9 @@ class ReducedCostsFixer(Extension):
                     this_expected_rc = reduced_costs[ci]
                     update_var = False
                     if np.isnan(this_expected_rc) or np.isinf(this_expected_rc):
+                        continue
+
+                    if np.isclose(xvar.lb, xvar.ub):
                         continue
 
                     # TODO: could simplify if/else blocks using sign variable - might reduce readability?
@@ -180,6 +187,8 @@ class ReducedCostsFixer(Extension):
     def reduced_costs_fixing(self, reduced_costs):
 
         if np.all(np.isnan(reduced_costs)):
+            # Note: If all rc = nan at some later iteration,
+            # this will skip unfixing
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("All reduced costs are nan, heuristic fixing will not be applied")
             return
@@ -189,11 +198,16 @@ class ReducedCostsFixer(Extension):
 
         fix_fraction_target = self.fix_fraction_target
 
-        if fix_fraction_target > 0:
-            target = np.nanquantile(abs_reduced_costs, 1 - fix_fraction_target, method="median_unbiased")
+        # excludes nan
+        nonzero_rc = abs_reduced_costs[abs_reduced_costs > self.zero_rc_tol]
+        if len(nonzero_rc) == 0:
+            # still need to continue, for unfixing
+            target = self.zero_rc_tol
         else:
-            target = float("inf")
+            target = np.nanquantile(nonzero_rc, 1 - fix_fraction_target, method="median_unbiased")
+
         if target < self.zero_rc_tol:
+            # shouldn't be reached
             target = self.zero_rc_tol
 
         if self.opt.cylinder_rank == 0 and self.verbose:
@@ -202,7 +216,6 @@ class ReducedCostsFixer(Extension):
         raw_fixed_this_iter = 0
         
         for sub in self.opt.local_subproblems.values():
-            # TODO: does this still work without the persistent solver?
             persistent_solver = is_persistent(sub._solver_plugin)
             for sn in sub.scen_list:
                 fixed_this_scenario = 0
@@ -218,7 +231,6 @@ class ReducedCostsFixer(Extension):
                             xvar.unfix()
                             update_var = True
                             raw_fixed_this_iter -= 1
-                            fixed_this_scenario -= 1
                             if self.debug and self.opt.cylinder_rank == 0:
                                 print(f"unfixing var {xvar.name}; not converged in LP-LR")
                     else: # not nan, variable is converged in LP-LR
@@ -227,7 +239,6 @@ class ReducedCostsFixer(Extension):
                                 xvar.unfix()
                                 update_var = True
                                 raw_fixed_this_iter -= 1
-                                fixed_this_scenario -= 1
                                 if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
 
@@ -242,14 +253,12 @@ class ReducedCostsFixer(Extension):
                                             print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
-                                        fixed_this_scenario += 1
                                     elif (reduced_costs[ci] < 0 - self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
                                         xvar.fix(xvar.ub)
                                         if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
-                                        fixed_this_scenario += 1
                                     else:
                                         # rc is near 0 or 
                                         # xbar from MIP might differ from rc from relaxation
@@ -261,14 +270,12 @@ class ReducedCostsFixer(Extension):
                                             print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
-                                        fixed_this_scenario += 1
                                     elif (reduced_costs[ci] > 0 + self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
                                         xvar.fix(xvar.ub)
                                         if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
-                                        fixed_this_scenario += 1
                                     else:
                                         # rc is near 0 or 
                                         # xbar from MIP might differ from rc from relaxation
@@ -277,6 +284,7 @@ class ReducedCostsFixer(Extension):
                     if update_var and persistent_solver:
                         sub._solver_plugin.update_var(xvar)
 
+        # might count incorrectly with bundling?
         self._heuristic_fixed_vars += raw_fixed_this_iter / len(self.opt.local_scenarios)
         if self.opt.cylinder_rank == 0 and self.verbose:
             print(f"Total unique vars fixed by heuristic: {int(round(self._heuristic_fixed_vars))}/{self.nonant_length}")
