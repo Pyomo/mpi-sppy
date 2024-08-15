@@ -41,10 +41,10 @@ def _parse_args(m):
                       domain=str,
                       default=None,
                       argparse=True)
-    cfg.add_to_config(name="write_solution",
-                      description="send write solution output to a csv, an npv file and a directory with names based on the module",
-                      domain=bool,
-                      default=False)
+    cfg.add_to_config(name="solution_base_name",
+                      description="The string used fo a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
+                      domain=str,
+                      default=None)
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
@@ -142,10 +142,9 @@ if __name__ == "__main__":
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
-    write_solution = cfg.write_solution
-    if write_solution:
-        wheel.write_first_stage_solution(f'{model_fname}.csv')
-        wheel.write_first_stage_solution(f'{model_fname}.npy',
+    if cfg.solution_base_name is not None:
+        wheel.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
+        wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution(f'{model_fname}_solution')
+        wheel.write_tree_solution(f'{cfg.solution_base_name}')
     
