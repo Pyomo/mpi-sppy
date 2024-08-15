@@ -206,6 +206,7 @@ class AMPL_guest():
         objstr = objstr.replace(f"minimize {objname}", "minimize phobj:")
         obj_fct.drop()
         gs.eval(objstr)
+        gs.eval("delete minus_profit;")    
         currentobj = gs.get_current_objective()
         # see _copy_Ws_...  see also the gams version
         WParamDatas = list(gs.get_parameter("W").instances())
@@ -273,12 +274,12 @@ class AMPL_guest():
 
         # For AMPL mips, we need to use the gap option to compute bounds
         # https://amplmp.readthedocs.io/rst/features-guide.html
-        objval = gs.get_objective("minus_profit").value()  # use this?
-        ###phobjval = gs.get_objective("phobj").value()   # use this???
+        objobj = gs.get_current_objective()  # different for xhatters
+        objval = objobj.value()
         if gd["sense"] == pyo.minimize:
             s._mpisppy_data.outer_bound = objval
         else:
-            s._mpisppy_data.outer_bound = objval
+            s._mpisppy_data.inner_bound = objval
 
         # copy the nonant x values from gs to s so mpisppy can use them in s
         # in general, we need more checks (see the pyomo agnostic guest example)
