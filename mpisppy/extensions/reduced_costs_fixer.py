@@ -95,7 +95,7 @@ class ReducedCostsFixer(Extension):
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print(f"Bounds tightened by reduced cost: 0 (inner or outer bound not available)")
             return
-        # TODO: keep track of and skip already fixed variables, i.e. lb=ub
+
         for sub in self.opt.local_subproblems.values():
             persistent_solver = is_persistent(sub._solver_plugin)
             for sn in sub.scen_list:

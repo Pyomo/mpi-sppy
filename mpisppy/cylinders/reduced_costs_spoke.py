@@ -13,9 +13,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        # TODO: bound_tol should be equal to option in rc fixer, for consistency
-        # This doesn't seem to be available in the spokes - needs to be added to shared_options?
-        # self.bound_tol = self.opt.options['rc_options']['bound_tol']
         self.bound_tol = self.opt.options['rc_bound_tol']
         self.consensus_threshold = np.sqrt(self.bound_tol)
         self.converger_spoke_char = 'R'
@@ -93,11 +90,14 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # NaN will signal that the x values do not agree in
         # every scenario, we can't extract an expected reduced
         # cost
+        # Note: might be good ta have a rc, even if scenarios are not
+        # in complete agreement, e.g. for more aggressive fixing
+        # would probably need additional info about where scenarios disagree
         rc = np.zeros(self.nonant_length)
 
         for sub in self.opt.local_subproblems.values():
             if is_persistent(sub._solver_plugin):
-                # TODO: what happens with non-persistent solvers? 
+                # Note: what happens with non-persistent solvers? 
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
                 # - if not, the solver should throw an error
                 # - direct solvers seem to behave the same as persistent solvers
@@ -105,7 +105,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 # XpressDirect loads for all vars by default - TODO: should notify someone of this inconsistency
                 vars_to_load = [x for sn in sub.scen_list for _, x in self.opt.local_scenarios[sn]._mpisppy_data.nonant_indices.items()]
                 sub._solver_plugin.load_rc(vars_to_load=vars_to_load)
-            # TODO: warning if solver not persistent?
 
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]
