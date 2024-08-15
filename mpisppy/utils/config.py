@@ -469,7 +469,7 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=0.0)
         
-        self.add_to_config('rc_fix_fraction_iterK',
+        self.add_to_config('rc_fix_fraction_iterk',
                             description="target fix fraction for rc fixer in subsequent iterations",
                             domain=float,
                             default=0.8)

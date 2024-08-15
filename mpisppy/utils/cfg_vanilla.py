@@ -213,7 +213,7 @@ def add_reduced_costs_fixer(hub_dict,
             "use_rc_fixer": cfg.rc_fixer,
             "zero_rc_tol": cfg.rc_zero_tol,
             "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
-            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterK,
+            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "use_rc_bt": cfg.rc_bound_tightening,
             "rc_bound_tol": cfg.rc_bound_tol,
         }
