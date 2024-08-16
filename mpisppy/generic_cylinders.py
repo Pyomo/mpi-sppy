@@ -2,13 +2,13 @@
 # Started by dlw August 2024: General cylinder driver.
 # We get the module from the command line.
 
-import sys
+import sys, os
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
-
+from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.fixer import Fixer
 
 def _parse_args(m):
     # m is the model file module
@@ -22,11 +22,15 @@ def _parse_args(m):
     cfg.add_to_config(name="solution_base_name",
                       description="The string used fo a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
                       domain=str,
-                      default=None)    
-
+                      default=None)
+    cfg.add_to_config(name="run_async",
+                      description="Use APH instead of PH (default False)",
+                      domain=bool,
+                      default=False)
+    
 
     m.inparser_adder(cfg)
-    # some models, e.g., farmer, need num_scens_required
+    # many models, e.g., farmer, need num_scens_required
     #  in which case, it should go in the inparser_adder function
     # cfg.num_scens_required()
 
@@ -46,7 +50,6 @@ def _parse_args(m):
     cfg.gradient_args()
     cfg.grad_rho_args()
 
-
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     return cfg
 
@@ -54,13 +57,23 @@ def _parse_args(m):
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         print("The python model file module name (no .py) must be given.")
-        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py --module-name farmer4agnostic" --help)
+        print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
         quit()
 
     model_fname = sys.argv[2]
 
-    module = sputils.module_name_to_module(model_fname)
-
+    # TBD: when agnostic is merged, use the function and delete the code lines
+    # module = sputils.module_name_to_module(model_fname)
+    # TBD: do the sys.path.append trick in sputils 
+    import importlib, inspect
+    if inspect.ismodule(model_fname):
+        module = model_fname
+    else:
+        dpath = os.path.dirname(model_fname)
+        fname = os.path.basename(model_fname)
+        sys.path.append(dpath)
+        module = importlib.import_module(fname)
+    
     cfg = _parse_args(module)
 
     scenario_creator = module.scenario_creator
@@ -74,12 +87,12 @@ if __name__ == "__main__":
     if cfg.default_rho is None and rho_setter is None:
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
-    if cfg.use_norm_rho_converger:
+    if False:   # maybe later... cfg.use_norm_rho_converger:
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
-    elif cfg.primal_dual_converger:
+    elif False:   # maybe later... cfg.primal_dual_converger:
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
@@ -106,14 +119,22 @@ if __name__ == "__main__":
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter = rho_setter)
-    hub_dict['opt_kwargs']['extensions'] = MultiExtension
+    
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
     # TBD: add Gapper and get the mipgapdict from a json
     # TBD: add cross_scenario_cuts, which also needs a cylinder
     if fixer:  # vanilla takes care of the fixer_tol
+        hub_dict['opt_kwargs']['extensions'] = MultiExtension  # TBD: move this  
         ext_classes.append(Fixer)
-    
+        hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
+            "verbose": cfg.verbose,
+            "boundtol": fixer_tol,
+            "id_fix_list_fct": uc.id_fix_list_fct,
+        }
+
+    if hub_dict['opt_kwargs']['extensions'] == MultiExtension:
+        hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cfg.primal_dual_converger:
         hub_dict['opt_kwargs']['options']\
             ['primal_dual_converger_options'] = {
@@ -122,9 +143,9 @@ if __name__ == "__main__":
                 'tracking': True}
 
     ## norm rho adaptive rho (not the gradient version)
-    if cfg.use_norm_rho_updater:
-        extension_adder(hub_dict, NormRhoUpdater)
-        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
+    #if cfg.use_norm_rho_updater:
+    #    extension_adder(hub_dict, NormRhoUpdater)
+    #    hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
     # FWPH spoke
     if cfg.fwph:
@@ -151,12 +172,8 @@ if __name__ == "__main__":
         list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if cfg.lagranger:
-        list_of_spoke_dict.append(lagranger_spoke)
     if cfg.ph_ob:
         list_of_spoke_dict.append(ph_ob_spoke)
-    if cfg.xhatlooper:
-        list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
