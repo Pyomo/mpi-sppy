@@ -1,6 +1,6 @@
 # aph (pyomo released)
 
-name: aph tests
+name: admmWrapper tests
 
 on:
   push:
@@ -28,6 +28,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo xpress cplex
+          pip install numpy
 
       - name: setup the program
         run: |
@@ -38,4 +39,5 @@ jobs:
         run: |
           cd mpisppy/tests
           # envall does nothing
-          python test_aph.py
+          python test_admmWrapper.py
+          python test_stoch_admmWrapper.py
