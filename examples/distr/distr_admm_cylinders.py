@@ -2,7 +2,6 @@
 import mpisppy.utils.admmWrapper as admmWrapper
 import distr_data
 import distr
-#import distr_no_dummy as distr
 import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -73,7 +72,7 @@ def main():
     else:
         inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
         all_nodes_dict = None
-        data_params = None
+        data_params = {"max revenue": 1200} # hard-coded because the model is hard-coded
 
     ph_converger = None
 

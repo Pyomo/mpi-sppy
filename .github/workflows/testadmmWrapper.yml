@@ -40,3 +40,4 @@ jobs:
           cd mpisppy/tests
           # envall does nothing
           python test_admmWrapper.py
+          python test_stoch_admmWrapper.py
