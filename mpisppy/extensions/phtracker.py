@@ -33,6 +33,8 @@ class TrackedData():
         name = name[:-4] if name.endswith('.csv') else name
 
         self.fname = os.path.join(self.folder, f'{name}.csv')
+        # LRL: Encountered a bug where plot = False, but plots where still generated,
+        # leading to error where plot_fname is None. So, always setting it here.
         #if self.plot:
         self.plot_fname = os.path.join(self.folder, f'{name}.png')
 
@@ -259,7 +261,8 @@ class PHTracker(Extension):
         if gather:
             comm = self.opt.comms['ROOT']
             data = comm.gather(data, root=0)
-    
+
+            # LRL: Bugfix to only get gathered data on rank 0.
             if self._rank == 0:
                 data = data[0]
 

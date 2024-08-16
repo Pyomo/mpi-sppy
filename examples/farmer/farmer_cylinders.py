@@ -2,9 +2,6 @@
 # This software is distributed under the 3-clause BSD License.
 # general example driver for farmer with cylinders
 
-import sys
-import json
-
 import farmer
 import mpisppy.cylinders
 
@@ -20,9 +17,6 @@ from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.utils.cfg_vanilla import extension_adder
-from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
-from mpisppy.extensions.fixer import Fixer
-from mpisppy.extensions.mipgapper import Gapper
 
 import pyomo.environ as pyo
 
@@ -103,6 +97,7 @@ def main():
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=None,
+                                   ph_converger=ph_converger,
                                    rho_setter = rho_setter)
     else:
         # Vanilla PH hub
@@ -125,11 +120,10 @@ def main():
         }
 
     ## hack in adaptive rho
-    # if cfg.use_norm_rho_updater:
-    #     extension_adder(hub_dict, NormRhoUpdater)
-    #     hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
+    if cfg.use_norm_rho_updater:
+        extension_adder(hub_dict, NormRhoUpdater)
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
-    vanilla.extension_adder(hub_dict, Gapper)
 
     if cfg.reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
