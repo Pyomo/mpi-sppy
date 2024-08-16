@@ -1,89 +1,68 @@
+# This shows using progressive hedging (PH) algorithm and using its smoothed 
+# version (SPH) to solve the farmer problem. 
+
 from mpisppy.opt.ph import PH
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
-
-
-def build_model(yields):
-    model = pyo.ConcreteModel()
-
-    # Variables
-    model.X = pyo.Var(["WHEAT", "CORN", "BEETS"], within=pyo.NonNegativeIntegers)
-    model.Y = pyo.Var(["WHEAT", "CORN"], within=pyo.NonNegativeReals)
-    model.W = pyo.Var(
-        ["WHEAT", "CORN", "BEETS_FAVORABLE", "BEETS_UNFAVORABLE"],
-        within=pyo.NonNegativeReals,
-    )
-
-    # Objective function
-    model.PLANTING_COST = 150 * model.X["WHEAT"] + 230 * model.X["CORN"] + 260 * model.X["BEETS"]
-    model.PURCHASE_COST = 238 * model.Y["WHEAT"] + 210 * model.Y["CORN"]
-    model.SALES_REVENUE = (
-        170 * model.W["WHEAT"] + 150 * model.W["CORN"]
-        + 36 * model.W["BEETS_FAVORABLE"] + 10 * model.W["BEETS_UNFAVORABLE"]
-    )
-    model.OBJ = pyo.Objective(
-        expr=model.PLANTING_COST + model.PURCHASE_COST - model.SALES_REVENUE,
-        sense=pyo.minimize
-    )
-
-    # Constraints
-    model.CONSTR= pyo.ConstraintList()
-
-    model.CONSTR.add(pyo.summation(model.X) <= 500)
-    model.CONSTR.add(
-        yields[0] * model.X["WHEAT"] + model.Y["WHEAT"] - model.W["WHEAT"] >= 200
-    )
-    model.CONSTR.add(
-        yields[1] * model.X["CORN"] + model.Y["CORN"] - model.W["CORN"] >= 240
-    )
-    model.CONSTR.add(
-        yields[2] * model.X["BEETS"] - model.W["BEETS_FAVORABLE"] - model.W["BEETS_UNFAVORABLE"] >= 0
-    )
-    model.W["BEETS_FAVORABLE"].setub(6000)
-
-    return model
-
-
-def scenario_creator(scenario_name):
-    if scenario_name == "good":
-        yields = [3, 3.6, 24]
-    elif scenario_name == "average":
-        yields = [2.5, 3, 20]
-    elif scenario_name == "bad":
-        yields = [2, 2.4, 16]
-    else:
-        raise ValueError("Unrecognized scenario name")
-
-    model = build_model(yields)
-    sputils.attach_root_node(model, model.PLANTING_COST, [model.X])
-    model._mpisppy_probability = 1.0 / 3
-    return model
+import farmer
+from mpisppy.extensions.xhatclosest import XhatClosest
+import sys
 
 
 def main():
-    mainrho = 3
+    # Two available type of input parameters, one without smoothing and the other with smoothing
+    if len(sys.argv) != 7 and len(sys.argv) != 10:
+        print("usage python farmer_ph.py {crops_multiplier} {scen_count} {use_int} {rho} "
+              "{itermax} {solver_name} ")
+        print("e.g., python farmer_ph.py 1 3 0 1 300 xpress")
+        print("or python farmer_ph_multi.py {crops_multiplier} {scen_count} {use_int} {rho} "
+              "{itermax} {smooth_type} {pvalue_or_pratio} {beta} {solver_name}")
+        print("e.g., python farmer_ph.py 1 3 0 1 300 1 0.1 0.1 xpress")
+        quit()
+    crops_multiplier = int(sys.argv[1])
+    num_scen = int(sys.argv[2])
+    use_int = bool(int(sys.argv[3]))
+    rho = float(sys.argv[4])
+    itermax = int(sys.argv[5])
+    solver_name = sys.argv[-1]
+    if len(sys.argv) == 10:
+        smooth_type = int(sys.argv[6])
+        pvalue = float(sys.argv[7])
+        beta = float(sys.argv[8])
+    elif len(sys.argv) == 7:
+        smooth_type = 0
+        pvalue = 0.0
+        beta = 0.0
     options = {
-        "solver_name": "xpress_direct",
-        "PHIterLimit": 500,
-        "defaultPHrho": mainrho,
-        "convthresh": -1e-8,
+        "solver_name": solver_name,
+        "PHIterLimit": itermax,
+        "defaultPHrho": rho,
+        "convthresh": -1e-8, # turn off convthresh and only use primal dual converger
         "verbose": False,
         "display_progress": True,
-        "display_timing": False,
+        "display_timing": True,
         "iter0_solver_options": dict(),
         "iterk_solver_options": dict(),
         "display_convergence_detail": True,
-        "smoothed": 0,
-        "defaultPHp": .1,
-        "defaultPHbeta": 0.1,
-        "primal_dual_converger_options" : {"tol" : 1e-6}
+        "smoothed": smooth_type,
+        "defaultPHp": pvalue,
+        "defaultPHbeta": beta,
+        "primal_dual_converger_options" : {"tol" : 1e-5},
+        'xhat_closest_options': {'xhat_solver_options': {}, 'keep_solution':True}
     }
-    all_scenario_names = ["good", "average", "bad"]
+    scenario_creator = farmer.scenario_creator
+    scenario_denouement = farmer.scenario_denouement
+    all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
+    scenario_creator_kwargs = {
+        'use_integer': use_int,
+        "crops_multiplier": crops_multiplier,
+    }
     ph = PH(
         options,
         all_scenario_names,
         scenario_creator,
+        scenario_denouement,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        extensions = XhatClosest,
         ph_converger = PrimalDualConverger
     )
     ph.ph_main()
@@ -91,6 +70,10 @@ def main():
     for (scenario_name, variable_name) in variables:
         variable_value = variables[scenario_name, variable_name]
         print(scenario_name, variable_name, variable_value)
+    
+    # Use the closest per scenario solution to xbar for evaluating objective 
+    if ph.tree_solution_available:
+        print(f"Final objective from XhatClosest: {ph.extobject._final_xhat_closest_obj}")
 
 
 if __name__=='__main__':
