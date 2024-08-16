@@ -97,13 +97,13 @@ def main():
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=None,
-                                   ph_converger=ph_converger,
                                    rho_setter = rho_setter)
     else:
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
+                                  ph_converger=ph_converger,
                                   rho_setter = rho_setter)
 
     if cfg.primal_dual_converger:
@@ -112,12 +112,6 @@ def main():
                 'verbose': True,
                 'tol': cfg.primal_dual_converger_tol,
                 'tracking': True}
-        
-
-    hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
-        "verbose": cfg.verbose,
-        "mipgapdict": None
-        }
 
     ## hack in adaptive rho
     if cfg.use_norm_rho_updater:
