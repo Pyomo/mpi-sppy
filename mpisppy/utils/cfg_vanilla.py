@@ -754,7 +754,7 @@ def ph_ob_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     rho_setter=None,
-    all_nodenames = None,
+    all_nodenames=None,
     variable_probability=None,
 ):
     shoptions = shared_options(cfg)
