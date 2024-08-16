@@ -384,7 +384,6 @@ class Config(pyofig.ConfigDict):
                            default=1e-2)
 
 
-
     def fwph_args(self):
 
         self.add_to_config('fwph',
