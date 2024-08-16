@@ -65,7 +65,7 @@ def main():
         xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(1 + i*branching_factors[1])
 
     scenario_creator_kwargs = {
-        "convex_relaxation": False,
+        "convex_relaxation": True,
         "epath": egret_path_to_data,
     }
     if scenario_creator_kwargs["convex_relaxation"]:
@@ -132,11 +132,11 @@ def main():
     options["verbose"] = False
     options["display_timing"] = False
     options["display_progress"] = True
-    options["iter0_solver_options"] = {"bound_relax_factor": 0.0}
-    options["iterk_solver_options"] = {"bound_relax_factor": 0.0}
+    options["iter0_solver_options"] = None
+    options["iterk_solver_options"] = None
     options["branching_factors"] = branching_factors
 
-    options["smoothed"] = True
+    options["smoothed"] = 0
     options["defaultPHp"] = 5000
     options["defaultPHbeta"] = .05
 
