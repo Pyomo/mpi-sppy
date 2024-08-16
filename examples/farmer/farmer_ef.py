@@ -12,19 +12,20 @@ import pyomo.environ as pyo
 
 def main_no_cfg():
     # Some parameters from sys.argv and some hard-wired.
-    if len(sys.argv) != 4:
-        print("usage python farmer_ef.py {crops_multiplier} {scen_count} {solver_name}")
-        print("e.g., python farmer_ef.py 1 3 gurobi")
+    if len(sys.argv) != 5:
+        print("usage python farmer_ef.py {crops_multiplier} {scen_count} {use_integer} {solver_name}")
+        print("e.g., python farmer_ef.py 1 3 1 gurobi")
         quit()
 
     scenario_creator = farmer.scenario_creator
 
     crops_multiplier = int(sys.argv[1])
     scen_count = int(sys.argv[2])
-    solver_name = sys.argv[3]
+    use_integer = int(sys.argv[3])
+    solver_name = sys.argv[4]
     
     scenario_creator_kwargs = {
-        "use_integer": True,
+        "use_integer": use_integer,
         "crops_multiplier": crops_multiplier,
     }
 
