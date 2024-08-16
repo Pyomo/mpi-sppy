@@ -218,7 +218,6 @@ class ReducedCostsFixer(Extension):
         for sub in self.opt.local_subproblems.values():
             persistent_solver = is_persistent(sub._solver_plugin)
             for sn in sub.scen_list:
-                fixed_this_scenario = 0
                 s = self.opt.local_scenarios[sn]
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     if ndn_i in self._modeler_fixed_nonants:
@@ -241,7 +240,6 @@ class ReducedCostsFixer(Extension):
                                 raw_fixed_this_iter -= 1
                                 if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
-
                         else:
                             xb = s._mpisppy_model.xbars[ndn_i].value
                             if (this_expected_rc >= target):
@@ -284,7 +282,7 @@ class ReducedCostsFixer(Extension):
                     if update_var and persistent_solver:
                         sub._solver_plugin.update_var(xvar)
 
-        # might count incorrectly with bundling?
+        # Note: might count incorrectly with bundling?
         self._heuristic_fixed_vars += raw_fixed_this_iter / len(self.opt.local_scenarios)
         if self.opt.cylinder_rank == 0 and self.verbose:
             print(f"Total unique vars fixed by heuristic: {int(round(self._heuristic_fixed_vars))}/{self.nonant_length}")
