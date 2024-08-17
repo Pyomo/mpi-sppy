@@ -3,8 +3,28 @@
 
 SOLVER="cplex"
 
-# You still need to name a module to get help
+# Note: you still need to name a module to get help
+echo "^^^ help ^^^"
 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --help
 
 # A not-so-useful run that does not use MPI, so only runs a hub
-python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 
+echo "^^^ hub ^^^"
+#python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 
+
+# same thing, but with bounds
+echo "^^^ farmer bounds ^^^"
+#mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+
+# now UC
+echo "^^^ not-so-cool UC bounds (you can do a lot better) ^^^"
+# I'm not sure why I can only find uc_funcs from the directory it is in...
+cd uc
+#mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name uc_funcs --num-scens 5 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+cd ..
+
+# try a simple Hydro
+pwd
+cd hydro
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name hydro --solver-name ${SOLVER} --max-iterations 100 --bundles-per-rank=0 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.1 --branching-factors "3 3" --stage2EFsolvern ${SOLVER}
+#mpiexec -np 2 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name hydro --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --rel-gap 0.01 --branching-factors "3 3" 
+cd ..

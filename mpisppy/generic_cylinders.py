@@ -2,7 +2,9 @@
 # Started by dlw August 2024: General cylinder driver.
 # We get the module from the command line.
 
-import sys, os
+import sys
+import os
+import numpy as np
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
@@ -81,8 +83,6 @@ if __name__ == "__main__":
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
 
-    all_scenario_names = module.scenario_names_creator(cfg.num_scens)
-
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
@@ -100,9 +100,20 @@ if __name__ == "__main__":
     fwph = cfg.fwph
     fixer = cfg.fixer
 
-    # Things needed for vanilla cylinders
-    beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
-        
+    # Note: high level code like this assumes there are branching factors
+    # for multi-stage problems. For other trees, you will need lower-level code
+    if cfg.get("branching_factors") is not None:
+        all_nodenames = sputils.create_nodenames_from_branching_factors(\
+                                    cfg.branching_factors)
+        num_scens = np.prod(cfg.branching_factors)
+        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None, "For now, stage2EFsolvern is required for multistage xhat"
+
+    else:
+        all_nodenames = None
+        num_scens = cfg.num_scens
+     
+    all_scenario_names = module.scenario_names_creator(num_scens)
+      
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
@@ -111,14 +122,18 @@ if __name__ == "__main__":
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=None,
-                                   rho_setter = rho_setter)
+                                   rho_setter = rho_setter,
+                                   all_nodenames = all_nodenames,
+                                   )
     else:
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
-                                  rho_setter = rho_setter)
+                                  rho_setter = rho_setter,
+                                  all_nodenames = all_nodenames,
+                                  )
     
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
@@ -149,23 +164,36 @@ if __name__ == "__main__":
 
     # FWPH spoke
     if cfg.fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs, all_nodenames=all_nodenames)
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter)
+                                                rho_setter = rho_setter,
+                                                all_nodenames = all_nodenames,
+                                                )
 
     # ph outer bounder spoke
     if cfg.ph_ob:
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = rho_setter)
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
 
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
+                                                      scenario_creator_kwargs=scenario_creator_kwargs,
+                                                      all_nodenames=all_nodenames)
+ 
+   # special code for multi-stage (e.g., hydro)
+    if cfg.get("stage2EFsolvern") is not None:
+        print("debug foo")
+        assert cfg.get("xhatshuffle"), "xhatshuffle is required for stage2EFsolvern"
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
     list_of_spoke_dict = list()
     if cfg.fwph:
