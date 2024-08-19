@@ -286,7 +286,7 @@ class Config(pyofig.ConfigDict):
     def make_EF2_parser(self, progname=None, num_scens_reqd=False):
         raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")
 
-    def _EF_base(self):
+    def EF_base(self):
 
         self.add_solver_specs(prefix="EF")
 
@@ -295,9 +295,15 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=None)
 
+        # Some EF programs only do EF and don't check this.
+        self.add_to_config("EF",
+                           description="Solve the extensive form directly; ignore most other directives.",
+                           domain=bool,
+                           default=False)
+
 
     def EF2(self):
-        self._EF_base()
+        self.EF_base()
         self.add_to_config("num_scens",
                            description="Number of scenarios (default None)",
                            domain=int,
@@ -309,7 +315,7 @@ class Config(pyofig.ConfigDict):
 
     def EF_multistage(self):
 
-        self._EF_base()
+        self.EF_base()
         # branching factors???
 
     ##### common additions to the command line #####

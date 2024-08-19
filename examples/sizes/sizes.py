@@ -29,6 +29,57 @@ def scenario_creator(scenario_name, scenario_count=None):
 def scenario_denouement(rank, scenario_name, scenario):
     pass
 
+########## helper functions ########
+
+#=========
+def scenario_names_creator(num_scens,start=None):
+    # (only for Amalgamator): return the full list of num_scens scenario names
+    # if start!=None, the list starts with the 'start' labeled scenario
+    if (start is None) :
+        start=0
+    return [f"Scenario{i+1}" for i in range(start,start+num_scens)]
+
+
+#=========
+def inparser_adder(cfg):
+    # add options unique to sizes
+    cfg.num_scens_required()
+
+
+#=========
+def kw_creator(cfg):
+    # (for Amalgamator): linked to the scenario_creator and inparser_adder
+    if cfg.num_scens not in (3, 10):
+        raise RuntimeError(f"num_scen must the 3 or 10; was {num_scen}")    
+    kwargs = {"scenario_count": cfg.num_scens}
+    return kwargs
+
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+        (this function supports zhat and confidence interval code)
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Since this is a two-stage problem, we don't have to do much.
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
+
+
+########## a customized rho setter #############
+# This demonstrates how to use a customized rho setter; consider also
+#  a gradient based rho setter.
+# note that _rho_setter is a reserved name....
 
 def _rho_setter(scen):
     """ rho values for the scenario.

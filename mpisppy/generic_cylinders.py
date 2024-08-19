@@ -5,12 +5,14 @@
 import sys
 import os
 import numpy as np
+import pyomo.environ as pyo
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+import mpisppy.utils.solver_spec as solver_spec
 
 def _parse_args(m):
     # m is the model file module
@@ -36,6 +38,7 @@ def _parse_args(m):
     #  in which case, it should go in the inparser_adder function
     # cfg.num_scens_required()
 
+    cfg.EF_base()  # If EF is slected, most other options will be moot
     # There are some arguments here that will not make sense for all models
     cfg.popular_args()
     cfg.two_sided_args()
@@ -46,6 +49,7 @@ def _parse_args(m):
     cfg.lagrangian_args()
     cfg.ph_ob_args()
     cfg.xhatshuffle_args()
+    cfg.xhatxbar_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
@@ -82,6 +86,34 @@ if __name__ == "__main__":
     scenario_creator_kwargs = module.kw_creator(cfg)    
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
+
+    # If we do the EF, that is all we will do and this block exits!
+    if cfg.EF:
+        ef = sputils.create_EF(
+            module.scenario_names_creator(cfg.num_scens),
+            module.scenario_creator,
+            scenario_creator_kwargs=module.kw_creator(cfg),
+        )
+
+        sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
+
+        solver = pyo.SolverFactory(solver_name)
+        if solver_options is not None:
+            # We probably could just assign the dictionary in one line...
+            for option_key,option_value in solver_options.items():
+                solver.options[option_key] = option_value
+        if 'persistent' in solver_name:
+            solver.set_instance(ef, symbolic_solver_labels=True)
+            results = solver.solve(tee=True)
+        else:
+            results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+
+        print(f"\nEF objective: {pyo.value(ef.EF_Obj)}")
+        print("TBD: work to do on EF.....")
+        # sputils.ef_ROOT_nonants_npy_serializer(main_ef, "farmer_root_nonants.npy")
+            
+        print("EF processing complete.")
+        quit()
 
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
