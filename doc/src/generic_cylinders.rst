@@ -7,7 +7,7 @@ The program ``mpisppy.generic_cylinders.py`` provides a starting point for
 creating a customized program for processing a model or perhaps it will be all
 that is needed for a particular model. Not all mpi-sppy features
 are implemented in this program, but enough are to provide examples and to get
-started. A bash script to illustrate its use is ``mpisppy.generic_cylinders.bash``.
+started. A bash script to illustrate its use is ``examples.generic_cylinders.bash``.
 
 For a new model, you will need to create a python file that will
 be refered to as the ``module`` and/or the ``model file``.
