@@ -102,7 +102,7 @@ def main():
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                  ph_extensions=MultiExtension,
+                                  ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter = rho_setter)
 

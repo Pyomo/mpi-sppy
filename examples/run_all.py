@@ -288,7 +288,7 @@ do_one("sslp",
        3,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
        "--max-iterations=5 --default-rho=1 "
-       "--reduced-costs --rc-fixer --xhatshuffle"
+       "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 "
        "--solver-name={}".format(solver_name))
