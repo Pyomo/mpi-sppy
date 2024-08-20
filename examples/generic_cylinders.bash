@@ -4,9 +4,19 @@
 SOLVER="cplex"
 
 # sizes EF
+echo "^^^ sizes ef ^^^"
 python ../mpisppy/generic_cylinders.py --module-name sizes/sizes --EF --num-scens 3 --EF-solver-name ${SOLVER}
+
+echo "^^^ not-so-cool UC with mipgapper ^^^"
+# I'm not sure why I can only find uc_funcs from the directory it is in...
+cd uc
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name uc_funcs --num-scens 5 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 --mipgaps-json phmipgaps.json
+cd ..
 exit
 
+
+# sizes with gradient-based rho setter and ph_ob
+echo("HEY, TBD: we need # sizes with gradient-based rho setter and ph_ob")
 
 # sizes with a custom rho_setter
 echo "^^^ sizes custom rho_setter ^^^"
@@ -36,7 +46,6 @@ echo "^^^ not-so-cool UC bounds (you can do a lot better) ^^^"
 # I'm not sure why I can only find uc_funcs from the directory it is in...
 cd uc
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name uc_funcs --num-scens 5 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
-
 cd ..
 
 

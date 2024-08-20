@@ -4,6 +4,7 @@
 
 import sys
 import os
+import json
 import numpy as np
 import pyomo.environ as pyo
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -12,7 +13,9 @@ import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.mipgapper import Gapper
 import mpisppy.utils.solver_spec as solver_spec
+from mpisppy import global_toc
 
 def _parse_args(m):
     # m is the model file module
@@ -45,6 +48,7 @@ def _parse_args(m):
     cfg.ph_args()
     cfg.aph_args()
     cfg.fixer_args()    
+    cfg.gapper_args()    
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
@@ -59,62 +63,8 @@ def _parse_args(m):
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     return cfg
 
-
-if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        print("The python model file module name (no .py) must be given.")
-        print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
-        quit()
-
-    model_fname = sys.argv[2]
-
-    # TBD: when agnostic is merged, use the function and delete the code lines
-    # module = sputils.module_name_to_module(model_fname)
-    # TBD: do the sys.path.append trick in sputils 
-    import importlib, inspect
-    if inspect.ismodule(model_fname):
-        module = model_fname
-    else:
-        dpath = os.path.dirname(model_fname)
-        fname = os.path.basename(model_fname)
-        sys.path.append(dpath)
-        module = importlib.import_module(fname)
-    
-    cfg = _parse_args(module)
-
-    scenario_creator = module.scenario_creator
-    scenario_creator_kwargs = module.kw_creator(cfg)    
-    assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
-    scenario_denouement = module.scenario_denouement
-
-    # If we do the EF, that is all we will do and this block exits!
-    if cfg.EF:
-        ef = sputils.create_EF(
-            module.scenario_names_creator(cfg.num_scens),
-            module.scenario_creator,
-            scenario_creator_kwargs=module.kw_creator(cfg),
-        )
-
-        sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
-
-        solver = pyo.SolverFactory(solver_name)
-        if solver_options is not None:
-            # We probably could just assign the dictionary in one line...
-            for option_key,option_value in solver_options.items():
-                solver.options[option_key] = option_value
-        if 'persistent' in solver_name:
-            solver.set_instance(ef, symbolic_solver_labels=True)
-            results = solver.solve(tee=True)
-        else:
-            results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
-
-        print(f"\nEF objective: {pyo.value(ef.EF_Obj)}")
-        print("TBD: work to do on EF.....")
-        # sputils.ef_ROOT_nonants_npy_serializer(main_ef, "farmer_root_nonants.npy")
-            
-        print("EF processing complete.")
-        quit()
-
+#==========
+def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
@@ -130,7 +80,6 @@ if __name__ == "__main__":
         ph_converger = None
 
     fwph = cfg.fwph
-    fixer = cfg.fixer
 
     # Note: high level code like this assumes there are branching factors
     # for multi-stage problems. For other trees, you will need lower-level code
@@ -169,18 +118,26 @@ if __name__ == "__main__":
     
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
-    # TBD: add Gapper and get the mipgapdict from a json
     # TBD: add cross_scenario_cuts, which also needs a cylinder
-    if fixer:  # vanilla takes care of the fixer_tol
-        hub_dict['opt_kwargs']['extensions'] = MultiExtension  # TBD: move this  
+    if cfg.mipgaps_json is not None:
+        ext_classes.append(Gapper)
+        with open(cfg.mipgaps_json) as fin:
+            din = json.load(fin)
+        mipgapdict = {int(i): din[i] for i in din}
+        hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
+            "verbose": cfg.verbose,
+            "mipgapdict": mipgapdict
+        }
+        
+    if cfg.fixer:  # cfg_vanilla takes care of the fixer_tol?
         ext_classes.append(Fixer)
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
             "verbose": cfg.verbose,
-            "boundtol": fixer_tol,
+            "boundtol": cfg.fixer_tol,
             "id_fix_list_fct": uc.id_fix_list_fct,
         }
-
-    if hub_dict['opt_kwargs']['extensions'] == MultiExtension:
+    if len(ext_classes) != 0:
+        hub_dict['opt_kwargs']['extensions'] = MultiExtension
         hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cfg.primal_dual_converger:
         hub_dict['opt_kwargs']['options']\
@@ -244,5 +201,68 @@ if __name__ == "__main__":
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution(f'{cfg.solution_base_name}')    
+        wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')    
+        global_toc("Wrote solution data.")
+
+
+#==========
+def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
+    ef = sputils.create_EF(
+        module.scenario_names_creator(cfg.num_scens),
+        module.scenario_creator,
+        scenario_creator_kwargs=module.kw_creator(cfg),
+    )
+
+    sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
+
+    solver = pyo.SolverFactory(solver_name)
+    if solver_options is not None:
+        # We probably could just assign the dictionary in one line...
+        for option_key,option_value in solver_options.items():
+            solver.options[option_key] = option_value
+    if 'persistent' in solver_name:
+        solver.set_instance(ef, symbolic_solver_labels=True)
+        results = solver.solve(tee=cfg.tee_EF)
+    else:
+        results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True,)
+
+    global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
+    if cfg.solution_base_name is not None:
+        sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
+        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.csv')
+        write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
+        global_toc("Wrote EF solution data.")
     
+
+##########################################################################
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        print("The python model file module name (no .py) must be given.")
+        print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
+        quit()
+
+    model_fname = sys.argv[2]
+
+    # TBD: when agnostic is merged, use the function and delete the code lines
+    # module = sputils.module_name_to_module(model_fname)
+    # TBD: do the sys.path.append trick in sputils 
+    import importlib, inspect
+    if inspect.ismodule(model_fname):
+        module = model_fname
+    else:
+        dpath = os.path.dirname(model_fname)
+        fname = os.path.basename(model_fname)
+        sys.path.append(dpath)
+        module = importlib.import_module(fname)
+    
+    cfg = _parse_args(module)
+
+    scenario_creator = module.scenario_creator
+    scenario_creator_kwargs = module.kw_creator(cfg)    
+    assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
+    scenario_denouement = module.scenario_denouement
+
+    if cfg.EF:
+        _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)
+    else:
+        _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)

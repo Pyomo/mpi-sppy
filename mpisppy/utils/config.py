@@ -283,17 +283,17 @@ class Config(pyofig.ConfigDict):
 
 
     #### EF ####
-    def make_EF2_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")
-
     def EF_base(self):
-
         self.add_solver_specs(prefix="EF")
 
         self.add_to_config("EF_mipgap",
                            description="mip gap option for the solver if needed (default None)",
                            domain=float,
                            default=None)
+        self.add_to_config("tee_EF",
+                           description="Show log output if solving the extensive form directly",
+                           domain=bool,
+                           default=False)
 
         # Some EF programs only do EF and don't check this.
         self.add_to_config("EF",
@@ -310,11 +310,7 @@ class Config(pyofig.ConfigDict):
                            default=None)
 
 
-    def make_EF_multistage_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")
-
     def EF_multistage(self):
-
         self.EF_base()
         # branching factors???
 
@@ -388,6 +384,14 @@ class Config(pyofig.ConfigDict):
                            description="fixer bounds tolerance  (default 1e-4)",
                            domain=float,
                            default=1e-2)
+
+
+    def gapper_args(self):
+
+        self.add_to_config('mipgaps_json',
+                           description="path to json file with a mipgap schedule for PH iterations",
+                           domain=str,
+                           default=None)
 
 
     def fwph_args(self):

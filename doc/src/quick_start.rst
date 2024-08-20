@@ -38,6 +38,25 @@ extensive form directly without decomposition, then you do not need to
 concern yourself with MPI.
 
 
+Pyomo Users who want to add stochastics
+---------------------------------------
+
+Users of ``mpi-sppy`` are viewed as developers, not as
+end-users. Consequently, some Python programming is required.  The
+first thing is to code a scenario creation function. See
+:ref:`scenario_creator` for more information.
+If you create a few more helper functions
+(see :ref:`helper_functions`),
+you can make use of the ``generic_cylinders`` program (see :ref:`generic_cylinders` to use the hub and spoke system or to solve the the EF directly.
+     
+Alternatively, once you have the scenario creation function,
+you can mimic the code in ``examples.farmer.farmer_ef`` to
+solve the extensive form directly. If you want to use the hub
+and spoke system to solve your problem via decomposition, you
+should proceed to the second on writing :ref:`Drivers` or to
+the :ref:`Examples` section.
+
+
 PySP Users
 ----------
 
@@ -65,20 +84,6 @@ These steps alone will not result in use of the hub-spoke features of
 examples and see :ref:`PySP conversion` for more details.
 For an example with the hub-spoke features of `mpi-sppy`,
 see ``examples/hydro/hydro_cylinders_pysp.py``.
-
-
-Pyomo Users who want to add stochastics
----------------------------------------
-
-Users of ``mpi-sppy`` are viewed as developers, not as
-end-users. Consequently, some Python programming is required.  The
-first thing is to code a scenario creation function. See
-:ref:`scenario_creator` for more information. Once you have the function,
-you can mimic the code in ``examples.farmer.farmer_ef`` to
-solve the extensive form directly. If you want to use the hub
-and spoke system to solve your problem via decomposition, you
-should proceed to the second on writing :ref:`Drivers` or to
-the :ref:`Examples` section.
 
 
 Researchers who want to compare with mpi-sppy
