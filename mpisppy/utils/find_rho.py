@@ -33,6 +33,7 @@ import mpisppy.utils.rho_utils as rho_utils
 import mpisppy.phbase as phbase
 
 
+
 # Could also pass, e.g., sys.stdout instead of a filename
 """mpisppy.log.setup_logger("mpisppy.utils.find_rho",
                          "findrho.log",
@@ -94,10 +95,10 @@ class Find_Rho():
         nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                     dtype='d', count=nlen)
         w_denom = np.abs(nonants_array - xbar_array)
-        denom_max = np.max(w_denom) #TBD: do something else to avoid 0 divide
+        denom_max = np.max(w_denom)
         for i in range(len(w_denom)):
             if w_denom[i] <= self.ph_object.E1_tolerance:
-                w_denom[i] = denom_max
+                w_denom[i] = max(denom_max, self.ph_object.E1_tolerance)
         return w_denom
 
 
@@ -128,6 +129,7 @@ class Find_Rho():
            g_denom (numpy array): denominator
 
         """
+        # Need a comment indicating why this isn't already computed/available
         phbase._Compute_Xbar(self.ph_object)
         sname, scenario = list(self.ph_object.local_scenarios.items())[0]
         for node in scenario._mpisppy_node_list:
@@ -144,7 +146,9 @@ class Find_Rho():
                 nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                             dtype='d', count=nlen)
                 probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
-                denom += probs * np.abs(nonants_array - xbar_array)
+                # using 1 as a default value because the variable values are converged if the diff is 0, so ...
+                denom += probs * np.maximum(np.abs(nonants_array - xbar_array), 1.0)
+                print("{denom=}")
         self.ph_object.comms["ROOT"].Allreduce([denom, MPI.DOUBLE],
                                                [g_denom, MPI.DOUBLE],
                                                op=MPI.SUM)
@@ -183,7 +187,9 @@ class Find_Rho():
         for k, scenario in self.ph_object.local_scenarios.items():
             w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
                              for ndn_i in scenario._mpisppy_data.nonant_indices])
-        rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in local_snames}
+
+        rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in local_snames}                
+
         local_rhos = {vname: [rho_list[idx] for _, rho_list in rho.items()]
                         for vname, idx in vname_to_idx.items()}
 
