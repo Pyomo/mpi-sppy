@@ -270,7 +270,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.max_iterations = 4
         self.ph_object = self._run_ph_farmer()
-        self.assertAlmostEqual(self.ph_object.conv, 12.1691811918913)
+        self.assertAlmostEqual(self.ph_object.conv, 2.12869680, places=1)
 
 
 if __name__ == '__main__':

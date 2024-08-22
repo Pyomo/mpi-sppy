@@ -181,8 +181,8 @@ class Find_Rho():
             # two-stage only for now
             loc_denom = {k: self._w_denom(s, s._mpisppy_node_list[0])
                            for k, s in self.ph_object.local_scenarios.items()}
-            prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
-                         for s in self.ph_object.local_scenarios.values()]
+        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
+                     for s in self.ph_object.local_scenarios.values()]
         w = dict()
         for k, scenario in self.ph_object.local_scenarios.items():
             w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
