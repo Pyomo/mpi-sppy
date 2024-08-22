@@ -15,6 +15,8 @@ import sys
 import pandas as pd
 from datetime import datetime as dt
 
+XHAT_TEMP = "AAA_delete_this_from_generic_tester"  # write solutions here, then delete.
+
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
     solver_name = sys.argv[1]
@@ -35,7 +37,7 @@ if len(sys.argv) > 3:
                            format(sys.argv[3]))
 
 badguys = dict()  # bad return code
-losers = dict()  # does not match baseline well enough
+xhat_losers = dict()  # does not match baseline well enough
 
 def egret_avail():
     try:
@@ -65,21 +67,28 @@ def _append_soln_output_dir(argstring, outdir):
     return retval
 
 
-def rebaseline(dirname, modname, np, argstring, baseline_dir):
+def rebaseline_xhat(dirname, modname, np, argstring, baseline_dir):
     # Add the write output to the command line, do_one,
     fullarg = _append_soln_output_dir(argstring, baseline_dir)
-    do_one(dirname, modname, np, fullarg)  # no baseline_dir!
+    do_one(dirname, modname, np, fullarg)  # do not check a baseline_dir, write one
 
 
-def _check_baseline(modname, argstring, baseline_dir):
+def _check_baseline_xhat(modname, argstring, baseline_dir):
     # return true if OK, False otherwise
+    # compare the baseline_dir to XHAT_TEMP
     return True
 
+def _xhat_dir_setup(modname):
+    if os.path.exists(XHAT_TEMP):
+        shutil.rmtree(XHAT_TEMP)    
+    os.makedirs(XHAT_TEMP)
+    return os.path.join(XHAT_TEMP, modname)
 
-def do_one(dirname, modname, np, argstring, baseline_dir=None):
+
+def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None):
     """ return the code"""
     os.chdir(dirname)
-    fullarg = argstring if baseline_dir is None else _append_soln_output_dir(argstring, baseline_dir)
+    fullarg = argstring if xhat_baseline_dir is None else _append_soln_output_dir(argstring, _xhat_dir_setup(modname))
     runstring = "mpiexec {} -np {} python -u -m mpi4py {} {}".\
                 format(mpiexec_arg, np, progname, fullarg)
     # The top process output seems to be cached by github actions
@@ -91,7 +100,8 @@ def do_one(dirname, modname, np, argstring, baseline_dir=None):
         else:
             badguys[dirname].append(runstring)
     if baseline_dir is not None:
-        if not check_baseline(modname, argstring, baseline_dir):
+        if not _check_baseline_xhat(modname, argstring, baseline_dir):
+            xhat_losers.append(runstring)
     if '/' not in dirname:
         os.chdir("..")
     else:
@@ -107,9 +117,9 @@ if len(badguys) > 0:
         for c in v:
             print("    {}".format(c))
     sys.exit(1)
-elif len(losers) > 0:
-    print("\nLosers:")
-    for i,v in losers.items():
+elif len(xhat_losers) > 0:
+    print("\nXhat Losers:")
+    for i,v in xhat_losers.items():
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))
