@@ -58,13 +58,8 @@ def main():
     )
     conv, obj, triv = ph.ph_main()
     # Obj includes prox (only ok if we find a non-ant soln)
-    # if (conv < 1e-8):
-    #     print(f'Objective value: {obj:.2f}')
-    # else:
-    #     print('Did not find a non-anticipative solution '
-    #          f'(conv = {conv:.1e})')
     
-    # ph.post_solve_bound(verbose=False)
+    ph.post_solve_bound(verbose=False)
 
     variables = ph.gather_var_values_to_rank0()
     for (scenario_name, variable_name) in variables:
