@@ -16,6 +16,8 @@ lelization efficiencies or for reasons related to information security. In
 either case, the input data may be uncertain and we give a decomposi-
 tion algorithm based on Progressive Hedging.
 
+A technical report is available at `ool < https://optimization-online.org/2024/08/consensus-admm-under-uncertainty >`
+
 **StochAdmmWrapper** uses progressive hedging implemented in mpi-sppy 
 to solve a stochastic problem by breaking them into subproblems.
 
