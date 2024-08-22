@@ -352,6 +352,15 @@ if not nouc and egret_avail():
     # 3-scenario UC
     do_one("uc", "uc_ef.py", 1, solver_name+" 3")
 
+    do_one("uc", "gradient_uc_cylinders.py", 15,
+           "--bundles-per-rank=0 --max-iterations=100 --default-rho=1 "
+           "--xhatshuffle --ph-ob --num-scens=5 --max-solver-threads=2 "
+           "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
+           f"--solver-name={solver_name} --xhatpath uc_cyl_nonants.npy "
+           "--rel-gap 0.00001 --abs-gap=1 --intra-hub-conv-thresh=-1 "
+           "--grad-rho-setter --grad-order-stat 0.5 "
+           "--grad-dynamic-primal-crit")
+    
     do_one("uc", "uc_cylinders.py", 4,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
