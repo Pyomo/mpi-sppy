@@ -6,17 +6,7 @@ from sizes import scenario_creator
 
 ScenCount = 3
 
-options = {}
-options["solver_name"] = sys.argv[1]
-options["convthresh"] = 0.001
-options["subsolvedirectives"] = None
-options["verbose"] = True
-options["display_timing"] = True
-options["display_progress"] = True
-options["iter0_solver_options"] = {"mipgap": 0.01}
-options["iterk_solver_options"] = {"mipgap": 0.005}
-
-solver = pyo.SolverFactory(options["solver_name"])
+solver = pyo.SolverFactory(sys.argv[1])
 
 all_scenario_names = list()
 for sn in range(ScenCount):

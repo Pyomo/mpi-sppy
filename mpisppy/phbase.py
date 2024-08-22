@@ -331,9 +331,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         for k,s in self.local_scenarios.items():
             for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
 
-                ##if nonant._value == None:
-                ##    print(f"***_value is None for nonant var {nonant.name}")
-
                 xzdiff = nonant._value \
                         - s._mpisppy_model.z[ndn_i]._value
                 s._mpisppy_model.z[ndn_i]._value += pyo.value(s._mpisppy_model.beta[ndn_i]) * xzdiff
@@ -739,9 +736,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 scenario._mpisppy_model.ProxExpr = pyo.Expression(expr=prox_expr)
                 ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.ProxExpr
 
-                # Adding smoothing term
-                scenario._mpisppy_model.SmoothExpr = pyo.Expression(expr=smooth_expr)
-                ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.SmoothExpr
+                if (add_smooth):
+                    # Adding smoothing term
+                    scenario._mpisppy_model.SmoothExpr = pyo.Expression(expr=smooth_expr)
+                    ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.SmoothExpr
 
             if (is_min_problem):
                 objfct.expr += ph_term
@@ -835,7 +833,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
-        # smoothed = bool(self.options["smoothed"])
         smooth_type = self.options["smoothed"]
         have_extensions = self.extensions is not None
         have_converger = self.ph_converger is not None

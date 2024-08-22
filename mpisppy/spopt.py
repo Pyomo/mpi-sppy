@@ -852,7 +852,6 @@ class SPOpt(SPBase):
         local_sit = [] # Local set instance time for time tracking
         for sname, s in self.local_subproblems.items(): # solver creation
             s._solver_plugin = SolverFactory(self.options["solver_name"])
-            # print("is_persistent?",sputils.is_persistent(s._solver_plugin))
             if (sputils.is_persistent(s._solver_plugin)):
                 if dtiming:
                     set_instance_start_time = time.time()

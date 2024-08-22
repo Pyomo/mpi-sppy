@@ -68,10 +68,6 @@ if __name__ == "__main__":
         variable_value = variables[scenario_name, variable_name]
         print(scenario_name, variable_name, variable_value)
 
-    # conv, obj, tbound = ph.ph_main()
-    # if ph.cylinder_rank == 0:
-    #     print ("Trival bound =",tbound)
-
     if ph.tree_solution_available:
         print(f"Final objective from XhatClosest: {ph.extobject._final_xhat_closest_obj}")
     else:

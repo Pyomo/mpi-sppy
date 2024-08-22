@@ -105,7 +105,7 @@ if __name__ == "__main__":
     start_time = dt.datetime.now()
 
     options = {}
-    options["solver_name"] = "xpress_persistent"
+    options["solver_name"] = "gurobi_persistent"
     options["PHIterLimit"] = maxit
     options["defaultPHrho"] = rho
     options["convthresh"] = -1
