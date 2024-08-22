@@ -19,7 +19,7 @@ def main():
     num_scen = int(inst.split("-")[-3])
     scenario_names = [f"Scen{i}" for i in range(num_scen)]
     path = f"./data/{inst}.dat"
-    options = {"solver": "xpress"}
+    options = {"solver": "gurobi"}
     ef = ExtensiveForm(
         options,
         scenario_names,

@@ -28,7 +28,7 @@ def main():
 
     ''' Now solve with PH to see what happens (very little, I imagine) '''
     PH_options = {
-        'solver_name'           : 'xpress_persistent',
+        'solver_name'           : 'gurobi_persistent',
         'PHIterLimit'          : int(sys.argv[2]),
         'defaultPHrho'         : float(sys.argv[3]),
         'convthresh'           : -1e-8,
