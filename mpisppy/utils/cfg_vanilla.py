@@ -512,7 +512,8 @@ def xhatxbar_spoke(
         all_scenario_names,
         scenario_creator_kwargs=None,
         variable_probability=None,
-        ph_extensions=None
+        ph_extensions=None,
+        all_nodenames=None,
 ):
     xhatxbar_dict = _Xhat_Eval_spoke_foundation(
         XhatXbarInnerBound,
@@ -522,6 +523,7 @@ def xhatxbar_spoke(
         all_scenario_names,
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
+        all_nodenames=all_nodenames,
     )
 
     xhatxbar_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
@@ -702,7 +704,8 @@ def ph_ob_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     rho_setter=None,
-    all_nodenames = None,
+    all_nodenames=None,
+    variable_probability=None,
 ):
     shoptions = shared_options(cfg)
     ph_ob_spoke = {
@@ -715,7 +718,8 @@ def ph_ob_spoke(
             "scenario_creator_kwargs": scenario_creator_kwargs,
             'scenario_denouement': scenario_denouement,
             "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames
+            "all_nodenames": all_nodenames,
+            "variable_probability": variable_probability,
         }
     }
     if cfg.ph_ob_rho_rescale_factors_json is not None:

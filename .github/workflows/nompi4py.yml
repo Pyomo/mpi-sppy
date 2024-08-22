@@ -24,12 +24,12 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          pip install pyomo sphinx sphinx_rtd_theme cplex
-          pip install xpress numpy pandas scipy dill
+          pip install sphinx sphinx_rtd_theme cplex
+          pip install xpress pandas dill
 
       - name: setup the program
         run: |
-          python setup.py develop
+          pip install -e .
 
       - name: PH EF tests
         run: |

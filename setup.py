@@ -30,7 +30,7 @@ setup(
     packages=packages,
     python_requires='>=3.8',
     install_requires=[
-        'numpy',
+        'numpy<2',
         'scipy',
         'pyomo>=6.4',
     ],
