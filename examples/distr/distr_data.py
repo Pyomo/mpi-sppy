@@ -309,13 +309,14 @@ def scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params): # same a
     count = 0
     for node_1 in all_DC_nodes: #although inter_region_dict["costs"] and ["capacities"] could be done with comprehension, "arcs" can't
         for node_2 in all_DC_nodes:
-            _, region_num1, _ = parse_node_name(node_1)
-            source = f"Region{region_num1}", node_1
-            _, region_num2, _ = parse_node_name(node_2)
-            target = f"Region{region_num2}", node_2
-            arc = source, target
-            _intra_arc_creator(inter_region_dict, node_1, node_2, cfg, arc, inter_region_arc_params, count, intra=False)
-            count += 1
+            if node_1 != node_2:
+                _, region_num1, _ = parse_node_name(node_1)
+                source = f"Region{region_num1}", node_1
+                _, region_num2, _ = parse_node_name(node_2)
+                target = f"Region{region_num2}", node_2
+                arc = source, target
+                _intra_arc_creator(inter_region_dict, node_1, node_2, cfg, arc, inter_region_arc_params, count, intra=False)
+                count += 1
     return inter_region_dict
 
 
@@ -353,7 +354,10 @@ def all_nodes_dict_creator(cfg, data_params):
             node_base_num = _node_num(max_node_per_region, node_type, i, 1) #the first node that will be created will have this number
             # That helps us to have a seed, thanks to that we choose an integer which will be the number of nodes of this type
             np.random.seed(node_base_num)
-            m = np.random.randint(0, max_node_per_region)
+            if node_type == "F" or node_type == "B":
+                m = np.random.randint(0, max_node_per_region)
+            else:
+                m = np.random.randint(1, int(np.sqrt(max_node_per_region))+1)
             all_nodes_dict[region_name][association_types[node_type]] = [node_type + str(i) + "_" +str(j) for j in range(1, m+1)]
             all_nodes_dict[region_name]["nodes"] += all_nodes_dict[region_name][association_types[node_type]]
             if node_type == "F":
@@ -368,7 +372,7 @@ def all_nodes_dict_creator(cfg, data_params):
                 count = 1
                 for node_name in all_nodes_dict[region_name][association_types[node_type]]:
                     np.random.seed(_node_num(max_node_per_region, node_type, i, count) + 2**28)
-                    all_nodes_dict[region_name]["revenues"][node_name] = max(0, np.random.normal(revenues_mean,revenues_cv))
+                    all_nodes_dict[region_name]["revenues"][node_name] = min(max(0, np.random.normal(revenues_mean,revenues_cv)), data_params["max revenue"])
                     np.random.seed(_node_num(max_node_per_region, node_type, i, count) + 2*2**28)
                     all_nodes_dict[region_name]["supply"][node_name] = - max(0, np.random.normal(supply_buyer_mean,supply_buyer_cv)) #negative
                     count += 1
@@ -391,13 +395,14 @@ def scalable_region_dict_creator(scenario_name, all_nodes_dict=None, cfg=None, d
     count = 2**30 # to have unrelated data with the production_costs
     for node_1 in local_nodes_dict["nodes"]: #although inter_region_dict["costs"] and ["capacities"] could be done with comprehension, "arcs" can't
         for node_2 in local_nodes_dict["nodes"]:
-            node_type1, _, _ = parse_node_name(node_1)
-            node_type2, _, _ = parse_node_name(node_2)
-            arcs_association = {("F","DC") : data_params["arc_F_DC"], ("DC", "B") : data_params["arc_DC_B"], ("F", "B") : data_params["arc_F_B"], ("DC", "DC"): data_params["arc_DC_DC"]}
-            arc_type = (node_type1, node_type2)
-            if arc_type in arcs_association:
-                arc_params = arcs_association[arc_type]
-                arc = (node_1, node_2)
-                _intra_arc_creator(region_dict, node_1, node_2, cfg, arc, arc_params, my_seed=count, intra=True)
-                count += 1
+            if node_1 != node_2:
+                node_type1, _, _ = parse_node_name(node_1)
+                node_type2, _, _ = parse_node_name(node_2)
+                arcs_association = {("F","DC") : data_params["arc_F_DC"], ("DC", "B") : data_params["arc_DC_B"], ("F", "B") : data_params["arc_F_B"], ("DC", "DC"): data_params["arc_DC_DC"]}
+                arc_type = (node_type1, node_type2)
+                if arc_type in arcs_association:
+                    arc_params = arcs_association[arc_type]
+                    arc = (node_1, node_2)
+                    _intra_arc_creator(region_dict, node_1, node_2, cfg, arc, arc_params, my_seed=count, intra=True)
+                    count += 1
     return region_dict
