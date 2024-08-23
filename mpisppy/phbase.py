@@ -250,6 +250,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         rho_setter=None,
         variable_probability=None,
     ):
+        self._PHIter = 0  # moved to _init June 2024 so extensions can see it
         """ PHBase constructor. """
         super().__init__(
             options,
@@ -959,7 +960,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             iteration_start_time = time.time()
 
             if dprogress:
-                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
+                global_toc(f"Initiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # Compute xbar
             #global_toc('Rank: {} - Before Compute_Xbar'.format(self.cylinder_rank), True)

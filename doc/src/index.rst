@@ -13,7 +13,6 @@ MPI is used.
    overview.rst
    scenario_creator.rst
    drivers.rst
-   amalgamator.rst
    examples.rst
    hubs.rst
    spokes.rst
@@ -24,7 +23,6 @@ MPI is used.
    zhat.rst
    confidence_intervals.rst
    seqsamp.rst
-   pysp.rst
    ef.rst
    nompi4py.rst
    secretmenu.rst
@@ -36,6 +34,8 @@ MPI is used.
    helper_functions.rst
    contributors.rst
    internals.rst
+   amalgamator.rst
+   pysp.rst
    api.rst
    refs.rst
 
