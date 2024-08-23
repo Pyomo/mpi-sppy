@@ -490,9 +490,13 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file: rho rescale factors (default None)",
+                            description="json file with {iternum: rho rescale factor} (default None)",
                             domain=str,
                             default=None)
+        self.add_to_config("ph_ob_initial_rho_rescale_factor",
+                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
+                            domain=float,
+                            default=0.1)
         self.add_to_config("ph_ob_gradient_rho",
                             description="use gradient-based rho in PH OB",
                             domain=bool,
@@ -653,66 +657,84 @@ class Config(pyofig.ConfigDict):
                               "scenario cuts (default 0.01)",
                               domain=float,
                               default=0.01)
-
+        
+    # note: grad_rho_args was subsumed by gradient_args
 
     def gradient_args(self):
-         # we will not try to get the specification from the command line
 
         self.add_to_config("xhatpath",
                            description="path to npy file with xhat",
                            domain=str,
                            default='')
-        self.add_to_config("grad_cost_file",
-                           description="name of the gradient cost file (must be csv)",
+        self.add_to_config("grad_cost_file_out",
+                           description="name of the gradient cost file for output (will be csv)",
                            domain=str,
                            default='')
-        self.add_to_config("grad_rho_file",
-                           description="name of the gradient rho file (must be csv)",
+        self.add_to_config("grad_cost_file_in",
+                           description="path to csv file with (grad based?) costs",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_rho_file_out",
+                           description="name of the gradient rho output file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("rho_file_in",
+                           description="name of the (gradient) rho input file (must be csv)",
                            domain=str,
                            default='')
         self.add_to_config("grad_display_rho",
                            description="display rho during gradient calcs (default True)",
                            domain=bool,
                            default=True)
-        self.add_to_config("grad_primal_thresh",
-                           description="primal threshold for diff during gradient calcs",
-                           domain=float,
-                           default=0.001)
-        self.add_to_config("grad_dual_thresh",
-                           description="dual threshold for abs norm during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_pd_thresh",
-                           description="threshold for dual/primal during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_order_stat",
-                           description="order statistic for gradient based rho (must be between 0 and 1)",
-                           domain=float,
-                           default=0.5)
+        # likely unused presently
+#        self.add_to_config("grad_pd_thresh",
+#                           description="threshold for dual/primal during gradient calcs",
+#                           domain=float,
+#                           default=0.1)
 
-    def grad_rho_args(self):
-        self.add_to_config("grad_whatpath",
-                           description="path to csv file with what",
-                           domain=str,
-                           default='')
         self.add_to_config('grad_rho_setter',
                            description="use rho setter from a rho file",
                            domain=bool,
                            default=False)
-        
-        self.add_to_config("grad_rho_path",
-                           description="csv file for the the grad based rho file (???)",
+        """
+        all occurances of rho_path converted to grad_rho_file July 2024
+        self.add_to_config("rho_path",
+                           description="csv file for the rho setter",
                            domain=str,
                            default='')
+        """
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
                            domain=float,
                            default=-1.0)
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
                            default=1e3)
+
+    def dynamic_gradient_args(self): # AKA adaptive
+
+        self.gradient_args()
+
+        self.add_to_config('grad_dynamic_primal_crit',
+                           description="Use dynamic gradient-based primal criterion for update",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('grad_dynamic_dual_crit',
+                           description="Use dynamic gradient-based dual criterion for update",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("grad_dynamic_primal_thresh",
+                           description="primal threshold for diff during gradient calcs",
+                           domain=float,
+                           default=0.001)
+        
+        self.add_to_config("grad_dynamic_dual_thresh",
+                           description="dual threshold for abs norm during gradient calcs",
+                           domain=float,
+                           default=0.1)        
 
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",
