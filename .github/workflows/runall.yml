@@ -1,4 +1,4 @@
-name: test_ef_ph (Pyomo released)
+name: test_runall (Pyomo released)
 
 on:
   push:
@@ -14,6 +14,7 @@ jobs:
   build:
 
     runs-on: ubuntu-latest
+    timeout-minutes: 15
 
     steps:
       - uses: actions/checkout@v3
@@ -37,16 +38,8 @@ jobs:
         run: |
           pip install -e .
 
-      - name: Test EF/PH
-        run: |
-          python mpisppy/tests/test_ef_ph.py
-
-      - name: Test afew
+      - name: Test run_all nouc
         run: |
           cd examples
-          python afew.py xpress_persistent --oversubscribe
+          python run_all.py xpress_persistent --oversubscribe nouc
 
-      - name: Test docs
-        run: |
-          cd ./doc/src/
-          make doctest
