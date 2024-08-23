@@ -218,7 +218,7 @@ def add_reduced_costs_fixer(hub_dict,
             "rc_bound_tol": cfg.rc_bound_tol,
         }
 
-     return hub_dict
+    return hub_dict
 
 def add_wxbar_read_write(hub_dict, cfg):
     """
