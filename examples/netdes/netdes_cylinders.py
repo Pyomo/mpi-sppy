@@ -25,6 +25,7 @@ def _parse_args():
     cfg.xhatshuffle_args()
     cfg.slammax_args()
     cfg.cross_scenario_cuts_args()
+    cfg.reduced_costs_args()
     cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
                         domain=str,
@@ -76,6 +77,9 @@ def main():
     if cross_scenario_cuts:
         hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
+        
+    if cfg.reduced_costs:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
     # FWPH spoke
     if fwph:
@@ -108,6 +112,11 @@ def main():
     if cross_scenario_cuts:
         cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
+    if cfg.reduced_costs:
+        reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = None)
+
     list_of_spoke_dict = list()
     if fwph:
         list_of_spoke_dict.append(fw_spoke)
@@ -123,6 +132,8 @@ def main():
         list_of_spoke_dict.append(slammax_spoke)
     if cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cuts_spoke)
+    if cfg.reduced_costs:
+        list_of_spoke_dict.append(reduced_costs_spoke)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()

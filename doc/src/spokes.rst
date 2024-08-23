@@ -87,6 +87,15 @@ rho setter for the uc problem in the ph_ob cylinder.
 
 As of August, 2024 use of a gradient based rho with ph_ob is untested.
 
+Reduced Costs
+^^^^^^^^^^^^^
+
+The reduced cost spoke is equivalent to the Lagrangian spoke, except that it relaxes all 
+integrality contraints in the subproblems. This enables the computation of reduced costs
+for the first stage variables, which can be used for bound tightening or heuristic fixing
+in the hub.
+
+
 Inner Bounds
 ------------
 

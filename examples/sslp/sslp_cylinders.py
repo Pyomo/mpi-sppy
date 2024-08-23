@@ -28,6 +28,7 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.xhatshuffle_args()
     cfg.subgradient_args()
+    cfg.reduced_costs_args()
     cfg.parse_command_line("sslp_cylinders")
     return cfg
 
@@ -49,6 +50,7 @@ def main():
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
     subgradient = cfg.subgradient
+    reduced_costs = cfg.reduced_costs
 
     if cfg.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
@@ -78,7 +80,10 @@ def main():
             "boundtol": fixer_tol,
             "id_fix_list_fct": sslp.id_fix_list_fct,
         }
-        
+    
+    if reduced_costs:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -100,6 +105,12 @@ def main():
     # xhat shuffle bound spoke
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+    
+    # reduced costs spoke
+    if reduced_costs:
+        reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = None)
        
     list_of_spoke_dict = list()
     if fwph:
@@ -112,6 +123,8 @@ def main():
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+    if reduced_costs:
+        list_of_spoke_dict.append(reduced_costs_spoke)
 
     WheelSpinner(hub_dict, list_of_spoke_dict).spin()
 

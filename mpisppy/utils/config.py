@@ -437,6 +437,54 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
 
+    def reduced_costs_args(self):
+
+        self.add_to_config('reduced_costs',
+                              description="have a reduced costs spoke",
+                              domain=bool,
+                              default=False)
+        
+        self.add_to_config('rc_verbose',
+                            description="verbose output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_debug',
+                            description="debug output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_fixer',
+                            description="use the reduced cost fixer",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_zero_tol',
+                            description="vars with rc below tol will never be fixed",
+                            domain=float,
+                            default=1e-4)
+
+        self.add_to_config('rc_fix_fraction_iter0',
+                            description="target fix fraction for rc fixer in first iteration",
+                            domain=float,
+                            default=0.0)
+        
+        self.add_to_config('rc_fix_fraction_iterk',
+                            description="target fix fraction for rc fixer in subsequent iterations",
+                            domain=float,
+                            default=0.8)
+        
+        self.add_to_config('rc_bound_tightening',
+                            description="use reduced cost bound tightening",
+                            domain=bool,
+                            default=True)
+
+        self.add_to_config('rc_bound_tol',
+                            description="tol to consider vars at bound",
+                            domain=float,
+                            default=1e-6)
+
+
     def lagranger_args(self):
 
         self.add_to_config('lagranger',
@@ -783,6 +831,11 @@ class Config(pyofig.ConfigDict):
                             description="Adds scenario gap tracking (default 0)",
                             domain=int,
                             default=0)
+        self.add_to_config("track_reduced_costs",
+                            description="Adds reduced costs tracking (default 0)",
+                            domain=int,
+                            default=0)
+
 
     def wxbar_read_write_args(self):
         self.add_to_config("init_W_fname",
