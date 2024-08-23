@@ -722,7 +722,7 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
         self.add_to_config('grad_dynamic_dual_crit',
-                           description="Use dynamic gradient-based primal criterion for update",
+                           description="Use dynamic gradient-based dual criterion for update",
                            domain=bool,
                            default=False)
 
