@@ -44,6 +44,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     # add options unique to sizes
     cfg.num_scens_required()
+    cfg.mip_options()
 
 
 #=========

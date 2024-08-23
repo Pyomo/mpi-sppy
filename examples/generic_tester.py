@@ -1,5 +1,7 @@
 # Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
 # This software is distributed under the 3-clause BSD License.
+# This might make a mess in terms of output files....
+# (re)baseline by uncommenting rebaseline_xhat lines
 # Run a lot of generic_cylinders examples for regression testing; dlw Aug 2024
 # Not intended to be user-friendly.
 # Assumes you run from the examples directory.
@@ -60,7 +62,7 @@ def egret_avail():
 
 
 def _append_soln_output_dir(argstring, outdir):
-    outarg = "--solution_base_name"
+    outarg = "--solution-base-name"
     assert outarg not in argstring, "The tester controls solution writing"
     assert os.path.isdir(outdir), f"The solution dir given ({outdir}) is not an existing directory"
     retval = argstring + f" {outarg} outdir"
@@ -84,13 +86,23 @@ def _xhat_dir_setup(modname):
     os.makedirs(XHAT_TEMP)
     return os.path.join(XHAT_TEMP, modname)
 
+def _xhat_dir_setup(modname):
+    if os.path.exists(XHAT_TEMP):
+        shutil.rmtree(XHAT_TEMP)    
+    os.makedirs(XHAT_TEMP)
+    return os.path.join(XHAT_TEMP, modname)
+
 
 def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None):
     """ return the code"""
     os.chdir(dirname)
-    fullarg = argstring if xhat_baseline_dir is None else _append_soln_output_dir(argstring, _xhat_dir_setup(modname))
-    runstring = "mpiexec {} -np {} python -u -m mpi4py {} {}".\
-                format(mpiexec_arg, np, progname, fullarg)
+    if xhat_baseline_dir is not None: 
+        fullarg = _append_soln_output_dir(argstring, _xhat_dir_setup(modname))         
+    else:
+        fullarg = argstring
+    
+    runstring = "mpiexec {} -np {} python -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
+                format(mpiexec_arg, np, modname, fullarg)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
     code = os.system("echo {} && {}".format(runstring, runstring))
@@ -99,16 +111,27 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None):
             badguys[dirname] = [runstring]
         else:
             badguys[dirname].append(runstring)
-    if baseline_dir is not None:
+    if xhat_baseline_dir is not None:
         if not _check_baseline_xhat(modname, argstring, baseline_dir):
             xhat_losers.append(runstring)
+        _xhat_dir_teardown()        
     if '/' not in dirname:
         os.chdir("..")
     else:
         os.chdir("../..")   # hack for one level of subdirectories
     return code
 
+###################### main code ######################
+
 do_one("sizes", "sizes", 1, "--help")
+
+sizesa = ("--linearize-proximal-terms "
+          " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
+          " --default-rho=1 --lagrangian --xhatshuffle"
+          " --iter0-mipgap=0.01 --iterk-mipgap=0.001"
+          f" --solver-name={solver_name}")
+#rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
+do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir = "test_data/sizesa_baseline")
 
 if len(badguys) > 0:
     print("\nBad Guys:")
