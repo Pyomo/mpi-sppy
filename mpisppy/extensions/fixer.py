@@ -117,6 +117,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.is_fixed():
                     continue
+                if ndn_i not in self.threshold:
+                    continue
                 xb = pyo.value(s._mpisppy_model.xbars[ndn_i])
                 diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[ndn_i])
                 tolval = self.threshold[ndn_i]
