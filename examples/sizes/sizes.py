@@ -76,9 +76,12 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
 
+######## end helper functions #########
 
 ########## a customized rho setter #############
-# This demonstrates how to use a customized rho setter; consider also
+# If you are using sizes.py as a starting point for your model,
+#  you should be aware that you don't need a _rho_setter function.
+# This demonstrates how to use a customized rho setter; consider instead
 #  a gradient based rho setter.
 # note that _rho_setter is a reserved name....
 
