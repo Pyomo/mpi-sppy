@@ -1,6 +1,5 @@
 # This software is distributed under the 3-clause BSD License.
-# Started by dlw August 2024: General cylinder driver.
-# We get the module from the command line.
+# Generic_cylinder test driver. Adapted from run_all.py by dlw August 2024.
 
 import sys
 import os
@@ -63,6 +62,25 @@ def _parse_args(m):
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     return cfg
 
+def _name_lists(module, cfg):
+
+    # Note: high level code like this assumes there are branching factors for
+    # multi-stage problems. For other trees, you will need lower-level code
+    if cfg.get("branching_factors") is not None:
+        all_nodenames = sputils.create_nodenames_from_branching_factors(\
+                                    cfg.branching_factors)
+        num_scens = np.prod(cfg.branching_factors)
+        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None, "For now, stage2EFsolvern is required for multistage xhat"
+
+    else:
+        all_nodenames = None
+        num_scens = cfg.num_scens
+
+    all_scenario_names = module.scenario_names_creator(num_scens)
+
+    return all_scenario_names, all_nodenames
+
+
 #==========
 def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
@@ -81,20 +99,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     fwph = cfg.fwph
 
-    # Note: high level code like this assumes there are branching factors
-    # for multi-stage problems. For other trees, you will need lower-level code
-    if cfg.get("branching_factors") is not None:
-        all_nodenames = sputils.create_nodenames_from_branching_factors(\
-                                    cfg.branching_factors)
-        num_scens = np.prod(cfg.branching_factors)
-        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None, "For now, stage2EFsolvern is required for multistage xhat"
+    all_scenario_names, all_nodenames = _name_lists(module, cfg)    
 
-    else:
-        all_nodenames = None
-        num_scens = cfg.num_scens
-     
-    all_scenario_names = module.scenario_names_creator(num_scens)
-      
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
@@ -207,12 +213,14 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
 #==========
 def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
+
+    all_scenario_names, _ = _name_lists(module, cfg)
     ef = sputils.create_EF(
-        module.scenario_names_creator(cfg.num_scens),
+        all_scenario_names,
         module.scenario_creator,
         scenario_creator_kwargs=module.kw_creator(cfg),
     )
-
+    
     sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
 
     solver = pyo.SolverFactory(solver_name)
@@ -229,8 +237,8 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
     global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
     if cfg.solution_base_name is not None:
         sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
-        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.csv')
-        write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
+        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
+        sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
     
 

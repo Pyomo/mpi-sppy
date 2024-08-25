@@ -71,9 +71,7 @@ def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
         if all_nodenames is None:
             all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
     if all_nodenames is not None:
-        print("Hello, surprise !!")
         cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    print("Hello,",cylinder_dict)
     return cylinder_dict
 
 def ph_hub(
