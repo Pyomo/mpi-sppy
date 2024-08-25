@@ -57,7 +57,7 @@ def _parse_args(m):
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
     cfg.gradient_args()
-    cfg.grad_rho_args()
+    cfg.dynamic_gradient_args()
 
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     return cfg
