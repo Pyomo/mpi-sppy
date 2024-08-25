@@ -140,13 +140,14 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
 ###################### main code ######################
 # directory names are given relative to the examples directory whence this runs
 
-# this particular sizes command line is not very deterministic
+# This particular sizes command line is not very deterministic, also
+# linearize prox to help xpress.
 sizesa = ("--linearize-proximal-terms "
           " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
           " --default-rho=5 --lagrangian --xhatshuffle"
           " --iter0-mipgap=0.01 --iterk-mipgap=0.001 --rel-gap 0.001"
           f" --solver-name={solver_name}")
-rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
+#rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
 do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir = "test_data/sizesa_baseline")
 
 
