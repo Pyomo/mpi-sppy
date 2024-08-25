@@ -30,7 +30,7 @@ if __name__ == "__main__":
     options = {}
     options["solver_name"] = sys.argv[1]
     options["asynchronousPH"] = False
-    options["PHIterLimit"] = 5
+    options["PHIterLimit"] = 100
     options["defaultPHrho"] = 1
     options["convthresh"] = 0.001
     options["subsolvedirectives"] = None

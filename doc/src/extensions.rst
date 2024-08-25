@@ -74,6 +74,14 @@ in ``examples.sizes.uc_ama.py``. The ``uc_ama`` example illustrates
 that when ``amgalgamator`` is used ``"id_fix_list_fct"`` needs
 to be on the ``Config`` object so the amalgamator can find it.
 
+.. note::
+
+   For the iteration zero fixer tuples, the iteration counts are just
+   compared with None. If you provide a count for iteration zero, the
+   variable will be fixed if it is within the tolerance of being converged.
+   So if you don't want to fix a variable at iteration zero, provide a
+   tolerance, but set all count values to ``None``.
+
 xhat
 ^^^^
 
