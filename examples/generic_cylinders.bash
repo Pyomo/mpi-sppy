@@ -14,10 +14,6 @@ mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name 
 cd ..
 exit
 
-
-# sizes with gradient-based rho setter and ph_ob
-echo("HEY, TBD: we need # sizes with gradient-based rho setter and ph_ob")
-
 # sizes with a custom rho_setter
 echo "^^^ sizes custom rho_setter ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name sizes/sizes --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.0001

@@ -140,17 +140,6 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
 ###################### main code ######################
 # directory names are given relative to the examples directory whence this runs
 
-# This particular sizes command line is not very deterministic, also
-# linearize prox to help xpress.
-sizesa = ("--linearize-proximal-terms "
-          " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
-          " --default-rho=5 --lagrangian --xhatshuffle"
-          " --iter0-mipgap=0.01 --iterk-mipgap=0.001 --rel-gap 0.001"
-          f" --solver-name={solver_name}")
-#rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
-do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir = "test_data/sizesa_baseline")
-
-
 farmeref = (f"--EF --num-scens 3 --EF-solver-name={solver_name}")
 #rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
 do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir = "test_data/farmeref_baseline")
@@ -174,6 +163,17 @@ if not nouc:
            f" --solver-name={solver_name}")
     #rebaseline_xhat("uc", "uc_funcs", 3, uca, "test_data/uca_baseline")    
     do_one("uc", "uc_funcs", 3, uca, xhat_baseline_dir="test_data/uca_baseline")
+
+    # This particular sizes command line is not very deterministic, also
+    # linearize prox to help xpress.
+    sizesa = ("--linearize-proximal-terms "
+              " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
+              " --default-rho=5 --lagrangian --xhatshuffle"
+              " --iter0-mipgap=0.01 --iterk-mipgap=0.001 --rel-gap 0.001"
+              f" --solver-name={solver_name}")
+    #rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
+    do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir = "test_data/sizesa_baseline")
+
     
 
 #### final processing ####
