@@ -1,0 +1,45 @@
+name: test_generic (Pyomo released)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+defaults:
+    run:
+        shell: bash -l {0}
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test test_generic nouc
+        run: |
+          cd examples
+          python generic_tester.py xpress_persistent --oversubscribe nouc
+

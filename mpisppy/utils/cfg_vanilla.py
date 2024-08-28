@@ -76,9 +76,7 @@ def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
         if all_nodenames is None:
             all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
     if all_nodenames is not None:
-        print("Hello, surprise !!")
         cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    print("Hello,",cylinder_dict)
     return cylinder_dict
 
 def ph_hub(
@@ -302,6 +300,7 @@ def fwph_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     all_nodenames=None,
+    rho_setter=None,
 ):
     shoptions = shared_options(cfg)
 
@@ -332,7 +331,8 @@ def fwph_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames
+            "all_nodenames": all_nodenames,
+            "rho_setter" : rho_setter,
         },
     }
     return fw_dict

@@ -12,6 +12,7 @@ MPI is used.
    install_mpi.rst
    overview.rst
    scenario_creator.rst
+   generic_cylinders.rst
    drivers.rst
    examples.rst
    hubs.rst
