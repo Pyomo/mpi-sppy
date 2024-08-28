@@ -51,6 +51,7 @@ def _parse_args(m):
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
+    cfg.subgradient_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
     cfg.converger_args()
@@ -159,7 +160,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     # FWPH spoke
     if cfg.fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs, all_nodenames=all_nodenames)
+        fw_spoke = vanilla.fwph_spoke(*beans,
+                                      scenario_creator_kwargs=scenario_creator_kwargs,
+                                      all_nodenames=all_nodenames,
+                                      rho_setter=rho_setter,
+                                      )
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
@@ -177,11 +182,24 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                           all_nodenames = all_nodenames,
                                           )
 
+    # subgradient outer bound spoke
+    if cfg.subgradient:
+        subgradient_spoke = vanilla.subgradient_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
+
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       scenario_creator_kwargs=scenario_creator_kwargs,
                                                       all_nodenames=all_nodenames)
+
+    if cfg.xhatxbar:
+        xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
+                                                   scenario_creator_kwargs=scenario_creator_kwargs,
+                                                   all_nodenames=all_nodenames)
  
    # special code for multi-stage (e.g., hydro)
     if cfg.get("stage2EFsolvern") is not None:
@@ -197,8 +215,12 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_ob:
         list_of_spoke_dict.append(ph_ob_spoke)
+    if cfg.subgradient:
+        list_of_spoke_dict.append(subgradient_spoke)
     if cfg.xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+    if cfg.xhatxbar:
+        list_of_spoke_dict.append(xhatxbar_spoke)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()

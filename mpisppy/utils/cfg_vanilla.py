@@ -300,6 +300,7 @@ def fwph_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     all_nodenames=None,
+    rho_setter=None,
 ):
     shoptions = shared_options(cfg)
 
@@ -330,7 +331,8 @@ def fwph_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames
+            "all_nodenames": all_nodenames,
+            "rho_setter" : rho_setter,
         },
     }
     return fw_dict
