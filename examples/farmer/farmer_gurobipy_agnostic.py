@@ -48,6 +48,8 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
         raise ValueError("Model sense Not recognized")
     
     model = gp.Model(scenname)
+    # Silence gurobi output
+    model.setParam('OutputFlag', 0)
     
     crops = ["WHEAT", "CORN", "SUGAR_BEETS"]
     CROPS = [f"{crop}{i}" for i in range(crops_multiplier) for crop in crops]
@@ -111,7 +113,8 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
         "nonant_names": {("ROOT", i): v.VarName for i, v in enumerate(DevotedAcreage.values())},
         "probability": "uniform",
         "sense": sense,
-        "BFs": None
+        "BFs": None,
+        "nonant_bounds": {("ROOT", i): (v.LB, v.UB) for i, v in enumerate(DevotedAcreage.values())}
     }
 
     return gd
@@ -306,7 +309,7 @@ def _copy_Ws_xbars_rho_from_host(scenario):
         prox_on = host_model.prox_on.value
         # Update x coeff and x^2 coeff
         for i, nonant in gd["nonants"].items():     # (Root, 1) : Nonant
-            new_coeff_val_xvar = nonants_coeffs[i] + W_on * (Wdict[nonant.VarName] * nonants_coeffs[i]) - prox_on * (rhodict[nonant.VarName] * xbarsdict[nonant.VarName]) 
+            new_coeff_val_xvar = nonants_coeffs[i] + W_on * (Wdict[nonant.VarName]) - prox_on * (rhodict[nonant.VarName] * xbarsdict[nonant.VarName])
             new_coeff_val_xsq = prox_on * rhodict[nonant.VarName]/2.0
             # Gurobipy does not seem to have setters/getters, instead we use attributes
             nonant.Obj = new_coeff_val_xvar
@@ -321,12 +324,12 @@ def _copy_nonants_from_host(s):
     for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
         guestVar = gd["nonants"][ndn_i]
-        if guestVar.lb == guestVar.ub:
-            guestVar.lb = 0 
-            guestVar.ub = float("inf") 
+        if guestVar.LB == guestVar.UB:
+            guestVar.LB = gd["nonant_bounds"][ndn_i][0] 
+            guestVar.UB = gd["nonant_bounds"][ndn_i][1]
         if hostVar.is_fixed():
-            guestVar.lb = hostVar._value
-            guestVar.ub = hostVar._value
+            guestVar.LB = hostVar._value
+            guestVar.UB = hostVar._value
         else:
             guestVar.Start = hostVar._value
 
