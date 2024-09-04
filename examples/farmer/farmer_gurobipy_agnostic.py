@@ -163,7 +163,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 # begin callouts
 
 def attach_Ws_and_prox(Ag, sname, scenario):
-
+    """Gurobipy does not have symbolic data, so this function just collects some data"""
     # Gurobipy is special so we are gonna need to maintain the coeffs ourselves
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
     gd = scenario._agnostic_dict
@@ -174,7 +174,7 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     nonants_not_in_obj = {}
 
     # Check to see if the nonants are in the objective function
-    for i, nonant in gd["nonants"].items():
+    for ndn_i, nonant in gd["nonants"].items():
         found_nonant_in_obj = False
         for obj_func_term in obj_func_terms:
             if obj_func_term.sameAs(nonant):
@@ -182,9 +182,9 @@ def attach_Ws_and_prox(Ag, sname, scenario):
                 found_nonant_in_obj = True
                 break
         if not found_nonant_in_obj:
-            print('We dont have a coeff for this nonant which is bad so we will default to 0')
+            print(f'No objective coeff for {gd["nonant_names"][ndn_i]=} which is bad so we will default to 0')
             nonant_coeffs[nonant] = 0
-            nonants_not_in_obj[i] = nonant
+            nonants_not_in_obj[ndn_i] = nonant
 
     # Update/attach nonants' coeffs to the dictionary 
     gd["nonant_coeffs"] = nonant_coeffs 
