@@ -1,0 +1,4 @@
+Node, EF_VarName, Value
+ROOT, scen0.DevotedAcreage[CORN0], 80.0
+ROOT, scen0.DevotedAcreage[SUGAR_BEETS0], 250.0
+ROOT, scen0.DevotedAcreage[WHEAT0], 170.0

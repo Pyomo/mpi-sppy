@@ -860,6 +860,9 @@ class SPOpt(SPBase):
 
                 if dtiming:
                     local_sit.append( time.time() - set_instance_start_time )
+            else:
+                if dtiming:
+                    local_sit.append(0.0)
 
             ## if we have bundling, attach
             ## the solver plugin to the scenarios

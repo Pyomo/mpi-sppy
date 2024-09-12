@@ -31,7 +31,7 @@ def _parse_args():
                          domain = str,
                          default=None)
 
-    cfg.parse_command_line("farmer_cylinders")
+    cfg.parse_command_line("hydro_cylinders")
     return cfg
 
 

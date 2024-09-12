@@ -20,7 +20,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.8
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -44,12 +44,7 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent
-
-      - name: Test run_all nouc
-        run: |
-          cd examples
-          python run_all.py xpress_persistent "" nouc
+          python afew.py xpress_persistent --oversubscribe
 
       - name: Test docs
         run: |

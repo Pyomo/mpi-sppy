@@ -33,6 +33,7 @@ import mpisppy.utils.rho_utils as rho_utils
 import mpisppy.phbase as phbase
 
 
+
 # Could also pass, e.g., sys.stdout instead of a filename
 """mpisppy.log.setup_logger("mpisppy.utils.find_rho",
                          "findrho.log",
@@ -44,13 +45,14 @@ logger = logging.getLogger("mpisppy.utils.find_rho")"""
 
 class Find_Rho():
     """ Interface to compute rhos from Ws for a given ph object and write them in a file
+    DLW July 2024 ? Is it from W's or from costs?
 
     Args:
        ph_object (PHBase): ph object
        cfg (Config): config object
 
     Attributes:
-       c (dict): a dictionnary {(scenario name, nonant indice): c value}
+       c (dict): a dictionary {(scenario name, nonant indice): c value}
        corresponding to the cost vector in the PH algorithm
 
     """
@@ -60,14 +62,12 @@ class Find_Rho():
         self.cfg = cfg
         self.c = dict()
 
-        if cfg.get("rho_file", ifmissing='')  == ''\
-           and cfg.get("grad_rho_file", ifmissing='')  == '': 
-            pass
+        if cfg.get("grad_cost_file_in", ifmissing='')  == '': 
+            raise RuntimeError("Find_Rho constructor called without grad_cost_file_in")
         else:
-            assert self.cfg.grad_whatpath != '', "to compute rhos you have to give the name of a What csv file (using --whatpath)"
-            if (not os.path.exists(self.cfg.grad_whatpath)):
-                raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_whatpath))
-            with open(self.cfg.grad_whatpath, 'r') as f:
+            if (not os.path.exists(self.cfg.grad_cost_file_in)):
+                raise RuntimeError(f'Could not find file {self.cfg.grad_cost_file_in}')
+            with open(self.cfg.grad_cost_file_in, 'r') as f:
                 for line in f:
                     if (line.startswith('#')):
                         continue
@@ -89,16 +89,16 @@ class Find_Rho():
            w_denom (numpy array): denominator
 
         """
-        assert node.name == "ROOT", "compute rho only works for two stage for now"
+        assert node.name == "ROOT", "gradient-based compute rho only works for two stage for now"
         nlen = s._mpisppy_data.nlens[node.name]
         xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
         nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                     dtype='d', count=nlen)
         w_denom = np.abs(nonants_array - xbar_array)
-        denom_max = np.max(w_denom) #TBD: do something else to avoid 0 divide
+        denom_max = np.max(w_denom)
         for i in range(len(w_denom)):
             if w_denom[i] <= self.ph_object.E1_tolerance:
-                w_denom[i] = denom_max
+                w_denom[i] = max(denom_max, self.ph_object.E1_tolerance)
         return w_denom
 
 
@@ -129,6 +129,7 @@ class Find_Rho():
            g_denom (numpy array): denominator
 
         """
+        # Need a comment indicating why this isn't already computed/available
         phbase._Compute_Xbar(self.ph_object)
         sname, scenario = list(self.ph_object.local_scenarios.items())[0]
         for node in scenario._mpisppy_node_list:
@@ -145,7 +146,9 @@ class Find_Rho():
                 nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
                                             dtype='d', count=nlen)
                 probs = s._mpisppy_data.prob_coeff[ndn] * np.ones(nlen)
-                denom += probs * np.abs(nonants_array - xbar_array)
+                # using 1 as a default value because the variable values are converged if the diff is 0, so ...
+                denom += probs * np.maximum(np.abs(nonants_array - xbar_array), 1.0)
+                print("{denom=}")
         self.ph_object.comms["ROOT"].Allreduce([denom, MPI.DOUBLE],
                                                [g_denom, MPI.DOUBLE],
                                                op=MPI.SUM)
@@ -154,82 +157,93 @@ class Find_Rho():
             return g_denom
 
 
-    def _order_stat(self, rho_list, prob_list):
-        """ Computes a scenario independant rho from a list of rhos.
-
-        Args:
-           rho_list (list): list of rhos
-
-        Returns:
-           rho (float): rho value
-        """
-        alpha = self.cfg.grad_order_stat
-        assert (alpha >= 0 and alpha <= 1), "0 is the min, 0.5 the average, 1 the max for grad_order_stat"
-        rho_mean = np.dot(rho_list, prob_list)
-        rho_min, rho_max = np.min(rho_list), np.max(rho_list)
-        if alpha == 0.5:
-            return rho_mean
-        if alpha < 0.5:
-            return (rho_min + alpha * 2 * (rho_mean - rho_min))
-        if alpha > 0.5:
-            return (2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)
-
     def compute_rho(self, indep_denom=False):
         """ Computes rhos for each scenario and each variable using the WW heuristic
         and first order condition.
 
         Returns:
-           arranged_rho (dict): dict {variable name: list of rhos for this variable}
+           rhos (dict): dict {variable name: list of rhos for this variable}
         """
-        all_snames = self.ph_object.all_scenario_names
-        all_vnames = []
+        local_snames = self.ph_object.local_scenario_names
+        vnames = []  # TBD: why not just use c.keys()
         for (sname, vname) in self.c.keys():
-            if vname not in all_vnames:all_vnames.append(vname)
+            if vname not in vnames: vnames.append(vname)
         k0, s0 = list(self.ph_object.local_scenarios.items())[0]
+        # TBD: drop vname_to_idx and use the map already provided
         vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
         cost = {k : np.array([self.c[k, vname]
-                for vname in all_vnames])
-                for k in all_snames}
+                for vname in vnames])
+                for k in local_snames}
         if indep_denom:
             grad_denom = self._grad_denom()
-            denom = {k: grad_denom for k in all_snames}
+            loc_denom = {k: grad_denom for k in local_snames}
         else:
-            loc_denom = {k: self._w_denom(s, node)
-                           for k, s in self.ph_object.local_scenarios.items()
-                           for node in s._mpisppy_node_list}
-            global_denom = self.ph_object.comms['ROOT'].gather(loc_denom, root=0)
-            denom = dict()
-            if self.ph_object.cylinder_rank == 0:
-                for loc_denom in global_denom:
-                    denom.update(loc_denom)
-        if self.ph_object.cylinder_rank == 0:
-            prob_list = [s._mpisppy_data.prob_coeff[node.name]
-                         for s in self.ph_object.local_scenarios.values()
-                         for node in s._mpisppy_node_list]
-            w = dict()
-            for k, scenario in self.ph_object.local_scenarios.items():
-                w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
-                                 for ndn_i in scenario._mpisppy_data.nonant_indices])
-            rho = {k : np.abs(np.divide(cost[k] - w[k], denom[k])) for k in all_snames}
-            arranged_rho = {vname: [rho_list[idx] for _, rho_list in rho.items()]
-                            for vname, idx in vname_to_idx.items()}
-            rho = {vname: self._order_stat(rho_list, prob_list) for (vname, rho_list) in arranged_rho.items()}
-            #change null rho to min
-            min_rho = min(r for r in rho.values() if (r > 0))
-            for vname, r in rho.items():
-                if r == 0.0:
-                    rho[vname] = min_rho
-            return rho
+            # two-stage only for now
+            loc_denom = {k: self._w_denom(s, s._mpisppy_node_list[0])
+                           for k, s in self.ph_object.local_scenarios.items()}
+        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
+                     for s in self.ph_object.local_scenarios.values()]
+        w = dict()
+        for k, scenario in self.ph_object.local_scenarios.items():
+            w[k] = np.array([scenario._mpisppy_model.W[ndn_i]._value
+                             for ndn_i in scenario._mpisppy_data.nonant_indices])
+
+        rho = {k : np.abs(np.divide(cost[k] - w[k], loc_denom[k])) for k in local_snames}                
+
+        local_rhos = {vname: [rho_list[idx] for _, rho_list in rho.items()]
+                        for vname, idx in vname_to_idx.items()}
+
+        # Compute a scenario independant rho from a list of rhos using a triangular distribution.
+        alpha = self.cfg.grad_order_stat
+        assert (alpha >= 0 and alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {alpha=} is invalid."
+        vcnt = len(local_rhos)  # variable count
+        rho_mins = np.empty(vcnt, dtype='d')  # global
+        rho_maxes = np.empty(vcnt, dtype='d')
+        rho_means = np.empty(vcnt, dtype='d')
+
+        local_rho_mins = np.fromiter((min(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
+        local_rho_maxes = np.fromiter((max(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
+        local_prob = np.sum(prob_list)
+        local_wgted_means = np.fromiter((np.dot(rho_vals, prob_list) * local_prob for rho_vals in local_rhos.values()), dtype='d')
+
+        self.ph_object.comms["ROOT"].Allreduce([local_rho_mins, MPI.DOUBLE],
+                                               [rho_mins, MPI.DOUBLE],
+                                               op=MPI.MIN)
+        self.ph_object.comms["ROOT"].Allreduce([local_rho_maxes, MPI.DOUBLE],
+                                               [rho_maxes, MPI.DOUBLE],
+                                               op=MPI.MAX)
+
+        self.ph_object.comms["ROOT"].Allreduce([local_wgted_means, MPI.DOUBLE],
+                                               [rho_means, MPI.DOUBLE],
+                                               op=MPI.SUM)
+        if alpha == 0.5:
+            rhos = {vname: float(rho_mean) for vname, rho_mean in zip(local_rhos.keys(), rho_means)}
+        elif alpha == 0.0:
+            rhos = {vname: float(rho_min) for vname, rho_min in zip(local_rhos.keys(), rho_mins)}
+        elif alpha == 1.0:
+            rhos = {vname: float(rho_max) for vname, rho_max in zip(local_rhos.keys(), rho_maxes)}
+        elif alpha < 0.5:
+            rhos = {vname: float(rho_min + alpha * 2 * (rho_mean - rho_min))\
+                    for vname, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)}
+        elif alpha > 0.5:
+            rhos = {vname: float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)\
+                    for vname, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)}
+        else:
+            raise RuntimeError("Coding error.")
+
+        return rhos
 
 
-    def write_rho(self):
-        """ Write the computed rhos in the file --rho-file.
+    def write_grad_rho(self):
+        """ Write the computed rhos in the file --grad-rho-file-out.
+            Note: this file was originally opened for append access
         """
-        if self.cfg.grad_rho_file == '': pass
+        if self.cfg.grad_rho_file_out == '':
+            raise RuntimeError("write_grad_rho called without grad_rho_file_out")
         else:
             rho_data = self.compute_rho()
             if self.ph_object.cylinder_rank == 0:
-                with open(self.cfg.grad_rho_file, 'w') as file:
+                with open(self.cfg.grad_rho_file_out, 'w') as file:
                     writer = csv.writer(file)
                     writer.writerow(['#Rho values'])
                     for (vname, rho) in rho_data.items():
@@ -258,8 +272,8 @@ class Set_Rho():
 
         """
         assert self.cfg != None, "you have to give the rho_setter a cfg"
-        assert self.cfg.grad_rho_path != '', "use --rho-path to give the path of your rhos file"
-        rhofile = self.cfg.grad_rho_path
+        assert self.cfg.rho_file_in != '', "use --rho-file-in to give the path of your rhos file"
+        rhofile = self.cfg.rho_file_in
         rho_list = list()
         with open(rhofile) as infile:
             reader = csv.reader(infile)
@@ -295,7 +309,6 @@ def _parser_setup():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()    
-    cfg.grad_rho_args()
 
     return cfg
 
@@ -306,9 +319,11 @@ def get_rho_from_W(mname, original_cfg):
     Args:
        mname (str): module name
        original_cfg (Config object): config object
+    NOTE: as of July 2024, this function is never called and would not work due
+          to the call to Find_Rho.rhos() (and perhaps other things)
 
     """
-    if  (original_cfg.grad_rho_file == ''): return
+    assert original_cfg.grad_rho_file != ''
 
     try:
         model_module = importlib.import_module(mname)
@@ -346,4 +361,4 @@ def get_rho_from_W(mname, original_cfg):
 
 
 if __name__ == "__main__":
-    print("call find_rho.get_rho_from_W(modulename, cfg) and use --whatpath --rho-file to compute and write rhos")
+    print("call find_rho.get_rho_from_W(modulename, cfg) and use --grad_cost_file_in --rho-file to compute and write rhos")
