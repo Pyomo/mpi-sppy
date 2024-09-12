@@ -12,7 +12,6 @@ echo "^^^ not-so-cool UC with mipgapper ^^^"
 cd uc
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name uc_funcs --num-scens 5 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 --mipgaps-json phmipgaps.json
 cd ..
-exit
 
 # sizes with a custom rho_setter
 echo "^^^ sizes custom rho_setter ^^^"
@@ -44,4 +43,26 @@ cd uc
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name uc_funcs --num-scens 5 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
 cd ..
 
+exit
+
+# begin gradient based rho demo
+# NOTE: you need to have pynumero installed!
+# gradient rho, and particularly the dynamic version, is agressive,
+# so you probably need ph-ob instead of lagrangian
+# and you probably need xhat-xbar instead of xhatshuffle
+# Note that the order stat is set to zero.
+# For farmer, just plain old rho=1 is usually better than gradient rho
+
+# First we are going to get an xhat, which is needed for grad_rho
+cd farmer
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --solution-base-name farmer_nonants
+
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001
+
+# now do it again, but this time using dynamic rho
+
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001 --grad-dynamic-dual-crit --grad-dynamic-dual-thresh 0.1
+
+cd ..
+# end gradient based rho demo
 

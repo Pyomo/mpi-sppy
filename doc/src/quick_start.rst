@@ -47,14 +47,14 @@ first thing is to code a scenario creation function. See
 :ref:`scenario_creator` for more information.
 If you create a few more helper functions
 (see :ref:`helper_functions`),
-you can make use of the ``generic_cylinders`` program (see :ref:`generic_cylinders` to use the hub and spoke system or to solve the the EF directly.
+you can make use of the ``generic_cylinders`` program (see :ref:`generic_cylinders`) to use the hub and spoke system or to solve the the EF directly.
      
 Alternatively, once you have the scenario creation function,
 you can mimic the code in ``examples.farmer.farmer_ef`` to
 solve the extensive form directly. If you want to use the hub
 and spoke system to solve your problem via decomposition, you
-should proceed to the second on writing :ref:`Drivers` or to
-the :ref:`Examples` section.
+should proceed to the section on writing :ref:`Drivers`, or to
+the :ref:`Examples` section, or to the :ref:`generic_cylinders` section.
 
 
 PySP Users
