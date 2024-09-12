@@ -13,6 +13,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
+from mpisppy.extensions.gradient_extension import Gradient_extension
 import mpisppy.utils.solver_spec as solver_spec
 from mpisppy import global_toc
 
@@ -143,6 +144,10 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             "boundtol": cfg.fixer_tol,
             "id_fix_list_fct": uc.id_fix_list_fct,
         }
+    if cfg.grad_rho_setter:
+        ext_classes.append(Gradient_extension)
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
+        
     if len(ext_classes) != 0:
         hub_dict['opt_kwargs']['extensions'] = MultiExtension
         hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
@@ -271,6 +276,7 @@ if __name__ == "__main__":
         print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
         quit()
 
+    assert sys.argv[1] == "--module-name", f"The first command argument must be '--module-name' but you gave {sys.argv[1]}"
     model_fname = sys.argv[2]
 
     # TBD: when agnostic is merged, use the function and delete the code lines

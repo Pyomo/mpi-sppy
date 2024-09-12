@@ -21,8 +21,8 @@ needed even with the ``--help`` argument, e.g.,
     python ../mpisppy/generic_cylinders.py --module-name farmer/farmer --help
 
 .. Note::
-   If you want to run cylinders, you need to use ``mpiexec``; however, you can
-   (and should) solve the EF directly without it.
+   If you want to run cylinders, you need to use ``mpiexec``; however, if you are
+   solving the EF directly, you do not need ``mpiexec``.
 
 
 .. Note::
