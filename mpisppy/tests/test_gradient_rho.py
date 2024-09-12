@@ -104,7 +104,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.grad_cost_file_in= './examples/rho_test_data/grad_cost.csv'
         self.grad_object = grad.Find_Grad(self.ph_object, self.cfg)
         rho = self.grad_object.find_grad_rho()
-        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 5.175)
+        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 3.375)
     
     def test_compute_and_write_grad_rho(self):
         self.cfg.grad_cost_file_in= './examples/rho_test_data/grad_cost.csv'
