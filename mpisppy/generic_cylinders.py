@@ -27,7 +27,7 @@ def _parse_args(m):
                       argparse=True)
     assert hasattr(m, "inparser_adder"), "The model file must have an inparser_adder function"
     cfg.add_to_config(name="solution_base_name",
-                      description="The string used fo a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
+                      description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
                       domain=str,
                       default=None)
     cfg.add_to_config(name="run_async",
