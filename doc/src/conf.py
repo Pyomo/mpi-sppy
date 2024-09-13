@@ -62,8 +62,8 @@ root_doc = 'index'
 
 # General information about the project.
 project = u'mpi-sppy'
-copyright = u'2020-2023'
-author = u'David L. Woodruff'
+copyright = u'2020-2024'
+author = u'mpi-sppy Developers'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the
