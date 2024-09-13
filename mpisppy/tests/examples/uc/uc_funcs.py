@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # Feb 2021: DTM: Why is the number of scenarios hardcoded and not a
 # scenario_creator_kwarg?
 # (maybe there is a super-computer reason)

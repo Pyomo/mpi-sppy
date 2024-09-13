@@ -1,5 +1,3 @@
-# Copyright 2023 U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 
 # TBD: put in more options: threads, mipgaps for spokes
 

@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # updated April 2020 so it executes, but this needs a three driver
 from mpisppy.opt.ph import PH
 from battery import scenario_creator, scenario_denouement

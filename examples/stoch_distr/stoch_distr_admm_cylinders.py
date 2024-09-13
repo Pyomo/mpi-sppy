@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # general example driver for stoch_distr with cylinders
 
 # Driver file for stochastic admm

@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # four stage test
 # mpiexec -np 8 python -m mpi4py forustage.py 2 2 2 1 0
 # (see the first lines of main() to change instances)

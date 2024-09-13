@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 import sys
 from runtests.mpi import Tester
 import os.path

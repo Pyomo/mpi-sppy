@@ -1,5 +1,3 @@
-# Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # Code that is producing an xhat and a confidence interval using sequantial sampling 
 # This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.

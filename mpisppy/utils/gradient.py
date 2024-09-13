@@ -1,5 +1,3 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # Code to compute gradient cost and rhos from the gradient. It also provides a corresponding rho setter.
 # To test: /examples/farmer/farmer_rho_demo.py
 

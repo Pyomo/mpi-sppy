@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 
 try:
     from mpi4py.MPI import *

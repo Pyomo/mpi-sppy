@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # NOTE: as of March 2022, consider aircondB.py as an alternative to aircond.py
 # Use bundle_pickler.py to create bundle pickles
 # NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.

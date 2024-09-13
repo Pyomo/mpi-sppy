@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 
 # DLW March 2023 A simple rho updater. Hold rho as a constant multple of the convergence metric
 # but only update when convergence improves

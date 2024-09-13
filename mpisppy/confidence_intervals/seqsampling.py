@@ -1,5 +1,3 @@
-# Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # Code that is producing a xhat and a confidence interval using sequential sampling 
 # This is the implementation of the 2 following papers:
 # [bm2011] Bayraksan, G., Morton,D.P.: A Sequential Sampling Procedure for Stochastic Programming. Operations Research 59(4), 898-913 (2011)

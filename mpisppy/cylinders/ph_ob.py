@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # Runs PH with smaller rhos in order to compute a lower bound
 # By default rescale the hub "default-rho" values (multiply by rf) but there are other options to set rho:
 # - set rho manually (use _hack_set_rho)

@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # Replace baseparsers.py and enhance functionality.
 # A class drived form pyomo.common.config is defined with
 #   supporting member functions.

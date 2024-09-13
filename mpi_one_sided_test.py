@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 ''' Basic test script to make sure that the one-sided MPI calls work as
     intended. Runs on two processes. Will raise an assertion error if the
     Lock/Get/Unlock combination blocks. Otherwise, exits normally and produces

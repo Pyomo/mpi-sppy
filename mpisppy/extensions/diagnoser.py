@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # An extension to output diagnostic information at each iteration
 # to a file for each scenario.
 # DLW, March 2019

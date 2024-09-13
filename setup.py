@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 #!/bin/usr/env python3
 import glob
 import sys

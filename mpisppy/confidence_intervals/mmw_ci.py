@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
 

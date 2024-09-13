@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # -*- coding: utf-8 -*-
 """
 Created on Fri Feb  8 11:49:24 2013

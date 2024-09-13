@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 ''' Implementation of a simple network design problem. See README for more info
 
     Created: 9 November 2019 by DTM

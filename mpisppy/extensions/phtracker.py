@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 ''' An extension to track the PH object (mpisppy.opt.ph.PH) during execution.
     Must use the PH object for this to work
 '''

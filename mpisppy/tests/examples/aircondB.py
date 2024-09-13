@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 #ReferenceModel for full set of scenarios for AirCond; June 2021
 # PICKLE BUNDLE VERSION!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # Dec 2021; numerous enhancements by DLW; do not change defaults

@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # Generic_cylinder test driver. Adapted from run_all.py by dlw August 2024.
 
 import sys

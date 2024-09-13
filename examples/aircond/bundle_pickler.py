@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # Program to create proper bundles for aircond; DLW march 2022
 # NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
 # see try_pickles.bash

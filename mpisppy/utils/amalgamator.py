@@ -1,5 +1,4 @@
 # Amalgamator.py starting point; DLW March 2021
-# This software is distributed under the 3-clause BSD License.
 # To test : python amalgamator.py 10 --solver-name=cplex --default-rho=1
 
 """Takes a scenario list and a scenario creator (and options)

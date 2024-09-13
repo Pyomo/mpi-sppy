@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 #Tree ideas; dlw Fall 2019
 # Stage numbers and scenario numbers are one-based, but lists are all zero-based
 # Tree node numbers used in node names are zero-based.

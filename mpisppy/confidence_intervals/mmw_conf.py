@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 
 # To test: (from confidence_intervals directory; assumes the npy file is in the farmer directory) 
 # python mmw_conf.py mpisppy/tests/examples/farmer.py --xhatpath ../../examples/farmer/farmer_root_nonants.npy --confidence-level 0.95 --EF-solver-name gurobi --MMW-num-batches 3 --MMW-batch-size 5

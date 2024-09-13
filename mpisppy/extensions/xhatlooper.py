@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # look for an xhat. 
 # Written to be the only extension or called from an extension "manager."
 # DLW, Jan 2019

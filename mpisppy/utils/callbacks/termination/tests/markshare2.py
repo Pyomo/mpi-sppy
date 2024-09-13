@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 '''
 markshare2 instance from MIPLIB 2017:
     https://miplib.zib.de/instance_details_markshare2.html

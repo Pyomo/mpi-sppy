@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 """ **** cfg version of vanilla that uses the Pyomo configuration system
     Plain versions of dictionaries that can be modified for each example as needed.
     ASSUME the corresponding args have been set up.

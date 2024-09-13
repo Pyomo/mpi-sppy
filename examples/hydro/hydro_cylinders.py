@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # general example driver for the hydro example with cylinders
 # Modfied April 2022 by DLW to illustrate config.py
 

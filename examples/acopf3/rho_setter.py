@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # January 2020; rho_setter for ccopf from n-1 stuff of a few years ago 
 
 def generator_p_cost(md, g, output_level):

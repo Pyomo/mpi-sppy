@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # Author:  D.L. Woodruff 2023
 """
 mpiexec -np 2 python -m mpi4py test_with_cylinders.py

@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 
 # NOTES: The design of the generic termination callback below is strictly MIP-centric.
 #        Specifically, we assume the following 3 attributes can be extracted, and

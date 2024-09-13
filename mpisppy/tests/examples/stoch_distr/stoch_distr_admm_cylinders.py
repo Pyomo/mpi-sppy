@@ -1,7 +1,5 @@
 # This file is used in the tests and should not be modified!
 
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # general example driver for stoch_distr with cylinders
 
 # This file is used for the example! It is slightly

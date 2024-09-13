@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 from pyomo.solvers.plugins.solvers.cplex_persistent import CPLEXPersistent
 from pyomo.solvers.plugins.solvers.gurobi_persistent import GurobiPersistent
 from pyomo.solvers.plugins.solvers.xpress_persistent import XpressPersistent

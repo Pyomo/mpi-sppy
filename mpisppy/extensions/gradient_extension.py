@@ -1,5 +1,3 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 
 import os
 import time

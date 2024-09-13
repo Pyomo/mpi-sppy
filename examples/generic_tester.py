@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 # This might make a mess in terms of output files....
 # (re)baseline by uncommenting rebaseline_xhat lines
 # NOTE: the asynchronous nature of mip-sppy makes it hard to hit baselines.

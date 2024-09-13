@@ -1,4 +1,3 @@
-# This software is distributed under the 3-clause BSD License.
 # Utilities to support formation and use of "proper" bundles
 
 # NOTE: if/because we require the bundles to consume entire

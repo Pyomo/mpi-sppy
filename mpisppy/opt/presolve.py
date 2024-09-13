@@ -1,5 +1,3 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
 
 # This module defines a presolver, which is used like an extension to an
 # SPBase object. However, it may be useful for this presolver extension
