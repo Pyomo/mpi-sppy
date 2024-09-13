@@ -282,17 +282,40 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
         sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
-    
 
+def _model_fname():
+    def _bad_news():
+        raise RuntimeError("Unable to parse module name from first argument"
+                           " (for module foo.py, we want, e.g.\n"
+                           "--module-name foo\n"
+                           "or\n"
+                           "--module-name=foo")
+    def _len_check(l):
+        if len(sys.argv) <= l:
+            _bad_news()
+        else:
+            return True
+
+    _len_check(1)
+    assert sys.argv[1][:13] == "--module-name", f"The first command argument must start with'--module-name' but you gave {sys.argv[1]}"
+    if sys.argv[1] == "--module-name":
+        _len_check(2)
+        return sys.argv[2]
+    else:
+        parts = sys.argv[1].split("=")
+        if len(parts) != 2:
+            _bad_news()
+        return parts[1]
+        
+    
+        
 ##########################################################################
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         print("The python model file module name (no .py) must be given.")
         print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
         quit()
-
-    assert sys.argv[1] == "--module-name", f"The first command argument must be '--module-name' but you gave {sys.argv[1]}"
-    model_fname = sys.argv[2]
+    model_fname = _model_fname()
 
     # TBD: when agnostic is merged, use the function and delete the code lines
     # module = sputils.module_name_to_module(model_fname)
