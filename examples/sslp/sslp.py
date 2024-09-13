@@ -35,6 +35,8 @@ def scenario_creator(scenario_name, data_dir=None):
             "ROOT", 1.0, 1, model.FirstStageCost, [model.FacilityOpen], model
         )
     ]
+    model._mpisppy_probability = "uniform"
+    
     return model
 
 
@@ -42,8 +44,76 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 
+########## helper functions ########
+
+#=========
+def scenario_names_creator(num_scens,start=None):
+    # one-based scenarios
+    # if start!=None, the list starts with the 'start' labeled scenario
+    if (start is None) :
+        start=1
+    return [f"Scenario{i}" for i in range(start,start+num_scens)]
+
+
+#=========
+def inparser_adder(cfg):
+    # add options unique to sizes
+    # we don't want num_scens from the command line
+    cfg.mip_options()
+    cfg.add_to_config("instance_name",
+                        description="sslp instance name (e.g., sslp_15_45_10)",
+                        domain=str,
+                        default=None)                
+    cfg.add_to_config("sslp_data_path",
+                        description="path to sslp data (e.g., ./data)",
+                        domain=str,
+                        default=None)                
+
+
+#=========
+def kw_creator(cfg):
+    # linked to the scenario_creator and inparser_adder
+    # side-effect is dealing with num_scens
+    inst = cfg.instance_name
+    ns = int(inst.split("_")[-1])
+    if hasattr(cfg, "num_scens"):
+        if cfg.num_scens != ns:
+            raise RuntimeError(f"Argument num-scens={cfg.num_scens} does not match the number "
+                               "implied by instance name={ns} "
+                               "\n(--num-scens is not needed for sslp)")
+    else:
+        cfg.add_and_assign("num_scens","number of scenarios", int, None, ns)
+    data_dir = os.path.join(cfg.sslp_data_path, inst, "scenariodata")
+    kwargs = {"data_dir": data_dir}
+    return kwargs
+
+
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+        (this function supports zhat and confidence interval code)
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Since this is a two-stage problem, we don't have to do much.
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
+
+######## end helper functions #########
+
+# special helper function
 def id_fix_list_fct(s):
-    """ specify tuples used by the fixer.
+    """ specify tuples used by the classic (non-RC-based) fixer.
 
         Args:
             s (ConcreteModel): the sizes instance.

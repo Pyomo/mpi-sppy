@@ -3,6 +3,17 @@
 
 SOLVER="cplex"
 
+# sslp EF
+echo "^^^ sslp ef ^^^"
+cd sslp
+python ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --EF --instance-name sslp_15_45_10 --EF-solver-name ${SOLVER}
+cd ..
+
+echo "^^^ sslp bounds ^^^"
+cd sslp
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+cd ..
+
 # netdes EF
 echo "^^^ netdes ef ^^^"
 cd netdes
