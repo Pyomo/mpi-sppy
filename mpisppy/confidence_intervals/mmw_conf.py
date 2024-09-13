@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # To test: (from confidence_intervals directory; assumes the npy file is in the farmer directory) 
 # python mmw_conf.py mpisppy/tests/examples/farmer.py --xhatpath ../../examples/farmer/farmer_root_nonants.npy --confidence-level 0.95 --EF-solver-name gurobi --MMW-num-batches 3 --MMW-batch-size 5
