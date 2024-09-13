@@ -197,8 +197,9 @@ class Find_Grad():
                      for (vname, rho) in rho_data.items():
                          writer.writerow([vname, rho_data[vname]])
 
+             # barrier added to avoid race-conditions involving other ranks reading.
              comm = self.ph_object.comms['ROOT']                    
-             comm.Barrier()                         
+             comm.Barrier()
 
 ###################################################################################
 

@@ -190,7 +190,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         self.cfg.grad_cost_file_in = self.cfg.grad_cost_file_out
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         rho = self.rho_object.compute_rho(indep_denom=True)
-        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689654)
+        self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 6.982758620689655)
         rho = self.rho_object.compute_rho()
         self.assertAlmostEqual(rho['DevotedAcreage[CORN0]'], 8.163805471726114)
 
@@ -270,7 +270,7 @@ class Test_grad_extension_farmer(unittest.TestCase):
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
         self.cfg.max_iterations = 4
         self.ph_object = self._run_ph_farmer()
-        self.assertAlmostEqual(self.ph_object.conv, 2.12869680, places=1)
+        self.assertAlmostEqual(self.ph_object.conv, 2.128968965420187, places=1)
 
 
 if __name__ == '__main__':
