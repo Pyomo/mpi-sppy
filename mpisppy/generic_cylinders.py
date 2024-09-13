@@ -208,8 +208,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    all_nodenames=all_nodenames)
 
-    # reduced cost fixer
-    # TBD Sept 2024: what does this do?
+    # reduced cost fixer options setup
     if cfg.reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
