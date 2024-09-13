@@ -60,6 +60,7 @@ def _parse_args(m):
     cfg.tracking_args()
     cfg.gradient_args()
     cfg.dynamic_gradient_args()
+    cfg.reduced_costs_args()
 
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     return cfg
@@ -138,11 +139,12 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         }
         
     if cfg.fixer:  # cfg_vanilla takes care of the fixer_tol?
+        assert hasattr(module, "id_fix_list_fct"), "id_fix_list_fct required for --fixer"
         ext_classes.append(Fixer)
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
             "verbose": cfg.verbose,
             "boundtol": cfg.fixer_tol,
-            "id_fix_list_fct": uc.id_fix_list_fct,
+            "id_fix_list_fct": module.id_fix_list_fct,
         }
     if cfg.grad_rho_setter:
         ext_classes.append(Gradient_extension)
@@ -205,10 +207,13 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    all_nodenames=all_nodenames)
- 
+
+    # reduced cost fixer
+    if cfg.reduced_costs:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+                
    # special code for multi-stage (e.g., hydro)
     if cfg.get("stage2EFsolvern") is not None:
-        print("debug foo")
         assert cfg.get("xhatshuffle"), "xhatshuffle is required for stage2EFsolvern"
         xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
         xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
@@ -226,6 +231,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cfg.xhatxbar:
         list_of_spoke_dict.append(xhatxbar_spoke)
+    if cfg.reduced_costs:
+        list_of_spoke_dict.append(reduced_costs_spoke)
+        
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
