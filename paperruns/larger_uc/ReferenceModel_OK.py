@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # modified April 2020 by DLW because Pyomo wants domains for Params: within=Any
 # OK from ME form latorre from Carrion and Arroyo v2 (so no multi-stage) #
 ########################################################################################################
