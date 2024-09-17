@@ -1,11 +1,16 @@
 # This software is distributed under the 3-clause BSD License.
 # Started by dlw Aug 2023
 
-import farmer_gams_agnostic
+import farmer_gams_gen_agnostic2 as farmer_gams_agnostic
+#import farmer_gams_agnostic
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.agnostic.agnostic as agnostic
+
+from mpisppy import MPI
+fullcomm = MPI.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING
@@ -28,9 +33,25 @@ def _farmer_parse_args():
 
 
 if __name__ == "__main__":
+
     print("begin ad hoc main for agnostic.py")
 
     cfg = _farmer_parse_args()
+    ### Creating the new gms file with ph included in it
+    original_file = "GAMS/farmer_average.gms"
+    nonants_support_set_name = "crop"
+    nonant_variables_name = "x"
+    nonants_name_pairs = [(nonants_support_set_name, nonant_variables_name)]
+
+
+    if global_rank == 0:
+        # Code for rank 0 to execute the task
+        print("Global rank 0 is executing the task.")
+        farmer_gams_agnostic.create_ph_model(original_file, nonants_name_pairs)
+        print("Global rank 0 has completed the task.")
+
+    # Broadcast a signal from rank 0 to all other ranks indicating the task is complete
+    fullcomm.Barrier()
     Ag = agnostic.Agnostic(farmer_gams_agnostic, cfg)
 
     scenario_creator = Ag.scenario_creator

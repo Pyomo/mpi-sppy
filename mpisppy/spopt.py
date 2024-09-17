@@ -404,8 +404,6 @@ class SPOpt(SPBase):
 
         self.mpicomm.Allreduce(local_Ebound, global_Ebound, op=MPI.SUM)
 
-        print(f"{global_Ebound[0]= }")
-        
         if extra_sum_terms is None:
             return global_Ebound[0]
         else:
@@ -898,8 +896,10 @@ class SPOpt(SPBase):
                                                      root=0)
             if self.cylinder_rank == 0:
                 asit = [sit for l_sit in all_set_instance_times for sit in l_sit]
-                print("Set instance times:")
-                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
+                if len(asit) == 0:
+                    print("Set instance times not available.")
+                else:
+                    print("Set instance times: \tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(asit), np.mean(asit), np.max(asit)))
 
 

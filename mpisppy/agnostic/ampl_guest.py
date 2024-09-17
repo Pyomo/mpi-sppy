@@ -1,4 +1,4 @@
-# This code sits between the guest model file and mpi-sppy
+# This code sits between the guest model file wrapper and mpi-sppy
 # AMPL is the guest language. Started by DLW June 2024
 """
 The guest model file (not this file) provides a scenario creator in Python
@@ -34,6 +34,7 @@ See farmer_ample_agnostic.py for an example where indexes are retained.
 
 """
 
+import re
 from amplpy import AMPL
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
@@ -65,22 +66,33 @@ class AMPL_guest():
             scenario_name (str):
                 Name of the scenario to construct.
         """
+        def _has_ints(s):
+            for _,v in s.getVariables():
+                if "binary" in str(v) or "integer" in str(v):
+                    return True
+            return False
+        
         s, prob, nonant_vardata_list, obj_fct = self.model_module.scenario_creator(scenario_name,
                                                                      self.ampl_file_name,
                                                                      **kwargs)
-        ### TBD: assert that this is minimization?
+        if len(nonant_vardata_list) == 0:
+            raise RuntimeError(f"model file {self.model_file_name} has an empty "
+                               f" nonant_vardata_list for {scenario_name =}")
         # In general, be sure to process variables in the same order has the guest does (so indexes match)
         nonant_vars = nonant_vardata_list  # typing aid
+        def _vname(v):
+            return v[1].name().split('[')[0]
         gd = {
             "scenario": s,
             "nonants": {("ROOT",i): v[1] for i,v in enumerate(nonant_vars)},
             "nonant_fixedness": {("ROOT",i): v[1].astatus()=="fixed" for i,v in enumerate(nonant_vars)},
             "nonant_start": {("ROOT",i): v[1].value() for i,v in enumerate(nonant_vars)},
-            "nonant_names": {("ROOT",i): ("area", v[0]) for i, v in enumerate(nonant_vars)},
+            "nonant_names": {("ROOT",i): (_vname(v), v[0]) for i, v in enumerate(nonant_vars)},
             "probability": prob,
             "obj_fct": obj_fct,
             "sense": pyo.minimize,
-            "BFs": None
+            "BFs": None,
+            "has_ints": _has_ints(s),
         }
         ##?xxxxx ? create nonant vars and put them on the ampl model,
         ##?xxxxx create constraints to make them equal to the original nonants
@@ -177,6 +189,7 @@ class AMPL_guest():
         gs.eval("param xbars{nonant_indices};")
         obj_fct = gd["obj_fct"]
         objstr = str(obj_fct)
+        assert objstr.split (' ')[0] == "minimize", "We currently assume minimization"
 
         # Dual term (weights W) (This is where indexes are an issue)
         phobjstr = ""
@@ -200,6 +213,7 @@ class AMPL_guest():
         objstr = objstr.replace(f"minimize {objname}", "minimize phobj:")
         obj_fct.drop()
         gs.eval(objstr)
+        gs.eval("delete minus_profit;")    
         currentobj = gs.get_current_objective()
         # see _copy_Ws_...  see also the gams version
         WParamDatas = list(gs.get_parameter("W").instances())
@@ -267,12 +281,14 @@ class AMPL_guest():
 
         # For AMPL mips, we need to use the gap option to compute bounds
         # https://amplmp.readthedocs.io/rst/features-guide.html
-        objval = gs.get_objective("minus_profit").value()  # use this?
-        ###phobjval = gs.get_objective("phobj").value()   # use this???
+        # As of Aug 2024, this is not tested...
+        mipgap = gs.getValue('_mipgap') if gd["has_ints"] else 0
+        objobj = gs.get_current_objective()  # different for xhatters
+        objval = objobj.value()
         if gd["sense"] == pyo.minimize:
-            s._mpisppy_data.outer_bound = objval
+            s._mpisppy_data.outer_bound = objval - mipgap
         else:
-            s._mpisppy_data.outer_bound = objval
+            s._mpisppy_data.inner_bound = objval + mpigap
 
         # copy the nonant x values from gs to s so mpisppy can use them in s
         # in general, we need more checks (see the pyomo agnostic guest example)

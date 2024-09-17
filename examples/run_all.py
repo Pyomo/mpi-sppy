@@ -337,7 +337,6 @@ if egret_avail():
 
 #  sizes kills the github tests using xpress
 #  so we use linearized proximal terms
-do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 do_one("sizes",
        "special_cylinders.py",
@@ -399,6 +398,8 @@ if not nouc and egret_avail():
            "--lagrangian-iter0-mipgap=1e-7 --cross-scenario-cuts "
            "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
            "--solver-name={}".format(solver_name))
+    # this one takes a long time, so I moved it into the uc section
+    do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 if len(badguys) > 0:
     print("\nBad Guys:")

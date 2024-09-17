@@ -341,7 +341,7 @@ class SPBase:
         # check the node names given by the scenarios
         for nodename in nonleafnodes:
             if nodename not in self.all_nodenames:
-                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames}")
+                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames} for {self.global_rank=}")
 
         # loop over all nodes and make the comms (split requires all ranks)
         # make sure we loop in the same order, so every rank iterate over
@@ -617,12 +617,15 @@ class SPBase:
             for this_var in variable_names:
                 print("{0: <{width}} | ".format(this_var, width=max_variable_name_len), end='')
                 for this_scenario in scenario_names:
-                    this_var_value = var_values[this_scenario, this_var]
-                    if (this_var_value == None) and (not print_zero_prob_values):
+                    if (this_scenario, this_var) not in var_values:
                         print("{0: ^{width}s}".format("-", width=value_field_len), end='')
                     else:
-                        print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
-                    print(" ", end='')
+                        this_var_value = var_values[this_scenario, this_var]
+                        if (this_var_value == None) and (not print_zero_prob_values):
+                            print("{0: ^{width}s}".format("-", width=value_field_len), end='')
+                        else:
+                            print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
+                        print(" ", end='')
                 print("")
 
     def write_first_stage_solution(self, file_name,

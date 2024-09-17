@@ -9,7 +9,7 @@ a there is a `paper <https://link.springer.com/article/10.1007/s12532-023-00247-
 Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. image:: https://github.com/Pyomo/mpi-sppy/workflows/pyomo%20tracker/badge.svg
+.. image:: https://github.com/Pyomo/mpi-sppy/workflows/pyotracker/badge.svg
    :target: https://github.com/Pyomo/mpi-sppy/actions/workflows/pyotracker.yml
 
 

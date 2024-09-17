@@ -1,3 +1,5 @@
+.. _Pickled-Bundles:
+
 Pickled Bundles
 ===============
 
@@ -6,7 +8,10 @@ the bleeding edge.  The idea is that bundles are formed and then saved
 as dill pickle files for rapid retrieval. The file
 ``aircond_cylinders.py`` in the aircond example directory provides an
 example.  The latter part of the ``allways.bash`` script demonstrates
-how to run it.
+how to run it. (The directory is mpi-sppy.examples.aircond assuming you installed
+into the directory mpi-sppy, but the important file aircondB.py is
+mpisppy.tests.examples.aircondB.py, which contains the scenario creator
+function.)
 
 In the future, we plan to support this concept with higher levels of abstraction.
 

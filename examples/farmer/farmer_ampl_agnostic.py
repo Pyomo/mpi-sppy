@@ -13,6 +13,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import farmer
 import numpy as np
+import time
 
 # If you need random numbers, use this random stream:
 farmerstream = np.random.RandomState()
@@ -198,6 +199,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     profitobj.drop()
     print(f"{objstr =}")
     gs.eval(objstr)
+    gs.eval("delete minus_profit;")
     currentobj = gs.get_current_objective()
     # see _copy_Ws_...  see also the gams version
     WParamDatas = list(gs.get_parameter("W").instances())
@@ -222,18 +224,27 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
     # To acommdate the solve_one call from xhat_eval.py, we need to attach the obj fct value to s
 
+    # time.sleep(np.random.uniform()/10)
+    
     _copy_Ws_xbars_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
     #### start debugging
-    if global_rank == 0:
-        WParamDatas = list(gs.get_parameter("W").instances())
-        print(f" in _solve_one {WParamDatas =} {global_rank =}")
-        xbarsParamDatas = list(gs.get_parameter("xbars").instances())
-        print(f" in _solve_one {xbarsParamDatas =} {global_rank =}")
-        rhoParamDatas = list(gs.get_parameter("rho").instances())
-        print(f" in _solve_one {rhoParamDatas =} {global_rank =}")
+    if True:  # global_rank == 0:
+        try:
+            WParamDatas = list(gs.get_parameter("W").instances())
+            print(f" ^^^ in _solve_one {WParamDatas =} {global_rank =}")
+        except:
+            print(f"    ^^^^ no W for xhat {global_rank=}")
+        #prox_on = gs.get_parameter("prox_on").value()
+        #print(f" ^^^ in _solve_one {prox_on =} {global_rank =}")
+        #W_on = gs.get_parameter("W_on").value()
+        #print(f" ^^^ in _solve_one {W_on =} {global_rank =}")
+        #xbarsParamDatas = list(gs.get_parameter("xbars").instances())
+        #print(f" in _solve_one {xbarsParamDatas =} {global_rank =}")
+        #rhoParamDatas = list(gs.get_parameter("rho").instances())
+        #print(f" in _solve_one {rhoParamDatas =} {global_rank =}")
     #### stop debugging
     
     solver_name = s._solver_plugin.name
@@ -249,6 +260,12 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         results = None
         solver_exception = e
 
+    # debug
+    #fname = f"{s.name}_{global_rank}"
+    #print(f"debug export to {fname}")
+    #gs.export_model(f"{fname}.mod")
+    #gs.export_data(f"{fname}.dat")
+    
     if gs.solve_result != "solved":
         s._mpisppy_data.scenario_feasible = False
         if gripe:
@@ -262,12 +279,12 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     s._mpisppy_data.scenario_feasible = True
     # For AMPL mips, we need to use the gap option to compute bounds
     # https://amplmp.readthedocs.io/rst/features-guide.html
-    objval = gs.get_objective("minus_profit").value()  # use this?
-    ###phobjval = gs.get_objective("phobj").value()   # use this???
+    objobj = gs.get_current_objective()  # different for xhatters
+    objval = objobj.value()
     if gd["sense"] == pyo.minimize:
         s._mpisppy_data.outer_bound = objval
     else:
-        s._mpisppy_data.outer_bound = objval
+        s._mpisppy_data.inner_bound = objval
 
     # copy the nonant x values from gs to s so mpisppy can use them in s
     # in general, we need more checks (see the pyomo agnostic guest example)
@@ -289,13 +306,13 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
 
         s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
-    # the next line ignore bundling
+    # the next line ignores bundling
     s._mpisppy_data._obj_from_agnostic = objval
 
     # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
 
 
-# local helper
+# local helper called right before the solve
 def _copy_Ws_xbars_rho_from_host(s):
     # print(f"   debug copy_Ws {s.name =}, {global_rank =}")
     gd = s._agnostic_dict
@@ -315,6 +332,12 @@ def _copy_Ws_xbars_rho_from_host(s):
         xbarsdict = {gd["nonant_names"][ndn_i][1]:\
                    pyo.value(v) for ndn_i, v in s._mpisppy_model.xbars.items()}
         gs.get_parameter("xbars").set_values(xbarsdict)
+        # debug
+        fname = f"{s.name}_{global_rank}"
+        print(f"debug export to {fname}")
+        gs.export_model(f"{fname}.mod")
+        gs.export_data(f"{fname}.dat")
+        
     else:
         pass  # presumably an xhatter; we should check, I suppose
         
