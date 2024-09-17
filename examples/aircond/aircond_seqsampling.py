@@ -9,14 +9,8 @@
 # Use the aircond model to illustrate how to use sequential sampling.
 #
 
-import sys
 import numpy as np
-import argparse
 import mpisppy.tests.examples.aircond as aircond
-import pyomo.environ as pyo
-import pyomo.common.config as pyofig
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.confidence_config as conf_config
 from mpisppy.utils import config
@@ -124,7 +118,7 @@ if __name__ == '__main__':
     cfg.quick_assign("EF_mstage", bool, True)
 
     results = main(cfg)
-    print(f"Final gap confidence interval results:", results)
+    print("Final gap confidence interval results:", results)
 
     if cfg.xhat1_file is not None:
         print(f"Writing xhat1 to {cfg.xhat1_file}.npy")

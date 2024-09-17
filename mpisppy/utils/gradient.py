@@ -9,36 +9,19 @@
 # Code to compute gradient cost and rhos from the gradient. It also provides a corresponding rho setter.
 # To test: /examples/farmer/farmer_rho_demo.py
 
-import sys
-import os
 import inspect
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
-import logging
-import numpy as np
-import math
 import importlib
 import csv
-import inspect
-import typing
 import copy
-import time
 
-import mpisppy.log
-from mpisppy import global_toc
-from mpisppy import MPI
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.confidence_intervals.ciutils as ciutils
 from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
-import mpisppy.utils.wxbarutils as wxbarutils
-import mpisppy.utils.rho_utils as rho_utils
 import mpisppy.utils.find_rho as find_rho
-import mpisppy.phbase as phbase
 
 
 # Could also pass, e.g., sys.stdout instead of a filename

@@ -6,12 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import os
-import time
 import logging
 import random
 import mpisppy.log
-import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 
 from mpisppy.utils.xhat_eval import Xhat_Eval

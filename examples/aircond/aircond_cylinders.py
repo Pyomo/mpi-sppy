@@ -10,9 +10,6 @@
 # Use bundle_pickler.py to create bundle pickles
 # NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
 
-import sys
-import os
-import copy
 import numpy as np
 import itertools
 from mpisppy import global_toc
@@ -243,8 +240,8 @@ def main():
         ama = amalgamator.from_module(refmodule,
                                       cfg, use_command_line=False)
         ama.run()
-        print(f"EF inner bound=", ama.best_inner_bound)
-        print(f"EF outer bound=", ama.best_outer_bound)
+        print("EF inner bound=", ama.best_inner_bound)
+        print("EF outer bound=", ama.best_outer_bound)
         quit()
 
     # if we are still here, we are running cylinders

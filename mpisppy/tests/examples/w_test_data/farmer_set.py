@@ -9,7 +9,6 @@
 # general example driver for farmer with cylinders
 
 import farmer
-import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner

@@ -9,9 +9,7 @@
 # This is an extension to be used for testing.
 
 from collections import defaultdict
-import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.xhatbase
-import mpisppy.phbase as phbase
 
 class TestHelperExtension(mpisppy.extensions.extension.Extension):
     """

@@ -20,7 +20,6 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
-from mpisppy import global_toc
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
 

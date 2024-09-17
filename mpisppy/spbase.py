@@ -12,9 +12,7 @@ import os
 import time
 import logging
 import weakref
-import math
 import numpy as np
-import re
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
@@ -517,7 +515,7 @@ class SPBase:
                 scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
             if hasattr(scenario, "PySP_prob"):
-                raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
+                raise RuntimeError("PySP_prob is deprecated; use _mpisppy_probability")
             pspec =  scenario._mpisppy_probability if hasattr(scenario, "_mpisppy_probability") else None
             if pspec is None or pspec == "uniform":
                 prob = 1./len(self.all_scenario_names)

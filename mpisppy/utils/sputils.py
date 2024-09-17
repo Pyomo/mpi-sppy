@@ -13,7 +13,6 @@ import pyomo.environ as pyo
 import sys
 import os
 import re
-import time
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
@@ -23,7 +22,7 @@ global_rank = MPI.COMM_WORLD.Get_rank()
 from pyomo.core.expr.numeric_expr import LinearExpression
 from pyomo.opt import SolutionStatus, TerminationCondition
 
-from mpisppy import tt_timer, global_toc
+from mpisppy import tt_timer
 
 def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
@@ -707,7 +706,7 @@ class _TreeNode():
         if len(desc_leaf_dict)==1 and list(desc_leaf_dict.keys()) == ['ROOT']: 
             #2-stage problem, we don't create leaf nodes
             self.kids = []
-        elif not name+"_0" in desc_leaf_dict:
+        elif name+"_0" not in desc_leaf_dict:
             self.is_leaf = True
             self.kids = []
         else:
@@ -720,7 +719,7 @@ class _TreeNode():
             child_list = [x for x in desc_leaf_dict if child_regex.match(x) ]
             for i in range(len(desc_leaf_dict)):
                 childname = name+f"_{i}"
-                if not childname in desc_leaf_dict:
+                if childname not in desc_leaf_dict:
                     if len(child_list) != i:
                         raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
                                            f"The node {name} has {len(child_list)} children, but {childname} is not one of them.")

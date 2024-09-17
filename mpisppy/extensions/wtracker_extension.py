@@ -7,11 +7,9 @@
 # full copyright and license information.
 ###############################################################################
 
-import pyomo.environ as pyo
 
 import mpisppy.extensions.extension
 import mpisppy.utils.wtracker as wtracker
-import mpisppy.utils.sputils as sputils
 
 
 class Wtracker_extension(mpisppy.extensions.extension.Extension):

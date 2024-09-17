@@ -10,7 +10,6 @@ from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
-from mpisppy import global_toc
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 
 import pyomo.environ as pyo

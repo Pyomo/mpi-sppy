@@ -10,7 +10,6 @@
 '''
 from netdes import scenario_creator, scenario_denouement
 from mpisppy.opt.ph import PH
-from netdes_extension import NetworkDesignTracker
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.xhatclosest import XhatClosest
 import os

@@ -9,7 +9,6 @@
 # script to estimate zhat from a given xhat for a given model
 
 import sys
-import argparse
 import importlib
 import numpy as np
 import scipy.stats

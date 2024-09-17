@@ -13,16 +13,11 @@
 # exccept Last Inventory cost, which should be negative.
 import os
 import numpy as np
-import time
 import pyomo.environ as pyo
-import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.pickle_bundle as pickle_bundle
 import mpisppy.tests.examples.aircond as base_aircond
 from mpisppy.utils.sputils import attach_root_node
-from mpisppy.utils import config
-from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()

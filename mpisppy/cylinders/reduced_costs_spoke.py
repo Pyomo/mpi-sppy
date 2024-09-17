@@ -6,9 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import math
 import pyomo.environ as pyo
-from pyomo.common.collections import ComponentSet
 import numpy as np
 from mpisppy.cylinders.spcommunicator import communicator_array
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound

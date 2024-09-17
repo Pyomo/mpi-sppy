@@ -13,15 +13,11 @@ import math
 import collections
 import time
 import logging
-import datetime as dt
-import mpisppy
 import mpisppy.MPI as mpi
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolverStatus
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.wxbarutils as wxbarutils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -847,7 +843,7 @@ class APH(ph_base.PHBase):
         if pwnorm > 0 and pznorm > 0:
             print(f"    scaled U term={punorm / pwnorm}; scaled V term={pvnorm / pznorm}")
         else:
-            print(f"    ! convergence metric cannot be computed due to zero-divide")
+            print("    ! convergence metric cannot be computed due to zero-divide")
 
 
     #========

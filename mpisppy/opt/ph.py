@@ -141,7 +141,6 @@ if __name__ == "__main__":
     ph.options["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
     conv, obj, bnd = ph.ph_main()
 
-    import mpisppy.extensions.avgminmaxer as minmax_extension
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
             extensions=MinMaxAvg,

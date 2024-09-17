@@ -13,7 +13,6 @@ import os
 import sys
 import socket
 import datetime as dt
-import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils

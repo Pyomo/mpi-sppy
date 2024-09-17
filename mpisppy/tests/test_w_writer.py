@@ -14,24 +14,14 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import os
-import glob
 import unittest
-import pandas as pd
 import csv
-import pyomo.environ as pyo
-import mpisppy.opt.ph
-import mpisppy.phbase
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.rho_utils as rho_utils
-import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver,round_pos_sig
-import mpisppy.utils.gradient as grad
-import mpisppy.utils.find_rho as find_rho
+from mpisppy.tests.utils import get_solver
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.utils.wxbarreader import WXBarReader
 

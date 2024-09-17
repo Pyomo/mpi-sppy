@@ -12,15 +12,12 @@
 import datetime
 import logging
 import sys
-import os
 import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
-from mpisppy.fwph.fwph import FWPH
 # Hub and spoke SPCommunicator classes
-from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub

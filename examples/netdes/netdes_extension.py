@@ -6,7 +6,6 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import numpy as np
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import Extension

@@ -48,7 +48,6 @@ import numpy as np
 import pyomo.environ as pyo
 import time
 import re # For manipulating scenario names
-from mpisppy import global_toc
 
 from mpisppy import MPI
 from pyomo.repn.standard_repn import generate_standard_repn

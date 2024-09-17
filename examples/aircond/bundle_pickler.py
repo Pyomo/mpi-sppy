@@ -11,11 +11,7 @@
 # see try_pickles.bash
 # parallel version
 
-import sys
-import os
-import copy
 import numpy as np
-import itertools
 import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy.utils import config
 from mpisppy.utils import pickle_bundle

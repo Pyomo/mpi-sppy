@@ -7,9 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 import numpy as np
-import pandas as pd
 
-from pyomo.common.collections import ComponentSet, ComponentMap
 
 from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
@@ -46,7 +44,7 @@ class ReducedCostsFixer(Extension):
 
         if not (self._use_rc_bt or self._use_rc_fixer) and \
             self.opt.cylinder_rank == 0:
-            print(f"Warning: ReducedCostsFixer will be idle. Enable use_rc_bt or use_rc_fixer in options.")
+            print("Warning: ReducedCostsFixer will be idle. Enable use_rc_bt or use_rc_fixer in options.")
 
         #self._options = rc_options
 
@@ -99,7 +97,7 @@ class ReducedCostsFixer(Extension):
         is_minimizing = self.opt.is_minimizing
         if np.isinf(inner_bound) or np.isinf(outer_bound):
             if self.opt.cylinder_rank == 0 and self.verbose:
-                print(f"Bounds tightened by reduced cost: 0 (inner or outer bound not available)")
+                print("Bounds tightened by reduced cost: 0 (inner or outer bound not available)")
             return
 
         for sub in self.opt.local_subproblems.values():

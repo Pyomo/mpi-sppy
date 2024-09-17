@@ -81,9 +81,9 @@ except ImportError:
         recv_data, recv_size, recv_type = _process_BufSpec(recvbuf)
     
         if send_size != recv_size:
-            raise RuntimeError(f"Send and receive buffers should be of the same size")
+            raise RuntimeError("Send and receive buffers should be of the same size")
         if send_type != recv_type:
-            raise RuntimeError(f"Send and receive buffers should be of the same type")
+            raise RuntimeError("Send and receive buffers should be of the same type")
     
         recv_data[:] = send_data
 

@@ -20,7 +20,6 @@ import numpy as np
 import collections
 import mpisppy.MPI as mpi
 import time
-import cProfile
 import threading
 import logging
 

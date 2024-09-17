@@ -72,5 +72,5 @@ def solver_specification(cfg, prefix="", name_required=True):
         if name_required:
             # Leaving in underscores even though it might confuse command line users
             print(f"\nsolver name arguments checked in Config object = {idx_list}\n")
-            raise RuntimeError(f"The Config object did not specify a solver")
+            raise RuntimeError("The Config object did not specify a solver")
     return sroot, solver_name, solver_options

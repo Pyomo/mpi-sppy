@@ -14,11 +14,8 @@
 # the command line parameters for both (so either way,
 # many command line parameters will be ignored). 
 
-import sys
 import numpy as np
-import argparse
 import farmer
-import pyomo.environ as pyo
 from mpisppy.utils import config
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
@@ -193,7 +190,7 @@ if __name__ == '__main__':
     cfg = _parse_args()
     
     results = main(cfg)
-    print(f"Final gap confidence interval results:", results)
+    print("Final gap confidence interval results:", results)
 
     if cfg.xhat1_file is not None:
         print(f"Writing xhat1 to {cfg.xhat1_file}.npy")

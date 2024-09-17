@@ -17,7 +17,6 @@ from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
-import mpisppy.cylinders as cylinders
 
 write_solution = True
 

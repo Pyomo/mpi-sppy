@@ -12,14 +12,11 @@
 # - use rho rescale factors written in a json file
 # - use gradient-based rho (to be tested)
 
-import time
 import json
-import csv
 import mpisppy.cylinders.spoke
 import mpisppy.utils.find_rho as find_rho
 import mpisppy.utils.gradient as grad
 from mpisppy.utils.wtracker import WTracker
-from mpisppy import global_toc
 
 class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
     """Updates its own W and x using its own rho.

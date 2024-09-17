@@ -15,7 +15,6 @@ import mpisppy.MPI as MPI
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spopt
 
 from mpisppy.utils.prox_approx import ProxApproxManager

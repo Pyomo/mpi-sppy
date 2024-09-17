@@ -10,19 +10,15 @@
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
 
 import mpisppy.MPI as mpi
-import argparse
 import numpy as np
 import scipy.stats
 import importlib
-import os
 from mpisppy import global_toc
     
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 import mpisppy.utils.amalgamator as ama
-import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.utils.sputils as sputils
 import mpisppy.confidence_intervals.ciutils as ciutils
 
 def remove_None(d):

@@ -368,12 +368,12 @@ def consensus_vars_creator(num_scens):
         vstr = f"y[{dummy_node}]" #variable name as string, y is the slack
 
         #adds dummy_node in the source region
-        if not region_source in consensus_vars: #initiates consensus_vars[region_source]
+        if region_source not in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
         consensus_vars[region_source].append(vstr)
 
         #adds dummy_node in the target region
-        if not region_target in consensus_vars: #initiates consensus_vars[region_target]
+        if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append(vstr)
     return consensus_vars
@@ -401,7 +401,7 @@ def kw_creator(cfg):
     """
     kwargs = {"num_scens" : cfg.get('num_scens', None),
               }
-    if not kwargs["num_scens"] in [2, 3, 4]:
+    if kwargs["num_scens"] not in [2, 3, 4]:
         RuntimeError (f"unexpected number of regions {cfg.num_scens}, whould be in  [2, 3, 4]")
     return kwargs
 

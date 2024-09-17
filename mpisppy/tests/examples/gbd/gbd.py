@@ -288,8 +288,8 @@ if __name__ == "__main__":
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
+    print("inner bound=", ama.best_inner_bound)
+    print("outer bound=", ama.best_outer_bound)
 
     xhat = sputils.nonant_cache_from_ef(ama.ef)
     print("xhat=",xhat['ROOT'])

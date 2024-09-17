@@ -6,9 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import pyomo.environ as pe
 import farmer
-import mpisppy.utils.sputils as sputils
 from mpisppy.opt import ef, sc
 import logging
 from mpisppy import MPI

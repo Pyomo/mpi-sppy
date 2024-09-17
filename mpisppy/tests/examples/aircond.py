@@ -17,7 +17,6 @@ import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import argparse
-from mpisppy import global_toc
 from mpisppy.utils import config
 import pyomo.common.config as pyofig
 
@@ -358,7 +357,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
         if stage == 1:
             past_demands = [starting_d]
         else:
-            raise RuntimeError(f"sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
+            raise RuntimeError("sample_tree_scen_creator for aircond needs a 'given_scenario' argument if the starting stage is greater than 1")
     else:
         past_demands = [given_scenario.stage_models[t].Demand for t in given_scenario.T if t<=stage]
 
@@ -594,8 +593,8 @@ if __name__ == "__main__":
     print('start ups costs: ', start_ups)
     print('branching factors: ', bfs)
     print('run time: ', time.time()-t0)
-    print(f"inner bound =", ama.best_inner_bound)
-    print(f"outer bound =", ama.best_outer_bound)
+    print("inner bound =", ama.best_inner_bound)
+    print("outer bound =", ama.best_outer_bound)
     
     xhat = sputils.nonant_cache_from_ef(ama.ef)
     print('xhat_one = ', xhat['ROOT'])

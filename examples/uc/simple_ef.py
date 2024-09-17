@@ -11,7 +11,6 @@ import uc_funcs as uc
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
-from mpisppy.opt.ef import ExtensiveForm
 
 """ UC """
 assert len(sys.argv) == 2, "Supply the solver name as the first argument"

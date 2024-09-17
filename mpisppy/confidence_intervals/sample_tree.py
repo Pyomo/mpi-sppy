@@ -15,7 +15,6 @@ import importlib
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.ciutils as ciutils
-from mpisppy import global_toc
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()

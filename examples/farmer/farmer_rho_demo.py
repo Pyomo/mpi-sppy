@@ -13,9 +13,7 @@
 # Edited by DLW Oct 2023
 # Note: norm_rho_updater is the Gabe thing
 
-import time
 import farmer
-import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -28,9 +26,6 @@ from mpisppy.extensions.extension import MultiExtension
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-import mpisppy.utils.gradient as grad
-import mpisppy.utils.find_rho as find_rho
-from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.extensions.gradient_extension import Gradient_extension
 
 write_solution = False

@@ -15,8 +15,6 @@ import os
 import tempfile
 import numpy as np
 import unittest
-import subprocess
-import importlib
 
 import pyomo.environ as pyo
 import mpisppy.MPI as mpi
@@ -25,7 +23,6 @@ from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
-import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
 import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling

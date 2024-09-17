@@ -11,7 +11,6 @@
 import egret
 import egret.models.acopf as eac
 import egret.models.ac_relaxations as eac_relax
-from egret.data.model_data import ModelData
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
@@ -22,9 +21,7 @@ import os
 import sys
 import copy
 import scipy
-import socket
 import numpy as np
-import datetime as dt
 import mpisppy.MPI as mpi
 
 import pyomo.environ as pyo

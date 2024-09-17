@@ -327,7 +327,8 @@ if __name__ == "__main__":
     # TBD: when agnostic is merged, use the function and delete the code lines
     # module = sputils.module_name_to_module(model_fname)
     # TBD: do the sys.path.append trick in sputils 
-    import importlib, inspect
+    import importlib
+    import inspect
     if inspect.ismodule(model_fname):
         module = model_fname
     else:

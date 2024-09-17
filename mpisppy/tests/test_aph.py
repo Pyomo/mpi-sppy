@@ -17,14 +17,12 @@ version matter a lot, so we often just do smoke tests for sizes.
 
 import unittest
 from math import log10, floor
-import pyomo.environ as pyo
 import mpisppy.opt.aph
 import mpisppy.phbase
 from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
-                                               scenario_denouement, \
-                                               _rho_setter
+                                               scenario_denouement
 import mpisppy.tests.examples.farmer as farmer
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver
 
 __version__ = 0.6
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()

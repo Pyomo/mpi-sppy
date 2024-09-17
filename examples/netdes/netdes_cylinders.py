@@ -6,9 +6,6 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import sys
-import os
-import copy
 import netdes
 
 from mpisppy.spin_the_wheel import WheelSpinner

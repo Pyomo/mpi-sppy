@@ -9,7 +9,6 @@
 # Indepedent Lagrangian that takes x values as input and
 # updates its own W.
 
-import time
 import json
 import csv
 import numpy as np

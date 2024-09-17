@@ -9,7 +9,6 @@
 import numpy as np
 import abc
 import logging
-import time
 import mpisppy.log
 from mpisppy.opt.aph import APH
 
@@ -174,7 +173,7 @@ class Hub(SPCommunicator):
 
         if self.global_rank == 0:
             self.print_init = True
-            global_toc(f"Statistics at termination", True)
+            global_toc("Statistics at termination", True)
             self.screen_trace()
 
     def receive_innerbounds(self):

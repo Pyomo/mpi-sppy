@@ -8,7 +8,6 @@
 ###############################################################################
 # Network Flow - various formulations
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import distr_data
 import time
 
@@ -196,12 +195,12 @@ def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
         vstr = f"flow[{arc}]" #variable name as string
 
         #adds inter region arcs in the source region
-        if not region_source in consensus_vars: #initiates consensus_vars[region_source]
+        if region_source not in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
         consensus_vars[region_source].append(vstr)
 
         #adds inter region arcs in the target region
-        if not region_target in consensus_vars: #initiates consensus_vars[region_target]
+        if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append(vstr)
     for region in all_scenario_names:

@@ -13,7 +13,6 @@
 # There is  manipulation of the mip gap,
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliExtensions
-import sys
 import json
 import uc_funcs as uc
 

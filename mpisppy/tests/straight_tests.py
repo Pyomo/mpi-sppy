@@ -9,10 +9,8 @@
 # straight smoke tests (with no unittest, which is a bummer but we need mpiexec)
 
 import os
-import sys
-import tempfile
 
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 badguys = list()

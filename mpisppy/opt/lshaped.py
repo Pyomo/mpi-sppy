@@ -20,7 +20,7 @@ from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from mpisppy.spopt import set_instance_retry
 from pyomo.core import (
-    Objective, SOSConstraint, Constraint, Var
+    SOSConstraint, Constraint, Var
 )
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.repn.standard_repn import generate_standard_repn

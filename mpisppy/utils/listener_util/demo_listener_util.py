@@ -16,9 +16,7 @@ import sys
 import collections
 import numpy as np
 import mpisppy.MPI as mpi
-import time
 import datetime as dt
-import threading
 import logging
 import mpisppy.utils.listener_util.listener_util as listener_util
 
@@ -234,7 +232,7 @@ np.random.seed(seed)
 # Note: at this point the first reduce is the only reduce
 Lens = collections.OrderedDict({"FirstReduce": {"ROOT": 2+n_proc}})
 if rank == 0:
-    logging.debug("iters %d, sleep %f, seed %d".format((iters, sleep, seed)))
+    logging.debug("iters %d, sleep %f, seed %d".format())
 # "ROOT" is required to be the name of the global comm
 synchronizer = listener_util.Synchronizer(comms = {"ROOT": fullcomm},
                                        Lens = Lens,

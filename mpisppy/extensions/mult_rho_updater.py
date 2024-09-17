@@ -11,11 +11,8 @@
 # but only update when convergence improves
 # Preference given to user-supplied converger
 
-import math
 import mpisppy.extensions.extension
 
-import numpy as np
-import mpisppy.MPI as MPI
 
 # for ph.options['mult_rho_options']:
 _mult_rho_defaults = { 'convergence_tolerance' : 1e-4,

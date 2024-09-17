@@ -14,7 +14,6 @@ import os
 
 from pyomo.dataportal import DataPortal
 
-import mpisppy.scenario_tree as scenario_tree
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils

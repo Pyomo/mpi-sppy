@@ -12,7 +12,6 @@ import examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylin
 import examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
-from mpisppy.utils import config
 import os
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
