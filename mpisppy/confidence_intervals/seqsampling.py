@@ -22,12 +22,12 @@ from mpisppy import global_toc
 from mpisppy.utils import config
 import mpisppy.utils.solver_spec as solver_spec
 
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
-
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
+
+fullcomm = mpi.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 print("\nTBD: check seqsampling for start vs start_seed")
 
@@ -195,7 +195,7 @@ class SeqSampling():
         """        
 
         if self.stochastic_sampling :
-                add_options(options, ["n0min"], [50])
+            add_options(cfg, {"n0min": 50})
                 
                 
         if self.stopping_criterion == "BM":

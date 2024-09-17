@@ -57,10 +57,10 @@ if __name__ == "__main__":
     mname = sys.argv[1]  # will be assigned to the model_module_name config arg
     try:
         m = import_file(mname)
-    except:
+    except Exception:
         try:
             m = import_file(f"{mname}.py")
-        except:
+        except Exception:
             raise RuntimeError(f"Could not import module: {mname}")
 
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     # the inprser_adder might want num_scens, but mmw contols the number of scenarios
     try:
         del cfg["num_scens"] 
-    except:
+    except Exception:
         pass
 
     parser = cfg.create_parser("mmw_conf")
@@ -98,7 +98,7 @@ if __name__ == "__main__":
     # Read xhats from xhatpath
     xhat = ciutils.read_xhat(cfg.xhatpath)
 
-    if cfg.MMW_batch_size == None:
+    if cfg.MMW_batch_size is None:
         raise RuntimeError("mmw_conf requires MMW_batch_size")
 
     refmodel = modelpath #Change this path to use a different model

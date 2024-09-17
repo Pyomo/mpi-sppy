@@ -15,11 +15,11 @@ import scipy.stats
 import importlib
 from mpisppy import global_toc
     
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
-
 import mpisppy.utils.amalgamator as ama
 import mpisppy.confidence_intervals.ciutils as ciutils
+
+fullcomm = mpi.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 def remove_None(d):
     if d is None:

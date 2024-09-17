@@ -18,15 +18,15 @@ from mpisppy.utils import config
 import numpy as np
 from mpisppy import global_toc
     
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
-
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
 from mpisppy.tests.examples.aircond import xhat_generator_aircond
 import mpisppy.confidence_intervals.sample_tree as sample_tree
+
+fullcomm = mpi.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 class IndepScens_SeqSampling(SeqSampling):
     def __init__(self,
@@ -110,7 +110,6 @@ class IndepScens_SeqSampling(SeqSampling):
         #----------------------------Step 3 -------------------------------------#       
             k+=1
             nk_m1 = nk #n_{k-1}
-            mk_m1 = mk
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
             
             #Computing m_k and associated scenario names

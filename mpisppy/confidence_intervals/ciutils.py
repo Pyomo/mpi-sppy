@@ -398,7 +398,7 @@ def gap_estimators(xhat_one,
                             all_nodenames = all_nodenames,mpicomm=mpicomm)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    zn_hat=ev.evaluate(xhats)
+    ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
     zn_star=ev.evaluate(xstars)
     objs_at_xstar = ev.objs_dict
