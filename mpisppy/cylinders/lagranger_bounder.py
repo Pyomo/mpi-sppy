@@ -34,7 +34,6 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
         self.opt._save_nonants()
 
     def _lagrangian(self, iternum):
-        verbose = self.opt.options['verbose']
         # see if rho should be rescaled
         if self.rho_rescale_factors is not None\
            and iternum in self.rho_rescale_factors:
@@ -81,10 +80,6 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
         return self._lagrangian(iternum)
 
     def main(self):
-        # The rho_setter should be attached to the opt object
-        rho_setter = None
-        if hasattr(self.opt, 'rho_setter'):
-            rho_setter = self.opt.rho_setter
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()

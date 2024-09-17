@@ -52,7 +52,6 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         if not isinstance(self.opt, Xhat_Eval):
             raise RuntimeError("XhatXbarInnerBound must be used with Xhat_Eval.")
 
-        verbose = self.opt.options['verbose']
         xhatter = XhatXbar(self.opt)
         # somehow deal with the prox option .... TBD .... important for aph APH
 
@@ -80,13 +79,11 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
         """
         dtm = logging.getLogger(f'dtm{global_rank}')
-        verbose = self.opt.options["verbose"] # typing aid  
         logging.debug("Enter xhatxbar main on rank {}".format(global_rank))
 
         xhatter = self.ib_prep()
 
         ib_iter = 1  # ib is for inner bound
-        got_kill_signal = False
         while (not self.got_kill_signal()):
             logging.debug('   IB loop iter={} on global rank {}'.\
                           format(ib_iter, global_rank))

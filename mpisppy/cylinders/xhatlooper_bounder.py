@@ -25,7 +25,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
     converger_spoke_char = 'X'
 
     def xhatlooper_prep(self):
-        verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
@@ -56,7 +55,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         return xhatter
 
     def main(self):
-        verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatlooper spoke rank {self.global_rank}")
 
         xhatter = self.xhatlooper_prep()

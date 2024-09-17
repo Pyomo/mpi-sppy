@@ -66,7 +66,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         same as base class, but relax the integer variables and
         attach the reduced cost suffix
         """
-        verbose = self.opt.options['verbose']
         # Split up PH_Prep? Prox option is important for APH.
         # Seems like we shouldn't need the Lagrangian stuff, so attach_prox=False
         # Scenarios are created here
