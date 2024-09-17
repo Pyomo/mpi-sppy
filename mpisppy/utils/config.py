@@ -786,7 +786,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("grad_dynamic_primal_thresh",
                            description="primal threshold for diff during gradient calcs",
                            domain=float,
-                           default=0.001)
+                           default=0.1)
         
         self.add_to_config("grad_dynamic_dual_thresh",
                            description="dual threshold for abs norm during gradient calcs",

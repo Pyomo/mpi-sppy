@@ -17,6 +17,7 @@ import inspect
 import typing
 import copy
 import time
+from sortedcollections import OrderedSet
 
 import mpisppy.log
 from mpisppy import MPI
@@ -165,9 +166,7 @@ class Find_Rho():
            rhos (dict): dict {variable name: list of rhos for this variable}
         """
         local_snames = self.ph_object.local_scenario_names
-        vnames = []  # TBD: why not just use c.keys()
-        for (sname, vname) in self.c.keys():
-            if vname not in vnames: vnames.append(vname)
+        vnames = OrderedSet(vname for (sname, vname) in self.c.keys())
         k0, s0 = list(self.ph_object.local_scenarios.items())[0]
         # TBD: drop vname_to_idx and use the map already provided
         vname_to_idx = {var.name : ndn_i[1] for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
@@ -248,6 +247,9 @@ class Find_Rho():
                     writer.writerow(['#Rho values'])
                     for (vname, rho) in rho_data.items():
                         writer.writerow([vname, rho])
+
+        comm = self.ph_object.comms['ROOT']                    
+        comm.Barrier()                        
 
 
 class Set_Rho():
