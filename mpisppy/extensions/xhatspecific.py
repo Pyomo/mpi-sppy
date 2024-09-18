@@ -47,7 +47,6 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
                 print("  xhat_specific: " + msg)
 
         obj = None
-        sname = None
 
         _vb("Enter XhatSpecific.xhat_tryit to try: "+str(xhat_scenario_dict))
 

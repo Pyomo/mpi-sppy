@@ -35,8 +35,6 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         self.n_proc = self.opt.n_proc
         self.verbose = self.opt.options["verbose"]
 
-        scen_count = len(opt.all_scenario_names)
-
         self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
         

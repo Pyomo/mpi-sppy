@@ -56,7 +56,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
 
             
     def _attach_rho_ratio_data(self, ph, conv):
-        if conv == None or conv == self._tol:
+        if conv is None or conv == self._tol:
             return
         self.first_c = conv
         if not self.ph.multistage:
