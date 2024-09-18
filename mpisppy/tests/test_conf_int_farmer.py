@@ -88,6 +88,7 @@ class Test_confint_farmer(unittest.TestCase):
                           cfg,
                           xhat,
                           cfg['num_batches'], batch_size = cfg["batch_size"], start = cfg['num_scens'])
+        assert MMW is not None
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
@@ -108,6 +109,7 @@ class Test_confint_farmer(unittest.TestCase):
         ama_object = ama.from_module(self.refmodelname,
                                      cfg=ama_options,
                                      use_command_line=False)   
+        assert ama_object is not None
         
     def test_seqsampling_creator(self):
         optionsBM = config.Config()
@@ -165,6 +167,7 @@ class Test_confint_farmer(unittest.TestCase):
                        scenario_denouement=None,
                        scenario_creator_kwargs=scenario_creator_kwargs
                        )
+        assert ev is not None
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")      

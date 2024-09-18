@@ -131,6 +131,7 @@ class Test_confint_aircond(unittest.TestCase):
         ama_object = ama.from_module(self.refmodelname,
                                      cfg=options,
                                      use_command_line=False)   
+        assert ama_object is not None
         
     def test_MMW_constructor(self):
         options, scenario_creator_kwargs = self._get_base_options()
@@ -140,10 +141,9 @@ class Test_confint_aircond(unittest.TestCase):
                           options,
                           xhat,
                           options['num_batches'], batch_size = options["batch_size"], start = options['num_scens'])
+        assert MMW is not None
 
     def test_seqsampling_creator(self):
-        BFs = [4, 3, 2]
-        xhat_gen_options = self._get_xhat_gen_options(BFs)
         optionsBM = config.Config()
         confidence_config.confidence_config(optionsBM)
         confidence_config.sequential_config(optionsBM)
@@ -169,8 +169,6 @@ class Test_confint_aircond(unittest.TestCase):
         
     def test_indepscens_seqsampling_creator(self):
         options, scenario_creator_kwargs = self._get_base_options()
-        branching_factors= global_BFs
-        xhat_gen_options = self._get_xhat_gen_options(branching_factors)
         
         # We want a very small instance for testing on GitHub.
         optionsBM = config.Config()
@@ -211,6 +209,7 @@ class Test_confint_aircond(unittest.TestCase):
                      "no solver is available")      
     def test_xhat_eval_creator(self):
         ev = self._eval_creator()
+        assert ev is not None
 
         
     @unittest.skipIf(not solver_available,

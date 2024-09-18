@@ -11,11 +11,11 @@ from pathlib import Path
 
 import pytest
 
-yaml = pytest.importorskip("yaml")
-addheader = pytest.importorskip("addheader")
-
 from addheader.add import FileFinder, detect_files
 import mpisppy
+
+yaml = pytest.importorskip("yaml")
+addheader = pytest.importorskip("addheader")
 
 def test_headers():
     root = Path(mpisppy.__file__).parent.parent

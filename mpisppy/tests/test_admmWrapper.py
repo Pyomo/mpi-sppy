@@ -142,7 +142,7 @@ class TestAdmmWrapper(unittest.TestCase):
                     objectives["EF objective"] = float(decomposed_line[1])
             try:
                 correct_order = objectives["outer bound"] <= objectives["EF objective"] <= objectives["inner bound"]
-            except:
+            except Exception:
                 raise RuntimeError("The output could not be read to capture the values")
             assert correct_order, f' We obtained {objectives["outer bound"]=}, {objectives["EF objective"]=}, {objectives["inner bound"]=}'
             os.chdir(original_dir)

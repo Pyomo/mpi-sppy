@@ -93,7 +93,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.grad_object.write_grad_cost()
         try:
             os.remove(self.cfg.grad_cost_file_out)
-        except:
+        except Exception:
             raise RuntimeError('gradient.write_grad_cost() did not write a csv file')
     
     def test_find_grad_rho(self):
@@ -108,7 +108,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.grad_object.write_grad_rho()
         try:
             os.remove(self.cfg.grad_rho_file_out)
-        except:
+        except Exception:
             raise RuntimeError('gradient.compute_and_write_grad_rho() did not write a csv file')
 
     def test_grad_cost_and_rho(self):

@@ -23,11 +23,11 @@ from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
                                                scenario_denouement
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.tests.utils import get_solver
+import mpisppy.MPI as mpi
 
 __version__ = 0.6
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
-import mpisppy.MPI as mpi
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -78,6 +78,7 @@ class Test_aph_sizes(unittest.TestCase):
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
         )
+        assert aph is not None
 
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
@@ -145,7 +146,6 @@ class Test_aph_sizes(unittest.TestCase):
         options["PHIterLimit"] = 2
         options["async_frac_needed"] = 0.5
         options["async_sleep_secs"] = 0.5
-        a = 2
         options["APHuse_lag"] = True
         aph = mpisppy.opt.aph.APH(
             options,
