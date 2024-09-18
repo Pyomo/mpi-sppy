@@ -79,7 +79,7 @@ class TestArchiveReaderFactory(unittest.TestCase):
 
     def test_ArchiveReaderFactory_nonexist(self):
         try:
-            archive = ArchiveReaderFactory(
+            ArchiveReaderFactory(
                 os.path.join(testdatadir, '_does_not_exist_'))
         except IOError:
             pass
