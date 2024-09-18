@@ -1,14 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Code to evaluate a given x-hat, but given as a nonant-cache
 # To test: python xhat_eval.py --num-scens=3 --EF-solver-name=cplex
 
 import inspect
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 import logging
 import numpy as np
-import math
 
 import mpisppy.log
 from mpisppy import MPI
@@ -202,7 +206,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if not k in self.objs_dict:
+            if k not in self.objs_dict:
                 raise RuntimeError(f"No value has been calculated for the scenario {k}")
             local_Eobjs.append(s._mpisppy_probability * fct(self.objs_dict[k]))
         local_Eobjs = np.array(local_Eobjs)
@@ -235,7 +239,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         k = scenario_name
-        pyomo_solve_time = self.solve_one(solver_options,k, s,
+        self.solve_one(solver_options,k, s,
                                           dtiming=False,
                                           verbose=self.verbose,
                                           tee=False,

@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 from pyomo.solvers.plugins.solvers.cplex_persistent import CPLEXPersistent
 from pyomo.solvers.plugins.solvers.gurobi_persistent import GurobiPersistent
 from pyomo.solvers.plugins.solvers.xpress_persistent import XpressPersistent
@@ -49,7 +56,7 @@ def set_termination_callback(solver_instance, termination_callback):
 
     if not tc.check_user_termination_callback_signature(termination_callback):
         raise RuntimeError(
-            f"Provided user termination callback did not match expected signature with 3 positional arguments"
+            "Provided user termination callback did not match expected signature with 3 positional arguments"
             )
 
     try:

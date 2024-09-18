@@ -1,5 +1,11 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This program can be used in two different ways:
 # Compute gradient-based cost and rho for a given problem
 # Use the gradient-based rho setter which sets adaptative gradient rho for PH.
@@ -7,9 +13,7 @@
 # Edited by DLW Oct 2023
 # Note: norm_rho_updater is the Gabe thing
 
-import time
 import farmer
-import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -22,9 +26,6 @@ from mpisppy.extensions.extension import MultiExtension
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-import mpisppy.utils.gradient as grad
-import mpisppy.utils.find_rho as find_rho
-from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.extensions.gradient_extension import Gradient_extension
 
 write_solution = False
@@ -74,7 +75,6 @@ def main():
     
     cfg = _parse_args()
 
-    num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
     rho_setter = None  # non-grad rho setter?
 
@@ -98,7 +98,6 @@ def main():
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

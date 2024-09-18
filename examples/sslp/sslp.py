@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # update April 2020: BUT this really needs upper and lower bound spokes
 # dlw February 2019: PySP 2 for the sslp example
 
@@ -7,7 +13,6 @@ import os
 import sys
 import socket
 import datetime as dt
-import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
@@ -155,17 +160,17 @@ if __name__ == "__main__":
         quit()
     try:
         bunper = int(sys.argv[2])
-    except:
+    except Exception:
         print(msg, "\n    bad number of bundles per rank=", sys.argv[2])
         quit()
     try:
         maxit = int(sys.argv[3])
-    except:
+    except Exception:
         print(msg, "\n    bad max iterations=", sys.argv[3])
         quit()
     try:
         rho = int(sys.argv[4])
-    except:
+    except Exception:
         print(msg, "\n    bad rho=", sys.argv[4])
         quit()
 

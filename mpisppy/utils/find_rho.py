@@ -1,36 +1,27 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Code to compute rhos from Ws. It also provides a corresponding rho setter.
 # To test: /examples/farmer/farmer_demo.py
 
-import sys
 import os
 import inspect
-import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
-import logging
 import numpy as np
-import math
 import importlib
 import csv
-import inspect
-import typing
 import copy
-import time
 from sortedcollections import OrderedSet
 
-import mpisppy.log
 from mpisppy import MPI
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.confidence_intervals.ciutils as ciutils
-from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
-import mpisppy.utils.wxbarutils as wxbarutils
-import mpisppy.utils.rho_utils as rho_utils
 import mpisppy.phbase as phbase
 
 
@@ -273,7 +264,7 @@ class Set_Rho():
         rho_list (list): list of (id(variable), rho)
 
         """
-        assert self.cfg != None, "you have to give the rho_setter a cfg"
+        assert self.cfg is not None, "you have to give the rho_setter a cfg"
         assert self.cfg.rho_file_in != '', "use --rho-file-in to give the path of your rhos file"
         rhofile = self.cfg.rho_file_in
         rho_list = list()
@@ -288,8 +279,8 @@ class Set_Rho():
                     if vo is not None:
                         rho_list.append((id(vo), float(row[1])))
                     else:
-                        raise RuntimeError(f"rho values from {filename} found Var {fullname} "
-                                           f"that is not found in the scenario given (name={s._name})")
+                        raise RuntimeError(f"rho values from {rhofile} found Var {fullname} "
+                                           f"that is not found in the scenario given (name={scenario._name})")
         return rho_list
 
 
@@ -329,7 +320,7 @@ def get_rho_from_W(mname, original_cfg):
 
     try:
         model_module = importlib.import_module(mname)
-    except:
+    except Exception:
         raise RuntimeError(f"Could not import module: {mname}")
     cfg = copy.deepcopy(original_cfg)
     cfg.max_iterations = 0 #we only need x0 here

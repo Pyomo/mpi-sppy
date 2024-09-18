@@ -1,14 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import numpy as np
 import abc
 import enum
-import logging
 import time
 import os
 import math
 
-import mpisppy.utils.sputils as sputils
 
 from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
@@ -225,7 +229,7 @@ class _BoundNonantLenSpoke(_BoundSpoke):
             raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
 
         if len(self.opt.local_scenarios) == 0:
-            raise RuntimeError(f"Rank has zero local_scenarios")
+            raise RuntimeError("Rank has zero local_scenarios")
 
         vbuflen = 2
         for s in self.opt.local_scenarios.values():

@@ -1,18 +1,22 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Runs PH with smaller rhos in order to compute a lower bound
 # By default rescale the hub "default-rho" values (multiply by rf) but there are other options to set rho:
 # - set rho manually (use _hack_set_rho)
 # - use rho rescale factors written in a json file
 # - use gradient-based rho (to be tested)
 
-import time
 import json
-import csv
 import mpisppy.cylinders.spoke
 import mpisppy.utils.find_rho as find_rho
 import mpisppy.utils.gradient as grad
 from mpisppy.utils.wtracker import WTracker
-from mpisppy import global_toc
 
 class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
     """Updates its own W and x using its own rho.
@@ -20,7 +24,6 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
     converger_spoke_char = 'B'
 
     def ph_ob_prep(self):
-        verbose = self.opt.options['verbose']
         # Scenarios are created here
         self.opt.PH_Prep(attach_prox=True)
         self.opt._reenable_W()
@@ -36,7 +39,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         # use gradient rho
         self.use_gradient_rho = False
         if "ph_ob_gradient_rho" in self.opt.options:
-            assert self.opt.options["ph_ob_gradient_rho"]["cfg"] != None, "You need to give a cfg to use gradient rho."
+            assert self.opt.options["ph_ob_gradient_rho"]["cfg"] is not None, "You need to give a cfg to use gradient rho."
             self.use_gradient_rho = True
             print("PH Outer Bounder uses an iterative gradient-based rho setter")
             self.cfg = self.opt.options["ph_ob_gradient_rho"]["cfg"]
@@ -143,11 +146,6 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         return bound
 
     def main(self):
-        # The rho_setter should be attached to the opt object
-        rho_setter = None
-        if hasattr(self.opt, 'rho_setter'):
-            rho_setter = self.opt.rho_setter
-
         self.ph_ob_prep()
         self._rescale_rho(self.opt.options["ph_ob_initial_rho_rescale_factor"] )
 

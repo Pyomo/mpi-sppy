@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 ''' An extension to save PH weights and/or PH xbar values to csv files.
 
     To use, specify either or both of the following keys to the options dict:
@@ -24,7 +30,6 @@
 '''
 
 import os
-import pyomo.environ as pyo
 import mpisppy.utils.wxbarutils
 import mpisppy.extensions.extension
 
@@ -94,9 +99,11 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
             mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, fname,
                 sep_files=self.sep_files)
         if (self.w_grad_fname):
-            grad_fname = f'grad_fname.csv'
+            # TODO: finish implementing?
+            #grad_fname = 'grad_fname.csv'
             #mpisppy.utils.wxbarutils.write_W_grad_to_file(self.PHB, grad_fname,
             #sep_files=self.sep_files)
+            pass
         if (self.x_fname):
             mpisppy.utils.wxbarutils.write_xbar_to_file(self.PHB, self.x_fname)
 

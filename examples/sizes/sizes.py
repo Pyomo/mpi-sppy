@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import os
 import models.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
@@ -14,7 +20,7 @@ def scenario_creator(scenario_name, scenario_count=None):
     datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"
-    except:
+    except Exception:
         print("FAIL: datadir=", datadir, " scenario_name=", scenario_name)
 
     model = ref.model.create_instance(fname)
@@ -51,7 +57,7 @@ def inparser_adder(cfg):
 def kw_creator(cfg):
     # (for Amalgamator): linked to the scenario_creator and inparser_adder
     if cfg.num_scens not in (3, 10):
-        raise RuntimeError(f"num_scen must the 3 or 10; was {num_scen}")    
+        raise RuntimeError(f"num_scen must the 3 or 10; was {cfg.num_scen}")    
     kwargs = {"scenario_count": cfg.num_scens}
     return kwargs
 

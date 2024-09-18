@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Utilities to support formation and use of "proper" bundles
 
 # NOTE: if/because we require the bundles to consume entire
@@ -29,7 +36,7 @@ def dill_unpickle(fname):
     return m
 
 
-def pickle_bundle_parser(cfg):
+def pickle_bundle_config(cfg):
     """ Add command line options for creation and use of "proper" bundles
     args:
         cfg (Config): the Config object to which we add"""

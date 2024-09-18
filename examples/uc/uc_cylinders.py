@@ -1,12 +1,17 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # TBD: put in more options: threads, mipgaps for spokes
 
 # There is  manipulation of the mip gap,
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliExtensions
-import sys
 import json
 import uc_funcs as uc
 
@@ -144,7 +149,7 @@ def main():
         hub_dict["opt_kwargs"]["options"]["defaultPHrho"] = 1
     ### end ph spoke ###
 
-    if cfg.reduced_costs:
+    if reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
     # FWPH spoke
@@ -169,7 +174,7 @@ def main():
     if cross_scenario_cuts:
         cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
-    if cfg.reduced_costs:
+    if reduced_costs:
         reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
@@ -185,7 +190,7 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if cross_scenario_cuts:
         list_of_spoke_dict.append(cross_scenario_cuts_spoke)
-    if cfg.reduced_costs:
+    if reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)

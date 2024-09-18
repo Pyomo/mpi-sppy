@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 """
 This is the logging configuration for mpisppy.
 
@@ -55,13 +61,13 @@ def setup_logger(name, out, level=logging.DEBUG, mode='w', fmt=None):
     '''
     if fmt is None:
         fmt = "(%(asctime)s) %(message)s"
-    l = logging.getLogger(name)
-    l.setLevel(level)
-    l.propagate = False
+    log = logging.getLogger(name)
+    log.setLevel(level)
+    log.propagate = False
     formatter = logging.Formatter(fmt)
     if out in (sys.stdout, sys.stderr):
         handler = logging.StreamHandler(out)
     else: # out is a filename
         handler = logging.FileHandler(out, mode=mode) 
     handler.setFormatter(formatter)
-    l.addHandler(handler)
+    log.addHandler(handler)

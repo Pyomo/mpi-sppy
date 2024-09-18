@@ -1,0 +1,460 @@
+name: GitHub CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+defaults:
+    run:
+        shell: bash -l {0}
+
+jobs:
+  ruff:
+    name: Ruff Linting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: chartboost/ruff-action@v1
+
+  nompi4py:
+    name: no mpi4py
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.8
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          pip install sphinx sphinx_rtd_theme cplex
+          pip install xpress pandas dill
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: PH EF tests
+        run: |
+          cd mpisppy/tests
+          python test_ef_ph.py
+
+
+  regression:
+    name: Basic regression tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test EF/PH
+        run: |
+          python mpisppy/tests/test_ef_ph.py
+
+      - name: Test afew
+        run: |
+          cd examples
+          python afew.py xpress_persistent --oversubscribe
+
+      - name: Test docs
+        run: |
+          cd ./doc/src/
+          make doctest
+
+  runall:
+    name: run_all.py
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # this takes the most time, so we'll start it
+    # without waiting on the linting and other checks
+    # needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test run_all nouc
+        run: |
+          cd examples
+          python run_all.py xpress_persistent --oversubscribe nouc
+
+  schur-complement:
+    name: schur-complement
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9]
+    steps:
+    - uses: actions/checkout@v1
+    - name: setup conda
+      uses: s-weigand/setup-conda@v1
+      with:
+        update-conda: true
+        python-version: ${{ matrix.python-version }}
+        conda-channels: anaconda, conda-forge
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install nose pybind11
+        conda install openmpi pymumps --no-update-deps
+        pip install mpi4py pandas
+        pip install git+https://github.com/pyutilib/pyutilib.git
+        git clone https://github.com/pyomo/pyomo.git
+        cd pyomo/
+        pip install -e .
+        pyomo download-extensions
+        pyomo build-extensions
+        cd ../
+        pip install git+https://github.com/parapint/parapint.git
+        pip install -e .
+    - name: Test with nose
+      run: |
+        nosetests -v mpisppy/tests/test_sc.py
+        mpirun -np 3 -oversubscribe nosetests mpisppy/tests/test_sc.py
+
+  straight-tests:
+    name: straight_tests.py
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex dill matplotlib
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: mpi tests
+        run: |
+          cd mpisppy/tests
+          python straight_tests.py
+
+  admm-wrapper:
+    name: admm wrapper tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex
+          pip install numpy
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run tests
+        timeout-minutes: 100
+        run: |
+          cd mpisppy/tests
+          # envall does nothing
+          python test_admmWrapper.py
+          python test_stoch_admmWrapper.py
+
+  aph:
+    name: aph tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run tests
+        timeout-minutes: 100
+        run: |
+          cd mpisppy/tests
+          # envall does nothing
+          python test_aph.py
+
+  pickled-bundles:
+    name: pickled bundles tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.8
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy<2" setuptools
+          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run pickled bundles tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          python test_pickle_bundle.py
+
+
+  confidence-intervals:
+    name: confidence intervals tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.8
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy<2" setuptools
+          pip install pyomo pandas xpress cplex scipy sympy dill
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run farmer tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          python test_conf_int_farmer.py
+
+      - name: run aircond tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          python test_conf_int_aircond.py
+
+  test-generic-pyomo-released:
+    name: generic_tester.py
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install xpress
+
+      - name: Build pyomo extensions
+        run: |
+          # we don't need it all; just APPSI's extensions
+          pyomo build-extensions || python -c "from pyomo.contrib.appsi.cmodel import cmodel_available; exit(0) if bool(cmodel_available) else exit(1)"
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Test test_generic nouc
+        run: |
+          cd examples
+          python generic_tester.py xpress_persistent --oversubscribe nouc
+
+  test-gradient-rho:
+    name: gradient and rho tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy<2" setuptools cmake
+          pip install pyomo pandas xpress cplex scipy sympy dill
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: Build Pyomo extensions
+        run: |
+          # some failures are expected, but this should succeed as long as pynumero is built correctly
+          pyomo build-extensions || python -c "from pyomo.contrib.pynumero.asl import AmplInterface; exit(0) if AmplInterface.available() else exit(1)"
+
+      - name: run farmer tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          python test_gradient_rho.py
+          python test_w_writer.py
+
+  test-headers:
+    name: header test
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.8
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy<2" setuptools
+          pip install pyomo addheader pyyaml pytest
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run headers test
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          pytest test_headers.py
+
+  test-pysp:
+    name: pysp tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.9
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools pytest pyyaml networkx
+          pip install pyomo xpress cplex
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run pysp model tests
+        timeout-minutes: 100
+        run: |
+          cd mpisppy/tests
+          # envall does nothing
+          python test_pysp_model.py
+
+      - name: run pysp unit tests
+        timeout-minutes: 100
+        run: |
+          cd mpisppy/utils/pysp_model
+          pytest -v .
+
+  test-cylinders:
+    name: tests on some cylinders
+    runs-on: ubuntu-latest
+    needs: [ruff]
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.8
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py "numpy<2" setuptools
+          pip install pyomo pandas xpress cplex scipy
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          mpiexec -np 2 python -m mpi4py test_with_cylinders.py          

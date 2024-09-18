@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
@@ -20,7 +28,6 @@ __all__ = ('ScenarioTreeNode',
 import sys
 import random
 import copy
-import math
 import logging
 
 try:
@@ -29,17 +36,10 @@ except ImportError:                         #pragma:nocover
     from ordereddict import OrderedDict
 
 from pyomo.common.collections import ComponentMap
-from pyomo.core import (value, minimize, maximize,
-                        Var, Expression, Block,
-                        Objective, SOSConstraint,
-                        ComponentUID)
-from pyomo.core.base.sos import _SOSConstraintData
-from pyomo.repn import generate_standard_repn
-from .phutils import (BasicSymbolMap,
-                      indexToString,
+from pyomo.core import (value, ComponentUID)
+from .phutils import (indexToString,
                       isVariableNameIndexed,
                       extractVariableNameAndIndex,
-                      extractComponentIndices,
                      )
 
 logger = logging.getLogger("mpisppy.utils.pysp_model")
@@ -1270,8 +1270,6 @@ class ScenarioTree:
 
             sequence = list(range(num_scenarios))
             random.shuffle(sequence)
-
-            next_scenario_index = 0
 
             # this is a hack-ish way to re-initialize the Bundles set of a
             # scenario tree instance, which should already be there

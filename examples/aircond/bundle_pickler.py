@@ -1,14 +1,17 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Program to create proper bundles for aircond; DLW march 2022
 # NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
 # see try_pickles.bash
 # parallel version
 
-import sys
-import os
-import copy
 import numpy as np
-import itertools
 import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy.utils import config
 from mpisppy.utils import pickle_bundle
@@ -24,7 +27,7 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 def _parse_args():
     cfg = config.Config()
     cfg.multistage()
-    pickle_bundle.pickle_bundle_parser(cfg)
+    pickle_bundle.pickle_bundle_config(cfg)
     aircondB.inparser_adder(cfg)
     cfg.parse_command_line("bundle_pickler for aircond")
 
@@ -48,8 +51,6 @@ def main():
 
     bsize = int(cfg.scenarios_per_bundle)
     numbuns = ScenCount // bsize
-    # we won't actually use all names
-    all_bundle_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
 
     if numbuns < n_proc:
         raise RuntimeError(

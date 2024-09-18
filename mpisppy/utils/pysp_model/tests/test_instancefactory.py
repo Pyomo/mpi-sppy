@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
@@ -17,6 +25,7 @@ import shutil
 from os.path import join, dirname, abspath, exists
 
 import pyomo.common.unittest as unittest
+from pyomo.common.dependencies import networkx_available as has_networkx
 
 from pyomo.common.dependencies import yaml_available
 from mpisppy.utils.pysp_model.instance_factory import \
@@ -27,11 +36,6 @@ from mpisppy.utils.pysp_model.tree_structure import \
     ScenarioTree
 from pyomo.common.fileutils import import_file
 
-try:
-    import networkx
-    has_networkx = True
-except:
-    has_networkx = False
 
 thisfile = abspath(__file__)
 thisdir = dirname(thisfile)
@@ -48,7 +52,7 @@ class Test(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        import pyomo.environ
+        pass
 
     def setUp(self):
         if "ReferenceModel" in sys.modules:
@@ -306,27 +310,27 @@ class Test(unittest.TestCase):
         with self.assertRaises(TypeError):
             with ScenarioTreeInstanceFactory(
                     model=join(testdatadir, "reference_test_model.py"),
-                    scenario_tree=int) as f:
+                    scenario_tree=int):
                 pass
         with self.assertRaises(ValueError):
             with ScenarioTreeInstanceFactory(
                     model=join(testdatadir, "reference_test_model.py"),
-                    scenario_tree=None) as f:
+                    scenario_tree=None):
                 pass
         with self.assertRaises(TypeError):
             with ScenarioTreeInstanceFactory(
                     model=None,
-                    scenario_tree=scenario_tree_model) as f:
+                    scenario_tree=scenario_tree_model):
                 pass
         with self.assertRaises(IOError):
             with ScenarioTreeInstanceFactory(
                     model=join(testdatadir, "reference_test_model_does_not_exist.py"),
-                    scenario_tree=scenario_tree_model) as f:
+                    scenario_tree=scenario_tree_model):
                 pass
         with self.assertRaises(ValueError):
             with ScenarioTreeInstanceFactory(
                     model=join(testdatadir, "reference_test_model.py"),
-                    scenario_tree=CreateAbstractScenarioTreeModel()) as f:
+                    scenario_tree=CreateAbstractScenarioTreeModel()):
                 pass
         self.assertEqual(len(factory._archives), 0)
         self.assertTrue("reference_test_model" in sys.modules)
