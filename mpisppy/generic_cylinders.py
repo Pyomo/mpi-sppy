@@ -299,8 +299,8 @@ def _model_fname():
                            "--module-name foo\n"
                            "or\n"
                            "--module-name=foo")
-    def _len_check(expected_length):
-        if len(sys.argv) <= expected_length:
+    def _len_check(needed_length):
+        if len(sys.argv) <= needed_length:
             _bad_news()
         else:
             return True
