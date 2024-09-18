@@ -222,7 +222,7 @@ def grad_cost_and_rho(mname, original_cfg):
 
     """
     if  (original_cfg.grad_rho_file_out == '') and (original_cfg.grad_cost_file_out == ''):
-        raise RuntimeError ("TBD: work not finished")
+        raise RuntimeError ("Presently, grad-rho-file-out and grad-cost-file cannot both be empty")
 
     try:
         model_module = importlib.import_module(mname)
