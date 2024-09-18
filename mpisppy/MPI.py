@@ -9,7 +9,7 @@
 
 try:
     from mpi4py.MPI import *
-    _haveMPI = True
+    haveMPI = True
 
 except ImportError:
     import numpy as _np
@@ -22,7 +22,7 @@ except ImportError:
     LOR = _np.logical_or
     DOUBLE = _np.double
     INT = _np.intc
-    _haveMPI = False
+    haveMPI = False
 
     class _MockMPIComm:
     

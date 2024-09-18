@@ -7,15 +7,16 @@
 # full copyright and license information.
 ###############################################################################
 from pyomo.common.timing import TicTocTimer as _TTT
-# Register numpy types in Pyomo, see https://github.com/Pyomo/pyomo/issues/3091
 from pyomo.common.dependencies import numpy_available as _np_avail
+
+from mpisppy.MPI import COMM_WORLD, haveMPI as haveMPI
+
+# Register numpy types in Pyomo, see https://github.com/Pyomo/pyomo/issues/3091
 bool(_np_avail)
-
-from mpisppy.MPI import COMM_WORLD, _haveMPI as haveMPI
-
 tt_timer = _TTT()
 
 _global_rank = COMM_WORLD.rank
 
-global_toc = lambda msg, cond=(_global_rank==0) : tt_timer.toc(msg, delta=False) if cond else None
+def global_toc(msg, cond=_global_rank == 0):
+    return tt_timer.toc(msg, delta=False) if cond else None
 global_toc("Initializing mpi-sppy")
