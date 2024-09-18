@@ -56,8 +56,7 @@ def solve_with_sc(scen_count, linear_solver=None):
                              scenario_creator=farmer.scenario_creator,
                              scenario_creator_kwargs=scenario_kwargs)
     results = opt.solve()
-    if not pyo.check_optimal_termination(results):
-        print("Warning: solver reported non-optimal termination status")
+    print(f"SchurComplement solver status: {results}")
     opt.report_var_values_at_rank0()
     return opt
 
