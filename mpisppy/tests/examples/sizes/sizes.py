@@ -10,10 +10,11 @@ import os
 import mpisppy.tests.examples.sizes.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
+
 def scenario_creator(scenario_name, scenario_count=None):
-    """ The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
-        Optionally attach _PHrho. 
+    """The callback needs to create an instance and then attach
+    the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
+    Optionally attach _PHrho.
     """
     if scenario_count is None:
         raise ValueError("Sizes scenario_creator requires a scenario_count kwarg")
@@ -41,7 +42,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 
 def _rho_setter(scen):
-    """ rho values for the scenario.
+    """rho values for the scenario.
     Args:
         scen (pyo.ConcreteModel): the scenario
     Returns:
@@ -65,7 +66,7 @@ def _rho_setter(scen):
 
 
 def id_fix_list_fct(s):
-    """ specify tuples used by the fixer.
+    """specify tuples used by the fixer.
 
     Args:
         s (ConcreteModel): the sizes instance.

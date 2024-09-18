@@ -24,6 +24,7 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
 
+
 def _parse_args():
     cfg = config.Config()
     cfg.multistage()
@@ -33,8 +34,8 @@ def _parse_args():
 
     return cfg
 
-def main():
 
+def main():
     cfg = _parse_args()
     assert cfg.pickle_bundles_dir is not None
     assert cfg.scenarios_per_bundle is not None
@@ -64,13 +65,12 @@ def main():
     local_slice = slices[my_rank]
     local_bundle_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in local_slice]
 
-    #print(f"{slices=}")
-    #print(f"{local_bundle_names=}")
-    
+    # print(f"{slices=}")
+    # print(f"{local_bundle_names=}")
+
     for bname in local_bundle_names:
         aircondB.scenario_creator(bname, **kwargs)
-    
+
 
 if __name__ == "__main__":
     main()
-    

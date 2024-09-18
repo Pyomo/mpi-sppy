@@ -28,7 +28,7 @@ import numpy as np
 from numpy.linalg import norm
 
 # Write solutions here, then delete. (.. makes it local to examples)
-XHAT_TEMP = os.path.join("..","AAA_delete_this_from_generic_tester")
+XHAT_TEMP = os.path.join("..", "AAA_delete_this_from_generic_tester")
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -51,6 +51,7 @@ if len(sys.argv) > 3:
 badguys = dict()  # bad return code
 xhat_losers = dict()  # does not match baseline well enough
 
+
 def egret_avail():
     try:
         import egret
@@ -59,14 +60,15 @@ def egret_avail():
 
     path = str(egret.__path__)
     left = path.find("'")
-    right = path.find("'", left+1)
-    egretrootpath = path[left+1:right]
+    right = path.find("'", left + 1)
+    egretrootpath = path[left + 1 : right]
 
     egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
     if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):
         return True
 
     from egret.thirdparty.get_pglib_opf import get_pglib_opf
+
     get_pglib_opf(egret_thirdparty_path)
     return True
 
@@ -81,15 +83,16 @@ def _append_soln_output_dir(argstring, outbase):
 def rebaseline_xhat(dirname, modname, np, argstring, baseline_dir):
     # Add the write output to the command line, then do one
     # note: baseline_dir must exist (and probably needs to be pushed to github)
-    fullarg = _append_soln_output_dir(argstring,
-                                      os.path.join("..", baseline_dir, modname))
+    fullarg = _append_soln_output_dir(
+        argstring, os.path.join("..", baseline_dir, modname)
+    )
     do_one(dirname, modname, np, fullarg)  # do not check a baseline_dir, write one
 
 
 def _check_baseline_xhat(modname, argstring, baseline_dir, tol=1e-6):
     # return true if OK, False otherwise
     # compare the baseline_dir to XHAT_TEMP
-    
+
     xhat = np.load(os.path.join(XHAT_TEMP, f"{modname}.npy"))
     base_xhat = np.load(os.path.join(baseline_dir, f"{modname}.npy"))
     d2 = norm(xhat - base_xhat, 2)
@@ -102,7 +105,7 @@ def _check_baseline_xhat(modname, argstring, baseline_dir, tol=1e-6):
 
 def _xhat_dir_setup(modname):
     if os.path.exists(XHAT_TEMP):
-        shutil.rmtree(XHAT_TEMP)    
+        shutil.rmtree(XHAT_TEMP)
     os.makedirs(XHAT_TEMP)
     # .. is prepended elsewhere
     return os.path.join(XHAT_TEMP, modname)
@@ -110,20 +113,21 @@ def _xhat_dir_setup(modname):
 
 def _xhat_dir_teardown():
     if os.path.exists(XHAT_TEMP):
-        shutil.rmtree(XHAT_TEMP)    
+        shutil.rmtree(XHAT_TEMP)
 
 
 def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
-    """ return the code"""
+    """return the code"""
     os.chdir(dirname)  # taking us down a level from examples
     if xhat_baseline_dir is not None:
-        fullarg = _append_soln_output_dir(argstring, _xhat_dir_setup(modname))         
+        fullarg = _append_soln_output_dir(argstring, _xhat_dir_setup(modname))
     else:
         # we might be making a baseline, or just not using one
         fullarg = argstring
 
-    runstring = "mpiexec {} -np {} python -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
-                format(mpiexec_arg, np, modname, fullarg)
+    runstring = "mpiexec {} -np {} python -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".format(
+        mpiexec_arg, np, modname, fullarg
+    )
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
     code = os.system("echo {} && {}".format(runstring, runstring))
@@ -143,56 +147,62 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
     os.chdir("..")
     return code
 
+
 ###################### main code ######################
 # directory names are given relative to the examples directory whence this runs
 
-farmeref = (f"--EF --num-scens 3 --EF-solver-name={solver_name}")
-#rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
-do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir = "test_data/farmeref_baseline")
+farmeref = f"--EF --num-scens 3 --EF-solver-name={solver_name}"
+# rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
+do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir="test_data/farmeref_baseline")
 
 
-hydroef = (f"--EF --branching-factors '3 3' --EF-solver-name={solver_name}")
-#rebaseline_xhat("hydro", "hydro", 1, hydroef, "test_data/hydroef_baseline")
+hydroef = f"--EF --branching-factors '3 3' --EF-solver-name={solver_name}"
+# rebaseline_xhat("hydro", "hydro", 1, hydroef, "test_data/hydroef_baseline")
 do_one("hydro", "hydro", 1, hydroef, xhat_baseline_dir="test_data/hydroef_baseline")
 
 
-hydroa = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
-          "--lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
-          f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
-#rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
-do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir = "test_data/hydroa_baseline")
+hydroa = (
+    "--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
+    "--lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
+    f"--stage2EFsolvern {solver_name} --solver-name={solver_name}"
+)
+# rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
+do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline")
 
 
 if not nouc:
-    uca = ("--num-scens 5 --max-iterations 3 --max-solver-threads 4 "
-           "--default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 "
-           f" --solver-name={solver_name}")
-    #rebaseline_xhat("uc", "uc_funcs", 3, uca, "test_data/uca_baseline")    
+    uca = (
+        "--num-scens 5 --max-iterations 3 --max-solver-threads 4 "
+        "--default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 "
+        f" --solver-name={solver_name}"
+    )
+    # rebaseline_xhat("uc", "uc_funcs", 3, uca, "test_data/uca_baseline")
     do_one("uc", "uc_funcs", 3, uca, xhat_baseline_dir="test_data/uca_baseline")
 
     # This particular sizes command line is not very deterministic, also
     # linearize prox to help xpress.
-    sizesa = ("--linearize-proximal-terms "
-              " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
-              " --default-rho=5 --lagrangian --xhatshuffle"
-              " --iter0-mipgap=0.01 --iterk-mipgap=0.001 --rel-gap 0.001"
-              f" --solver-name={solver_name}")
-    #rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
-    do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir = "test_data/sizesa_baseline")
+    sizesa = (
+        "--linearize-proximal-terms "
+        " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
+        " --default-rho=5 --lagrangian --xhatshuffle"
+        " --iter0-mipgap=0.01 --iterk-mipgap=0.001 --rel-gap 0.001"
+        f" --solver-name={solver_name}"
+    )
+    # rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
+    do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir="test_data/sizesa_baseline")
 
-    
 
 #### final processing ####
 if len(badguys) > 0:
     print("\nBad Guys:")
-    for i,v in badguys.items():
+    for i, v in badguys.items():
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))
     sys.exit(1)
 elif len(xhat_losers) > 0:
     print("\nXhat Losers:")
-    for i,v in xhat_losers.items():
+    for i, v in xhat_losers.items():
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))

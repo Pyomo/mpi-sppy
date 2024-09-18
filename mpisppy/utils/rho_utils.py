@@ -9,8 +9,9 @@
 
 import pandas as pd
 
+
 def rhos_to_csv(s, filename):
-    """ write the rho values to a csv "fullname", rho
+    """write the rho values to a csv "fullname", rho
     Args:
         s (ConcreteModel): the scenario Pyomo model
         filenaame (str): file to which to write
@@ -22,15 +23,15 @@ def rhos_to_csv(s, filename):
             fullname = vdata.name
             f.write(f'"{fullname}",{rho._value}\n')
 
-            
+
 def rho_list_from_csv(s, filename):
-    """ read rho values from a file and return a list suitable for rho_setter
+    """read rho values from a file and return a list suitable for rho_setter
     Args:
         s (ConcreteModel): scenario whence the id values come
         filename (str): name of the csv file to read (fullname, rho)
     Returns:
         retlist (list of (id, rho) tuples); list suitable for rho_setter
-   """
+    """
     rhodf = pd.read_csv(filename)
     retlist = list()
     for idx, row in rhodf.iterrows():
@@ -39,6 +40,8 @@ def rho_list_from_csv(s, filename):
         if vo is not None:
             retlist.append((id(vo), row["rho"]))
         else:
-            raise RuntimeError(f"rho values from {filename} found Var {fullname} "
-                               f"that is not found in the scenario given (name={s._name})")
-    return retlist    
+            raise RuntimeError(
+                f"rho values from {filename} found Var {fullname} "
+                f"that is not found in the scenario given (name={s._name})"
+            )
+    return retlist

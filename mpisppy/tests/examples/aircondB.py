@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-#ReferenceModel for full set of scenarios for AirCond; June 2021
+# ReferenceModel for full set of scenarios for AirCond; June 2021
 # PICKLE BUNDLE VERSION!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # Dec 2021; numerous enhancements by DLW; do not change defaults
 # Feb 2022: Changed all inventory cost coefficients to be positive numbers
@@ -22,23 +22,25 @@ from mpisppy.utils.sputils import attach_root_node
 # Use this random stream:
 aircondstream = np.random.RandomState()
 # Do not edit these defaults!
-parms = {"mu_dev": (float, 0.),
-         "sigma_dev": (float, 40.),
-         "start_ups": (bool, False),
-         "StartUpCost": (float, 300.),
-         "start_seed": (int, 1134),
-         "min_d": (float, 0.),
-         "max_d": (float, 400.),
-         "starting_d": (float, 200.),
-         "BeginInventory": (float, 200.),
-         "InventoryCost": (float, 0.5),
-         "LastInventoryCost": (float, -0.8),
-         "Capacity": (float, 200.),
-         "RegularProdCost": (float, 1.),
-         "OvertimeProdCost": (float, 3.),
-         "NegInventoryCost": (float, 5.),
-         "QuadShortCoeff": (float, 0)
+parms = {
+    "mu_dev": (float, 0.0),
+    "sigma_dev": (float, 40.0),
+    "start_ups": (bool, False),
+    "StartUpCost": (float, 300.0),
+    "start_seed": (int, 1134),
+    "min_d": (float, 0.0),
+    "max_d": (float, 400.0),
+    "starting_d": (float, 200.0),
+    "BeginInventory": (float, 200.0),
+    "InventoryCost": (float, 0.5),
+    "LastInventoryCost": (float, -0.8),
+    "Capacity": (float, 200.0),
+    "RegularProdCost": (float, 1.0),
+    "OvertimeProdCost": (float, 3.0),
+    "NegInventoryCost": (float, 5.0),
+    "QuadShortCoeff": (float, 0),
 }
+
 
 def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs):
     # create replicable pseudo random demand steps
@@ -53,7 +55,7 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     mu_dev = kwargs.get("mu_dev", None)
     sigma_dev = kwargs.get("sigma_dev", None)
 
-    scennum   = sputils.extract_num(sname)
+    scennum = sputils.extract_num(sname)
     # Find the right path and the associated seeds (one for each node) using scennum
     prod = np.prod(sample_branching_factors)
     s = int(scennum % prod)
@@ -61,33 +63,48 @@ def _demands_creator(sname, sample_branching_factors, root_name="ROOT", **kwargs
     demands = [d]
     nodenames = [root_name]
     for bf in sample_branching_factors:
-        assert prod%bf == 0
-        prod = prod//bf
-        nodenames.append(str(s//prod))
-        s = s%prod
-    
+        assert prod % bf == 0
+        prod = prod // bf
+        nodenames.append(str(s // prod))
+        s = s % prod
+
     stagelist = [int(x) for x in nodenames[1:]]
-    for t in range(1,len(nodenames)):
-        aircondstream.seed(start_seed+sputils.node_idx(stagelist[:t],sample_branching_factors))
-        d = min(max_d,max(min_d,d+aircondstream.normal(mu_dev,sigma_dev)))
+    for t in range(1, len(nodenames)):
+        aircondstream.seed(
+            start_seed + sputils.node_idx(stagelist[:t], sample_branching_factors)
+        )
+        d = min(max_d, max(min_d, d + aircondstream.normal(mu_dev, sigma_dev)))
         demands.append(d)
-    
-    return demands,nodenames
+
+    return demands, nodenames
+
 
 def general_rho_setter(scenario_instance, rho_scale_factor=1.0):
-    """ TBD: make this work with proper bundles, which are two stage problems when solved"""    
+    """TBD: make this work with proper bundles, which are two stage problems when solved"""
     computed_rhos = []
 
     for t in scenario_instance.T[:-1]:
-        computed_rhos.append((id(scenario_instance.stage_models[t].RegularProd),
-                              pyo.value(scenario_instance.stage_models[t].RegularProdCost) * rho_scale_factor))
-        computed_rhos.append((id(scenario_instance.stage_models[t].OvertimeProd),
-                              pyo.value(scenario_instance.stage_models[t].OvertimeProdCost) * rho_scale_factor))
+        computed_rhos.append(
+            (
+                id(scenario_instance.stage_models[t].RegularProd),
+                pyo.value(scenario_instance.stage_models[t].RegularProdCost)
+                * rho_scale_factor,
+            )
+        )
+        computed_rhos.append(
+            (
+                id(scenario_instance.stage_models[t].OvertimeProd),
+                pyo.value(scenario_instance.stage_models[t].OvertimeProdCost)
+                * rho_scale_factor,
+            )
+        )
 
     return computed_rhos
 
+
 def dual_rho_setter(scenario_instance):
     return general_rho_setter(scenario_instance, rho_scale_factor=0.0001)
+
 
 def primal_rho_setter(scenario_instance):
     return general_rho_setter(scenario_instance, rho_scale_factor=0.01)
@@ -97,109 +114,137 @@ def _StageModel_creator(time, demand, last_stage, **kwargs):
     return base_aircond._StageModel_creator(time, demand, last_stage, kwargs)
 
 
-#Assume that demands has been drawn before
+# Assume that demands has been drawn before
 def aircond_model_creator(demands, **kwargs):
     return base_aircond.aircond_model_creator(demands, **kwargs)
 
-def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
-    return base_aircond.MakeNodesforScen(model,nodenames,branching_factors,starting_stage=starting_stage)
 
-        
+def MakeNodesforScen(model, nodenames, branching_factors, starting_stage=1):
+    return base_aircond.MakeNodesforScen(
+        model, nodenames, branching_factors, starting_stage=starting_stage
+    )
+
+
 def scenario_creator(sname, **kwargs):
     """
     NOTE: modified Feb/March 2022 to be able to return a bundle if the name
     is Bundle_firstnum_lastnum (e.g. Bundle_14_28)
     This returns a Pyomo model (either for scenario, or the EF of a bundle)
     """
+
     def _bunBFs(branching_factors, bunsize):
         # return branching factors for the bundle's EF
         assert len(branching_factors) > 1
         beyond2size = np.prod(branching_factors[1:])
-        if bunsize % beyond2size!= 0:
-            raise RuntimeError(f"Bundles must consume entire second stage nodes {beyond2size} {bunsize}")
-        bunBFs = [bunsize // beyond2size] + branching_factors[1:]  # branching factors in the bundle
+        if bunsize % beyond2size != 0:
+            raise RuntimeError(
+                f"Bundles must consume entire second stage nodes {beyond2size} {bunsize}"
+            )
+        bunBFs = [bunsize // beyond2size] + branching_factors[
+            1:
+        ]  # branching factors in the bundle
         return bunBFs
 
-    
     # NOTE: start seed is not used here (noted Feb 2022)
-    start_seed = kwargs['start_seed']
+    start_seed = kwargs["start_seed"]
     if "branching_factors" not in kwargs:
-        raise RuntimeError("scenario_creator for aircond needs branching_factors in kwargs")
+        raise RuntimeError(
+            "scenario_creator for aircond needs branching_factors in kwargs"
+        )
     branching_factors = kwargs["branching_factors"]
 
     if "scen" in sname:
-
-        demands,nodenames = _demands_creator(sname, branching_factors, root_name="ROOT", **kwargs)
+        demands, nodenames = _demands_creator(
+            sname, branching_factors, root_name="ROOT", **kwargs
+        )
 
         model = aircond_model_creator(demands, **kwargs)
 
-        #Constructing the nodes used by the scenario
+        # Constructing the nodes used by the scenario
         model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
         model._mpisppy_probability = 1 / np.prod(branching_factors)
 
-        return model 
+        return model
 
     elif "Bundle" in sname:
         firstnum = int(sname.split("_")[1])
         lastnum = int(sname.split("_")[2])
-        snames = [f"scen{i}" for i in range(firstnum, lastnum+1)]
+        snames = [f"scen{i}" for i in range(firstnum, lastnum + 1)]
 
         if kwargs.get("unpickle_bundles_dir") is not None:
-            fname = os.path.join(kwargs["unpickle_bundles_dir"], sname+".pkl")
-            bundle =  pickle_bundle.dill_unpickle(fname)
+            fname = os.path.join(kwargs["unpickle_bundles_dir"], sname + ".pkl")
+            bundle = pickle_bundle.dill_unpickle(fname)
             return bundle
 
         # if we are still here, we have to create the bundle (we did not load it)
         bunkwargs = kwargs.copy()
         bunkwargs["branching_factors"] = _bunBFs(branching_factors, len(snames))
         # The next line is needed, but eliminates comparison of pickle and non-pickle
-        bunkwargs["start_seed"] = start_seed+firstnum * len(branching_factors) # the usual block of seeds
-        bundle = sputils.create_EF(snames, scenario_creator,
-                                   scenario_creator_kwargs=bunkwargs, EF_name=sname,
-                                   nonant_for_fixed_vars = False)
+        bunkwargs["start_seed"] = start_seed + firstnum * len(
+            branching_factors
+        )  # the usual block of seeds
+        bundle = sputils.create_EF(
+            snames,
+            scenario_creator,
+            scenario_creator_kwargs=bunkwargs,
+            EF_name=sname,
+            nonant_for_fixed_vars=False,
+        )
         # It simplifies things if we assume that the bundles consume entire second stage nodes,
         # then all we need is a root node and the only nonants that need to be reported are
         # at the root node (otherwise, more coding is required here to figure out which nodes and Vars
         # are shared with other bundles)
-        bunsize = (lastnum-firstnum+1)
+        bunsize = lastnum - firstnum + 1
         N = np.prod(branching_factors)
         numbuns = N / bunsize
-        nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]
+        nonantlist = [v for idx, v in bundle.ref_vars.items() if idx[0] == "ROOT"]
         attach_root_node(bundle, 0, nonantlist)
         # scenarios are equally likely so bundles are too
-        bundle._mpisppy_probability = 1/numbuns
+        bundle._mpisppy_probability = 1 / numbuns
         if kwargs.get("pickle_bundles_dir") is not None:
             # note that sname is a bundle name
-            fname = os.path.join(kwargs["pickle_bundles_dir"], sname+".pkl")
+            fname = os.path.join(kwargs["pickle_bundles_dir"], sname + ".pkl")
             pickle_bundle.dill_pickle(bundle, fname)
         return bundle
     else:
-        raise RuntimeError (f"Scenario name does not have scen or Bundle: {sname}")
-        
+        raise RuntimeError(f"Scenario name does not have scen or Bundle: {sname}")
 
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    return base_aircond.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=given_scenario, **scenario_creator_kwargs)
-                
 
-#=========
-def scenario_names_creator(num_scens,start=None):
+def sample_tree_scen_creator(
+    sname,
+    stage,
+    sample_branching_factors,
+    seed,
+    given_scenario=None,
+    **scenario_creator_kwargs,
+):
+    return base_aircond.sample_tree_scen_creator(
+        sname,
+        stage,
+        sample_branching_factors,
+        seed,
+        given_scenario=given_scenario,
+        **scenario_creator_kwargs,
+    )
+
+
+# =========
+def scenario_names_creator(num_scens, start=None):
     # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+    if start is None:
+        start = 0
+    return [f"scen{i}" for i in range(start, start + num_scens)]
 
-#=========
+
+# =========
 def inparser_adder(cfg):
     base_aircond.inparser_adder(cfg)
     # special "proper" bundle arguments
     pickle_bundle.pickle_bundle_config(cfg)
-    
 
-#=========
+
+# =========
 def kw_creator(options=None):
     kwargs = base_aircond.kw_creator(options)
 
@@ -210,22 +255,33 @@ def kw_creator(options=None):
     return kwargs
 
 
-#============================
+# ============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 
-#============================
-def xhat_generator_aircond(scenario_names, solver_name="gurobi", solver_options=None,
-                           branching_factors=None, mudev = 0, sigmadev = 40,
-                           start_ups=None, start_seed = 0):
-    return base_aircond.xhat_generator_aircond(scenario_names, solver_name="gurobi", solver_options=solver_options,
-                                               branching_factors=branching_factors, mudev = mudev, sigmadev = sigmadev,
-                                               start_ups=start_ups, start_seed = start_seed)
+# ============================
+def xhat_generator_aircond(
+    scenario_names,
+    solver_name="gurobi",
+    solver_options=None,
+    branching_factors=None,
+    mudev=0,
+    sigmadev=40,
+    start_ups=None,
+    start_seed=0,
+):
+    return base_aircond.xhat_generator_aircond(
+        scenario_names,
+        solver_name="gurobi",
+        solver_options=solver_options,
+        branching_factors=branching_factors,
+        mudev=mudev,
+        sigmadev=sigmadev,
+        start_ups=start_ups,
+        start_seed=start_seed,
+    )
 
 
 if __name__ == "__main__":
     print("not directly runnable.")
-   
-        
-        

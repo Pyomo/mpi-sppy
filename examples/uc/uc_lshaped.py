@@ -21,7 +21,7 @@ from mpisppy.opt.lshaped import LShapedMethod
 def _parse_args():
     cfg = config.Config()
     cfg.popular_args()
-    cfg.num_scens_required() 
+    cfg.num_scens_required()
     cfg.ph_args()
     cfg.two_sided_args()
     cfg.fwph_args()
@@ -33,7 +33,7 @@ def _parse_args():
 def main():
     cfg = _parse_args()
 
-    # Need default_rho for FWPH, without you get 
+    # Need default_rho for FWPH, without you get
     # uninitialized numeric value error
     if cfg.fwph and cfg.default_rho is None:
         print("Must specify a default_rho if using FWPH")
@@ -45,28 +45,28 @@ def main():
 
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
-    scenario_creator_kwargs = {
-        "path": f"./{num_scen}scenarios_r1/"
-    }
+    scenario_creator_kwargs = {"path": f"./{num_scen}scenarios_r1/"}
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     # Options for the L-shaped method at the hub
-    spo = None if cfg.max_solver_threads is None else {"threads": cfg.max_solver_threads}
-    spo['mipgap'] = 0.005
+    spo = (
+        None if cfg.max_solver_threads is None else {"threads": cfg.max_solver_threads}
+    )
+    spo["mipgap"] = 0.005
     options = {
         "root_solver": cfg.solver_name,
         "sp_solver": cfg.solver_name,
-        "sp_solver_options" : spo,
-        "root_solver_options" : spo,
-        #"valid_eta_lb": {n:0. for n in all_scenario_names},
+        "sp_solver_options": spo,
+        "root_solver_options": spo,
+        # "valid_eta_lb": {n:0. for n in all_scenario_names},
         "max_iter": cfg.max_iterations,
         "verbose": False,
-        "root_scenarios":[all_scenario_names[len(all_scenario_names)//2]],
-   }
-    
+        "root_scenarios": [all_scenario_names[len(all_scenario_names) // 2]],
+    }
+
     # L-shaped hub
     hub_dict = {
         "hub_class": LShapedHub,
@@ -77,7 +77,7 @@ def main():
             },
         },
         "opt_class": LShapedMethod,
-        "opt_kwargs": { # Args passed to LShapedMethod __init__
+        "opt_kwargs": {  # Args passed to LShapedMethod __init__
             "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
@@ -87,13 +87,17 @@ def main():
 
     # FWPH spoke
     if fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-        fw_spoke["opt_kwargs"]["PH_options"]["abs_gap"] = 0.
+        fw_spoke = vanilla.fwph_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
+        fw_spoke["opt_kwargs"]["PH_options"]["abs_gap"] = 0.0
         fw_spoke["opt_kwargs"]["PH_options"]["rel_gap"] = 1e-5
         fw_spoke["opt_kwargs"]["rho_setter"] = uc.scenario_rhos
 
     if xhatlshaped:
-        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     list_of_spoke_dict = list()
     if fwph:

@@ -11,6 +11,7 @@ import os
 import models.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
+
 def scenario_creator(scenario_name, scenario_count=None):
     if scenario_count not in (3, 10):
         raise ValueError(
@@ -42,7 +43,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 
 def _rho_setter(scen):
-    """ rho values for the scenario.
+    """rho values for the scenario.
     Args:
         scen (pyo.ConcreteModel): the scenario
     Returns:
@@ -64,8 +65,9 @@ def _rho_setter(scen):
 
     return retlist
 
+
 def _variable_probability(scen):
-    """ per variable probabilities
+    """per variable probabilities
     Args:
         scen (pyo.ConcreteModel): the scenario
     Returns:
@@ -80,13 +82,13 @@ def _variable_probability(scen):
     if scen._PySP_scenario_name == "Scenario1":
         retlist.append((idv, 0))
     else:
-        retlist.append((idv, 1/(scencnt-1)))
-        
+        retlist.append((idv, 1 / (scencnt - 1)))
+
     return retlist
 
 
 def id_fix_list_fct(s):
-    """ specify tuples used by the fixer.
+    """specify tuples used by the fixer.
 
     Args:
         s (ConcreteModel): the sizes instance.

@@ -25,11 +25,11 @@ from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 
 def scenario_creator(scenario_name, data_dir=None):
-    """ The callback needs to create an instance and then attach
-        the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
-        Optionally attach _PHrho.
+    """The callback needs to create an instance and then attach
+    the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
+    Optionally attach _PHrho.
     """
-    if data_dir is None:    
+    if data_dir is None:
         raise ValueError("kwarg `data_dir` is required for SSLP scenario_creator")
     fname = data_dir + os.sep + scenario_name + ".dat"
     model = ref.model.create_instance(fname, name=scenario_name)
@@ -41,7 +41,7 @@ def scenario_creator(scenario_name, data_dir=None):
         )
     ]
     model._mpisppy_probability = "uniform"
-    
+
     return model
 
 
@@ -51,31 +51,36 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 ########## helper functions ########
 
-#=========
-def scenario_names_creator(num_scens,start=None):
+
+# =========
+def scenario_names_creator(num_scens, start=None):
     # one-based scenarios
     # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=1
-    return [f"Scenario{i}" for i in range(start,start+num_scens)]
+    if start is None:
+        start = 1
+    return [f"Scenario{i}" for i in range(start, start + num_scens)]
 
 
-#=========
+# =========
 def inparser_adder(cfg):
     # add options unique to sizes
     # we don't want num_scens from the command line
     cfg.mip_options()
-    cfg.add_to_config("instance_name",
-                        description="sslp instance name (e.g., sslp_15_45_10)",
-                        domain=str,
-                        default=None)                
-    cfg.add_to_config("sslp_data_path",
-                        description="path to sslp data (e.g., ./data)",
-                        domain=str,
-                        default=None)                
+    cfg.add_to_config(
+        "instance_name",
+        description="sslp instance name (e.g., sslp_15_45_10)",
+        domain=str,
+        default=None,
+    )
+    cfg.add_to_config(
+        "sslp_data_path",
+        description="path to sslp data (e.g., ./data)",
+        domain=str,
+        default=None,
+    )
 
 
-#=========
+# =========
 def kw_creator(cfg):
     # linked to the scenario_creator and inparser_adder
     # side-effect is dealing with num_scens
@@ -83,19 +88,27 @@ def kw_creator(cfg):
     ns = int(inst.split("_")[-1])
     if hasattr(cfg, "num_scens"):
         if cfg.num_scens != ns:
-            raise RuntimeError(f"Argument num-scens={cfg.num_scens} does not match the number "
-                               "implied by instance name={ns} "
-                               "\n(--num-scens is not needed for sslp)")
+            raise RuntimeError(
+                f"Argument num-scens={cfg.num_scens} does not match the number "
+                "implied by instance name={ns} "
+                "\n(--num-scens is not needed for sslp)"
+            )
     else:
-        cfg.add_and_assign("num_scens","number of scenarios", int, None, ns)
+        cfg.add_and_assign("num_scens", "number of scenarios", int, None, ns)
     data_dir = os.path.join(cfg.sslp_data_path, inst, "scenariodata")
     kwargs = {"data_dir": data_dir}
     return kwargs
 
 
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+def sample_tree_scen_creator(
+    sname,
+    stage,
+    sample_branching_factors,
+    seed,
+    given_scenario=None,
+    **scenario_creator_kwargs,
+):
+    """Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
         (this function supports zhat and confidence interval code)
     Args:
         sname (string): scenario name to be created
@@ -114,23 +127,25 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
 
+
 ######## end helper functions #########
+
 
 # special helper function
 def id_fix_list_fct(s):
-    """ specify tuples used by the classic (non-RC-based) fixer.
+    """specify tuples used by the classic (non-RC-based) fixer.
 
-        Args:
-            s (ConcreteModel): the sizes instance.
-        Returns:
-             i0, ik (tuples): one for iter 0 and other for general iterations.
-                 Var id,  threshold, nb, lb, ub
-                 The threshold is on the square root of the xbar squared differnce
-                 nb, lb an bu an "no bound", "upper" and "lower" and give the numver
-                     of iterations or None for ik and for i0 anything other than None
-                     or None. In both cases, None indicates don't fix.
-        Note:
-            This is just here to provide an illustration, we don't run long enough.
+    Args:
+        s (ConcreteModel): the sizes instance.
+    Returns:
+         i0, ik (tuples): one for iter 0 and other for general iterations.
+             Var id,  threshold, nb, lb, ub
+             The threshold is on the square root of the xbar squared differnce
+             nb, lb an bu an "no bound", "upper" and "lower" and give the numver
+                 of iterations or None for ik and for i0 anything other than None
+                 or None. In both cases, None indicates don't fix.
+    Note:
+        This is just here to provide an illustration, we don't run long enough.
     """
 
     # iter0tuples = [
@@ -189,10 +204,10 @@ if __name__ == "__main__":
     options["display_timing"] = False
     options["display_progress"] = True
 
-    options["primal_dual_converger_options"] = {"tol" : 1e-6}
+    options["primal_dual_converger_options"] = {"tol": 1e-6}
     options["display_convergence_detail"] = True
     options["smoothed"] = True
-    options["defaultPHp"] = .5
+    options["defaultPHp"] = 0.5
     options["defaultPHbeta"] = 0.1
 
     ### async section ###
@@ -231,7 +246,7 @@ if __name__ == "__main__":
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"data_dir": data_dir},
-        ph_converger = PrimalDualConverger
+        ph_converger=PrimalDualConverger,
     )
 
     if ph.cylinder_rank == 0:

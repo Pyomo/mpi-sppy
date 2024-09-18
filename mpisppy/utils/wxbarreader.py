@@ -6,69 +6,71 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-''' An extension to initialize PH weights and/or PH xbar values from csv files.
+"""An extension to initialize PH weights and/or PH xbar values from csv files.
 
-    To use, specify either or both of the following keys to the options dict:
+To use, specify either or both of the following keys to the options dict:
 
-        "init_W_fname" : <str filename>
-        "init_Xbar_fname": <str filename>
+    "init_W_fname" : <str filename>
+    "init_Xbar_fname": <str filename>
 
-    If neither option is specified, this extension does nothing (i.e. is
-    silent--does not raise a warning/error). If only one is specified, then
-    only those values are initialized. The specified files should be
-    formatted as follows:
+If neither option is specified, this extension does nothing (i.e. is
+silent--does not raise a warning/error). If only one is specified, then
+only those values are initialized. The specified files should be
+formatted as follows:
 
-        (W values) csv with rows: scenario_name, variable_name, weight_value
-        (x values) csv with rows: variable_name, variable_value
+    (W values) csv with rows: scenario_name, variable_name, weight_value
+    (x values) csv with rows: variable_name, variable_value
 
-    Rows that begin with "#" are treated as comments. If the files are missing
-    any values, raises an error. Extra values are ignored.
+Rows that begin with "#" are treated as comments. If the files are missing
+any values, raises an error. Extra values are ignored.
 
-    TODO:
-        Check with bundles.
+TODO:
+    Check with bundles.
 
-    Written: DLW, July 2019
-    Modified: DTM, Aug 2019
-'''
+Written: DLW, July 2019
+Modified: DTM, Aug 2019
+"""
 
 import mpisppy.utils.wxbarutils
-import os # For checking if files exist
+import os  # For checking if files exist
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
 
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
 
+
 class WXBarReader(mpisppy.extensions.extension.Extension):
-    """ Extension class for reading W values
-    """
+    """Extension class for reading W values"""
+
     def __init__(self, ph):
-
-        ''' Do a bunch of checking if files exist '''
+        """Do a bunch of checking if files exist"""
         w_fname, x_fname, sep_files = None, None, False
-        if ('init_separate_W_files' in ph.options):
-            sep_files = ph.options['init_separate_W_files']
+        if "init_separate_W_files" in ph.options:
+            sep_files = ph.options["init_separate_W_files"]
 
-        if ('init_W_fname' in ph.options):
-            w_fname = ph.options['init_W_fname']
-            if (not os.path.exists(w_fname)):
-                if (rank == 0):
-                    if (sep_files):
-                        print('Cannot find path', w_fname)
+        if "init_W_fname" in ph.options:
+            w_fname = ph.options["init_W_fname"]
+            if not os.path.exists(w_fname):
+                if rank == 0:
+                    if sep_files:
+                        print("Cannot find path", w_fname)
                     else:
-                        print('Cannot find file', w_fname)
+                        print("Cannot find file", w_fname)
                 quit()
 
-        if ('init_Xbar_fname' in ph.options):
-            x_fname = ph.options['init_Xbar_fname']
-            if (not os.path.exists(x_fname)):
-                if (rank == 0):
-                    print('Cannot find file', x_fname)
+        if "init_Xbar_fname" in ph.options:
+            x_fname = ph.options["init_Xbar_fname"]
+            if not os.path.exists(x_fname):
+                if rank == 0:
+                    print("Cannot find file", x_fname)
                 quit()
 
-        if (x_fname is None and w_fname is None and rank==0):
-            print('Warning: no input files provided to WXBarReader. '
-                  'W and Xbar will be initialized to their default values.')
+        if x_fname is None and w_fname is None and rank == 0:
+            print(
+                "Warning: no input files provided to WXBarReader. "
+                "W and Xbar will be initialized to their default values."
+            )
 
         self.PHB = ph
         self.cylinder_rank = rank
@@ -79,24 +81,23 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
     def pre_iter0(self):
         pass
 
-
     def post_iter0(self):
         pass
 
     def miditer(self):
-        ''' Called before the solveloop is called '''
+        """Called before the solveloop is called"""
         if self.PHB._PHIter == 1:
             if self.w_fname:
                 mpisppy.utils.wxbarutils.set_W_from_file(
-                        self.w_fname, self.PHB, self.cylinder_rank,
-                        sep_files=self.sep_files)
-                self.PHB._reenable_W() # This makes a big difference.
+                    self.w_fname, self.PHB, self.cylinder_rank, sep_files=self.sep_files
+                )
+                self.PHB._reenable_W()  # This makes a big difference.
             if self.x_fname:
                 mpisppy.utils.wxbarutils.set_xbar_from_file(self.x_fname, self.PHB)
                 self.PHB._reenable_prox()
 
     def enditer(self):
-        ''' Called after the solve loop '''
+        """Called after the solve loop"""
         pass
 
     def post_everything(self):

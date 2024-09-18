@@ -14,15 +14,14 @@ import mpisppy.phbase
 import mpisppy.opt.ph
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.xhatclosest import XhatClosest
-from sizes import scenario_creator, \
-                  scenario_denouement, \
-                  _rho_setter
+from sizes import scenario_creator, scenario_denouement, _rho_setter
 
 
 if __name__ == "__main__":
-
     if len(sys.argv) != 8:
-        print("usage: python sizes_ph.py scenNum maxiter rho smooth_type pvalue_or_pratio beta proxlin")
+        print(
+            "usage: python sizes_ph.py scenNum maxiter rho smooth_type pvalue_or_pratio beta proxlin"
+        )
         print("eg: python sizes_ph.py 3 100 1 0 0.0 1.0 1")
         quit()
     ScenCount = int(sys.argv[1])  # 3 or 10
@@ -41,9 +40,12 @@ if __name__ == "__main__":
     options["iter0_solver_options"] = {"mipgap": 0.01, "threads": 1}
     # another way
     options["iterk_solver_options"] = {"mipgap": 0.005, "threads": 1}
-    
-    options["xhat_closest_options"] =  {"xhat_solver_options": options["iterk_solver_options"], "keep_solution":True}
-    options["primal_dual_converger_options"] = {"tol" : 1e-2}
+
+    options["xhat_closest_options"] = {
+        "xhat_solver_options": options["iterk_solver_options"],
+        "keep_solution": True,
+    }
+    options["primal_dual_converger_options"] = {"tol": 1e-2}
 
     options["smoothed"] = int(sys.argv[4])
     options["defaultPHp"] = float(sys.argv[5])
@@ -53,8 +55,7 @@ if __name__ == "__main__":
 
     all_scenario_names = list()
     for sn in range(ScenCount):
-        all_scenario_names.append("Scenario"+str(sn+1))
-
+        all_scenario_names.append("Scenario" + str(sn + 1))
 
     ph = mpisppy.opt.ph.PH(
         options,
@@ -62,21 +63,20 @@ if __name__ == "__main__":
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"scenario_count": ScenCount},
-        rho_setter=_rho_setter, 
-        ph_converger = PrimalDualConverger,
+        rho_setter=_rho_setter,
+        ph_converger=PrimalDualConverger,
         extensions=XhatClosest,
     )
-    
+
     ph.ph_main()
     variables = ph.gather_var_values_to_rank0()
-    for (scenario_name, variable_name) in variables:
+    for scenario_name, variable_name in variables:
         variable_value = variables[scenario_name, variable_name]
         print(scenario_name, variable_name, variable_value)
 
     if ph.tree_solution_available:
-        print(f"Final objective from XhatClosest: {ph.extobject._final_xhat_closest_obj}")
+        print(
+            f"Final objective from XhatClosest: {ph.extobject._final_xhat_closest_obj}"
+        )
     else:
         print(f"Final objective from XhatClosest: {float('inf')}")
-
-    
-

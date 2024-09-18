@@ -8,8 +8,8 @@
 ###############################################################################
 import mpisppy.extension
 
-class BatteryExtension(mpisppy.extension.Extension):
 
+class BatteryExtension(mpisppy.extension.Extension):
     def __init__(self, ph, rank, n_proc):
         self.cylinder_rank = rank
         self.ph = ph
@@ -21,8 +21,8 @@ class BatteryExtension(mpisppy.extension.Extension):
         pass
 
     def miditer(self, PHiter, conv):
-        if (self.cylinder_rank == 0):
-            print('{itr:3d} {conv:12.4e}'.format(itr=PHiter, conv=conv))
+        if self.cylinder_rank == 0:
+            print("{itr:3d} {conv:12.4e}".format(itr=PHiter, conv=conv))
 
     def enditer(self, PHiter):
         pass

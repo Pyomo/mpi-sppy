@@ -13,16 +13,19 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
+
 def _parse_args():
     cfg = config.Config()
     cfg.popular_args()
-    cfg.num_scens_optional() 
+    cfg.num_scens_optional()
     cfg.ph_args()
-    cfg.add_to_config("instance_name",
-                         description="sslp instance name (e.g., sslp_15_45_10)",
-                         domain=str,
-                         default=None,
-                         argparse_args = {"required": True})
+    cfg.add_to_config(
+        "instance_name",
+        description="sslp instance name (e.g., sslp_15_45_10)",
+        domain=str,
+        default=None,
+        argparse_args={"required": True},
+    )
 
     cfg.two_sided_args()
     cfg.fixer_args()
@@ -42,9 +45,11 @@ def main():
     inst = cfg.instance_name
     num_scen = int(inst.split("_")[-1])
     if cfg.num_scens is not None and cfg.num_scens != num_scen:
-        raise RuntimeError("Argument num-scens={} does not match the number "
-                           "implied by instance name={} "
-                           "\n(--num-scens is not needed for sslp)")
+        raise RuntimeError(
+            "Argument num-scens={} does not match the number "
+            "implied by instance name={} "
+            "\n(--num-scens is not needed for sslp)"
+        )
 
     fwph = cfg.fwph
     fixer = cfg.fixer
@@ -58,9 +63,11 @@ def main():
     if cfg.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
 
-    scenario_creator_kwargs = {"data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"}
+    scenario_creator_kwargs = {
+        "data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"
+    }
     scenario_creator = sslp.scenario_creator
-    scenario_denouement = sslp.scenario_denouement    
+    scenario_denouement = sslp.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     if fixer:
@@ -72,10 +79,12 @@ def main():
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=ph_ext,
-                              rho_setter = None)
+    hub_dict = vanilla.ph_hub(
+        *beans,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_ext,
+        rho_setter=None,
+    )
 
     if fixer:
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
@@ -83,38 +92,44 @@ def main():
             "boundtol": fixer_tol,
             "id_fix_list_fct": sslp.id_fix_list_fct,
         }
-    
+
     if reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
     # FWPH spoke
     if fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        fw_spoke = vanilla.fwph_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     # Standard Lagrangian bound spoke
     if lagrangian:
-        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None)
+        lagrangian_spoke = vanilla.lagrangian_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs, rho_setter=None
+        )
     if subgradient:
-        subgradient_spoke = vanilla.subgradient_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None)
-        
+        subgradient_spoke = vanilla.subgradient_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs, rho_setter=None
+        )
+
     # xhat looper bound spoke
     if xhatlooper:
-        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatlooper_spoke = vanilla.xhatlooper_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     # xhat shuffle bound spoke
     if xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-    
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
+
     # reduced costs spoke
     if reduced_costs:
-        reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = None)
-       
+        reduced_costs_spoke = vanilla.reduced_costs_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs, rho_setter=None
+        )
+
     list_of_spoke_dict = list()
     if fwph:
         list_of_spoke_dict.append(fw_spoke)

@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 """Provides functions to plot the solution of a scenario."""
+
 import os
 
 import matplotlib.pyplot as plt

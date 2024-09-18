@@ -19,21 +19,23 @@ import unittest
 from math import log10, floor
 import mpisppy.opt.aph
 import mpisppy.phbase
-from mpisppy.tests.examples.sizes.sizes import scenario_creator, \
-                                               scenario_denouement
+from mpisppy.tests.examples.sizes.sizes import scenario_creator, scenario_denouement
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.tests.utils import get_solver
 import mpisppy.MPI as mpi
 
 __version__ = 0.6
-solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name = (
+    get_solver()
+)
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-#*****************************************************************************
+
+# *****************************************************************************
 class Test_aph_sizes(unittest.TestCase):
-    """ Test the aph mpisppy code using sizes."""
+    """Test the aph mpisppy code using sizes."""
 
     def setUp(self):
         self.Baseoptions = {}
@@ -53,20 +55,20 @@ class Test_aph_sizes(unittest.TestCase):
 
         self.all3_scenario_names = list()
         for sn in range(3):
-            self.all3_scenario_names.append("Scenario"+str(sn+1))
+            self.all3_scenario_names.append("Scenario" + str(sn + 1))
 
         self.all10_scenario_names = list()
         for sn in range(10):
-            self.all10_scenario_names.append("Scenario"+str(sn+1))
+            self.all10_scenario_names.append("Scenario" + str(sn + 1))
 
     def _copy_of_base_options(self):
         retval = {}
-        for k,v in self.Baseoptions.items():
+        for k, v in self.Baseoptions.items():
             retval[k] = v
         return retval
-        
+
     def test_make_aph(self):
-        """ Just smoke to verify construction"""
+        """Just smoke to verify construction"""
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
         options["async_frac_needed"] = 0.5
@@ -80,8 +82,9 @@ class Test_aph_sizes(unittest.TestCase):
         )
         assert aph is not None
 
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_aph_basic(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -96,8 +99,8 @@ class Test_aph_sizes(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("objthing={}, (was=-2435908)".format(obj))
-        print ("tbound ={} (was=224106)".format(tbound))
+        print("objthing={}, (was=-2435908)".format(obj))
+        print("tbound ={} (was=224106)".format(tbound))
 
     def test_bundles(self):
         options = self._copy_of_base_options()
@@ -113,12 +116,12 @@ class Test_aph_sizes(unittest.TestCase):
             scenario_creator_kwargs={"scenario_count": 10},
         )
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("bundle objthing={}, (was=224712.9)".format(obj))
-        print ("bundle tbound ={} (was=223168.5)".format(tbound))
+        print("bundle objthing={}, (was=224712.9)".format(obj))
+        print("bundle tbound ={} (was=223168.5)".format(tbound))
 
-        
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_APHgamma(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -135,12 +138,12 @@ class Test_aph_sizes(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print (f"APHgamma={a}; objthing={obj}")
-        print ("tbound ={}".format(tbound))
+        print(f"APHgamma={a}; objthing={obj}")
+        print("tbound ={}".format(tbound))
 
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_use_lag(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -156,12 +159,12 @@ class Test_aph_sizes(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print (f"use lag objthing={obj}")
-        print ("tbound ={}".format(tbound))
+        print(f"use lag objthing={obj}")
+        print("tbound ={}".format(tbound))
 
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_running_dump(self):
         # just see if "display_convergence_detail" causes a crash
         options = self._copy_of_base_options()
@@ -178,7 +181,6 @@ class Test_aph_sizes(unittest.TestCase):
         )
         conv, obj, tbound = aph.APH_main(spcomm=None)
 
-
     def test_lags_bundles(self):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
@@ -194,12 +196,13 @@ class Test_aph_sizes(unittest.TestCase):
             scenario_creator_kwargs={"scenario_count": 10},
         )
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("uselag bundle objthing={}, (pre-lag was=224712.9)".format(obj))
-        print ("bundle tbound ={} (was=223168.5)".format(tbound))
+        print("uselag bundle objthing={}, (pre-lag was=224712.9)".format(obj))
+        print("bundle tbound ={} (was=223168.5)".format(tbound))
 
-#*****************************************************************************
+
+# *****************************************************************************
 class Test_aph_farmer(unittest.TestCase):
-    """ Test the aph mpisppy code using farmer."""
+    """Test the aph mpisppy code using farmer."""
 
     def setUp(self):
         self.Baseoptions = {}
@@ -219,18 +222,19 @@ class Test_aph_farmer(unittest.TestCase):
 
     def _copy_of_base_options(self):
         retval = {}
-        for k,v in self.Baseoptions.items():
+        for k, v in self.Baseoptions.items():
             retval[k] = v
         return retval
 
     def round_pos_sig(self, x, sig=1):
-        return round(x, sig-int(floor(log10(abs(x))))-1)
+        return round(x, sig - int(floor(log10(abs(x)))) - 1)
 
     def _make_scenario_names(self, cnt):
         return [f"Scenario{i+1}" for i in range(cnt)]
-        
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_aph_farmer_basic30(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -247,7 +251,7 @@ class Test_aph_farmer(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        digits=3
+        digits = 3
         tbtarget = self.round_pos_sig(137846, digits)
         boundgot = self.round_pos_sig(-tbound, digits)
         self.assertEqual(tbtarget, boundgot)
@@ -256,8 +260,9 @@ class Test_aph_farmer(unittest.TestCase):
         objgot = self.round_pos_sig(-obj, digits)
         self.assertEqual(objgot, objtarget)
 
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_aph_farmer_dispatch(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -274,7 +279,7 @@ class Test_aph_farmer(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        digits=3
+        digits = 3
         tbtarget = self.round_pos_sig(137846, digits)
         boundgot = self.round_pos_sig(-tbound, digits)
         self.assertEqual(tbtarget, boundgot)
@@ -283,9 +288,9 @@ class Test_aph_farmer(unittest.TestCase):
         objgot = self.round_pos_sig(-obj, digits)
         self.assertEqual(objgot, objtarget)
 
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
+    @unittest.skipIf(
+        not solver_available, "%s solver is not available" % (solver_name,)
+    )
     def test_aph_farmer_dispatch_bundles(self):
         Aoptions = self._copy_of_base_options()
         Aoptions["PHIterLimit"] = 2
@@ -294,7 +299,7 @@ class Test_aph_farmer(unittest.TestCase):
         Aoptions["async_sleep_secs"] = 0.01
         Aoptions["aph_gamma"] = 1
         Aoptions["bundles_per_rank"] = 5
-        
+
         aph = mpisppy.opt.aph.APH(
             Aoptions,
             self._make_scenario_names(30),
@@ -304,7 +309,7 @@ class Test_aph_farmer(unittest.TestCase):
         )
 
         conv, obj, tbound = aph.APH_main(spcomm=None)
-        digits=3
+        digits = 3
         tbtarget = self.round_pos_sig(133005, digits)
         boundgot = self.round_pos_sig(-tbound, digits)
         self.assertEqual(tbtarget, boundgot)
@@ -314,5 +319,5 @@ class Test_aph_farmer(unittest.TestCase):
         self.assertEqual(objgot, objtarget)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

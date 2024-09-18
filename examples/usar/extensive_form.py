@@ -13,6 +13,7 @@ arguments serve to configure the USAR problem being solved. You can run
 with ``--help`` to show the command-line arguments. Additionally, the
 functions here can be imported and used as documented.
 """
+
 import itertools
 import os
 
@@ -42,7 +43,8 @@ def extensive_form(
     scenario_names = list(map(str, range(num_scens)))
 
     data_dicts = list(
-        itertools.islice(generate_data(**generate_data_kwargs), num_scens))
+        itertools.islice(generate_data(**generate_data_kwargs), num_scens)
+    )
     depot_coords, site_coords = generate_coords(**generate_data_kwargs)
     scenario_creator_kwargs = {
         "data_dicts": data_dicts,

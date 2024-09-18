@@ -105,7 +105,6 @@ class SPIntervalTightener(_SPPresolver):
         )
 
         while True:
-
             if not same_nonant_bounds:
                 update = True
 

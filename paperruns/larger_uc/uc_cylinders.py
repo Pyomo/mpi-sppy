@@ -34,18 +34,19 @@ def _parse_args():
     parser = baseparsers.xhatlooper_args(parser)
     parser = baseparsers.xhatshuffle_args(parser)
     parser = baseparsers.cross_scenario_cuts_args(parser)
-    parser.add_argument("--ph-mipgaps-json",
-                        help="json file with mipgap schedule (default None)",
-                        dest="ph_mipgaps_json",
-                        type=str,
-                        default=None)                
-    
+    parser.add_argument(
+        "--ph-mipgaps-json",
+        help="json file with mipgap schedule (default None)",
+        dest="ph_mipgaps_json",
+        type=str,
+        default=None,
+    )
+
     args = parser.parse_args()
     return args
 
 
 def main():
-    
     args = _parse_args()
 
     num_scen = args.num_scens
@@ -58,11 +59,12 @@ def main():
     fixer_tol = args.fixer_tol
     with_cross_scenario_cuts = args.with_cross_scenario_cuts
 
-    scensavail = [3,50,100,250,500,750,1000]
+    scensavail = [3, 50, 100, 250, 500, 750, 1000]
     if num_scen not in scensavail:
-        raise RuntimeError("num-scen was {}, but must be in {}".\
-                           format(num_scen, scensavail))
-    
+        raise RuntimeError(
+            "num-scen was {}, but must be in {}".format(num_scen, scensavail)
+        )
+
     scenario_creator_kwargs = {
         "scenario_count": num_scen,
         "path": str(num_scen) + "scenarios_wind",
@@ -71,7 +73,7 @@ def main():
     scenario_denouement = uc.scenario_denouement
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
     rho_setter = uc._rho_setter
-    
+
     # Things needed for vanilla cylinders
     beans = (args, scenario_creator, scenario_denouement, all_scenario_names)
 
@@ -90,11 +92,12 @@ def main():
         multi_ext = {"ext_classes": [Gapper]}
     if with_cross_scenario_cuts:
         multi_ext["ext_classes"].append(CrossScenarioExtension)
-        
+
     hub_dict["opt_kwargs"]["extension_kwargs"] = multi_ext
     if with_cross_scenario_cuts:
-        hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
-            = {"check_bound_improve_iterations" : args.cross_scenario_iter_cnt}
+        hub_dict["opt_kwargs"]["options"]["cross_scen_options"] = {
+            "check_bound_improve_iterations": args.cross_scenario_iter_cnt
+        }
 
     if with_fixer:
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
@@ -110,14 +113,14 @@ def main():
         mipgapdict = None
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": args.with_verbose,
-        "mipgapdict": mipgapdict
-        }
-        
+        "mipgapdict": mipgapdict,
+    }
+
     if args.default_rho is None:
         # since we are using a rho_setter anyway
-        hub_dict.opt_kwargs.options["defaultPHrho"] = 1  
+        hub_dict.opt_kwargs.options["defaultPHrho"] = 1
     ### end ph spoke ###
-    
+
     # FWPH spoke
     if with_fwph:
         fw_spoke = vanilla.fwph_spoke(
@@ -145,7 +148,7 @@ def main():
             *beans,
             scenario_creator_kwargs=scenario_creator_kwargs,
         )
-       
+
     # cross scenario cut spoke
     if with_cross_scenario_cuts:
         cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(

@@ -31,25 +31,28 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
     - The uc_cylinders.py code has a `scenario_count` kwarg that gets passed to
       the spokes, but it seems to be unused here...
     """
-    #print("Building instance for scenario =", scenario_name)
+    # print("Building instance for scenario =", scenario_name)
     scennum = sputils.extract_num(scenario_name)
 
     uc_model_params = pdp.get_uc_model()
 
     scenario_data = DataPortal(model=uc_model_params)
-    scenario_data.load(filename=path+os.sep+"RootNode.dat")
-    scenario_data.load(filename=path+os.sep+"Node"+str(scennum)+".dat")
+    scenario_data.load(filename=path + os.sep + "RootNode.dat")
+    scenario_data.load(filename=path + os.sep + "Node" + str(scennum) + ".dat")
 
-    scenario_params = uc_model_params.create_instance(scenario_data,
-                                                      report_timing=False,
-                                                      name=scenario_name)
+    scenario_params = uc_model_params.create_instance(
+        scenario_data, report_timing=False, name=scenario_name
+    )
 
-    scenario_md = md.ModelData(pdp.create_model_data_dict_params(scenario_params, keep_names=True))
+    scenario_md = md.ModelData(
+        pdp.create_model_data_dict_params(scenario_params, keep_names=True)
+    )
 
     ## TODO: use the "power_balance_constraints" for now. In the future, networks should be
     ##       handled with a custom callback -- also consider other base models
-    scenario_instance = uc.create_tight_unit_commitment_model(scenario_md,
-                                                    network_constraints='power_balance_constraints')
+    scenario_instance = uc.create_tight_unit_commitment_model(
+        scenario_md, network_constraints="power_balance_constraints"
+    )
 
     # hold over string attribute from Egret,
     # causes warning wth LShaped/Benders
@@ -60,25 +63,36 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
 # TBD: there are legacy functions here that should probably be factored.
 
-def scenario_creator(scenario_name, scenario_count=None, path=None,
-                     num_scens=None, seedoffset=0):
-    return pysp2_callback(scenario_name, scenario_count=scenario_count,
-                          path=path, num_scens=num_scens, seedoffset=seedoffset)
 
-def pysp2_callback(scenario_name, scenario_count=None, path=None,
-                     num_scens=None, seedoffset=0):
-    ''' The callback needs to create an instance and then attach
-        the nodes to it in a list _mpisppy_node_list ordered by stages.
-        Optionally attach _PHrho. 
-    '''
-
-    instance = pysp_instance_creation_callback(
-        scenario_name, scenario_count=scenario_count, path=path,
+def scenario_creator(
+    scenario_name, scenario_count=None, path=None, num_scens=None, seedoffset=0
+):
+    return pysp2_callback(
+        scenario_name,
+        scenario_count=scenario_count,
+        path=path,
+        num_scens=num_scens,
+        seedoffset=seedoffset,
     )
 
-    #Add the probability of the scenario
-    if num_scens is not None :
-        instance._mpisppy_probability = 1/num_scens
+
+def pysp2_callback(
+    scenario_name, scenario_count=None, path=None, num_scens=None, seedoffset=0
+):
+    """The callback needs to create an instance and then attach
+    the nodes to it in a list _mpisppy_node_list ordered by stages.
+    Optionally attach _PHrho.
+    """
+
+    instance = pysp_instance_creation_callback(
+        scenario_name,
+        scenario_count=scenario_count,
+        path=path,
+    )
+
+    # Add the probability of the scenario
+    if num_scens is not None:
+        instance._mpisppy_probability = 1 / num_scens
 
     # now attach the one and only tree node (ROOT is a reserved word)
     # UnitOn[*,*] is the only set of nonant variables
@@ -92,100 +106,117 @@ def pysp2_callback(scenario_name, scenario_count=None, path=None,
                                                           [instance.UnitStart, instance.UnitStop, instance.StartupIndicator],
                                                           )]
     """
-    sputils.attach_root_node(instance,
-                             instance.StageCost["Stage_1"],
-                             [instance.UnitOn],
-                             nonant_ef_suppl_list = [instance.UnitStart,
-                                                     instance.UnitStop,
-                                                     instance.StartupIndicator])
+    sputils.attach_root_node(
+        instance,
+        instance.StageCost["Stage_1"],
+        [instance.UnitOn],
+        nonant_ef_suppl_list=[
+            instance.UnitStart,
+            instance.UnitStop,
+            instance.StartupIndicator,
+        ],
+    )
     return instance
 
+
 def scenario_denouement(rank, scenario_name, scenario):
-#    print("First stage cost for scenario",scenario_name,"is",pyo.value(scenario.StageCost["FirstStage"]))
-#    print("Second stage cost for scenario",scenario_name,"is",pyo.value(scenario.StageCost["SecondStage"]))
+    #    print("First stage cost for scenario",scenario_name,"is",pyo.value(scenario.StageCost["FirstStage"]))
+    #    print("Second stage cost for scenario",scenario_name,"is",pyo.value(scenario.StageCost["SecondStage"]))
     pass
 
-def scenario_rhosa(scenario_instance):
 
+def scenario_rhosa(scenario_instance):
     return scenario_rhos(scenario_instance)
+
 
 def _rho_setter(scenario_instance):
-
     return scenario_rhos(scenario_instance)
+
 
 def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
     computed_rhos = []
     for t in scenario_instance.TimePeriods:
         for g in scenario_instance.ThermalGenerators:
-            min_power = pyo.value(scenario_instance.MinimumPowerOutput[g,t])
-            max_power = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
+            min_power = pyo.value(scenario_instance.MinimumPowerOutput[g, t])
+            max_power = pyo.value(scenario_instance.MaximumPowerOutput[g, t])
             avg_power = min_power + ((max_power - min_power) / 2.0)
 
-            min_cost = pyo.value(scenario_instance.MinimumProductionCost[g,t])
+            min_cost = pyo.value(scenario_instance.MinimumProductionCost[g, t])
 
-            avg_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, avg_power) + min_cost
-            #max_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, max_power) + min_cost
+            avg_cost = (
+                scenario_instance.ComputeProductionCosts(
+                    scenario_instance, g, t, avg_power
+                )
+                + min_cost
+            )
+            # max_cost = scenario_instance.ComputeProductionCosts(scenario_instance, g, t, max_power) + min_cost
 
             computed_rho = rho_scale_factor * avg_cost
-            computed_rhos.append((id(scenario_instance.UnitOn[g,t]), computed_rho))
-                             
+            computed_rhos.append((id(scenario_instance.UnitOn[g, t]), computed_rho))
+
     return computed_rhos
 
-def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
-                                    fname=None):
-    ''' First computes the standard rho values (as computed by scenario_rhos()
-        above). Then reads rho values from the specified file (raises error if
-        no file specified) which is a csv formatted (var_name,rho_value). If
-        the rho_value specified in the file is strictly positive, it replaces
-        the value computed by scenario_rhos().
 
-        DTM: I wrote this function to test some specific things--I don't think
-        this will have a general purpose use, and can probably be deleted.
-    '''
-    if (fname is None):
-        raise RuntimeError('Please provide an "fname" kwarg to '
-                           'the "rho_setter_kwargs" option in options')
-    computed_rhos = scenario_rhos(scenario_instance,
-                                    rho_scale_factor=rho_scale_factor)
+def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01, fname=None):
+    """First computes the standard rho values (as computed by scenario_rhos()
+    above). Then reads rho values from the specified file (raises error if
+    no file specified) which is a csv formatted (var_name,rho_value). If
+    the rho_value specified in the file is strictly positive, it replaces
+    the value computed by scenario_rhos().
+
+    DTM: I wrote this function to test some specific things--I don't think
+    this will have a general purpose use, and can probably be deleted.
+    """
+    if fname is None:
+        raise RuntimeError(
+            'Please provide an "fname" kwarg to '
+            'the "rho_setter_kwargs" option in options'
+        )
+    computed_rhos = scenario_rhos(scenario_instance, rho_scale_factor=rho_scale_factor)
     try:
         trial_rhos = _get_saved_rhos(fname)
     except Exception:
-        raise RuntimeError('Formatting issue in specified rho file ' + fname +
-                           '. Format should be (variable_name,rho_value) for '
-                           'each row, with no blank lines, and no '
-                           'extra/commented lines')
-    
+        raise RuntimeError(
+            "Formatting issue in specified rho file "
+            + fname
+            + ". Format should be (variable_name,rho_value) for "
+            "each row, with no blank lines, and no "
+            "extra/commented lines"
+        )
+
     index = 0
     for b in sorted(scenario_instance.Buses):
         for t in sorted(scenario_instance.TimePeriods):
             for g in sorted(scenario_instance.ThermalGeneratorsAtBus[b]):
-                var = scenario_instance.UnitOn[g,t]
+                var = scenario_instance.UnitOn[g, t]
                 try:
                     trial_rho = trial_rhos[var.name]
                 except KeyError:
-                    raise RuntimeError(var.name + ' is missing from '
-                                       'the specified rho file ' + fname)
-                if (trial_rho >= 1e-14):
-                    print('Using a trial rho')
+                    raise RuntimeError(
+                        var.name + " is missing from " "the specified rho file " + fname
+                    )
+                if trial_rho >= 1e-14:
+                    print("Using a trial rho")
                     computed_rhos[index] = (id(var), trial_rho)
                 index += 1
-                             
+
     return computed_rhos
 
+
 def _get_saved_rhos(fname):
-    ''' Return a dict of trial rho values, indexed by variable name.
-    '''
+    """Return a dict of trial rho values, indexed by variable name."""
     rhos = dict()
-    with open(fname, 'r') as f:
+    with open(fname, "r") as f:
         for line in f:
-            line = line.split(',')
-            vname = ','.join(line[:-1])
+            line = line.split(",")
+            vname = ",".join(line[:-1])
             rho = float(line[-1])
             rhos[vname] = rho
     return rhos
 
+
 def id_fix_list_fct(scenario_instance):
-    """ specify tuples used by the fixer.
+    """specify tuples used by the fixer.
 
     Args:
         s (ConcreteModel): the sizes instance.
@@ -205,14 +236,20 @@ def id_fix_list_fct(scenario_instance):
     for b in sorted(scenario_instance.Buses):
         for t in sorted(scenario_instance.TimePeriods):
             for g in sorted(scenario_instance.ThermalGeneratorsAtBus[b]):
+                iter0tuples.append(
+                    fixer.Fixer_tuple(
+                        scenario_instance.UnitOn[g, t], th=0.01, nb=None, lb=0, ub=None
+                    )
+                )
 
-                iter0tuples.append(fixer.Fixer_tuple(scenario_instance.UnitOn[g,t],
-                                                     th=0.01, nb=None, lb=0, ub=None))
-                
-                iterktuples.append(fixer.Fixer_tuple(scenario_instance.UnitOn[g,t],
-                                                     th=0.01, nb=None, lb=6, ub=6))
+                iterktuples.append(
+                    fixer.Fixer_tuple(
+                        scenario_instance.UnitOn[g, t], th=0.01, nb=None, lb=6, ub=6
+                    )
+                )
 
     return iter0tuples, iterktuples
+
 
 def write_solution(spcomm, opt_dict, solution_dir):
     from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
@@ -237,12 +274,17 @@ def write_solution(spcomm, opt_dict, solution_dir):
 
     # do some checks, to make sure the solution we print will be nonantipative
     if best_strata_rank != 0:
-        assert opt_dict["spoke_class"] in (XhatShuffleInnerBound, )
-    else: # this is the hub, TODO: also could check for XhatSpecific
-        assert opt_dict["opt_class"] in (PH, )
+        assert opt_dict["spoke_class"] in (XhatShuffleInnerBound,)
+    else:  # this is the hub, TODO: also could check for XhatSpecific
+        assert opt_dict["opt_class"] in (PH,)
         assert XhatClosest in opt_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]
-        assert "keep_solution" in opt_dict["opt_kwargs"]["options"]["xhat_closest_options"]
-        assert opt_dict["opt_kwargs"]["options"]["xhat_closest_options"]["keep_solution"] is True
+        assert (
+            "keep_solution" in opt_dict["opt_kwargs"]["options"]["xhat_closest_options"]
+        )
+        assert (
+            opt_dict["opt_kwargs"]["options"]["xhat_closest_options"]["keep_solution"]
+            is True
+        )
 
     ## if we've passed the above checks, the scenarios should have the tree solution
 
@@ -255,57 +297,66 @@ def write_solution(spcomm, opt_dict, solution_dir):
     spcomm.cylinder_comm.Barrier()
 
     for sname, s in spcomm.opt.local_scenarios.items():
-        file_name = os.path.join(solution_dir, sname+'.json')
+        file_name = os.path.join(solution_dir, sname + ".json")
         mds = uc._save_uc_results(s, relaxed=False)
         mds.write(file_name)
 
     return
 
-def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
-    file_name = os.path.join(solution_dir, sname+'.json')
+
+def scenario_tree_solution_writer(solution_dir, sname, scenario, bundling):
+    file_name = os.path.join(solution_dir, sname + ".json")
     mds = uc._save_uc_results(scenario, relaxed=False)
     mds.write(file_name)
 
-#=========
-def scenario_names_creator(scnt,start=0):
-    # (only for Amalgamator): return the full list of names
-    return [F"Scenario{i+1}" for i in range(start,scnt+start)]
 
-#=========
+# =========
+def scenario_names_creator(scnt, start=0):
+    # (only for Amalgamator): return the full list of names
+    return [f"Scenario{i+1}" for i in range(start, scnt + start)]
+
+
+# =========
 def inparser_adder(cfg):
     # (only for Amalgamator): add command options unique to uc
     cfg.num_scens_required()
-    cfg.add_to_config("UC_count_for_path",
-                         description="Mainly for confidence intervals to give a prefix for the directory providing the scenario data but will be overridden if scen_count is greater (default 0)",
-                          domain=int,
-                          default=0)
-    return()
+    cfg.add_to_config(
+        "UC_count_for_path",
+        description="Mainly for confidence intervals to give a prefix for the directory providing the scenario data but will be overridden if scen_count is greater (default 0)",
+        domain=int,
+        default=0,
+    )
+    return ()
 
 
-#=========
+# =========
 def kw_creator(options):
     # (only for Amalgamator and MMW_conf): linked to the scenario_creator and inparser_adder
     if "path" in options:
         path = options["path"]
-        num_scens = options.get('num_scens', 0)
+        num_scens = options.get("num_scens", 0)
     else:
-        UCC = options.get('UC_count_for_path', 0)
-        args = options.get('args')
+        UCC = options.get("UC_count_for_path", 0)
+        args = options.get("args")
         UCC = args.UC_count_for_path if hasattr(args, "UC_count_for_path") else UCC
-        num_scens = options.get('num_scens', 0)
+        num_scens = options.get("num_scens", 0)
         scens_for_path = max(num_scens, UCC)
         path = str(scens_for_path) + "scenarios_r1"
     num_scens = None if num_scens == 0 else num_scens
-    kwargs = {
-        "scenario_count": num_scens,
-        "path": path
-    }
+    kwargs = {"scenario_count": num_scens, "path": path}
     return kwargs
 
-#============================
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+
+# ============================
+def sample_tree_scen_creator(
+    sname,
+    stage,
+    sample_branching_factors,
+    seed,
+    given_scenario=None,
+    **scenario_creator_kwargs,
+):
+    """Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
     Args:
         sname (string): scenario name to be created
         stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
@@ -322,4 +373,3 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["seedoffset"] = seed
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
-

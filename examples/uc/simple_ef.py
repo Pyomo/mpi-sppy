@@ -26,11 +26,15 @@ ef = sputils.create_EF(
 )
 
 solver = pyo.SolverFactory(solver_name)
-if 'persistent' in solver_name:
+if "persistent" in solver_name:
     solver.set_instance(ef, symbolic_solver_labels=True)
     results = solver.solve(tee=True)
 else:
-    results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+    results = solver.solve(
+        ef,
+        tee=True,
+        symbolic_solver_labels=True,
+    )
 ###results = ef.solve_extensive_form(tee=True)
 pyo.assert_optimal_termination(results)
 

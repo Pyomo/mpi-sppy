@@ -20,6 +20,7 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 write_solution = True
 
+
 def _parse_args():
     # create a Config object, get values for it, and return it
     cfg = config.Config()
@@ -31,10 +32,12 @@ def _parse_args():
     cfg.lagrangian_args()
     cfg.xhatspecific_args()
 
-    cfg.add_to_config(name ="stage2EFsolvern",
-                         description="Solver to use for xhatlooper stage2ef option (default None)",
-                         domain = str,
-                         default=None)
+    cfg.add_to_config(
+        name="stage2EFsolvern",
+        description="Solver to use for xhatlooper stage2ef option (default None)",
+        domain=str,
+        default=None,
+    )
 
     cfg.parse_command_line("hydro_cylinders")
     return cfg
@@ -61,34 +64,36 @@ def main():
     scenario_creator = hydro.scenario_creator
     scenario_denouement = hydro.scenario_denouement
     rho_setter = None
-    
+
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
-    
+
     # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=None,
-                              rho_setter = rho_setter,
-                              all_nodenames = all_nodenames,
-                             )
+    hub_dict = vanilla.ph_hub(
+        *beans,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=None,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+    )
 
     # Standard Lagrangian bound spoke
     if lagrangian:
-        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                                    scenario_creator_kwargs=scenario_creator_kwargs,
-                                                    rho_setter = rho_setter,
-                                                    all_nodenames = all_nodenames,
-                                                   )
-
+        lagrangian_spoke = vanilla.lagrangian_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            rho_setter=rho_setter,
+            all_nodenames=all_nodenames,
+        )
 
     # xhat looper bound spoke
-    
+
     if xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
-                                                      all_nodenames=all_nodenames,
-                                                      scenario_creator_kwargs=scenario_creator_kwargs,
-                                                     )
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans,
+            all_nodenames=all_nodenames,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
 
     list_of_spoke_dict = list()
     if lagrangian:
@@ -98,18 +103,25 @@ def main():
 
     if cfg.stage2EFsolvern is not None:
         assert xhatshuffle is not None, "xhatshuffle is required for stage2EFsolvern"
-        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
-        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
+        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg[
+            "stage2EFsolvern"
+        ]
+        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg[
+            "branching_factors"
+        ]
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
 
     if wheel.global_rank == 0:  # we are the reporting hub rank
-        print(f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}")
-    
+        print(
+            f"BestInnerBound={wheel.BestInnerBound} and BestOuterBound={wheel.BestOuterBound}"
+        )
+
     if write_solution:
-        wheel.write_first_stage_solution('hydro_first_stage.csv')
-        wheel.write_tree_solution('hydro_full_solution')
+        wheel.write_first_stage_solution("hydro_first_stage.csv")
+        wheel.write_tree_solution("hydro_full_solution")
+
 
 if __name__ == "__main__":
     main()

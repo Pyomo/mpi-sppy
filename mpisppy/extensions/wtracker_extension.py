@@ -14,16 +14,17 @@ import mpisppy.utils.wtracker as wtracker
 
 class Wtracker_extension(mpisppy.extensions.extension.Extension):
     """
-        wrap the wtracker code as an extension
-        
-        Args:
-            opt (PHBase (inherets from SPOpt) object): gives the problem that we bound
+    wrap the wtracker code as an extension
 
-        Attributes:
-          scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
-                keys are comms (i.e., tree nodes); values are dicts with keys
-                that are scenario names and values that are ranks
+    Args:
+        opt (PHBase (inherets from SPOpt) object): gives the problem that we bound
+
+    Attributes:
+      scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
+            keys are comms (i.e., tree nodes); values are dicts with keys
+            that are scenario names and values that are ranks
     """
+
     def __init__(self, opt, comm=None):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
@@ -38,7 +39,7 @@ class Wtracker_extension(mpisppy.extensions.extension.Extension):
 
     def post_iter0(self):
         pass
-        
+
     def miditer(self):
         pass
 
@@ -49,9 +50,9 @@ class Wtracker_extension(mpisppy.extensions.extension.Extension):
         reportlen = self.options.get("reportlen")
         stdevthresh = self.options.get("stdevthresh")
         file_prefix = self.options.get("file_prefix")
-        self.wtracker.report_by_moving_stats(self.wlen,
-                                             reportlen=reportlen,
-                                             stdevthresh=stdevthresh,
-                                             file_prefix=file_prefix)
-
-        
+        self.wtracker.report_by_moving_stats(
+            self.wlen,
+            reportlen=reportlen,
+            stdevthresh=stdevthresh,
+            file_prefix=file_prefix,
+        )

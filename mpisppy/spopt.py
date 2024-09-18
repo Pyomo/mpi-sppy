@@ -28,22 +28,23 @@ from mpisppy.opt.presolve import SPPresolve
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
 
+
 class SPOpt(SPBase):
-    """ Defines optimization methods for hubs and spokes """
+    """Defines optimization methods for hubs and spokes"""
 
     def __init__(
-            self,
-            options,
-            all_scenario_names,
-            scenario_creator,
-            scenario_denouement=None,
-            all_nodenames=None,
-            mpicomm=None,
-            extensions=None,
-            extension_kwargs=None,
-            scenario_creator_kwargs=None,
-            variable_probability=None,
-            E1_tolerance=1e-5,
+        self,
+        options,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement=None,
+        all_nodenames=None,
+        mpicomm=None,
+        extensions=None,
+        extension_kwargs=None,
+        scenario_creator_kwargs=None,
+        variable_probability=None,
+        E1_tolerance=1e-5,
     ):
         super().__init__(
             options,
@@ -65,13 +66,11 @@ class SPOpt(SPBase):
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
 
-        if (self.extensions is not None):
+        if self.extensions is not None:
             if self.extension_kwargs is None:
                 self.extobject = self.extensions(self)
             else:
-                self.extobject = self.extensions(
-                    self, **self.extension_kwargs
-                )
+                self.extobject = self.extensions(self, **self.extension_kwargs)
 
     def _check_staleness(self, s):
         # check for staleness in *scenario* s
@@ -82,9 +81,10 @@ class SPOpt(SPBase):
             if (not v.fixed) and v.stale:
                 if self.is_zero_prob(s, v) and v._value is None:
                     raise RuntimeError(
-                            f"Non-anticipative zero-probability variable {v.name} "
-                            f"on scenario {s.name} reported as stale and has no value. "
-                             "Zero-probability variables must have a value (e.g., fixed).")
+                        f"Non-anticipative zero-probability variable {v.name} "
+                        f"on scenario {s.name} reported as stale and has no value. "
+                        "Zero-probability variables must have a value (e.g., fixed)."
+                    )
                 else:
                     try:
                         float(pyo.value(v))
@@ -93,17 +93,22 @@ class SPOpt(SPBase):
                             f"Non-anticipative variable {v.name} on scenario {s.name} "
                             "reported as stale. This usually means this variable "
                             "did not appear in any (active) components, and hence "
-                            "was not communicated to the subproblem solver. ")
+                            "was not communicated to the subproblem solver. "
+                        )
 
-
-    def solve_one(self, solver_options, k, s,
-                  dtiming=False,
-                  gripe=False,
-                  tee=False,
-                  verbose=False,
-                  disable_pyomo_signal_handling=False,
-                  update_objective=True):
-        """ Solve one subproblem.
+    def solve_one(
+        self,
+        solver_options,
+        k,
+        s,
+        dtiming=False,
+        gripe=False,
+        tee=False,
+        verbose=False,
+        disable_pyomo_signal_handling=False,
+        update_objective=True,
+    ):
+        """Solve one subproblem.
 
         Args:
             solver_options (dict or None):
@@ -132,10 +137,9 @@ class SPOpt(SPBase):
                 Pyomo solve time in seconds.
         """
 
-
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
-                print ("(rank0) " + msg)
+                print("(rank0) " + msg)
 
         # if using a persistent solver plugin,
         # re-compile the objective due to changed weights and x-bars
@@ -143,14 +147,21 @@ class SPOpt(SPBase):
         if update_objective and (sputils.is_persistent(s._solver_plugin)):
             set_objective_start_time = time.time()
 
-            active_objective_datas = list(s.component_data_objects(
-                pyo.Objective, active=True, descend_into=True))
+            active_objective_datas = list(
+                s.component_data_objects(pyo.Objective, active=True, descend_into=True)
+            )
             if len(active_objective_datas) > 1:
-                raise RuntimeError('Multiple active objectives identified '
-                                   'for scenario {sn}'.format(sn=s._name))
+                raise RuntimeError(
+                    "Multiple active objectives identified " "for scenario {sn}".format(
+                        sn=s._name
+                    )
+                )
             elif len(active_objective_datas) < 1:
-                raise RuntimeError('Could not find any active objectives '
-                                   'for scenario {sn}'.format(sn=s._name))
+                raise RuntimeError(
+                    "Could not find any active objectives " "for scenario {sn}".format(
+                        sn=s._name
+                    )
+                )
             else:
                 s._solver_plugin.set_objective(active_objective_datas[0])
                 set_objective_time = time.time() - set_objective_start_time
@@ -161,25 +172,24 @@ class SPOpt(SPBase):
             results = self.extobject.pre_solve(s)
 
         solve_start_time = time.time()
-        if (solver_options):
-            _vb("Using sub-problem solver options="
-                + str(solver_options))
-            for option_key,option_value in solver_options.items():
+        if solver_options:
+            _vb("Using sub-problem solver options=" + str(solver_options))
+            for option_key, option_value in solver_options.items():
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()
         if self.cylinder_rank == 0:
             if tee is not None and tee is True:
                 solve_keyword_args["tee"] = True
-        if (sputils.is_persistent(s._solver_plugin)):
+        if sputils.is_persistent(s._solver_plugin):
             solve_keyword_args["save_results"] = False
         elif disable_pyomo_signal_handling:
             solve_keyword_args["use_signal_handling"] = False
 
         try:
-            results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
+            results = s._solver_plugin.solve(
+                s, **solve_keyword_args, load_solutions=False
+            )
             solver_exception = None
         except Exception as e:
             results = None
@@ -193,17 +203,16 @@ class SPOpt(SPBase):
                 name = self.__class__.__name__
                 if self.spcomm:
                     name = self.spcomm.__class__.__name__
-                print (f"[{name}] Solve failed for scenario {s.name}")
+                print(f"[{name}] Solve failed for scenario {s.name}")
                 if results is not None:
-                    print ("status=", results.solver.status)
-                    print ("TerminationCondition=",
-                           results.solver.termination_condition)
+                    print("status=", results.solver.status)
+                    print("TerminationCondition=", results.solver.termination_condition)
                 else:
                     print("no results object, so solving agin with tee=True")
                     solve_keyword_args["tee"] = True
-                    results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
+                    results = s._solver_plugin.solve(
+                        s, **solve_keyword_args, load_solutions=False
+                    )
 
             if solver_exception is not None:
                 raise solver_exception
@@ -222,12 +231,13 @@ class SPOpt(SPBase):
             s._mpisppy_data.scenario_feasible = True
         # TBD: get this ready for IPopt (e.g., check feas_prob every time)
         # propogate down
-        if self.bundling: # must be a bundle
+        if self.bundling:  # must be a bundle
             for sname in s._ef_scenario_names:
-                 self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
-                     = s._mpisppy_data.scenario_feasible
-                 if s._mpisppy_data.scenario_feasible:
-                     self._check_staleness(self.local_scenarios[sname])
+                self.local_scenarios[
+                    sname
+                ]._mpisppy_data.scenario_feasible = s._mpisppy_data.scenario_feasible
+                if s._mpisppy_data.scenario_feasible:
+                    self._check_staleness(self.local_scenarios[sname])
         else:  # not a bundle
             if s._mpisppy_data.scenario_feasible:
                 self._check_staleness(s)
@@ -235,17 +245,21 @@ class SPOpt(SPBase):
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 
-        return pyomo_solve_time + set_objective_time  # set_objective_time added Feb 2023
+        return (
+            pyomo_solve_time + set_objective_time
+        )  # set_objective_time added Feb 2023
 
-
-    def solve_loop(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
-                   dtiming=False,
-                   gripe=False,
-                   disable_pyomo_signal_handling=False,
-                   tee=False,
-                   verbose=False):
-        """ Loop over `local_subproblems` and solve them in a manner
+    def solve_loop(
+        self,
+        solver_options=None,
+        use_scenarios_not_subproblems=False,
+        dtiming=False,
+        gripe=False,
+        disable_pyomo_signal_handling=False,
+        tee=False,
+        verbose=False,
+    ):
+        """Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
@@ -281,14 +295,16 @@ class SPOpt(SPBase):
 
         set_objective takes care of W and prox changes.
         """
+
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
-                print ("(rank0) " + msg)
+                print("(rank0) " + msg)
+
         _vb("Entering solve_loop function.")
         logger.debug("  early solve_loop for rank={}".format(self.cylinder_rank))
 
         if self.extensions is not None:
-                self.extobject.pre_solve_loop()
+            self.extobject.pre_solve_loop()
 
         # note that when there is no bundling, scenarios are subproblems
         if use_scenarios_not_subproblems:
@@ -296,34 +312,46 @@ class SPOpt(SPBase):
         else:
             s_source = self.local_subproblems
         pyomo_solve_times = list()
-        for k,s in s_source.items():
-            logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
+        for k, s in s_source.items():
+            logger.debug(
+                "  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank)
+            )
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
-            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
-                                              dtiming=dtiming,
-                                              verbose=verbose,
-                                              tee=tee,
-                                              gripe=gripe,
-                disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            ))
+            pyomo_solve_times.append(
+                self.solve_one(
+                    solver_options,
+                    k,
+                    s,
+                    dtiming=dtiming,
+                    verbose=verbose,
+                    tee=tee,
+                    gripe=gripe,
+                    disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+                )
+            )
 
         if self.extensions is not None:
-                self.extobject.post_solve_loop()
+            self.extobject.post_solve_loop()
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_times, root=0)
             if self.cylinder_rank == 0:
                 apst = [pst for l_pst in all_pyomo_solve_times for pst in l_pst]
                 print("Pyomo solve times (seconds):")
-                print("\tmin=%4.2f@%d mean=%4.2f max=%4.2f@%d" %
-                      (np.min(apst), np.argmin(apst),
-                       np.mean(apst),
-                       np.max(apst), np.argmax(apst)))
-
+                print(
+                    "\tmin=%4.2f@%d mean=%4.2f max=%4.2f@%d"
+                    % (
+                        np.min(apst),
+                        np.argmin(apst),
+                        np.mean(apst),
+                        np.max(apst),
+                        np.argmax(apst),
+                    )
+                )
 
     def Eobjective(self, verbose=False):
-        """ Compute the expected objective function across all scenarios.
+        """Compute the expected objective function across all scenarios.
 
         Note:
             Assumes the optimization is done beforehand,
@@ -340,13 +368,16 @@ class SPOpt(SPBase):
                 The expected objective function value
         """
         local_Eobjs = []
-        for k,s in self.local_scenarios.items():
+        for k, s in self.local_scenarios.items():
             objfct = self.saved_objectives[k]
             local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             if verbose:
-                print ("caller", inspect.stack()[1][3])
-                print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+                print("caller", inspect.stack()[1][3])
+                print(
+                    "E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}".format(
+                        k, s._mpisppy_probability, pyo.value(objfct), objfct.expr
+                    )
+                )
 
         local_Eobj = np.array([math.fsum(local_Eobjs)])
         global_Eobj = np.zeros(1)
@@ -354,9 +385,8 @@ class SPOpt(SPBase):
 
         return global_Eobj[0]
 
-
     def Ebound(self, verbose=False, extra_sum_terms=None):
-        """ Compute the expected outer bound across all scenarios.
+        """Compute the expected outer bound across all scenarios.
 
         Note:
             Assumes the optimization is done beforehand.
@@ -374,18 +404,23 @@ class SPOpt(SPBase):
                 The expected objective outer bound.
         """
         local_Ebounds = []
-        for k,s in self.local_subproblems.items():
+        for k, s in self.local_subproblems.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
             try:
                 eb = s._mpisppy_probability * float(s._mpisppy_data.outer_bound)
             except:
-                print(f"eb calc failed for {s._mpisppy_probability} * {s._mpisppy_data.outer_bound}")
+                print(
+                    f"eb calc failed for {s._mpisppy_probability} * {s._mpisppy_data.outer_bound}"
+                )
                 raise
             local_Ebounds.append(eb)
             if verbose:
-                print ("caller", inspect.stack()[1][3])
-                print ("E_Bound Scenario {}, prob={}, bound={}"\
-                       .format(k, s._mpisppy_probability, s._mpisppy_data.outer_bound))
+                print("caller", inspect.stack()[1][3])
+                print(
+                    "E_Bound Scenario {}, prob={}, bound={}".format(
+                        k, s._mpisppy_probability, s._mpisppy_data.outer_bound
+                    )
+                )
 
         if extra_sum_terms is not None:
             local_Ebound_list = [math.fsum(local_Ebounds)] + list(extra_sum_terms)
@@ -402,26 +437,22 @@ class SPOpt(SPBase):
         else:
             return global_Ebound[0], global_Ebound[1:]
 
-
     def _update_E1(self):
-        """ Add up the probabilities of all scenarios using a reduce call.
-            then attach it to the PH object as a float.
+        """Add up the probabilities of all scenarios using a reduce call.
+        then attach it to the PH object as a float.
         """
-        localP = np.zeros(1, dtype='d')
-        globalP = np.zeros(1, dtype='d')
+        localP = np.zeros(1, dtype="d")
+        globalP = np.zeros(1, dtype="d")
 
-        for k,s in self.local_scenarios.items():
-            localP[0] +=  s._mpisppy_probability
+        for k, s in self.local_scenarios.items():
+            localP[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([localP, MPI.DOUBLE],
-                           [globalP, MPI.DOUBLE],
-                           op=MPI.SUM)
+        self.mpicomm.Allreduce([localP, MPI.DOUBLE], [globalP, MPI.DOUBLE], op=MPI.SUM)
 
         self.E1 = float(globalP[0])
 
-
     def feas_prob(self):
-        """ Compute the total probability of all feasible scenarios.
+        """Compute the total probability of all feasible scenarios.
 
         This function can be used to check whether all scenarios are feasible
         by comparing the return value to one.
@@ -437,22 +468,19 @@ class SPOpt(SPBase):
         """
 
         # locals[0] is E_feas and locals[1] is E_1
-        locals = np.zeros(1, dtype='d')
-        globals = np.zeros(1, dtype='d')
+        locals = np.zeros(1, dtype="d")
+        globals = np.zeros(1, dtype="d")
 
-        for k,s in self.local_scenarios.items():
+        for k, s in self.local_scenarios.items():
             if s._mpisppy_data.scenario_feasible:
                 locals[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([locals, MPI.DOUBLE],
-                           [globals, MPI.DOUBLE],
-                           op=MPI.SUM)
+        self.mpicomm.Allreduce([locals, MPI.DOUBLE], [globals, MPI.DOUBLE], op=MPI.SUM)
 
         return float(globals[0])
 
-
     def infeas_prob(self):
-        """ Sum the total probability for all infeasible scenarios.
+        """Sum the total probability for all infeasible scenarios.
 
         Note:
             This function assumes the scenarios have a boolean
@@ -464,22 +492,19 @@ class SPOpt(SPBase):
                 This value equals 0 if all scenarios are feasible.
         """
 
-        locals = np.zeros(1, dtype='d')
-        globals = np.zeros(1, dtype='d')
+        locals = np.zeros(1, dtype="d")
+        globals = np.zeros(1, dtype="d")
 
-        for k,s in self.local_scenarios.items():
+        for k, s in self.local_scenarios.items():
             if not s._mpisppy_data.scenario_feasible:
                 locals[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([locals, MPI.DOUBLE],
-                           [globals, MPI.DOUBLE],
-                           op=MPI.SUM)
+        self.mpicomm.Allreduce([locals, MPI.DOUBLE], [globals, MPI.DOUBLE], op=MPI.SUM)
 
         return float(globals[0])
 
-
     def avg_min_max(self, compstr):
-        """ Can be used to track convergence progress.
+        """Can be used to track convergence progress.
 
         Args:
             compstr (str):
@@ -501,19 +526,17 @@ class SPOpt(SPBase):
             Not user-friendly. If you give a bad compstr, it will just crash.
         """
         firsttime = True
-        localavg = np.zeros(1, dtype='d')
-        localmin = np.zeros(1, dtype='d')
-        localmax = np.zeros(1, dtype='d')
-        globalavg = np.zeros(1, dtype='d')
-        globalmin = np.zeros(1, dtype='d')
-        globalmax = np.zeros(1, dtype='d')
+        localavg = np.zeros(1, dtype="d")
+        localmin = np.zeros(1, dtype="d")
+        localmax = np.zeros(1, dtype="d")
+        globalavg = np.zeros(1, dtype="d")
+        globalmin = np.zeros(1, dtype="d")
+        globalmax = np.zeros(1, dtype="d")
 
         v_cuid = pyo.ComponentUID(compstr)
 
-        for k,s in self.local_scenarios.items():
-
+        for k, s in self.local_scenarios.items():
             compv = pyo.value(v_cuid.find_component_on(s))
-
 
             ###compv = pyo.value(getattr(s, compstr))
             localavg[0] += s._mpisppy_probability * compv
@@ -523,51 +546,50 @@ class SPOpt(SPBase):
                 localmax[0] = compv
             firsttime = False
 
-        self.comms["ROOT"].Allreduce([localavg, MPI.DOUBLE],
-                                     [globalavg, MPI.DOUBLE],
-                                     op=MPI.SUM)
-        self.comms["ROOT"].Allreduce([localmin, MPI.DOUBLE],
-                                     [globalmin, MPI.DOUBLE],
-                                     op=MPI.MIN)
-        self.comms["ROOT"].Allreduce([localmax, MPI.DOUBLE],
-                                     [globalmax, MPI.DOUBLE],
-                                     op=MPI.MAX)
-        return (float(globalavg[0]),
-                float(globalmin[0]),
-                float(globalmax[0]))
-
+        self.comms["ROOT"].Allreduce(
+            [localavg, MPI.DOUBLE], [globalavg, MPI.DOUBLE], op=MPI.SUM
+        )
+        self.comms["ROOT"].Allreduce(
+            [localmin, MPI.DOUBLE], [globalmin, MPI.DOUBLE], op=MPI.MIN
+        )
+        self.comms["ROOT"].Allreduce(
+            [localmax, MPI.DOUBLE], [globalmax, MPI.DOUBLE], op=MPI.MAX
+        )
+        return (float(globalavg[0]), float(globalmin[0]), float(globalmax[0]))
 
     def _put_nonant_cache(self, cache):
-        """ Put the value in the cache for nonants *for all local scenarios*
+        """Put the value in the cache for nonants *for all local scenarios*
         Args:
             cache (np vector) to receive the nonant's for all local scenarios
 
         """
-        ci = 0 # Cache index
+        ci = 0  # Cache index
         for sname, model in self.local_scenarios.items():
             if model._mpisppy_data.nonant_cache is None:
-                raise RuntimeError(f"Rank {self.global_rank} Scenario {sname}"
-                                   " nonant_cache is None"
-                                   " (call _save_nonants first?)")
-            for i,_ in enumerate(model._mpisppy_data.nonant_indices):
-                assert(ci < len(cache))
+                raise RuntimeError(
+                    f"Rank {self.global_rank} Scenario {sname}"
+                    " nonant_cache is None"
+                    " (call _save_nonants first?)"
+                )
+            for i, _ in enumerate(model._mpisppy_data.nonant_indices):
+                assert ci < len(cache)
                 model._mpisppy_data.nonant_cache[i] = cache[ci]
                 ci += 1
-
 
     def _restore_original_fixedness(self):
         # We are going to hack a little to get the original fixedness, but current values
         # (We are assuming that algorithms are not fixing anticipative vars; but if they
         # do, they had better put their fixedness back to its correct state.)
         self._save_nonants()
-        for k,s in self.local_scenarios.items():
+        for k, s in self.local_scenarios.items():
             for ci, _ in enumerate(s._mpisppy_data.nonant_indices):
-                s._mpisppy_data.fixedness_cache[ci] = s._mpisppy_data.original_fixedness[ci]
+                s._mpisppy_data.fixedness_cache[ci] = (
+                    s._mpisppy_data.original_fixedness[ci]
+                )
         self._restore_nonants()
 
-
     def _fix_nonants(self, cache):
-        """ Fix the Vars subject to non-anticipativity at given values.
+        """Fix the Vars subject to non-anticipativity at given values.
             Loop over the scenarios to restore, but loop over subproblems
             to alert persistent solvers.
         Args:
@@ -578,23 +600,26 @@ class SPOpt(SPBase):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
-        for k,s in self.local_scenarios.items():
-
+        for k, s in self.local_scenarios.items():
             persistent_solver = None
-            if (sputils.is_persistent(s._solver_plugin)):
+            if sputils.is_persistent(s._solver_plugin):
                 persistent_solver = s._solver_plugin
 
             nlens = s._mpisppy_data.nlens
             for node in s._mpisppy_node_list:
                 ndn = node.name
                 if ndn not in cache:
-                    raise RuntimeError("Could not find {} in {}"\
-                                       .format(ndn, cache))
+                    raise RuntimeError("Could not find {} in {}".format(ndn, cache))
                 if cache[ndn] is None:
-                    raise RuntimeError("Empty cache for scen={}, node={}".format(k, ndn))
+                    raise RuntimeError(
+                        "Empty cache for scen={}, node={}".format(k, ndn)
+                    )
                 if len(cache[ndn]) != nlens[ndn]:
-                    raise RuntimeError("Needed {} nonant Vars for {}, got {}"\
-                                       .format(nlens[ndn], ndn, len(cache[ndn])))
+                    raise RuntimeError(
+                        "Needed {} nonant Vars for {}, got {}".format(
+                            nlens[ndn], ndn, len(cache[ndn])
+                        )
+                    )
                 for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
                     this_vardata._value = cache[ndn][i]
@@ -602,8 +627,8 @@ class SPOpt(SPBase):
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
 
-    def _fix_root_nonants(self,root_cache):
-        """ Fix the 1st stage Vars subject to non-anticipativity at given values.
+    def _fix_root_nonants(self, root_cache):
+        """Fix the 1st stage Vars subject to non-anticipativity at given values.
             Loop over the scenarios to restore, but loop over subproblems
             to alert persistent solvers.
             Useful for multistage to find feasible solutions with a given scenario.
@@ -615,40 +640,39 @@ class SPOpt(SPBase):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
-        for k,s in self.local_scenarios.items():
-
+        for k, s in self.local_scenarios.items():
             persistent_solver = None
-            if (sputils.is_persistent(s._solver_plugin)):
+            if sputils.is_persistent(s._solver_plugin):
                 persistent_solver = s._solver_plugin
 
             nlens = s._mpisppy_data.nlens
 
             rootnode = None
             for node in s._mpisppy_node_list:
-                if node.name == 'ROOT':
+                if node.name == "ROOT":
                     rootnode = node
                     break
 
             if rootnode is None:
-                raise RuntimeError("Could not find a 'ROOT' node in scen {}"\
-                                   .format(k))
+                raise RuntimeError("Could not find a 'ROOT' node in scen {}".format(k))
             if root_cache is None:
                 raise RuntimeError("Empty root cache for scen={}".format(k))
-            if len(root_cache) != nlens['ROOT']:
-                raise RuntimeError("Needed {} nonant Vars for 'ROOT', got {}"\
-                                   .format(nlens['ROOT'], len(root_cache)))
+            if len(root_cache) != nlens["ROOT"]:
+                raise RuntimeError(
+                    "Needed {} nonant Vars for 'ROOT', got {}".format(
+                        nlens["ROOT"], len(root_cache)
+                    )
+                )
 
-            for i in range(nlens['ROOT']):
+            for i in range(nlens["ROOT"]):
                 this_vardata = node.nonant_vardata_list[i]
                 this_vardata._value = root_cache[i]
                 this_vardata.fix()
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
 
-
-
     def _restore_nonants(self):
-        """ Restore nonanticipative variables to their original values.
+        """Restore nonanticipative variables to their original values.
 
         This function works in conjunction with _save_nonants.
 
@@ -660,10 +684,9 @@ class SPOpt(SPBase):
             and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
             hopefully does not need to.
         """
-        for k,s in self.local_scenarios.items():
-
+        for k, s in self.local_scenarios.items():
             persistent_solver = None
-            if (sputils.is_persistent(s._solver_plugin)):
+            if sputils.is_persistent(s._solver_plugin):
                 persistent_solver = s._solver_plugin
 
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
@@ -673,9 +696,8 @@ class SPOpt(SPBase):
                 if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
 
-
     def _save_nonants(self):
-        """ Save the values and fixedness status of the Vars that are
+        """Save the values and fixedness status of the Vars that are
         subject to non-anticipativity.
 
         Note:
@@ -687,43 +709,41 @@ class SPOpt(SPBase):
         Note:
             The value cache is np because it might be transmitted
         """
-        for k,s in self.local_scenarios.items():
+        for k, s in self.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
-            if not hasattr(s._mpisppy_data,"nonant_cache"):
+            if not hasattr(s._mpisppy_data, "nonant_cache"):
                 clen = sum(nlens[ndn] for ndn in nlens)
-                s._mpisppy_data.nonant_cache = np.zeros(clen, dtype='d')
+                s._mpisppy_data.nonant_cache = np.zeros(clen, dtype="d")
                 s._mpisppy_data.fixedness_cache = [None for _ in range(clen)]
 
             for ci, xvar in enumerate(s._mpisppy_data.nonant_indices.values()):
-                s._mpisppy_data.nonant_cache[ci]  = xvar._value
-                s._mpisppy_data.fixedness_cache[ci]  = xvar.is_fixed()
-
+                s._mpisppy_data.nonant_cache[ci] = xvar._value
+                s._mpisppy_data.fixedness_cache[ci] = xvar.is_fixed()
 
     def _save_original_nonants(self):
-        """ Save the current value of the nonanticipative variables.
+        """Save the current value of the nonanticipative variables.
 
         Values are saved in the `_PySP_original_nonants` attribute. Whether
         the variable was fixed is stored in `_PySP_original_fixedness`.
         """
-        for k,s in self.local_scenarios.items():
-            if hasattr(s,"_PySP_original_fixedness"):
-                print ("ERROR: Attempt to replace original nonants")
+        for k, s in self.local_scenarios.items():
+            if hasattr(s, "_PySP_original_fixedness"):
+                print("ERROR: Attempt to replace original nonants")
                 raise
-            if not hasattr(s._mpisppy_data,"nonant_cache"):
+            if not hasattr(s._mpisppy_data, "nonant_cache"):
                 # uses nonant cache to signal other things have not
                 # been created
                 # TODO: combine cache creation (or something else)
                 clen = len(s._mpisppy_data.nonant_indices)
                 s._mpisppy_data.original_fixedness = [None] * clen
-                s._mpisppy_data.original_nonants = np.zeros(clen, dtype='d')
+                s._mpisppy_data.original_nonants = np.zeros(clen, dtype="d")
 
             for ci, xvar in enumerate(s._mpisppy_data.nonant_indices.values()):
-                s._mpisppy_data.original_fixedness[ci]  = xvar.is_fixed()
-                s._mpisppy_data.original_nonants[ci]  = xvar._value
-
+                s._mpisppy_data.original_fixedness[ci] = xvar.is_fixed()
+                s._mpisppy_data.original_nonants[ci] = xvar._value
 
     def _restore_original_nonants(self):
-        """ Restore nonanticipative variables to their original values.
+        """Restore nonanticipative variables to their original values.
 
         This function works in conjunction with _save_original_nonants.
 
@@ -735,11 +755,10 @@ class SPOpt(SPBase):
             and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
             hopefully does not need to.
         """
-        for k,s in self.local_scenarios.items():
-
+        for k, s in self.local_scenarios.items():
             persistent_solver = None
             if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
+                if sputils.is_persistent(s._solver_plugin):
                     persistent_solver = s._solver_plugin
             else:
                 print("restore_original_nonants called for a bundle")
@@ -751,17 +770,17 @@ class SPOpt(SPBase):
                 if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
 
-
     def _save_active_objectives(self):
-        """ Save the active objectives for use in PH, bundles, and calculation """
+        """Save the active objectives for use in PH, bundles, and calculation"""
         self.saved_objectives = dict()
 
         for sname, scenario_instance in self.local_scenarios.items():
-            self.saved_objectives[sname] = sputils.find_active_objective(scenario_instance)
-
+            self.saved_objectives[sname] = sputils.find_active_objective(
+                scenario_instance
+            )
 
     def FormEF(self, scen_dict, EF_name=None):
-        """ Make the EF for a list of scenarios.
+        """Make the EF for a list of scenarios.
 
         This function is mainly to build bundles. To build (and solve) the
         EF of the entire problem, use the EF class instead.
@@ -805,17 +824,19 @@ class SPOpt(SPBase):
         if len(scen_dict) == 1:
             sname, scenario_instance = list(scen_dict.items())[0]
             if EF_name is not None:
-                print ("WARNING: EF_name="+EF_name+" not used; singleton="+sname)
-                print ("MAJOR WARNING: a bundle of size one encountered; if you try to compute bounds it might crash (Feb 2019)")
+                print("WARNING: EF_name=" + EF_name + " not used; singleton=" + sname)
+                print(
+                    "MAJOR WARNING: a bundle of size one encountered; if you try to compute bounds it might crash (Feb 2019)"
+                )
             return scenario_instance
 
-        EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
-                        nonant_for_fixed_vars=False)
+        EF_instance = sputils._create_EF_from_scen_dict(
+            scen_dict, EF_name=EF_name, nonant_for_fixed_vars=False
+        )
         return EF_instance
 
-
     def _subproblem_creation(self, verbose=False):
-        """ Create local subproblems (not local scenarios).
+        """Create local subproblems (not local scenarios).
 
         If bundles are specified, this function creates the bundles.
         Otherwise, this function simply copies pointers to the already-created
@@ -832,39 +853,39 @@ class SPOpt(SPBase):
                 sdict = dict()
                 bname = "rank" + str(self.cylinder_rank) + "bundle" + str(bun)
                 for sname in self.names_in_bundles[rank_local][bun]:
-                    if (verbose and self.cylinder_rank==0):
-                        print ("bundling "+sname+" into "+bname)
+                    if verbose and self.cylinder_rank == 0:
+                        print("bundling " + sname + " into " + bname)
                     scen = self.local_scenarios[sname]
                     scen._mpisppy_data.bundlename = bname
                     sdict[sname] = scen
                 self.local_subproblems[bname] = self.FormEF(sdict, bname)
-                self.local_subproblems[bname].scen_list = \
-                    self.names_in_bundles[rank_local][bun]
-                self.local_subproblems[bname]._mpisppy_probability = \
-                                    sum(s._mpisppy_probability for s in sdict.values())
+                self.local_subproblems[bname].scen_list = self.names_in_bundles[
+                    rank_local
+                ][bun]
+                self.local_subproblems[bname]._mpisppy_probability = sum(
+                    s._mpisppy_probability for s in sdict.values()
+                )
         else:
             for sname, s in self.local_scenarios.items():
                 self.local_subproblems[sname] = s
                 self.local_subproblems[sname].scen_list = [sname]
 
-
     def _create_solvers(self, presolve=True):
-
         if self._presolver is not None and presolve:
             self._presolver.presolve()
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
-        local_sit = [] # Local set instance time for time tracking
-        for sname, s in self.local_subproblems.items(): # solver creation
+        local_sit = []  # Local set instance time for time tracking
+        for sname, s in self.local_subproblems.items():  # solver creation
             s._solver_plugin = SolverFactory(self.options["solver_name"])
-            if (sputils.is_persistent(s._solver_plugin)):
+            if sputils.is_persistent(s._solver_plugin):
                 if dtiming:
                     set_instance_start_time = time.time()
 
                 set_instance_retry(s, s._solver_plugin, sname)
 
                 if dtiming:
-                    local_sit.append( time.time() - set_instance_start_time )
+                    local_sit.append(time.time() - set_instance_start_time)
             else:
                 if dtiming:
                     local_sit.append(0.0)
@@ -877,16 +898,16 @@ class SPOpt(SPBase):
                     scen = self.local_scenarios[scen_name]
                     scen._solver_plugin = s._solver_plugin
         if dtiming:
-            all_set_instance_times = self.mpicomm.gather(local_sit,
-                                                     root=0)
+            all_set_instance_times = self.mpicomm.gather(local_sit, root=0)
             if self.cylinder_rank == 0:
                 asit = [sit for l_sit in all_set_instance_times for sit in l_sit]
                 if len(asit) == 0:
                     print("Set instance times not available.")
                 else:
-                    print("Set instance times: \tmin=%4.2f mean=%4.2f max=%4.2f" %
-                      (np.min(asit), np.mean(asit), np.max(asit)))
-
+                    print(
+                        "Set instance times: \tmin=%4.2f mean=%4.2f max=%4.2f"
+                        % (np.min(asit), np.mean(asit), np.max(asit))
+                    )
 
     def subproblem_scenario_generator(self):
         """
@@ -905,8 +926,8 @@ class SPOpt(SPBase):
 # logic can be encapsulated in a sputils.py function.
 MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
 
-def set_instance_retry(subproblem, solver_plugin, subproblem_name):
 
+def set_instance_retry(subproblem, solver_plugin, subproblem_name):
     sname = subproblem_name
     # this loop is required to address the sitution where license
     # token servers become temporarily over-subscribed / non-responsive
@@ -917,17 +938,29 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
         try:
             solver_plugin.set_instance(subproblem)
             if num_retry_attempts > 0:
-                print("Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                print(
+                    "Acquired solver license (call to set_instance() for scenario=%s) after %d retry attempts"
+                    % (sname, num_retry_attempts)
+                )
             break
         # pyomo presently has no general way to trap a license acquisition
         # error - so we're stuck with trapping on "any" exception. not ideal.
         except Exception:
             if num_retry_attempts == 0:
-                print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
+                print(
+                    "Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt"
+                    % (sname)
+                )
             else:
-                print("Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts" % (sname, num_retry_attempts))
+                print(
+                    "Failed to acquire solver license (call to set_instance() for scenario=%s) after %d retry attempts"
+                    % (sname, num_retry_attempts)
+                )
             if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
-                raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
+                raise RuntimeError(
+                    "Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts"
+                    % (sname, num_retry_attempts)
+                )
             else:
                 sleep_time = random.random()
                 print(f"Sleeping for {sleep_time:.2f} seconds before re-attempting")

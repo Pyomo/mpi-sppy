@@ -14,9 +14,14 @@ import numpy as np
 import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
+
 class CrossScenarioCutSpoke(spoke.Spoke):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
+    def __init__(
+        self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None
+    ):
+        super().__init__(
+            spbase_object, fullcomm, strata_comm, cylinder_comm, options=options
+        )
 
     def make_windows(self):
         nscen = len(self.opt.all_scenario_names)
@@ -33,24 +38,28 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         ## the _locals will also have the kill signal
         self.all_nonant_len = vbuflen
-        self.all_eta_len = nscen*local_scen_count
-        self._locals = np.zeros(nscen*local_scen_count + vbuflen + 1)
-        self._coefs = np.zeros(nscen*(nscen + self.nonant_per_scen) + 1 + 1)
+        self.all_eta_len = nscen * local_scen_count
+        self._locals = np.zeros(nscen * local_scen_count + vbuflen + 1)
+        self._coefs = np.zeros(nscen * (nscen + self.nonant_per_scen) + 1 + 1)
         self._new_locals = False
 
         # local, remote
         # send, receive
-        self._make_windows(nscen*(self.nonant_per_scen + 1 + 1), nscen*local_scen_count + vbuflen)
+        self._make_windows(
+            nscen * (self.nonant_per_scen + 1 + 1), nscen * local_scen_count + vbuflen
+        )
 
     def _got_kill_signal(self):
-        ''' returns True if a kill signal was received,
-            and refreshes the array and _locals'''
+        """returns True if a kill signal was received,
+        and refreshes the array and _locals"""
         self._new_locals = self.spoke_from_hub(self._locals)
-        return self.remote_write_id == -1 
+        return self.remote_write_id == -1
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
-        self.scenario_to_index = { scen : indx for indx, scen in enumerate(self.opt.all_scenario_names) }
+        self.scenario_to_index = {
+            scen: indx for indx, scen in enumerate(self.opt.all_scenario_names)
+        }
 
         # create concrete model to use as pseudo-root
         self.opt.root = pyo.ConcreteModel()
@@ -62,7 +71,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # add copies of the nonanticipatory variables to the root problem
         # NOTE: the LShaped code expects the nonant vars to be in a particular
         #       order and with a particular *name*.
-        #       We're also creating an index for reference against later 
+        #       We're also creating an index for reference against later
         nonant_vid_to_copy_map = dict()
         root_vars = list()
         for v in non_ants:
@@ -84,8 +93,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         self.opt.root.eta = pyo.Var(self.opt.all_scenario_names)
 
         self.opt.root.bender = LShapedCutGenerator()
-        self.opt.root.bender.set_input(root_vars=self.opt.root_vars, 
-                                            tol=1e-4, comm=self.cylinder_comm)
+        self.opt.root.bender.set_input(
+            root_vars=self.opt.root_vars, tol=1e-4, comm=self.cylinder_comm
+        )
         self.opt.root.bender.set_ls(self.opt)
 
         ## the below for loop can take some time,
@@ -100,12 +110,14 @@ class CrossScenarioCutSpoke(spoke.Spoke):
             subproblem_fn_kwargs = dict()
 
             # need to modify this to accept in user kwargs as well
-            subproblem_fn_kwargs['scenario_name'] = scen
-            self.opt.root.bender.add_subproblem(subproblem_fn=self.opt.create_subproblem,
-                                                 subproblem_fn_kwargs=subproblem_fn_kwargs,
-                                                 root_eta=self.opt.root.eta[scen],
-                                                 subproblem_solver=self.opt.options["sp_solver"],
-                                                 subproblem_solver_options=self.opt.options["sp_solver_options"])
+            subproblem_fn_kwargs["scenario_name"] = scen
+            self.opt.root.bender.add_subproblem(
+                subproblem_fn=self.opt.create_subproblem,
+                subproblem_fn_kwargs=subproblem_fn_kwargs,
+                root_eta=self.opt.root.eta[scen],
+                subproblem_solver=self.opt.options["sp_solver"],
+                subproblem_solver_options=self.opt.options["sp_solver_options"],
+            )
 
         ## the above for loop can take some time,
         ## so return early if we get a kill signal,
@@ -119,24 +131,25 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ## above.
         self.opt.set_eta_bounds()
         self._eta_lb_array = np.fromiter(
-                (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
-                dtype='d', count=len(self.opt.all_scenario_names))
+            (self.opt.valid_eta_lb[s] for s in self.opt.all_scenario_names),
+            dtype="d",
+            count=len(self.opt.all_scenario_names),
+        )
         self.make_eta_lb_cut()
 
     def make_eta_lb_cut(self):
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
-        row_len = 1+1+len(self.root_nonants)
-        all_coefs = np.zeros( self.nscen*row_len+1, dtype='d')
+        row_len = 1 + 1 + len(self.root_nonants)
+        all_coefs = np.zeros(self.nscen * row_len + 1, dtype="d")
         for idx, k in enumerate(self.opt.all_scenario_names):
             ## cut_array -- [ constant, eta_coef, *nonant_coefs ]
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
-            all_coefs[row_len*idx] = self._eta_lb_array[idx]
-            all_coefs[row_len*idx+1] = -1
+            all_coefs[row_len * idx] = self._eta_lb_array[idx]
+            all_coefs[row_len * idx + 1] = -1
         self.spoke_to_hub(all_coefs)
 
     def make_cut(self):
-
         ## cache opt
         opt = self.opt
 
@@ -158,15 +171,21 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         ## self.nscen == len(opt.all_scenario_names)
         # compute local min etas
-        min_eta_vals = np.fromiter(( min(etas[k,sn] for k in opt.local_scenarios) \
-                                       for sn in opt.all_scenario_names ),
-                                    dtype='d', count=self.nscen)
+        min_eta_vals = np.fromiter(
+            (
+                min(etas[k, sn] for k in opt.local_scenarios)
+                for sn in opt.all_scenario_names
+            ),
+            dtype="d",
+            count=self.nscen,
+        )
         # Allreduce the etas to take the minimum
-        global_eta_vals = np.empty(self.nscen, dtype='d')
+        global_eta_vals = np.empty(self.nscen, dtype="d")
         self.cylinder_comm.Allreduce(min_eta_vals, global_eta_vals, op=MPI.MIN)
 
-        eta_lb_viol = (global_eta_vals + np.full_like(global_eta_vals, 1e-3) \
-                        < self._eta_lb_array).any()
+        eta_lb_viol = (
+            global_eta_vals + np.full_like(global_eta_vals, 1e-3) < self._eta_lb_array
+        ).any()
         if eta_lb_viol:
             self.make_eta_lb_cut()
             return
@@ -179,23 +198,30 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # sum the local nonants for average computation
         root_nonants = self.root_nonants
 
-        local_nonant_sum = np.fromiter( ( sum(nonants[k, nname, ix] for k in opt.local_scenarios)
-                                          for nname, ix in root_nonants),
-                                          dtype='d', count=len(root_nonants) )
-
+        local_nonant_sum = np.fromiter(
+            (
+                sum(nonants[k, nname, ix] for k in opt.local_scenarios)
+                for nname, ix in root_nonants
+            ),
+            dtype="d",
+            count=len(root_nonants),
+        )
 
         # Allreduce the xhats to get averages
-        global_nonant_sum = np.empty(len(local_nonant_sum), dtype='d')
-        self.cylinder_comm.Allreduce(local_nonant_sum, global_nonant_sum, op = MPI.SUM)
+        global_nonant_sum = np.empty(len(local_nonant_sum), dtype="d")
+        self.cylinder_comm.Allreduce(local_nonant_sum, global_nonant_sum, op=MPI.SUM)
         # need to divide through by the number of different spoke processes
         global_xbar = global_nonant_sum / self.nscen
 
-        local_dist = np.array([0],dtype='d')
+        local_dist = np.array([0], dtype="d")
         local_winner = None
         # iterate through the ranks xhats to get the ranks maximum dist
         for i, k in enumerate(opt.local_scenarios):
-            scenario_xhat = np.fromiter( (nonants[k, nname, ix] for nname, ix in root_nonants),
-                                         dtype='d', count=len(root_nonants) )
+            scenario_xhat = np.fromiter(
+                (nonants[k, nname, ix] for nname, ix in root_nonants),
+                dtype="d",
+                count=len(root_nonants),
+            )
             scenario_dist = np.linalg.norm(scenario_xhat - global_xbar)
             local_dist[0] = max(local_dist[0], scenario_dist)
             if local_winner is None:
@@ -204,22 +230,24 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                 local_winner = k
 
         # Allreduce to find the biggest distance
-        global_dist = np.empty(1, dtype='d')
+        global_dist = np.empty(1, dtype="d")
         self.cylinder_comm.Allreduce(local_dist, global_dist, op=MPI.MAX)
-        vote = np.array([-1], dtype='i')
+        vote = np.array([-1], dtype="i")
         if local_dist[0] >= global_dist[0]:
             vote[0] = self.cylinder_comm.Get_rank()
 
-        global_rank = np.empty(1, dtype='i')
+        global_rank = np.empty(1, dtype="i")
         self.cylinder_comm.Allreduce(vote, global_rank, op=MPI.MAX)
 
         # if we are the winner, grab the xhat and bcast it to the other ranks
         if self.cylinder_comm.Get_rank() == global_rank[0]:
-            farthest_xhat = np.fromiter( (nonants[local_winner, nname, ix] 
-                                            for nname, ix in root_nonants),
-                                         dtype='d', count=len(root_nonants) )
+            farthest_xhat = np.fromiter(
+                (nonants[local_winner, nname, ix] for nname, ix in root_nonants),
+                dtype="d",
+                count=len(root_nonants),
+            )
         else:
-            farthest_xhat = np.zeros(len(root_nonants), dtype='d')
+            farthest_xhat = np.zeros(len(root_nonants), dtype="d")
 
         self.cylinder_comm.Bcast(farthest_xhat, root=global_rank)
 
@@ -231,7 +259,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         cuts = opt.root.bender.generate_cut()
 
         # eta var_id map:
-        eta_id_map = { id(var) : k for k,var in root_etas.items()}
+        eta_id_map = {id(var): k for k, var in root_etas.items()}
         coef_dict = dict()
         feas_cuts = list()
         # package cuts, slightly silly in that we reconstruct the coefficients from the cuts
@@ -242,7 +270,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                 raise RuntimeError("BendersCutGenerator returned nonlinear cut")
 
             ## create a map from id(var) to index in repn
-            id_var_to_idx = { id(var) : i for i,var in enumerate(repn.linear_vars) }
+            id_var_to_idx = {id(var): i for i, var in enumerate(repn.linear_vars)}
 
             ## find the eta index
             for vid in eta_id_map:
@@ -255,9 +283,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                     # each variable should only appear once in repn.linear_vars
                     del id_var_to_idx[vid]
                     break
-            else: # no break,
+            else:  # no break,
                 # so no scenario recourse cost variables appear in the cut
-                cut_array = [repn.constant, 0.]
+                cut_array = [repn.constant, 0.0]
                 # we don't know what scenario,
                 # but since eta_s is 0, it doesn't
                 # matter
@@ -276,19 +304,19 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                     cut_array.append(0)
 
             if scen_name is not None:
-                coef_dict[scen_name] = np.array(cut_array, dtype='d')
+                coef_dict[scen_name] = np.array(cut_array, dtype="d")
             else:
-                feas_cuts.append( np.array(cut_array, dtype='d') )
+                feas_cuts.append(np.array(cut_array, dtype="d"))
 
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
-        row_len = 1+1+len(root_nonants)
-        all_coefs = np.zeros( self.nscen*row_len +1, dtype='d')
+        row_len = 1 + 1 + len(root_nonants)
+        all_coefs = np.zeros(self.nscen * row_len + 1, dtype="d")
         for idx, k in enumerate(opt.all_scenario_names):
             if k in coef_dict:
-                all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
+                all_coefs[row_len * idx : row_len * (idx + 1)] = coef_dict[k]
             elif feas_cuts:
-                all_coefs[row_len*idx:row_len*(idx+1)] = feas_cuts.pop()
+                all_coefs[row_len * idx : row_len * (idx + 1)] = feas_cuts.pop()
         self.spoke_to_hub(all_coefs)
 
     def main(self):

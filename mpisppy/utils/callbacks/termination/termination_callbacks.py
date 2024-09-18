@@ -20,6 +20,7 @@ _termination_callback_solvers_to_setters = {
     XpressPersistent: tc.set_xpress_callback,
 }
 
+
 def supports_termination_callback(solver_instance):
     """
     Determines if this module supports a solver instance
@@ -57,7 +58,7 @@ def set_termination_callback(solver_instance, termination_callback):
     if not tc.check_user_termination_callback_signature(termination_callback):
         raise RuntimeError(
             "Provided user termination callback did not match expected signature with 3 positional arguments"
-            )
+        )
 
     try:
         _termination_callback_solvers_to_setters[solver_instance.__class__](

@@ -30,10 +30,12 @@ if len(sys.argv) > 2:
 
 badguys = dict()
 
+
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
-                format(mpiexec_arg, np, progname, argstring)
+    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".format(
+        mpiexec_arg, np, progname, argstring
+    )
     print(runstring)
     code = os.system(runstring)
     if code != 0:
@@ -45,30 +47,46 @@ def do_one(dirname, progname, np, argstring):
 
 
 # for farmer, the first arg is num_scens and is required
-do_one("farmer", "farmer_cylinders.py", 3,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 --display-convergence-detail "
-       "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
-do_one("farmer", "farmer_lshapedhub.py", 2,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
-       "--solver-name={} --rel-gap=0.0 "
-       " --xhatlshaped --max-solver-threads=1".format(solver_name))
-do_one("sizes",
-       "sizes_cylinders.py",
-       4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
-       " --xhatshuffle --lagrangian --fwph "
-       "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
+do_one(
+    "farmer",
+    "farmer_cylinders.py",
+    3,
+    "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
+    "--default-rho=1 --display-convergence-detail "
+    "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(
+        solver_name
+    ),
+)
+do_one(
+    "farmer",
+    "farmer_lshapedhub.py",
+    2,
+    "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
+    "--solver-name={} --rel-gap=0.0 "
+    " --xhatlshaped --max-solver-threads=1".format(solver_name),
+)
+do_one(
+    "sizes",
+    "sizes_cylinders.py",
+    4,
+    "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+    "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
+    " --xhatshuffle --lagrangian --fwph "
+    "--default-rho=1 --solver-name={} --display-progress".format(solver_name),
+)
 
-do_one("hydro", "hydro_cylinders_pysp.py", 3,
-       "--bundles-per-rank=0 --max-iterations=100 "
-       "--default-rho=1 --xhatshuffle --lagrangian "
-       "--solver-name={}".format(solver_name))
+do_one(
+    "hydro",
+    "hydro_cylinders_pysp.py",
+    3,
+    "--bundles-per-rank=0 --max-iterations=100 "
+    "--default-rho=1 --xhatshuffle --lagrangian "
+    "--solver-name={}".format(solver_name),
+)
 
 if len(badguys) > 0:
     print("\nBad Guys:")
-    for i,v in badguys.items():
+    for i, v in badguys.items():
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))

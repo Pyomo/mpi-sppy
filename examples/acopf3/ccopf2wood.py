@@ -11,19 +11,21 @@
 # (see the first lines of main() to change instances)
 import os
 import numpy as np
+
 # Hub and spoke SPBase classes
 from mpisppy.opt.ph import PH
+
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
+
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # the problem
 import ACtree as etree
-from ccopf_multistage import pysp2_callback,\
-    scenario_denouement, _md_dict, FixFast
+from ccopf_multistage import pysp2_callback, scenario_denouement, _md_dict, FixFast
 
 import pyomo.environ as pyo
 import socket
@@ -31,6 +33,7 @@ import sys
 import datetime as dt
 
 import mpisppy.MPI as mpi
+
 comm_global = mpi.COMM_WORLD
 global_rank = comm_global.Get_rank()
 n_proc = comm_global.Get_size()
@@ -48,11 +51,11 @@ def main():
     # pglib_opf_case2383wp_k.m
     # pglib_opf_case2000_tamu.m
     # do not use pglib_opf_case89_pegase
-    egret_path_to_data = "/thirdparty/"+casename
+    egret_path_to_data = "/thirdparty/" + casename
     number_of_stages = 3
     stage_duration_minutes = [5, 15, 30]
     if len(sys.argv) != number_of_stages + 3:
-        print ("Usage: python ccop_multistage bf1 bf2 iters scenperbun(!) solver")
+        print("Usage: python ccop_multistage bf1 bf2 iters scenperbun(!) solver")
         exit(1)
     branching_factors = [int(sys.argv[1]), int(sys.argv[2])]
     PHIterLimit = int(sys.argv[3])
@@ -67,7 +70,7 @@ def main():
     # create an arbitrary xhat for xhatspecific to use
     xhat_dict = {"ROOT": "Scenario_1"}
     for i in range(branching_factors[0]):
-        xhat_dict["ROOT_"+str(i)] = "Scenario_"+str(1 + i*branching_factors[1])
+        xhat_dict["ROOT_" + str(i)] = "Scenario_" + str(1 + i * branching_factors[1])
 
     scenario_creator_kwargs = {
         "convex_relaxation": True,
@@ -78,7 +81,7 @@ def main():
         solver = pyo.SolverFactory(solver_name)
         scenario_creator_kwargs["solver"] = None
         ##if "gurobi" in solver_name:
-            ##solver.options["BarHomogeneous"] = 1
+        ##solver.options["BarHomogeneous"] = 1
     else:
         solver = pyo.SolverFactory(solver_name)
         if "gurobi" in solver_name:
@@ -89,11 +92,11 @@ def main():
     if verbose:
         print("start data dump")
         print(list(md_dict.elements("generator")))
-        for this_branch in md_dict.elements("branch"): 
-            print("TYPE=",type(this_branch))
-            print("B=",this_branch)
-            print("IN SERVICE=",this_branch[1]["in_service"])
-        print("GENERATOR SET=",md_dict.attributes("generator"))
+        for this_branch in md_dict.elements("branch"):
+            print("TYPE=", type(this_branch))
+            print("B=", this_branch)
+            print("IN SERVICE=", this_branch[1]["in_service"])
+        print("GENERATOR SET=", md_dict.attributes("generator"))
         print("end data dump")
 
     lines = list()
@@ -101,20 +104,25 @@ def main():
         lines.append(this_branch[0])
 
     acstream = np.random.RandomState()
-        
-    scenario_creator_kwargs["etree"] = etree.ACTree(number_of_stages,
-                                    branching_factors,
-                                    seed,
-                                    acstream,
-                                    a_line_fails_prob,
-                                    stage_duration_minutes,
-                                    repair_fct,
-                                    lines)
+
+    scenario_creator_kwargs["etree"] = etree.ACTree(
+        number_of_stages,
+        branching_factors,
+        seed,
+        acstream,
+        a_line_fails_prob,
+        stage_duration_minutes,
+        repair_fct,
+        lines,
+    )
     scenario_creator_kwargs["acstream"] = acstream
 
-    all_scenario_names=["Scenario_"+str(i)\
-                        for i in range(1,len(scenario_creator_kwargs["etree"].\
-                                             rootnode.ScenarioList)+1)]
+    all_scenario_names = [
+        "Scenario_" + str(i)
+        for i in range(
+            1, len(scenario_creator_kwargs["etree"].rootnode.ScenarioList) + 1
+        )
+    ]
     all_nodenames = scenario_creator_kwargs["etree"].All_Nodenames()
 
     options = dict()
@@ -143,7 +151,7 @@ def main():
 
     options["smoothed"] = 0
     options["defaultPHp"] = 5000
-    options["defaultPHbeta"] = .05
+    options["defaultPHbeta"] = 0.05
 
     # try to do something interesting for bundles per rank
     if scenperbun > 0:
@@ -163,17 +171,16 @@ def main():
             nbunstr = str(options["bundles_per_rank"])
         else:
             nbunstr = "0"
-        oline = "\n"+ str(start_time)+","+socket.gethostname()
-        oline += ","+str(branching_factors[0])+","+str(branching_factors[1])
-        oline += ", "+str(seed) + ", "+str(options["solver_name"])
-        oline += ", "+str(n_proc) + ", "+ nbunstr
-        oline += ", "+str(options["PHIterLimit"])
-        oline += ", "+str(options["convthresh"])
+        oline = "\n" + str(start_time) + "," + socket.gethostname()
+        oline += "," + str(branching_factors[0]) + "," + str(branching_factors[1])
+        oline += ", " + str(seed) + ", " + str(options["solver_name"])
+        oline += ", " + str(n_proc) + ", " + nbunstr
+        oline += ", " + str(options["PHIterLimit"])
+        oline += ", " + str(options["convthresh"])
 
         with open(appfile, "a") as f:
             f.write(oline)
         print(oline)
-
 
     # PH hub
     options["tee-rank0-solves"] = False
@@ -189,31 +196,32 @@ def main():
             "scenario_creator_kwargs": scenario_creator_kwargs,
             # "rho_setter": rho_setter.ph_rhosetter_callback,
             "extensions": None,
-            "all_nodenames":all_nodenames,
-        }
+            "all_nodenames": all_nodenames,
+        },
     }
 
     xhat_options = options.copy()
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhat_options["xhat_specific_options"] = {"xhat_solver_options":
-                                          options["iterk_solver_options"],
-                                          "xhat_scenario_dict": xhat_dict,
-                                          "csvname": "specific.csv"}
+    xhat_options["bundles_per_rank"] = 0  #  no bundles for xhat
+    xhat_options["xhat_specific_options"] = {
+        "xhat_solver_options": options["iterk_solver_options"],
+        "xhat_scenario_dict": xhat_dict,
+        "csvname": "specific.csv",
+    }
 
     ub2 = {
-        'spoke_class': XhatSpecificInnerBound,
+        "spoke_class": XhatSpecificInnerBound,
         "spoke_kwargs": dict(),
         "opt_class": Xhat_Eval,
-        'opt_kwargs': {
-            'options': xhat_options,
-            'all_scenario_names': all_scenario_names,
-            'scenario_creator': pysp2_callback,
-            'scenario_denouement': scenario_denouement,
+        "opt_kwargs": {
+            "options": xhat_options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": pysp2_callback,
+            "scenario_denouement": scenario_denouement,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            'all_nodenames': all_nodenames
+            "all_nodenames": all_nodenames,
         },
     }
-    
+
     list_of_spoke_dict = [ub2]
     wheel_spinner = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel_spinner.spin()
@@ -222,12 +230,11 @@ def main():
         ph_end_time = dt.datetime.now()
         IB = wheel_spinner.BestInnerBound
         OB = wheel_spinner.BestOuterBound
-        print("BestInnerBound={} and BestOuterBound={}".\
-              format(IB, OB))
+        print("BestInnerBound={} and BestOuterBound={}".format(IB, OB))
         with open(appfile, "a") as f:
-            f.write(", "+str(IB)+", "+str(OB)+", "+str(spcomm.opt._PHIter))
-            f.write(", "+str((ph_end_time - start_time).total_seconds()))
+            f.write(", " + str(IB) + ", " + str(OB) + ", " + str(spcomm.opt._PHIter))
+            f.write(", " + str((ph_end_time - start_time).total_seconds()))
 
-                
-if __name__=='__main__':
+
+if __name__ == "__main__":
     main()

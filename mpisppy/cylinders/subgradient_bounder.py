@@ -9,13 +9,13 @@
 import mpisppy.cylinders.spoke
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 
-class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundSpoke):
 
-    converger_spoke_char = 'G'
+class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundSpoke):
+    converger_spoke_char = "G"
 
     def main(self):
         extensions = self.opt.extensions is not None
-        verbose = self.opt.options['verbose']
+        verbose = self.opt.options["verbose"]
 
         self.lagrangian_prep()
 
@@ -33,8 +33,8 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
         # update rho / alpha
-        if self.opt.options.get('subgradient_rho_multiplier') is not None:
-            rf = self.opt.options['subgradient_rho_multiplier']
+        if self.opt.options.get("subgradient_rho_multiplier") is not None:
+            rf = self.opt.options["subgradient_rho_multiplier"]
             for scenario in self.opt.local_scenarios.values():
                 for ndn_i in scenario._mpisppy_model.rho:
                     scenario._mpisppy_model.rho[ndn_i] *= rf

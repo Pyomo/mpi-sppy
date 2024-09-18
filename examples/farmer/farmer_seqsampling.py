@@ -12,7 +12,7 @@
 # argument to choose between BM (Bayraksan and Morton) and
 # BPL (Bayraksan and Pierre Louis) but provides all
 # the command line parameters for both (so either way,
-# many command line parameters will be ignored). 
+# many command line parameters will be ignored).
 
 import numpy as np
 import farmer
@@ -23,12 +23,18 @@ import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 
 
-#============================
-def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
-                          use_integer=False, crops_multiplier=1, start_seed=None):
-    '''
+# ============================
+def xhat_generator_farmer(
+    scenario_names,
+    solver_name=None,
+    solver_options=None,
+    use_integer=False,
+    crops_multiplier=1,
+    start_seed=None,
+):
+    """
     For sequential sampling.
-    Takes scenario names as input and provide the best solution for the 
+    Takes scenario names as input and provide the best solution for the
         approximate problem associated with the scenarios.
     Parameters
     ----------
@@ -50,42 +56,41 @@ def xhat_generator_farmer(scenario_names, solver_name=None, solver_options=None,
     -------
     xhat: str
         A generated xhat, solution to the approximate problem induced by scenario_names.
-        
-    NOTE: This tool only works when the file is in mpisppy. In SPInstances, 
+
+    NOTE: This tool only works when the file is in mpisppy. In SPInstances,
             you must change the from_module line.
 
-    '''
+    """
     num_scens = len(scenario_names)
 
     cfg = config.Config()
     cfg.quick_assign("EF_2stage", bool, True)
     cfg.quick_assign("EF_solver_name", str, solver_name)
-    #cfg.quick_assign("solver_name", str, solver_name)  # amalgamator wants this
+    # cfg.quick_assign("solver_name", str, solver_name)  # amalgamator wants this
     cfg.quick_assign("EF_solver_options", dict, solver_options)
     cfg.quick_assign("num_scens", int, num_scens)
-    cfg.quick_assign("_mpisppy_probability", float, 1/num_scens)
+    cfg.quick_assign("_mpisppy_probability", float, 1 / num_scens)
     cfg.quick_assign("start_seed", int, start_seed)
-    
-    #We use from_module to build easily an Amalgamator object
+
+    # We use from_module to build easily an Amalgamator object
     ama = amalgamator.from_module("farmer", cfg, use_command_line=False)
-    #Correcting the building by putting the right scenarios.
+    # Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.verbose = False
     ama.run()
-    
+
     # get the xhat
     xhat = sputils.nonant_cache_from_ef(ama.ef)
 
-    return {'ROOT': xhat['ROOT']}
-    
+    return {"ROOT": xhat["ROOT"]}
 
 
 def main(cfg):
-    """ Code for farmer sequential sampling (in a function for easier testing)
+    """Code for farmer sequential sampling (in a function for easier testing)
     Args:
         args (parseargs): the command line arguments object from parseargs
     Returns:
-        results (dict): the solution, gap confidence interval and T 
+        results (dict): the solution, gap confidence interval and T
     """
     refmodelname = "farmer"
 
@@ -93,43 +98,47 @@ def main(cfg):
     assert cfg.EF_solver_name is not None
     solver_name = cfg.EF_solver_name
     crops_multiplier = cfg.crops_multiplier
-    
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
-    
-    xhat_gen_kwargs = {"scenario_names": scenario_names,
-                       "solver_name": solver_name,
-                       "solver_options": None,
-                       "use_integer": False,
-                       "crops_multiplier": crops_multiplier,
-                       "start_seed": 0,
+
+    scenario_names = ["Scenario" + str(i) for i in range(scen_count)]
+
+    xhat_gen_kwargs = {
+        "scenario_names": scenario_names,
+        "solver_name": solver_name,
+        "solver_options": None,
+        "use_integer": False,
+        "crops_multiplier": crops_multiplier,
+        "start_seed": 0,
     }
     cfg.quick_assign("xhat_gen_kwargs", dict, xhat_gen_kwargs)
 
     # Note that as of July 2022, we are not using conditional args so cfg has everything
     if cfg.BM_vs_BPL == "BM":
-        sampler = seqsampling.SeqSampling(refmodelname,
-                                xhat_generator_farmer,
-                                cfg,
-                                stochastic_sampling=False,
-                                stopping_criterion="BM",
-                                solving_type="EF_2stage",
-                                )
+        sampler = seqsampling.SeqSampling(
+            refmodelname,
+            xhat_generator_farmer,
+            cfg,
+            stochastic_sampling=False,
+            stopping_criterion="BM",
+            solving_type="EF_2stage",
+        )
     else:  # must be BPL
         ss = int(cfg.BPL_n0min) != 0
-        sampler = seqsampling.SeqSampling(refmodelname,
-                                xhat_generator_farmer,
-                                cfg,
-                                stochastic_sampling=ss,
-                                stopping_criterion="BPL",
-                                solving_type="EF_2stage",
-                                )
+        sampler = seqsampling.SeqSampling(
+            refmodelname,
+            xhat_generator_farmer,
+            cfg,
+            stochastic_sampling=ss,
+            stopping_criterion="BPL",
+            solving_type="EF_2stage",
+        )
     xhat = sampler.run()
     return xhat
+
 
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
-    
+
     cfg.num_scens_required()
 
     farmer.inparser_adder(cfg)
@@ -139,40 +148,52 @@ def _parse_args():
     confidence_config.BM_config(cfg)
     confidence_config.BPL_config(cfg)  # --help will show both BM and BPL
 
-    cfg.add_to_config("BM_vs_BPL",
-                      description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
-                      domain=str,
-                      default=None)
-    cfg.add_to_config("xhat1_file",
-                      description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
-                      domain=str,
-                      default=None)
+    cfg.add_to_config(
+        "BM_vs_BPL",
+        description="BM or BPL for Bayraksan and Morton or B and Pierre Louis",
+        domain=str,
+        default=None,
+    )
+    cfg.add_to_config(
+        "xhat1_file",
+        description="File to which xhat1 should be (e.g. to process with zhat4hat.py)",
+        domain=str,
+        default=None,
+    )
 
     cfg.popular_args()
     cfg.two_sided_args()
-    cfg.ph_args()    
-    cfg.aph_args()    
+    cfg.ph_args()
+    cfg.aph_args()
     cfg.xhatlooper_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
-    cfg.add_to_config("use_norm_rho_updater",
-                         description="Use the norm rho updater extension",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("use-norm-rho-converger",
-                         description="Use the norm rho converger",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("run_async",
-                         description="Run with async projective hedging instead of progressive hedging",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("use_norm_rho_converger",
-                         description="Use the norm rho converger",
-                         domain=bool,
-                         default=False)
+    cfg.add_to_config(
+        "use_norm_rho_updater",
+        description="Use the norm rho updater extension",
+        domain=bool,
+        default=False,
+    )
+    cfg.add_to_config(
+        "use-norm-rho-converger",
+        description="Use the norm rho converger",
+        domain=bool,
+        default=False,
+    )
+    cfg.add_to_config(
+        "run_async",
+        description="Run with async projective hedging instead of progressive hedging",
+        domain=bool,
+        default=False,
+    )
+    cfg.add_to_config(
+        "use_norm_rho_converger",
+        description="Use the norm rho converger",
+        domain=bool,
+        default=False,
+    )
 
     cfg.parse_command_line("farmer_sequential")
 
@@ -180,18 +201,19 @@ def _parse_args():
         raise RuntimeError("--BM-vs_BPL must be given.")
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
         raise RuntimeError(f"--BM-vs_BPL must be BM or BPL (you gave {cfg.BM_vs_BMPL})")
-    
+
     return cfg
 
 
-if __name__ == '__main__':
-
+if __name__ == "__main__":
     cfg = _parse_args()
-    
+
     results = main(cfg)
     print("Final gap confidence interval results:", results)
 
     if cfg.xhat1_file is not None:
         print(f"Writing xhat1 to {cfg.xhat1_file}.npy")
-        root_nonants =np.fromiter((v for v in results["Candidate_solution"]["ROOT"]), float)
+        root_nonants = np.fromiter(
+            (v for v in results["Candidate_solution"]["ROOT"]), float
+        )
         np.save(cfg.xhat1_file, root_nonants)

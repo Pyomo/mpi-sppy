@@ -13,17 +13,19 @@ import netdes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
 from mpisppy.fwph.fwph import FWPH
+
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub
+
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     """ For testing and debugging only 
     
         Race a Lagrangian spoke against an FWPH spoke
@@ -41,8 +43,8 @@ if __name__=="__main__":
     hub_ph_options = {
         "solver_name": "gurobi_persistent",
         "PHIterLimit": 1000,
-        "defaultPHrho": 10000, # Big for netdes
-        "convthresh": 0.,
+        "defaultPHrho": 10000,  # Big for netdes
+        "convthresh": 0.0,
         "verbose": False,
         "display_progress": False,
         "display_timing": False,
@@ -65,14 +67,14 @@ if __name__=="__main__":
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-        }
+        },
     }
 
     ph_options = {
         "solver_name": "gurobi_persistent",
         "PHIterLimit": 1000,
-        "defaultPHrho": 10000, # Big for netdes
-        "convthresh": 0., # To prevent FWPH from terminating
+        "defaultPHrho": 10000,  # Big for netdes
+        "convthresh": 0.0,  # To prevent FWPH from terminating
         "verbose": False,
         "display_progress": False,
         "display_timing": False,
@@ -83,7 +85,7 @@ if __name__=="__main__":
     # FWPH spoke
     fw_options = {
         "FW_iter_limit": 10,
-        "FW_weight": 0., # Or 1.? I forget what this does, honestly
+        "FW_weight": 0.0,  # Or 1.? I forget what this does, honestly
         "FW_conv_thresh": 1e-4,
         "solver_name": "gurobi_persistent",
         "FW_verbose": False,
@@ -98,7 +100,7 @@ if __name__=="__main__":
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-        }
+        },
     }
 
     # Standard Lagrangian bound spoke
@@ -111,17 +113,18 @@ if __name__=="__main__":
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-        }
+        },
     }
 
     # xhat looper bound spoke
     xhat_options = hub_ph_options.copy()
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
-    xhat_options["xhat_looper_options"] =  {"xhat_solver_options":\
-                                          ph_options["iterk_solver_options"],
-                                          "scen_limit": 3,
-                                          "dump_prefix": "delme",
-                                          "csvname": "looper.csv"}
+    xhat_options["bundles_per_rank"] = 0  #  no bundles for xhat
+    xhat_options["xhat_looper_options"] = {
+        "xhat_solver_options": ph_options["iterk_solver_options"],
+        "scen_limit": 3,
+        "dump_prefix": "delme",
+        "csvname": "looper.csv",
+    }
     xhatlooper_spoke = {
         "spoke_class": XhatLooperInnerBound,
         "spoke_kwargs": dict(),
@@ -131,7 +134,7 @@ if __name__=="__main__":
             "all_scenario_names": scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-        }
+        },
     }
     list_of_spoke_dict = (fw_spoke, lagrangian_spoke, xhatlooper_spoke)
 

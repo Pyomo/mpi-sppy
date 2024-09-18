@@ -13,6 +13,7 @@ arguments serve to configure the USAR problem being solved. You can run
 with ``--help`` to show the command-line arguments. Additionally, the
 functions here can be imported and used as documented.
 """
+
 import itertools
 import os
 
@@ -54,8 +55,7 @@ def wheel_spinner(
         raise ValueError("Provide a positive integer for num_scens")
     scenario_names = list(map(str, range(cnfg["num_scens"])))
 
-    data_dicts = list(
-        itertools.islice(generate_data(**cnfg), cnfg["num_scens"]))
+    data_dicts = list(itertools.islice(generate_data(**cnfg), cnfg["num_scens"]))
     depot_coords, site_coords = generate_coords(**cnfg)
     scenario_creator_kwargs = {
         "data_dicts": data_dicts,
@@ -63,8 +63,7 @@ def wheel_spinner(
         "site_coords": site_coords,
     }
 
-    vanilla_args = \
-        (cnfg, scenario_creator, scenario_denouement, scenario_names)
+    vanilla_args = (cnfg, scenario_creator, scenario_denouement, scenario_names)
     vanilla_kwargs = {"scenario_creator_kwargs": scenario_creator_kwargs}
 
     vanilla_fn = vanilla.aph_hub if cnfg["run_async"] else vanilla.ph_hub

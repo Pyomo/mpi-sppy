@@ -17,8 +17,11 @@ from mpisppy.opt.ph import PH
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 
+
 def _print_usage():
     print('Usage: "abstract.py solver" where solver is a pyomo solver name')
+
+
 if len(sys.argv) < 2:
     _print_usage()
     sys.exit()
@@ -34,38 +37,45 @@ except Exception:
     _print_usage()
     sys.exit()
 
-pref = os.path.join("..","PySP","abstract")
-farmer = PySPModel(model=os.path.join(pref,"ReferenceModel.py"),
-                   scenario_tree=os.path.join(pref,"ScenarioStructure.dat"),
-                   data_dir=pref)
+pref = os.path.join("..", "PySP", "abstract")
+farmer = PySPModel(
+    model=os.path.join(pref, "ReferenceModel.py"),
+    scenario_tree=os.path.join(pref, "ScenarioStructure.dat"),
+    data_dir=pref,
+)
 
-phoptions = {'defaultPHrho': 1.0,
-             'solver_name':solver_name,
-             'PHIterLimit': 50,
-             'convthresh': 0.01,
-             'verbose': False,
-             'display_progress': True,
-             'display_timing': False,
-             'iter0_solver_options': None,
-             'iterk_solver_options': None
-             }
+phoptions = {
+    "defaultPHrho": 1.0,
+    "solver_name": solver_name,
+    "PHIterLimit": 50,
+    "convthresh": 0.01,
+    "verbose": False,
+    "display_progress": True,
+    "display_timing": False,
+    "iter0_solver_options": None,
+    "iterk_solver_options": None,
+}
 
-ph = PH( options = phoptions,
-         all_scenario_names = farmer.all_scenario_names,
-         scenario_creator = farmer.scenario_creator,
-         scenario_denouement = farmer.scenario_denouement,
-        )
+ph = PH(
+    options=phoptions,
+    all_scenario_names=farmer.all_scenario_names,
+    scenario_creator=farmer.scenario_creator,
+    scenario_denouement=farmer.scenario_denouement,
+)
 
 ph.ph_main()
 
-ef = sputils.create_EF(farmer.all_scenario_names,
-                       farmer.scenario_creator)
+ef = sputils.create_EF(farmer.all_scenario_names, farmer.scenario_creator)
 solver = pyo.SolverFactory(solver_name)
-if 'persistent' in solver_name:
+if "persistent" in solver_name:
     solver.set_instance(ef, symbolic_solver_labels=True)
     solver.solve(tee=True)
 else:
-    solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+    solver.solve(
+        ef,
+        tee=True,
+        symbolic_solver_labels=True,
+    )
 
 print(f"EF objective: {pyo.value(ef.EF_Obj)}")
 farmer.close()
