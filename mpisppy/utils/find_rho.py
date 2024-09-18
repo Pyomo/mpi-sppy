@@ -264,7 +264,7 @@ class Set_Rho():
         rho_list (list): list of (id(variable), rho)
 
         """
-        assert self.cfg != None, "you have to give the rho_setter a cfg"
+        assert self.cfg is not None, "you have to give the rho_setter a cfg"
         assert self.cfg.rho_file_in != '', "use --rho-file-in to give the path of your rhos file"
         rhofile = self.cfg.rho_file_in
         rho_list = list()
@@ -279,8 +279,8 @@ class Set_Rho():
                     if vo is not None:
                         rho_list.append((id(vo), float(row[1])))
                     else:
-                        raise RuntimeError(f"rho values from {filename} found Var {fullname} "
-                                           f"that is not found in the scenario given (name={s._name})")
+                        raise RuntimeError(f"rho values from {rhofile} found Var {fullname} "
+                                           f"that is not found in the scenario given (name={scenario._name})")
         return rho_list
 
 
@@ -320,7 +320,7 @@ def get_rho_from_W(mname, original_cfg):
 
     try:
         model_module = importlib.import_module(mname)
-    except:
+    except Exception:
         raise RuntimeError(f"Could not import module: {mname}")
     cfg = copy.deepcopy(original_cfg)
     cfg.max_iterations = 0 #we only need x0 here

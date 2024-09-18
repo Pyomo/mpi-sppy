@@ -13,16 +13,6 @@ import pyomo.contrib.benders.benders_cuts as bc
 
 from mpisppy.spopt import set_instance_retry
 
-try:
-
-    mpi4py_available = True
-except:
-    mpi4py_available = False
-try:
-
-    numpy_available = True
-except:
-    numpy_available = False
 import logging
 
 logger = logging.getLogger(__name__)

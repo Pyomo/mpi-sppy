@@ -8,6 +8,20 @@
 ###############################################################################
 # Amalgamator.py starting point; DLW March 2021
 # To test : python amalgamator.py 10 --solver-name=cplex --default-rho=1
+import importlib
+import inspect
+import pyomo.environ as pyo
+import copy
+import pyomo.common.config as pyofig
+from mpisppy.utils import config
+import mpisppy.utils.solver_spec as solver_spec
+
+from mpisppy.spin_the_wheel import WheelSpinner
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy import global_toc
+
+from mpisppy.extensions.fixer import Fixer
 
 """Takes a scenario list and a scenario creator (and options)
 as input and produces an outer bound on the objective function (solving the EF directly
@@ -38,20 +52,6 @@ Config object **** that it might modify (mainly add) *****
 It no longer has options, just a cfg.
 You might want to copy your cfg before passing it in.
 """
-import importlib
-import inspect
-import pyomo.environ as pyo
-import copy
-import pyomo.common.config as pyofig
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
-
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy import global_toc
-
-from mpisppy.extensions.fixer import Fixer
 
 hubs_and_multi_compatibility = {'ph': True,
                                 'aph': True, 
@@ -133,10 +133,10 @@ def check_module_ama(module):
     you_can_have_it_all = True
     for ething in everything:
         if not hasattr(module, ething):
-            print(f"Module {mname} is missing {ething}")
+            print(f"Module {module} is missing {ething}")
             you_can_have_it_all = False
     if not you_can_have_it_all:
-        raise RuntimeError(f"Module {mname} not complete for from_module")
+        raise RuntimeError(f"Module {module} not complete for from_module")
 
 
 #==========

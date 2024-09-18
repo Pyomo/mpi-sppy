@@ -99,9 +99,11 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
             mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, fname,
                 sep_files=self.sep_files)
         if (self.w_grad_fname):
-            grad_fname = 'grad_fname.csv'
+            # TODO: finish implementing?
+            #grad_fname = 'grad_fname.csv'
             #mpisppy.utils.wxbarutils.write_W_grad_to_file(self.PHB, grad_fname,
             #sep_files=self.sep_files)
+            pass
         if (self.x_fname):
             mpisppy.utils.wxbarutils.write_xbar_to_file(self.PHB, self.x_fname)
 

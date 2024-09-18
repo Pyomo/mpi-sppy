@@ -239,7 +239,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         k = scenario_name
-        pyomo_solve_time = self.solve_one(solver_options,k, s,
+        self.solve_one(solver_options,k, s,
                                           dtiming=False,
                                           verbose=self.verbose,
                                           tee=False,
