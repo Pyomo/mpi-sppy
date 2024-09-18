@@ -84,7 +84,7 @@ class FWPH(mpisppy.phbase.PHBase):
             ph_converger=ph_converger,
             rho_setter=rho_setter,
         )      
-        assert (variable_probability == None), "variable probability is not allowed with fwph"
+        assert (variable_probability is None), "variable probability is not allowed with fwph"
         self._init(FW_options)
 
     def _init(self, FW_options):
@@ -109,7 +109,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (check):
                 self._check_initial_points()
             self._create_solvers()
-            self._use_rho_setter(verbose and self.cylinder_rank==0)
+            self._use_rho_setter(self.options['verbose'] and self.cylinder_rank==0)
             self._initialize_MIP_var_values()
             best_bound = -np.inf if self.is_minimizing else np.inf
         else:
@@ -201,7 +201,6 @@ class FWPH(mpisppy.phbase.PHBase):
             secs = time.time() - self.t0
             self._output(itr+1, self._local_bound, best_bound, diff, secs)
             self.Update_W(self.options['verbose'])
-            timed_out = self._is_timed_out()
             if (self._is_timed_out()):
                 if (self.cylinder_rank == 0 and self.vb):
                     print('Timeout.')
@@ -429,7 +428,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     leaf_var_dict = {(scenario_name, 'LEAF', ix):
                         var for ix, var in enumerate(self._get_leaf_vars(mip))}
                     EF.leaf_vars.update(leaf_var_dict)
-                    EF.num_leaf_vars[scenario_name] = len(leaf_vars_dict)
+                    EF.num_leaf_vars[scenario_name] = len(leaf_var_dict)
                     # Reference variables are already attached: EF.ref_vars
                     # indexed by (node_name, index)
         else:
@@ -465,7 +464,6 @@ class FWPH(mpisppy.phbase.PHBase):
         points = {key: value for block in init_pts 
                              for (key, value) in block.items()}
         scenario_names = points.keys()
-        num_scenarios = len(points)
 
         # Some index sets we will need..
         conv_ix = [(scenario_name, var_name) 
