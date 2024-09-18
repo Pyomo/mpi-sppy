@@ -95,10 +95,6 @@ def main():
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-
-    # xhat looper bound spoke -- any scenario will do for
-    # lshaped (they're all the same)
-    xhat_scenario_dict = {"ROOT": all_scenario_names[0]}
     
     if xhatlshaped:
         xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)

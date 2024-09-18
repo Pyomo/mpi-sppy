@@ -98,7 +98,7 @@ def make_nodenames_balanced(BFs, leaf_nodes=False, root = True):
         0, 1, 2, ..., BFs[0], 0_0, 0_1, ..., 0_BFs[1], 1_0, 1_1, ... ,
         1_BFs[1], ... , BFs[0]_BFs[1], ... , BFs[0]...BFs[-2]
     """
-    if leaf_nodes == False:
+    if not leaf_nodes:
         BFs = BFs[:-1] # exclude leaf nodes
 
     # Constructs all nodenames
@@ -153,7 +153,7 @@ def _parse_args():
                          domain=bool,
                          default=False)    
     # special "proper" bundle arguments
-    parser = pickle_bundle.pickle_bundle_parser(cfg)
+    pickle_bundle.pickle_bundle_config(cfg)
 
     cfg.add_to_config("EF_directly",
                          description="Solve the EF directly instead of using cylinders (default False)",
@@ -208,7 +208,6 @@ def main():
         all_scenario_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
         refmodule = aircondB
         primal_rho_setter = None
-        dual_rho_setter = None
         global_toc("WARNING: not using rho setters with proper bundles")
         
     else:
@@ -216,7 +215,6 @@ def main():
         all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
         refmodule = aircond
         primal_rho_setter = refmodule.primal_rho_setter
-        dual_rho_setter = refmodule.dual_rho_setter
 
     xhat_scenario_dict = make_node_scenario_dict_balanced(BFs)
     all_nodenames = list(xhat_scenario_dict.keys())

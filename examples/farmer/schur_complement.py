@@ -11,6 +11,7 @@ from mpisppy.opt import ef, sc
 import logging
 from mpisppy import MPI
 import sys
+import pyomo.environ as pyo
 
 
 if MPI.COMM_WORLD.Get_rank() == 0:
@@ -36,6 +37,8 @@ def solve_with_extensive_form(scen_count):
                            scenario_creator=farmer.scenario_creator,
                            scenario_creator_kwargs=scenario_kwargs)
     results = opt.solve_extensive_form()
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
     opt.report_var_values_at_rank0()
     return opt
 
@@ -53,6 +56,8 @@ def solve_with_sc(scen_count, linear_solver=None):
                              scenario_creator=farmer.scenario_creator,
                              scenario_creator_kwargs=scenario_kwargs)
     results = opt.solve()
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
     opt.report_var_values_at_rank0()
     return opt
 

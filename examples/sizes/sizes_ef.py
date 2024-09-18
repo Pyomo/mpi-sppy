@@ -25,8 +25,8 @@ ef = mpisppy.utils.sputils.create_EF(
     scenario_creator,
     scenario_creator_kwargs={"scenario_count": ScenCount},
 )
-if 'persistent' in options["solver_name"]:
+if 'persistent' in solver.name: 
     solver.set_instance(ef, symbolic_solver_labels=True)
 solver.options["mipgap"] = 0.0001
-results = solver.solve(ef, tee=options["verbose"])
+results = solver.solve(ef, tee=True)
 print('EF objective value:', pyo.value(ef.EF_Obj))

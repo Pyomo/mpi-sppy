@@ -75,7 +75,6 @@ def main():
     
     cfg = _parse_args()
 
-    num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
     rho_setter = None  # non-grad rho setter?
 
@@ -99,7 +98,6 @@ def main():
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

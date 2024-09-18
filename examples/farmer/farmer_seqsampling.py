@@ -88,7 +88,6 @@ def main(cfg):
         results (dict): the solution, gap confidence interval and T 
     """
     refmodelname = "farmer"
-    scenario_creator = farmer.scenario_creator
 
     scen_count = cfg.num_scens
     assert cfg.EF_solver_name is not None

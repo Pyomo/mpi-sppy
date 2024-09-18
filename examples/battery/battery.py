@@ -23,7 +23,7 @@ import pyomo.environ as pyo
 import mpisppy.scenario_tree as stree
 
 def scenario_creator(
-    scenario_name, solar_filname=None, use_LP=False, lam=None,
+    scenario_name, solar_filename=None, use_LP=False, lam=None,
 ):
     """
     Args:
@@ -80,7 +80,8 @@ def scenario_creator(
         + data['disc'] * pyo.quicksum(model.q) + lam * model.z[0],
         sense=pyo.minimize)
 
-    fscr = lambda model: pyo.dot_product(data['rev'], model.y)
+    def fscr(model):
+        return pyo.dot_product(data["rev"], model.y)
     model.first_stage_cost = pyo.Expression(rule=fscr)
 
     model._mpisppy_node_list = [

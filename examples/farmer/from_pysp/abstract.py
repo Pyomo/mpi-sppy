@@ -29,7 +29,7 @@ try:
     if not solver_avail:
         print(f"Cannot find solver {solver_name}")
         sys.exit()
-except:
+except Exception:
     print(f"Cannot find solver {solver_name}")
     _print_usage()
     sys.exit()

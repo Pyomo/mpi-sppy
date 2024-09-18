@@ -91,7 +91,6 @@ def main():
         "crops_multiplier": crops_multiplier,
         'sense': pyo.minimize
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

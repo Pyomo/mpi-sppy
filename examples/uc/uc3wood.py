@@ -62,7 +62,7 @@ if __name__ == "__main__":
         ScenCount = int(sys.argv[1])
         bundles_per_rank = int(sys.argv[2])
         PHIterLimit = int(sys.argv[3])
-    except:
+    except Exception:
         _usage()
     if sys.argv[4] == "fixer":
         usefixer = True
@@ -110,7 +110,7 @@ if __name__ == "__main__":
             "mipgapdict": dict() , # Setting this changes iter0_solver_options
         },
     }
-    if usefixer==True:
+    if usefixer:
         multi_ext = {"ext_classes": [Fixer, Gapper]}
     else:
         multi_ext = {"ext_classes": [Gapper]}

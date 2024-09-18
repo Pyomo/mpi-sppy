@@ -34,6 +34,8 @@ def main():
         scenario_creator_kwargs={"path": path},
     )
     results = ef.solve_extensive_form(tee=True)
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
     print("Netdes objective value:", pyo.value(ef.ef.EF_Obj))
 
 if __name__=="__main__":

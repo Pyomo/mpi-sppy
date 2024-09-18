@@ -37,6 +37,8 @@ def main():
         scenario_creator_kwargs={"data_dir": data_dir},
     )
     results = ef.solve_extensive_form()
+    if not pyo.check_optimal_termination(results):
+        print("Warning: Non-optimal termination condition from Pyomo")
     print("sslp objective value:", pyo.value(ef.ef.EF_Obj))
 
 if __name__=="__main__":

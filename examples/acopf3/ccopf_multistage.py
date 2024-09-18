@@ -54,10 +54,10 @@ def FixGaussian(minutes, acstream, mu, sigma):
 #======= end repair functions =====
     
 def _md_dict(epath):
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
+    path = str(egret.__path__)
+    left = path.find("'")
+    right = path.find("'", left+1)
+    egretrootpath = path[left+1:right]
     if epath[0] != os.sep:
         test_case = os.path.join(egretrootpath, epath)
     else:
@@ -259,9 +259,10 @@ def scenario_denouement(rank, scenario_name, scenario):
 
         print("GEN: %4s PG:" % gen, end="")
 
+        previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).pg[gen])
-            if stage == stages[0]:
+            if previous_val is None:
                 print("%6.2f -->> " % current_val, end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")
@@ -270,9 +271,10 @@ def scenario_denouement(rank, scenario_name, scenario):
 
         print("GEN: %4s QG:" % gen, end="")
 
+        previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).qg[gen])
-            if stage == stages[0]:
+            if previous_val is None:
                 print("%6.2f -->> " % current_val, end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")

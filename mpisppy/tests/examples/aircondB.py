@@ -196,7 +196,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     base_aircond.inparser_adder(cfg)
     # special "proper" bundle arguments
-    pickle_bundle.pickle_bundle_parser(cfg)
+    pickle_bundle.pickle_bundle_config(cfg)
     
 
 #=========

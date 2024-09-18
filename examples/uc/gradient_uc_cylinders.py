@@ -96,6 +96,8 @@ def main():
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
     if cfg.use_cost_based_rho:
         rho_setter = uc._rho_setter
+    else:
+        rho_setter = None
     
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -105,12 +107,12 @@ def main():
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=MultiExtension,
-                                   rho_setter = None)
+                                   rho_setter = rho_setter)
     else:
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
-                                  rho_setter = None)
+                                  rho_setter = rho_setter)
         
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
@@ -168,7 +170,7 @@ def main():
     if lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                                     scenario_creator_kwargs=scenario_creator_kwargs,
-                                                    rho_setter = None)
+                                                    rho_setter = rho_setter)
 
     # xhat looper bound spoke
     if xhatlooper:
@@ -178,7 +180,7 @@ def main():
     if cfg.ph_ob:
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = uc._rho_setter)        
+                                          rho_setter = rho_setter)        
 
     # xhat shuffle bound spoke
     if xhatshuffle:
