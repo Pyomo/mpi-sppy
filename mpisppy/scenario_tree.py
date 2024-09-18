@@ -1,13 +1,53 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # scenario_tree.py; PySP 2.0 scenario structure
 # ALL INDEXES ARE ZERO-BASED
 import logging
-logger = logging.getLogger('mpisppy.scenario_tree')
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
+logger = logging.getLogger('mpisppy.scenario_tree')
+
+def build_vardatalist(self, model, varlist=None):
+    """
+    Convert a list of pyomo variables to a list of SimpleVar and _GeneralVarData. If varlist is none, builds a
+    list of all variables in the model. Written by CD Laird
+
+    Parameters
+    ----------
+    model: ConcreteModel
+    varlist: None or list of pyo.Var
+    """
+    vardatalist = None
+
+    # if the varlist is None, then assume we want all the active variables
+    if varlist is None:
+        raise RuntimeError("varlist is None in scenario_tree.build_vardatalist")
+        vardatalist = [v for v in model.component_data_objects(pyo.Var, active=True, sort=True)]
+    elif isinstance(varlist, (pyo.Var, IndexedComponent_slice)):
+        # user provided a variable, not a list of variables. Let's work with it anyway
+        varlist = [varlist]
+
+    if vardatalist is None:
+        # expand any indexed components in the list to their
+        # component data objects
+        vardatalist = list()
+        for v in varlist:
+            if isinstance(v, IndexedComponent_slice):
+                vardatalist.extend(v.__iter__())
+            elif v.is_indexed():
+                vardatalist.extend((v[i] for i in sorted(v.keys())))
+            else:
+                vardatalist.append(v)
+    return vardatalist
+    
 class ScenarioNode:
     """Store a node in the scenario tree.
 

@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Our data, gives the constraints inside each in region in region_dict_creator
 # and amongst the different regions in inter_region_dict_creator
 # The data slightly differs depending on the number of regions (num_scens) which is created for 2, 3 or 4 regions
@@ -6,6 +14,10 @@
 # First there is a hard wired data_set, then there is a scalable dataset
 
 # Hardwired data sets
+import json
+import re
+import numpy as np
+
 
 def inter_region_dict_creator(num_scens):
     """Creates the oriented arcs between the regions, with their capacities and costs. \n
@@ -176,7 +188,6 @@ def region_dict_creator(scenario_name):
 
     return region_dict
 
-import json
 if __name__ == "__main__":
     #creating the json files
     for num_scens in range(2,5):
@@ -197,9 +208,6 @@ if __name__ == "__main__":
 
 ########################################################################################################################
 # Scalable datasets
-
-import re
-import numpy as np
 
 def parse_node_name(name):
     """ decomposes the name, for example "DC1_2 gives" "DC",1,2

@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Try a particular scenario as xhat. This is mainly for regression testing.
 # DLW, Feb 2019
 # This extension uses options["xhat_scenario_dict"] (keys are node names)
@@ -41,7 +47,6 @@ class XhatSpecific(mpisppy.extensions.xhatbase.XhatBase):
                 print("  xhat_specific: " + msg)
 
         obj = None
-        sname = None
 
         _vb("Enter XhatSpecific.xhat_tryit to try: "+str(xhat_scenario_dict))
 

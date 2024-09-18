@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Run a lot of examples for regression testing; dlw May 2020
 # Not intended to be user-friendly.
 # Assumes you run from the examples directory.
@@ -39,13 +45,13 @@ badguys = dict()
 def egret_avail():
     try:
         import egret
-    except:
+    except Exception:
         return False
 
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
+    path = str(egret.__path__)
+    left = path.find("'")
+    right = path.find("'", left+1)
+    egretrootpath = path[left+1:right]
 
     egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
     if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):
@@ -100,6 +106,8 @@ def time_one(ID, dirname, progname, np, argstring):
         if (i % 2) == 0:
             foo = i * i
             bar = str(i)+"!"
+    del foo
+    del bar
     finish = dt.now()
     refsecs = (finish-start).total_seconds()
 
@@ -283,6 +291,16 @@ do_one("sslp",
        "--rel-gap=0.0 "
        "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
 
+do_one("sslp",
+       "sslp_cylinders.py",
+       3,
+       "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
+       "--max-iterations=5 --default-rho=1 "
+       "--reduced-costs --rc-fixer --xhatshuffle "
+       "--linearize-proximal-terms "
+       "--rel-gap=0.0 "
+       "--solver-name={}".format(solver_name))
+
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
@@ -351,6 +369,15 @@ if not nouc and egret_avail():
     # 3-scenario UC
     do_one("uc", "uc_ef.py", 1, solver_name+" 3")
 
+    do_one("uc", "gradient_uc_cylinders.py", 15,
+           "--bundles-per-rank=0 --max-iterations=100 --default-rho=1 "
+           "--xhatshuffle --ph-ob --num-scens=5 --max-solver-threads=2 "
+           "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
+           f"--solver-name={solver_name} --xhatpath uc_cyl_nonants.npy "
+           "--rel-gap 0.00001 --abs-gap=1 --intra-hub-conv-thresh=-1 "
+           "--grad-rho-setter --grad-order-stat 0.5 "
+           "--grad-dynamic-primal-crit")
+    
     do_one("uc", "uc_cylinders.py", 4,
            "--bundles-per-rank=0 --max-iterations=2 "
            "--default-rho=1 --num-scens=3 --max-solver-threads=2 "

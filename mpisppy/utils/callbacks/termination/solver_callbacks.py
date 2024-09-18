@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # NOTES: The design of the generic termination callback below is strictly MIP-centric.
 #        Specifically, we assume the following 3 attributes can be extracted, and

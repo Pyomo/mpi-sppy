@@ -1,7 +1,14 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # script to estimate zhat from a given xhat for a given model
 
 import sys
-import argparse
 import importlib
 import numpy as np
 import scipy.stats
@@ -172,14 +179,14 @@ if __name__ == "__main__":
         raise ValueError(f"Module name should not end in .py ({mname})")
     try:
         model_module = importlib.import_module(mname)
-    except:
+    except Exception:
         raise RuntimeError(f"Could not import module: {mname}")
     model_module.inparser_adder(cfg)
     # TBD xxxx the inprser_adder might want num_scens, but zhat4xhat contols the number of scenarios
     # see if this works:
     try:
         del cfg.num_scens
-    except:
+    except Exception:
         pass
     
     parser = cfg.create_parser("zhat4zhat")

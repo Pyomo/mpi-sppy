@@ -1,11 +1,16 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # JPW and DLW; July 2019; ccopf create scenario instances for line outages
 # extended Fall 2019 by DLW
 import egret
 import egret.models.acopf as eac
 import egret.models.ac_relaxations as eac_relax
-from egret.data.model_data import ModelData
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
@@ -16,9 +21,7 @@ import os
 import sys
 import copy
 import scipy
-import socket
 import numpy as np
-import datetime as dt
 import mpisppy.MPI as mpi
 
 import pyomo.environ as pyo
@@ -51,10 +54,10 @@ def FixGaussian(minutes, acstream, mu, sigma):
 #======= end repair functions =====
     
 def _md_dict(epath):
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
+    path = str(egret.__path__)
+    left = path.find("'")
+    right = path.find("'", left+1)
+    egretrootpath = path[left+1:right]
     if epath[0] != os.sep:
         test_case = os.path.join(egretrootpath, epath)
     else:
@@ -256,9 +259,10 @@ def scenario_denouement(rank, scenario_name, scenario):
 
         print("GEN: %4s PG:" % gen, end="")
 
+        previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).pg[gen])
-            if stage == stages[0]:
+            if previous_val is None:
                 print("%6.2f -->> " % current_val, end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")
@@ -267,9 +271,10 @@ def scenario_denouement(rank, scenario_name, scenario):
 
         print("GEN: %4s QG:" % gen, end="")
 
+        previous_val = None
         for stage in stages:
             current_val = pyo.value(getattr(scenario, "stage_models_"+str(stage)).qg[gen])
-            if stage == stages[0]:
+            if previous_val is None:
                 print("%6.2f -->> " % current_val, end=" ")
             else:
                 print("%6.2f" % (current_val-previous_val), end=" ")

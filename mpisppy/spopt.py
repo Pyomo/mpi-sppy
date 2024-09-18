@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # base class for hub and for spoke strata
 
 import logging
@@ -14,7 +20,6 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
-from mpisppy import global_toc
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
 
@@ -83,7 +88,7 @@ class SPOpt(SPBase):
                 else:
                     try:
                         float(pyo.value(v))
-                    except:
+                    except Exception:
                         raise RuntimeError(
                             f"Non-anticipative variable {v.name} on scenario {s.name} "
                             "reported as stale. This usually means this variable "
@@ -766,7 +771,7 @@ class SPOpt(SPBase):
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
                 vardata._value = s._mpisppy_data.original_nonants[ci]
                 vardata.fixed = s._mpisppy_data.original_fixedness[ci]
-                if persistent_solver != None:
+                if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
 
 
@@ -883,6 +888,9 @@ class SPOpt(SPBase):
 
                 if dtiming:
                     local_sit.append( time.time() - set_instance_start_time )
+            else:
+                if dtiming:
+                    local_sit.append(0.0)
 
             ## if we have bundling, attach
             ## the solver plugin to the scenarios
@@ -936,7 +944,7 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
             break
         # pyomo presently has no general way to trap a license acquisition
         # error - so we're stuck with trapping on "any" exception. not ideal.
-        except:
+        except Exception:
             if num_retry_attempts == 0:
                 print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
             else:

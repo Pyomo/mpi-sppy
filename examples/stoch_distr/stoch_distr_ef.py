@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # general example driver for stoch_distr with cylinders
 
 # This file can be executed thanks to python stoch_distr_ef.py --num-stoch-scens 2 --solver-name xpress --num-stoch-scens 2 --num-admm-subproblems 3 --scalable --mnpr 6
@@ -8,7 +14,6 @@
 import stoch_distr
 import stoch_distr_admm_cylinders
 import examples.distr.distr_data as distr_data
-import mpisppy.cylinders
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils

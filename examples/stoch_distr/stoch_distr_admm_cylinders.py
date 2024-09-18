@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # general example driver for stoch_distr with cylinders
 
 # Driver file for stochastic admm
@@ -7,7 +13,6 @@ import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
 import examples.distr.distr_data as distr_data
 import stoch_distr
-import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils

@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 ''' Solution to the Lagrangian relaxation of a hybrid solar-battery storage
     system from the paper:
 
@@ -17,7 +23,7 @@ import pyomo.environ as pyo
 import mpisppy.scenario_tree as stree
 
 def scenario_creator(
-    scenario_name, solar_filname=None, use_LP=False, lam=None,
+    scenario_name, solar_filename=None, use_LP=False, lam=None,
 ):
     """
     Args:
@@ -74,7 +80,8 @@ def scenario_creator(
         + data['disc'] * pyo.quicksum(model.q) + lam * model.z[0],
         sense=pyo.minimize)
 
-    fscr = lambda model: pyo.dot_product(data['rev'], model.y)
+    def fscr(model):
+        return pyo.dot_product(data["rev"], model.y)
     model.first_stage_cost = pyo.Expression(rule=fscr)
 
     model._mpisppy_node_list = [

@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import unittest
 import mpisppy.utils.admmWrapper as admmWrapper
 import examples.distr as distr
@@ -134,7 +142,7 @@ class TestAdmmWrapper(unittest.TestCase):
                     objectives["EF objective"] = float(decomposed_line[1])
             try:
                 correct_order = objectives["outer bound"] <= objectives["EF objective"] <= objectives["inner bound"]
-            except:
+            except Exception:
                 raise RuntimeError("The output could not be read to capture the values")
             assert correct_order, f' We obtained {objectives["outer bound"]=}, {objectives["EF objective"]=}, {objectives["inner bound"]=}'
             os.chdir(original_dir)

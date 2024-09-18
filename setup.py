@@ -1,8 +1,13 @@
-# This software is distributed under the 3-clause BSD License.
 #!/bin/usr/env python3
-import glob
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import sys
-import os
 
 # We raise an error if trying to install with python2
 if sys.version[0] == '2':
@@ -30,6 +35,7 @@ setup(
     packages=packages,
     python_requires='>=3.8',
     install_requires=[
+        'sortedcollections',
         'numpy<2',
         'scipy',
         'pyomo>=6.4',

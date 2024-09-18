@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Replace baseparsers.py and enhance functionality.
 # A class drived form pyomo.common.config is defined with
 #   supporting member functions.
@@ -283,33 +290,35 @@ class Config(pyofig.ConfigDict):
 
 
     #### EF ####
-    def make_EF2_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")
-
-    def _EF_base(self):
-
+    def EF_base(self):
         self.add_solver_specs(prefix="EF")
 
         self.add_to_config("EF_mipgap",
                            description="mip gap option for the solver if needed (default None)",
                            domain=float,
                            default=None)
+        self.add_to_config("tee_EF",
+                           description="Show log output if solving the extensive form directly",
+                           domain=bool,
+                           default=False)
+
+        # Some EF programs only do EF and don't check this.
+        self.add_to_config("EF",
+                           description="Solve the extensive form directly; ignore most other directives.",
+                           domain=bool,
+                           default=False)
 
 
     def EF2(self):
-        self._EF_base()
+        self.EF_base()
         self.add_to_config("num_scens",
                            description="Number of scenarios (default None)",
                            domain=int,
                            default=None)
 
 
-    def make_EF_multistage_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")
-
     def EF_multistage(self):
-
-        self._EF_base()
+        self.EF_base()
         # branching factors???
 
     ##### common additions to the command line #####
@@ -384,6 +393,13 @@ class Config(pyofig.ConfigDict):
                            default=1e-2)
 
 
+    def gapper_args(self):
+
+        self.add_to_config('mipgaps_json',
+                           description="path to json file with a mipgap schedule for PH iterations",
+                           domain=str,
+                           default=None)
+
 
     def fwph_args(self):
 
@@ -435,6 +451,54 @@ class Config(pyofig.ConfigDict):
                             description="lgr. iterk solver option mipgap (default None)",
                             domain=float,
                             default=None)
+
+
+    def reduced_costs_args(self):
+
+        self.add_to_config('reduced_costs',
+                              description="have a reduced costs spoke",
+                              domain=bool,
+                              default=False)
+        
+        self.add_to_config('rc_verbose',
+                            description="verbose output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_debug',
+                            description="debug output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_fixer',
+                            description="use the reduced cost fixer",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_zero_tol',
+                            description="vars with rc below tol will never be fixed",
+                            domain=float,
+                            default=1e-4)
+
+        self.add_to_config('rc_fix_fraction_iter0',
+                            description="target fix fraction for rc fixer in first iteration",
+                            domain=float,
+                            default=0.0)
+        
+        self.add_to_config('rc_fix_fraction_iterk',
+                            description="target fix fraction for rc fixer in subsequent iterations",
+                            domain=float,
+                            default=0.8)
+        
+        self.add_to_config('rc_bound_tightening',
+                            description="use reduced cost bound tightening",
+                            domain=bool,
+                            default=True)
+
+        self.add_to_config('rc_bound_tol',
+                            description="tol to consider vars at bound",
+                            domain=float,
+                            default=1e-6)
 
 
     def lagranger_args(self):
@@ -490,9 +554,13 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file: rho rescale factors (default None)",
+                            description="json file with {iternum: rho rescale factor} (default None)",
                             domain=str,
                             default=None)
+        self.add_to_config("ph_ob_initial_rho_rescale_factor",
+                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
+                            domain=float,
+                            default=0.1)
         self.add_to_config("ph_ob_gradient_rho",
                             description="use gradient-based rho in PH OB",
                             domain=bool,
@@ -653,66 +721,84 @@ class Config(pyofig.ConfigDict):
                               "scenario cuts (default 0.01)",
                               domain=float,
                               default=0.01)
-
+        
+    # note: grad_rho_args was subsumed by gradient_args
 
     def gradient_args(self):
-         # we will not try to get the specification from the command line
 
         self.add_to_config("xhatpath",
                            description="path to npy file with xhat",
                            domain=str,
                            default='')
-        self.add_to_config("grad_cost_file",
-                           description="name of the gradient cost file (must be csv)",
+        self.add_to_config("grad_cost_file_out",
+                           description="name of the gradient cost file for output (will be csv)",
                            domain=str,
                            default='')
-        self.add_to_config("grad_rho_file",
-                           description="name of the gradient rho file (must be csv)",
+        self.add_to_config("grad_cost_file_in",
+                           description="path to csv file with (grad based?) costs",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_rho_file_out",
+                           description="name of the gradient rho output file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("rho_file_in",
+                           description="name of the (gradient) rho input file (must be csv)",
                            domain=str,
                            default='')
         self.add_to_config("grad_display_rho",
                            description="display rho during gradient calcs (default True)",
                            domain=bool,
                            default=True)
-        self.add_to_config("grad_primal_thresh",
-                           description="primal threshold for diff during gradient calcs",
-                           domain=float,
-                           default=0.001)
-        self.add_to_config("grad_dual_thresh",
-                           description="dual threshold for abs norm during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_pd_thresh",
-                           description="threshold for dual/primal during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_order_stat",
-                           description="order statistic for gradient based rho (must be between 0 and 1)",
-                           domain=float,
-                           default=0.5)
+        # likely unused presently
+#        self.add_to_config("grad_pd_thresh",
+#                           description="threshold for dual/primal during gradient calcs",
+#                           domain=float,
+#                           default=0.1)
 
-    def grad_rho_args(self):
-        self.add_to_config("grad_whatpath",
-                           description="path to csv file with what",
-                           domain=str,
-                           default='')
         self.add_to_config('grad_rho_setter',
                            description="use rho setter from a rho file",
                            domain=bool,
                            default=False)
-        
-        self.add_to_config("grad_rho_path",
-                           description="csv file for the the grad based rho file (???)",
+        """
+        all occurances of rho_path converted to grad_rho_file July 2024
+        self.add_to_config("rho_path",
+                           description="csv file for the rho setter",
                            domain=str,
                            default='')
+        """
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
                            domain=float,
                            default=-1.0)
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
                            default=1e3)
+
+    def dynamic_gradient_args(self): # AKA adaptive
+
+        self.gradient_args()
+
+        self.add_to_config('grad_dynamic_primal_crit',
+                           description="Use dynamic gradient-based primal criterion for update",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('grad_dynamic_dual_crit',
+                           description="Use dynamic gradient-based dual criterion for update",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("grad_dynamic_primal_thresh",
+                           description="primal threshold for diff during gradient calcs",
+                           domain=float,
+                           default=0.1)
+        
+        self.add_to_config("grad_dynamic_dual_thresh",
+                           description="dual threshold for abs norm during gradient calcs",
+                           domain=float,
+                           default=0.1)        
 
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",
@@ -761,6 +847,11 @@ class Config(pyofig.ConfigDict):
                             description="Adds scenario gap tracking (default 0)",
                             domain=int,
                             default=0)
+        self.add_to_config("track_reduced_costs",
+                            description="Adds reduced costs tracking (default 0)",
+                            domain=int,
+                            default=0)
+
 
     def wxbar_read_write_args(self):
         self.add_to_config("init_W_fname",

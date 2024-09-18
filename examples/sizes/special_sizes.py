@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # special sizes to support exotic options
 import os
 import models.ReferenceModel as ref
@@ -15,7 +21,7 @@ def scenario_creator(scenario_name, scenario_count=None):
     datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"
-    except:
+    except Exception:
         print("FAIL: datadir=", datadir, " scenario_name=", scenario_name)
 
     model = ref.model.create_instance(fname)

@@ -1,6 +1,27 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Amalgamator.py starting point; DLW March 2021
-# This software is distributed under the 3-clause BSD License.
 # To test : python amalgamator.py 10 --solver-name=cplex --default-rho=1
+import importlib
+import inspect
+import pyomo.environ as pyo
+import copy
+import pyomo.common.config as pyofig
+from mpisppy.utils import config
+import mpisppy.utils.solver_spec as solver_spec
+
+from mpisppy.spin_the_wheel import WheelSpinner
+import mpisppy.utils.sputils as sputils
+import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy import global_toc
+
+from mpisppy.extensions.fixer import Fixer
 
 """Takes a scenario list and a scenario creator (and options)
 as input and produces an outer bound on the objective function (solving the EF directly
@@ -31,23 +52,6 @@ Config object **** that it might modify (mainly add) *****
 It no longer has options, just a cfg.
 You might want to copy your cfg before passing it in.
 """
-import numpy as np
-import importlib
-import inspect
-import pyomo.environ as pyo
-import argparse
-import copy
-import pyomo.common.config as pyofig
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
-
-from mpisppy.utils.sputils import get_objs, nonant_cache_from_ef
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy import global_toc
-
-from mpisppy.extensions.fixer import Fixer
 
 hubs_and_multi_compatibility = {'ph': True,
                                 'aph': True, 
@@ -109,7 +113,7 @@ def find_hub(cylinders, is_multi=False):
 def find_spokes(cylinders, is_multi=False):
     spokes = []
     for c in cylinders:
-        if not c in hubs_and_multi_compatibility:
+        if c not in hubs_and_multi_compatibility:
             if c not in spokes_and_multi_compatibility:
                 raise RuntimeError(f"The cylinder {c} do not exist or cannot be called via amalgamator.")
             if is_multi and not spokes_and_multi_compatibility[c]:
@@ -129,10 +133,10 @@ def check_module_ama(module):
     you_can_have_it_all = True
     for ething in everything:
         if not hasattr(module, ething):
-            print(f"Module {mname} is missing {ething}")
+            print(f"Module {module} is missing {ething}")
             you_can_have_it_all = False
     if not you_can_have_it_all:
-        raise RuntimeError(f"Module {mname} not complete for from_module")
+        raise RuntimeError(f"Module {module} not complete for from_module")
 
 
 #==========
@@ -206,7 +210,7 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
             cfg.mip_options()
                 
             #Adding cylinders
-            if not "cylinders" in cfg:
+            if "cylinders" not in cfg:
                 raise RuntimeError("A cylinder list must be specified")
             
             for cylinder in cfg['cylinders']:
@@ -239,9 +243,9 @@ def Amalgamator_parser(cfg, inparser_adder, extraargs_fct=None, use_command_line
         #Checking if cfg has all the options we need 
         if not (_bool_option(cfg, "EF_2stage") or _bool_option(cfg, "EF_mstage")):
             raise RuntimeError("For now, completly bypassing command line only works with EF." )
-        if not ('EF_solver_name' in cfg):
+        if 'EF_solver_name' not in cfg:
             raise RuntimeError("EF_solver_name must be specified for the amalgamator." )
-        if not ('num_scens' in cfg):
+        if 'num_scens' not in cfg:
             raise RuntimeWarning("cfg should have a number of scenarios to compute a xhat")
         if _bool_option(cfg, 'EF-mstage') and 'branching_factors' not in cfg:
             raise RuntimeError("For a multistage problem, cfg must have a 'branching_factors' attribute with branching factors")
@@ -282,7 +286,7 @@ class Amalgamator():
         if self.is_EF:
             sroot, self.solver_name, self.solver_options = solver_spec.solver_specification(cfg, ["EF", ""])
         self.is_multi = _bool_option(cfg, "EF-mstage") or _bool_option(cfg, "mstage")
-        if self.is_multi and not "all_nodenames" in cfg:
+        if self.is_multi and "all_nodenames" not in cfg:
             if "branching_factors" in cfg:
                 ndnms = sputils.create_nodenames_from_branching_factors(cfg["branching_factors"])
                 self.cfg.quick_assign("all_nodenames", domain=pyofig.ListOf(str), value=ndnms)
@@ -411,7 +415,6 @@ class Amalgamator():
 
 if __name__ == "__main__":
     # For use by developers doing ad hoc testing, our example is farmer
-    import mpisppy.tests.examples.farmer as farmer
     # EF, PH, L-shaped, APH flags, and then boolean multi-stage
     """
     ama_options = {"2stage": True,   # 2stage vs. mstage

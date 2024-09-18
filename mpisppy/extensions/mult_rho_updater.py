@@ -1,15 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # DLW March 2023 A simple rho updater. Hold rho as a constant multple of the convergence metric
 # but only update when convergence improves
 # Preference given to user-supplied converger
 
-import math
 import mpisppy.extensions.extension
 
-import numpy as np
-import mpisppy.MPI as MPI
 
 # for ph.options['mult_rho_options']:
 _mult_rho_defaults = { 'convergence_tolerance' : 1e-4,
@@ -53,7 +56,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
 
             
     def _attach_rho_ratio_data(self, ph, conv):
-        if conv == None or conv == self._tol:
+        if conv is None or conv == self._tol:
             return
         self.first_c = conv
         if not self.ph.multistage:

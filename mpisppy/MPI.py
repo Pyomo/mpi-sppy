@@ -1,8 +1,15 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 try:
-    from mpi4py.MPI import *
-    _haveMPI = True
+    from mpi4py.MPI import *  # noqa: F403
+    haveMPI = True
 
 except ImportError:
     import numpy as _np
@@ -15,7 +22,7 @@ except ImportError:
     LOR = _np.logical_or
     DOUBLE = _np.double
     INT = _np.intc
-    _haveMPI = False
+    haveMPI = False
 
     class _MockMPIComm:
     
@@ -74,9 +81,9 @@ except ImportError:
         recv_data, recv_size, recv_type = _process_BufSpec(recvbuf)
     
         if send_size != recv_size:
-            raise RuntimeError(f"Send and receive buffers should be of the same size")
+            raise RuntimeError("Send and receive buffers should be of the same size")
         if send_type != recv_type:
-            raise RuntimeError(f"Send and receive buffers should be of the same type")
+            raise RuntimeError("Send and receive buffers should be of the same type")
     
         recv_data[:] = send_data
 

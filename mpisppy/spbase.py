@@ -1,14 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # base class for hub and for spoke strata
 
 import os
 import time
 import logging
 import weakref
-import math
 import numpy as np
-import re
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
@@ -511,7 +515,7 @@ class SPBase:
                 scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
             if hasattr(scenario, "PySP_prob"):
-                raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
+                raise RuntimeError("PySP_prob is deprecated; use _mpisppy_probability")
             pspec =  scenario._mpisppy_probability if hasattr(scenario, "_mpisppy_probability") else None
             if pspec is None or pspec == "uniform":
                 prob = 1./len(self.all_scenario_names)
@@ -621,7 +625,7 @@ class SPBase:
                         print("{0: ^{width}s}".format("-", width=value_field_len), end='')
                     else:
                         this_var_value = var_values[this_scenario, this_var]
-                        if (this_var_value == None) and (not print_zero_prob_values):
+                        if (this_var_value is None) and (not print_zero_prob_values):
                             print("{0: ^{width}s}".format("-", width=value_field_len), end='')
                         else:
                             print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')

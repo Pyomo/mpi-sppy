@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This software is distributed under the 3-clause BSD License.
 
 # TBD: put in more options: threads, mipgaps for spokes
@@ -5,7 +13,6 @@
 # There is  manipulation of the mip gap,
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliExtensions
-import sys
 import json
 import uc_funcs as uc
 

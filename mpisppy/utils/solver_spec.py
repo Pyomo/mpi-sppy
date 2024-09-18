@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Utility to allow for a heirarchy of solvers and options
 # and perhaps utilities to support special options like threads and mipgap
 
@@ -64,5 +72,5 @@ def solver_specification(cfg, prefix="", name_required=True):
         if name_required:
             # Leaving in underscores even though it might confuse command line users
             print(f"\nsolver name arguments checked in Config object = {idx_list}\n")
-            raise RuntimeError(f"The Config object did not specify a solver")
+            raise RuntimeError("The Config object did not specify a solver")
     return sroot, solver_name, solver_options
