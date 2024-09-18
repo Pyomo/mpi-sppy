@@ -10,7 +10,7 @@
 import sys
 
 # We raise an error if trying to install with python2
-if sys.version[0] == '2':
+if sys.version[0] == "2":
     print("Error: This package must be installed with python3")
     sys.exit(1)
 
@@ -25,25 +25,25 @@ long_description = (this_directory / "README.rst").read_text()
 
 # intentionally leaving out mpi4py to help readthedocs
 setup(
-    name='mpi-sppy',
-    version='0.12.2.dev0',
+    name="mpi-sppy",
+    version="0.12.2.dev0",
     description="mpi-sppy",
     long_description=long_description,
-    url='https://github.com/Pyomo/mpi-sppy',
-    author='David Woodruff',
-    author_email='dlwoodruff@ucdavis.edu',
+    url="https://github.com/Pyomo/mpi-sppy",
+    author="David Woodruff",
+    author_email="dlwoodruff@ucdavis.edu",
     packages=packages,
-    python_requires='>=3.8',
+    python_requires=">=3.8",
     install_requires=[
-        'sortedcollections',
-        'numpy<2',
-        'scipy',
-        'pyomo>=6.4',
+        "sortedcollections",
+        "numpy<2",
+        "scipy",
+        "pyomo>=6.4",
     ],
     extras_require={
-        'doc': [
-            'sphinx_rtd_theme',
-            'sphinx',
+        "doc": [
+            "sphinx_rtd_theme",
+            "sphinx",
         ]
     },
 )

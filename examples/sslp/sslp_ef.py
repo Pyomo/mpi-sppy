@@ -6,13 +6,14 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-''' Solve the EF of the sslp problems
-'''
+"""Solve the EF of the sslp problems"""
+
 from mpisppy.opt.ef import ExtensiveForm
 from sslp import scenario_creator
 import pyomo.environ as pyo
 import sys
 import os
+
 
 def main():
     # inst = "sslp_15_45_5"
@@ -41,5 +42,6 @@ def main():
         print("Warning: Non-optimal termination condition from Pyomo")
     print("sslp objective value:", pyo.value(ef.ef.EF_Obj))
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()

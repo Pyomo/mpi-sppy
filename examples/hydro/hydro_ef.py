@@ -26,8 +26,8 @@ ef = ExtensiveForm(
     all_scenario_names,
     hydro.scenario_creator,
     scenario_creator_kwargs={"branching_factors": BFs},
-    all_nodenames=all_nodenames
+    all_nodenames=all_nodenames,
 )
 ef.solve_extensive_form(tee=True)
-print(f'hydro objective value {pyo.value(ef.ef.EF_Obj)}')
+print(f"hydro objective value {pyo.value(ef.ef.EF_Obj)}")
 ef.report_var_values_at_rank0("Hydro")

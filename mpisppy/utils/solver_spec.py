@@ -39,8 +39,9 @@ Note: we are no longer going to allow a dict as the options value. It will have 
 
 """
 
+
 def solver_specification(cfg, prefix="", name_required=True):
-    """ Look through cfg to find the soler_name and solver_options.
+    """Look through cfg to find the soler_name and solver_options.
 
     Args:
         cfg (Config): options, typically from the command line
@@ -52,11 +53,13 @@ def solver_specification(cfg, prefix="", name_required=True):
         solver_name (str): the solver name (or None)
         solver_options (dict): the options dictionary created from the string
     """
-    
-    if isinstance(prefix, (list,tuple)):
+
+    if isinstance(prefix, (list, tuple)):
         root_list = prefix
     else:
-        root_list = [prefix, ]
+        root_list = [
+            prefix,
+        ]
 
     idx_list = list()
     for sroot in root_list:
@@ -66,7 +69,9 @@ def solver_specification(cfg, prefix="", name_required=True):
             solver_name = cfg[name_idx]
             options_idx = "solver_options" if sroot == "" else f"{sroot}_solver_options"
             ostr = cfg.get(options_idx)
-            solver_options = sputils.option_string_to_dict(ostr)  # will return None for None
+            solver_options = sputils.option_string_to_dict(
+                ostr
+            )  # will return None for None
             break
     else:
         if name_required:

@@ -12,9 +12,11 @@ import mpisppy.phbase
 import shutil
 import mpisppy.MPI as mpi
 
+
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
     pass
+
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -22,14 +24,14 @@ global_rank = fullcomm.Get_rank()
 
 ############################################################################
 class PH(mpisppy.phbase.PHBase):
-    """ PH. See PHBase for list of args. """
+    """PH. See PHBase for list of args."""
 
-    #======================================================================
-    # uncomment the line below to get per-rank profile outputs, which can 
+    # ======================================================================
+    # uncomment the line below to get per-rank profile outputs, which can
     # be examined with snakeviz (or your favorite profile output analyzer)
-    #@profile(filename="profile_out")
+    # @profile(filename="profile_out")
     def ph_main(self, finalize=True):
-        """ Execute the PH algorithm.
+        """Execute the PH algorithm.
 
         Args:
             finalize (bool, optional, default=True):
@@ -54,16 +56,16 @@ class PH(mpisppy.phbase.PHBase):
         NOTE:
             You need an xhat finder either in denoument or in an extension.
         """
-        verbose = self.options['verbose']
-        smoothed = self.options['smoothed']
-        self.PH_Prep(attach_smooth = smoothed)
+        verbose = self.options["verbose"]
+        smoothed = self.options["smoothed"]
+        self.PH_Prep(attach_smooth=smoothed)
 
-        if (verbose):
-            print('Calling PH Iter0 on global rank {}'.format(global_rank))
+        if verbose:
+            print("Calling PH Iter0 on global rank {}".format(global_rank))
         trivial_bound = self.Iter0()
-        if (verbose):
-            print ('Completed PH Iter0 on global rank {}'.format(global_rank))
-        if ('asynchronousPH' in self.options) and (self.options['asynchronousPH']):
+        if verbose:
+            print("Completed PH Iter0 on global rank {}".format(global_rank))
+        if ("asynchronousPH" in self.options) and (self.options["asynchronousPH"]):
             raise RuntimeError("asynchronousPH is deprecated; use APH")
 
         self.iterk_loop()
@@ -77,7 +79,7 @@ class PH(mpisppy.phbase.PHBase):
 
 
 if __name__ == "__main__":
-    #==============================
+    # ==============================
     # hardwired by dlw for debugging
     import mpisppy.tests.examples.farmer as refmodel
     import mpisppy.utils.sputils as sputils
@@ -92,13 +94,12 @@ if __name__ == "__main__":
     PHopt["display_timing"] = True
     PHopt["display_progress"] = True
     # one way to set up options (never mind that this is not a MIP)
-    PHopt["iter0_solver_options"]\
-        = sputils.option_string_to_dict("mipgap=0.01")
+    PHopt["iter0_solver_options"] = sputils.option_string_to_dict("mipgap=0.01")
     # another way
     PHopt["iterk_solver_options"] = {"mipgap": 0.001}
 
     ScenCount = 50
-    all_scenario_names = ['scen' + str(i) for i in range(ScenCount)]
+    all_scenario_names = ["scen" + str(i) for i in range(ScenCount)]
     # end hardwire
 
     scenario_creator = refmodel.scenario_creator
@@ -107,50 +108,69 @@ if __name__ == "__main__":
     # now test extensions and convergers together.
     # NOTE that the options is a reference,
     #   so you could have changed PHopt instead.
-    PHopt["PHIterLimit"] = 5 # the converger will probably stop it.
+    PHopt["PHIterLimit"] = 5  # the converger will probably stop it.
     PHopt["asynchronousPH"] = False
 
     from mpisppy.extensions.xhatlooper import XhatLooper
     from mpisppy.convergers.fracintsnotconv import FractionalConverger
-    PHopt["xhat_looper_options"] =  {"xhat_solver_options":\
-                                     PHopt["iterk_solver_options"],
-                                     "scen_limit": 3,
-                                     "csvname": "looper.csv"}
-    ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            extensions=XhatLooper,
-            ph_converger=FractionalConverger,
-            rho_setter=None)
+
+    PHopt["xhat_looper_options"] = {
+        "xhat_solver_options": PHopt["iterk_solver_options"],
+        "scen_limit": 3,
+        "csvname": "looper.csv",
+    }
+    ph = PH(
+        PHopt,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        extensions=XhatLooper,
+        ph_converger=FractionalConverger,
+        rho_setter=None,
+    )
     conv, obj, bnd = ph.ph_main()
-    print ("Quitting Early.")
+    print("Quitting Early.")
     quit()
 
     from mpisppy.extensions.diagnoser import Diagnoser
+
     # now test whatever is new
-    ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            extensions=Diagnoser, 
-            ph_converger=None,
-            rho_setter=None)
+    ph = PH(
+        PHopt,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        extensions=Diagnoser,
+        ph_converger=None,
+        rho_setter=None,
+    )
     ph.options["PHIterLimit"] = 3
 
     if global_rank == 0:
         try:
             shutil.rmtree("delme_diagdir")
-            print ("...deleted delme_diagdir")
+            print("...deleted delme_diagdir")
         except Exception:
             pass
     ph.options["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
     conv, obj, bnd = ph.ph_main()
 
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
-    ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
-            extensions=MinMaxAvg,
-            ph_converger=None,
-            rho_setter=None)
-    ph.options["avgminmax_name"] =  "FirstStageCost"
+
+    ph = PH(
+        PHopt,
+        all_scenario_names,
+        scenario_creator,
+        scenario_denouement,
+        extensions=MinMaxAvg,
+        ph_converger=None,
+        rho_setter=None,
+    )
+    ph.options["avgminmax_name"] = "FirstStageCost"
     ph.options["PHIterLimit"] = 3
     conv, obj, bnd = ph.ph_main()
 
-        # trying asynchronous operation
+    # trying asynchronous operation
     PHopt["asynchronousPH"] = True
     PHopt["async_frac_needed"] = 0.5
     PHopt["async_sleep_secs"] = 1
@@ -159,12 +179,10 @@ if __name__ == "__main__":
     conv, obj, bnd = ph.ph_main()
 
     if global_rank == 0:
-        print ("E[obj] for converged solution (probably NOT non-anticipative)",
-               obj)
+        print("E[obj] for converged solution (probably NOT non-anticipative)", obj)
 
     dopts = sputils.option_string_to_dict("mipgap=0.001")
     objbound = ph.post_solve_bound(solver_options=dopts, verbose=False)
     if global_rank == 0:
-        print ("**** Lagrangian objective function bound=",objbound)
-        print ("(probably converged way too early, BTW)")
-   
+        print("**** Lagrangian objective function bound=", objbound)
+        print("(probably converged way too early, BTW)")

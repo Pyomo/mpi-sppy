@@ -8,9 +8,9 @@
 ###############################################################################
 import mpisppy.cylinders.spoke
 
-class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
 
-    converger_spoke_char = 'F'
+class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
+    converger_spoke_char = "F"
 
     def main(self):
         self.opt.fwph_main()
@@ -22,7 +22,7 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         # The FWPH spoke can call "sync" before it
         # even starts doing anything, so its possible
         # to get here without any bound information
-        if not hasattr(self.opt, '_local_bound'):
+        if not hasattr(self.opt, "_local_bound"):
             return
         # Tell the hub about the most recent bound
         self.bound = self.opt._local_bound
@@ -32,7 +32,7 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         # even starts doing anything, so its possible
         # to get here without any bound information
         # if we terminated early
-        if not hasattr(self.opt, '_local_bound'):
+        if not hasattr(self.opt, "_local_bound"):
             return
         self.bound = self.opt._local_bound
         self.final_bound = self.opt._local_bound

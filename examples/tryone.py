@@ -30,10 +30,12 @@ if len(sys.argv) > 2:
 
 badguys = dict()
 
+
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
-                format(mpiexec_arg, np, progname, argstring)
+    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".format(
+        mpiexec_arg, np, progname, argstring
+    )
     print(runstring)
     code = os.system(runstring)
     if code != 0:
@@ -43,28 +45,33 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname].append(runstring)
     os.chdir("..")
 
+
 print("** Starting sizes_demo **")
 do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 print("** Starting regular sizes **")
-do_one("sizes",
-       "sizes_cylinders.py",
-       4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+do_one(
+    "sizes",
+    "sizes_cylinders.py",
+    4,
+    "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+    "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+    "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name),
+)
 
 print("** Starting special sizes **")
-do_one("sizes",
-       "special_cylinders.py",
-       4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
-       "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
+do_one(
+    "sizes",
+    "special_cylinders.py",
+    4,
+    "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+    "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+    "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name),
+)
 
 if len(badguys) > 0:
     print("\nBad Guys:")
-    for i,v in badguys.items():
+    for i, v in badguys.items():
         print("Directory={}".format(i))
         for c in v:
             print("    {}".format(c))

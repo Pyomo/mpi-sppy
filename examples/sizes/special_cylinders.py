@@ -14,6 +14,7 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
+
 def _parse_args():
     cfg = config.Config()
 
@@ -33,7 +34,6 @@ def _parse_args():
 
 
 def main():
-
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -63,11 +63,13 @@ def main():
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
     # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=ph_ext,
-                              rho_setter = rho_setter,
-                              variable_probability = variable_probability)
+    hub_dict = vanilla.ph_hub(
+        *beans,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_ext,
+        rho_setter=rho_setter,
+        variable_probability=variable_probability,
+    )
 
     if fixer:
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
@@ -81,21 +83,29 @@ def main():
 
     # FWPH spoke
     if fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        fw_spoke = vanilla.fwph_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     # Standard Lagrangian bound spoke
     if lagrangian:
-        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                              scenario_creator_kwargs=scenario_creator_kwargs,
-                                              rho_setter = rho_setter)
+        lagrangian_spoke = vanilla.lagrangian_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            rho_setter=rho_setter,
+        )
 
     # xhat looper bound spoke
     if xhatlooper:
-        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatlooper_spoke = vanilla.xhatlooper_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     # xhat shuffle bound spoke
     if xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     list_of_spoke_dict = list()
     if fwph:

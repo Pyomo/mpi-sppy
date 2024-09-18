@@ -27,49 +27,59 @@ from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
+
 def _parse_args():
     cfg = config.Config()
     cfg.popular_args()
-    cfg.num_scens_required() 
+    cfg.num_scens_required()
     cfg.ph_args()
     cfg.two_sided_args()
-    cfg.aph_args()        
+    cfg.aph_args()
     cfg.fixer_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.xhatlooper_args()
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
-    cfg.dynamic_gradient_args() # gets you gradient_args for free
+    cfg.dynamic_gradient_args()  # gets you gradient_args for free
     cfg.ph_ob_args()
-    cfg.add_to_config("ph_mipgaps_json",
-                         description="json file with mipgap schedule (default None)",
-                         domain=str,
-                         default=None)
-    cfg.add_to_config("solution_dir",
-                         description="writes a tree solution to the provided directory"
-                                      " (default None)",
-                         domain=str,
-                         default=None)
-    cfg.add_to_config("xhat_closest_tree",
-                         description="Uses XhatClosest to compute a tree solution after"
-                                     " PH termination (default False)",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("run_aph",
-                         description="Run with async projective hedging instead of progressive hedging",
-                         domain=bool,
-                         default=False)
-    cfg.add_to_config("use_cost_based_rho",
-                         description="Run with standard UC cost based rho setter (not gradient based)",
-                         domain=bool,
-                         default=False)            
+    cfg.add_to_config(
+        "ph_mipgaps_json",
+        description="json file with mipgap schedule (default None)",
+        domain=str,
+        default=None,
+    )
+    cfg.add_to_config(
+        "solution_dir",
+        description="writes a tree solution to the provided directory"
+        " (default None)",
+        domain=str,
+        default=None,
+    )
+    cfg.add_to_config(
+        "xhat_closest_tree",
+        description="Uses XhatClosest to compute a tree solution after"
+        " PH termination (default False)",
+        domain=bool,
+        default=False,
+    )
+    cfg.add_to_config(
+        "run_aph",
+        description="Run with async projective hedging instead of progressive hedging",
+        domain=bool,
+        default=False,
+    )
+    cfg.add_to_config(
+        "use_cost_based_rho",
+        description="Run with standard UC cost based rho setter (not gradient based)",
+        domain=bool,
+        default=False,
+    )
     cfg.parse_command_line("gradient_uc_cylinders")
     return cfg
 
 
 def main():
-    
     cfg = _parse_args()
 
     num_scen = cfg.num_scens
@@ -82,11 +92,12 @@ def main():
     fixer_tol = cfg.fixer_tol
     cross_scenario_cuts = cfg.cross_scenario_cuts
 
-    scensavail = [3,5,10,25,50,100]
+    scensavail = [3, 5, 10, 25, 50, 100]
     if num_scen not in scensavail:
-        raise RuntimeError("num-scen was {}, but must be in {}".\
-                           format(num_scen, scensavail))
-    
+        raise RuntimeError(
+            "num-scen was {}, but must be in {}".format(num_scen, scensavail)
+        )
+
     scenario_creator_kwargs = {
         "scenario_count": num_scen,
         "path": str(num_scen) + "scenarios_r1",
@@ -98,38 +109,43 @@ def main():
         rho_setter = uc._rho_setter
     else:
         rho_setter = None
-    
+
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     ### start ph spoke ###
     if cfg.run_aph:
-        hub_dict = vanilla.aph_hub(*beans,
-                                   scenario_creator_kwargs=scenario_creator_kwargs,
-                                   ph_extensions=MultiExtension,
-                                   rho_setter = rho_setter)
+        hub_dict = vanilla.aph_hub(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            ph_extensions=MultiExtension,
+            rho_setter=rho_setter,
+        )
     else:
-        hub_dict = vanilla.ph_hub(*beans,
-                                  scenario_creator_kwargs=scenario_creator_kwargs,
-                                  ph_extensions=MultiExtension,
-                                  rho_setter = rho_setter)
-        
+        hub_dict = vanilla.ph_hub(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            ph_extensions=MultiExtension,
+            rho_setter=rho_setter,
+        )
+
     # Extend and/or correct the vanilla dictionary
-    ext_classes =  [Gapper]
+    ext_classes = [Gapper]
     if fixer:
         ext_classes.append(Fixer)
     if cross_scenario_cuts:
         ext_classes.append(CrossScenarioExtension)
     if cfg.xhat_closest_tree:
         ext_classes.append(XhatClosest)
-    
+
     if cfg.grad_rho_setter:
         ext_classes.append(Gradient_extension)
-        
-    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
+
+    hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes": ext_classes}
     if cross_scenario_cuts:
-        hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
-            = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
+        hub_dict["opt_kwargs"]["options"]["cross_scen_options"] = {
+            "check_bound_improve_iterations": cfg.cross_scenario_iter_cnt
+        }
 
     if fixer:
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
@@ -139,12 +155,12 @@ def main():
         }
     if cfg.xhat_closest_tree:
         hub_dict["opt_kwargs"]["options"]["xhat_closest_options"] = {
-            "xhat_solver_options" : dict(),
-            "keep_solution" : True
+            "xhat_solver_options": dict(),
+            "keep_solution": True,
         }
 
     if cfg.grad_rho_setter:
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
+        hub_dict["opt_kwargs"]["options"]["gradient_extension_options"] = {"cfg": cfg}
 
     if cfg.ph_mipgaps_json is not None:
         with open(cfg.ph_mipgaps_json) as fin:
@@ -154,41 +170,53 @@ def main():
         mipgapdict = None
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": cfg.verbose,
-        "mipgapdict": mipgapdict
-        }
-        
+        "mipgapdict": mipgapdict,
+    }
+
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway
-        hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
+        hub_dict.opt_kwcfg.options["defaultPHrho"] = 1
     ### end ph spoke ###
-    
+
     # FWPH spoke
     if fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        fw_spoke = vanilla.fwph_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     # Standard Lagrangian bound spoke
     if lagrangian:
-        lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
-                                                    scenario_creator_kwargs=scenario_creator_kwargs,
-                                                    rho_setter = rho_setter)
+        lagrangian_spoke = vanilla.lagrangian_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            rho_setter=rho_setter,
+        )
 
     # xhat looper bound spoke
     if xhatlooper:
-        xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        xhatlooper_spoke = vanilla.xhatlooper_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     # ph outer bounder spoke
     if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = rho_setter)        
+        ph_ob_spoke = vanilla.ph_ob_spoke(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            rho_setter=rho_setter,
+        )
 
     # xhat shuffle bound spoke
     if xhatshuffle:
-        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-       
+        xhatshuffle_spoke = vanilla.xhatshuffle_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
+
     # cross scenario cut spoke
     if cross_scenario_cuts:
-        cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        cross_scenario_cuts_spoke = vanilla.cross_scenario_cuts_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     list_of_spoke_dict = list()
     if fwph:
@@ -196,7 +224,7 @@ def main():
     if lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)        
+        list_of_spoke_dict.append(ph_ob_spoke)
     if xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:
@@ -210,8 +238,11 @@ def main():
     if cfg.solution_dir is not None:
         wheel.write_tree_solution(cfg.solution_dir, uc.scenario_tree_solution_writer)
 
-    wheel.write_first_stage_solution('uc_cyl_nonants.npy',
-            first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
+    wheel.write_first_stage_solution(
+        "uc_cyl_nonants.npy",
+        first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer,
+    )
+
 
 if __name__ == "__main__":
-    main()    
+    main()

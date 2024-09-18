@@ -15,8 +15,11 @@ from mpisppy.utils.pysp_model import PySPModel
 from mpisppy.opt.ph import PH
 from mpisppy.extensions.xhatclosest import XhatClosest
 
+
 def _print_usage():
     print('Usage: "concrete_ampl.py solver" where solver is a pyomo solver name')
+
+
 if len(sys.argv) < 2:
     _print_usage()
     sys.exit()
@@ -30,29 +33,32 @@ except Exception:
     _print_usage()
     sys.exit()
 
-pref = os.path.join("..","PySP")
-farmer = PySPModel(model=os.path.join(pref,"concrete",
-                                                 "ReferenceModel.py"),
-                   scenario_tree=os.path.join(pref,"ScenarioStructure.dat"))
+pref = os.path.join("..", "PySP")
+farmer = PySPModel(
+    model=os.path.join(pref, "concrete", "ReferenceModel.py"),
+    scenario_tree=os.path.join(pref, "ScenarioStructure.dat"),
+)
 
-phoptions = {'defaultPHrho': 1.0,
-             'solver_name':sys.argv[1],
-             'PHIterLimit': 50,
-             'convthresh': 0.01,
-             'verbose': False,
-             'display_progress': True,
-             'display_timing': False,
-             'iter0_solver_options': None,
-             'iterk_solver_options': None,
-             'xhat_closest_options': {'xhat_solver_options': {}, 'keep_solution':True},
-             }
+phoptions = {
+    "defaultPHrho": 1.0,
+    "solver_name": sys.argv[1],
+    "PHIterLimit": 50,
+    "convthresh": 0.01,
+    "verbose": False,
+    "display_progress": True,
+    "display_timing": False,
+    "iter0_solver_options": None,
+    "iterk_solver_options": None,
+    "xhat_closest_options": {"xhat_solver_options": {}, "keep_solution": True},
+}
 
-ph = PH( options = phoptions,
-         all_scenario_names = farmer.all_scenario_names,
-         scenario_creator = farmer.scenario_creator,
-         scenario_denouement = farmer.scenario_denouement,
-         extensions = XhatClosest,
-        )
+ph = PH(
+    options=phoptions,
+    all_scenario_names=farmer.all_scenario_names,
+    scenario_creator=farmer.scenario_creator,
+    scenario_denouement=farmer.scenario_denouement,
+    extensions=XhatClosest,
+)
 
 ph.ph_main()
 

@@ -16,6 +16,7 @@ to solutions with travel times of 0.
 
 Typically, you will only directly call functions prefixed with "plot\_".
 """
+
 import itertools
 import random
 from typing import (
@@ -216,8 +217,7 @@ def event_walks(numbered_events: Iterable[NumberedEvent]) -> List[List[int]]:
 
         for event in events_at_t:
             if len(event) == 1 or event[0][0] < t:
-                available_walks[event[-1][1]].append(
-                    unavailable_walks[event].pop())
+                available_walks[event[-1][1]].append(unavailable_walks[event].pop())
             elif event[0][0] == t:
                 net_degree[event[0]] -= 1
                 net_degree[event[-1]] += 1
@@ -239,8 +239,7 @@ def event_walks(numbered_events: Iterable[NumberedEvent]) -> List[List[int]]:
                         out_edges[v].append(dummy_vertex)
                         out_edges[dummy_vertex].append(v)
                         break
-        eulerian_circuit, num_rotated = \
-            hierholzers_alg(out_edges, dummy_vertex)
+        eulerian_circuit, num_rotated = hierholzers_alg(out_edges, dummy_vertex)
 
         # Incorporate Eulerian circuit into walks
         eulerian_circuit.rotate(-num_rotated)  # Need to start at dummy vertex
@@ -264,6 +263,7 @@ def event_walks(numbered_events: Iterable[NumberedEvent]) -> List[List[int]]:
 
 def filter_keys_by_value(indexed_var: IndexedVar) -> Iterable:
     """Filters `indexed_var` to just what has value that is truthy."""
+
     def value_truthyness(key):
         var = indexed_var[key]
         try:

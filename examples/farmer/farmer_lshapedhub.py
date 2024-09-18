@@ -27,10 +27,12 @@ def _parse_args():
     cfg.two_sided_args()
     cfg.fwph_args()
     cfg.xhatlshaped_args()
-    cfg.add_to_config("crops_mult",
-                         description="There will be 3x this many crops (default 1)",
-                         domain=int,
-                         default=1)                
+    cfg.add_to_config(
+        "crops_mult",
+        description="There will be 3x this many crops (default 1)",
+        domain=int,
+        default=1,
+    )
 
     cfg.parse_command_line("farmer_cylinders")
     return cfg
@@ -39,7 +41,7 @@ def _parse_args():
 def main():
     cfg = _parse_args()
 
-    # Need default_rho for FWPH, without you get 
+    # Need default_rho for FWPH, without you get
     # uninitialized numeric value error
     if cfg.fwph and cfg.default_rho is None:
         print("Must specify a default_rho if using FWPH")
@@ -63,17 +65,19 @@ def main():
 
     # Options for the L-shaped method at the hub
     # Bounds only valid for 3 scenarios, I think? Need to ask Chris
-    spo = None if cfg.max_solver_threads is None else {"threads": cfg.max_solver_threads}
+    spo = (
+        None if cfg.max_solver_threads is None else {"threads": cfg.max_solver_threads}
+    )
     options = {
         "root_solver": cfg.solver_name,
         "sp_solver": cfg.solver_name,
-        "sp_solver_options" : spo,
-        #"valid_eta_lb": {i: -432000 for i in all_scenario_names},
+        "sp_solver_options": spo,
+        # "valid_eta_lb": {i: -432000 for i in all_scenario_names},
         "max_iter": cfg.max_iterations,
         "verbose": False,
-        "root_scenarios":[all_scenario_names[len(all_scenario_names)//2]]
-   }
-    
+        "root_scenarios": [all_scenario_names[len(all_scenario_names) // 2]],
+    }
+
     # L-shaped hub
     hub_dict = {
         "hub_class": LShapedHub,
@@ -84,7 +88,7 @@ def main():
             },
         },
         "opt_class": LShapedMethod,
-        "opt_kwargs": { # Args passed to LShapedMethod __init__
+        "opt_kwargs": {  # Args passed to LShapedMethod __init__
             "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
@@ -94,11 +98,14 @@ def main():
 
     # FWPH spoke
     if fwph:
-        fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
-    
-    if xhatlshaped:
-        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        fw_spoke = vanilla.fwph_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
+    if xhatlshaped:
+        xhatlshaped_spoke = vanilla.xhatlshaped_spoke(
+            *beans, scenario_creator_kwargs=scenario_creator_kwargs
+        )
 
     list_of_spoke_dict = list()
     if fwph:

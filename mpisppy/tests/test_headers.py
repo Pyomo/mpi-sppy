@@ -17,6 +17,7 @@ import mpisppy
 yaml = pytest.importorskip("yaml")
 addheader = pytest.importorskip("addheader")
 
+
 def test_headers():
     root = Path(mpisppy.__file__).parent.parent
 

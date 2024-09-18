@@ -10,21 +10,22 @@ import pyomo.environ as pyo
 import numpy as np
 from mpisppy.cylinders.spcommunicator import communicator_array
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
-from mpisppy.utils.sputils import is_persistent 
+from mpisppy.utils.sputils import is_persistent
 from mpisppy import MPI
 
-class ReducedCostsSpoke(LagrangianOuterBound):
 
+class ReducedCostsSpoke(LagrangianOuterBound):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.bound_tol = self.opt.options['rc_bound_tol']
+        self.bound_tol = self.opt.options["rc_bound_tol"]
         self.consensus_threshold = np.sqrt(self.bound_tol)
-        self.converger_spoke_char = 'R'
-
+        self.converger_spoke_char = "R"
 
     def make_windows(self):
         if not hasattr(self.opt, "local_scenarios"):
-            raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
+            raise RuntimeError(
+                "Provided SPBase object does not have local_scenarios attribute"
+            )
 
         if len(self.opt.local_scenarios) == 0:
             raise RuntimeError("Rank has zero local_scenarios")
@@ -37,7 +38,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         self._modeler_fixed_nonants = set()
 
-        for k,s in self.opt.local_scenarios.items():
+        for k, s in self.opt.local_scenarios.items():
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.fixed:
                     self._modeler_fixed_nonants.add(ndn_i)
@@ -55,11 +56,11 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     @property
     def rc(self):
-        return self._bound[1:1+self.nonant_length]
+        return self._bound[1 : 1 + self.nonant_length]
 
     @rc.setter
     def rc(self, vals):
-        self._bound[1:1+self.nonant_length] = vals
+        self._bound[1 : 1 + self.nonant_length] = vals
 
     def lagrangian_prep(self):
         """
@@ -100,18 +101,26 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         for sub in self.opt.local_subproblems.values():
             if is_persistent(sub._solver_plugin):
-                # Note: what happens with non-persistent solvers? 
+                # Note: what happens with non-persistent solvers?
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
                 # - if not, the solver should throw an error
                 # - direct solvers seem to behave the same as persistent solvers
                 # GurobiDirect needs vars_to_load argument
                 # XpressDirect loads for all vars by default - TODO: should notify someone of this inconsistency
-                vars_to_load = [x for sn in sub.scen_list for _, x in self.opt.local_scenarios[sn]._mpisppy_data.nonant_indices.items()]
+                vars_to_load = [
+                    x
+                    for sn in sub.scen_list
+                    for _, x in self.opt.local_scenarios[
+                        sn
+                    ]._mpisppy_data.nonant_indices.items()
+                ]
                 sub._solver_plugin.load_rc(vars_to_load=vars_to_load)
 
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]
-                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                for ci, (ndn_i, xvar) in enumerate(
+                    s._mpisppy_data.nonant_indices.items()
+                ):
                     # fixed by modeler
                     if ndn_i in self._modeler_fixed_nonants:
                         rc[ci] = np.nan
@@ -119,14 +128,16 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                     xb = s._mpisppy_model.xbars[ndn_i].value
                     # check variance of xb to determine if consensus achieved
                     var_xb = pyo.value(s._mpisppy_model.xsqbars[ndn_i]) - xb * xb
-            
-                    if var_xb  > self.consensus_threshold * self.consensus_threshold:
+
+                    if var_xb > self.consensus_threshold * self.consensus_threshold:
                         rc[ci] = np.nan
                         continue
 
                     # solver takes care of sign of rc, based on lb, ub and max,min
                     # rc can be of wrong sign if numerically 0 - accepted here, checked in extension
-                    if (xb - xvar.lb <= self.bound_tol) or (xvar.ub - xb <= self.bound_tol):
+                    if (xb - xvar.lb <= self.bound_tol) or (
+                        xvar.ub - xb <= self.bound_tol
+                    ):
                         rc[ci] += sub._mpisppy_probability * sub.rc[xvar]
                     # not close to either bound -> rc = nan
                     else:

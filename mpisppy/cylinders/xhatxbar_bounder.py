@@ -35,8 +35,7 @@ def _attach_xbars(opt):
 
 ############################################################################
 class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
-
-    converger_spoke_char = 'B'
+    converger_spoke_char = "B"
 
     def ib_prep(self):
         """
@@ -45,8 +44,10 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         Returns:
             xhatter (xhatxbar object): Constructed by a call to Prep
         """
-        if "bundles_per_rank" in self.opt.options\
-           and self.opt.options["bundles_per_rank"] != 0:
+        if (
+            "bundles_per_rank" in self.opt.options
+            and self.opt.options["bundles_per_rank"] != 0
+        ):
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
         if not isinstance(self.opt, Xhat_Eval):
@@ -61,9 +62,12 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
 
-        self.opt._update_E1()  
-        if (abs(1 - self.opt.E1) > self.opt.E1_tolerance):
-            raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
+        self.opt._update_E1()
+        if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
+            raise RuntimeError(
+                f"Total probability of scenarios was {self.E1};  E1_tolerance = ",
+                self.E1_tolerance,
+            )
 
         ### end iter0 stuff
 
@@ -78,24 +82,25 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         Entry point. Communicates with the optimization companion.
 
         """
-        dtm = logging.getLogger(f'dtm{global_rank}')
+        dtm = logging.getLogger(f"dtm{global_rank}")
         logging.debug("Enter xhatxbar main on rank {}".format(global_rank))
 
         xhatter = self.ib_prep()
 
         ib_iter = 1  # ib is for inner bound
-        while (not self.got_kill_signal()):
-            logging.debug('   IB loop iter={} on global rank {}'.\
-                          format(ib_iter, global_rank))
+        while not self.got_kill_signal():
+            logging.debug(
+                "   IB loop iter={} on global rank {}".format(ib_iter, global_rank)
+            )
             # _log_values(ib_iter, self._locals, dtm)
 
-            logging.debug('   IB got from opt on global rank {}'.\
-                          format(global_rank))
-            if (self.new_nonants):
-                logging.debug('  and its new! on global rank {}'.\
-                              format(global_rank))
-                logging.debug('  localnonants={}'.format(str(self.localnonants)))
-                self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
+            logging.debug("   IB got from opt on global rank {}".format(global_rank))
+            if self.new_nonants:
+                logging.debug("  and its new! on global rank {}".format(global_rank))
+                logging.debug("  localnonants={}".format(str(self.localnonants)))
+                self.opt._put_nonant_cache(
+                    self.localnonants
+                )  # don't really need all caches
                 self.opt._restore_nonants()
                 innerbound = xhatter.xhat_tryit(restore_nonants=False)
 
@@ -103,14 +108,15 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
             ib_iter += 1
 
-        dtm.debug(f'IB xbar thread ran {ib_iter} iterations\n')
-    
+        dtm.debug(f"IB xbar thread ran {ib_iter} iterations\n")
+
         # for debugging
-        #print("output .txt files for debugging in xhatxbar_bounder.py")
-        #for k,s in self.opt.local_scenarios.items():
+        # print("output .txt files for debugging in xhatxbar_bounder.py")
+        # for k,s in self.opt.local_scenarios.items():
         #    fname = f"xhatxbar_model_{k}.txt"
         #    with open(fname, "w") as f:
         #        s.pprint(f)
+
 
 if __name__ == "__main__":
     print("no main.")

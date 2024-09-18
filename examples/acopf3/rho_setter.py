@@ -6,23 +6,22 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# January 2020; rho_setter for ccopf from n-1 stuff of a few years ago 
+# January 2020; rho_setter for ccopf from n-1 stuff of a few years ago
+
 
 def generator_p_cost(md, g, output_level):
     # g is an egret tuple (num, dict); md is egret model data
-    if md.attributes("generator")['p_cost'][g[0]]['cost_curve_type']\
-       != 'polynomial':
-        print ("rho setter wants polynomial, returning 1")
+    if md.attributes("generator")["p_cost"][g[0]]["cost_curve_type"] != "polynomial":
+        print("rho setter wants polynomial, returning 1")
         return 1
-    CCVs = md.attributes("generator")['p_cost'][g[0]]['values']
-    a0 = CCVs[2] #???? delete this comment after checking
+    CCVs = md.attributes("generator")["p_cost"][g[0]]["values"]
+    a0 = CCVs[2]  # ???? delete this comment after checking
     a1 = CCVs[1]
     a2 = CCVs[0]
     retval = a0 + a1 * output_level + a2 * output_level**2
     if retval == 0:
-        retval = 0.99 
+        retval = 0.99
     return retval
-        
 
 
 def ph_rhosetter_callback(scen):
@@ -33,14 +32,14 @@ def ph_rhosetter_callback(scen):
     numstages = len(scen._mpisppy_node_list)
     generator_set = scen._egret_md.attributes("generator")
     generator_names = generator_set["names"]
-    
+
     for egen in generator_names:
         for stage in range(1, numstages):
-            pgen = scen.stage_models[stage].pg[egen] # pgen is a Var
-            
+            pgen = scen.stage_models[stage].pg[egen]  # pgen is a Var
+
             lb = pgen.lb
             ub = pgen.ub
-            mid = lb + (ub - lb)/2.0
+            mid = lb + (ub - lb) / 2.0
             cost_at_mid = generator_p_cost(scen._egret_md, egen, mid)
             rho = cost_at_mid * MyRhoFactor
             idv = id(pgen)

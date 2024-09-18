@@ -28,7 +28,10 @@ from mpisppy.utils.wxbarreader import WXBarReader
 
 __version__ = 0.1
 
-solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
+solver_available, solver_name, persistent_available, persistent_solver_name = (
+    get_solver()
+)
+
 
 def _create_cfg():
     cfg = config.Config()
@@ -41,16 +44,18 @@ def _create_cfg():
     cfg.default_rho = 1
     return cfg
 
-#*****************************************************************************
+
+# *****************************************************************************
+
 
 class Test_w_writer_farmer(unittest.TestCase):
-    """ Test the gradient code using farmer."""
+    """Test the gradient code using farmer."""
 
     def _create_ph_farmer(self, ph_extensions=None, max_iter=100):
-        self.w_file_name = './examples/w_test_data/w_file.csv'
-        self.temp_w_file_name = './examples/w_test_data/_temp_w_file.csv'
-        self.xbar_file_name = './examples/w_test_data/xbar_file.csv'
-        self.temp_xbar_file_name = './examples/w_test_data/_temp_xbar_file.csv'
+        self.w_file_name = "./examples/w_test_data/w_file.csv"
+        self.temp_w_file_name = "./examples/w_test_data/_temp_w_file.csv"
+        self.xbar_file_name = "./examples/w_test_data/xbar_file.csv"
+        self.temp_xbar_file_name = "./examples/w_test_data/_temp_xbar_file.csv"
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
@@ -58,15 +63,19 @@ class Test_w_writer_farmer(unittest.TestCase):
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         self.cfg.max_iterations = max_iter
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
-        hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=ph_extensions)
-        if ph_extensions==WXBarWriter: #tbd
-            hub_dict['opt_kwargs']['options']["W_and_xbar_writer"] =  {"Wcsvdir": "Wdir"}
-            hub_dict['opt_kwargs']['options']['W_fname'] = self.temp_w_file_name
-            hub_dict['opt_kwargs']['options']['Xbar_fname'] = self.temp_xbar_file_name
-        if ph_extensions==WXBarReader:
-            hub_dict['opt_kwargs']['options']["W_and_xbar_reader"] =  {"Wcsvdir": "Wdir"}
-            hub_dict['opt_kwargs']['options']['init_W_fname'] = self.w_file_name
-            hub_dict['opt_kwargs']['options']['init_Xbar_fname'] = self.xbar_file_name
+        hub_dict = vanilla.ph_hub(
+            *beans,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+            ph_extensions=ph_extensions,
+        )
+        if ph_extensions == WXBarWriter:  # tbd
+            hub_dict["opt_kwargs"]["options"]["W_and_xbar_writer"] = {"Wcsvdir": "Wdir"}
+            hub_dict["opt_kwargs"]["options"]["W_fname"] = self.temp_w_file_name
+            hub_dict["opt_kwargs"]["options"]["Xbar_fname"] = self.temp_xbar_file_name
+        if ph_extensions == WXBarReader:
+            hub_dict["opt_kwargs"]["options"]["W_and_xbar_reader"] = {"Wcsvdir": "Wdir"}
+            hub_dict["opt_kwargs"]["options"]["init_W_fname"] = self.w_file_name
+            hub_dict["opt_kwargs"]["options"]["init_Xbar_fname"] = self.xbar_file_name
         list_of_spoke_dict = list()
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
@@ -77,10 +86,10 @@ class Test_w_writer_farmer(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
         self.ph_object = None
-    
+
     def test_wwriter(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=WXBarWriter, max_iter=5)
-        with open(self.temp_w_file_name, 'r') as f:
+        with open(self.temp_w_file_name, "r") as f:
             read = csv.reader(f)
             rows = list(read)
             self.assertAlmostEqual(float(rows[1][2]), 70.84705093609978, places=5)
@@ -89,7 +98,7 @@ class Test_w_writer_farmer(unittest.TestCase):
 
     def test_xbarwriter(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=WXBarWriter, max_iter=5)
-        with open(self.temp_xbar_file_name, 'r') as f:
+        with open(self.temp_xbar_file_name, "r") as f:
             read = csv.reader(f)
             rows = list(read)
             self.assertAlmostEqual(float(rows[1][1]), 274.2239371483933, places=5)
@@ -99,18 +108,27 @@ class Test_w_writer_farmer(unittest.TestCase):
     def test_wreader(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=1)
         for sname, scenario in self.ph_object.local_scenarios.items():
-            if sname == 'scen0':
-                self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 1)]._value, 70.84705093609978)
-            if sname == 'scen1':
-                self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 0)]._value, -41.104251445950844)
+            if sname == "scen0":
+                self.assertAlmostEqual(
+                    scenario._mpisppy_model.W[("ROOT", 1)]._value, 70.84705093609978
+                )
+            if sname == "scen1":
+                self.assertAlmostEqual(
+                    scenario._mpisppy_model.W[("ROOT", 0)]._value, -41.104251445950844
+                )
 
     def test_xbarreader(self):
         self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=1)
         for sname, scenario in self.ph_object.local_scenarios.items():
-            if sname == 'scen0':
-                self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 1)]._value, 274.2239371483933)
-            if sname == 'scen1':
-                self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 0)]._value, 96.88717449844287)
+            if sname == "scen0":
+                self.assertAlmostEqual(
+                    scenario._mpisppy_model.xbars[("ROOT", 1)]._value, 274.2239371483933
+                )
+            if sname == "scen1":
+                self.assertAlmostEqual(
+                    scenario._mpisppy_model.xbars[("ROOT", 0)]._value, 96.88717449844287
+                )
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

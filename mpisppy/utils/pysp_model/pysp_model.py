@@ -15,18 +15,21 @@ from .instance_factory import ScenarioTreeInstanceFactory
 
 logger = logging.getLogger("mpisppy.utils.pysp_model")
 
+
 def _get_cost_expression(model, cost_variable):
     return model.find_component(cost_variable[0])[cost_variable[1]]
+
 
 def _yeild_componentdata_from_indexlist(component, index_list):
     for index in index_list:
         if type(index) is tuple:
-            indices = tuple(idx if idx != '*' else slice(None) for idx in index)
+            indices = tuple(idx if idx != "*" else slice(None) for idx in index)
             yield from component.__getitem__(indices)
-        elif index == '*' or index == '':
+        elif index == "*" or index == "":
             yield from component.values()
         else:
             yield component.__getitem__(index)
+
 
 def _get_nonant_list_from_templates(model, templates):
     nonant_list = []
@@ -37,17 +40,32 @@ def _get_nonant_list_from_templates(model, templates):
                 nonant_list.append(vardata)
         elif isinstance(component, pyo.Block):
             for blockdata in _yeild_componentdata_from_indexlist(component, index_list):
-                for vardata in blockdata.component_data_objects(ctype=pyo.Var, active=True, descend_into=True):
+                for vardata in blockdata.component_data_objects(
+                    ctype=pyo.Var, active=True, descend_into=True
+                ):
                     nonant_list.append(vardata)
         else:
-            raise RuntimeError("Cannot extract non-anticipative variables from component {component.name}")
+            raise RuntimeError(
+                "Cannot extract non-anticipative variables from component {component.name}"
+            )
     return nonant_list
 
+
 def _get_nonant_list(model, pysp_node):
-    return _get_nonant_list_from_templates(model, {**pysp_node.stage._variable_templates, **pysp_node._variable_templates})
+    return _get_nonant_list_from_templates(
+        model, {**pysp_node.stage._variable_templates, **pysp_node._variable_templates}
+    )
+
 
 def _get_derived_nonant_list(model, pysp_node):
-    return _get_nonant_list_from_templates(model, {**pysp_node.stage._derived_variable_templates, **pysp_node._derived_variable_templates})
+    return _get_nonant_list_from_templates(
+        model,
+        {
+            **pysp_node.stage._derived_variable_templates,
+            **pysp_node._derived_variable_templates,
+        },
+    )
+
 
 def _get_nodenames(root_node):
     root_node._mpisppy_stage = 1
@@ -56,6 +74,7 @@ def _get_nodenames(root_node):
     nodenames = ["ROOT"]
     _add_next_stage(root_node, nodenames)
     return nodenames
+
 
 def _add_next_stage(node, nodenames):
     for idx, child in enumerate(node.children):
@@ -67,7 +86,7 @@ def _add_next_stage(node, nodenames):
 
 
 class PySPModel:
-    """A class for instantiating PySP models for use in mpisppy. 
+    """A class for instantiating PySP models for use in mpisppy.
 
     Args:
         model: The reference scenario model. Can be set
@@ -114,18 +133,18 @@ class PySPModel:
       scenario_denouement (fct):
                     A blank scenario_denouement function for use in mpisppy
     """
-    def __init__(self,
-                 model,
-                 scenario_tree,
-                 data_dir=None):
 
-        self._scenario_tree_instance_factory = \
-                ScenarioTreeInstanceFactory(model, scenario_tree, data=data_dir)
-        self._pysp_scenario_tree = self._scenario_tree_instance_factory.generate_scenario_tree()
+    def __init__(self, model, scenario_tree, data_dir=None):
+        self._scenario_tree_instance_factory = ScenarioTreeInstanceFactory(
+            model, scenario_tree, data=data_dir
+        )
+        self._pysp_scenario_tree = (
+            self._scenario_tree_instance_factory.generate_scenario_tree()
+        )
 
         ## get the things out of the tree model we need
         self._all_scenario_names = [s.name for s in self._pysp_scenario_tree.scenarios]
-        
+
         ## check for more than two stages
         ## gripe if we see bundles
         if self._pysp_scenario_tree.bundles:
@@ -136,7 +155,8 @@ class PySPModel:
     def scenario_creator_callback(self, scenario_name, **kwargs):
         ## fist, get the model out
         model = self._scenario_tree_instance_factory.construct_scenario_instance(
-                scenario_name, self._pysp_scenario_tree)
+            scenario_name, self._pysp_scenario_tree
+        )
 
         tree_scenario = self._pysp_scenario_tree.get_scenario(scenario_name)
 
@@ -146,40 +166,52 @@ class PySPModel:
             if node.is_leaf_node():
                 raise Exception("Unexpected leaf node")
 
-            node._mpisppy_cost_expression = _get_cost_expression(model, node._cost_variable)
+            node._mpisppy_cost_expression = _get_cost_expression(
+                model, node._cost_variable
+            )
             node._mpisppy_nonant_list = _get_nonant_list(model, node)
             node._mpisppy_nonant_ef_suppl_list = _get_derived_nonant_list(model, node)
 
         ## add the things mpisppy expects to the model
         model._mpisppy_probability = tree_scenario.probability
 
-        model._mpisppy_node_list = [mpisppyScenarioNode(
-                                            name=node._mpisppy_name,
-                                            cond_prob=node.conditional_probability,
-                                            stage=node._mpisppy_stage,
-                                            cost_expression=node._mpisppy_cost_expression,
-                                            nonant_list=node._mpisppy_nonant_list,
-                                            scen_model=None,
-                                            nonant_ef_suppl_list=node._mpisppy_nonant_ef_suppl_list,
-                                            parent_name=node._mpisppy_parent_name,
-                                    )
-                                    for node in non_leaf_nodes
-                                   ]
+        model._mpisppy_node_list = [
+            mpisppyScenarioNode(
+                name=node._mpisppy_name,
+                cond_prob=node.conditional_probability,
+                stage=node._mpisppy_stage,
+                cost_expression=node._mpisppy_cost_expression,
+                nonant_list=node._mpisppy_nonant_list,
+                scen_model=None,
+                nonant_ef_suppl_list=node._mpisppy_nonant_ef_suppl_list,
+                parent_name=node._mpisppy_parent_name,
+            )
+            for node in non_leaf_nodes
+        ]
 
-        for _ in model.component_data_objects(pyo.Objective, active=True, descend_into=True):
+        for _ in model.component_data_objects(
+            pyo.Objective, active=True, descend_into=True
+        ):
             break
-        else: # no break
-            print("Provided model has no objective; using PySP auto-generated objective")
+        else:  # no break
+            print(
+                "Provided model has no objective; using PySP auto-generated objective"
+            )
 
             # attach PySP objective
             leaf_node = tree_scenario.node_list[-1]
-            leaf_node._mpisppy_cost_expression = _get_cost_expression(model, leaf_node._cost_variable)
+            leaf_node._mpisppy_cost_expression = _get_cost_expression(
+                model, leaf_node._cost_variable
+            )
 
             if hasattr(model, "_PySPModel_objective"):
                 raise RuntimeError("provided model has attribute _PySPModel_objective")
 
-            model._PySPModel_objective = pyo.Objective(expr=\
-                    pyo.quicksum(node._mpisppy_cost_expression for node in tree_scenario.node_list))
+            model._PySPModel_objective = pyo.Objective(
+                expr=pyo.quicksum(
+                    node._mpisppy_cost_expression for node in tree_scenario.node_list
+                )
+            )
 
         return model
 
@@ -194,7 +226,7 @@ class PySPModel:
 
     @property
     def scenario_creator(self):
-        return lambda *args,**kwargs : self.scenario_creator_callback(*args,**kwargs)
+        return lambda *args, **kwargs: self.scenario_creator_callback(*args, **kwargs)
 
     @property
     def all_scenario_names(self):
@@ -206,4 +238,4 @@ class PySPModel:
 
     @property
     def scenario_denouement(self):
-        return lambda *args,**kwargs: None
+        return lambda *args, **kwargs: None

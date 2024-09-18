@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 """Provides a function which creates `ConcreteModel`\s for scenarios."""
+
 from typing import Dict, Sequence
 
 import pyomo.environ as pyo
@@ -43,6 +44,7 @@ def scenario_creator(
         setattr(concrete, key, val)
 
     mpisppy.utils.sputils.attach_root_node(
-        concrete, concrete.first_stage_cost, [concrete.is_active_depot])
+        concrete, concrete.first_stage_cost, [concrete.is_active_depot]
+    )
 
     return concrete

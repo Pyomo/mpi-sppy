@@ -24,15 +24,16 @@ For iter0, if the lag is not None, do it.
 For other iters, use count;  None is also how you avoid.
 """
 
+
 def Fixer_tuple(xvar, th=None, nb=None, lb=None, ub=None):
-    """ Somewhat self-documenting way to make a fixer tuple.
+    """Somewhat self-documenting way to make a fixer tuple.
         For use in/by/for the so-called Reference Model.
     Args:
         xvar (Var): the Pyomo Var
         th (float): compared to sqrt(abs(xbar_sqared - xsquared_bar))
-        nb: (int) None means ignore; for iter k, number of iters 
+        nb: (int) None means ignore; for iter k, number of iters
                   converged anywhere.
-        lb: (int) None means ignore; for iter k, number of iters 
+        lb: (int) None means ignore; for iter k, number of iters
                   converged within th of xvar lower bound.
         ub: (int) None means ignore; for iter k, number of iters
                   converged within th of xvar upper bound
@@ -41,85 +42,95 @@ def Fixer_tuple(xvar, th=None, nb=None, lb=None, ub=None):
         tuple: a tuple to be appended to the iter0 or iterk list of tuples
     """
     if th is None and nb is None and lb is None and ub is None:
-        print ("warning: Fixer_tuple called for Var=", xvar.name,
-               "but no arguments were given")
+        print(
+            "warning: Fixer_tuple called for Var=",
+            xvar.name,
+            "but no arguments were given",
+        )
     if th is None:
         th = 0
     if nb is not None and lb is not None and nb < lb:
-        print ("warning: Fixer_tuple called for Var=", xvar.name,
-               "with nb < lb, which means lb will be ignored.")
-    if  nb is not None and ub is not None and nb < ub:
-        print ("warning: Fixer_tuple called for Var=", xvar.name,
-               "with nb < ub, which means ub will be ignored.")
-        
+        print(
+            "warning: Fixer_tuple called for Var=",
+            xvar.name,
+            "with nb < lb, which means lb will be ignored.",
+        )
+    if nb is not None and ub is not None and nb < ub:
+        print(
+            "warning: Fixer_tuple called for Var=",
+            xvar.name,
+            "with nb < ub, which means ub will be ignored.",
+        )
+
     return (id(xvar), th, nb, lb, ub)
 
-class Fixer(mpisppy.extensions.extension.Extension):
 
+class Fixer(mpisppy.extensions.extension.Extension):
     def __init__(self, ph):
         self.ph = ph
         self.cylinder_rank = self.ph.cylinder_rank
         self.options = ph.options
-        self.fixeroptions = self.options["fixeroptions"] # required
-        self.verbose = self.options["verbose"] \
-                       or self.fixeroptions["verbose"]
+        self.fixeroptions = self.options["fixeroptions"]  # required
+        self.verbose = self.options["verbose"] or self.fixeroptions["verbose"]
         # this function is scenario specific (takes a scenario as an arg)
         self.id_fix_list_fct = self.fixeroptions["id_fix_list_fct"]
         self.dprogress = ph.options["display_progress"]
         self.fixed_prior_iter0 = 0
-        self.fixed_so_far = 0        
+        self.fixed_so_far = 0
         self.boundtol = self.fixeroptions["boundtol"]
 
     def populate(self, local_scenarios):
         # [(ndn, i)] = iter count (i indices into nonantlist)
         self.local_scenarios = local_scenarios
 
-        self.iter0_fixer_tuples = {} # caller data
-        self.fixer_tuples = {} # caller data
-        self.threshold = {}  
-        self.iter0_threshold = {}  
+        self.iter0_fixer_tuples = {}  # caller data
+        self.fixer_tuples = {}  # caller data
+        self.threshold = {}
+        self.iter0_threshold = {}
         # This count dict drives the loops later
         # NOTE: every scenario has a list.
-        for k,s in self.local_scenarios.items():
-            s._mpisppy_data.conv_iter_count = {} # key is (ndn, i)
+        for k, s in self.local_scenarios.items():
+            s._mpisppy_data.conv_iter_count = {}  # key is (ndn, i)
 
-            self.iter0_fixer_tuples[s], self.fixer_tuples[s] = \
-                    self.id_fix_list_fct(s)
+            self.iter0_fixer_tuples[s], self.fixer_tuples[s] = self.id_fix_list_fct(s)
 
             if self.iter0_fixer_tuples[s] is not None:
-                for (varid, th, nb, lb, ub) in self.iter0_fixer_tuples[s]:
-                    (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid] #
+                for varid, th, nb, lb, ub in self.iter0_fixer_tuples[s]:
+                    (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]  #
                     if (ndn, i) not in self.iter0_threshold:
                         self.iter0_threshold[(ndn, i)] = th
                     else:
                         if th != self.iter0_threshold[(ndn, i)]:
-                            print (s.name, ndn, i, th)
-                            raise RuntimeError("Attempt to vary iter0 fixer "+\
-                                               "threshold across scenarios.")
+                            print(s.name, ndn, i, th)
+                            raise RuntimeError(
+                                "Attempt to vary iter0 fixer "
+                                + "threshold across scenarios."
+                            )
             if self.fixer_tuples[s] is not None:
-                for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
+                for varid, th, nb, lb, ub in self.fixer_tuples[s]:
                     (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
                     s._mpisppy_data.conv_iter_count[(ndn, i)] = 0
                     if (ndn, i) not in self.threshold:
                         self.threshold[(ndn, i)] = th
                     else:
                         if th != self.threshold[(ndn, i)]:
-                            print (s.name, ndn, i, th)
-                            raise RuntimeError("Attempt to vary fixer "+\
-                                               "threshold across scenarios")
+                            print(s.name, ndn, i, th)
+                            raise RuntimeError(
+                                "Attempt to vary fixer " + "threshold across scenarios"
+                            )
 
     # verbose utility
     def _vb(self, str):
         if self.verbose and self.cylinder_rank == 0:
-            print ("(rank0) " + str)
+            print("(rank0) " + str)
 
     # display progress utility
     def _dp(self, str):
         if (self.dprogress or self.verbose) and self.cylinder_rank == 0:
-            print ("(rank0) " + str)
+            print("(rank0) " + str)
 
     def _update_fix_counts(self):
-        for k,s in self.local_scenarios.items():
+        for k, s in self.local_scenarios.items():
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.is_fixed():
                     continue
@@ -135,44 +146,47 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 else:
                     s._mpisppy_data.conv_iter_count[ndn_i] = 0
                     ##print ("debug reset fix diff, tolval", diff, tolval)
-                    
-    def iter0(self, local_scenarios):
 
-        # first, do some persistent solver with bundles gymnastics        
-        have_bundles = self.ph.bundling # indicates bundles
+    def iter0(self, local_scenarios):
+        # first, do some persistent solver with bundles gymnastics
+        have_bundles = self.ph.bundling  # indicates bundles
         if have_bundles:
             subpname = next(iter(self.ph.local_subproblems))
             subp = self.ph.local_subproblems[subpname]
-            solver_is_persistent = isinstance(subp._solver_plugin,
-            pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
+            solver_is_persistent = isinstance(
+                subp._solver_plugin,
+                pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver,
+            )
             if solver_is_persistent:
                 vars_to_update = {}
 
         # modelers might have already fixed variables - count those up and output the result
         raw_fixed_on_arrival = 0
-        raw_fixed_this_iter = 0   
-        for sname,s in self.ph.local_scenarios.items():
+        raw_fixed_this_iter = 0
+        for sname, s in self.ph.local_scenarios.items():
             if self.iter0_fixer_tuples[s] is None:
-                print ("WARNING: No Iter0 fixer tuple for s.name=",s.name)
+                print("WARNING: No Iter0 fixer tuple for s.name=", s.name)
                 return
-            
-            if not have_bundles:
-                solver_is_persistent = isinstance(s._solver_plugin,
-                    pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
 
-            for (varid, th, nb, lb, ub) in self.iter0_fixer_tuples[s]:
+            if not have_bundles:
+                solver_is_persistent = isinstance(
+                    s._solver_plugin,
+                    pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver,
+                )
+
+            for varid, th, nb, lb, ub in self.iter0_fixer_tuples[s]:
                 was_fixed = False
                 try:
                     (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
                 except:
-                    print ("Are you trying to fix a Var that is not nonant?")
+                    print("Are you trying to fix a Var that is not nonant?")
                     raise
-                xvar = s._mpisppy_data.nonant_indices[ndn,i]
+                xvar = s._mpisppy_data.nonant_indices[ndn, i]
                 if not xvar.is_fixed():
-                    xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
-                    diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[(ndn,i)])
+                    xb = pyo.value(s._mpisppy_model.xbars[(ndn, i)])
+                    diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[(ndn, i)])
                     tolval = self.iter0_threshold[(ndn, i)]
-                    sqtolval = tolval*tolval  # the tol is on sqrt
+                    sqtolval = tolval * tolval  # the tol is on sqrt
                     if -diff > sqtolval or diff > sqtolval:
                         ##print ("debug0 NO fix diff, sqtolval", diff, sqtolval)
                         continue
@@ -181,18 +195,24 @@ class Fixer(mpisppy.extensions.extension.Extension):
                         # if we are still here, it is converged
                         if nb is not None:
                             xvar.fix(xb)
-                            self._vb("Fixed0 nb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(
+                                "Fixed0 nb %s %s at %s"
+                                % (s.name, xvar.name, str(xvar._value))
+                            )
                             was_fixed = True
                         elif lb is not None and xb - xvar.lb < self.boundtol:
                             xvar.fix(xvar.lb)
-                            self._vb("Fixed0 lb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(
+                                "Fixed0 lb %s %s at %s"
+                                % (s.name, xvar.name, str(xvar._value))
+                            )
                             was_fixed = True
                         elif ub is not None and xvar.ub - xb < self.boundtol:
                             xvar.fix(xvar.ub)
-                            self._vb("Fixed0 ub %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(
+                                "Fixed0 ub %s %s at %s"
+                                % (s.name, xvar.name, str(xvar._value))
+                            )
                             was_fixed = True
 
                     if was_fixed:
@@ -210,77 +230,94 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     raw_fixed_on_arrival += 1
 
         if have_bundles and solver_is_persistent:
-            for k,subp in self.ph.local_subproblems.items():
+            for k, subp in self.ph.local_subproblems.items():
                 subpnum = sputils.extract_num(k)
                 rank_local = self.ph.cylinder_rank
                 for sname in self.ph.names_in_bundles[rank_local][subpnum]:
                     if sname in vars_to_update:
                         for xvar in vars_to_update[sname]:
                             subp._solver_plugin.update_var(xvar)
-                        
+
         self.fixed_prior_iter0 += raw_fixed_on_arrival / len(local_scenarios)
         self.fixed_so_far += raw_fixed_this_iter / len(local_scenarios)
-        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))
+        self._dp(
+            "Unique vars fixed so far - %d (%d prior to iteration 0)"
+            % (self.fixed_so_far + self.fixed_prior_iter0, self.fixed_prior_iter0)
+        )
         if raw_fixed_this_iter % len(local_scenarios) != 0:
-            raise RuntimeError ("Variation in fixing across scenarios detected "
-                                "in fixer.py (iter0)")
-            # maybe to do mpicomm.abort()        
+            raise RuntimeError(
+                "Variation in fixing across scenarios detected " "in fixer.py (iter0)"
+            )
+            # maybe to do mpicomm.abort()
         if raw_fixed_on_arrival % len(local_scenarios) != 0:
-            raise RuntimeError ("Variation in fixing across scenarios prior to iteration 0 detected "
-                                "in fixer.py (iter0)")        
-
+            raise RuntimeError(
+                "Variation in fixing across scenarios prior to iteration 0 detected "
+                "in fixer.py (iter0)"
+            )
 
     def iterk(self, PHIter):
-        """ Before iter k>1 solves, but after x-bar update.
-        """
-        # first, do some persistent solver with bundles gymnastics        
-        have_bundles = self.ph.bundling # indicates bundles
+        """Before iter k>1 solves, but after x-bar update."""
+        # first, do some persistent solver with bundles gymnastics
+        have_bundles = self.ph.bundling  # indicates bundles
         if have_bundles:
             subpname = next(iter(self.ph.local_subproblems))
             subp = self.ph.local_subproblems[subpname]
-            solver_is_persistent = isinstance(subp._solver_plugin,
-            pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
+            solver_is_persistent = isinstance(
+                subp._solver_plugin,
+                pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver,
+            )
             if solver_is_persistent:
                 vars_to_update = {}
 
         raw_fixed_this_iter = 0
         self._update_fix_counts()
-        for sname,s in self.local_scenarios.items():
+        for sname, s in self.local_scenarios.items():
             if self.fixer_tuples[s] is None:
-                print ("MAJOR WARNING: No Iter k fixer tuple for s.name=",s.name)
+                print("MAJOR WARNING: No Iter k fixer tuple for s.name=", s.name)
                 return
             if not have_bundles:
-                solver_is_persistent = isinstance(s._solver_plugin, pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
-            for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
+                solver_is_persistent = isinstance(
+                    s._solver_plugin,
+                    pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver,
+                )
+            for varid, th, nb, lb, ub in self.fixer_tuples[s]:
                 was_fixed = False
                 try:
                     (ndn, i) = s._mpisppy_data.varid_to_nonant_index[varid]
                 except:
-                    print ("Are you trying to fix a Var that is not nonant?")
+                    print("Are you trying to fix a Var that is not nonant?")
                     raise
-                xvar = s._mpisppy_data.nonant_indices[ndn,i]
+                xvar = s._mpisppy_data.nonant_indices[ndn, i]
                 if not xvar.is_fixed():
-                    xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
-                    fx = s._mpisppy_data.conv_iter_count[(ndn,i)]
+                    xb = pyo.value(s._mpisppy_model.xbars[(ndn, i)])
+                    fx = s._mpisppy_data.conv_iter_count[(ndn, i)]
                     if fx > 0:
-                        xbar = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
+                        xbar = pyo.value(s._mpisppy_model.xbars[(ndn, i)])
                         was_fixed = False
-                        if  nb is not None and nb <= fx:
+                        if nb is not None and nb <= fx:
                             xvar.fix(xbar)
-                            self._vb("Fixed nb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(
+                                "Fixed nb %s %s at %s"
+                                % (s.name, xvar.name, str(xvar._value))
+                            )
                             was_fixed = True
-                        elif lb is not None and lb < fx \
-                             and xb - xvar.lb < self.boundtol:
+                        elif (
+                            lb is not None and lb < fx and xb - xvar.lb < self.boundtol
+                        ):
                             xvar.fix(xvar.lb)
-                            self._vb("Fixed lb %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(
+                                "Fixed lb %s %s at %s"
+                                % (s.name, xvar.name, str(xvar._value))
+                            )
                             was_fixed = True
-                        elif ub is not None and ub < fx \
-                             and xvar.ub - xb < self.boundtol:
+                        elif (
+                            ub is not None and ub < fx and xvar.ub - xb < self.boundtol
+                        ):
                             xvar.fix(xvar.ub)
-                            self._vb("Fixed ub %s %s at %s" % \
-                                     (s.name, xvar.name, str(xvar._value)))
+                            self._vb(
+                                "Fixed ub %s %s at %s"
+                                % (s.name, xvar.name, str(xvar._value))
+                            )
                             was_fixed = True
 
                     if was_fixed:
@@ -292,9 +329,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
                                 vars_to_update[sname] = []
                             vars_to_update[sname].append(xvar)
 
-
         if have_bundles and solver_is_persistent:
-            for k,subp in self.ph.local_subproblems.items():
+            for k, subp in self.ph.local_subproblems.items():
                 subpnum = sputils.extract_num(k)
                 rank_local = self.ph.cylinder_rank
                 for sname in self.ph.names_in_bundles[rank_local][subpnum]:
@@ -303,21 +339,24 @@ class Fixer(mpisppy.extensions.extension.Extension):
                             subp._solver_plugin.update_var(xvar)
 
         self.fixed_so_far += raw_fixed_this_iter / len(self.local_scenarios)
-        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))        
+        self._dp(
+            "Unique vars fixed so far - %d (%d prior to iteration 0)"
+            % (self.fixed_so_far + self.fixed_prior_iter0, self.fixed_prior_iter0)
+        )
         if raw_fixed_this_iter % len(self.local_scenarios) != 0:
-            raise RuntimeError ("Variation in fixing across scenarios detected "
-                                "in fixer.py")
+            raise RuntimeError(
+                "Variation in fixing across scenarios detected " "in fixer.py"
+            )
 
     def pre_iter0(self):
         return
-                                        
+
     def post_iter0(self):
-        """ initialize data structures; that's all we can do at this point
-        """
+        """initialize data structures; that's all we can do at this point"""
         self.populate(self.ph.local_scenarios)
 
     def miditer(self):
-        """ Check for fixing before in the middle of PHIter (after
+        """Check for fixing before in the middle of PHIter (after
         the xbar update for PHiter-1).
         """
         PHIter = self.ph._PHIter
@@ -330,6 +369,4 @@ class Fixer(mpisppy.extensions.extension.Extension):
         return
 
     def post_everything(self):
-        self._dp("Final unique vars fixed by fixer= %s" % \
-                      (self.fixed_so_far))
-
+        self._dp("Final unique vars fixed by fixer= %s" % (self.fixed_so_far))

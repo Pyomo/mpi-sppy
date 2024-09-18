@@ -17,14 +17,14 @@ import numpy as np
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # Could also pass, e.g., sys.stdout instead of a filename
-mpisppy.log.setup_logger("mpisppy.cylinders.slam_heuristic",
-                         "slamheur.log",
-                         level=logging.CRITICAL)                         
+mpisppy.log.setup_logger(
+    "mpisppy.cylinders.slam_heuristic", "slamheur.log", level=logging.CRITICAL
+)
 logger = logging.getLogger("mpisppy.cylinders.slam_heuristic")
 
-class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
-    converger_spoke_char = 'S'
+class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
+    converger_spoke_char = "S"
 
     @property
     @abc.abstractmethod
@@ -38,17 +38,23 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
     def slam_heur_prep(self):
         if self.opt.multistage:
-            raise RuntimeError(f'The {self.__class__.__name__} only supports '
-                               'two-stage models at this time.')
+            raise RuntimeError(
+                f"The {self.__class__.__name__} only supports "
+                "two-stage models at this time."
+            )
         if not isinstance(self.opt, Xhat_Eval):
-            raise RuntimeError(f"{self.__class__.__name__} must be used with Xhat_Eval.")
-        verbose = self.opt.options['verbose']
+            raise RuntimeError(
+                f"{self.__class__.__name__} must be used with Xhat_Eval."
+            )
+        verbose = self.opt.options["verbose"]
 
-        logger.debug(f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}")
+        logger.debug(
+            f"{self.__class__.__name__} spoke back from PH_Prep rank {self.global_rank}"
+        )
 
         self.tee = False
         if "tee-rank0-solves" in self.opt.options:
-            self.tee = self.opt.options['tee-rank0-solves']
+            self.tee = self.opt.options["tee-rank0-solves"]
 
         self.verbose = verbose
 
@@ -58,7 +64,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
     def extract_local_candidate_soln(self):
         num_scen = len(self.opt.local_scenarios)
         num_vars = len(self.localnonants) // num_scen
-        assert(num_scen * num_vars == len(self.localnonants))
+        assert num_scen * num_vars == len(self.localnonants)
         ## matrix with num_scen rows and num_vars columns
         nonant_matrix = np.reshape(self.localnonants, (num_scen, num_vars))
 
@@ -72,22 +78,27 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
         slam_iter = 1
         while not self.got_kill_signal():
-            if (slam_iter-1) % 10000 == 0:
-                logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}')
-                logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
+            if (slam_iter - 1) % 10000 == 0:
+                logger.debug(
+                    f"   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}"
+                )
+                logger.debug(
+                    f"   {self.__class__.__name__} got from opt on rank {self.global_rank}"
+                )
 
             if self.new_nonants:
-                
                 local_candidate = self.extract_local_candidate_soln()
 
                 global_candidate = np.empty_like(local_candidate)
 
-                self.cylinder_comm.Allreduce(local_candidate, global_candidate, op=self.mpi_op)
+                self.cylinder_comm.Allreduce(
+                    local_candidate, global_candidate, op=self.mpi_op
+                )
 
-                '''
+                """
                 ## round the candidate
                 candidate = global_candidate.round()
-                '''
+                """
 
                 # Everyone has the candidate solution at this point
                 for s in self.opt.local_scenarios.values():
@@ -96,17 +107,17 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
 
                     for ix, var in enumerate(s._mpisppy_data.nonant_indices.values()):
                         var.fix(global_candidate[ix])
-                        if (is_pers):
+                        if is_pers:
                             solver.update_var(var)
 
                 obj = self.opt.calculate_incumbent(fix_nonants=False)
 
                 self.update_if_improving(obj)
-                
+
             slam_iter += 1
 
-class SlamMaxHeuristic(_SlamHeuristic):
 
+class SlamMaxHeuristic(_SlamHeuristic):
     @property
     def numpy_op(self):
         return np.amax
@@ -115,8 +126,8 @@ class SlamMaxHeuristic(_SlamHeuristic):
     def mpi_op(self):
         return mpi.MAX
 
-class SlamMinHeuristic(_SlamHeuristic):
 
+class SlamMinHeuristic(_SlamHeuristic):
     @property
     def numpy_op(self):
         return np.amin

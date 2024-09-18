@@ -10,6 +10,7 @@ import os
 import models.ReferenceModel as ref
 import mpisppy.utils.sputils as sputils
 
+
 def scenario_creator(scenario_name, scenario_count=None):
     if scenario_count not in (3, 10):
         raise RuntimeError(
@@ -35,35 +36,44 @@ def scenario_creator(scenario_name, scenario_count=None):
 def scenario_denouement(rank, scenario_name, scenario):
     pass
 
+
 ########## helper functions ########
 
-#=========
-def scenario_names_creator(num_scens,start=None):
+
+# =========
+def scenario_names_creator(num_scens, start=None):
     # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"Scenario{i+1}" for i in range(start,start+num_scens)]
+    if start is None:
+        start = 0
+    return [f"Scenario{i+1}" for i in range(start, start + num_scens)]
 
 
-#=========
+# =========
 def inparser_adder(cfg):
     # add options unique to sizes
     cfg.num_scens_required()
     cfg.mip_options()
 
 
-#=========
+# =========
 def kw_creator(cfg):
     # (for Amalgamator): linked to the scenario_creator and inparser_adder
     if cfg.num_scens not in (3, 10):
-        raise RuntimeError(f"num_scen must the 3 or 10; was {cfg.num_scen}")    
+        raise RuntimeError(f"num_scen must the 3 or 10; was {cfg.num_scen}")
     kwargs = {"scenario_count": cfg.num_scens}
     return kwargs
 
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+
+def sample_tree_scen_creator(
+    sname,
+    stage,
+    sample_branching_factors,
+    seed,
+    given_scenario=None,
+    **scenario_creator_kwargs,
+):
+    """Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
         (this function supports zhat and confidence interval code)
     Args:
         sname (string): scenario name to be created
@@ -82,6 +92,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
 
+
 ######## end helper functions #########
 
 ########## a customized rho setter #############
@@ -91,8 +102,9 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
 #  a gradient based rho setter.
 # note that _rho_setter is a reserved name....
 
+
 def _rho_setter(scen, **kwargs):
-    """ rho values for the scenario.
+    """rho values for the scenario.
     Args:
         scen (pyo.ConcreteModel): the scenario
     Returns:
@@ -103,7 +115,7 @@ def _rho_setter(scen, **kwargs):
 
     if "RF" in kwargs and isinstance(kwargs["RF"], float):
         RF = kwargs["RF"]
-        
+
     cutrho = scen.UnitReductionCost * RF
 
     for i in scen.ProductSizes:
@@ -120,7 +132,7 @@ def _rho_setter(scen, **kwargs):
 
 
 def id_fix_list_fct(s):
-    """ specify tuples used by the fixer.
+    """specify tuples used by the fixer.
 
     Args:
         s (ConcreteModel): the sizes instance.

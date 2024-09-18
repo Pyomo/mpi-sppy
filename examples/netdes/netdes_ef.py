@@ -6,12 +6,13 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-''' Solve the EF of the network problems
-'''
+"""Solve the EF of the network problems"""
+
 from mpisppy.opt.ef import ExtensiveForm
 from netdes import scenario_creator
 import pyomo.environ as pyo
 import sys
+
 
 def main():
     # inst = "network-10-20-L-01"
@@ -38,5 +39,6 @@ def main():
         print("Warning: solver reported non-optimal termination status")
     print("Netdes objective value:", pyo.value(ef.ef.EF_Obj))
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     main()

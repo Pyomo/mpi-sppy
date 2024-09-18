@@ -12,13 +12,14 @@
 #        are (mostly) defined in the context of MIPs. If we want to expand to LPs
 #        and other non-branch-and-bound contexts, additional work is required.
 
-def check_user_termination_callback_signature(user_termination_callback):
 
+def check_user_termination_callback_signature(user_termination_callback):
     import inspect
+
     return len(inspect.signature(user_termination_callback).parameters) == 3
 
+
 def set_cplex_callback(solver, user_termination_callback):
-    
     cplex = solver._cplex
     cplex_model = solver._solver_model
 
@@ -39,7 +40,6 @@ def set_cplex_callback(solver, user_termination_callback):
 
 
 def set_gurobi_callback(solver, user_termination_callback):
-    
     gurobi_model = solver._solver_model
     gurobi_model._terminate_function = user_termination_callback
 
@@ -62,7 +62,6 @@ def set_gurobi_callback(solver, user_termination_callback):
 
 
 def set_xpress_callback(solver, user_termination_callback):
-    
     xpress_problem = solver._solver_model
 
     def cbchecktime_callback(xpress_problem, termination_callback):

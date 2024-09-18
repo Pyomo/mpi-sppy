@@ -17,6 +17,9 @@ tt_timer = _TTT()
 
 _global_rank = COMM_WORLD.rank
 
+
 def global_toc(msg, cond=_global_rank == 0):
     return tt_timer.toc(msg, delta=False) if cond else None
+
+
 global_toc("Initializing mpi-sppy")

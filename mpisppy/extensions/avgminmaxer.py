@@ -13,12 +13,14 @@
 
 import mpisppy.extensions.xhatbase
 
+
 class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:
         ph (PH object): the calling object
         rank (int): mpi process rank of currently running process
     """
+
     def __init__(self, ph, rank, n_proc):
         super().__init__(ph, rank, n_proc)
         self.compstr = self.ph.options["avgminmax_name"]
@@ -28,18 +30,32 @@ class MinMaxAvg(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_iter0(self):
         avgv, minv, maxv = self.ph.avg_min_max(self.compstr)
-        if (self.cylinder_rank == 0):
-            print ("  ### ", self.compstr,": avg, min, max, max-min", avgv, minv, maxv, maxv-minv)
-        
+        if self.cylinder_rank == 0:
+            print(
+                "  ### ",
+                self.compstr,
+                ": avg, min, max, max-min",
+                avgv,
+                minv,
+                maxv,
+                maxv - minv,
+            )
+
     def miditer(self, PHIter, conv):
         return
 
     def enditer(self, PHIter):
         avgv, minv, maxv = self.ph.avg_min_max(self.compstr)
-        if (self.cylinder_rank == 0):
-            print ("  ### ", self.compstr,": avg, min, max, max-min", avgv, minv, maxv, maxv-minv)
+        if self.cylinder_rank == 0:
+            print(
+                "  ### ",
+                self.compstr,
+                ": avg, min, max, max-min",
+                avgv,
+                minv,
+                maxv,
+                maxv - minv,
+            )
 
     def post_everything(self, PHIter, conv):
         return
-
-

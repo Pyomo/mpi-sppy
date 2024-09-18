@@ -11,26 +11,26 @@ import mpisppy.cylinders.spoke as spoke
 from math import inf
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
-class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
 
-    converger_spoke_char = 'X'
+class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
+    converger_spoke_char = "X"
 
     def xhatlshaped_prep(self):
-        verbose = self.opt.options['verbose']
+        verbose = self.opt.options["verbose"]
 
         if not isinstance(self.opt, Xhat_Eval):
             raise RuntimeError("XhatLShapedInnerBound must be used with Xhat_Eval.")
 
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
-            teeme = self.opt.options['tee-rank0-solves']
+            teeme = self.opt.options["tee-rank0-solves"]
 
         self.opt.solve_loop(
             solver_options=self.opt.current_solver_options,
             dtiming=False,
             gripe=True,
             tee=teeme,
-            verbose=verbose
+            verbose=verbose,
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
@@ -40,29 +40,26 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
         infeasP = self.opt.infeas_prob()
-        if infeasP != 0.:
+        if infeasP != 0.0:
             if self.opt.cylinder_rank == 0:
                 print("ERROR")
                 print("Infeasibility detected; E_infeas, E1=", infeasP, self.opt.E1)
             quit()
 
-        self.opt._save_nonants() # make the cache
+        self.opt._save_nonants()  # make the cache
 
         self.opt.current_solver_options = self.opt.options["iterk_solver_options"]
         ### end iter0 stuff
 
     def main(self):
-
         self.xhatlshaped_prep()
         is_minimizing = self.opt.is_minimizing
 
         self.ib = inf if is_minimizing else -inf
 
-        #xh_iter = 1
+        # xh_iter = 1
         while not self.got_kill_signal():
-
             if self.new_nonants:
-                
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
                 obj = self.opt.calculate_incumbent(fix_nonants=True)

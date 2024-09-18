@@ -6,11 +6,12 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# look for an xhat. 
+# look for an xhat.
 # Written to be the only extension or called from an extension "manager."
 # DLW, Jan 2019
 
 import mpisppy.extensions.xhatbase
+
 
 class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -18,24 +19,21 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
         opt (SPBase object): problem that we are bounding
         rank (int): mpi process rank of currently running process
     """
+
     def __init__(self, ph):
         super().__init__(ph)
         self.options = ph.options["xhat_looper_options"]
         self.solver_options = self.options["xhat_solver_options"]
         self._xhat_looper_obj_final = None
         self.keep_solution = True
-        if ('keep_solution' in self.options) and (not self.options['keep_solution']):
+        if ("keep_solution" in self.options) and (not self.options["keep_solution"]):
             self.keep_solution = False
 
-    #==========
-    def xhat_looper(self,
-                    scen_limit=1,
-                    seed=None,
-                    verbose=False,
-                    restore_nonants=True):
+    # ==========
+    def xhat_looper(self, scen_limit=1, seed=None, verbose=False, restore_nonants=True):
         """Loop over some number of the global scenarios; if your rank has
         the chosen guy, bcast, if not, recieve the bcast. In any event, fix the vars
-        at the bcast values and see if it is feasible. If so, stop and 
+        at the bcast values and see if it is feasible. If so, stop and
         leave the nonants fixed.
 
         Args:
@@ -53,15 +51,16 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             If options has an append_file_name, write to it
             Also attach the resulting bound to the object
         """
+
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
-                print ("    rank {} xhat_looper: {}".\
-                       format(self.cylinder_rank,msg))
+                print("    rank {} xhat_looper: {}".format(self.cylinder_rank, msg))
+
         obj = None
         sname = None
         snumlists = dict()
         llim = min(scen_limit, len(self.opt.all_scenario_names))
-        _vb("Enter xhat_looper to try "+str(llim)+" scenarios.")
+        _vb("Enter xhat_looper to try " + str(llim) + " scenarios.")
         # The tedious task of collecting the tree information for
         # local scenario tree nodes (maybe move to the constructor)
         for k, s in self.opt.local_scenarios.items():
@@ -71,44 +70,46 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
                 if seed is None:
                     snumlists[ndn] = [i % nsize for i in range(llim)]
                 else:
-                    print ("need a random permutation in snumlist xxxx quitting")
+                    print("need a random permutation in snumlist xxxx quitting")
                     quit()
-        
-        self.opt._save_nonants() # to cache for use in fixing
+
+        self.opt._save_nonants()  # to cache for use in fixing
         # for the moment (dec 2019) treat two-stage as special
         if len(snumlists) == 1:
             for snum in snumlists["ROOT"]:
                 sname = self.opt.all_scenario_names[snum]
-                _vb("Trying scenario "+sname)
-                _vb("   Solver options="+str(self.solver_options))
+                _vb("Trying scenario " + sname)
+                _vb("   Solver options=" + str(self.solver_options))
                 snamedict = {"ROOT": sname}
-                obj = self._try_one(snamedict,
-                                    solver_options=self.solver_options,
-                                    verbose=False,
-                                    restore_nonants=restore_nonants)
+                obj = self._try_one(
+                    snamedict,
+                    solver_options=self.solver_options,
+                    verbose=False,
+                    restore_nonants=restore_nonants,
+                )
                 if obj is None:
                     _vb("    Infeasible")
                 else:
                     _vb("    Feasible, returning " + str(obj))
                     break
         else:
-            raise RuntimeError("xhatlooper cannot do multi-stage")            
+            raise RuntimeError("xhatlooper cannot do multi-stage")
 
         if "append_file_name" in self.options and self.opt.cylinder_rank == 0:
             with open(self.options["append_file_name"], "a") as f:
-                f.write(", "+str(obj))
+                f.write(", " + str(obj))
 
         self.xhatlooper_obj = obj
         return obj, snamedict
 
     def pre_iter0(self):
         if self.opt.multistage:
-            raise RuntimeError("xhatlooper cannot do multi-stage")            
+            raise RuntimeError("xhatlooper cannot do multi-stage")
 
     def post_iter0(self):
         # a little bit silly
         self.comms = self.opt.comms
-        
+
     def miditer(self):
         pass
 

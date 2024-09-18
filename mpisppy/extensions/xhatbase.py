@@ -19,16 +19,17 @@ import mpisppy.utils.sputils as sputils
 
 class XhatBase(mpisppy.extensions.extension.Extension):
     """
-        Any inherited class must implement the preiter0, postiter etc. methods
-        
-        Args:
-            opt (SPOpt object): gives the problem that we bound
+    Any inherited class must implement the preiter0, postiter etc. methods
 
-        Attributes:
-          scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
-                keys are comms (i.e., tree nodes); values are dicts with keys
-                that are scenario names and values that are ranks
+    Args:
+        opt (SPOpt object): gives the problem that we bound
+
+    Attributes:
+      scenario_name_to_rank (dict of dict): nodes (i.e. comms) scen names
+            keys are comms (i.e., tree nodes); values are dicts with keys
+            that are scenario names and values that are ranks
     """
+
     def __init__(self, opt):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
@@ -37,42 +38,49 @@ class XhatBase(mpisppy.extensions.extension.Extension):
 
         self.scenario_name_to_rank = opt.scenario_names_to_rank
         # dict: scenario names --> LOCAL rank number (needed mainly for xhat)
-        
-     #**********
-    def _try_one(self, snamedict, solver_options=None, verbose=False,
-                 restore_nonants=True, stage2EFsolvern=None, branching_factors=None):
-        """ try the scenario named sname in self.opt.local_scenarios
-       Args:
-            snamedict (dict): key: scenario tree non-leaf name, val: scen name
-                            the scen name can be None if it is not local
-            solver_options (dict): passed through to the solver
-            verbose (boolean): controls output
-            restore_nonants (bool): if True, restores the nonants to their original
-                                    values in all scenarios. If False, leaves the
-                                    nonants as they are in the tried scenario
-            stage2EFsolvern: use this for EFs based on second stage nodes for multi-stage
-            branching_factors (list): list of branching factors for stage2ef
-       NOTE: The solve loop is with fixed nonants so W and rho do not
-             matter to the optimization. When we want to check the obj
-             value we need to drop them, but we don't need to re-optimize
-             since all other Vars are optimized already with the nonants
-             fixed.
-        Returns:
-             obj (float or None): the expected value for sname as xhat or None
-        NOTE:
-             the stage2ef stuff is a little bit hacked-in
+
+    # **********
+    def _try_one(
+        self,
+        snamedict,
+        solver_options=None,
+        verbose=False,
+        restore_nonants=True,
+        stage2EFsolvern=None,
+        branching_factors=None,
+    ):
+        """try the scenario named sname in self.opt.local_scenarios
+        Args:
+             snamedict (dict): key: scenario tree non-leaf name, val: scen name
+                             the scen name can be None if it is not local
+             solver_options (dict): passed through to the solver
+             verbose (boolean): controls output
+             restore_nonants (bool): if True, restores the nonants to their original
+                                     values in all scenarios. If False, leaves the
+                                     nonants as they are in the tried scenario
+             stage2EFsolvern: use this for EFs based on second stage nodes for multi-stage
+             branching_factors (list): list of branching factors for stage2ef
+        NOTE: The solve loop is with fixed nonants so W and rho do not
+              matter to the optimization. When we want to check the obj
+              value we need to drop them, but we don't need to re-optimize
+              since all other Vars are optimized already with the nonants
+              fixed.
+         Returns:
+              obj (float or None): the expected value for sname as xhat or None
+         NOTE:
+              the stage2ef stuff is a little bit hacked-in
         """
         xhats = dict()  # to pass to _fix_nonants
         self.opt._save_nonants()  # (BTW: for all local scenarios)
 
         # Special Tee option for xhat
         sopt = solver_options
-        Tee=False
+        Tee = False
         if solver_options is not None and "Tee" in solver_options:
             sopt = dict(solver_options)
             Tee = sopt["Tee"]
             del sopt["Tee"]
-        
+
         # For now, we are going to treat two-stage as a special case
         if len(snamedict) == 1:
             sname = snamedict["ROOT"]  # also serves as an assert
@@ -84,8 +92,11 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
+                print(
+                    "rank=",
+                    self.cylinder_rank,
+                    "xhats bcast failed on src_rank={}".format(src_rank),
+                )
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
         elif stage2EFsolvern is None:  # regular multi-stage
@@ -109,21 +120,32 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                         raise RuntimeError(f"{ndn} not in snamedict={snamedict}")
                     if snamedict[ndn] == k:
                         # cache lists are just concated node lists
-                        xhats[ndn] = [s._mpisppy_data.nonant_cache[i+cistart[ndn]]
-                                      for i in range(nlens[ndn])]
+                        xhats[ndn] = [
+                            s._mpisppy_data.nonant_cache[i + cistart[ndn]]
+                            for i in range(nlens[ndn])
+                        ]
             for ndn in cistart:  # local nodes
                 if snamedict[ndn] not in self.scenario_name_to_rank[ndn]:
-                    print (f"For ndn={ndn}, snamedict[ndn] not in "
-                           "self.scenario_name_to_rank[ndn]")
+                    print(
+                        f"For ndn={ndn}, snamedict[ndn] not in "
+                        "self.scenario_name_to_rank[ndn]"
+                    )
                     print(f"snamedict[ndn]={snamedict[ndn]}")
-                    print(f"self.scenario_name_to_rank[ndn]={self.scenario_name_to_rank[ndn]}")
+                    print(
+                        f"self.scenario_name_to_rank[ndn]={self.scenario_name_to_rank[ndn]}"
+                    )
                     raise RuntimeError("Bad scenario selection for xhat")
                 src_rank = self.scenario_name_to_rank[ndn][snamedict[ndn]]
                 try:
                     xhats[ndn] = self.comms[ndn].bcast(xhats[ndn], root=src_rank)
                 except:
-                    print("rank=",self.cylinder_rank, "xhats bcast failed on ndn={}, src_rank={}"\
-                          .format(ndn,src_rank))
+                    print(
+                        "rank=",
+                        self.cylinder_rank,
+                        "xhats bcast failed on ndn={}, src_rank={}".format(
+                            ndn, src_rank
+                        ),
+                    )
                     raise
         else:  # we are multi-stage with stage2ef
             # Form an ef for all local scenarios and then fix the first stage
@@ -132,15 +154,21 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             sname = snamedict["ROOT"]  # also serves as an assert
             if sname in self.opt.local_scenarios:
                 rnlen = self.opt.local_scenarios[sname]._mpisppy_data.nlens["ROOT"]
-                xhat = [self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache[i] for i in range(rnlen)]
+                xhat = [
+                    self.opt.local_scenarios[sname]._mpisppy_data.nonant_cache[i]
+                    for i in range(rnlen)
+                ]
             else:
                 xhat = None
             src_rank = self.scenario_name_to_rank["ROOT"][sname]
             try:
                 xhats["ROOT"] = self.comms["ROOT"].bcast(xhat, root=src_rank)
             except:
-                print("rank=",self.cylinder_rank, "xhats bcast failed on src_rank={}"\
-                      .format(src_rank))
+                print(
+                    "rank=",
+                    self.cylinder_rank,
+                    "xhats bcast failed on src_rank={}".format(src_rank),
+                )
                 print("root comm size={}".format(self.comms["ROOT"].size))
                 raise
             # now form the EF for the appropriate number of second-stage scenario tree nodes
@@ -148,14 +176,16 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             stage2cnt = branching_factors[1]
             rankcnt = self.n_proc
             # The next assert is important.
-            assert stage2cnt % rankcnt== 0, "for stage2ef, ranks must be a multiple of stage2 nodes"            
+            assert (
+                stage2cnt % rankcnt == 0
+            ), "for stage2ef, ranks must be a multiple of stage2 nodes"
             nodes_per_rank = stage2cnt // rankcnt
             # to keep the code easier to read, we will first collect the nodenames
             # Important: we are assuming a standard node naming pattern using underscores.
             # TBD: do something that would work with underscores *in* the stage branch name
             # TBD: factor this
             local_2ndns = dict()  # dict of dicts (inner dicts are for FormEF)
-            for k,s in self.opt.local_scenarios.items():
+            for k, s in self.opt.local_scenarios.items():
                 if hasattr(self, "_EFs"):
                     sputils.deact_objs(s)  # create EF does this the first time
                 for node in s._mpisppy_node_list:
@@ -165,12 +195,19 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                             local_2ndns[ndn] = {k: s}
                         local_2ndns[ndn][k] = s
             if len(local_2ndns) != nodes_per_rank:
-                print("stage2ef failure: nodes_per_rank=",nodes_per_rank, "local_2ndns=",local_2ndns)
-                raise RuntimeError("stagecnt assumes regular scenario tree and standard _ node naming")
+                print(
+                    "stage2ef failure: nodes_per_rank=",
+                    nodes_per_rank,
+                    "local_2ndns=",
+                    local_2ndns,
+                )
+                raise RuntimeError(
+                    "stagecnt assumes regular scenario tree and standard _ node naming"
+                )
             # create an EF for each second stage node and solve with fixed nonant
             # TBD: factor out the EF creation!
             if not hasattr(self, "_EFs"):
-                for k,s in self.opt.local_scenarios.items():
+                for k, s in self.opt.local_scenarios.items():
                     sputils.stash_ref_objs(s)
                 self._EFs = dict()
                 for ndn2, sdict in local_2ndns.items():  # ndn2 will be a the node name
@@ -181,20 +218,24 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 wxbarutils.fix_ef_ROOT_nonants(self._EFs[ndn2], xhats["ROOT"])
                 # solve EF
                 solver = pyo.SolverFactory(stage2EFsolvern)
-                if 'persistent' in stage2EFsolvern:
+                if "persistent" in stage2EFsolvern:
                     solver.set_instance(self._EFs[ndn2], symbolic_solver_labels=True)
                     results = solver.solve(tee=Tee)
                 else:
-                    results = solver.solve(self._EFs[ndn2], tee=Tee, symbolic_solver_labels=True,)
+                    results = solver.solve(
+                        self._EFs[ndn2],
+                        tee=Tee,
+                        symbolic_solver_labels=True,
+                    )
 
                 # restore objectives so Ebojective will work
                 for s in sdict.values():
                     sputils.reactivate_objs(s)
                 # if you hit infeas, return None
                 if not pyo.check_optimal_termination(results):
-                   self.opt._restore_nonants()
-                   return None
-               
+                    self.opt._restore_nonants()
+                    return None
+
             # feasible xhat found, so finish up 2EF part and return
             if verbose and src_rank == self.cylinder_rank:
                 print("   Feasible xhat found:")
@@ -212,13 +253,15 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         self.opt._fix_nonants(xhats)  # (BTW: for all local scenarios)
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
-        self.opt.solve_loop(solver_options=sopt,
-                           #dis_W=True, dis_prox=True,
-                           verbose=verbose,
-                           tee=Tee)
+        self.opt.solve_loop(
+            solver_options=sopt,
+            # dis_W=True, dis_prox=True,
+            verbose=verbose,
+            tee=Tee,
+        )
 
         infeasP = self.opt.infeas_prob()
-        if infeasP != 0.:
+        if infeasP != 0.0:
             # restoring does no harm
             # if this solution is infeasible
             self.opt._restore_nonants()
@@ -232,20 +275,20 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 self.opt._restore_nonants()
             return obj
 
-    #**********
+    # **********
     def csv_nonants(self, snamedict, fname):
-        """ write the non-ants in csv format to files based on the file name
-            (we will over-write files if they already exists)
-            Args:
-               snamedic (str): the names of the scenarios to use
-               fname (str): the full name of the file to which to write
+        """write the non-ants in csv format to files based on the file name
+        (we will over-write files if they already exists)
+        Args:
+           snamedic (str): the names of the scenarios to use
+           fname (str): the full name of the file to which to write
         """
         # only the rank with the requested scenario writes
         for ndn, sname in snamedict.items():
             if sname not in self.opt.local_scenarios:
                 continue
             scen = self.opt.local_scenarios[sname]
-            with open(fname+"_"+ndn+"_"+sname+".csv", "w") as f:
+            with open(fname + "_" + ndn + "_" + sname + ".csv", "w") as f:
                 for node in scen._mpisppy_node_list:
                     if node.name == ndn:
                         break
@@ -253,16 +296,16 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 f.write(ndn)
                 for i in range(nlens[ndn]):
                     vardata = node.nonant_vardata_list[i]
-                    f.write(', "'+vardata.name+'", '+str(vardata._value))
+                    f.write(', "' + vardata.name + '", ' + str(vardata._value))
                 f.write("\n")
 
-    #**********
+    # **********
     def csv_allvars(self, snamedict, fname):
-        """ write all Vars in csv format to files based on the file name
-            (we will over-write files if they already exists)
-            Args:
-               snamedict (dict): scenario names
-               fname (str): the full name of the file to which to write
+        """write all Vars in csv format to files based on the file name
+        (we will over-write files if they already exists)
+        Args:
+           snamedict (dict): scenario names
+           fname (str): the full name of the file to which to write
         """
         # only the rank with the requested scenario writes
         for ndn, sname in snamedict.items():
@@ -272,9 +315,10 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             for node in scen._mpisppy_node_list:
                 if node.name == ndn:
                     break
-                with open(fname+"_"+ndn+"_"+sname,"w") as f:
-                    for ((v_name, v_index), v_data)\
-                        in scen.component_data_iterindex(pyo.Var, active=True):
+                with open(fname + "_" + ndn + "_" + sname, "w") as f:
+                    for (v_name, v_index), v_data in scen.component_data_iterindex(
+                        pyo.Var, active=True
+                    ):
                         f.write(v_name + ", " + str(pyo.value(v_data)) + "\n")
 
     """ Functions to be called by xhat extensions. This is just code
@@ -284,7 +328,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
     factored simply for the usual reasons to factor code.  """
 
     def xhat_common_post_everything(self, extname, obj, snamedict, restored_nonants):
-        """ Code that most xhat post_everything routines will want to call.
+        """Code that most xhat post_everything routines will want to call.
         Args:
             extname (str): the name of the extension for reporting
             obj (float): the xhat objective function
@@ -297,10 +341,18 @@ class XhatBase(mpisppy.extensions.extension.Extension):
             self.opt.tree_solution_available = True
             self.opt.first_stage_solution_available = True
         if (obj is not None) and (self.opt.spcomm is not None):
-            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(obj, char='E')
+            self.opt.spcomm.BestInnerBound = self.opt.spcomm.InnerBoundUpdate(
+                obj, char="E"
+            )
         if self.cylinder_rank == 0 and self.verbose:
-            print ("****", extname ,"Used scenarios",
-                   str(snamedict),"to get xhat Eobj=",obj)
+            print(
+                "****",
+                extname,
+                "Used scenarios",
+                str(snamedict),
+                "to get xhat Eobj=",
+                obj,
+            )
 
         if "csvname" in self.options:
             self.csv_nonants(snamedict, self.options["csvname"])
@@ -314,7 +366,8 @@ class XhatBase(mpisppy.extensions.extension.Extension):
     def post_iter0(self):
         # the base class needs this
         self.comms = self.opt.comms
-        
+
+
 """
 May 2020, DLW
 Simple tree with branching factors (arbitrary trees later)

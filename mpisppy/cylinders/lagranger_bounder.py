@@ -15,17 +15,24 @@ import numpy as np
 import mpisppy.cylinders.spoke
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 
-class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke):
-    """Indepedent Lagrangian that takes x values as input and updates its own W.
-    """
-    converger_spoke_char = 'A'
+
+class LagrangerOuterBound(
+    _LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNonantSpoke
+):
+    """Indepedent Lagrangian that takes x values as input and updates its own W."""
+
+    converger_spoke_char = "A"
 
     def lagrangian_prep(self):
         # Scenarios are created here
         super().lagrangian_prep()
-        if "lagranger_rho_rescale_factors_json" in self.opt.options and\
-            self.opt.options["lagranger_rho_rescale_factors_json"] is not None:
-            with open(self.opt.options["lagranger_rho_rescale_factors_json"], "r") as fin:
+        if (
+            "lagranger_rho_rescale_factors_json" in self.opt.options
+            and self.opt.options["lagranger_rho_rescale_factors_json"] is not None
+        ):
+            with open(
+                self.opt.options["lagranger_rho_rescale_factors_json"], "r"
+            ) as fin:
                 din = json.load(fin)
             self.rho_rescale_factors = {int(i): float(din[i]) for i in din}
         else:
@@ -35,31 +42,29 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
 
     def _lagrangian(self, iternum):
         # see if rho should be rescaled
-        if self.rho_rescale_factors is not None\
-           and iternum in self.rho_rescale_factors:
+        if self.rho_rescale_factors is not None and iternum in self.rho_rescale_factors:
             self._rescale_rho(self.rho_rescale_factors[iternum])
         return self.lagrangian()
 
-    def _rescale_rho(self,rf):
+    def _rescale_rho(self, rf):
         # IMPORTANT: the scalings accumulate.
         # E.g., 0.5 then 2.0 gets you back where you started.
-        for (sname, scenario) in self.opt.local_scenarios.items():
+        for sname, scenario in self.opt.local_scenarios.items():
             for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                 scenario._mpisppy_model.rho[ndn_i] *= rf
 
     def _write_W_and_xbar(self, iternum):
         if self.opt.options.get("lagranger_write_W", False):
-            w_fname = 'lagranger_w_vals.csv'
-            with open(w_fname, 'a') as f:
+            w_fname = "lagranger_w_vals.csv"
+            with open(w_fname, "a") as f:
                 writer = csv.writer(f)
-                writer.writerow(['#iteration number', iternum])
-            mpisppy.utils.wxbarutils.write_W_to_file(self.opt, w_fname,
-                                                     sep_files=False)
+                writer.writerow(["#iteration number", iternum])
+            mpisppy.utils.wxbarutils.write_W_to_file(self.opt, w_fname, sep_files=False)
         if self.opt.options.get("lagranger_write_xbar", False):
-            xbar_fname = 'lagranger_xbar_vals.csv'
-            with open(xbar_fname, 'a') as f:
+            xbar_fname = "lagranger_xbar_vals.csv"
+            with open(xbar_fname, "a") as f:
                 writer = csv.writer(f)
-                writer.writerow(['#iteration number', iternum])
+                writer.writerow(["#iteration number", iternum])
             mpisppy.utils.wxbarutils.write_xbar_to_file(self.opt, xbar_fname)
 
     def _update_weights_and_solve(self, iternum):

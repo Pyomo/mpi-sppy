@@ -23,8 +23,7 @@ fullcom_n_proc = fullcomm.Get_size()
 
 ############################################################################
 class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
-
-    converger_spoke_char = 'S'
+    converger_spoke_char = "S"
 
     def ib_prep(self):
         """
@@ -33,8 +32,10 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         Returns:
             xhatter (xhatspecific object): Constructed by a call to Prep
         """
-        if "bundles_per_rank" in self.opt.options\
-           and self.opt.options["bundles_per_rank"] != 0:
+        if (
+            "bundles_per_rank" in self.opt.options
+            and self.opt.options["bundles_per_rank"] != 0
+        ):
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
 
         if not isinstance(self.opt, Xhat_Eval):
@@ -49,8 +50,8 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
 
-        self.opt._update_E1()  
-        if (abs(1 - self.opt.E1) > self.opt.E1_tolerance):
+        self.opt._update_E1()
+        if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
             if self.opt.cylinder_rank == 0:
                 print("ERROR")
                 print("Total probability of scenarios was ", self.opt.E1)
@@ -69,37 +70,42 @@ class XhatSpecificInnerBound(spoke.InnerBoundNonantSpoke):
         Entry point. Communicates with the optimization companion.
 
         """
-        dtm = logging.getLogger(f'dtm{global_rank}')
+        dtm = logging.getLogger(f"dtm{global_rank}")
         logging.debug("Enter xhatspecific main on rank {}".format(global_rank))
 
         # What to try does not change, but the data in the scenarios should
-        xhat_scenario_dict = self.opt.options["xhat_specific_options"]\
-                                             ["xhat_scenario_dict"]
+        xhat_scenario_dict = self.opt.options["xhat_specific_options"][
+            "xhat_scenario_dict"
+        ]
 
         xhatter = self.ib_prep()
 
         ib_iter = 1  # ib is for inner bound
-        while (not self.got_kill_signal()):
-            logging.debug('   IB loop iter={} on global rank {}'.\
-                          format(ib_iter, global_rank))
+        while not self.got_kill_signal():
+            logging.debug(
+                "   IB loop iter={} on global rank {}".format(ib_iter, global_rank)
+            )
             # _log_values(ib_iter, self._locals, dtm)
 
-            logging.debug('   IB got from opt on global rank {}'.\
-                          format(global_rank))
-            if (self.new_nonants):
-                logging.debug('  and its new! on global rank {}'.\
-                              format(global_rank))
-                logging.debug('  localnonants={}'.format(str(self.localnonants)))
+            logging.debug("   IB got from opt on global rank {}".format(global_rank))
+            if self.new_nonants:
+                logging.debug("  and its new! on global rank {}".format(global_rank))
+                logging.debug("  localnonants={}".format(str(self.localnonants)))
 
-                self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
+                self.opt._put_nonant_cache(
+                    self.localnonants
+                )  # don't really need all caches
                 self.opt._restore_nonants()
-                innerbound = xhatter.xhat_tryit(xhat_scenario_dict, restore_nonants=False)
+                innerbound = xhatter.xhat_tryit(
+                    xhat_scenario_dict, restore_nonants=False
+                )
 
                 self.update_if_improving(innerbound)
 
             ib_iter += 1
 
-        dtm.debug(f'IB specific thread ran {ib_iter} iterations\n')
-    
+        dtm.debug(f"IB specific thread ran {ib_iter} iterations\n")
+
+
 if __name__ == "__main__":
     print("no main.")

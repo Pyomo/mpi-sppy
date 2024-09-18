@@ -18,38 +18,39 @@ import os
 import pyomo.environ as pyo
 import mpisppy.extensions.xhatbase
 
+
 class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:
         ph (PH object): the calling object
         rank (int): mpi process rank of currently running process
     """
+
     def __init__(self, ph):
         dirname = ph.options["diagnoser_options"]["diagnoser_outdir"]
         if os.path.exists(dirname):
             if ph.cylinder_rank == 0:
-                print ("Shutting down because Diagnostic directory exists:",
-                       dirname)
+                print("Shutting down because Diagnostic directory exists:", dirname)
             quit()
         if ph.cylinder_rank == 0:
-            os.mkdir(dirname) # just let it crash
+            os.mkdir(dirname)  # just let it crash
 
         super().__init__(ph)
         self.options = self.ph.options["diagnoser_options"]
         self.dirname = self.options["diagnoser_outdir"]
 
     def write_loop(self):
-        """ Bundles are special. Also: this code needs help
+        """Bundles are special. Also: this code needs help
         from the ph object to be more efficient...
         """
         for sname, s in self.ph.local_scenarios.items():
             bundling = self.ph.bundling
-            fname = self.dirname+os.sep+sname+".dag"
+            fname = self.dirname + os.sep + sname + ".dag"
             with open(fname, "a") as f:
-                f.write(str(self.ph._PHIter)+",")
+                f.write(str(self.ph._PHIter) + ",")
                 objfct = self.ph.saved_objectives[sname]
                 if bundling:
-                    f.write("Bundling"+",")
+                    f.write("Bundling" + ",")
                 f.write(str(pyo.value(objfct)))
                 f.write("\n")
 
@@ -58,12 +59,12 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
 
     def post_iter0(self):
         for sname, s in self.ph.local_scenarios.items():
-            fname = self.dirname+os.sep+sname+".dag"
+            fname = self.dirname + os.sep + sname + ".dag"
             with open(fname, "w") as f:
-                f.write(str(dt.datetime.now())+", diagnoser\n")
+                f.write(str(dt.datetime.now()) + ", diagnoser\n")
 
         self.write_loop()
-        
+
     def miditer(self, PHIter, conv):
         return
 
