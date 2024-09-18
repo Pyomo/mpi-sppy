@@ -17,6 +17,8 @@ from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
@@ -106,8 +108,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
-
-    fwph = cfg.fwph
 
     all_scenario_names, all_nodenames = _name_lists(module, cfg)    
 
@@ -282,6 +282,8 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         results = solver.solve(tee=cfg.tee_EF)
     else:
         results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True,)
+    if not pyo.check_optimal_termination(results):
+        print("Warning: non-optimal solver termination")
 
     global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
     if cfg.solution_base_name is not None:
@@ -297,8 +299,8 @@ def _model_fname():
                            "--module-name foo\n"
                            "or\n"
                            "--module-name=foo")
-    def _len_check(l):
-        if len(sys.argv) <= l:
+    def _len_check(needed_length):
+        if len(sys.argv) <= needed_length:
             _bad_news()
         else:
             return True
@@ -327,7 +329,8 @@ if __name__ == "__main__":
     # TBD: when agnostic is merged, use the function and delete the code lines
     # module = sputils.module_name_to_module(model_fname)
     # TBD: do the sys.path.append trick in sputils 
-    import importlib, inspect
+    import importlib
+    import inspect
     if inspect.ismodule(model_fname):
         module = model_fname
     else:

@@ -271,7 +271,7 @@ def gap_estimators(xhat_one,
     '''
     global_toc("Enter gap_estimators")
     if solving_type not in ["EF_2stage","EF_mstage"]:
-        print(f"solving type=", solving_type)
+        print("solving type=", solving_type)
         raise RuntimeError("Only EF solve for the approximate problem is supported yet.")
     else:
         is_multi = (solving_type=="EF_mstage")
@@ -398,7 +398,7 @@ def gap_estimators(xhat_one,
                             all_nodenames = all_nodenames,mpicomm=mpicomm)
     #Evaluating xhat and xstar and getting the value of the objective function 
     #for every (local) scenario
-    zn_hat=ev.evaluate(xhats)
+    ev.evaluate(xhats)
     objs_at_xhat = ev.objs_dict
     zn_star=ev.evaluate(xstars)
     objs_at_xstar = ev.objs_dict

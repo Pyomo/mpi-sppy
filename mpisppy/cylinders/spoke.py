@@ -9,12 +9,10 @@
 import numpy as np
 import abc
 import enum
-import logging
 import time
 import os
 import math
 
-import mpisppy.utils.sputils as sputils
 
 from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
@@ -231,7 +229,7 @@ class _BoundNonantLenSpoke(_BoundSpoke):
             raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
 
         if len(self.opt.local_scenarios) == 0:
-            raise RuntimeError(f"Rank has zero local_scenarios")
+            raise RuntimeError("Rank has zero local_scenarios")
 
         vbuflen = 2
         for s in self.opt.local_scenarios.values():

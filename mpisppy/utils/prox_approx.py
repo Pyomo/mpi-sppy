@@ -8,7 +8,6 @@
 ###############################################################################
 
 from math import isclose
-from pyomo.environ import value
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2

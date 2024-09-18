@@ -77,7 +77,6 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                 print("  xhat_xbar: " + msg)
 
         obj = None
-        sname = None
 
         _vb("Enter XhatXbar.xhat_tryit")
 
@@ -100,7 +99,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             self.opt._restore_nonants()
             return None
         else:
-            if verbose and src_rank == self.cylinder_rank:
+            if verbose and self.cylinder_rank == 0:
                 print("   Feasible xhat found at xbar")
             obj = self.opt.Eobjective(verbose=verbose)
             if restore_nonants:

@@ -16,9 +16,7 @@ import sys
 import collections
 import numpy as np
 import mpisppy.MPI as mpi
-import time
 import datetime as dt
-import threading
 import logging
 import mpisppy.utils.listener_util.listener_util as listener_util
 
@@ -194,7 +192,6 @@ def side_gig(synchro, msg = None):
     
     # Normally, the concats would be created once in an __init__, btw.
     local_concat = {"SecondReduce": {"ROOT": np.zeros(1, dtype='d')}}
-    global_concat = {"SecondReduce": {"ROOT": np.zeros(1, dtype='d')}}
     local_concat["SecondReduce"]["ROOT"][0] = rank
     # We can (and should) do a dangerous put in the side_gig because
     # the listener will have the lock. If the worker gets to its compute_global
@@ -217,15 +214,15 @@ if len(sys.argv) != 4:
    raise RuntimeError(usemsg)
 try:
     iters = int(sys.argv[1])
-except:
+except Exception:
    raise RuntimeError(sys.argv[1]+" is not a valid iters\n"+usemsg)    
 try:
     sleep = float(sys.argv[2])
-except:
+except Exception:
    raise RuntimeError(sys.argv[2]+" is not a valid sleep\n"+usemsg)
 try:
     seed = int(sys.argv[3])
-except:
+except Exception:
    raise RuntimeError(sys.argv[3]+" is not a valid seed\n"+usemsg)    
 
 sting = 1 # standard devation
@@ -234,7 +231,7 @@ np.random.seed(seed)
 # Note: at this point the first reduce is the only reduce
 Lens = collections.OrderedDict({"FirstReduce": {"ROOT": 2+n_proc}})
 if rank == 0:
-    logging.debug("iters %d, sleep %f, seed %d".format((iters, sleep, seed)))
+    logging.debug("iters %d, sleep %f, seed %d" % (iters, sleep, seed))
 # "ROOT" is required to be the name of the global comm
 synchronizer = listener_util.Synchronizer(comms = {"ROOT": fullcomm},
                                        Lens = Lens,

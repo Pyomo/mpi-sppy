@@ -9,36 +9,19 @@
 # Code to compute gradient cost and rhos from the gradient. It also provides a corresponding rho setter.
 # To test: /examples/farmer/farmer_rho_demo.py
 
-import sys
-import os
 import inspect
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
-import logging
-import numpy as np
-import math
 import importlib
 import csv
-import inspect
-import typing
 import copy
-import time
 
-import mpisppy.log
-from mpisppy import global_toc
-from mpisppy import MPI
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.confidence_intervals.ciutils as ciutils
 from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
-import mpisppy.utils.wxbarutils as wxbarutils
-import mpisppy.utils.rho_utils as rho_utils
 import mpisppy.utils.find_rho as find_rho
-import mpisppy.phbase as phbase
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -95,10 +78,9 @@ class Find_Grad():
         relax_int.apply_to(scenario)
         nlp = PyomoNLP(scenario)
 
-        nlp_vars = nlp.get_pyomo_variables()
         try:
             grad = nlp.evaluate_grad_objective()
-        except:
+        except Exception:
             raise RuntimeError("Cannot compute the gradient")
         grad = nlp.evaluate_grad_objective()
         grad_dict = {ndn_i: -grad[ndn_i[1]]
@@ -122,7 +104,6 @@ class Find_Grad():
         self.ph_object.disable_W_and_prox()
         xhatfile = self.cfg.xhatpath
         xhat = ciutils.read_xhat(xhatfile)
-        xhat_one = xhat["ROOT"]
         self.ph_object._save_nonants()
         self.ph_object._fix_nonants(xhat)
         self.ph_object.solve_loop()
@@ -139,7 +120,6 @@ class Find_Grad():
                        for (ix, var) in enumerate(node.nonant_vardata_list)}
         comm = self.ph_object.comms['ROOT']
         costs = comm.gather(local_costs, root=0)
-        rank = self.ph_object.cylinder_rank
         if (self.ph_object.cylinder_rank == 0):
             self.c = {key: val 
                       for cost in costs
@@ -241,11 +221,12 @@ def grad_cost_and_rho(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
-    if  (original_cfg.grad_rho_file_out == '') and (original_cfg.grad_cost_file_out == ''): raise RuntimeError ("TBD: work not finished")
+    if  (original_cfg.grad_rho_file_out == '') and (original_cfg.grad_cost_file_out == ''):
+        raise RuntimeError ("Presently, grad-rho-file-out and grad-cost-file cannot both be empty")
 
     try:
         model_module = importlib.import_module(mname)
-    except:
+    except Exception:
         raise RuntimeError(f"Could not import module: {mname}")
     cfg = copy.deepcopy(original_cfg)
     cfg.max_iterations = 0 #we only need x0 here

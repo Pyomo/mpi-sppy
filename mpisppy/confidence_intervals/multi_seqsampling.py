@@ -10,27 +10,23 @@
 # This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.
 
-import pyomo.environ as pyo
 import pyomo.common.config as pyofig
 import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 from mpisppy.utils import config
 import numpy as np
-import scipy.stats
-import importlib
 from mpisppy import global_toc
     
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
-
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
 from mpisppy.tests.examples.aircond import xhat_generator_aircond
 import mpisppy.confidence_intervals.sample_tree as sample_tree
-import mpisppy.confidence_intervals.ciutils as ciutils
+
+fullcomm = mpi.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 class IndepScens_SeqSampling(SeqSampling):
     def __init__(self,
@@ -114,7 +110,6 @@ class IndepScens_SeqSampling(SeqSampling):
         #----------------------------Step 3 -------------------------------------#       
             k+=1
             nk_m1 = nk #n_{k-1}
-            mk_m1 = mk
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
             
             #Computing m_k and associated scenario names

@@ -14,10 +14,6 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
     converger_spoke_char = 'G'
 
     def main(self):
-        # The rho_setter should be attached to the opt object
-        rho_setter = None
-        if hasattr(self.opt, 'rho_setter'):
-            rho_setter = self.opt.rho_setter
         extensions = self.opt.extensions is not None
         verbose = self.opt.options['verbose']
 

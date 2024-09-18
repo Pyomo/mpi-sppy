@@ -181,7 +181,6 @@ class WTracker():
                    f" offsetback {offsetback}\n")
         else:
             print(f"{np.shape(self.local_Ws)}")
-            wlist = dict()
             for i in range(fi+1, li+1):
                 for sname, _ in self.PHB.local_scenarios.items():
                     sgn_curr_iter = np.sign(np.array(self.local_Ws[fi][sname]))

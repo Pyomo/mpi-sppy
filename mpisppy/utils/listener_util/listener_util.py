@@ -20,7 +20,6 @@ import numpy as np
 import collections
 import mpisppy.MPI as mpi
 import time
-import cProfile
 import threading
 import logging
 
@@ -96,15 +95,15 @@ class Synchronizer(object):
             #ph.setDaemon(True)
 
             listenargs = [self._rank, self]
-            l = threading.Thread(name='listener',
+            listener = threading.Thread(name='listener',
                                  target=Synchronizer.listener_daemon,
                                  args=listenargs)
-            #l.setDaemon(True)
+            #listener.setDaemon(True)
 
-            l.start()
+            listener.start()
             wthread.start()
 
-            l.join()
+            listener.join()
         else:
             self.work_fct(*args, **kwargs)
 

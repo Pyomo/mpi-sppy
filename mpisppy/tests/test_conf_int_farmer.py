@@ -15,8 +15,6 @@ import os
 import tempfile
 import numpy as np
 import unittest
-import subprocess
-import importlib
 
 import pyomo.environ as pyo
 import mpisppy.MPI as mpi
@@ -25,7 +23,6 @@ from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.tests.examples.farmer as farmer
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
-import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
 import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
@@ -91,6 +88,7 @@ class Test_confint_farmer(unittest.TestCase):
                           cfg,
                           xhat,
                           cfg['num_batches'], batch_size = cfg["batch_size"], start = cfg['num_scens'])
+        assert MMW is not None
     
     def test_xhat_read_write(self):
         path = tempfile.mkstemp(prefix="xhat",suffix=".npy")[1]
@@ -111,6 +109,7 @@ class Test_confint_farmer(unittest.TestCase):
         ama_object = ama.from_module(self.refmodelname,
                                      cfg=ama_options,
                                      use_command_line=False)   
+        assert ama_object is not None
         
     def test_seqsampling_creator(self):
         optionsBM = config.Config()
@@ -168,6 +167,7 @@ class Test_confint_farmer(unittest.TestCase):
                        scenario_denouement=None,
                        scenario_creator_kwargs=scenario_creator_kwargs
                        )
+        assert ev is not None
         
     @unittest.skipIf(not solver_available,
                      "no solver is available")      

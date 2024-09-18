@@ -9,17 +9,14 @@
 # updated 23 April 2020
 # Serial (not cylinders)
 
-import os
 import sys
 import pyomo.environ as pyo
 import mpisppy.phbase
 import mpisppy.opt.ph
-import mpisppy.scenario_tree as scenario_tree
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.extensions.xhatlooper import XhatLooper
-from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.extensions.avgminmaxer import MinMaxAvg
 from mpisppy.extensions.wtracker_extension import Wtracker_extension
 from sizes import scenario_creator, \
                   scenario_denouement, \
@@ -120,7 +117,6 @@ if __name__ == "__main__":
     #quit()
 
     ############ test W and xbar writers and special joint reader  ############
-    from mpisppy.utils.wxbarwriter import WXBarWriter
     
     newph = mpisppy.opt.ph.PH(
         options,
@@ -135,7 +131,6 @@ if __name__ == "__main__":
 
     conv, obj, tbound = newph.ph_main()
     #####
-    from mpisppy.utils.wxbarreader import WXBarReader
     
     newph = mpisppy.opt.ph.PH(
         options,
@@ -198,7 +193,6 @@ if __name__ == "__main__":
     )
     ph.options["PHIterLimit"] = 3
 
-    from mpisppy.extensions.avgminmaxer import MinMaxAvg
     options["avgminmax_name"] =  "FirstStageCost"
     conv, obj, bnd = ph.ph_main()
 

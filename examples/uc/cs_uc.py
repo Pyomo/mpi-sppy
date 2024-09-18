@@ -9,7 +9,6 @@
 import datetime
 import logging
 import sys
-import os
 import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
@@ -68,7 +67,7 @@ if __name__ == "__main__":
         ScenCount = int(sys.argv[1])
         bundles_per_rank = int(sys.argv[2])
         PHIterLimit = int(sys.argv[3])
-    except:
+    except Exception:
         _usage()
     if sys.argv[4] == "fixer":
         usefixer = True
@@ -118,7 +117,7 @@ if __name__ == "__main__":
         },
         "cross_scen_options":{"valid_eta_bound": {i:0 for i in all_scenario_names}},
     }
-    if usefixer == True:
+    if usefixer:
         multi_ext = {"ext_classes": [Fixer, Gapper]}
     else:
         multi_ext = {"ext_classes": [Gapper]}

@@ -36,7 +36,7 @@ def dill_unpickle(fname):
     return m
 
 
-def pickle_bundle_parser(cfg):
+def pickle_bundle_config(cfg):
     """ Add command line options for creation and use of "proper" bundles
     args:
         cfg (Config): the Config object to which we add"""

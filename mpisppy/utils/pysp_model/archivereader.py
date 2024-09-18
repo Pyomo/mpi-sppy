@@ -26,33 +26,13 @@ import os
 import tempfile
 import shutil
 import posixpath
+from pyomo.common.dependencies import attempt_import
+zipfile, zipfile_available = attempt_import("zipfile")
+tarfile, tarfile_available = attempt_import("tarfile")
+gzip, gzip_available = attempt_import("gzip")
+bz2, bz2_available = attempt_import("bz2")
 
 _sep = '/'
-
-zipfile_available = False
-tarfile_available = False
-gzip_available = False
-bz2_available = False
-try:
-    import zipfile
-    zipfile_available = True
-except:
-    pass
-try:
-    import tarfile
-    tarfile_available = True
-except:
-    pass
-try:
-    import gzip
-    gzip_available = True
-except:
-    pass
-try:
-    import bz2
-    bz2_available = True
-except:
-    pass
 
 _WindowsError = None
 try:
@@ -111,7 +91,7 @@ class ArchiveReader:
             raise ImportError("zipfile support is disabled")
         try:
             return zipfile.is_zipfile(ArchiveReader.normalize_name(name))
-        except:
+        except Exception:
             return False
 
     @staticmethod

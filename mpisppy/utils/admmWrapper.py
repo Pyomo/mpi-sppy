@@ -9,8 +9,6 @@
 #creating the class AdmmWrapper
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
-import mpisppy
-from collections import OrderedDict
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -28,7 +26,7 @@ def _consensus_vars_number_creator(consensus_vars):
     consensus_vars_number={}
     for subproblem in consensus_vars:
         for var in consensus_vars[subproblem]:
-            if not var in consensus_vars_number: # instanciates consensus_vars_number[var]
+            if var not in consensus_vars_number: # instanciates consensus_vars_number[var]
                 consensus_vars_number[var] = 0
             consensus_vars_number[var] += 1
     for var in consensus_vars_number:

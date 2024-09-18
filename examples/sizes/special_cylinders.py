@@ -7,8 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 # ** special **
-import sys
-import copy
 import special_sizes as sizes
 
 from mpisppy.spin_the_wheel import WheelSpinner

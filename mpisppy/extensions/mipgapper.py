@@ -11,7 +11,6 @@
     extension.
 """
 
-import pyomo.environ as pyo
 import mpisppy.extensions.extension
 
 class Gapper(mpisppy.extensions.extension.Extension):

@@ -9,14 +9,8 @@
 # Use the aircond model to illustrate how to use sequential sampling.
 #
 
-import sys
 import numpy as np
-import argparse
 import mpisppy.tests.examples.aircond as aircond
-import pyomo.environ as pyo
-import pyomo.common.config as pyofig
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.confidence_config as conf_config
 from mpisppy.utils import config
@@ -29,19 +23,10 @@ def main(cfg):
         results (dict): the solution, gap confidence interval and T 
     """
     refmodelname = "mpisppy.tests.examples.aircond"
-    scenario_creator = aircond.scenario_creator
 
     BFs = cfg.branching_factors
     num_scens = np.prod(BFs)
 
-    scenario_creator_kwargs = {"num_scens" : num_scens,
-                               "branching_factors": BFs,
-                               "mu_dev": cfg.mu_dev,
-                               "sigma_dev": cfg.sigma_dev,
-                               "start_ups": cfg.start_ups,
-                               "start_seed": cfg.seed,
-                               }
-    
     scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
     
     xhat_gen_kwargs = {"scenario_names": scenario_names,
@@ -114,7 +99,7 @@ def _parse_args():
     if cfg.BM_vs_BPL is None:
         raise RuntimeError("--BM-vs-BPL must be given.")
     if cfg.BM_vs_BPL != "BM" and cfg.BM_vs_BPL != "BPL":
-        raise RuntimeError(f"--BM-vs-BPL must be BM or BPL (you gave {args.BM_vs_BMPL})")
+        raise RuntimeError(f"--BM-vs-BPL must be BM or BPL (you gave {cfg.BM_vs_BPL})")
 
     return cfg
 
@@ -124,7 +109,7 @@ if __name__ == '__main__':
     cfg.quick_assign("EF_mstage", bool, True)
 
     results = main(cfg)
-    print(f"Final gap confidence interval results:", results)
+    print("Final gap confidence interval results:", results)
 
     if cfg.xhat1_file is not None:
         print(f"Writing xhat1 to {cfg.xhat1_file}.npy")

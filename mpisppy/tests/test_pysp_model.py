@@ -1,4 +1,4 @@
-###############################################################################
+##############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 #
 # Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
@@ -43,6 +43,7 @@ class Test_sizes_abstract(unittest.TestCase):
                                   pysp_sizes.scenario_creator,
                                   lambda *args : None,
                                   )
+        assert ph is not None
 
     def test_ef_constructor(self):
         pysp_sizes = self.pysp_sizes3
@@ -52,6 +53,7 @@ class Test_sizes_abstract(unittest.TestCase):
             pysp_sizes.all_scenario_names,
             pysp_sizes.scenario_creator,
         )
+        assert ef is not None
 
     
     @unittest.skipIf(not solver_available,
@@ -66,6 +68,7 @@ class Test_sizes_abstract(unittest.TestCase):
             pysp_sizes.scenario_creator,
         )
         results = ef.solve_extensive_form(tee=False)
+        pyo.assert_optimal_termination(results)
         sig2eobj = round_pos_sig(pyo.value(ef.ef.EF_Obj),2)
         self.assertEqual(220000.0, sig2eobj)
 

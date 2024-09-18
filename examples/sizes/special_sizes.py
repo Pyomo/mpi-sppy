@@ -21,7 +21,7 @@ def scenario_creator(scenario_name, scenario_count=None):
     datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"
-    except:
+    except Exception:
         print("FAIL: datadir=", datadir, " scenario_name=", scenario_name)
 
     model = ref.model.create_instance(fname)

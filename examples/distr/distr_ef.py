@@ -13,7 +13,6 @@
 import mpisppy.utils.admmWrapper as admmWrapper
 import distr
 import distr_data
-import mpisppy.cylinders
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils

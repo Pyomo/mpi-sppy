@@ -20,7 +20,7 @@ def scenario_creator(scenario_name, scenario_count=None):
     datadir = os.sep.join((sizes_dir, f"SIZES{scenario_count}"))
     try:
         fname = datadir + os.sep + scenario_name + ".dat"
-    except:
+    except Exception:
         print("FAIL: datadir=", datadir, " scenario_name=", scenario_name)
 
     model = ref.model.create_instance(fname)
@@ -57,7 +57,7 @@ def inparser_adder(cfg):
 def kw_creator(cfg):
     # (for Amalgamator): linked to the scenario_creator and inparser_adder
     if cfg.num_scens not in (3, 10):
-        raise RuntimeError(f"num_scen must the 3 or 10; was {num_scen}")    
+        raise RuntimeError(f"num_scen must the 3 or 10; was {cfg.num_scen}")    
     kwargs = {"scenario_count": cfg.num_scens}
     return kwargs
 

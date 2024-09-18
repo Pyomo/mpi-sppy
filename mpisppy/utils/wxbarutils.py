@@ -41,7 +41,6 @@
 import os
 import numpy as np
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 
 ''' W utilities '''
 

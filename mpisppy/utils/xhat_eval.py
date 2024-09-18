@@ -11,10 +11,8 @@
 
 import inspect
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 import logging
 import numpy as np
-import math
 
 import mpisppy.log
 from mpisppy import MPI
@@ -208,7 +206,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if not k in self.objs_dict:
+            if k not in self.objs_dict:
                 raise RuntimeError(f"No value has been calculated for the scenario {k}")
             local_Eobjs.append(s._mpisppy_probability * fct(self.objs_dict[k]))
         local_Eobjs = np.array(local_Eobjs)
@@ -241,7 +239,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         k = scenario_name
-        pyomo_solve_time = self.solve_one(solver_options,k, s,
+        self.solve_one(solver_options,k, s,
                                           dtiming=False,
                                           verbose=self.verbose,
                                           tee=False,

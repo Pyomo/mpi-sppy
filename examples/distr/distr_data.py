@@ -14,6 +14,10 @@
 # First there is a hard wired data_set, then there is a scalable dataset
 
 # Hardwired data sets
+import json
+import re
+import numpy as np
+
 
 def inter_region_dict_creator(num_scens):
     """Creates the oriented arcs between the regions, with their capacities and costs. \n
@@ -184,7 +188,6 @@ def region_dict_creator(scenario_name):
 
     return region_dict
 
-import json
 if __name__ == "__main__":
     #creating the json files
     for num_scens in range(2,5):
@@ -205,9 +208,6 @@ if __name__ == "__main__":
 
 ########################################################################################################################
 # Scalable datasets
-
-import re
-import numpy as np
 
 def parse_node_name(name):
     """ decomposes the name, for example "DC1_2 gives" "DC",1,2

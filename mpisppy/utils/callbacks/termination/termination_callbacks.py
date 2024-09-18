@@ -56,7 +56,7 @@ def set_termination_callback(solver_instance, termination_callback):
 
     if not tc.check_user_termination_callback_signature(termination_callback):
         raise RuntimeError(
-            f"Provided user termination callback did not match expected signature with 3 positional arguments"
+            "Provided user termination callback did not match expected signature with 3 positional arguments"
             )
 
     try:

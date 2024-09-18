@@ -17,7 +17,7 @@ def get_solver():
     for solver_name in solvers:
         try:
             solver_available = pyo.SolverFactory(solver_name).available()
-        except:
+        except Exception:
             solver_available = False
         if solver_available:
             break
@@ -28,7 +28,7 @@ def get_solver():
         persistent_solver_name = solver_name+"_persistent"
     try:
         persistent_available = pyo.SolverFactory(persistent_solver_name).available()
-    except:
+    except Exception:
         persistent_available = False
     
     return solver_available, solver_name, persistent_available, persistent_solver_name

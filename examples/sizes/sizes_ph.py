@@ -10,7 +10,6 @@
 # Serial (not cylinders)
 
 import sys
-import os
 import mpisppy.phbase
 import mpisppy.opt.ph
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger

@@ -10,7 +10,6 @@ from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
-from mpisppy import global_toc
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 
 import pyomo.environ as pyo
@@ -166,7 +165,6 @@ class CrossScenarioExtension(Extension):
         row_len = 1+1+self.nonant_len
         outer_iter = int(coefs[-1])
 
-        bundling = opt.bundling
         if opt.bundling:
             for bn,b in opt.local_subproblems.items():
                 persistent_solver = sputils.is_persistent(b._solver_plugin)
@@ -284,11 +282,14 @@ class CrossScenarioExtension(Extension):
                 _eta_init = { k: -v for k,v in valid_eta_bound.items() }
             else:
                 _eta_init = valid_eta_bound
-            _eta_bounds = lambda m,k : (_eta_init[k], None)
+            def _eta_bounds(m, k):
+                return _eta_init[k], None
         else:
             lb = (-sys.maxsize - 1) * 1. / len(opt.all_scenario_names)
-            _eta_init = lambda m,k : lb
-            _eta_bounds = lambda m,k : (lb, None)
+            def _eta_init(m, k):
+                return lb
+            def _eta_bounds(m, k):
+                return lb, None
 
         # eta is attached to each subproblem, regardless of bundles
         bundling = opt.bundling

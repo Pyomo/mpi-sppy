@@ -25,7 +25,7 @@ try:
     if not solver_avail:
         print(f"Cannot find solver {sys.argv[1]}")
         sys.exit()
-except:
+except Exception:
     print(f"Cannot find solver {sys.argv[1]}")
     _print_usage()
     sys.exit()

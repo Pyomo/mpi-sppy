@@ -149,11 +149,9 @@ class TreeNode():
             self.kids = []
             if self.stage < TreeInfo.NumStages:
                 bf = TreeInfo.BFs[self.stage-1]
-                snstr = "_sn"+str(self.sn)
                 self.sn += 1 # serial number for non-leaf, non-ROOT nodes
             else:
                 bf = 1  # leaf node
-                snstr = ""
             for b in range(bf):
                 # divide up the scenario list
                 plist = self.ScenarioList # typing aid

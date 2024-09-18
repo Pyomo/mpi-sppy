@@ -23,9 +23,7 @@
 
 import pyomo.environ as pyo
 import numpy as np
-import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 
 # Use this random stream:
 farmerstream = np.random.RandomState()

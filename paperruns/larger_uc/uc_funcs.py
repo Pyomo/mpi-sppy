@@ -11,7 +11,6 @@ import os
 
 from pyomo.dataportal import DataPortal
 
-import mpisppy.scenario_tree as scenario_tree
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
@@ -106,7 +105,6 @@ def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
     computed_rhos = []
     for t in scenario_instance.TimePeriods:
         for g in scenario_instance.ThermalGenerators:
-            max_capacity = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
             min_power = pyo.value(scenario_instance.MinimumPowerOutput[g,t])
             max_power = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
             avg_power = min_power + ((max_power - min_power) / 2.0)
@@ -139,7 +137,7 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
                                     rho_scale_factor=rho_scale_factor)
     try:
         trial_rhos = _get_saved_rhos(fname)
-    except:
+    except Exception:
         raise RuntimeError('Formatting issue in specified rho file ' + fname +
                            '. Format should be (variable_name,rho_value) for '
                            'each row, with no blank lines, and no '
@@ -150,7 +148,6 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
         for t in sorted(scenario_instance.TimePeriods):
             for g in sorted(scenario_instance.ThermalGeneratorsAtBus[b]):
                 var = scenario_instance.UnitOn[g,t]
-                computed_rho = computed_rhos[index]
                 try:
                     trial_rho = trial_rhos[var.name]
                 except KeyError:

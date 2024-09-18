@@ -6,8 +6,6 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import sys
-import copy
 import sizes
 
 from mpisppy.utils import config

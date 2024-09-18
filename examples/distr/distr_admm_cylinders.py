@@ -10,16 +10,15 @@
 import mpisppy.utils.admmWrapper as admmWrapper
 import distr_data
 import distr
-import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import MPI
-global_rank = MPI.COMM_WORLD.Get_rank()
-
 import time
+
+global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False
 

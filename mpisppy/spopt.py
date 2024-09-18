@@ -20,7 +20,6 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 
-from mpisppy import global_toc
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
 
@@ -89,7 +88,7 @@ class SPOpt(SPBase):
                 else:
                     try:
                         float(pyo.value(v))
-                    except:
+                    except Exception:
                         raise RuntimeError(
                             f"Non-anticipative variable {v.name} on scenario {s.name} "
                             "reported as stale. This usually means this variable "
@@ -749,7 +748,7 @@ class SPOpt(SPBase):
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
                 vardata._value = s._mpisppy_data.original_nonants[ci]
                 vardata.fixed = s._mpisppy_data.original_fixedness[ci]
-                if persistent_solver != None:
+                if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
 
 
@@ -922,7 +921,7 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
             break
         # pyomo presently has no general way to trap a license acquisition
         # error - so we're stuck with trapping on "any" exception. not ideal.
-        except:
+        except Exception:
             if num_retry_attempts == 0:
                 print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
             else:

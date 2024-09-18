@@ -11,11 +11,8 @@
 # but only update when convergence improves
 # Preference given to user-supplied converger
 
-import math
 import mpisppy.extensions.extension
 
-import numpy as np
-import mpisppy.MPI as MPI
 
 # for ph.options['mult_rho_options']:
 _mult_rho_defaults = { 'convergence_tolerance' : 1e-4,
@@ -59,7 +56,7 @@ class MultRhoUpdater(mpisppy.extensions.extension.Extension):
 
             
     def _attach_rho_ratio_data(self, ph, conv):
-        if conv == None or conv == self._tol:
+        if conv is None or conv == self._tol:
             return
         self.first_c = conv
         if not self.ph.multistage:

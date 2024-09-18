@@ -23,8 +23,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 # the problem
 import ACtree as etree
 from ccopf_multistage import pysp2_callback,\
-    scenario_denouement, _md_dict, FixFast, FixNever, FixGaussian
-import rho_setter
+    scenario_denouement, _md_dict, FixFast
 
 import pyomo.environ as pyo
 import socket

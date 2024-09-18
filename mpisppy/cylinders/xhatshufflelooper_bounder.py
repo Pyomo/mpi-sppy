@@ -6,12 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import os
-import time
 import logging
 import random
 import mpisppy.log
-import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 
 from mpisppy.utils.xhat_eval import Xhat_Eval
@@ -29,7 +26,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatbase_prep(self):
 
-        verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
@@ -92,7 +88,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         return update
 
     def main(self):
-        verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhatbase_prep()

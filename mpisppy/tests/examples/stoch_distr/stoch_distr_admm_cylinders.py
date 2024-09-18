@@ -18,7 +18,6 @@
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 # import stoch_distr ## It is necessary for the test to have the full direction
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
-import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils

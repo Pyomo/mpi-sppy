@@ -247,7 +247,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
 
 
 def _scenario_number(stoch_scenario_name, demand=None):
-    if demand == None:
+    if demand is None:
         scennum = sputils.extract_num(stoch_scenario_name)
     else: # 3-stage
         production_num = int(re.search(r'\d+', stoch_scenario_name).group())
@@ -417,7 +417,7 @@ def branching_factors_creator(num_stoch_scens, num_stage):
     # BFs is only used with multiple stages
     if num_stage == 3:
         # There should always be a high demand and a low demand version
-        assert num_stoch_scens % 2 == 0, f"there should be an even number of stochastic scenarios for this 3 stage problem, but it is odd"
+        assert num_stoch_scens % 2 == 0, "there should be an even number of stochastic scenarios for this 3 stage problem, but it is odd"
         BFs = [num_stoch_scens//2, 2]
     elif num_stage == 2:
         BFs = None # No need to use branching factors (or even to define them with two stage problems)
@@ -496,12 +496,12 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
         vstr = f"y[{dummy_node}]" #variable name as string, y is the slack
 
         #adds dummy_node in the source region
-        if not region_source in consensus_vars: #initiates consensus_vars[region_source]
+        if region_source not in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
         consensus_vars[region_source].append((vstr,num_stage))
 
         #adds dummy_node in the target region
-        if not region_target in consensus_vars: #initiates consensus_vars[region_target]
+        if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append((vstr,num_stage))
     # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
@@ -514,7 +514,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
             for var in node.nonant_list:
                 #print(f"{admm_subproblem_name=}")
                 #print(f"{var.name=}")
-                if not var.name in consensus_vars[admm_subproblem_name]:
+                if var.name not in consensus_vars[admm_subproblem_name]:
                     consensus_vars[admm_subproblem_name].append((var.name, node.stage))
     return consensus_vars
 

@@ -8,15 +8,11 @@
 ###############################################################################
 
 import os
-import time
 import numpy as np
-import pyomo.environ as pyo
 
-import mpisppy.MPI as MPI
 import mpisppy.extensions.extension
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
-import mpisppy.utils.sputils as sputils
 from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 

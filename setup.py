@@ -7,9 +7,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import glob
 import sys
-import os
 
 # We raise an error if trying to install with python2
 if sys.version[0] == '2':

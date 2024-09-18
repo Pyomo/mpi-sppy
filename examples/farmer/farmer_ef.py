@@ -80,6 +80,8 @@ def main_with_cfg():
         results = solver.solve(tee=True)
     else:
         results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
         
     return ef
 

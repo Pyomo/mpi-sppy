@@ -12,15 +12,13 @@ mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 
 """
 
-import os
 import unittest
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver
 
 __version__ = 0.1
 

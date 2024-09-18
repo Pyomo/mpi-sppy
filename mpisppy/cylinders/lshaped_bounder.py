@@ -6,16 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import logging
-import time
-import random
-import mpisppy.log
-import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 
 from math import inf
-from pyomo.opt import SolverFactory, SolverStatus, TerminationCondition
-from mpisppy.phbase import PHBase
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):

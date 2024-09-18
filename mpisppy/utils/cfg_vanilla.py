@@ -175,11 +175,11 @@ def extension_adder(hub_dict,ext_class):
     elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
         if hub_dict["opt_kwargs"]["extension_kwargs"] is None:
             hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes": []}
-        if not ext_class in hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]:
+        if ext_class not in hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]:
             hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"].append(ext_class)
     elif hub_dict["opt_kwargs"]["extensions"] != ext_class:
         #ext_class is the second extension
-        if not "extensions_kwargs" in hub_dict["opt_kwargs"]:
+        if "extensions_kwargs" not in hub_dict["opt_kwargs"]:
             hub_dict["opt_kwargs"]["extension_kwargs"] = {}
         hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"] = \
             [hub_dict["opt_kwargs"]["extensions"], ext_class]

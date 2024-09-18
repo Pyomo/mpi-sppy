@@ -10,9 +10,7 @@
 # Not all extension points are guaranteed to be here (see the parent class)
 
 
-import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.xhatbase
-import mpisppy.phbase as phbase
 
 class TestExtension(mpisppy.extensions.extension.Extension):
     """

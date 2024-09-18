@@ -13,7 +13,6 @@ import os
 import sys
 import socket
 import datetime as dt
-import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
@@ -161,17 +160,17 @@ if __name__ == "__main__":
         quit()
     try:
         bunper = int(sys.argv[2])
-    except:
+    except Exception:
         print(msg, "\n    bad number of bundles per rank=", sys.argv[2])
         quit()
     try:
         maxit = int(sys.argv[3])
-    except:
+    except Exception:
         print(msg, "\n    bad max iterations=", sys.argv[3])
         quit()
     try:
         rho = int(sys.argv[4])
-    except:
+    except Exception:
         print(msg, "\n    bad rho=", sys.argv[4])
         quit()
 

@@ -11,7 +11,6 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import examples.distr.distr_data as distr_data
 import numpy as np
-import re
 
 # In this file, we create a (linear) inter-region minimal cost distribution problem.
 # Our data, gives the constraints inside each in region in region_dict_creator
@@ -234,12 +233,12 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
         vstr = f"flow[{arc}]" #variable name as string, y is the slack
 
         #adds inter_region_arcs in the source region
-        if not region_source in consensus_vars: #initiates consensus_vars[region_source]
+        if region_source not in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
         consensus_vars[region_source].append((vstr,2))
 
         #adds inter_region_arcs in the target region
-        if not region_target in consensus_vars: #initiates consensus_vars[region_target]
+        if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append((vstr,2))
 
@@ -258,7 +257,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, inter_reg
         model = scenario_creator(admm_stoch_subproblem_scenario_name, inter_region_dict=inter_region_dict, cfg=cfg, data_params=data_params, all_nodes_dict=all_nodes_dict)
         for node in model._mpisppy_node_list:
             for var in node.nonant_list:
-                if not var.name in consensus_vars[admm_subproblem_name]:
+                if var.name not in consensus_vars[admm_subproblem_name]:
                     consensus_vars[admm_subproblem_name].append((var.name, node.stage))
     return consensus_vars
 
@@ -321,7 +320,7 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     """
     # Method specific to our example and because the admm_subproblem_name and stoch_scenario_name don't include "_"
     splitted = admm_stoch_subproblem_scenario_name.split('_')
-    assert (len(splitted) == 4), f"no underscore should be attached to admm_subproblem_name nor stoch_scenario_name"
+    assert (len(splitted) == 4), "no underscore should be attached to admm_subproblem_name nor stoch_scenario_name"
     admm_subproblem_name = splitted[2]
     stoch_scenario_name = splitted[3]
     return admm_subproblem_name, stoch_scenario_name

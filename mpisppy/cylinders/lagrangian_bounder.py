@@ -11,7 +11,6 @@ import mpisppy.cylinders.spoke
 class _LagrangianMixin:
 
     def lagrangian_prep(self):
-        verbose = self.opt.options['verbose']
         # Split up PH_Prep? Prox option is important for APH.
         # Seems like we shouldn't need the Lagrangian stuff, so attach_prox=False
         # Scenarios are created here
@@ -59,12 +58,8 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
         return self.lagrangian()
 
     def main(self):
-        # The rho_setter should be attached to the opt object
-        rho_setter = None
-        if hasattr(self.opt, 'rho_setter'):
-            rho_setter = self.opt.rho_setter
-        extensions = self.opt.extensions is not None
         verbose = self.opt.options['verbose']
+        extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
 

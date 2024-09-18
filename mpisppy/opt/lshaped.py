@@ -20,7 +20,7 @@ from mpisppy.utils.sputils import find_active_objective
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from mpisppy.spopt import set_instance_retry
 from pyomo.core import (
-    Objective, SOSConstraint, Constraint, Var
+    SOSConstraint, Constraint, Var
 )
 from pyomo.core.expr.visitor import identify_variables
 from pyomo.repn.standard_repn import generate_standard_repn
@@ -126,7 +126,7 @@ class LShapedMethod(spbase.SPBase):
         self.has_root_scens = self.root_scenarios is not None
 
         if self.store_subproblems:
-            self.subproblems = dict.fromkeys(scenario_names)
+            self.subproblems = {}
 
     def options_check(self):
         """ Check to ensure that the user-specified options are valid. Requried

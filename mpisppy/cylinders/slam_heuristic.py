@@ -8,18 +8,13 @@
 ###############################################################################
 import abc
 import logging
-import time
-import random
-import logging
 import mpisppy.log
 import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 import mpisppy.MPI as mpi
-import pyomo.environ as pyo
 import numpy as np
 
 from mpisppy.utils.xhat_eval import Xhat_Eval
-from math import inf
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.slam_heuristic",

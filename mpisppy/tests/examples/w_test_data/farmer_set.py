@@ -9,7 +9,6 @@
 # general example driver for farmer with cylinders
 
 import farmer
-import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -91,8 +90,6 @@ def main():
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
-
 
     multi_ext = {"ext_classes" : [WXBarWriter, WXBarReader]}
     

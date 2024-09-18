@@ -45,13 +45,13 @@ badguys = dict()
 def egret_avail():
     try:
         import egret
-    except:
+    except Exception:
         return False
 
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
+    path = str(egret.__path__)
+    left = path.find("'")
+    right = path.find("'", left+1)
+    egretrootpath = path[left+1:right]
 
     egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
     if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):
@@ -106,6 +106,8 @@ def time_one(ID, dirname, progname, np, argstring):
         if (i % 2) == 0:
             foo = i * i
             bar = str(i)+"!"
+    del foo
+    del bar
     finish = dt.now()
     refsecs = (finish-start).total_seconds()
 

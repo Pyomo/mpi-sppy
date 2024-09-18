@@ -8,15 +8,12 @@
 ###############################################################################
 # general example driver for the hydro example with cylinders
 
-import hydro
 import hydro_cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils.pysp_model import PySPModel
 
-import mpisppy.cylinders as cylinders
 
 write_solution = True
 

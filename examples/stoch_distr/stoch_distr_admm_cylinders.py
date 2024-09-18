@@ -13,7 +13,6 @@ import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
 import examples.distr.distr_data as distr_data
 import stoch_distr
-import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils

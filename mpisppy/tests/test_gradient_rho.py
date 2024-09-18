@@ -14,27 +14,17 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import os
-import glob
 import unittest
-import pandas as pd
 import csv
-import pyomo.environ as pyo
-import mpisppy.opt.ph
-import mpisppy.phbase
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.rho_utils as rho_utils
-import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
 
-from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
-from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.extensions.gradient_extension import Gradient_extension
 from mpisppy.extensions.extension import MultiExtension
 
@@ -103,7 +93,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.grad_object.write_grad_cost()
         try:
             os.remove(self.cfg.grad_cost_file_out)
-        except:
+        except Exception:
             raise RuntimeError('gradient.write_grad_cost() did not write a csv file')
     
     def test_find_grad_rho(self):
@@ -118,7 +108,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.grad_object.write_grad_rho()
         try:
             os.remove(self.cfg.grad_rho_file_out)
-        except:
+        except Exception:
             raise RuntimeError('gradient.compute_and_write_grad_rho() did not write a csv file')
 
     def test_grad_cost_and_rho(self):

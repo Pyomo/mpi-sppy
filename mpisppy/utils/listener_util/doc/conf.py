@@ -197,7 +197,7 @@ texinfo_documents = [
     (root_doc, 'listener_util', 'listener_util Documentation',
      author, 'listener_util', 'One line description of project.',
      'Miscellaneous'),
-
+]
 
 #autodoc_member_order = 'bysource'
 #autodoc_member_order = 'groupwise'

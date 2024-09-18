@@ -15,8 +15,6 @@
 # Solves the stochastic distribution problem 
 import stoch_distr
 import stoch_distr_admm_cylinders
-import examples.distr.distr_data as distr_data
-import mpisppy.cylinders
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils

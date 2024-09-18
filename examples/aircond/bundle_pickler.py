@@ -11,11 +11,7 @@
 # see try_pickles.bash
 # parallel version
 
-import sys
-import os
-import copy
 import numpy as np
-import itertools
 import mpisppy.tests.examples.aircondB as aircondB
 from mpisppy.utils import config
 from mpisppy.utils import pickle_bundle
@@ -31,7 +27,7 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 def _parse_args():
     cfg = config.Config()
     cfg.multistage()
-    pickle_bundle.pickle_bundle_parser(cfg)
+    pickle_bundle.pickle_bundle_config(cfg)
     aircondB.inparser_adder(cfg)
     cfg.parse_command_line("bundle_pickler for aircond")
 
@@ -55,8 +51,6 @@ def main():
 
     bsize = int(cfg.scenarios_per_bundle)
     numbuns = ScenCount // bsize
-    # we won't actually use all names
-    all_bundle_names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(numbuns)]
 
     if numbuns < n_proc:
         raise RuntimeError(

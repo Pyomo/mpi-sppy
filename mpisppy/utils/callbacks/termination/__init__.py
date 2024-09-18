@@ -7,6 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 from .termination_callbacks import (
-    supports_termination_callback,
-    set_termination_callback,
+    supports_termination_callback as supports_termination_callback,
+    set_termination_callback as set_termination_callback,
 )
