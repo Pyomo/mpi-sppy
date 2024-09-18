@@ -126,7 +126,7 @@ class LShapedMethod(spbase.SPBase):
         self.has_root_scens = self.root_scenarios is not None
 
         if self.store_subproblems:
-            self.subproblems = dict.fromkeys(scenario_names)
+            self.subproblems = {}
 
     def options_check(self):
         """ Check to ensure that the user-specified options are valid. Requried

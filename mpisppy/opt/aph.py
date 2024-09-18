@@ -241,8 +241,6 @@ class APH(ph_base.PHBase):
         
         uk = self.global_pusqnorm
         vk = self.global_pvsqnorm
-        wk = self.global_pwsqnorm
-        zk = self.global_pzsqnorm
         
         # Note June, 2023: We are waiting until we get values greater
         # than 0 for the norms. Iteration 3 is arbitrary
@@ -939,7 +937,6 @@ class APH(ph_base.PHBase):
                     break    
             if have_converger:
                 if self.convobject.is_converged():
-                    converged = True
                     if self.cylinder_rank == 0:
                         print("User-supplied converger determined termination criterion reached")
                     break
@@ -950,7 +947,7 @@ class APH(ph_base.PHBase):
                 self.extobject.miditer()
             
             teeme = ("tee-rank0-solves" in self.options) \
-                 and (self.options["tee-rank0-solves"] == True
+                 and (self.options["tee-rank0-solves"]
                       and self.cylinder_rank == 0)
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....

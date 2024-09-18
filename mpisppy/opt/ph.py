@@ -136,7 +136,7 @@ if __name__ == "__main__":
         try:
             shutil.rmtree("delme_diagdir")
             print ("...deleted delme_diagdir")
-        except:
+        except Exception:
             pass
     ph.options["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
     conv, obj, bnd = ph.ph_main()
