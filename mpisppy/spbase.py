@@ -625,7 +625,7 @@ class SPBase:
                         print("{0: ^{width}s}".format("-", width=value_field_len), end='')
                     else:
                         this_var_value = var_values[this_scenario, this_var]
-                        if (this_var_value == None) and (not print_zero_prob_values):
+                        if (this_var_value is None) and (not print_zero_prob_values):
                             print("{0: ^{width}s}".format("-", width=value_field_len), end='')
                         else:
                             print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')

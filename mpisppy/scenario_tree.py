@@ -9,10 +9,11 @@
 # scenario_tree.py; PySP 2.0 scenario structure
 # ALL INDEXES ARE ZERO-BASED
 import logging
-logger = logging.getLogger('mpisppy.scenario_tree')
 
 import pyomo.environ as pyo
 from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
+
+logger = logging.getLogger('mpisppy.scenario_tree')
 
 def build_vardatalist(self, model, varlist=None):
     """

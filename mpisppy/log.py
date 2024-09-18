@@ -61,13 +61,13 @@ def setup_logger(name, out, level=logging.DEBUG, mode='w', fmt=None):
     '''
     if fmt is None:
         fmt = "(%(asctime)s) %(message)s"
-    l = logging.getLogger(name)
-    l.setLevel(level)
-    l.propagate = False
+    log = logging.getLogger(name)
+    log.setLevel(level)
+    log.propagate = False
     formatter = logging.Formatter(fmt)
     if out in (sys.stdout, sys.stderr):
         handler = logging.StreamHandler(out)
     else: # out is a filename
         handler = logging.FileHandler(out, mode=mode) 
     handler.setFormatter(formatter)
-    l.addHandler(handler)
+    log.addHandler(handler)

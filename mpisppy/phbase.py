@@ -908,7 +908,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
                         scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
 
-        converged = False
         if have_converger:
             # Call the constructor of the converger object
             self.convobject = self.ph_converger(self)
@@ -990,12 +989,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             # latest data, even at termination
             if have_converger:
                 if self.convobject.is_converged():
-                    converged = True
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
             elif self.conv is not None:
                 if self.conv < self.options["convthresh"]:
-                    converged = True
                     global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
                     break
 

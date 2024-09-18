@@ -8,7 +8,7 @@
 ###############################################################################
 
 try:
-    from mpi4py.MPI import *
+    from mpi4py.MPI import *  # noqa: F403
     haveMPI = True
 
 except ImportError:
