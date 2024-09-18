@@ -192,8 +192,6 @@ def aircond_model_creator(demands, **kwargs):
     # create a single aircond model for the given demands
     # branching_factors=None, num_scens=None, mu_dev=0, sigma_dev=40, start_seed=0, start_ups=None):
     # typing aids...
-    start_seed = kwargs["start_seed"]
-
     start_ups = kwargs.get("start_ups", parms["start_ups"][1])
     
     model = pyo.ConcreteModel()
@@ -310,7 +308,6 @@ def MakeNodesforScen(model,nodenames,branching_factors,starting_stage=1):
         
 def scenario_creator(sname, **kwargs):
 
-    start_seed = kwargs['start_seed']
     if "branching_factors" not in kwargs:
         raise RuntimeError("scenario_creator for aircond needs branching_factors in kwargs")
     branching_factors = kwargs["branching_factors"]

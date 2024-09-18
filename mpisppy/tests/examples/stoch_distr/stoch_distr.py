@@ -247,7 +247,7 @@ def region_dict_creator(admm_subproblem_name): #in this precise example region_d
 
 
 def _scenario_number(stoch_scenario_name, demand=None):
-    if demand == None:
+    if demand is None:
         scennum = sputils.extract_num(stoch_scenario_name)
     else: # 3-stage
         production_num = int(re.search(r'\d+', stoch_scenario_name).group())

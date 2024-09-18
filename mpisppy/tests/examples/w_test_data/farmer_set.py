@@ -90,8 +90,6 @@ def main():
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
-
 
     multi_ext = {"ext_classes" : [WXBarWriter, WXBarReader]}
     
