@@ -1,4 +1,4 @@
-# ignore Pyomo models, PySP code
+# ignore old Pyomo models
 extend-exclude = [
     "ReferenceModel*.py",
     "./mpisppy/utils/callbacks/termination/tests/markshare2.py",

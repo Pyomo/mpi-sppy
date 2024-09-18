@@ -17,7 +17,7 @@ from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
-from mpisppy.convergers.norm_rho_converge import NormRhoConverger
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
