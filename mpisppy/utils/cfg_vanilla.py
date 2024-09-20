@@ -107,6 +107,9 @@ def ph_hub(
     options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
+    options["smoothed"] = 2 if cfg.smoothing else 0
+    options["defaultPHp"] = cfg.smoothing_rho_ratio
+    options["defaultPHbeta"] = cfg.smoothing_beta
 
     hub_dict = {
         "hub_class": PHHub,

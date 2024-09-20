@@ -104,12 +104,12 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         else:
             raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
-    if False:   # maybe later... cfg.use_norm_rho_converger:
+    if cfg.use_norm_rho_converger:
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
-    elif False:   # maybe later... cfg.primal_dual_converger:
+    elif cfg.primal_dual_converger:
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
