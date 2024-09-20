@@ -393,6 +393,28 @@ class Config(pyofig.ConfigDict):
                            default=1e-2)
 
 
+    def sep_rho_args(self):
+        self.add_to_config("sep_rho",
+                           description="have a SepRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("sep_rho_multiplier",
+                           description="multiplier for SepRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
+    def coeff_rho_args(self):
+        self.add_to_config("coeff_rho",
+                           description="have a CoeffRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("coeff_rho_multiplier",
+                           description="multiplier for CoeffRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
     def gapper_args(self):
 
         self.add_to_config('mipgaps_json',

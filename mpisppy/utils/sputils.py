@@ -16,6 +16,7 @@ import re
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
+from pyomo.repn import generate_standard_repn
 
 from mpisppy import MPI, haveMPI
 from pyomo.core.expr.numeric_expr import LinearExpression
@@ -951,6 +952,30 @@ def find_active_objective(pyomomodel):
                            "Objective for model '%s' (found %d objectives)"
                            % (pyomomodel.name, len(obj)))
     return obj[0]
+
+
+def nonant_cost_coeffs(s):
+    """
+    return a dictionary from s._mpisppy_data.nonant_indices.keys()
+    to the objective cost coefficient
+    """
+    objective = find_active_objective(s)
+
+    # initialize to 0
+    cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+    repn = generate_standard_repn(objective.expr, quadratic=False)
+    for coef, var in zip(repn.linear_coefs, repn.linear_vars):
+        if id(var) in s._mpisppy_data.varid_to_nonant_index:
+            cost_coefs[s._mpisppy_data.varid_to_nonant_index[id(var)]] = coef
+
+    for var in repn.nonlinear_vars:
+        if id(var) in s._mpisppy_data.varid_to_nonant_index:
+            raise RuntimeError(
+                "Found nonlinear variables in the objective function. "
+                f"Variable {var} has nonlinear interactions in the objective funtion"
+            )
+    return cost_coefs
+
 
 def create_nodenames_from_branching_factors(BFS):
     """

@@ -40,6 +40,8 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
+from mpisppy.extensions.sep_rho import SepRho
+from mpisppy.extensions.coeff_rho import CoeffRho
 from mpisppy.utils.wxbarreader import WXBarReader
 from mpisppy.utils.wxbarwriter import WXBarWriter
 
@@ -195,6 +197,16 @@ def add_fixer(hub_dict,
                                               "boundtol": cfg.fixer_tol,
                                               "id_fix_list_fct": cfg.id_fix_list_fct}
     return hub_dict
+
+def add_sep_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,SepRho)
+    hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier}
+
+
+def add_coeff_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,CoeffRho)
+    hub_dict["opt_kwargs"]["options"]["coeff_rho_options"] = {"multiplier" : cfg.coeff_rho_multiplier}
+
 
 def add_cross_scenario_cuts(hub_dict,
                             cfg,
