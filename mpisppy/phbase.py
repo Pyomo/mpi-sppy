@@ -827,8 +827,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 removed.
         """
 
-        # JPW: the pre iter0 callback should arguably be called not from within
-        #      the Iter0() method, but rather from something that calls it.
         if (self.extensions is not None):
             self.extobject.pre_iter0()
         
