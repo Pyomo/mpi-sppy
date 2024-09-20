@@ -87,10 +87,15 @@ class Extension:
         pass
 
     def pre_iter0(self):
-        ''' Method called at the end of PH_Prep().
-            When this method is called, all scenarios have been created, and
+        ''' When this method is called, all scenarios have been created, and
             the dual/prox terms have been attached to the objective, but the
             solvers have not yet been created.
+        '''
+        pass
+
+    def iter0_post_solver_creation(self):
+        ''' When this method is called, PH iteration 0 has been initiated and 
+            all solver objects have been created.
         '''
         pass
 
