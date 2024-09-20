@@ -1,19 +1,24 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Author:  D.L. Woodruff 2023
 """
 mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 
 """
 
-import os
 import unittest
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver,round_pos_sig
+from mpisppy.tests.utils import get_solver
 
 __version__ = 0.1
 

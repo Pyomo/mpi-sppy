@@ -1,22 +1,25 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # Code to evaluate a given x-hat given as a nonant-cache, and the MMW confidence interval.
 
 import mpisppy.MPI as mpi
-import argparse
 import numpy as np
 import scipy.stats
 import importlib
-import os
 from mpisppy import global_toc
     
+import mpisppy.utils.amalgamator as ama
+import mpisppy.confidence_intervals.ciutils as ciutils
+
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
-
-import mpisppy.utils.amalgamator as ama
-import mpisppy.utils.xhat_eval as xhat_eval
-import mpisppy.utils.sputils as sputils
-import mpisppy.confidence_intervals.ciutils as ciutils
 
 def remove_None(d):
     if d is None:

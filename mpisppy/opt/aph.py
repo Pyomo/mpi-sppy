@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # APH
 
 import numpy as np
@@ -7,15 +13,11 @@ import math
 import collections
 import time
 import logging
-import datetime as dt
-import mpisppy
 import mpisppy.MPI as mpi
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolverStatus
 import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.phbase as ph_base
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.wxbarutils as wxbarutils
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -239,8 +241,6 @@ class APH(ph_base.PHBase):
         
         uk = self.global_pusqnorm
         vk = self.global_pvsqnorm
-        wk = self.global_pwsqnorm
-        zk = self.global_pzsqnorm
         
         # Note June, 2023: We are waiting until we get values greater
         # than 0 for the norms. Iteration 3 is arbitrary
@@ -841,7 +841,7 @@ class APH(ph_base.PHBase):
         if pwnorm > 0 and pznorm > 0:
             print(f"    scaled U term={punorm / pwnorm}; scaled V term={pvnorm / pznorm}")
         else:
-            print(f"    ! convergence metric cannot be computed due to zero-divide")
+            print("    ! convergence metric cannot be computed due to zero-divide")
 
 
     #========
@@ -937,7 +937,6 @@ class APH(ph_base.PHBase):
                     break    
             if have_converger:
                 if self.convobject.is_converged():
-                    converged = True
                     if self.cylinder_rank == 0:
                         print("User-supplied converger determined termination criterion reached")
                     break
@@ -948,7 +947,7 @@ class APH(ph_base.PHBase):
                 self.extobject.miditer()
             
             teeme = ("tee-rank0-solves" in self.options) \
-                 and (self.options["tee-rank0-solves"] == True
+                 and (self.options["tee-rank0-solves"]
                       and self.cylinder_rank == 0)
             # Let the solve loop deal with persistent solvers & signal handling
             # Aug2020 switch to a partial loop xxxxx maybe that is enough.....

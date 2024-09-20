@@ -1,24 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
-from pyomo.core.base.block import _BlockData, declare_custom_block
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+from pyomo.core.base.block import declare_custom_block
 import pyomo.environ as pe
 from pyomo.solvers.plugins.solvers.persistent_solver import PersistentSolver
 import pyomo.contrib.benders.benders_cuts as bc
 
 from mpisppy.spopt import set_instance_retry
 
-try:
-    from mpisppy import MPI
-
-    mpi4py_available = True
-except:
-    mpi4py_available = False
-try:
-    import numpy as np
-
-    numpy_available = True
-except:
-    numpy_available = False
 import logging
 
 logger = logging.getLogger(__name__)

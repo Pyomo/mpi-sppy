@@ -1,0 +1,7 @@
+# ignore old Pyomo models
+extend-exclude = [
+    "ReferenceModel*.py",
+    "./mpisppy/utils/callbacks/termination/tests/markshare2.py",
+    "./mpisppy/tests/examples/hydro/hydro.py",
+    "./examples/hydro/hydro.py",
+]

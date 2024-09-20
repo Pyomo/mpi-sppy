@@ -1,36 +1,15 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
-import sys
-import os
-import inspect
-import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
-import logging
 import numpy as np
-import math
-import importlib
-import csv
-import inspect
-import typing
-import copy
-import time
 
-import mpisppy.log
-from mpisppy import global_toc
 from mpisppy import MPI
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
-from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.confidence_intervals.ciutils as ciutils
-from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
-import mpisppy.utils.wxbarutils as wxbarutils
-import mpisppy.utils.rho_utils as rho_utils
-import mpisppy.utils.find_rho as find_rho
-import mpisppy.phbase as phbase
 
 
 ############################################################################

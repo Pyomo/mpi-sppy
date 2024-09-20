@@ -1,10 +1,16 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # straight smoke tests (with no unittest, which is a bummer but we need mpiexec)
 
 import os
-import sys
-import tempfile
 
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 badguys = list()

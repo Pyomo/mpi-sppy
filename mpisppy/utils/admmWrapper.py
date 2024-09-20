@@ -1,8 +1,14 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #creating the class AdmmWrapper
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
-import mpisppy
-from collections import OrderedDict
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -20,7 +26,7 @@ def _consensus_vars_number_creator(consensus_vars):
     consensus_vars_number={}
     for subproblem in consensus_vars:
         for var in consensus_vars[subproblem]:
-            if not var in consensus_vars_number: # instanciates consensus_vars_number[var]
+            if var not in consensus_vars_number: # instanciates consensus_vars_number[var]
                 consensus_vars_number[var] = 0
             consensus_vars_number[var] += 1
     for var in consensus_vars_number:

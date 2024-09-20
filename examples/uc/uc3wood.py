@@ -1,20 +1,23 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # updated 23April2020
 # dlw August 2019: 3driver caller for the uc example; unix path names
 
 import datetime
 import logging
 import sys
-import os
 import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
-from mpisppy.fwph.fwph import FWPH
 # Hub and spoke SPCommunicator classes
-from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub
@@ -59,7 +62,7 @@ if __name__ == "__main__":
         ScenCount = int(sys.argv[1])
         bundles_per_rank = int(sys.argv[2])
         PHIterLimit = int(sys.argv[3])
-    except:
+    except Exception:
         _usage()
     if sys.argv[4] == "fixer":
         usefixer = True
@@ -107,7 +110,7 @@ if __name__ == "__main__":
             "mipgapdict": dict() , # Setting this changes iter0_solver_options
         },
     }
-    if usefixer==True:
+    if usefixer:
         multi_ext = {"ext_classes": [Fixer, Gapper]}
     else:
         multi_ext = {"ext_classes": [Gapper]}

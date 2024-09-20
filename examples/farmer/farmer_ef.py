@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This shows two ways to get parameters to the EF for solution; both are fairly short.
 
 import sys
@@ -74,6 +80,8 @@ def main_with_cfg():
         results = solver.solve(tee=True)
     else:
         results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
         
     return ef
 

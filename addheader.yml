@@ -1,0 +1,12 @@
+# Usage: 
+# addheader -c addheader.yml
+---
+root: .
+text: file_header.txt
+patterns:
+   - "*.py"
+   - "__init__.py"
+   - "~ReferenceModel_OK.py"
+verbose: 1
+sep_len: 80
+...

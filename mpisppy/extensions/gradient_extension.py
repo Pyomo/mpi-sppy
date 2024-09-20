@@ -1,16 +1,18 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 import os
-import time
 import numpy as np
-import pyomo.environ as pyo
 
-import mpisppy.MPI as MPI
 import mpisppy.extensions.extension
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
-import mpisppy.utils.sputils as sputils
 from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 

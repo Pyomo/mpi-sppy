@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Started by DLW, March 2023
 
 """
@@ -174,7 +181,6 @@ class WTracker():
                    f" offsetback {offsetback}\n")
         else:
             print(f"{np.shape(self.local_Ws)}")
-            wlist = dict()
             for i in range(fi+1, li+1):
                 for sname, _ in self.PHB.local_scenarios.items():
                     sgn_curr_iter = np.sign(np.array(self.local_Ws[fi][sname]))

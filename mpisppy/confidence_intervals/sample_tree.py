@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #Code for sampling for multistage problem
 
 import numpy as np
@@ -9,7 +15,6 @@ import importlib
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.ciutils as ciutils
-from mpisppy import global_toc
 
 fullcomm = mpi.COMM_WORLD
 global_rank = fullcomm.Get_rank()

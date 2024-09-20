@@ -1,10 +1,15 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 ''' Solve the EF of the network problems
 '''
 from netdes import scenario_creator, scenario_denouement
 from mpisppy.opt.ph import PH
-from netdes_extension import NetworkDesignTracker
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.xhatclosest import XhatClosest
 import os

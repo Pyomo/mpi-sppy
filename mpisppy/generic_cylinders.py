@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Generic_cylinder test driver. Adapted from run_all.py by dlw August 2024.
 
 import sys
@@ -10,6 +17,8 @@ from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
+from mpisppy.convergers.norm_rho_converger import NormRhoConverger
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
@@ -99,8 +108,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
-
-    fwph = cfg.fwph
 
     all_scenario_names, all_nodenames = _name_lists(module, cfg)    
 
@@ -275,6 +282,8 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         results = solver.solve(tee=cfg.tee_EF)
     else:
         results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True,)
+    if not pyo.check_optimal_termination(results):
+        print("Warning: non-optimal solver termination")
 
     global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
     if cfg.solution_base_name is not None:
@@ -282,22 +291,46 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
         sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
-    
 
+def _model_fname():
+    def _bad_news():
+        raise RuntimeError("Unable to parse module name from first argument"
+                           " (for module foo.py, we want, e.g.\n"
+                           "--module-name foo\n"
+                           "or\n"
+                           "--module-name=foo")
+    def _len_check(needed_length):
+        if len(sys.argv) <= needed_length:
+            _bad_news()
+        else:
+            return True
+
+    _len_check(1)
+    assert sys.argv[1][:13] == "--module-name", f"The first command argument must start with'--module-name' but you gave {sys.argv[1]}"
+    if sys.argv[1] == "--module-name":
+        _len_check(2)
+        return sys.argv[2]
+    else:
+        parts = sys.argv[1].split("=")
+        if len(parts) != 2:
+            _bad_news()
+        return parts[1]
+        
+    
+        
 ##########################################################################
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         print("The python model file module name (no .py) must be given.")
         print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
         quit()
-
-    assert sys.argv[1] == "--module-name", f"The first command argument must be '--module-name' but you gave {sys.argv[1]}"
-    model_fname = sys.argv[2]
+    model_fname = _model_fname()
 
     # TBD: when agnostic is merged, use the function and delete the code lines
     # module = sputils.module_name_to_module(model_fname)
     # TBD: do the sys.path.append trick in sputils 
-    import importlib, inspect
+    import importlib
+    import inspect
     if inspect.ismodule(model_fname):
         module = model_fname
     else:

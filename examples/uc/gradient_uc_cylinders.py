@@ -1,12 +1,17 @@
-# Copyright 2023 U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # TBD: put in more options: threads, mipgaps for spokes
 
 # There is  manipulation of the mip gap,
 #  so we need modifications of the vanilla dicts.
 # Notice also that this uses MutliExtensions
-import sys
 import json
 import uc_funcs as uc
 
@@ -91,6 +96,8 @@ def main():
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
     if cfg.use_cost_based_rho:
         rho_setter = uc._rho_setter
+    else:
+        rho_setter = None
     
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -100,12 +107,12 @@ def main():
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                    ph_extensions=MultiExtension,
-                                   rho_setter = None)
+                                   rho_setter = rho_setter)
     else:
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=MultiExtension,
-                                  rho_setter = None)
+                                  rho_setter = rho_setter)
         
     # Extend and/or correct the vanilla dictionary
     ext_classes =  [Gapper]
@@ -163,7 +170,7 @@ def main():
     if lagrangian:
         lagrangian_spoke = vanilla.lagrangian_spoke(*beans,
                                                     scenario_creator_kwargs=scenario_creator_kwargs,
-                                                    rho_setter = None)
+                                                    rho_setter = rho_setter)
 
     # xhat looper bound spoke
     if xhatlooper:
@@ -173,7 +180,7 @@ def main():
     if cfg.ph_ob:
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = uc._rho_setter)        
+                                          rho_setter = rho_setter)        
 
     # xhat shuffle bound spoke
     if xhatshuffle:

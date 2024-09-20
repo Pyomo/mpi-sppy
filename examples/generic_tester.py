@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This might make a mess in terms of output files....
 # (re)baseline by uncommenting rebaseline_xhat lines
 # NOTE: the asynchronous nature of mip-sppy makes it hard to hit baselines.
@@ -48,13 +54,13 @@ xhat_losers = dict()  # does not match baseline well enough
 def egret_avail():
     try:
         import egret
-    except:
+    except Exception:
         return False
 
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
+    path = str(egret.__path__)
+    left = path.find("'")
+    right = path.find("'", left+1)
+    egretrootpath = path[left+1:right]
 
     egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
     if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):

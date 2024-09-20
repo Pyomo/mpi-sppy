@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #  ___________________________________________________________________________
 #
 #  Pyomo: Python Optimization Modeling Objects
@@ -11,7 +19,6 @@
 # This file was originally part of PySP and Pyomo, available: https://github.com/Pyomo/pysp
 # Copied with modification from pysp/phutils.py
 
-from pyomo.core import Objective
 
 
 class BasicSymbolMap:
@@ -32,7 +39,7 @@ class BasicSymbolMap:
         # if so, we need to copy since we use it twice
         if hasattr(data_stream, '__iter__') and \
            not hasattr(data_stream, '__len__'):
-            obj_symbol_tuples = list(obj_symbol_tuples)
+            data_stream = list(data_stream)
         self.byObject.update((id(obj), label) for obj,label in data_stream)
         self.bySymbol.update((label,obj) for obj,label in data_stream)
 
@@ -185,7 +192,7 @@ def extractComponentIndices(component, index_template):
     # if the input index template is not a tuple, make it one.
     # one-dimensional indices in pyomo are not tuples, but
     # everything else is.
-    if type(index_template) != tuple:
+    if type(index_template) is not tuple:
         index_template = (index_template,)
 
     if component_index_dimension != len(index_template):

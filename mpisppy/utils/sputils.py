@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Base and utility functions for mpisppy
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
@@ -7,17 +13,17 @@ import pyomo.environ as pyo
 import sys
 import os
 import re
-import time
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 
 from mpisppy import MPI, haveMPI
-global_rank = MPI.COMM_WORLD.Get_rank()
 from pyomo.core.expr.numeric_expr import LinearExpression
 from pyomo.opt import SolutionStatus, TerminationCondition
 
-from mpisppy import tt_timer, global_toc
+from mpisppy import tt_timer
+
+global_rank = MPI.COMM_WORLD.Get_rank()
 
 def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
@@ -591,7 +597,7 @@ def option_string_to_dict(ostr):
             solver_options[option_key] = None
         else:
             raise RuntimeError("Illegally formed subsolve directive"\
-                               + " option=%s detected" % this_option)
+                               + " option=%s detected" % this_option_string)
     return solver_options
 
 
@@ -701,7 +707,7 @@ class _TreeNode():
         if len(desc_leaf_dict)==1 and list(desc_leaf_dict.keys()) == ['ROOT']: 
             #2-stage problem, we don't create leaf nodes
             self.kids = []
-        elif not name+"_0" in desc_leaf_dict:
+        elif name+"_0" not in desc_leaf_dict:
             self.is_leaf = True
             self.kids = []
         else:
@@ -714,7 +720,7 @@ class _TreeNode():
             child_list = [x for x in desc_leaf_dict if child_regex.match(x) ]
             for i in range(len(desc_leaf_dict)):
                 childname = name+f"_{i}"
-                if not childname in desc_leaf_dict:
+                if childname not in desc_leaf_dict:
                     if len(child_list) != i:
                         raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
                                            f"The node {name} has {len(child_list)} children, but {childname} is not one of them.")
@@ -740,13 +746,13 @@ class _TreeNode():
         if self.is_leaf:
             return 1
         else:
-            l = [child.stage_max() for child in self.kids]
-            if l.count(l[0]) != len(l):
-                maxstage = max(l)+ self.stage
-                minstage = min(l)+ self.stage
+            leaves = [child.stage_max() for child in self.kids]
+            if leaves.count(leaves[0]) != len(leaves):
+                maxstage = max(leaves)+ self.stage
+                minstage = min(leaves)+ self.stage
                 raise RuntimeError("The all_nodenames argument is giving an inconsistent tree. "
                                    f"The node {self.name} has descendant leaves with stages going from {minstage} to {maxstage}")
-            return 1+l[0]
+            return 1+leaves[0]
             
                     
 
@@ -915,7 +921,7 @@ def check4losses(numscens, branching_factors,
         for s in scenlist:
             snum = int(s[8:])
             stagepresents[stagenum][snum] = True
-    missingone = False
+    missingsome = False
     for stage in stagepresents:
         for scen, there in enumerate(stagepresents[stage]):
             if not there:

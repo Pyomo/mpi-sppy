@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #ReferenceModel for full set of scenarios for GBD; Aug 2021
 #From original Ferguson and Dantzig 1956
 #Extended scenarios as done in Seq Sampling by B&M
@@ -280,8 +288,8 @@ if __name__ == "__main__":
     #Correcting the building by putting the right scenarios.
     ama.scenario_names = scenario_names
     ama.run()
-    print(f"inner bound=", ama.best_inner_bound)
-    print(f"outer bound=", ama.best_outer_bound)
+    print("inner bound=", ama.best_inner_bound)
+    print("outer bound=", ama.best_outer_bound)
 
     xhat = sputils.nonant_cache_from_ef(ama.ef)
     print("xhat=",xhat['ROOT'])

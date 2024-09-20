@@ -1,7 +1,14 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #creating the class stoch_admmWrapper
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
-from collections import OrderedDict
 import mpisppy.scenario_tree as scenario_tree
 import numpy as np
 
@@ -20,7 +27,7 @@ def _consensus_vars_number_creator(consensus_vars):
     for subproblem in consensus_vars:
         for var_stage_tuple in consensus_vars[subproblem]:
             var = var_stage_tuple[0]
-            if not var in consensus_vars_number: # instanciates consensus_vars_number[var]
+            if var not in consensus_vars_number: # instanciates consensus_vars_number[var]
                 consensus_vars_number[var] = 0
             consensus_vars_number[var] += 1
     return consensus_vars_number

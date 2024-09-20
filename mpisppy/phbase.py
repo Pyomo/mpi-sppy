@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import time
 import logging
 
@@ -9,7 +15,6 @@ import mpisppy.MPI as MPI
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spopt
 
 from mpisppy.utils.prox_approx import ProxApproxManager
@@ -906,7 +911,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
                         scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
 
-        converged = False
         if have_converger:
             # Call the constructor of the converger object
             self.convobject = self.ph_converger(self)
@@ -988,12 +992,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             # latest data, even at termination
             if have_converger:
                 if self.convobject.is_converged():
-                    converged = True
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
             elif self.conv is not None:
                 if self.conv < self.options["convthresh"]:
-                    converged = True
                     global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
                     break
 
