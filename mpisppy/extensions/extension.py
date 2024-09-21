@@ -197,6 +197,10 @@ class MultiExtension(Extension):
         for lobject in self.extdict.values():
             lobject.pre_iter0()
 
+    def iter0_post_solver_creation(self):
+        for lobject in self.extdict.values():
+            lobject.iter0_post_solver_creation()        
+
     def post_iter0(self):
         for lobject in self.extdict.values():
             lobject.post_iter0()
