@@ -45,6 +45,8 @@ def _parse_args():
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
     cfg.reduced_costs_args()
+    cfg.sep_rho_args()
+    cfg.coeff_rho_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -125,6 +127,11 @@ def main():
     if cfg.reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
+    if cfg.sep_rho:
+        vanilla.add_sep_rho(hub_dict, cfg)
+    if cfg.coeff_rho:
+        vanilla.add_coeff_rho(hub_dict, cfg)
+
     # FWPH spoke
     if cfg.fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -145,6 +152,10 @@ def main():
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
                                           rho_setter = rho_setter)
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(ph_ob_spoke, cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(ph_ob_spoke, cfg)
 
     # xhat looper bound spoke
     if cfg.xhatlooper:
