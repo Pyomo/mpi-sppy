@@ -205,11 +205,9 @@ def add_sep_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,SepRho)
     hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier}
 
-
 def add_coeff_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,CoeffRho)
     hub_dict["opt_kwargs"]["options"]["coeff_rho_options"] = {"multiplier" : cfg.coeff_rho_multiplier}
-
 
 def add_cross_scenario_cuts(hub_dict,
                             cfg,

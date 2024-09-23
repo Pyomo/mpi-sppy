@@ -190,10 +190,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                       all_nodenames=all_nodenames,
                                       rho_setter=rho_setter,
                                       )
-        if cfg.sep_rho:
-            vanilla.add_sep_rho(fw_spoke, cfg)
-        if cfg.coeff_rho:
-            vanilla.add_coeff_rho(fw_spoke, cfg)
+        # Need to fix FWPH to support extensions
+        # if cfg.sep_rho:
+        #     vanilla.add_sep_rho(fw_spoke, cfg)
+        # if cfg.coeff_rho:
+        #     vanilla.add_coeff_rho(fw_spoke, cfg)
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:

@@ -32,6 +32,7 @@ def _parse_args():
     cfg.xhatshuffle_args()
     cfg.subgradient_args()
     cfg.reduced_costs_args()
+    cfg.coeff_rho_args()
     cfg.parse_command_line("sslp_cylinders")
     return cfg
 
@@ -87,9 +88,15 @@ def main():
     if reduced_costs:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
+    if cfg.coeff_rho:
+        vanilla.add_coeff_rho(hub_dict, cfg)
+
     # FWPH spoke
     if fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        # Need to fix FWPH to support extensions
+        # if cfg.coeff_rho:
+        #     vanilla.add_coeff_rho(fw_spoke, cfg)
 
     # Standard Lagrangian bound spoke
     if lagrangian:
@@ -100,6 +107,8 @@ def main():
         subgradient_spoke = vanilla.subgradient_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = None)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(subgradient_spoke, cfg)
         
     # xhat looper bound spoke
     if xhatlooper:

@@ -942,16 +942,28 @@ def reenable_tictoc_output():
     tt_timer._ostream.close()
     tt_timer._ostream = sys.stdout
 
-    
+
 def find_active_objective(pyomomodel):
+    return find_objective(pyomomodel, active=True)
+
+
+def find_objective(pyomomodel, active=False):
     # return the only active objective or raise and error
     obj = list(pyomomodel.component_data_objects(
         Objective, active=True, descend_into=True))
-    if len(obj) != 1:
+    if len(obj) == 1:
+        return obj[0]
+    if active or len(obj) > 1:
         raise RuntimeError("Could not identify exactly one active "
                            "Objective for model '%s' (found %d objectives)"
                            % (pyomomodel.name, len(obj)))
-    return obj[0]
+    # search again for a single inactive objective
+    obj = list(pyomomodel.component_data_objects(
+        Objective, descend_into=True))
+    if len(obj) == 1:
+        return obj[0]
+    raise RuntimeError("Could not identify exactly one objective for model "
+                       f"{pyomomodel.name} (found {len(obj)} objectives)")
 
 
 def nonant_cost_coeffs(s):
@@ -959,7 +971,7 @@ def nonant_cost_coeffs(s):
     return a dictionary from s._mpisppy_data.nonant_indices.keys()
     to the objective cost coefficient
     """
-    objective = find_active_objective(s)
+    objective = find_objective(s)
 
     # initialize to 0
     cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
