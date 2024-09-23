@@ -116,6 +116,23 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 
 There is an example of the function in the sizes example (``_rho_setter``).
 
+SepRho
+^^^^^^
+
+Set per variable rho values using the "SEP" algorithm from
+
+Progressive hedging innovations for a class of stochastic mixed-integer resource allocation problems
+Jean-Paul Watson, David L. Woodruff, Compu Management Science, 2011
+DOI 10.1007/s10287-010-0125-4
+
+One can additional specify a multiplier on the computed value (default = 1.0).
+If the cost coefficient on a non-anticipative variable is 0, the default rho value is used instead.
+
+CoeffRho
+^^^^^^^^
+
+Set per variable rho values proportional to the cost coefficient on each non-anticipative variable,
+with an optional multiplier (default = 1.0). If the coefficient is 0, the default rho value is used instead.
 
 wtracker_extension
 ^^^^^^^^^^^^^^^^^^
