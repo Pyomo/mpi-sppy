@@ -11,6 +11,7 @@ import mpisppy.extensions.extension
 
 from mpisppy.utils.sputils import nonant_cost_coeffs
 
+
 class CoeffRho(mpisppy.extensions.extension.Extension):
     """
     Determine rho as a linear function of the objective coefficient
@@ -19,14 +20,18 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
     def __init__(self, ph):
         self.ph = ph
         self.multiplier = 1.0
-        if "coeff_rho_options" in ph.options and "multiplier" in ph.options["coeff_rho_options"]:
+        if (
+            "coeff_rho_options" in ph.options
+            and "multiplier" in ph.options["coeff_rho_options"]
+        ):
             self.multiplier = ph.options["coeff_rho_options"]["multiplier"]
 
     def post_iter0(self):
         for s in self.ph.local_scenarios.values():
             cc = nonant_cost_coeffs(s)
             for ndn_i, rho in s._mpisppy_model.rho.items():
-                rho._value = cc[ndn_i] * self.multiplier
+                if cc[ndn_i] != 0:
+                    rho._value = abs(cc[ndn_i]) * self.multiplier
                 # if self.ph.cylinder_rank==0:
                 #     nv = s._mpisppy_data.nonant_indices[ndn_i] # var_data object
                 #     print(ndn_i,nv.getname(),cc[ndn_i],rho._value)

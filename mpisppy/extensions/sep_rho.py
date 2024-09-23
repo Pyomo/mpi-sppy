@@ -28,7 +28,10 @@ class SepRho(mpisppy.extensions.extension.Extension):
 
         self.multiplier = 1.0
 
-        if "sep_rho_options" in ph.options and "multiplier" in ph.options["sep_rho_options"]:
+        if (
+            "sep_rho_options" in ph.options
+            and "multiplier" in ph.options["sep_rho_options"]
+        ):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
 
     def _compute_primal_residual_norm(self, ph):
@@ -143,13 +146,14 @@ class SepRho(mpisppy.extensions.extension.Extension):
         for s in ph.local_scenarios.values():
             cc = nonant_cost_coeffs(s)
             for ndn_i, rho in s._mpisppy_model.rho.items():
-                nv = s._mpisppy_data.nonant_indices[ndn_i] # var_data object
-                if nv.is_integer():
-                    rho._value = cc[ndn_i] / (xmax[ndn_i] - xmin[ndn_i] + 1)
-                else:
-                    rho._value = cc[ndn_i] / max(1, primal_resid[ndn_i])
+                if cc[ndn_i] != 0:
+                    nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
+                    if nv.is_integer():
+                        rho._value = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
+                    else:
+                        rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
 
-                rho._value *= self.multiplier
+                    rho._value *= self.multiplier
 
                 # if ph.cylinder_rank==0:
                 #     print(ndn_i,nv.getname(),xmax[ndn_i],xmin[ndn_i],primal_resid[ndn_i],cc[ndn_i],rho._value)
