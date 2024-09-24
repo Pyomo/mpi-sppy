@@ -586,7 +586,19 @@ class PHBase(mpisppy.spopt.SPOpt):
                             descend_into=True,
                             active=True,
                             sort=False):
-                        s._solver_plugin.set_var_attr(var,'Start',var.value)
+                        try:
+                            if var.value is not None:
+                                s._solver_plugin.set_var_attr(var,'Start',var.value)
+                            elif 'xsqvar' in var.name and self._PHIter==1:
+                                # During Iter 1, xvarsqrd vars will have None value, set to 0
+                                s._solver_plugin.set_var_attr(var,'Start',0)
+                            else:
+                                # Unexpected, let an error be thrown
+                                pass
+                        except AttributeError as e:
+                            # If var value is None, gurobipy throws an AttributeError
+                            print(var.name, var.value, type(var.value))
+                            raise e
 
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
