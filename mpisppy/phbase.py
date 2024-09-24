@@ -791,8 +791,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         Note:
             This function constructs an Extension object if one was specified
-            at the time the PH object was created. It also calls the
-            `pre_iter0` method of the Extension object.
+            at the time the PH object was created. 
         """
 
         self.attach_Ws_and_prox()
@@ -851,9 +850,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 stochastic program with the nonanticipativity constraints
                 removed.
         """
+
         if (self.extensions is not None):
             self.extobject.pre_iter0()
-
+        
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
@@ -871,6 +871,9 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         global_toc("Creating solvers")
         self._create_solvers()
+
+        if (self.extensions is not None):
+            self.extobject.iter0_post_solver_creation()        
 
         teeme = ("tee-rank0-solves" in self.options
                  and self.options['tee-rank0-solves']
