@@ -347,7 +347,19 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=100)
 
+    def timed_mipgap_args(self):
+        self.add_to_config('timed_mipgap',
+                           description="use a time-dependent target mip gap",
+                           domain=bool,
+                           default=False)
 
+        self.add_to_config("timed_mipgap_options",
+                           description=
+                           "Should be a string with the following format: 'gap1:time1 gap2:time2 ... gapN:timeN'."
+                           "Each pair defines a soft solver time limit, i.e. time limit only applied to solver "
+                           "if MIP gap is below specified threshold. Default: 0.05:600",
+                           domain=str,
+                           default="0.05:600")
 
     def mip_options(self):
 

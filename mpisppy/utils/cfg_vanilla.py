@@ -129,6 +129,7 @@ def ph_hub(
     }
     add_wxbar_read_write(hub_dict, cfg)
     add_ph_tracking(hub_dict, cfg)
+    add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
 
@@ -299,6 +300,14 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
         cylinder_dict["opt_kwargs"]["options"]["phtracker_options"] = phtrackeroptions
 
     return cylinder_dict
+
+def add_timed_mipgap(cylinder_dict, cfg):
+    if _hasit(cfg,'timed_mipgap'):
+        from mpisppy.extensions.timed_mipgap import TimedMIPGapCB
+        cylinder_dict = extension_adder(cylinder_dict, TimedMIPGapCB)
+        cylinder_dict['opt_kwargs']['options']['timed_mipgap']= {'timecurve':cfg.timed_mipgap_options}
+
+    return cylinder_dict        
 
 def fwph_spoke(
     cfg,
@@ -495,6 +504,7 @@ def lagranger_spoke(
             ["lagranger_rho_rescale_factors_json"]\
             = cfg.lagranger_rho_rescale_factors_json
     add_ph_tracking(lagranger_spoke, cfg, spoke=True)
+    add_timed_mipgap(lagranger_spoke, cfg)
     return lagranger_spoke
 
 
