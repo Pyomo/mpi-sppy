@@ -8,6 +8,7 @@ import mpisppy.extensions.extension
 import mpisppy.utils.sputils as sputils
 from pyomo.solvers.plugins.solvers.gurobi_persistent import GurobiPersistent
 
+from gurobipy import GRB
 
 class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
     '''
@@ -43,7 +44,7 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
         timecurve_str = ph.options['timed_mipgap']['timecurve']
         self.timecurve = {float(ent.split(':')[0]):float(ent.split(':')[1]) for ent in timecurve_str.split(' ')}
 
-    def pre_iter0(self):
+    def iter0_post_solver_creation(self):
         ph = self.ph
         for sname, s in ph.local_subproblems.items():
             if not hasattr(s, '_solver_plugin'):
@@ -77,7 +78,6 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
 
         '''
 
-        from gurobipy import GRB
         if cb_where == GRB.Callback.MIP:
             grb_m = cb_opt._solver_model # gurobipy model
             runtime = grb_m.cbGet(GRB.Callback.RUNTIME)
