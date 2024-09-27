@@ -248,6 +248,23 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.e-1)
 
+        self.add_to_config("smoothing",
+                           description="For PH, add a smoothing term to the objective",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("smoothing_rho_ratio",
+                           description="For PH, when smoothing, the ratio of "
+                           "the smoothing coefficient to rho (default 1e-1)",
+                           domain=float,
+                           default=1.e-1)
+
+        self.add_to_config("smoothing_beta",
+                           description="For PH, when smoothing, the smoothing "
+                           "memory coefficient beta (default 2e-1)",
+                           domain=float,
+                           default=2.e-1)
+
     def make_parser(self, progname=None, num_scens_reqd=False):
         raise RuntimeError("make_parser is no longer used. See comments at top of config.py")
 
@@ -391,6 +408,28 @@ class Config(pyofig.ConfigDict):
                            description="fixer bounds tolerance  (default 1e-4)",
                            domain=float,
                            default=1e-2)
+
+
+    def sep_rho_args(self):
+        self.add_to_config("sep_rho",
+                           description="have a SepRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("sep_rho_multiplier",
+                           description="multiplier for SepRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
+    def coeff_rho_args(self):
+        self.add_to_config("coeff_rho",
+                           description="have a CoeffRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("coeff_rho_multiplier",
+                           description="multiplier for CoeffRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
 
 
     def gapper_args(self):
