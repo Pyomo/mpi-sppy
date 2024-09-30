@@ -9,12 +9,9 @@
 
 import numpy as np
 
-import pyomo.environ as pyo
-from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
 
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
-from mpisppy.utils.kkt.interface import InteriorPointInterface
 from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 
 
