@@ -35,98 +35,6 @@ class SensiRho(mpisppy.extensions.extension.Extension):
         ):
             self.multiplier = ph.options["sensi_rho_options"]["multiplier"]
 
-    def _compute_primal_residual_norm(self, ph):
-        local_nodenames = []
-        local_primal_residuals = {}
-        global_primal_residuals = {}
-
-        for k, s in ph.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                if node.name not in local_nodenames:
-                    ndn = node.name
-                    local_nodenames.append(ndn)
-                    nlen = nlens[ndn]
-
-                    local_primal_residuals[ndn] = np.zeros(nlen, dtype="d")
-                    global_primal_residuals[ndn] = np.zeros(nlen, dtype="d")
-
-        for k, s in ph.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens
-            xbars = s._mpisppy_model.xbars
-            for node in s._mpisppy_node_list:
-                ndn = node.name
-                primal_residuals = local_primal_residuals[ndn]
-
-                unweighted_primal_residuals = np.fromiter(
-                    (
-                        abs(v._value - xbars[ndn, i]._value)
-                        for i, v in enumerate(node.nonant_vardata_list)
-                    ),
-                    dtype="d",
-                    count=nlens[ndn],
-                )
-                primal_residuals += s._mpisppy_probability * unweighted_primal_residuals
-
-        for nodename in local_nodenames:
-            ph.comms[nodename].Allreduce(
-                [local_primal_residuals[nodename], MPI.DOUBLE],
-                [global_primal_residuals[nodename], MPI.DOUBLE],
-                op=MPI.SUM,
-            )
-
-        primal_resid = {}
-        for ndn, global_primal_resid in global_primal_residuals.items():
-            for i, v in enumerate(global_primal_resid):
-                primal_resid[ndn, i] = v
-
-        return primal_resid
-
-    @staticmethod
-    def _compute_min_max(ph, npop, mpiop, start):
-        local_nodenames = []
-        local_xmaxmin = {}
-        global_xmaxmin = {}
-
-        for k, s in ph.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                if node.name not in local_nodenames:
-                    ndn = node.name
-                    local_nodenames.append(ndn)
-                    nlen = nlens[ndn]
-
-                    local_xmaxmin[ndn] = start * np.ones(nlen, dtype="d")
-                    global_xmaxmin[ndn] = np.zeros(nlen, dtype="d")
-
-        for k, s in ph.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                ndn = node.name
-                xmaxmin = local_xmaxmin[ndn]
-
-                xmaxmin_partial = np.fromiter(
-                    (v._value for v in node.nonant_vardata_list),
-                    dtype="d",
-                    count=nlens[ndn],
-                )
-                xmaxmin = npop(xmaxmin, xmaxmin_partial)
-                local_xmaxmin[ndn] = xmaxmin
-
-        for nodename in local_nodenames:
-            ph.comms[nodename].Allreduce(
-                [local_xmaxmin[nodename], MPI.DOUBLE],
-                [global_xmaxmin[nodename], MPI.DOUBLE],
-                op=mpiop,
-            )
-
-        xmaxmin_dict = {}
-        for ndn, global_xmaxmin_dict in global_xmaxmin.items():
-            for i, v in enumerate(global_xmaxmin_dict):
-                xmaxmin_dict[ndn, i] = v
-
-        return xmaxmin_dict
-
     @staticmethod
     def _compute_rho_min_max(ph, npop, mpiop, start):
         local_nodenames = []
@@ -223,14 +131,6 @@ class SensiRho(mpisppy.extensions.extension.Extension):
         return rhoavg_dict
 
     @staticmethod
-    def _compute_xmax(ph):
-        return SensiRho._compute_min_max(ph, np.maximum, MPI.MAX, -np.inf)
-
-    @staticmethod
-    def _compute_xmin(ph):
-        return SensiRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
-
-    @staticmethod
     def _compute_rho_max(ph):
         return SensiRho._compute_rho_min_max(ph, np.maximum, MPI.MAX, -np.inf)
 
@@ -243,9 +143,6 @@ class SensiRho(mpisppy.extensions.extension.Extension):
 
     def post_iter0(self):
         ph = self.ph
-        primal_resid = self._compute_primal_residual_norm(ph)
-        xmax = self._compute_xmax(ph)
-        xmin = self._compute_xmin(ph)
 
         # first, solve the subproblems with Ipopt,
         # and gather sensitivity information
@@ -265,18 +162,15 @@ class SensiRho(mpisppy.extensions.extension.Extension):
             s.ipopt_zU_out = pyo.Suffix(direction=pyo.Suffix.IMPORT)
             s.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT_EXPORT)
 
-            ipopt.options["bound_relax_factor"] = 0.0
             results = ipopt.solve(s)
             pyo.assert_optimal_termination(results)
 
             kkt_builder = InteriorPointInterface(s)
-            duals = np.zeros(kkt_builder._nlp.n_constraints())
-            for idx, c in enumerate(kkt_builder._nlp.get_pyomo_constraints()):
-                # print( idx, c.name )
-                duals[idx] = s.dual[c]
-            kkt_builder._nlp.set_duals(duals)
             kkt_builder.set_barrier_parameter(1e-9)
             kkt_builder.set_bounds_relaxation_factor(1e-8)
+            #rhs = kkt_builder.evaluate_primal_dual_kkt_rhs()
+            #print(f"{rhs}")
+            #print(f"{rhs.flatten()}")
             kkt = kkt_builder.evaluate_primal_dual_kkt_matrix()
 
             # print(f"{kkt=}")
@@ -320,19 +214,24 @@ class SensiRho(mpisppy.extensions.extension.Extension):
             for var, val in solution_cache.items():
                 var._value = val
 
-        rhomax = self._compute_rho_avg(ph)
         for s in ph.local_scenarios.values():
+            xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
-                if nv.is_integer():
-                    rho._value = abs(rhomax[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
-                else:
-                    rho._value = abs(rhomax[ndn_i]) / max(1, primal_resid[ndn_i])
-
+                rho._value = rho._value / max(1, abs(nv._value - xbars[ndn_i]._value))
                 rho._value *= self.multiplier
+                # if ph.cylinder_rank == 0:
+                #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
 
-                # if ph.cylinder_rank==0:
-                #     print(ndn_i,nv.getname(),xmax[ndn_i],xmin[ndn_i],primal_resid[ndn_i],rhomax[ndn_i],rho._value)
+        rhoavg = self._compute_rho_avg(ph)
+        for s in ph.local_scenarios.values():
+            xbars = s._mpisppy_model.xbars
+            for ndn_i, rho in s._mpisppy_model.rho.items():
+                rho._value = rhoavg[ndn_i]
+                # if ph.cylinder_rank == 0:
+                #     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
+                #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
+
         if ph.cylinder_rank == 0:
             print("Rho values updated by SensiRho Extension")
 
