@@ -10,8 +10,6 @@
 import numpy as np
 
 import pyomo.environ as pyo
-from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
-from pyomo.contrib.pynumero.linalg.base import LinearSolverStatus
 from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
 
 import mpisppy.extensions.extension
