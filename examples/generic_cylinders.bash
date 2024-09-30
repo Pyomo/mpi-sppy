@@ -3,6 +3,16 @@
 
 SOLVER="cplex"
 
+echo "^^^ netdes sensi-rho ^^^"
+cd netdes
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name netdes --netdes-data-path ./data --instance-name network-10-20-L-01 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --sensi-rho
+cd ..
+
+echo "^^^ farmer sensi-rho ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --sensi-rho
+
+exit
+
 # sslp EF
 echo "^^^ sslp ef ^^^"
 cd sslp
