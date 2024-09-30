@@ -135,7 +135,7 @@ class SensiRho(mpisppy.extensions.extension.Extension):
         return SensiRho._compute_rho_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
     # Implementation of a virtual function
-    def compute_rho(self):
+    def compute_and_update_rho(self):
         ph = self.ph
 
         nonant_sensis = dict()  # dict of dicts [s][ndn_i]
@@ -167,7 +167,7 @@ class SensiRho(mpisppy.extensions.extension.Extension):
         pass
 
     def post_iter0(self):
-        self.compute_rho()
+        self.compute_and_update_rho()
         
     def miditer(self):
         pass
