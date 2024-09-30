@@ -9,12 +9,10 @@
 
 import numpy as np
 
-import pyomo.environ as pyo
-from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
 
 import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
-from mpisppy.utils.kkt.interface import InteriorPointInterface
+from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 
 
 class SensiRho(mpisppy.extensions.extension.Extension):
@@ -142,81 +140,15 @@ class SensiRho(mpisppy.extensions.extension.Extension):
     def post_iter0(self):
         ph = self.ph
 
-        # first, solve the subproblems with Ipopt,
-        # and gather sensitivity information
-        ipopt = pyo.SolverFactory("ipopt")
-        nonant_sensis = {}
+        nonant_sensis = dict()  # dict of dicts [s][ndn_i]
         for k, s in ph.local_subproblems.items():
-            solution_cache = pyo.ComponentMap()
-            for var in s.component_data_objects(pyo.Var):
-                solution_cache[var] = var._value
-            relax_int = pyo.TransformationFactory('core.relax_integer_vars')
-            relax_int.apply_to(s)
-
-            assert hasattr(s, "_relaxed_integer_vars")
-
-            # add the needed suffixes / remove later
-            s.ipopt_zL_out = pyo.Suffix(direction=pyo.Suffix.IMPORT)
-            s.ipopt_zU_out = pyo.Suffix(direction=pyo.Suffix.IMPORT)
-            s.dual = pyo.Suffix(direction=pyo.Suffix.IMPORT_EXPORT)
-
-            results = ipopt.solve(s)
-            pyo.assert_optimal_termination(results)
-
-            kkt_builder = InteriorPointInterface(s)
-            kkt_builder.set_barrier_parameter(1e-9)
-            kkt_builder.set_bounds_relaxation_factor(1e-8)
-            #rhs = kkt_builder.evaluate_primal_dual_kkt_rhs()
-            #print(f"{rhs}")
-            #print(f"{rhs.flatten()}")
-            kkt = kkt_builder.evaluate_primal_dual_kkt_matrix()
-
-            # print(f"{kkt=}")
-            # could do better than SuperLU
-            kkt_lu = ScipyLU()
-            # always regularize equality constraints
-            kkt_builder.regularize_equality_gradient(kkt=kkt, coef=-1e-8, copy_kkt=False)
-            kkt_lu.do_numeric_factorization(kkt, raise_on_error=True)
-
-            grad_vec = np.zeros(kkt.shape[1])
-            grad_vec[0:kkt_builder._nlp.n_primals()] = kkt_builder._nlp.evaluate_grad_objective()
-
-            grad_vec_kkt_inv = kkt_lu._lu.solve(grad_vec, "T")
-
-            for scenario_name in s.scen_list:
-                nonant_sensis[scenario_name] = {}
-                rho = ph.local_scenarios[scenario_name]._mpisppy_model.rho
-                for ndn_i, v in ph.local_scenarios[scenario_name]._mpisppy_data.nonant_indices.items():
-                    var_idx = kkt_builder._nlp._vardata_to_idx[v]
- 
-                    y_vec = np.zeros(kkt.shape[0])
-                    y_vec[var_idx] = 1.0
-
-                    x_denom = y_vec.T @ kkt_lu._lu.solve(y_vec)
-                    x = (-1 / x_denom)
-                    e_x = x * y_vec
-
-                    sensitivity = grad_vec_kkt_inv @ -e_x
-                    # print(f"df/d{v.name}: {sensitivity:.2e}, ∂f/∂{v.name}: {grad_vec[var_idx]:.2e}, "
-                    #       f"rho {v.name}: {ph.local_scenarios[scenario_name]._mpisppy_model.rho[ndn_i]._value:.2e}, ",
-                    #       f"value: {v._value:.2e}"
-                    #       )
-
-                    rho[ndn_i]._value = abs(sensitivity)
-
-            relax_int.apply_to(s, options={"undo":True})
-            assert not hasattr(s, "_relaxed_integer_vars")
-            del s.ipopt_zL_out
-            del s.ipopt_zU_out
-            del s.dual
-            for var, val in solution_cache.items():
-                var._value = val
-
+            nonant_sensis[s] = nonant_sensitivies(s, ph)
+                
         for s in ph.local_scenarios.values():
             xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
-                rho._value = rho._value / max(1, abs(nv._value - xbars[ndn_i]._value))
+                rho._value = abs(nonant_sensis[s][ndn_i]) / max(1, abs(nv._value - xbars[ndn_i]._value))
                 rho._value *= self.multiplier
                 # if ph.cylinder_rank == 0:
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
