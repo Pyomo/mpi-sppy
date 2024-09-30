@@ -72,6 +72,7 @@ def _parse_args(m):
     cfg.reduced_costs_args()
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
+    cfg.sensi_rho_args()
 
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     return cfg
@@ -99,7 +100,7 @@ def _name_lists(module, cfg):
 def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
-        if cfg.sep_rho or cfg.coeff_rho:
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
         else:
             raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
@@ -167,6 +168,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
+
+    if cfg.sensi_rho:
+        vanilla.add_sensi_rho(hub_dict, cfg)
  
     if len(ext_classes) != 0:
         hub_dict['opt_kwargs']['extensions'] = MultiExtension
@@ -215,6 +219,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             vanilla.add_sep_rho(ph_ob_spoke, cfg)
         if cfg.coeff_rho:
             vanilla.add_coeff_rho(ph_ob_spoke, cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(ph_ob_spoke, cfg)
+ 
 
     # subgradient outer bound spoke
     if cfg.subgradient:
@@ -227,6 +234,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             vanilla.add_sep_rho(subgradient_spoke, cfg)
         if cfg.coeff_rho:
             vanilla.add_coeff_rho(subgradient_spoke, cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(subgradient_spoke, cfg)
 
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:

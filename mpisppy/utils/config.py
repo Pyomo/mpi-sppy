@@ -421,6 +421,17 @@ class Config(pyofig.ConfigDict):
                            default=1.0)
 
 
+    def sensi_rho_args(self):
+        self.add_to_config("sensi_rho",
+                           description="have a SensiRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("sensi_rho_multiplier",
+                           description="multiplier for SensiRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
     def coeff_rho_args(self):
         self.add_to_config("coeff_rho",
                            description="have a CoeffRho extension",
