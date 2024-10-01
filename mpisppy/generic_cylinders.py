@@ -68,7 +68,7 @@ def _parse_args(m):
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
     cfg.gradient_args()
-    cfg.dynamic_gradient_args()
+    cfg.dynamic_rho_args()
     cfg.reduced_costs_args()
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
