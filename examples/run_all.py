@@ -286,11 +286,10 @@ do_one("sslp",
        4,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
        "--max-iterations=5 --default-rho=1 "
-       "--subgradient --xhatshuffle --fwph "
+       "--subgradient --xhatshuffle --fwph  --coeff-rho "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 "
        "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
-
 do_one("sslp",
        "sslp_cylinders.py",
        3,
