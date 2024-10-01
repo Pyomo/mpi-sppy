@@ -39,7 +39,7 @@ def _create_cfg():
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
-    cfg.dynamic_gradient_args()
+    cfg.dynamic_rho_args()
     cfg.solver_name = solver_name
     cfg.default_rho = 1
     return cfg
@@ -124,7 +124,6 @@ class Test_gradient_farmer(unittest.TestCase):
             self.assertAlmostEqual(float(rows[3][1]), 2.0616161616161617)
         os.remove(self.cfg.grad_cost_file_out)
         os.remove(self.cfg.grad_rho_file_out)
-    
 
 
 ###############################################
@@ -267,7 +266,6 @@ class Test_grad_extension_farmer(unittest.TestCase):
         self.cfg.max_iterations = 4
         self.ph_object = self._run_ph_farmer()
         self.assertAlmostEqual(self.ph_object.conv, 2.128968965420187, places=1)
-
 
 if __name__ == '__main__':
     unittest.main()
