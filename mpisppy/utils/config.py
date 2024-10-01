@@ -826,27 +826,27 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e3)
 
-    def dynamic_gradient_args(self): # AKA adaptive
+    def dynamic_rho_args(self): # AKA adaptive
 
         self.gradient_args()
 
-        self.add_to_config('grad_dynamic_primal_crit',
-                           description="Use dynamic gradient-based primal criterion for update",
+        self.add_to_config('dynamic_rho_primal_crit',
+                           description="Use dynamic primal criterion for some rho updates",
                            domain=bool,
                            default=False)
 
-        self.add_to_config('grad_dynamic_dual_crit',
-                           description="Use dynamic gradient-based dual criterion for update",
+        self.add_to_config('dynamic_rho_dual_crit',
+                           description="Use dynamic dual criterion for some rho updates",
                            domain=bool,
                            default=False)
 
-        self.add_to_config("grad_dynamic_primal_thresh",
-                           description="primal threshold for diff during gradient calcs",
+        self.add_to_config("dynamic_rho_primal_thresh",
+                           description="primal threshold for diff during dynamic rho calcs",
                            domain=float,
                            default=0.1)
         
-        self.add_to_config("grad_dynamic_dual_thresh",
-                           description="dual threshold for abs norm during gradient calcs",
+        self.add_to_config("dynamic_rho_dual_thresh",
+                           description="dual threshold for dirr during dynamic rho calcs",
                            domain=float,
                            default=0.1)        
 
