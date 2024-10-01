@@ -12,7 +12,6 @@
 # Children should call the parent for post_iter0
 
 
-import os
 import numpy as np
 
 import mpisppy.extensions.extension

@@ -8,7 +8,6 @@
 ###############################################################################
 
 import os
-import numpy as np
 
 import mpisppy.extensions.dyn_rho_base
 import mpisppy.utils.gradient as grad
