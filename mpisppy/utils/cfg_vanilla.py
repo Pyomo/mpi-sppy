@@ -212,7 +212,7 @@ def add_coeff_rho(hub_dict, cfg):
 
 def add_sensi_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,SensiRho)
-    hub_dict["opt_kwargs"]["options"]["sensi_rho_options"] = {"multiplier" : cfg.sensi_rho_multiplier}
+    hub_dict["opt_kwargs"]["options"]["sensi_rho_options"] = {"multiplier" : cfg.sensi_rho_multiplier, "cfg": cfg}
 
 def add_cross_scenario_cuts(hub_dict,
                             cfg,

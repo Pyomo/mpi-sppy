@@ -9,8 +9,11 @@ mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name 
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001
 
 # now do it again, but this time using dynamic rho
-
+echo "^^^ grad rho dynamic ^^^"
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+
+echo "^^^ sensi rho dynamic ^^^"
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sensi-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
 cd ..
 exit

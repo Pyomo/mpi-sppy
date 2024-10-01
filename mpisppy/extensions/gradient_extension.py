@@ -13,11 +13,8 @@ import numpy as np
 import mpisppy.extensions.dyn_rho_base
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
-from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 
-# for trapping numpy warnings
-import warnings
 
 class Gradient_extension(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     """
