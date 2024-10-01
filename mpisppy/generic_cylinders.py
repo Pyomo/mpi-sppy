@@ -73,8 +73,9 @@ def _parse_args(m):
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
-
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
+    
+    cfg.checker()  # looks for inconsistencies 
     return cfg
 
 def _name_lists(module, cfg):
