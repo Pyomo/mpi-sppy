@@ -140,6 +140,20 @@ class Config(pyofig.ConfigDict):
         else:
             return ifmissing
 
+    #===============
+    def checker(self):
+        """Verify that options *selected* make sense with respect to each other
+        """
+        def _bad_rho_setters(msg):
+            raise ValueError("Rho setter options do not make sense together:\n"
+                             f"{msg}")
+        
+        if self.grad_rho_setter and self.sensi_rho:
+            _bad_rho_setters("Only one rho setter can be active.")
+        if not self.grad_rho_setter and not self.sensi_rho:
+            if self.dynamic_rho_primal_crit or self.dynamic_rho_dual_crit:
+                _bad_rho_setters("dynamic rho only works with grad- and sensi-")
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
         self.add_to_config(f"{sstr}_name",
