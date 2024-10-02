@@ -62,6 +62,13 @@ class ProperBundler():
         names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(start+num_buns)]
         return names
 
+    def kw_creator(self, cfg):
+        sc_kwargs = self.module.kw_creator(cfg)
+        self.oringal_kwargs = sc_kwargs.copy()
+        # Add cfg in case it is not already there
+        sc_kwargs["cfg"] = cfg
+        return sc_kwargs
+    
     def scenario_creator(self, sname, **kwargs):
         """
         Wraps the module scenario_creator to return a bundle if the name
@@ -70,7 +77,7 @@ class ProperBundler():
         NOTE: has early returns
         """
         if "scen" in sname or "Scen" in sname:
-            return self.model.scenario_creator(**kwargs)
+            return self.module.scenario_creator(sname, **self.oringal_kwargs)
 
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is not None:
             fname = os.path.join(cfg.unpickle_bundles_dir, sname+".pkl")
@@ -81,14 +88,15 @@ class ProperBundler():
             # if we are still here, we have to create the bundle
             firstnum = int(sname.split("_")[1])
             lastnum = int(sname.split("_")[2])
-            snames = self.model.scenario_names_creator(firstnum, lastnum)
+            snames = self.module.scenario_names_creator(firstnum, lastnum)
 
             print("\nHEY!!! seeds are big trouble\n")
-            bundle = sputils.create_EF(snames, self.model.scenario_creator,
-                                       scenario_creator_kwargs=kwargs, EF_name=sname,
+            bundle = sputils.create_EF(snames, self.module.scenario_creator,
+                                       scenario_creator_kwargs=self.oringal_kwargs,
+                                       EF_name=sname,
                                        nonant_for_fixed_vars = False)
             # every scenario has the same nonants, so create one and grab them
-            scen = self.model.scenario_creator(snames[0], **kwargs)
+            scen = self.module.scenario_creator(snames[0], **self.oringal_kwargs)
             nonantlist = scen._mpisppy_node_list[0].nonant_vardata_list
             bprob = bundle._mpisppy_probability  # EF instance has probability
             sputils.attach_root_node(bundle, 0, nonantlist)
