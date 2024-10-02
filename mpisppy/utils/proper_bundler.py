@@ -21,7 +21,7 @@ import mpisppy.utils.pickle_bundle as pickle_bundle
 #  - make a bundle 
 #  - make a bundle and write it
 # Multi-stage (as of Sept 2024) not supported in class or generic_cylinders
-#  You need to do something clevar like in aircondB
+#  You need to do something clever like in aircondB
 # NOTE:: the caller needs to make sure it is two stage
 #        the caller needs to worry about what is in what rank
 #        (local_scenarios might have bundle names, e.g.)
@@ -36,7 +36,7 @@ class ProperBundler():
         comm: (MPI comm): might be the global comm when pickling and writing
     """
 
-    def __init__(self, module, comm):
+    def __init__(self, module, comm=None):
         self.module = module
         self.comm = comm
 
@@ -50,7 +50,7 @@ class ProperBundler():
         assert cfg is not None, "ProperBundler needs cfg for scenario names"
         return cfg.model.scenario_names_creator(num_scens, start=start)
 
-    def bundle_names_creator(self, cfg, num_buns, start=None, cfg=None):
+    def bundle_names_creator(self, num_buns, start=None, cfg=None):
         # start refers to the bundle number
         if start is None:
             start = 0
@@ -59,7 +59,7 @@ class ProperBundler():
         assert cfg.get("scenarios_per_bundle") is not None
         assert cfg.num_scens % cfg.scenarios_per_bundle == 0
         bsize = cfg.scenarios_per_bundle  # typing aid
-        names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for start in range(start+num_buns)]
+        names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(start+num_buns)]
         return names
 
     def scenario_creator(self, sname, **kwargs):
