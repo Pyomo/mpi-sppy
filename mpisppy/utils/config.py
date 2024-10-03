@@ -98,8 +98,7 @@ class Config(pyofig.ConfigDict):
         """
         if name in self:
             if complain:
-                print(f"Duplicate {name=} will not be added to cfg to assign {value=}")
-                # raise RuntimeError(f"Trying to add duplicate {name} to self.")
+                raise RuntimeError(f"Trying to add duplicate {name=} to cfg {value=}")
         else:
             self.add_to_config(name, description, domain, default, argparse=False)
             self[name] = value
