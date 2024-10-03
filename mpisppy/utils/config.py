@@ -86,7 +86,7 @@ class Config(pyofig.ConfigDict):
 
 
     #===============
-    def add_and_assign(self, name, description, domain, default, value, complain=False):
+    def add_and_assign(self, name, description, domain, default, value, complain=True):
         """ Add an arg to the self dict and assign it a value
         Args:
              name (str): the argument name, underscore separated
@@ -98,7 +98,7 @@ class Config(pyofig.ConfigDict):
         """
         if name in self:
             if complain:
-                print(f"Duplicate {name} will not be added to self by add_and_assign {value}.")
+                print(f"Duplicate {name=} will not be added to cfg to assign {value=}")
                 # raise RuntimeError(f"Trying to add duplicate {name} to self.")
         else:
             self.add_to_config(name, description, domain, default, argparse=False)
