@@ -55,6 +55,8 @@ def nonant_sensitivies(s, ph):
     kkt_lu = ScipyLU()
     # always regularize equality constraints
     kkt_builder.regularize_equality_gradient(kkt=kkt, coef=-1e-8, copy_kkt=False)
+    # always regularize the Hessian too
+    kkt_builder.regularize_hessian(kkt=kkt, coef=1e-8, copy_kkt=False)
     kkt_lu.do_numeric_factorization(kkt, raise_on_error=True)
 
     grad_vec = np.zeros(kkt.shape[1])
