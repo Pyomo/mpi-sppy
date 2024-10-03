@@ -11,7 +11,7 @@
 import logging
 
 import pyomo.environ as pyo
-from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
+import mpisppy.utils.sputils as sputils
 
 logger = logging.getLogger('mpisppy.scenario_tree')
 
@@ -87,7 +87,7 @@ class ScenarioNode:
         self.parent_name = parent_name # None for ROOT
         # now make the vardata lists
         if self.nonant_list is not None:
-            self.nonant_vardata_list = build_vardatalist(self,
+            self.nonant_vardata_list = sputils.build_vardatalist(
                                                          scen_model,
                                                          self.nonant_list)
         else:
@@ -96,7 +96,7 @@ class ScenarioNode:
             self.nonant_vardata_list = []
 
         if self.nonant_ef_suppl_list is not None:
-            self.nonant_ef_suppl_vardata_list = build_vardatalist(self,
+            self.nonant_ef_suppl_vardata_list = sputils.build_vardatalist(
                                                          scen_model,
                                                          self.nonant_ef_suppl_list)
         else:
