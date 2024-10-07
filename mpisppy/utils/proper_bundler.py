@@ -9,7 +9,6 @@
 # Utilities to support formation and use of "proper" bundles
 
 import os
-import dill  
 from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.pickle_bundle as pickle_bundle
@@ -76,6 +75,7 @@ class ProperBundler():
         This returns a Pyomo model (either for scenario, or the EF of a bundle)
         NOTE: has early returns
         """
+        cfg = kwargs["cfg"]
         if "scen" in sname or "Scen" in sname:
             return self.module.scenario_creator(sname, **self.oringal_kwargs)
 
