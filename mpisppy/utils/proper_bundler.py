@@ -50,7 +50,7 @@ class ProperBundler():
         return cfg.model.scenario_names_creator(num_scens, start=start)
 
     def bundle_names_creator(self, num_buns, start=None, cfg=None):
-        # start refers to the bundle number
+        # start refers to the bundle number; bundles are always zero-based
         if start is None:
             start = 0
         assert cfg is not None, "ProperBundler needs cfg for bundle names"
@@ -58,7 +58,9 @@ class ProperBundler():
         assert cfg.get("scenarios_per_bundle") is not None
         assert cfg.num_scens % cfg.scenarios_per_bundle == 0
         bsize = cfg.scenarios_per_bundle  # typing aid
-        names = [f"Bundle_{bn*bsize}_{(bn+1)*bsize-1}" for bn in range(start+num_buns)]
+        # We need to know if scenarios (not bundles) are one-based.
+        inum = sputils.extract_num(self.module.scenario_names_creator(1)[0])
+        names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in range(start+num_buns)]
         return names
 
     def kw_creator(self, cfg):
@@ -85,12 +87,14 @@ class ProperBundler():
             return bundle
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is None:
             
-            # if we are still here, we have to create the bundle
-            firstnum = int(sname.split("_")[1])
+            # If we are still here, we have to create the bundle.
+            firstnum = int(sname.split("_")[1])  # sname is a bundle name
             lastnum = int(sname.split("_")[2])
-            snames = self.module.scenario_names_creator(firstnum, lastnum)
+            # snames are scenario names
+            snames = self.module.scenario_names_creator(lastnum-firstnum+1,
+                                                        firstnum)
 
-            print("\nHEY!!! seeds are big trouble\n")
+            # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
                                        scenario_creator_kwargs=self.oringal_kwargs,
                                        EF_name=sname,
@@ -102,11 +106,6 @@ class ProperBundler():
             sputils.attach_root_node(bundle, 0, nonantlist)
             # I think attach_root_node messes up the probability
             bundle._mpisppy_probability = bprob
-
-            if kwargs.get("pickle_bundles_dir") is not None:
-                # note that sname is a bundle name
-                fname = os.path.join(kwargs["pickle_bundles_dir"], sname+".pkl")
-                pickle_bundle.dill_pickle(bundle, fname)
             return bundle
         else:
             raise RuntimeError (f"Scenario name does not have scen or Bundle: {sname}")

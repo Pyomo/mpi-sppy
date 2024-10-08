@@ -21,19 +21,19 @@ from mpisppy import global_toc
 
 def dill_pickle(model, fname):
     """ serialize model using dill to file name"""
-    global_toc(f"about to pickle to {fname}")
+    # global_toc(f"about to pickle to {fname}")
     with open(fname, "wb") as f:
         dill.dump(model, f)
-    global_toc(f"done with pickle {fname}")
+    # global_toc(f"done with pickle {fname}")
 
 
 def dill_unpickle(fname):
     """ load a model from fname"""
     
-    global_toc(f"about to unpickle {fname}")
+    # global_toc(f"about to unpickle {fname}")
     with open(fname, "rb") as f:
         m = dill.load(f)
-    global_toc(f"done with unpickle {fname}")
+    # global_toc(f"done with unpickle {fname}")
     return m
 
 
