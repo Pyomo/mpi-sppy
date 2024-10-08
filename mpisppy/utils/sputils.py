@@ -18,6 +18,7 @@ import inspect
 import importlib
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
+from pyomo.repn import generate_standard_repn
 
 from mpisppy import MPI, haveMPI
 from pyomo.core.expr.numeric_expr import LinearExpression
@@ -980,16 +981,52 @@ def reenable_tictoc_output():
     tt_timer._ostream.close()
     tt_timer._ostream = sys.stdout
 
-    
+
 def find_active_objective(pyomomodel):
+    return find_objective(pyomomodel, active=True)
+
+
+def find_objective(pyomomodel, active=False):
     # return the only active objective or raise and error
     obj = list(pyomomodel.component_data_objects(
         Objective, active=True, descend_into=True))
-    if len(obj) != 1:
+    if len(obj) == 1:
+        return obj[0]
+    if active or len(obj) > 1:
         raise RuntimeError("Could not identify exactly one active "
                            "Objective for model '%s' (found %d objectives)"
                            % (pyomomodel.name, len(obj)))
-    return obj[0]
+    # search again for a single inactive objective
+    obj = list(pyomomodel.component_data_objects(
+        Objective, descend_into=True))
+    if len(obj) == 1:
+        return obj[0]
+    raise RuntimeError("Could not identify exactly one objective for model "
+                       f"{pyomomodel.name} (found {len(obj)} objectives)")
+
+
+def nonant_cost_coeffs(s):
+    """
+    return a dictionary from s._mpisppy_data.nonant_indices.keys()
+    to the objective cost coefficient
+    """
+    objective = find_objective(s)
+
+    # initialize to 0
+    cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+    repn = generate_standard_repn(objective.expr, quadratic=False)
+    for coef, var in zip(repn.linear_coefs, repn.linear_vars):
+        if id(var) in s._mpisppy_data.varid_to_nonant_index:
+            cost_coefs[s._mpisppy_data.varid_to_nonant_index[id(var)]] = coef
+
+    for var in repn.nonlinear_vars:
+        if id(var) in s._mpisppy_data.varid_to_nonant_index:
+            raise RuntimeError(
+                "Found nonlinear variables in the objective function. "
+                f"Variable {var} has nonlinear interactions in the objective funtion"
+            )
+    return cost_coefs
+
 
 def create_nodenames_from_branching_factors(BFS):
     """

@@ -196,7 +196,7 @@ class ReducedCostsFixer(Extension):
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("All reduced costs are nan, heuristic fixing will not be applied")
             return
-        
+  
         # compute the quantile target
         abs_reduced_costs = np.abs(reduced_costs)
 
