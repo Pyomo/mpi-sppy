@@ -1,6 +1,22 @@
 Pickled Bundles
 ===============
 
+Current support
+---------------
+
+  - ``mpisppy.utils.pickle_bundle.py`` has miscellaneious utilities related to picking and other data processing
+  - ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
+
+
+
+
+
+
+
+
+Deprecated
+----------
+
 At the time of this writing, pickled bundles is a little bit beyond
 the bleeding edge.  The idea is that bundles are formed and then saved
 as dill pickle files for rapid retrieval. The file

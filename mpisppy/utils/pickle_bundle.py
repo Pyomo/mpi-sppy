@@ -50,8 +50,9 @@ def pickle_bundle_config(cfg):
                         description="Read bundles from a dill pickle files in this dir; (default None)",
                         domain=str,
                         default=None)
+    
     cfg.add_to_config("scenarios_per_bundle",
-                        description="Used for `proper` bundles only (default None)",
+                        description="Used for `proper` (aka pickle) bundles only (might also be used when reading) (default None)",
                         domain=int,
                         default=None)
 

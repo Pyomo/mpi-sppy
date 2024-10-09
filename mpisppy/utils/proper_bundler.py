@@ -100,13 +100,22 @@ class ProperBundler():
                                        EF_name=sname,
                                        nonant_for_fixed_vars = False)
             # every scenario has the same nonants, so create one and grab them
-            scen = self.module.scenario_creator(snames[0], **self.oringal_kwargs)
-            nonantlist = scen._mpisppy_node_list[0].nonant_vardata_list
-            bprob = bundle._mpisppy_probability  # EF instance has probability
+            nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]
+            # if the original scenarios were uniform, this needs to be also
+            # (EF formation will recompute for the bundle if uniform)
+            scen = self.module.scenario_creator(snames[0], **self.original_kwargs)
+            if scen._mpisppy_probability == "uniform":
+                bprob = "uniform"
+            else:
+                bprob = bundle._mpisppy_probability 
+            print(f"{bprob=}")
             sputils.attach_root_node(bundle, 0, nonantlist)
-            # I think attach_root_node messes up the probability
             bundle._mpisppy_probability = bprob
             return bundle
         else:
             raise RuntimeError (f"Scenario name does not have scen or Bundle: {sname}")
 
+
+
+
+        
