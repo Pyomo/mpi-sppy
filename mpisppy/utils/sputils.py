@@ -282,7 +282,6 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         try:
             EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
             EF_instance._mpisppy_probability += scenario_instance._mpisppy_probability
-            print(f"{EF_instance._mpisppy_probability=}")
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "

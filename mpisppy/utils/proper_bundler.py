@@ -65,7 +65,7 @@ class ProperBundler():
 
     def kw_creator(self, cfg):
         sc_kwargs = self.module.kw_creator(cfg)
-        self.oringal_kwargs = sc_kwargs.copy()
+        self.original_kwargs = sc_kwargs.copy()
         # Add cfg in case it is not already there
         sc_kwargs["cfg"] = cfg
         return sc_kwargs
@@ -79,7 +79,7 @@ class ProperBundler():
         """
         cfg = kwargs["cfg"]
         if "scen" in sname or "Scen" in sname:
-            return self.module.scenario_creator(sname, **self.oringal_kwargs)
+            return self.module.scenario_creator(sname, **self.original_kwargs)
 
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is not None:
             fname = os.path.join(cfg.unpickle_bundles_dir, sname+".pkl")
@@ -96,11 +96,11 @@ class ProperBundler():
 
             # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
-                                       scenario_creator_kwargs=self.oringal_kwargs,
+                                       scenario_creator_kwargs=self.original_kwargs,
                                        EF_name=sname,
                                        nonant_for_fixed_vars = False)
-            # every scenario has the same nonants, so create one and grab them
-            nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]
+
+            nonantlist = [v for idx, v in bundle.ref_vars.items() if idx[0] =="ROOT"]
             # if the original scenarios were uniform, this needs to be also
             # (EF formation will recompute for the bundle if uniform)
             scen = self.module.scenario_creator(snames[0], **self.original_kwargs)
@@ -108,7 +108,6 @@ class ProperBundler():
                 bprob = "uniform"
             else:
                 bprob = bundle._mpisppy_probability 
-            print(f"{bprob=}")
             sputils.attach_root_node(bundle, 0, nonantlist)
             bundle._mpisppy_probability = bprob
             return bundle
