@@ -82,8 +82,9 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             s.rc = pyo.Suffix(direction=pyo.Suffix.IMPORT)
         self.opt._create_solvers(presolve=False)
 
-    def lagrangian(self):
-        bound = super().lagrangian()
+    def lagrangian(self, need_solution=True):
+        # we need the solution, so ignore what was passed in
+        bound = super().lagrangian(need_solution=True)
         if bound is not None:
             self.extract_and_store_reduced_costs(bound)
         return bound
