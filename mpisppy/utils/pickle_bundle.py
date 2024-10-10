@@ -37,30 +37,6 @@ def dill_unpickle(fname):
     return m
 
 
-def pickle_bundle_config(cfg):
-    """ Add command line options for creation and use of "proper" bundles
-    args:
-        cfg (Config): the Config object to which we add"""
-    cfg.add_to_config('pickle_bundles_dir',
-                        description="Write bundles to a dill pickle files in this dir (default None)",
-                        domain=str,
-                        default=None)
-    
-    cfg.add_to_config('unpickle_bundles_dir',
-                        description="Read bundles from a dill pickle files in this dir; (default None)",
-                        domain=str,
-                        default=None)
-    
-    cfg.add_to_config("scenarios_per_bundle",
-                        description="Used for `proper` (aka pickle) bundles only (might also be used when reading) (default None)",
-                        domain=int,
-                        default=None)
-
-    cfg.add_to_config(name="proper_no_files",
-                      description="Proper bundles without reading or writing files (default False)",
-                      domain=bool,
-                      default=False)
-    
 def check_args(cfg):
     """ make sure the pickle bundle args make sense"""
     assert(cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None)

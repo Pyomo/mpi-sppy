@@ -37,7 +37,7 @@ def _parse_args(m):
     # m is the model file module
     cfg = config.Config()
     # pb:
-    pickle_bundle.pickle_bundle_config(cfg)
+    cfg.proper_bundle_config()
     
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",

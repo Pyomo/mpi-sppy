@@ -27,7 +27,7 @@ my_rank = MPI.COMM_WORLD.Get_rank()
 def _parse_args():
     cfg = config.Config()
     cfg.multistage()
-    pickle_bundle.pickle_bundle_config(cfg)
+    cfg.proper_bundle_config()
     aircondB.inparser_adder(cfg)
     cfg.parse_command_line("bundle_pickler for aircond")
 

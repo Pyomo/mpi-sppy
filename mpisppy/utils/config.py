@@ -943,6 +943,27 @@ class Config(pyofig.ConfigDict):
                                 domain=bool,
                                 default=False)
 
+    def proper_bundle_config(self):
+        self.add_to_config('pickle_bundles_dir',
+                            description="Write bundles to a dill pickle files in this dir (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config('unpickle_bundles_dir',
+                            description="Read bundles from a dill pickle files in this dir; (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config("scenarios_per_bundle",
+                            description="Used for `proper` (aka pickle) bundles only (might also be used when reading) (default None)",
+                            domain=int,
+                            default=None)
+
+        self.add_to_config(name="proper_no_files",
+                          description="Proper bundles without reading or writing files (default False)",
+                          domain=bool,
+                          default=False)
+
 
     #================
     def create_parser(self,progname=None):
