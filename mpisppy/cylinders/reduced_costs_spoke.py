@@ -15,12 +15,12 @@ from mpisppy import MPI
 
 class ReducedCostsSpoke(LagrangianOuterBound):
 
+    converger_spoke_char = 'R'
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.bound_tol = self.opt.options['rc_bound_tol']
         self.consensus_threshold = np.sqrt(self.bound_tol)
-        self.converger_spoke_char = 'R'
-
 
     def make_windows(self):
         if not hasattr(self.opt, "local_scenarios"):
@@ -82,8 +82,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             s.rc = pyo.Suffix(direction=pyo.Suffix.IMPORT)
         self.opt._create_solvers(presolve=False)
 
-    def lagrangian(self):
-        bound = super().lagrangian()
+    def lagrangian(self, need_solution=True):
+        if not need_solution:
+            raise RuntimeError("ReducedCostsSpoke always needs a solution to work")
+        bound = super().lagrangian(need_solution=need_solution)
         if bound is not None:
             self.extract_and_store_reduced_costs(bound)
         return bound
@@ -135,3 +137,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
         self.rc = rcg
+
+    def main(self):
+        # need the solution for ReducedCostsSpoke
+        super().main(need_solution=True)
