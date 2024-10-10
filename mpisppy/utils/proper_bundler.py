@@ -86,7 +86,7 @@ class ProperBundler():
             bundle = pickle_bundle.dill_unpickle(fname)
             return bundle
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is None:
-            
+            # this is also the branch for proper_no_files
             # If we are still here, we have to create the bundle.
             firstnum = int(sname.split("_")[1])  # sname is a bundle name
             lastnum = int(sname.split("_")[2])
