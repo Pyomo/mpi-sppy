@@ -1,0 +1,73 @@
+Proper Bundles
+==============
+
+Prior to 2024, bundles were constructed for the purpose of solves, but
+all other processing (e.g., computing W values) was done on individutal
+scenarios. We will refer to these as `loose bundles`. This bundling scheme
+is very flexible with respect to the numbers of scenarios in each bundle.
+There are various if-blocks in the mpisppy code to support this type of bundle.
+
+In 2024, `proper bundles` were supported. After the extensive form
+for a proper bundle is created, the original scenarios are more or less
+forgotten and all processing takes place for the bundle. At the time
+of this writing, these bundles are a little less flexible in that
+the number of scenarios per bundle must divide the number of scenarios
+and randomizing the assignment of scenarios to bundles is left to the
+user (e.g., but using a pseudo-random vector to provide one level
+of indirection for the scenario number in the ``scenario_creator`` function).
+As of the time of this writing, only two-stage problems are easily supported.
+
+Proper bundles result in faster execution than loose bundles. See
+``mpisppy.generic_cylinders.py`` for an example of their use.
+In addition to being created on the fly and used with ``--proper-no-files``,
+then can be written (but not used in the same run) with ``--pickle-bundles-dir``
+(note the the directory specified will be overwritten), and read before
+use with ``--unpickle-bundles-dir``.  In all uses of bundles
+in ``mpisppy.generic_cylinders.py`` the ``--scenarios-per-bundle`` option
+must be specified (even when reading).
+
+.. Note::
+   When writing bundles in ``mpisppy.generic_cylinders.py``, all
+   ranks are used for forming and writing bundles. Command line
+   options related to anythong other than proper bundles are ignored.
+
+.. Note::
+   Reading and writing pickle files only works with proper bundles, not
+   loose bundles.
+
+.. Note::
+   If you do pseudo random number generation on-the-fly during scenario creation,
+   very careful management of random seeds is required if you want to
+   get the same scenarios with proper  bundles that you get without them.
+
+Modules
+-------
+
+In addition to command line options specified in ``mpisppy.utils.config.py``
+there are two modules that have most of the support for proper bundles:
+
+  - ``mpisppy.utils.pickle_bundle.py`` has miscellaneious utilities related to picking and other data processing
+  - ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
+
+
+Multistage and notes
+--------------------
+
+At the time of this writing, multi-stage proper, pickled bundles is a
+little bit beyond the bleeding edge.  The idea is that bundles are
+formed and then saved as dill pickle files for rapid retrieval. The
+file ``aircond_cylinders.py`` in the aircond example directory
+provides an example.  The latter part of the ``allways.bash`` script
+demonstrates how to run it.
+
+Pickled bundles are clearly useful for algorithm tuning and algorithm
+experimentation. In some, but not all, settings they can also improve
+wall-clock performance for a single optimization run. The pickler
+(e.g., ``bundle_pickler.py`` in the aircond example) does not use a
+solver and can be run once to provide bundles to all cylinders. It can
+often be assigned as many ranks as the total number of CPUs
+available. Reading the bundles from a pickle file is much faster
+than creating them.
+
+The trick is that the bundles must contain entire second stage nodes
+so the resulting bundles represent a two-stage problem.
