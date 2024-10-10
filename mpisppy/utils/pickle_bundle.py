@@ -1,4 +1,3 @@
-
 ###############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 #
