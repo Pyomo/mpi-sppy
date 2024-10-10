@@ -8,6 +8,7 @@
 ###############################################################################
 # This might make a mess in terms of output files....
 # (re)baseline by uncommenting rebaseline_xhat lines
+# The baselines are in the subdirectories of the examples/test_data 
 # NOTE: the asynchronous nature of mip-sppy makes it hard to hit baselines.
 # Run a lot of generic_cylinders examples for regression testing; dlw Aug 2024
 # Not intended to be user-friendly.
@@ -160,7 +161,25 @@ hydroa = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
           "--lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
           f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
-do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir = "test_data/hydroa_baseline")
+do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline")
+
+# proper bundles
+sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
+           "--proper-no-files --scenarios-per-bundle 5 --default-rho 1 "
+           f"--solver-name {solver_name} --max-iterations 5 --lagrangian "
+           "--xhatshuffle --rel-gap 0.001")
+#rebaseline_xhat("sslp", "sslp", 3, sslp_pb, "test_data/sslp_pb_baseline")
+do_one("sslp", "sslp", 3, sslp_pb, xhat_baseline_dir="test_data/sslp_pb_baseline")
+
+# write, then read, pickle bundles
+sslp_wr = "--module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 --default-rho 1"
+do_one("sslp", "sslp", 2, sslp_wr, xhat_baseline_dir=None)
+sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
+           "--unpickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 "
+           f"--default-rho 1 --solver-name={solver_name} "
+           "--max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001")
+#rebaseline_xhat("sslp", "sslp", 3, sslp_rd, "test_data/sslp_rd_baseline")
+do_one("sslp", "sslp", 3, sslp_rd, xhat_baseline_dir="test_data/sslp_rd_baseline")
 
 
 if not nouc:

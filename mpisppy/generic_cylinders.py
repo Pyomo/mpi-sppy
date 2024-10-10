@@ -26,8 +26,6 @@ from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 import mpisppy.utils.solver_spec as solver_spec
 from mpisppy import global_toc
-import mpisppy.utils.pickle_bundle as pickle_bundle
-import mpisppy.utils.proper_bundler as proper_bundler
 from mpisppy import MPI
 
 
@@ -438,6 +436,10 @@ if __name__ == "__main__":
     cfg = _parse_args(module)
 
     if _proper_bundles(cfg):
+        # TBD: remove the need for dill if you are not reading or writing
+        import mpisppy.utils.pickle_bundle as pickle_bundle
+        import mpisppy.utils.proper_bundler as proper_bundler
+    
         wrapper = proper_bundler.ProperBundler(module)
         scenario_creator = wrapper.scenario_creator
         # The scenario creator is wrapped, so these kw_args will not go the original
