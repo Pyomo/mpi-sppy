@@ -17,7 +17,6 @@
 
 import os
 import dill  
-from mpisppy import global_toc
 
 def dill_pickle(model, fname):
     """ serialize model using dill to file name"""

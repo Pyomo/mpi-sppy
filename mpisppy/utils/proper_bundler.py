@@ -9,7 +9,6 @@
 # Utilities to support formation and use of "proper" bundles
 
 import os
-from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.pickle_bundle as pickle_bundle
 
