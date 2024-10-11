@@ -153,7 +153,7 @@ def _parse_args():
                          domain=bool,
                          default=False)    
     # special "proper" bundle arguments
-    pickle_bundle.pickle_bundle_config(cfg)
+    cfg.proper_bundle_config()
 
     cfg.add_to_config("EF_directly",
                          description="Solve the EF directly instead of using cylinders (default False)",

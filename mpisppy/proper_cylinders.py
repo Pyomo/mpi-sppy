@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Generic_cylinder test driver. Adapted from run_all.py by dlw August 2024.
+# pb: temporary version of the Generic_cylinder driver to develop proper_bundles.py
 
 import sys
 import os
@@ -26,6 +26,9 @@ from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 import mpisppy.utils.solver_spec as solver_spec
 from mpisppy import global_toc
+# pb:
+import mpisppy.utils.pickle_bundle as pickle_bundle
+import mpisppy.utils.proper_bundler as proper_bundler
 from mpisppy import MPI
 
 
@@ -33,6 +36,7 @@ from mpisppy import MPI
 def _parse_args(m):
     # m is the model file module
     cfg = config.Config()
+    # pb:
     cfg.proper_bundle_config()
     
     cfg.add_to_config(name="module_name",
@@ -76,12 +80,8 @@ def _parse_args(m):
     cfg.gradient_args()
     cfg.dynamic_rho_args()
     cfg.reduced_costs_args()
-    cfg.sep_rho_args()
-    cfg.coeff_rho_args()
-    cfg.sensi_rho_args()
+
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
-    
-    cfg.checker()  # looks for inconsistencies 
     return cfg
 
 def _name_lists(module, cfg):
@@ -94,12 +94,14 @@ def _name_lists(module, cfg):
         num_scens = np.prod(cfg.branching_factors)
         assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None,\
             "For now, stage2EFsolvern is required for multistage xhat"
+        # pb:
         assert cfg.scenarios_per_bundle is None, "proper bundles in generic_cylinders does not yet support multistage"
 
     else:
         all_nodenames = None
         num_scens = cfg.num_scens
 
+    #pb:
     # proper_no_files should be almost magic
     if cfg.unpickle_bundles_dir is not None or cfg.proper_no_files:
         assert cfg.scenarios_per_bundle is not None
@@ -115,21 +117,21 @@ def _name_lists(module, cfg):
 def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
-        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
-            cfg.default_rho = 1
-        else:
-            raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
+        raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
     if cfg.use_norm_rho_converger:
+        raise RuntimeError("norm rho converger not supported yet")
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
     elif cfg.primal_dual_converger:
+        raise RuntimeError("norm primal dual converger not supported yet")        
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
 
+    #pb:
     all_scenario_names, all_nodenames = _name_lists(module, cfg)    
 
     # Things needed for vanilla cylinders
@@ -177,16 +179,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.grad_rho_setter:
         ext_classes.append(Gradient_extension)
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
-
-    if cfg.sep_rho:
-        vanilla.add_sep_rho(hub_dict, cfg)
-
-    if cfg.coeff_rho:
-        vanilla.add_coeff_rho(hub_dict, cfg)
-
-    if cfg.sensi_rho:
-        vanilla.add_sensi_rho(hub_dict, cfg)
- 
+        
     if len(ext_classes) != 0:
         hub_dict['opt_kwargs']['extensions'] = MultiExtension
         hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
@@ -209,11 +202,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                       all_nodenames=all_nodenames,
                                       rho_setter=rho_setter,
                                       )
-        # Need to fix FWPH to support extensions
-        # if cfg.sep_rho:
-        #     vanilla.add_sep_rho(fw_spoke, cfg)
-        # if cfg.coeff_rho:
-        #     vanilla.add_coeff_rho(fw_spoke, cfg)
 
     # Standard Lagrangian bound spoke
     if cfg.lagrangian:
@@ -230,13 +218,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                           rho_setter = rho_setter,
                                           all_nodenames = all_nodenames,
                                           )
-        if cfg.sep_rho:
-            vanilla.add_sep_rho(ph_ob_spoke, cfg)
-        if cfg.coeff_rho:
-            vanilla.add_coeff_rho(ph_ob_spoke, cfg)
-        if cfg.sensi_rho:
-            vanilla.add_sensi_rho(ph_ob_spoke, cfg)
- 
 
     # subgradient outer bound spoke
     if cfg.subgradient:
@@ -245,12 +226,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                           rho_setter = rho_setter,
                                           all_nodenames = all_nodenames,
                                           )
-        if cfg.sep_rho:
-            vanilla.add_sep_rho(subgradient_spoke, cfg)
-        if cfg.coeff_rho:
-            vanilla.add_coeff_rho(subgradient_spoke, cfg)
-        if cfg.sensi_rho:
-            vanilla.add_sensi_rho(subgradient_spoke, cfg)
 
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
@@ -295,7 +270,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(xhatxbar_spoke)
     if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
-        
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
@@ -339,11 +313,9 @@ def _write_bundles(module,
 
     #print(f"{slices=}")
     #print(f"{local_bundle_names=}")
-    if my_rank == 0:
-        if os.path.exists(cfg.pickle_bundles_dir):
-            shutil.rmtree(cfg.pickle_bundles_dir)
-        os.makedirs(cfg.pickle_bundles_dir)
-    comm.Barrier()
+    if os.path.exists(cfg.pickle_bundles_dir):
+        shutil.rmtree(cfg.pickle_bundles_dir)
+    os.makedirs(cfg.pickle_bundles_dir)
     for bname in local_bundle_names:
         bundle = scenario_creator(bname, **scenario_creator_kwargs)
         fname = os.path.join(cfg.pickle_bundles_dir, bname+".pkl")
@@ -405,12 +377,7 @@ def _model_fname():
         if len(parts) != 2:
             _bad_news()
         return parts[1]
-    
 
-def _proper_bundles(cfg):
-    return cfg.get("pickle_bundles_dir", ifmissing=False)\
-        or cfg.get("unpickle_bundles_dir", ifmissing=False)\
-        or cfg.get("proper_no_files", ifmissing=False)
 
 ##########################################################################
 if __name__ == "__main__":
@@ -432,23 +399,14 @@ if __name__ == "__main__":
         fname = os.path.basename(model_fname)
         sys.path.append(dpath)
         module = importlib.import_module(fname)
-    
     cfg = _parse_args(module)
 
-    if _proper_bundles(cfg):
-        # TBD: remove the need for dill if you are not reading or writing
-        import mpisppy.utils.pickle_bundle as pickle_bundle
-        import mpisppy.utils.proper_bundler as proper_bundler
-    
-        wrapper = proper_bundler.ProperBundler(module)
-        scenario_creator = wrapper.scenario_creator
-        # The scenario creator is wrapped, so these kw_args will not go the original
-        # creator (the kw_creator will keep the original args)
-        scenario_creator_kwargs = wrapper.kw_creator(cfg)
-    else:  # the more common case
-        scenario_creator = module.scenario_creator
-        scenario_creator_kwargs = module.kw_creator(cfg)
-        
+    #pb: from here to bottom, really
+    wrapper = proper_bundler.ProperBundler(module)
+    scenario_creator = wrapper.scenario_creator
+    # The scenario creator is wrapped, so these kw_args will not go the original
+    # creator (the kw_creator will keep the original args)
+    scenario_creator_kwargs = wrapper.kw_creator(cfg)
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
 
