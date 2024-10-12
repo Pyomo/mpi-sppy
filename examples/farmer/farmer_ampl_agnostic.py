@@ -11,9 +11,7 @@ but not necessarily the best ways in all cases.
 from amplpy import AMPL
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import farmer
 import numpy as np
-import time
 
 # If you need random numbers, use this random stream:
 farmerstream = np.random.RandomState()
@@ -82,12 +80,23 @@ def scenario_creator(
     
 #=========
 def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
+    if (start is None) :
+        start=0
+    return [f"scen{i}" for i in range(start,start+num_scens)]
 
 
 #=========
 def inparser_adder(cfg):
-    farmer.inparser_adder(cfg)
+    cfg.num_scens_required()
+    cfg.add_to_config("crops_multiplier",
+                      description="number of crops will be three times this (default 1)",
+                      domain=int,
+                      default=1)
+    
+    cfg.add_to_config("farmer_with_integers",
+                      description="make the version that has integers (default False)",
+                      domain=bool,
+                      default=False)
 
     
 #=========
@@ -98,15 +107,18 @@ def kw_creator(cfg):
 # This is not needed for PH
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
-    return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                                           given_scenario, **scenario_creator_kwargs)
+    # Since this is a two-stage problem, we don't have to do much.
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
+
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
     # (the fct in farmer won't work because the Var names don't match)
     #farmer.scenario_denouement(rank, scenario_name, scenario)
-
 
 
 ##################################################################################################
