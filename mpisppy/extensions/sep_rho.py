@@ -151,11 +151,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                         rho._value = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
                     else:
                         rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
-
                     rho._value *= self.multiplier
-
-                # if ph.cylinder_rank==0:
-                #     print(ndn_i,nv.getname(),xmax[ndn_i],xmin[ndn_i],primal_resid[ndn_i],cc[ndn_i],rho._value)
         if ph.cylinder_rank == 0:
             print("Rho values updated by SepRho Extension")
         
