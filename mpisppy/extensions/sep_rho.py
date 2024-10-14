@@ -169,7 +169,15 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.dual_conv_cache.append(self.wt.W_diff())
 
         if self._update_recommended():
+            reenable_prox = False
+            if not self.ph.prox_disabled:
+                self.ph._disable_prox()
+                reenable_prox = True
+            # this will ask for objective function coefficients,
+            # so we don't want the prox term (TODO: and maybe W?)
             self.compute_and_update_rho()
+            if reenable_prox:
+                self.ph._reenable_prox()
             sum_rho = 0.0
             num_rhos = 0   # could be computed...
             for sname, s in self.opt.local_scenarios.items():
