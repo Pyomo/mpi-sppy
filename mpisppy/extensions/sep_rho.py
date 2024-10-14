@@ -136,7 +136,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def _compute_xmin(ph):
         return SepRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
-    def compute_and_update_rho(self):
+    def _compute_and_update_rho(self):
         ph = self.ph
         primal_resid = self._compute_primal_residual_norm(ph)
         xmax = self._compute_xmax(ph)
@@ -152,8 +152,25 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     else:
                         rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
                     rho._value *= self.multiplier
-        if ph.cylinder_rank == 0:
-            print("Rho values updated by SepRho Extension")
+
+    def compute_and_update_rho(self):
+        reenable_prox = False
+        if not self.ph.prox_disabled:
+            self.ph._disable_prox()
+            reenable_prox = True
+        # this will ask for objective function coefficients,
+        # so we don't want the prox term (TODO: and maybe W?)
+        self._compute_and_update_rho()
+        if reenable_prox:
+            self.ph._reenable_prox()
+        sum_rho = 0.0
+        num_rhos = 0   # could be computed...
+        for sname, s in self.opt.local_scenarios.items():
+            for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+                sum_rho += s._mpisppy_model.rho[ndn_i]._value
+                num_rhos += 1
+        rho_avg = sum_rho / num_rhos
+        global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
         
     def pre_iter0(self):
         pass
@@ -169,23 +186,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.dual_conv_cache.append(self.wt.W_diff())
 
         if self._update_recommended():
-            reenable_prox = False
-            if not self.ph.prox_disabled:
-                self.ph._disable_prox()
-                reenable_prox = True
-            # this will ask for objective function coefficients,
-            # so we don't want the prox term (TODO: and maybe W?)
             self.compute_and_update_rho()
-            if reenable_prox:
-                self.ph._reenable_prox()
-            sum_rho = 0.0
-            num_rhos = 0   # could be computed...
-            for sname, s in self.opt.local_scenarios.items():
-                for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
-                    sum_rho += s._mpisppy_model.rho[ndn_i]._value
-                    num_rhos += 1
-            rho_avg = sum_rho / num_rhos
-            global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
 
     def enditer(self):
         pass
