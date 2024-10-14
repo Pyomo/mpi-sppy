@@ -36,6 +36,8 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
         self.cfg = ph.options["sep_rho_options"]["cfg"]
 
+        self._nonant_cost_coeffs = None
+
     def _compute_primal_residual_norm(self, ph):
         local_nodenames = []
         local_primal_residuals = {}
@@ -136,6 +138,12 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def _compute_xmin(ph):
         return SepRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
+    def nonant_cost_coeffs(self, s):
+        if self._nonant_cost_coeffs is None:
+            # Should be the same in every scenario...
+            self._nonant_cost_coeffs = nonant_cost_coeffs(s)
+        return self._nonant_cost_coeffs
+
     def _compute_and_update_rho(self):
         ph = self.ph
         primal_resid = self._compute_primal_residual_norm(ph)
@@ -143,7 +151,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         xmin = self._compute_xmin(ph)
 
         for s in ph.local_scenarios.values():
-            cc = nonant_cost_coeffs(s)
+            cc = self.nonant_cost_coeffs(s)
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 if cc[ndn_i] != 0:
                     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
@@ -154,15 +162,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     rho._value *= self.multiplier
 
     def compute_and_update_rho(self):
-        reenable_prox = False
-        if not self.ph.prox_disabled:
-            self.ph._disable_prox()
-            reenable_prox = True
-        # this will ask for objective function coefficients,
-        # so we don't want the prox term (TODO: and maybe W?)
         self._compute_and_update_rho()
-        if reenable_prox:
-            self.ph._reenable_prox()
         sum_rho = 0.0
         num_rhos = 0   # could be computed...
         for sname, s in self.opt.local_scenarios.items():
