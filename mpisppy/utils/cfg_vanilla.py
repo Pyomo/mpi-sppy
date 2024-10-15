@@ -204,7 +204,7 @@ def add_fixer(hub_dict,
 
 def add_sep_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,SepRho)
-    hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier}
+    hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier, "cfg": cfg}
 
 def add_coeff_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,CoeffRho)

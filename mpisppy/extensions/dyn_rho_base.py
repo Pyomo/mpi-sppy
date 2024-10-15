@@ -55,7 +55,7 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     def _update_rho_primal_based(self):
         with warnings.catch_warnings():
             warnings.filterwarnings('error')
-            curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
+            curr_conv, last_conv = self.primal_conv_cache[0], self.primal_conv_cache[-1]
             try:
                 primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
             except Warning:
@@ -65,14 +65,16 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
             return (primal_diff <= self.cfg.dynamic_rho_primal_thresh)
 
     def _update_rho_dual_based(self):
-        curr_conv, last_conv = self.dual_conv_cache[-1], self.dual_conv_cache[-2]
+        if len(self.dual_conv_cache) < 4:
+            # first two entries will be 0 by construction, so ignore
+            return False
+        curr_conv, last_conv = self.dual_conv_cache[0], self.dual_conv_cache[-1]
         dual_diff =  np.abs((last_conv - curr_conv) / last_conv) if last_conv != 0 else 0
-        #print(f'{dual_diff =}')
         return (dual_diff <= self.cfg.dynamic_rho_dual_thresh)
 
     def _update_recommended(self):
-        return (self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
-               (self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
+        return (hasattr(self.cfg, "dynamic_rho_primal_crit") and self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
+               (hasattr(self.cfg, "dynamic_rho_dual_crit") and self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
 
     def pre_iter0(self):
         pass
