@@ -73,8 +73,8 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
         return (dual_diff <= self.cfg.dynamic_rho_dual_thresh)
 
     def _update_recommended(self):
-        return (self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
-               (self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
+        return (hasattr(self.cfg, "dynamic_rho_primal_crit") and self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
+               (hasattr(self.cfg, "dynamic_rho_dual_crit") and self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
 
     def pre_iter0(self):
         pass
