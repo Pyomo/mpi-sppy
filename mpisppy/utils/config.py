@@ -813,6 +813,14 @@ class Config(pyofig.ConfigDict):
                             description="Tolerance for primal dual converger (default 1e-2)",
                             domain=float,
                             default=1e-2)
+        self.add_to_config("use_time_limit_converger",
+                           description="Use the time limit converger",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("time_limit",
+                           description="Time limit for time limit converger (in seconds)",
+                           domain=float,
+                           default=3600)
 
     def tracking_args(self):
         self.add_to_config("tracking_folder",
