@@ -527,7 +527,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                    gripe=False,
                    disable_pyomo_signal_handling=False,
                    tee=False,
-                   verbose=False):
+                   verbose=False,
+                   need_solution=True):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -558,6 +559,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, displays solver output. Default False.
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
+            need_solution (boolean, optional):
+                If True, raises an exception if a solution is not available.
+                Default True
         """
 
         """ Developer notes:
@@ -603,13 +607,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
 
-        super().solve_loop(solver_options,
-                   use_scenarios_not_subproblems,
-                   dtiming,
-                   gripe,
-                   disable_pyomo_signal_handling,
-                   tee,
-                   verbose)
+        super().solve_loop(
+            solver_options,
+            use_scenarios_not_subproblems,
+            dtiming,
+            gripe,
+            disable_pyomo_signal_handling,
+            tee,
+            verbose,
+            need_solution,
+        )
 
         if dis_W and dis_prox:
             self.reenable_W_and_prox()

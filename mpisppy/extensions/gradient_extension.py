@@ -8,18 +8,14 @@
 ###############################################################################
 
 import os
-import numpy as np
 
-import mpisppy.extensions.extension
+import mpisppy.extensions.dyn_rho_base
 import mpisppy.utils.gradient as grad
 import mpisppy.utils.find_rho as find_rho
-from mpisppy.utils.wtracker import WTracker
 from mpisppy import global_toc
 
-# for trapping numpy warnings
-import warnings
 
-class Gradient_extension(mpisppy.extensions.extension.Extension):
+class Gradient_extension(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     """
     This extension makes PH use gradient-rho and the corresponding rho setter.
     
@@ -32,8 +28,8 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
     
     """
     def __init__(self, opt, comm=None):
-        super().__init__(opt)
-        self.cylinder_rank = self.opt.cylinder_rank
+        super().__init__(opt, comm=comm)
+
         self.cfg = opt.options["gradient_extension_options"]["cfg"]
         # This is messy because we want to be able to use or give rhos as requested.
         # (e.g., if the user gave us an input file, use that)
@@ -60,53 +56,13 @@ class Gradient_extension(mpisppy.extensions.extension.Extension):
 
         self.grad_object = grad.Find_Grad(opt, self.cfg)
         self.rho_setter = find_rho.Set_Rho(self.cfg).rho_setter
-        self.primal_conv_cache = []
-        self.dual_conv_cache = []
-        self.wt = WTracker(self.opt)
-
-    def _display_rho_values(self):
-        for sname, scenario in self.opt.local_scenarios.items():
-            rho_list = [scenario._mpisppy_model.rho[ndn_i]._value
-                      for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items()]
-            print(sname, 'rho values: ', rho_list[:5])
-            break
-
-    def _display_W_values(self):
-        for (sname, scenario) in self.opt.local_scenarios.items():
-            W_list = [w._value for w in scenario._mpisppy_model.W.values()]
-            print(sname, 'W values: ', W_list)
-            break
-
-
-    def _update_rho_primal_based(self):
-        with warnings.catch_warnings():
-            warnings.filterwarnings('error')
-            curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
-            try:
-                primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
-            except Warning:
-                if self.cylinder_rank == 0:
-                    print(f"Gradient extension reports {last_conv=} {curr_conv=} - no rho updates recommended")
-                return False
-            return (primal_diff <= self.cfg.grad_dynamic_primal_thresh)
-
-    def _update_rho_dual_based(self):
-        curr_conv, last_conv = self.dual_conv_cache[-1], self.dual_conv_cache[-2]
-        dual_diff =  np.abs((last_conv - curr_conv) / last_conv) if last_conv != 0 else 0
-        #print(f'{dual_diff =}')
-        return (dual_diff <= self.cfg.grad_dynamic_dual_thresh)
-
-    def _update_recommended(self):
-        return (self.cfg.grad_dynamic_primal_crit and self._update_rho_primal_based()) or \
-               (self.cfg.grad_dynamic_dual_crit and self._update_rho_dual_based())
 
     def pre_iter0(self):
         pass
 
     def post_iter0(self):
         global_toc("Using gradient-based rho setter")
-        self.primal_conv_cache.append(self.opt.convergence_diff())
-        self.dual_conv_cache.append(self.wt.W_diff())
+        super().post_iter0()
 
     def miditer(self):
         self.primal_conv_cache.append(self.opt.convergence_diff())
