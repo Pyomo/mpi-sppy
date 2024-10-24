@@ -522,7 +522,6 @@ def lagranger_spoke(
             ["lagranger_rho_rescale_factors_json"]\
             = cfg.lagranger_rho_rescale_factors_json
     add_ph_tracking(lagranger_spoke, cfg, spoke=True)
-    add_timed_mipgap(lagranger_spoke, cfg)
     return lagranger_spoke
 
 
