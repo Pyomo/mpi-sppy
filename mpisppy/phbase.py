@@ -950,6 +950,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
                         scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
 
+        self.elapsed_time=time.perf_counter()-self.start_time
         if have_converger:
             # Call the constructor of the converger object
             self.convobject = self.ph_converger(self)
@@ -1029,6 +1030,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # over the converger, such that
             # the spokes will always have the
             # latest data, even at termination
+            self.elapsed_time=time.perf_counter()-self.start_time
             if have_converger:
                 if self.convobject.is_converged():
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
