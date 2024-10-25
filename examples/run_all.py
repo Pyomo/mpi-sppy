@@ -273,16 +273,6 @@ do_one("sizes",
        "--solver-name={}".format(solver_name))
 
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
-
-do_one("sslp",
-       "sslp_cylinders.py",
-       4,
-       "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
-       "--max-iterations=5 --default-rho=1 "
-       "--subgradient --xhatshuffle --fwph  --coeff-rho "
-       "--linearize-proximal-terms "
-       "--rel-gap=0.0 "
-       "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
        3,
@@ -346,6 +336,16 @@ do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonan
 
 if not nouc:
     # put a few slow runs and/or runs that are trouble on github in the uc group
+
+    do_one("sslp",
+           "sslp_cylinders.py",
+           4,
+           "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
+           "--max-iterations=5 --default-rho=1 "
+           "--subgradient --xhatshuffle --fwph  --coeff-rho "
+           "--linearize-proximal-terms "
+           "--rel-gap=0.0 "
+           "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
     do_one("sizes",
            "special_cylinders.py",
            3,
