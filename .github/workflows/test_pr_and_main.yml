@@ -323,8 +323,6 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress
-          pip install dill
 
       - name: Build pyomo extensions
         run: |
@@ -338,7 +336,7 @@ jobs:
       - name: Test test_generic nouc
         run: |
           cd examples
-          python generic_tester.py xpress_persistent --oversubscribe nouc
+          python generic_tester.py cplex_direct --oversubscribe nouc
 
   test-gradient-rho:
     name: gradient and rho tests
