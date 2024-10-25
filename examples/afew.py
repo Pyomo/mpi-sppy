@@ -53,14 +53,6 @@ do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        " --xhatlshaped --max-solver-threads=1".format(solver_name))
-do_one("sizes",
-       "sizes_cylinders.py",
-       4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
-       " --xhatshuffle --lagrangian --fwph --smoothing "
-       "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
-
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "

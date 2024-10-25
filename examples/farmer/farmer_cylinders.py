@@ -47,6 +47,7 @@ def _parse_args():
     cfg.reduced_costs_args()
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
+    cfg.dynamic_rho_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,

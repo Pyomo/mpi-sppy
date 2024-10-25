@@ -7,14 +7,14 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.extensions.extension
+import mpisppy.extensions.dyn_rho_base
 import numpy as np
 import mpisppy.MPI as MPI
-
+from mpisppy import global_toc
 from mpisppy.utils.sputils import nonant_cost_coeffs
 
 
-class SepRho(mpisppy.extensions.extension.Extension):
+class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     """
     Rho determination algorithm "SEP" from
     Progressive hedging innovations for a class of stochastic mixed-integer
@@ -23,7 +23,8 @@ class SepRho(mpisppy.extensions.extension.Extension):
     DOI 10.1007/s10287-010-0125-4
     """
 
-    def __init__(self, ph):
+    def __init__(self, ph, comm=None):
+        super().__init__(ph, comm=comm)
         self.ph = ph
 
         self.multiplier = 1.0
@@ -33,6 +34,9 @@ class SepRho(mpisppy.extensions.extension.Extension):
             and "multiplier" in ph.options["sep_rho_options"]
         ):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
+        self.cfg = ph.options["sep_rho_options"]["cfg"]
+
+        self._nonant_cost_coeffs = None
 
     def _compute_primal_residual_norm(self, ph):
         local_nodenames = []
@@ -134,17 +138,20 @@ class SepRho(mpisppy.extensions.extension.Extension):
     def _compute_xmin(ph):
         return SepRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
-    def pre_iter0(self):
-        pass
+    def nonant_cost_coeffs(self, s):
+        if self._nonant_cost_coeffs is None:
+            # Should be the same in every scenario...
+            self._nonant_cost_coeffs = nonant_cost_coeffs(s)
+        return self._nonant_cost_coeffs
 
-    def post_iter0(self):
+    def _compute_and_update_rho(self):
         ph = self.ph
         primal_resid = self._compute_primal_residual_norm(ph)
         xmax = self._compute_xmax(ph)
         xmin = self._compute_xmin(ph)
 
         for s in ph.local_scenarios.values():
-            cc = nonant_cost_coeffs(s)
+            cc = self.nonant_cost_coeffs(s)
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 if cc[ndn_i] != 0:
                     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
@@ -152,16 +159,34 @@ class SepRho(mpisppy.extensions.extension.Extension):
                         rho._value = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
                     else:
                         rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
-
                     rho._value *= self.multiplier
 
-                # if ph.cylinder_rank==0:
-                #     print(ndn_i,nv.getname(),xmax[ndn_i],xmin[ndn_i],primal_resid[ndn_i],cc[ndn_i],rho._value)
-        if ph.cylinder_rank == 0:
-            print("Rho values updated by SepRho Extension")
+    def compute_and_update_rho(self):
+        self._compute_and_update_rho()
+        sum_rho = 0.0
+        num_rhos = 0   # could be computed...
+        for sname, s in self.opt.local_scenarios.items():
+            for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+                sum_rho += s._mpisppy_model.rho[ndn_i]._value
+                num_rhos += 1
+        rho_avg = sum_rho / num_rhos
+        global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
+        
+    def pre_iter0(self):
+        pass
+
+    def post_iter0(self):
+        global_toc("Using sep-rho rho setter")
+        super().post_iter0()        
+        self.compute_and_update_rho()
 
     def miditer(self):
-        pass
+        # this code could be factored; see sens_rho.py
+        self.primal_conv_cache.append(self.opt.convergence_diff())
+        self.dual_conv_cache.append(self.wt.W_diff())
+
+        if self._update_recommended():
+            self.compute_and_update_rho()
 
     def enditer(self):
         pass
