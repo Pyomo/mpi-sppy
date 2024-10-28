@@ -13,7 +13,7 @@
 # And if having the file named listener_util with a class named
 # Synchronizer makes your head hurt, that's good. Get used to it.
 """
-To avoid errors from Pyomo use,
+Prior to October 2024, to avoid errors from Pyomo we used:
                 solve_keyword_args["use_signal_handling"] = False
 """
 import numpy as np
