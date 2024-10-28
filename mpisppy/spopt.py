@@ -178,7 +178,8 @@ class SPOpt(SPBase):
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
         elif disable_pyomo_signal_handling:
-            solve_keyword_args["use_signal_handling"] = False
+            # solve_keyword_args["use_signal_handling"] = False
+            pass
 
         try:
             results = s._solver_plugin.solve(s,
