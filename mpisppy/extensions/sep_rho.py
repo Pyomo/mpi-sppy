@@ -36,6 +36,8 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
         self.cfg = ph.options["sep_rho_options"]["cfg"]
 
+        self._nonant_cost_coeffs = None
+
     def _compute_primal_residual_norm(self, ph):
         local_nodenames = []
         local_primal_residuals = {}
@@ -136,14 +138,20 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def _compute_xmin(ph):
         return SepRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
-    def compute_and_update_rho(self):
+    def nonant_cost_coeffs(self, s):
+        if self._nonant_cost_coeffs is None:
+            # Should be the same in every scenario...
+            self._nonant_cost_coeffs = nonant_cost_coeffs(s)
+        return self._nonant_cost_coeffs
+
+    def _compute_and_update_rho(self):
         ph = self.ph
         primal_resid = self._compute_primal_residual_norm(ph)
         xmax = self._compute_xmax(ph)
         xmin = self._compute_xmin(ph)
 
         for s in ph.local_scenarios.values():
-            cc = nonant_cost_coeffs(s)
+            cc = self.nonant_cost_coeffs(s)
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 if cc[ndn_i] != 0:
                     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
@@ -151,13 +159,18 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                         rho._value = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
                     else:
                         rho._value = abs(cc[ndn_i]) / max(1, primal_resid[ndn_i])
-
                     rho._value *= self.multiplier
 
-                # if ph.cylinder_rank==0:
-                #     print(ndn_i,nv.getname(),xmax[ndn_i],xmin[ndn_i],primal_resid[ndn_i],cc[ndn_i],rho._value)
-        if ph.cylinder_rank == 0:
-            print("Rho values updated by SepRho Extension")
+    def compute_and_update_rho(self):
+        self._compute_and_update_rho()
+        sum_rho = 0.0
+        num_rhos = 0   # could be computed...
+        for sname, s in self.opt.local_scenarios.items():
+            for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+                sum_rho += s._mpisppy_model.rho[ndn_i]._value
+                num_rhos += 1
+        rho_avg = sum_rho / num_rhos
+        global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
         
     def pre_iter0(self):
         pass
@@ -174,14 +187,6 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         if self._update_recommended():
             self.compute_and_update_rho()
-            sum_rho = 0.0
-            num_rhos = 0   # could be computed...
-            for sname, s in self.opt.local_scenarios.items():
-                for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
-                    sum_rho += s._mpisppy_model.rho[ndn_i]._value
-                    num_rhos += 1
-            rho_avg = sum_rho / num_rhos
-            global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
 
     def enditer(self):
         pass
