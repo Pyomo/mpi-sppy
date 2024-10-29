@@ -102,7 +102,8 @@ class SPOpt(SPBase):
                   tee=False,
                   verbose=False,
                   disable_pyomo_signal_handling=False,
-                  update_objective=True):
+                  update_objective=True,
+                  need_solution=True):
         """ Solve one subproblem.
 
         Args:
@@ -126,6 +127,9 @@ class SPOpt(SPBase):
             update_objective (boolean, optional):
                 If True, and a persistent solver is used, update
                 the persistent solver's objective
+            need_solution (boolean, optional):
+                If True, raises an exception if a solution is not available.
+                Default True
 
         Returns:
             float:
@@ -174,7 +178,8 @@ class SPOpt(SPBase):
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
         elif disable_pyomo_signal_handling:
-            solve_keyword_args["use_signal_handling"] = False
+            # solve_keyword_args["use_signal_handling"] = False
+            pass
 
         try:
             results = s._solver_plugin.solve(s,
@@ -209,10 +214,14 @@ class SPOpt(SPBase):
                 raise solver_exception
 
         else:
-            if sputils.is_persistent(s._solver_plugin):
-                s._solver_plugin.load_vars()
-            else:
-                s.solutions.load_from(results)
+            try:
+                if sputils.is_persistent(s._solver_plugin):
+                    s._solver_plugin.load_vars()
+                else:
+                    s.solutions.load_from(results)
+            except Exception as e: # catch everything
+                if need_solution:
+                    raise e
             if self.is_minimizing:
                 s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
                 s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
@@ -244,7 +253,8 @@ class SPOpt(SPBase):
                    gripe=False,
                    disable_pyomo_signal_handling=False,
                    tee=False,
-                   verbose=False):
+                   verbose=False,
+                   need_solution=True):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -269,6 +279,9 @@ class SPOpt(SPBase):
                 If True, displays solver output. Default False.
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
+            need_solution (boolean, optional):
+                If True, raises an exception if a solution is not available.
+                Default True
         """
 
         """ Developer notes:
@@ -300,13 +313,19 @@ class SPOpt(SPBase):
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
-            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
-                                              dtiming=dtiming,
-                                              verbose=verbose,
-                                              tee=tee,
-                                              gripe=gripe,
-                disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            ))
+            pyomo_solve_times.append(
+                self.solve_one(
+                    solver_options,
+                    k,
+                    s,
+                    dtiming=dtiming,
+                    verbose=verbose,
+                    tee=tee,
+                    gripe=gripe,
+                    disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+                    need_solution=need_solution,
+                )
+            )
 
         if self.extensions is not None:
                 self.extobject.post_solve_loop()
