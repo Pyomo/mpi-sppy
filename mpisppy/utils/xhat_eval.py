@@ -317,7 +317,10 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                            .format(nlens[ndn], ndn, len(cache[ndn])))
                     for i in range(nlens[ndn]): 
                         this_vardata = node.nonant_vardata_list[i]
-                        this_vardata._value = cache[ndn][i]
+                        if this_vardata.is_binary() or this_vardata.is_integer():
+                            this_vardata._value = round(cache[ndn][i])
+                        else:
+                            this_vardata._value = cache[ndn][i]
                         this_vardata.fix()
                         if persistent_solver is not None:
                             persistent_solver.update_var(this_vardata)
@@ -339,6 +342,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                     persistent_solver = s._solver_plugin
 
             for var in s._mpisppy_data.nonant_indices.values():
+                if var.is_binary() or var.is_integer():
+                    var._value = round(var._value)
                 var.fix()
                 if not self.bundling and persistent_solver is not None:
                     persistent_solver.update_var(var)

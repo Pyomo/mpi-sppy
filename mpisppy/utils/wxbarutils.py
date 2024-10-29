@@ -397,4 +397,6 @@ def fix_ef_ROOT_nonants(ef, root_nonants):
     varlist = [var for (ndn,i), var in ef.ref_vars.items() if ndn == "ROOT"]
     assert len(varlist) == len(root_nonants)
     for var, vval in zip(varlist, root_nonants):
+        if var.is_binary() or var.is_integer():
+            vval = round(vval)
         var.fix(vval)
