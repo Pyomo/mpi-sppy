@@ -240,6 +240,11 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("config_file",
+                            description="Path to file containing config options",
+                            domain=str,
+                            default='')
+
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
                               description="For PH, linearize the proximal terms for "
@@ -986,8 +991,70 @@ class Config(pyofig.ConfigDict):
             raise RuntimeError("create parser called before Config is populated")
         parser = self.create_parser(progname)
         args = parser.parse_args()
+
+        if 'CONFIGBLOCK.config_file' in args and \
+           len(args.__dict__['CONFIGBLOCK.config_file'])>0:
+            # First read output_dir (to format certain values that may use it)
+            output_dir = args.__dict__['CONFIGBLOCK.output_dir'] if 'CONFIGBLOCK.output_dir' in args else '.'
+            # First read from config file
+            self._import_read_config_dict(self._read_config_file(args.__dict__['CONFIGBLOCK.config_file'],
+                                                                 output_dir=output_dir))
+
+        # Override values from the file with any args specified in command line
         args = self.import_argparse(args)
         return args
+
+    def _read_config_file(self, path_to_configfile, output_dir='.'):
+        '''
+        Read values from config file and load them to a dict.
+        import function (see below) is expecting the name to be 'CONFIGBLOCK.'+arg_name,
+        so I'm adding that to the name.
+        '''
+        read_config_dict = dict()
+        with open(path_to_configfile,'r') as f:
+            l = f.readline()
+            while l:
+                l = l.split('#',1)[0] # Ignore anything that may come after an '#'
+                if len(l)>0:
+                    l_args = l.split(':') # File lines are arg_name: arg_value. There could be ':' in arg_value
+                    arg_name = 'CONFIGBLOCK.'+l_args[0].strip()
+                    if len(l_args)>2:
+                        arg_val = ':'.join(l_args[1:]).strip()
+                    else:
+                        arg_val = l_args[1].strip().format(output_dir=output_dir)
+                    if arg_val!='None':
+                        # None values are defaults, do not read
+                        read_config_dict[arg_name]=arg_val
+                l = f.readline()
+        return read_config_dict
+
+    def _import_read_config_dict(self, read_config_dict):
+        '''
+        Copied from pyomo.common.config.import_argparse
+        We could probably do without the 'CONFIGBLOCK' thing, but I'm not sure what purpose it serves so
+        I just left it there.
+        '''
+        for level, prefix, value, obj in self._data_collector(None, ""):
+            if obj._argparse is None:
+                continue
+            for _args, _kwds in obj._argparse:
+                if 'dest' in _kwds:
+                    _dest = _kwds['dest']
+                    if _dest in read_config_dict:
+                        obj.set_value(read_config_dict[_dest])
+                else:
+                    _dest = 'CONFIGBLOCK.' + obj.name(True)
+                    if _dest in read_config_dict:
+                        obj.set_value(read_config_dict[_dest])
+                        del read_config_dict[_dest]
+
+        # Check if any args in the config file were not used
+        if len(read_config_dict)>0:
+            for k in read_config_dict:
+                print(f'Parameter {k} found in the config file is not a valid config option, ignoring.')
+
+        return read_config_dict
+
 
 #=================
 if __name__ == "__main__":
