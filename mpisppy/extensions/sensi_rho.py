@@ -7,38 +7,27 @@
 # full copyright and license information.
 ###############################################################################
 
-import numpy as np
 from mpisppy import global_toc
 import mpisppy.extensions.dyn_rho_base
-import mpisppy.MPI as MPI
 from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 
 
-class SensiRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
-    """
-    Rho determination algorithm using nonant sensitivities
-    """
+class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
-    def __init__(self, ph, comm=None):
-        super().__init__(ph, comm=comm)
-        self.ph = ph
-
-        self.multiplier = 1.0
-
-        if (
-            "sensi_rho_options" in ph.options
-            and "multiplier" in ph.options["sensi_rho_options"]
-        ):
-            self.multiplier = ph.options["sensi_rho_options"]["multiplier"]
-        self.cfg = ph.options["sensi_rho_options"]["cfg"]
+    def get_nonant_sensitivites(self):
+        """
+        Method should return a dict of dicts [s][ndn_i]
+        of sensitivity values for each scenario, node, and
+        index.
+        """
+        raise NotImplementedError()
 
     def compute_and_update_rho(self):
         ph = self.ph
 
-        nonant_sensis = dict()  # dict of dicts [s][ndn_i]
-        for k, s in ph.local_subproblems.items():
-            nonant_sensis[s] = nonant_sensitivies(s, ph)
-                
+        # dict of dicts [s][ndn_i]
+        nonant_sensis = self.get_nonant_sensitivites(self)
+
         for s in ph.local_scenarios.values():
             xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
@@ -62,16 +51,8 @@ class SensiRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
 
         if ph.cylinder_rank == 0:
-            print("Rho values updated by SensiRho Extension")
+            print(f"Rho values updated by {self.__class__.__name__} Extension")
 
-    def pre_iter0(self):
-        pass
-
-    def post_iter0(self):
-        global_toc("Using sensi-rho rho setter")
-        super().post_iter0()        
-        self.compute_and_update_rho()
-        
     def miditer(self):
         self.primal_conv_cache.append(self.opt.convergence_diff())
         self.dual_conv_cache.append(self.wt.W_diff())
@@ -87,8 +68,34 @@ class SensiRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             rho_avg = sum_rho / num_rhos
             global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
 
-    def enditer(self):
-        pass
 
-    def post_everything(self):
-        pass
+class SensiRho(_SensiRhoBase):
+    """
+    Rho determination algorithm using nonant sensitivities
+    """
+
+    def __init__(self, ph, comm=None):
+        super().__init__(ph, comm=comm)
+        self.ph = ph
+
+        self.multiplier = 1.0
+
+        if (
+            "sensi_rho_options" in ph.options
+            and "multiplier" in ph.options["sensi_rho_options"]
+        ):
+            self.multiplier = ph.options["sensi_rho_options"]["multiplier"]
+        self.cfg = ph.options["sensi_rho_options"]["cfg"]
+
+    def get_nonant_sensitivites(self):
+        # dict of dicts [s][ndn_i]
+        nonant_sensis = {}
+        for k, s in self.ph.local_subproblems.items():
+            nonant_sensis[s] = nonant_sensitivies(s, self.ph)
+        return nonant_sensis
+
+    def post_iter0(self):
+        global_toc("Using sensitivity rho setter")
+        super().post_iter0()
+        self.compute_and_update_rho()
+
