@@ -146,16 +146,20 @@ class SensiRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
-                rho._value = abs(nonant_sensis[s][ndn_i]) / max(1, abs(nv._value - xbars[ndn_i]._value))
-                rho._value *= self.multiplier
+                val = abs(nonant_sensis[s][ndn_i]) / max(1, abs(nv._value - xbars[ndn_i]._value))
+                val *= self.multiplier
+                # the sensitivity can be small if the variable is "active"
+                # therefore we'll only update if this makes rho *larger*
+                if rho._value < val:
+                    rho._value = val
                 # if ph.cylinder_rank == 0:
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
 
-        rhoavg = self._compute_rho_avg(ph)
+        rhomax = self._compute_rho_max(ph)
         for s in ph.local_scenarios.values():
             xbars = s._mpisppy_model.xbars
             for ndn_i, rho in s._mpisppy_model.rho.items():
-                rho._value = rhoavg[ndn_i]
+                rho._value = rhomax[ndn_i]
                 # if ph.cylinder_rank == 0:
                 #     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
