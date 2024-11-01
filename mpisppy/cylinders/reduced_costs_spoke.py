@@ -29,9 +29,9 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         if len(self.opt.local_scenarios) == 0:
             raise RuntimeError("Rank has zero local_scenarios")
 
-        vbuflen = 2
+        rbuflen = 2
         for s in self.opt.local_scenarios.values():
-            vbuflen += len(s._mpisppy_data.nonant_indices)
+            rbuflen += len(s._mpisppy_data.nonant_indices)
 
         self.nonant_length = self.opt.nonant_length
 
@@ -43,23 +43,40 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                     self._modeler_fixed_nonants.add(ndn_i)
             break
 
-        self._make_windows(1 + self.nonant_length, vbuflen)
-        self._locals = communicator_array(vbuflen)
+        scenario_buffer_len = 0
+        for s in self.opt.local_scenarios.values():
+            scenario_buffer_len += len(s._mpisppy_data.nonant_indices)
+        self._scenario_rc_buffer = np.zeros(scenario_buffer_len)
         # over load the _bound attribute here
         # so the rest of the class works as expected
         # first float will be the bound we're sending
-        # indices 1:-1 will be the reduced costs, and
+        # indices 1:1+self.nonant_length will be the
+        # expected reduced costs,
+        # 1+self.nonant_length:1+self.nonant_length+|S|*self.nonant_length
+        # will be the scenario reduced costs, and
         # the last index will be the serial number
-        self._bound = communicator_array(1 + self.nonant_length)
+        sbuflen = 1 + self.nonant_length + scenario_buffer_len
+
+        self._make_windows(sbuflen, rbuflen)
+        self._locals = communicator_array(rbuflen)
+        self._bound = communicator_array(sbuflen)
         # print(f"nonant_length: {self.nonant_length}, integer_nonant_length: {self.integer_nonant_length}")
 
     @property
-    def rc(self):
+    def rc_global(self):
         return self._bound[1:1+self.nonant_length]
 
-    @rc.setter
-    def rc(self, vals):
+    @rc_global.setter
+    def rc_global(self, vals):
         self._bound[1:1+self.nonant_length] = vals
+
+    @property
+    def rc_scenario(self):
+        return self._bound[1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)]
+
+    @rc_scenario.setter
+    def rc_scenario(self, vals):
+        self._bound[1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)] = vals
 
     def lagrangian_prep(self):
         """
@@ -87,10 +104,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             raise RuntimeError("ReducedCostsSpoke always needs a solution to work")
         bound = super().lagrangian(need_solution=need_solution)
         if bound is not None:
-            self.extract_and_store_reduced_costs(bound)
+            self.extract_and_store_reduced_costs()
         return bound
 
-    def extract_and_store_reduced_costs(self, outer_bound):
+    def extract_and_store_reduced_costs(self):
         self.opt.Compute_Xbar()
         # NaN will signal that the x values do not agree in
         # every scenario, we can't extract an expected reduced
@@ -134,9 +151,17 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                     else:
                         rc[ci] = np.nan
 
+        self._scenario_rc_buffer.fill(0)
+        ci = 0 # buffer index
+        for s in self.opt.local_scenarios.values():
+            for xvar in s._mpisppy_data.nonant_indices.values():
+                self._scenario_rc_buffer[ci] = s.rc[xvar]
+                ci += 1
+        self.rc_scenario = self._scenario_rc_buffer
+
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
-        self.rc = rcg
+        self.rc_global = rcg
 
     def main(self):
         # need the solution for ReducedCostsSpoke
