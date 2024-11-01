@@ -13,6 +13,7 @@
 
 
 import numpy as np
+import mpisppy.MPI as MPI
 
 import mpisppy.extensions.extension
 from mpisppy.utils.wtracker import WTracker
@@ -75,6 +76,109 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     def _update_recommended(self):
         return (hasattr(self.cfg, "dynamic_rho_primal_crit") and self.cfg.dynamic_rho_primal_crit and self._update_rho_primal_based()) or \
                (hasattr(self.cfg, "dynamic_rho_dual_crit") and self.cfg.dynamic_rho_dual_crit and self._update_rho_dual_based())
+
+    @staticmethod
+    def _compute_rho_min_max(ph, npop, mpiop, start):
+        local_nodenames = []
+        local_xmaxmin = {}
+        global_xmaxmin = {}
+
+        for k, s in ph.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                if node.name not in local_nodenames:
+                    ndn = node.name
+                    local_nodenames.append(ndn)
+                    nlen = nlens[ndn]
+
+                    local_xmaxmin[ndn] = start * np.ones(nlen, dtype="d")
+                    global_xmaxmin[ndn] = np.zeros(nlen, dtype="d")
+
+        for k, s in ph.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            rho = s._mpisppy_model.rho
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                xmaxmin = local_xmaxmin[ndn]
+
+                xmaxmin_partial = np.fromiter(
+                    (rho[ndn,i]._value for i, _ in enumerate(node.nonant_vardata_list)),
+                    dtype="d",
+                    count=nlens[ndn],
+                )
+                xmaxmin = npop(xmaxmin, xmaxmin_partial)
+                local_xmaxmin[ndn] = xmaxmin
+
+        for nodename in local_nodenames:
+            ph.comms[nodename].Allreduce(
+                [local_xmaxmin[nodename], MPI.DOUBLE],
+                [global_xmaxmin[nodename], MPI.DOUBLE],
+                op=mpiop,
+            )
+
+        xmaxmin_dict = {}
+        for ndn, global_xmaxmin_dict in global_xmaxmin.items():
+            for i, v in enumerate(global_xmaxmin_dict):
+                xmaxmin_dict[ndn, i] = v
+
+        return xmaxmin_dict
+
+    @staticmethod
+    def _compute_rho_avg(ph):
+        local_nodenames = []
+        local_avg = {}
+        global_avg = {}
+
+        for k, s in ph.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            rho = s._mpisppy_model.rho
+            for node in s._mpisppy_node_list:
+                if node.name not in local_nodenames:
+                    ndn = node.name
+                    local_nodenames.append(ndn)
+                    nlen = nlens[ndn]
+
+                    local_avg[ndn] = np.zeros(nlen, dtype="d")
+                    global_avg[ndn] = np.zeros(nlen, dtype="d")
+
+        for k, s in ph.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            rho = s._mpisppy_model.rho
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+
+                local_rhos = np.fromiter(
+                        (rho[ndn,i]._value for i, _ in enumerate(node.nonant_vardata_list)),
+                        dtype="d",
+                        count=nlens[ndn],
+                    )
+                # print(f"{k=}, {local_rhos=}, {s._mpisppy_probability=}, {s._mpisppy_data.prob_coeff[ndn]=}")
+                # TODO: is this the right thing, or should it be s._mpisppy_probability?
+                local_rhos *= s._mpisppy_data.prob_coeff[ndn]
+
+                local_avg[ndn] += local_rhos
+
+        for nodename in local_nodenames:
+            ph.comms[nodename].Allreduce(
+                [local_avg[nodename], MPI.DOUBLE],
+                [global_avg[nodename], MPI.DOUBLE],
+                op=MPI.SUM,
+            )
+
+        rhoavg_dict = {}
+        for ndn, global_rhoavg_dict in global_avg.items():
+            for i, v in enumerate(global_rhoavg_dict):
+                rhoavg_dict[ndn, i] = v
+
+        return rhoavg_dict
+
+    @staticmethod
+    def _compute_rho_max(ph):
+        return Dyn_Rho_extension_base._compute_rho_min_max(ph, np.maximum, MPI.MAX, -np.inf)
+
+    @staticmethod
+    def _compute_rho_min(ph):
+        return Dyn_Rho_extension_base._compute_rho_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
     def pre_iter0(self):
         pass
