@@ -165,7 +165,7 @@ do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline
 
 # proper bundles
 sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
-           "--proper-no-files --scenarios-per-bundle 5 --default-rho 1 "
+           "--scenarios-per-bundle 2 --default-rho 1 "
            f"--solver-name {solver_name} --max-iterations 5 --lagrangian "
            "--xhatshuffle --rel-gap 0.001")
 #rebaseline_xhat("sslp", "sslp", 3, sslp_pb, "test_data/sslp_pb_baseline")

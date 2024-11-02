@@ -100,9 +100,8 @@ def _name_lists(module, cfg):
         all_nodenames = None
         num_scens = cfg.num_scens
 
-    # proper_no_files should be almost magic
-    if cfg.unpickle_bundles_dir is not None or cfg.proper_no_files:
-        assert cfg.scenarios_per_bundle is not None
+    # proper bundles should be almost magic
+    if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
         num_buns = cfg.num_scens // cfg.scenarios_per_bundle
         all_scenario_names = wrapper.bundle_names_creator(num_buns, cfg=cfg)
     else:
@@ -410,7 +409,7 @@ def _model_fname():
 def _proper_bundles(cfg):
     return cfg.get("pickle_bundles_dir", ifmissing=False)\
         or cfg.get("unpickle_bundles_dir", ifmissing=False)\
-        or cfg.get("proper_no_files", ifmissing=False)
+        or cfg.get("scenarios_per_bundle", ifmissing=False)
 
 ##########################################################################
 if __name__ == "__main__":

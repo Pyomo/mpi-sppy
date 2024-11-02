@@ -38,10 +38,6 @@ def dill_unpickle(fname):
 def check_args(cfg):
     """ make sure the pickle bundle args make sense"""
     assert(cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None)
-    if cfg.proper_no_files:
-        assert cfg.pickle_bundles_dir is None and cfg.unpickle_bundles_dir is None, "For proper bundles with no files, do not specify a directory"
-    if cfg.scenarios_per_bundle is None:
-        raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified")
     if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank != 0:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
                            "and --bundles-per-rank cannot be")

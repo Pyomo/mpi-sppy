@@ -954,14 +954,9 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("scenarios_per_bundle",
-                            description="Used for `proper` (aka pickle) bundles only (might also be used when reading) (default None)",
+                            description="Used for `proper` bundles only (might also be used when reading pickled bundles) (default None)",
                             domain=int,
                             default=None)
-
-        self.add_to_config(name="proper_no_files",
-                          description="Proper bundles without reading or writing files (default False)",
-                          domain=bool,
-                          default=False)
 
 
     #================

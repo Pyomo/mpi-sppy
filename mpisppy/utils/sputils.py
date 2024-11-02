@@ -77,7 +77,7 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 active=True,
                 sort=True):
             var_name = var.name
-            if bundling:
+            if bundling:  # loose bundling
                 dot_index = var_name.find('.')
                 assert dot_index >= 0
                 var_name = var_name[(dot_index+1):]

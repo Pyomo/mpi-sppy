@@ -78,7 +78,8 @@ class ProperBundler():
         """
         cfg = kwargs["cfg"]
         if "scen" in sname or "Scen" in sname:
-            return self.module.scenario_creator(sname, **self.original_kwargs)
+            # In case the user passes in kwargs from scenario_creator_kwargs.
+            return self.module.scenario_creator(sname, {**self.original_kwargs, **kwargs})
 
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is not None:
             fname = os.path.join(cfg.unpickle_bundles_dir, sname+".pkl")
@@ -97,6 +98,7 @@ class ProperBundler():
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
                                        scenario_creator_kwargs=self.original_kwargs,
                                        EF_name=sname,
+                                       suppress_warnings=True,                                       
                                        nonant_for_fixed_vars = False)
 
             nonantlist = [v for idx, v in bundle.ref_vars.items() if idx[0] =="ROOT"]

@@ -3,29 +3,28 @@
 
 SOLVER="cplex"
 
+SPB=1
+
 echo "^^^ use proper bundles without writing ^^^"
 cd sslp
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --proper-no-files --scenarios-per-bundle 5 --default-rho 1 --solver-name ${SOLVER} --max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --scenarios-per-bundle $SPB --default-rho 1 --solver-name ${SOLVER} --max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001
 cd ..
 
 echo "^^^ write pickle bundles ^^^"
 cd sslp
-python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 --default-rho 1
+python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle $SPB --default-rho 1
 cd ..
 
 echo "^^^ write pickle bundles faster ^^^"
 # np needs to divide the number of scenarios, btw
 cd sslp
-mpiexec -np 2 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 --default-rho 1
+mpiexec -np 2 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle $SPB --default-rho 1
 cd ..
 
 echo "^^^ read pickle bundles ^^^"
 cd sslp
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --unpickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 --default-rho 1 --solver-name=${SOLVER} --max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --unpickle-bundles-dir sslp_pickles --scenarios-per-bundle $SPB --default-rho 1 --solver-name=${SOLVER} --max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001
 cd ..
-
-echo "exit"
-exit
 
 cd farmer
 
