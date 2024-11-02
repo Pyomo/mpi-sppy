@@ -172,13 +172,13 @@ rebaseline_xhat("sslp", "sslp", 3, sslp_pb, "test_data/sslp_pb_baseline")
 do_one("sslp", "sslp", 3, sslp_pb, xhat_baseline_dir="test_data/sslp_pb_baseline")
 
 # write, then read, pickle bundles
-sslp_wr = "--module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 --default-rho 1"
+sslp_wr = "--module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 --default-rho 1"
 do_one("sslp", "sslp", 2, sslp_wr, xhat_baseline_dir=None)
 sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
-           "--unpickle-bundles-dir sslp_pickles --scenarios-per-bundle 5 "
+           "--unpickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 "
            f"--default-rho 1 --solver-name={solver_name} "
            "--max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001")
-#rebaseline_xhat("sslp", "sslp", 3, sslp_rd, "test_data/sslp_rd_baseline")
+rebaseline_xhat("sslp", "sslp", 3, sslp_rd, "test_data/sslp_rd_baseline")
 do_one("sslp", "sslp", 3, sslp_rd, xhat_baseline_dir="test_data/sslp_rd_baseline")
 
 
