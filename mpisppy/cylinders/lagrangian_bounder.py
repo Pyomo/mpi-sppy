@@ -18,7 +18,7 @@ class _LagrangianMixin:
         self.opt._reenable_W()
         self.opt._create_solvers()
 
-    def lagrangian(self):
+    def lagrangian(self, need_solution=True):
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
         if "ipopt" in self.opt.options["solver_name"]:
@@ -32,7 +32,8 @@ class _LagrangianMixin:
             dtiming=False,
             gripe=True,
             tee=teeme,
-            verbose=verbose
+            verbose=verbose,
+            need_solution=need_solution,
         )
         ''' DTM (dlw edits): This is where PHBase Iter0 checks for scenario
             probabilities that don't sum to one and infeasibility and
@@ -53,11 +54,11 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
     converger_spoke_char = 'L'
 
-    def _set_weights_and_solve(self):
+    def _set_weights_and_solve(self, need_solution=True):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
-        return self.lagrangian()
+        return self.lagrangian(need_solution=need_solution)
 
-    def main(self):
+    def main(self, need_solution=False):
         verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
@@ -66,7 +67,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
         if extensions:
             self.opt.extobject.pre_iter0()
         self.dk_iter = 1
-        self.trivial_bound = self.lagrangian()
+        self.trivial_bound = self.lagrangian(need_solution=need_solution)
         if extensions:
             self.opt.extobject.post_iter0()
 
@@ -80,7 +81,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
             if self.new_Ws:
                 if extensions:
                     self.opt.extobject.miditer()
-                bound = self._set_weights_and_solve()
+                bound = self._set_weights_and_solve(need_solution=need_solution)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
@@ -92,6 +93,6 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 # compute a subgradient step
                 self.opt.Compute_Xbar(verbose)
                 self.opt.Update_W(verbose)
-                bound = self.lagrangian()
+                bound = self.lagrangian(need_solution=need_solution)
                 if bound is not None:
                     self.bound = bound

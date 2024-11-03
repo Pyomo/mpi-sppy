@@ -167,7 +167,7 @@ def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
     cfg = Amalgamator_parser(cfg, m.inparser_adder,
                                  extraargs_fct=extraargs_fct,
                                  use_command_line=use_command_line)
-    cfg.add_and_assign('_mpisppy_probability', description="Uniform prob.", domain=float, default=None, value= 1/cfg['num_scens'])
+    cfg.add_and_assign('_mpisppy_probability', description="Uniform prob.", domain=float, default=None, value= 1/cfg['num_scens'], complain=False)
     start = cfg['start'] if 'start' in cfg else 0
     sn = m.scenario_names_creator(cfg['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None

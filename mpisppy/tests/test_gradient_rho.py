@@ -272,11 +272,10 @@ class Test_grad_extension_farmer(unittest.TestCase):
         self.cfg.grad_rho_file_out = './_test_rho.csv'
         #self.cfg.grad_cost_file_in = './examples/rho_test_data/grad_cost.csv'
         self.cfg.xhatpath = './examples/rho_test_data/farmer_cyl_nonants.npy'
-        self.cfg.max_iterations = 4
+        self.cfg.max_iterations = 10
         self.cfg.dynamic_rho_dual_crit = True
         self.cfg.dynamic_rho_dual_thresh = 0.1        
         self.ph_object = self._run_ph_farmer()
-        print(f"{self.ph_object.conv=}")
         self.assertAlmostEqual(self.ph_object.conv, 0.039598, places=1)
 
 
