@@ -83,6 +83,8 @@ class ReducedCostsRho(_SensiRhoBase):
         global_toc("Using reduced cost rho setter")
         super().post_iter0()
         # wait until the spoke has data
-        while self._get_serial_number() == 0:
+        if self._get_serial_number() == 0:
+            while not self.ph.spcomm.hub_from_spoke(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index], self.reduced_costs_spoke_index):
+                continue
             self.sync_with_spokes()
         self.compute_and_update_rho()
