@@ -23,6 +23,7 @@ class ReducedCostsRho(_SensiRhoBase):
         self.ph = ph
 
         self.multiplier = 1.0
+        self.verbose = ph.options["verbose"]
 
         if (
             "reduced_costs_rho_options" in ph.options
