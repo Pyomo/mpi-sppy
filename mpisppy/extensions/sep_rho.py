@@ -36,7 +36,7 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
         self.cfg = ph.options["sep_rho_options"]["cfg"]
 
-        self._nonant_cost_coeffs = None
+        self._nonant_cost_coeffs = {}
 
     def _compute_primal_residual_norm(self, ph):
         local_nodenames = []
@@ -139,10 +139,9 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         return SepRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
     def nonant_cost_coeffs(self, s):
-        if self._nonant_cost_coeffs is None:
-            # Should be the same in every scenario...
-            self._nonant_cost_coeffs = nonant_cost_coeffs(s)
-        return self._nonant_cost_coeffs
+        if s not in self._nonant_cost_coeffs:
+            self._nonant_cost_coeffs[s] = nonant_cost_coeffs(s)
+        return self._nonant_cost_coeffs[s]
 
     def _compute_and_update_rho(self):
         ph = self.ph

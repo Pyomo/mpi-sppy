@@ -21,6 +21,7 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 import mpisppy.utils.solver_spec as solver_spec
@@ -161,6 +162,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             "boundtol": cfg.fixer_tol,
             "id_fix_list_fct": module.id_fix_list_fct,
         }
+    if cfg.rc_fixer:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+
     if cfg.grad_rho_setter:
         ext_classes.append(Gradient_extension)
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
@@ -264,6 +268,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.reduced_costs:
         reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
+                                              all_nodenames=all_nodenames,
                                               rho_setter = None)
 
                 

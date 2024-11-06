@@ -13,6 +13,10 @@ from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 
 
 class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
+    def __init__(self, ph, comm=None):
+        super().__init__(ph, comm=comm)
+        # we'll set a minimum rho value to be the default rho
+        self._minimum_rho = ph.options["defaultPHrho"]
 
     def get_nonant_sensitivites(self):
         """
@@ -34,9 +38,9 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
                 val = abs(nonant_sensis[s][ndn_i]) / max(1, abs(nv._value - xbars[ndn_i]._value))
                 val *= self.multiplier
-                # the sensitivity can be small if the variable is "active"
-                # therefore we'll only update if this makes rho *larger*
-                if rho._value < val:
+                if val < self._minimum_rho:
+                    rho._value = self._minimum_rho
+                else:
                     rho._value = val
                 # if ph.cylinder_rank == 0:
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
