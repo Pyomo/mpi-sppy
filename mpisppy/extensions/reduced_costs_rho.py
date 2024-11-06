@@ -45,15 +45,19 @@ class ReducedCostsRho(_SensiRhoBase):
             if spoke["spoke_class"] == ReducedCostsSpoke:
                 self.reduced_costs_spoke_index = i + 1
         if self.reduced_costs_spoke_index is None:
-            raise RuntimeError(f"ReducedCostsRho requires a ReducedCostsSpoke for calculations")
+            raise RuntimeError("ReducedCostsRho requires a ReducedCostsSpoke for calculations")
+
+    def _get_serial_number(self):
+        return int(round(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index][-1]))
+
+    def _get_reduced_costs_from_spoke(self):
+        return self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index][1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)]
 
     def sync_with_spokes(self):
-        spcomm = self.opt.spcomm
-        idx = self.reduced_costs_spoke_index
-        serial_number = int(round(spcomm.outerbound_receive_buffers[idx][-1]))
+        serial_number = self._get_serial_number()
         if serial_number > self._last_serial_number:
             self._last_serial_number = serial_number
-            self._scenario_rc_buffer[:] = spcomm.outerbound_receive_buffers[idx][1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)]
+            self._scenario_rc_buffer[:] = self._get_reduced_costs_from_spoke()
             # print(f"In ReducedCostsRho; {self._scenario_rc_buffer=}")
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
@@ -77,4 +81,7 @@ class ReducedCostsRho(_SensiRhoBase):
     def post_iter0_after_sync(self):
         global_toc("Using reduced cost rho setter")
         super().post_iter0()
+        # wait until the spoke has data
+        while self._get_serial_number() == 0:
+            self.sync_with_spokes()
         self.compute_and_update_rho()

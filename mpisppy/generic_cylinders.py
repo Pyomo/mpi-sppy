@@ -21,7 +21,6 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
-from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 import mpisppy.utils.solver_spec as solver_spec
