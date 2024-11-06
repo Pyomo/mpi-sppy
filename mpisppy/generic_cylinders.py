@@ -73,6 +73,7 @@ def _parse_args(m):
     cfg.sep_rho_args()
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
+    cfg.reduced_costs_rho_args()
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     
     cfg.checker()  # looks for inconsistencies 
@@ -170,8 +171,14 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
 
+    # these should be after sep rho and coeff rho
+    # as they will use existing rho values if the
+    # sensitivity is too small
     if cfg.sensi_rho:
         vanilla.add_sensi_rho(hub_dict, cfg)
+
+    if cfg.reduced_costs_rho:
+        vanilla.add_reduced_costs_rho(hub_dict, cfg)
  
     if len(ext_classes) != 0:
         hub_dict['opt_kwargs']['extensions'] = MultiExtension

@@ -26,7 +26,7 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         ph = self.ph
 
         # dict of dicts [s][ndn_i]
-        nonant_sensis = self.get_nonant_sensitivites(self)
+        nonant_sensis = self.get_nonant_sensitivites()
 
         for s in ph.local_scenarios.values():
             xbars = s._mpisppy_model.xbars

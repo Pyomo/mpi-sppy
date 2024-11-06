@@ -12,7 +12,7 @@ from mpisppy import global_toc
 from mpisppy.extensions.sensi_rho import _SensiRhoBase
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
 
-class RCRho(_SensiRhoBase):
+class ReducedCostsRho(_SensiRhoBase):
     """
     Rho determination algorithm using nonant reduced costs,
     calculated in a ReducedCostsSpoke
@@ -25,11 +25,11 @@ class RCRho(_SensiRhoBase):
         self.multiplier = 1.0
 
         if (
-            "rc_rho_options" in ph.options
-            and "multiplier" in ph.options["rc_rho_options"]
+            "reduced_costs_rho_options" in ph.options
+            and "multiplier" in ph.options["reduced_costs_rho_options"]
         ):
-            self.multiplier = ph.options["rc_rho_options"]["multiplier"]
-        self.cfg = ph.options["rc_rho_options"]["cfg"]
+            self.multiplier = ph.options["reduced_costs_rho_options"]["multiplier"]
+        self.cfg = ph.options["reduced_costs_rho_options"]["cfg"]
 
         scenario_buffer_len = 0
         for s in ph.local_scenarios.values():
@@ -37,10 +37,15 @@ class RCRho(_SensiRhoBase):
         self._scenario_rc_buffer = np.empty(scenario_buffer_len)
         self._scenario_rc_buffer.fill(np.nan)
 
+        self._last_serial_number = -1
+        self.reduced_costs_spoke_index = None
+
     def initialize_spoke_indices(self):
         for (i, spoke) in enumerate(self.opt.spcomm.spokes):
             if spoke["spoke_class"] == ReducedCostsSpoke:
                 self.reduced_costs_spoke_index = i + 1
+        if self.reduced_costs_spoke_index is None:
+            raise RuntimeError(f"ReducedCostsRho requires a ReducedCostsSpoke for calculations")
 
     def sync_with_spokes(self):
         spcomm = self.opt.spcomm
@@ -49,6 +54,7 @@ class RCRho(_SensiRhoBase):
         if serial_number > self._last_serial_number:
             self._last_serial_number = serial_number
             self._scenario_rc_buffer[:] = spcomm.outerbound_receive_buffers[idx][1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)]
+            # print(f"In ReducedCostsRho; {self._scenario_rc_buffer=}")
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
@@ -65,6 +71,7 @@ class RCRho(_SensiRhoBase):
             for ndn_i in s._mpisppy_data.nonant_indices:
                 nonant_sensis[s][ndn_i] = self._scenario_rc_buffer[ci]
                 ci += 1
+        # print(f"{nonant_sensis=}")
         return nonant_sensis
 
     def post_iter0_after_sync(self):

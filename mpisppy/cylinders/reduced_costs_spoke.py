@@ -158,6 +158,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 self._scenario_rc_buffer[ci] = s.rc[xvar]
                 ci += 1
         self.rc_scenario = self._scenario_rc_buffer
+        # print(f"In ReducedCostsSpoke; {self.rc_scenario=}")
 
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)

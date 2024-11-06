@@ -422,6 +422,15 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-2)
 
+    def reduced_costs_rho_args(self):
+        self.add_to_config("reduced_costs_rho",
+                           description="have a ReducedCostsRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("reduced_costs_rho_multiplier",
+                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
 
     def sep_rho_args(self):
         self.add_to_config("sep_rho",
