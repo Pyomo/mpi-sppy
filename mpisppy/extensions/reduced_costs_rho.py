@@ -67,6 +67,10 @@ class ReducedCostsRho(_SensiRhoBase):
     def pre_iter0(self):
         self.nonant_length = self.opt.nonant_length
 
+    def post_iter0(self):
+        # need to wait for spoke sync
+        pass
+
     def get_nonant_sensitivites(self):
         # dict of dicts [s][ndn_i]
         nonant_sensis = {}
