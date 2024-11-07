@@ -82,7 +82,7 @@ class ReducedCostsFixer(Extension):
             this_outer_bound = spcomm.outerbound_receive_buffers[idx][0]
             if self._use_rc_bt:
                 self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
-            if self._use_rc_fixer:
+            if self._use_rc_fixer and self.fix_fraction_target > 0.0:
                 self.reduced_costs_fixing(reduced_costs)
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
