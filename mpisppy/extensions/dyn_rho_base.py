@@ -8,16 +8,13 @@
 ###############################################################################
 
 # A dynamic rho base class that assumes a member function compute_and_update_rho
-# As of Oct 2024, it only mainly provides services and needs a better mid_iter
-# Children should call the parent for post_iter0
-
+# As of Nov 2024, it only mainly provides services
 
 import numpy as np
 import mpisppy.MPI as MPI
 
 import mpisppy.extensions.extension
 from mpisppy.utils.wtracker import WTracker
-from mpisppy import global_toc
 
 # for trapping numpy warnings
 import warnings
@@ -180,37 +177,18 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     def _compute_rho_min(ph):
         return Dyn_Rho_extension_base._compute_rho_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
+    def update_caches(self):
+        self.primal_conv_cache.append(self.opt.convergence_diff())
+        self.dual_conv_cache.append(self.wt.W_diff())
+
     def pre_iter0(self):
         pass
 
     def post_iter0(self):
-        self.primal_conv_cache.append(self.opt.convergence_diff())
-        self.dual_conv_cache.append(self.wt.W_diff())
+        raise NotImplementedError
 
     def miditer(self):
-        self.primal_conv_cache.append(self.opt.convergence_diff())
-        self.dual_conv_cache.append(self.wt.W_diff())
-        if self.opt._PHIter == 1:
-            self.grad_object.write_grad_cost()
-        if self.opt._PHIter == 1 or self._update_recommended():
-            self.grad_object.write_grad_rho()
-            rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
-                                if 'rho_setter_kwargs' in self.opt.options \
-                                   else dict()
-
-            sum_rho = 0.0
-            num_rhos = 0
-            for sname, scenario in self.opt.local_scenarios.items():
-                rholist = self.rho_setter(scenario, **rho_setter_kwargs)
-                for (vid, rho) in rholist:
-                    (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
-                    scenario._mpisppy_model.rho[(ndn, i)] = rho
-                    sum_rho += rho
-                    num_rhos += 1
-
-            rho_avg = sum_rho / num_rhos
-            
-            global_toc(f"Rho values recomputed - average rank 0 rho={rho_avg}")
+        raise NotImplementedError
 
     def enditer(self):
         pass

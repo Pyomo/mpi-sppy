@@ -176,14 +176,11 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def post_iter0(self):
         global_toc("Using sep-rho rho setter")
-        super().post_iter0()        
+        self.update_caches()
         self.compute_and_update_rho()
 
     def miditer(self):
-        # this code could be factored; see sens_rho.py
-        self.primal_conv_cache.append(self.opt.convergence_diff())
-        self.dual_conv_cache.append(self.wt.W_diff())
-
+        self.update_caches()
         if self._update_recommended():
             self.compute_and_update_rho()
 

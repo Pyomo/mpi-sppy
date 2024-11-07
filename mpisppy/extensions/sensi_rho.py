@@ -58,8 +58,7 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             print(f"Rho values updated by {self.__class__.__name__} Extension")
 
     def miditer(self):
-        self.primal_conv_cache.append(self.opt.convergence_diff())
-        self.dual_conv_cache.append(self.wt.W_diff())
+        self.update_caches()
 
         if self._update_recommended():
             self.compute_and_update_rho()
@@ -100,6 +99,6 @@ class SensiRho(_SensiRhoBase):
 
     def post_iter0(self):
         global_toc("Using sensitivity rho setter")
-        super().post_iter0()
+        self.update_caches()
         self.compute_and_update_rho()
 
