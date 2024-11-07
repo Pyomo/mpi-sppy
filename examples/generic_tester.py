@@ -181,6 +181,13 @@ sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
 #rebaseline_xhat("sslp", "sslp", 3, sslp_rd, "test_data/sslp_rd_baseline")
 do_one("sslp", "sslp", 3, sslp_rd, xhat_baseline_dir="test_data/sslp_rd_baseline")
 
+hydroa_rc = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
+          "--reduced-costs --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
+          "--rc-fixer --reduced-costs-rho --reduced-costs-rho-multiplier=1.0 "
+          f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
+#rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
+do_one("hydro", "hydro", 3, hydroa_rc, xhat_baseline_dir = "test_data/hydroa_baseline")
+
 
 if not nouc:
     uca = ("--num-scens 5 --max-iterations 3 --max-solver-threads 4 "
