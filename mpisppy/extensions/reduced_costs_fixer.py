@@ -77,6 +77,7 @@ class ReducedCostsFixer(Extension):
                 while not self.opt.spcomm.hub_from_spoke(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index], self.reduced_costs_spoke_index):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
+            self.opt.spcomm.use_trivial_bound = False
         self.fix_fraction_target = self._fix_fraction_target_iter0
 
     def post_iter0_after_sync(self):
