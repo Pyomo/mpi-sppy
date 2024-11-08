@@ -552,6 +552,11 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-4)
 
+        self.add_to_config('rc_fix_fraction_pre_iter0',
+                            description="target fix fraction for rc fixer before the first iteration",
+                            domain=float,
+                            default=0.0)
+
         self.add_to_config('rc_fix_fraction_iter0',
                             description="target fix fraction for rc fixer in first iteration",
                             domain=float,
