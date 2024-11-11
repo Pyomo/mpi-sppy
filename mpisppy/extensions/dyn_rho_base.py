@@ -53,7 +53,9 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
     def _update_rho_primal_based(self):
         with warnings.catch_warnings():
             warnings.filterwarnings('error')
-            curr_conv, last_conv = self.primal_conv_cache[0], self.primal_conv_cache[-1]
+            # dlw Nov 2024: Is this lagged one iteration (that is not horrible)
+            
+            curr_conv, last_conv = self.primal_conv_cache[-1], self.primal_conv_cache[-2]
             try:
                 primal_diff =  np.abs((last_conv - curr_conv) / last_conv)
             except Warning:
@@ -66,7 +68,8 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
         if len(self.dual_conv_cache) < 4:
             # first two entries will be 0 by construction, so ignore
             return False
-        curr_conv, last_conv = self.dual_conv_cache[0], self.dual_conv_cache[-1]
+        # dlw Nov 2024: Is this lagged by one iteration (that is not horrible)
+        curr_conv, last_conv = self.dual_conv_cache[-1], self.dual_conv_cache[-2]
         dual_diff =  np.abs((last_conv - curr_conv) / last_conv) if last_conv != 0 else 0
         return (dual_diff <= self.cfg.dynamic_rho_dual_thresh)
 
