@@ -163,6 +163,17 @@ hydroa = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
 do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline")
 
+# write, then read, pickled scenarios
+print("starting write/read pickled scenarios")
+farmer_wr = "--pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10"
+do_one("farmer", "farmer", 2, farmer_wr, xhat_baseline_dir=None)
+farmer_rd = f"--num-scens 10 --solver-name {solver_name} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --unpickle-scenarios-dir farmer_pickles"
+#rebaseline_xhat("farmer", "farmer", 3, farmer_rd, "test_data/farmer_rd_baseline")
+do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_baseline")
+
+quit()
+
+
 # proper bundles
 sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
            "--scenarios-per-bundle 1 --default-rho 1 "
@@ -171,7 +182,7 @@ sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
 #rebaseline_xhat("sslp", "sslp", 3, sslp_pb, "test_data/sslp_pb_baseline")
 do_one("sslp", "sslp", 3, sslp_pb, xhat_baseline_dir="test_data/sslp_pb_baseline")
 
-# write, then read, pickle bundles
+# write, then read, pickled bundles
 sslp_wr = "--module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 --default-rho 1"
 do_one("sslp", "sslp", 2, sslp_wr, xhat_baseline_dir=None)
 sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "

@@ -2,8 +2,24 @@
 # This runs a few command lines to illustrate the use of generic_cylinders.py
 
 SOLVER="cplex"
-
 SPB=1
+
+echo "^^^ pickle the scenarios ^^^"
+cd farmer
+python ../../mpisppy/generic_cylinders.py --module-name farmer --pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10
+cd ..
+
+echo "^^^ pickle the scenarios a little faster ^^^"
+# for larger models, the speed up is more
+cd farmer
+mpiexec -np 2 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10
+cd ..
+
+echo "^^^ used pickled scenarios ^^^"
+cd farmer
+# note that crops-mult would be ignored
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 10 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --unpickle-scenarios-dir farmer_pickles
+cd ..
 
 echo "^^^ use proper bundles without writing ^^^"
 cd sslp

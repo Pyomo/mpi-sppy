@@ -187,7 +187,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="bundles per rank (default 0 (no bundles))",
+                            description="Loose bundles per rank (default 0 (no bundles))",
                             domain=int,
                             default=0)
 
@@ -967,6 +967,17 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=None)
 
+    def pickle_scenarios_config(self):
+        # Distinct from pickle bundles
+        self.add_to_config('pickle_scenarios_dir',
+                            description="Write individual scenarios to a dill pickle files in this dir (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config('unpickle_scenarios_dir',
+                            description="Read individual scenarios_per_bundle from a dill pickle files in this dir; (default None)",
+                            domain=str,
+                            default=None)
 
     #================
     def create_parser(self,progname=None):

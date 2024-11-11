@@ -34,6 +34,7 @@ def _parse_args(m):
     # m is the model file module
     cfg = config.Config()
     cfg.proper_bundle_config()
+    cfg.pickle_scenarios_config()
     
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",
@@ -319,11 +320,51 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
 
 #==========
+def _write_scenarios(module,
+                     cfg,
+                     scenario_creator,
+                     scenario_creator_kwargs,
+                     scenario_denouement,
+                     comm):
+    assert hasattr(cfg, "num_scens")
+    ScenCount = cfg.num_scens
+    
+    n_proc = comm.Get_size()
+    my_rank = comm.Get_rank()
+    avg = ScenCount / n_proc
+    slices = [list(range(int(i * avg), int((i + 1) * avg))) for i in range(n_proc)]
+
+    local_slice = slices[my_rank]
+    my_start = local_slice[0]   # zero based
+    inum = sputils.extract_num(module.scenario_names_creator(1)[0])
+    
+    local_scenario_names = module.scenario_names_creator(len(local_slice),
+                                                         start=inum + my_start)
+    if my_rank == 0:
+        if os.path.exists(cfg.pickle_scenarios_dir):
+            shutil.rmtree(cfg.pickle_scenarios_dir)
+        os.makedirs(cfg.pickle_scenarios_dir)
+    comm.Barrier()
+    for sname in local_scenario_names:
+        scen = scenario_creator(sname, **scenario_creator_kwargs)
+        fname = os.path.join(cfg.pickle_scenarios_dir, sname+".pkl")
+        pickle_bundle.dill_pickle(scen, fname)
+        # scenario_denouement(my_rank, sname, scen)  # see farmer.py
+    global_toc(f"Pickled Scenarios written to {cfg.pickle_scenarios_dir}")
+
+
+#==========
+def _read_pickled_scenario(sname, cfg):
+    fname = os.path.join(cfg.unpickle_scenarios_dir, sname+".pkl")
+    scen = pickle_bundle.dill_unpickle(fname)
+    return scen
+    
+        
+#==========
 def _write_bundles(module,
                    cfg,
                    scenario_creator,
                    scenario_creator_kwargs,
-                   scenario_denouement,
                    comm):
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
@@ -347,8 +388,6 @@ def _write_bundles(module,
     
     local_bundle_names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in local_slice]
 
-    #print(f"{slices=}")
-    #print(f"{local_bundle_names=}")
     if my_rank == 0:
         if os.path.exists(cfg.pickle_bundles_dir):
             shutil.rmtree(cfg.pickle_bundles_dir)
@@ -455,7 +494,12 @@ if __name__ == "__main__":
         # The scenario creator is wrapped, so these kw_args will not go the original
         # creator (the kw_creator will keep the original args)
         scenario_creator_kwargs = wrapper.kw_creator(cfg)
-    else:  # the more common case
+    elif cfg.unpickle_scenarios_dir is not None:
+        # So reading pickled scenarios cannot be composed with proper bundles
+        import mpisppy.utils.pickle_bundle as pickle_bundle
+        scenario_creator = _read_pickled_scenario
+        scenario_creator_kwargs = {"cfg": cfg}
+    else:  # the most common case
         scenario_creator = module.scenario_creator
         scenario_creator_kwargs = module.kw_creator(cfg)
         
@@ -468,8 +512,16 @@ if __name__ == "__main__":
                        cfg,
                        scenario_creator,
                        scenario_creator_kwargs,
-                       scenario_denouement,
                        global_comm)
+    elif cfg.pickle_scenarios_dir is not None:
+        import mpisppy.utils.pickle_bundle as pickle_bundle
+        global_comm = MPI.COMM_WORLD
+        _write_scenarios(module,
+                         cfg,
+                         scenario_creator,
+                         scenario_creator_kwargs,
+                         scenario_denouement,
+                         global_comm)
     elif cfg.EF:
         _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)
     else:

@@ -6,7 +6,8 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Utilities to support formation and use of "proper" bundles
+# Utilities to support pickling and unpickling "proper" bundles
+# This file also provides support for pickled scenarios
 
 # NOTE: if/because we require the bundles to consume entire
 #       second stage tree nodes, the resulting problem is two stage.
@@ -36,13 +37,19 @@ def dill_unpickle(fname):
 
 
 def check_args(cfg):
-    """ make sure the pickle bundle args make sense"""
-    assert(cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None)
+    """ Make sure the pickle bundle args make sense; this assumes the config
+    has all the appropriate fields."""
+    assert cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None
+    assert cfg.pickle_scenarios_dir is None or cfg.unpickle_scenarios_dir is None
+    assert cfg.unpickle_scenarios_dir is None or cfg.bundles_per_rank != 0, "Unpickled scenarios in proper bundles are not supported"
     if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank != 0:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
-                           "and --bundles-per-rank cannot be")
+                           "and --bundles-per-rank, which is for loose bundles, cannot be")
     if cfg.unpickle_bundles_dir is not None and not os.path.isdir(cfg.unpickle_bundles_dir):
-        raise RuntimeError(f"Directory to load pickle files from not found: {cfg.unpickle_bundles_dir}")
+        raise RuntimeError(f"Directory to load pickled bundle files from not found: {cfg.unpickle_bundles_dir}")
+    if cfg.unpickle_scenarios_dir is not None and not os.path.isdir(cfg.unpickle_scenarios_dir):
+        raise RuntimeError(f"Directory to load pickled scenarios files from not found: {cfg.unpickle_scenarios_dir}")
+    
 
 def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
