@@ -469,6 +469,11 @@ class PHHub(Hub):
                 "Cannot call setup_hub before memory windows are constructed"
             )
 
+        # attribute to set False if some extension
+        # modified the iteration 0 subproblems such
+        # that the trivial bound is no longer valid
+        self.use_trivial_bound = True
+
         self.initialize_spoke_indices()
         self.initialize_bound_values()
 
@@ -531,7 +536,7 @@ class PHHub(Hub):
 
     def is_converged(self):
         ## might as well get a bound, in this case
-        if self.opt._PHIter == 1:
+        if self.opt._PHIter == 1 and self.use_trivial_bound:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
 
         if not self.has_innerbound_spokes:
