@@ -62,11 +62,10 @@ class Gradient_extension(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base)
 
     def post_iter0(self):
         global_toc("Using gradient-based rho setter")
-        super().post_iter0()
+        self.update_caches()
 
     def miditer(self):
-        self.primal_conv_cache.append(self.opt.convergence_diff())
-        self.dual_conv_cache.append(self.wt.W_diff())
+        self.update_caches()
         if self.opt._PHIter == 1:
             self.grad_object.write_grad_cost()
         if self.opt._PHIter == 1 or self._update_recommended():

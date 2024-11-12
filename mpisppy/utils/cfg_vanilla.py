@@ -40,6 +40,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
+from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
 from mpisppy.extensions.sep_rho import SepRho
 from mpisppy.extensions.coeff_rho import CoeffRho
 from mpisppy.extensions.sensi_rho import SensiRho
@@ -202,6 +203,10 @@ def add_fixer(hub_dict,
                                               "id_fix_list_fct": cfg.id_fix_list_fct}
     return hub_dict
 
+def add_reduced_costs_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,ReducedCostsRho)
+    hub_dict["opt_kwargs"]["options"]["reduced_costs_rho_options"] = {"multiplier" : cfg.reduced_costs_rho_multiplier, "cfg": cfg}
+
 def add_sep_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,SepRho)
     hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier, "cfg": cfg}
@@ -234,6 +239,7 @@ def add_reduced_costs_fixer(hub_dict,
             "debug": cfg.rc_debug,
             "use_rc_fixer": cfg.rc_fixer,
             "zero_rc_tol": cfg.rc_zero_tol,
+            "fix_fraction_target_pre_iter0": cfg.rc_fix_fraction_pre_iter0,
             "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "use_rc_bt": cfg.rc_bound_tightening,
