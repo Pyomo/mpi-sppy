@@ -11,6 +11,7 @@
 import sys
 import os
 import json
+import shutil
 import numpy as np
 import pyomo.environ as pyo
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -25,10 +26,16 @@ from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 import mpisppy.utils.solver_spec as solver_spec
 from mpisppy import global_toc
+from mpisppy import MPI
+
+
 
 def _parse_args(m):
     # m is the model file module
     cfg = config.Config()
+    cfg.proper_bundle_config()
+    cfg.pickle_scenarios_config()
+    
     cfg.add_to_config(name="module_name",
                       description="Name of the file that has the scenario creator, etc.",
                       domain=str,
@@ -84,16 +91,23 @@ def _name_lists(module, cfg):
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
     if cfg.get("branching_factors") is not None:
-        all_nodenames = sputils.create_nodenames_from_branching_factors(\
+        all_nodenames = sputils.create_nodenames_from_branching_factors(
                                     cfg.branching_factors)
         num_scens = np.prod(cfg.branching_factors)
-        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None, "For now, stage2EFsolvern is required for multistage xhat"
+        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None,\
+            "For now, stage2EFsolvern is required for multistage xhat"
+        assert cfg.scenarios_per_bundle is None, "proper bundles in generic_cylinders does not yet support multistage"
 
     else:
         all_nodenames = None
         num_scens = cfg.num_scens
 
-    all_scenario_names = module.scenario_names_creator(num_scens)
+    # proper bundles should be almost magic
+    if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
+        num_buns = cfg.num_scens // cfg.scenarios_per_bundle
+        all_scenario_names = wrapper.bundle_names_creator(num_buns, cfg=cfg)
+    else:
+        all_scenario_names = module.scenario_names_creator(num_scens)
 
     return all_scenario_names, all_nodenames
 
@@ -306,6 +320,86 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
 
 #==========
+def _write_scenarios(module,
+                     cfg,
+                     scenario_creator,
+                     scenario_creator_kwargs,
+                     scenario_denouement,
+                     comm):
+    assert hasattr(cfg, "num_scens")
+    ScenCount = cfg.num_scens
+    
+    n_proc = comm.Get_size()
+    my_rank = comm.Get_rank()
+    avg = ScenCount / n_proc
+    slices = [list(range(int(i * avg), int((i + 1) * avg))) for i in range(n_proc)]
+
+    local_slice = slices[my_rank]
+    my_start = local_slice[0]   # zero based
+    inum = sputils.extract_num(module.scenario_names_creator(1)[0])
+    
+    local_scenario_names = module.scenario_names_creator(len(local_slice),
+                                                         start=inum + my_start)
+    if my_rank == 0:
+        if os.path.exists(cfg.pickle_scenarios_dir):
+            shutil.rmtree(cfg.pickle_scenarios_dir)
+        os.makedirs(cfg.pickle_scenarios_dir)
+    comm.Barrier()
+    for sname in local_scenario_names:
+        scen = scenario_creator(sname, **scenario_creator_kwargs)
+        fname = os.path.join(cfg.pickle_scenarios_dir, sname+".pkl")
+        pickle_bundle.dill_pickle(scen, fname)
+        # scenario_denouement(my_rank, sname, scen)  # see farmer.py
+    global_toc(f"Pickled Scenarios written to {cfg.pickle_scenarios_dir}")
+
+
+#==========
+def _read_pickled_scenario(sname, cfg):
+    fname = os.path.join(cfg.unpickle_scenarios_dir, sname+".pkl")
+    scen = pickle_bundle.dill_unpickle(fname)
+    return scen
+    
+        
+#==========
+def _write_bundles(module,
+                   cfg,
+                   scenario_creator,
+                   scenario_creator_kwargs,
+                   comm):
+    assert hasattr(cfg, "num_scens")
+    ScenCount = cfg.num_scens
+    bsize = int(cfg.scenarios_per_bundle)
+    numbuns = ScenCount // bsize
+    n_proc = comm.Get_size()
+    my_rank = comm.Get_rank()
+
+    if numbuns < n_proc:
+        raise RuntimeError(
+            "More MPI ranks (%d) supplied than needed given the number of bundles (%d) "
+            % (n_proc, numbuns)
+        )
+
+    avg = numbuns / n_proc
+    slices = [list(range(int(i * avg), int((i + 1) * avg))) for i in range(n_proc)]
+
+    local_slice = slices[my_rank]
+    # We need to know if scenarios (not bundles) are one-based.
+    inum = sputils.extract_num(module.scenario_names_creator(1)[0])
+    
+    local_bundle_names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in local_slice]
+
+    if my_rank == 0:
+        if os.path.exists(cfg.pickle_bundles_dir):
+            shutil.rmtree(cfg.pickle_bundles_dir)
+        os.makedirs(cfg.pickle_bundles_dir)
+    comm.Barrier()
+    for bname in local_bundle_names:
+        bundle = scenario_creator(bname, **scenario_creator_kwargs)
+        fname = os.path.join(cfg.pickle_bundles_dir, bname+".pkl")
+        pickle_bundle.dill_pickle(bundle, fname)
+    global_toc(f"Bundles written to {cfg.pickle_bundles_dir}")
+        
+#==========
 def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
 
     all_scenario_names, _ = _name_lists(module, cfg)
@@ -360,9 +454,13 @@ def _model_fname():
         if len(parts) != 2:
             _bad_news()
         return parts[1]
-        
     
-        
+
+def _proper_bundles(cfg):
+    return cfg.get("pickle_bundles_dir", ifmissing=False)\
+        or cfg.get("unpickle_bundles_dir", ifmissing=False)\
+        or cfg.get("scenarios_per_bundle", ifmissing=False)
+
 ##########################################################################
 if __name__ == "__main__":
     if len(sys.argv) == 1:
@@ -386,12 +484,45 @@ if __name__ == "__main__":
     
     cfg = _parse_args(module)
 
-    scenario_creator = module.scenario_creator
-    scenario_creator_kwargs = module.kw_creator(cfg)    
+    if _proper_bundles(cfg):
+        # TBD: remove the need for dill if you are not reading or writing
+        import mpisppy.utils.pickle_bundle as pickle_bundle
+        import mpisppy.utils.proper_bundler as proper_bundler
+    
+        wrapper = proper_bundler.ProperBundler(module)
+        scenario_creator = wrapper.scenario_creator
+        # The scenario creator is wrapped, so these kw_args will not go the original
+        # creator (the kw_creator will keep the original args)
+        scenario_creator_kwargs = wrapper.kw_creator(cfg)
+    elif cfg.unpickle_scenarios_dir is not None:
+        # So reading pickled scenarios cannot be composed with proper bundles
+        import mpisppy.utils.pickle_bundle as pickle_bundle
+        scenario_creator = _read_pickled_scenario
+        scenario_creator_kwargs = {"cfg": cfg}
+    else:  # the most common case
+        scenario_creator = module.scenario_creator
+        scenario_creator_kwargs = module.kw_creator(cfg)
+        
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
 
-    if cfg.EF:
+    if cfg.pickle_bundles_dir is not None:
+        global_comm = MPI.COMM_WORLD
+        _write_bundles(module,
+                       cfg,
+                       scenario_creator,
+                       scenario_creator_kwargs,
+                       global_comm)
+    elif cfg.pickle_scenarios_dir is not None:
+        import mpisppy.utils.pickle_bundle as pickle_bundle
+        global_comm = MPI.COMM_WORLD
+        _write_scenarios(module,
+                         cfg,
+                         scenario_creator,
+                         scenario_creator_kwargs,
+                         scenario_denouement,
+                         global_comm)
+    elif cfg.EF:
         _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)
     else:
         _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)

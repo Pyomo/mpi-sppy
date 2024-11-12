@@ -44,3 +44,6 @@ Some modules (e.g. PH) call this function at termination
         scenario_name (str): name of the scenario
 
         scenario (Pyomo ConcreteModel): the instantiated model
+
+.. Warning::
+    Not all modules call the ``scenario_denouement`` function.
