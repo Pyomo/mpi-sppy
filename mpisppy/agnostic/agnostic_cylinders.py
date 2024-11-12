@@ -104,7 +104,7 @@ if __name__ == "__main__":
             print("Global rank 0 has created the new .gms model file")
         fullcomm.Barrier()
 
-        guest = gams_guest.GAMS_guest(model_fname, new_file_path, nonants_name_pairs)
+        guest = gams_guest.GAMS_guest(model_fname, new_file_path, nonants_name_pairs, cfg)
         Ag = agnostic.Agnostic(guest, cfg)
 
     scenario_creator = Ag.scenario_creator

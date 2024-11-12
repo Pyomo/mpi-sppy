@@ -22,7 +22,7 @@ def nonants_name_pairs_creator():
     """Mustn't take any argument. Is called in agnostic cylinders
 
     Returns:
-        list of pairs (str, str): for each non-anticipative variable, the name of the support set must be given with the name of the parameter.
+        list of pairs (str, str): for each non-anticipative variable, the name of the support set must be given with the name of the variable.
         If the set is a cartesian set, there should be no paranthesis when given
     """
     return [("crop", "x")]
@@ -31,43 +31,21 @@ def nonants_name_pairs_creator():
 def stoch_param_name_pairs_creator():
     """
     Returns:
-        list of pairs (str, str): for each stochastic parameter, the name of the support set must be given with the name of the variable.
+        list of pairs (str, str): for each stochastic parameter, the name of the support set must be given with the name of the parameter.
         If the set is a cartesian set, there should be no paranthesis when given
     """
     return [("crop", "yield")]
 
 
-def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None):
+def scenario_creator(scenario_name, mi, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
     
     Args:
         scenario_name (str):
             Name of the scenario to construct.
-        new_file_name (str):
-            the gms file in which is created the gams model with the ph_objective
-        nonants_name_pairs (list of (str,str)): list of (non_ant_support_set_name, non_ant_variable_name)
+        mi (gams model instance): the base model
         cfg: pyomo config
     """
-    assert new_file_name is not None
-    stoch_param_name_pairs = stoch_param_name_pairs_creator()
-
-    ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
-
-    ### Calling this function is required regardless of the model
-    # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
-    mi, job, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = gams_guest.pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs)
-
-    opt = ws.add_options()
-    opt.all_model_types = cfg.solver_name
-    if LINEARIZED:
-        mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
-    else:
-        mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
-
-    ### Calling this function is required regardless of the model
-    # This functions initializes, by adding records (and values), all the parameters that appear due to PH
-    nonant_set_sync_dict = gams_guest.adding_record_for_PH(nonants_name_pairs, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job)
-
     ### This part is model specific, we define the values of the stochastic parameters depending on scenario_name
     scennum = sputils.extract_num(scenario_name)
     assert scennum < 3, "three scenarios hardwired for now"
@@ -86,7 +64,7 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
         y.add_record("corn").value = 3.6
         y.add_record("sugarbeets").value = 24.0    
 
-    return mi, nonants_name_pairs, nonant_set_sync_dict
+    return mi
 
         
 #=========

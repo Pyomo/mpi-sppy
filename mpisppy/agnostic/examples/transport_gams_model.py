@@ -38,6 +38,7 @@ def stoch_param_name_pairs_creator():
 
 
 def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None):
+    xxxx match factoring from farmer; drop new_file_name a non-specific lines at the beginning of the function xxxx also look at args and returns that are gone
     """ Create a scenario for the (scalable) farmer example.
     
     Args:

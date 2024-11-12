@@ -1,4 +1,3 @@
-# <special for agnostic debugging DLW Aug 2023>
 # In this example, GAMS is the guest language.
 # NOTE: unlike everywhere else, we are using xbar instead of xbars (no biggy)
 
@@ -29,18 +28,20 @@ import re
 
 class GAMS_guest():
     """
-    Provide an interface to a model file for an AMPL guest.
+    Provide an interface to a model file for a GAMS guest.
     
     Args:
         model_file_name (str): name of Python file that has functions like scenario_creator
-        ampl_file_name (str): name of AMPL file that is passed to the model file
+        gams_file_name (str): name of GAMS file that is passed to the model file
         nonants_name_pairs (list of (str,str)): list of (non_ant_support_set_name, non_ant_variable_name)
+        cfg (pyomo config object)
     """
-    def __init__(self, model_file_name, new_file_name, nonants_name_pairs):
+    def __init__(self, model_file_name, new_file_name, nonants_name_pairs, cfg):
         self.model_file_name = model_file_name
         self.model_module = sputils.module_name_to_module(model_file_name)
         self.new_file_name = new_file_name
         self.nonants_name_pairs = nonants_name_pairs
+        self.cfg = cfg
 
     def scenario_creator(self, scenario_name, **kwargs):
         """ Wrap the guest (GAMS in this case) scenario creator
@@ -50,12 +51,31 @@ class GAMS_guest():
                 Name of the scenario to construct.
 
         """
-        mi, nonants_name_pairs, nonant_set_sync_dict = self.model_module.scenario_creator(scenario_name,
-                                                                     self.new_file_name,
-                                                                     self.nonants_name_pairs,
-                                                                     **kwargs)
+        new_file_name = self.new_file_name
+        assert new_file_name is not None
+        stoch_param_name_pairs = self.model_module.stoch_param_name_pairs_creator()
+
+        ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
+
+        ### Calling this function is required regardless of the model
+        # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
+        mi, job, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = pre_instantiation_for_PH(ws, new_file_name, self.nonants_name_pairs, stoch_param_name_pairs)
+
+        opt = ws.add_options()
+        opt.all_model_types = self.cfg.solver_name
+        if LINEARIZED:
+            mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
+        else:
+            mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
+
+        ### Calling this function is required regardless of the model
+        # This functions initializes, by adding records (and values), all the parameters that appear due to PH
+        nonant_set_sync_dict = adding_record_for_PH(self.nonants_name_pairs, self.cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job)
+
+        # delete this line (end of factor)
+        mi = self.model_module.scenario_creator(scenario_name, mi, **kwargs)
         mi.solve()
-        nonant_variable_list = [nonant_var  for (_, nonant_variables_name) in nonants_name_pairs for nonant_var in mi.sync_db.get_variable(nonant_variables_name)]
+        nonant_variable_list = [nonant_var  for (_, nonant_variables_name) in self.nonants_name_pairs for nonant_var in mi.sync_db.get_variable(nonant_variables_name)]
 
         gd = {
             "scenario": mi,
@@ -65,7 +85,7 @@ class GAMS_guest():
             "probability": "uniform",
             "sense": pyo.minimize,
             "BFs": None,
-            "nonants_name_pairs": nonants_name_pairs,
+            "nonants_name_pairs": self.nonants_name_pairs,
             "nonant_set_sync_dict": nonant_set_sync_dict
         }
         return gd
@@ -474,8 +494,9 @@ def file_name_creator(original_file_path):
     Args:
         original_file_path (str): the path (including the name) of the original gms path
     """
-        # Get the directory and filename
-    directory, filename = os.path.split(original_file_path)
+    # Get the directory and filename
+        
+    directory, filename = os.path.split(os.path.abspath(original_file_path))
     name, ext = os.path.splitext(filename)
 
     assert ext == ".gms", "the original data file should be a gms file"
@@ -492,7 +513,7 @@ def file_name_creator(original_file_path):
 
 ### Generic functions called inside the specific scenario creator
 def _add_or_get_set(mi, out_set):
-    # Captures the set, thanks to the data of the out_database. If it hasn't been added yet to the model insatnce it adds it as well
+    # Captures the set using data from the out_database. If it hasn't been added yet to the model insatnce it adds it as well
     try:
         return mi.sync_db.add_set(out_set.name, out_set._dim, out_set.text)
     except gams.GamsException:
@@ -505,22 +526,24 @@ def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_
     Args:
         ws (GamsWorkspace): the workspace to create the model instance
         new_file_name (str): the gms file in which is created the gams model with the ph_objective
-        nonants_name_pairs (list of pairs (str, str)): for each non-anticipative variable, the name of the support set must be given with the name of the parameter
+        nonants_name_pairs (list of pairs (str, str)): for each non-anticipative variable, the name of the support set must be given with the name of the paramete
         stoch_param_name_pairs (_type_): for each stochastic parameter, the name of the support set must be given with the name of the variable
 
     Returns:
         tuple: include everything needed for creating the model instance
-        nonant_set_sync_dict gives the name of all t
+        nonant_set_sync_dict gives the name of all the elements of the sets presented as tuples. It is useful if the set is a cartesian set: i,j then the elements
+        will be of the shape (element_in_i,element_in_j). Some functions iterate over this set.
+
     """
     ### First create the model instance
-    job = ws.add_job_from_file(new_file_name)
+    job = ws.add_job_from_file(new_file_name.replace(".gms",""))
     cp = ws.add_checkpoint()
     mi = cp.add_modelinstance()
 
-    job.run(checkpoint=cp) # at this point the model with bad values is solved, it creates the file _gams_py_gjo0.lst
+    job.run(checkpoint=cp) # at this point the model (with what data?) is solved, it creates the file _gams_py_gjo0.lst
 
     ### Add to the elements that should be modified the stochastic parameters
-    # The parameters don't exist yet in the model instance, so they need to be redefined thanks to the job
+    # The parameters don't exist yet in the model instance, so they need to be redefined using the job
     stoch_sets_out_dict = {param_name: [job.out_db.get_set(elementary_set) for elementary_set in set_name.split(",")] for set_name, param_name in stoch_param_name_pairs}
     stoch_sets_sync_dict = {param_name: [_add_or_get_set(mi, out_elementary_set) for out_elementary_set in out_elementary_sets] for param_name, out_elementary_sets in stoch_sets_out_dict.items()}
     glist = [gams.GamsModifier(mi.sync_db.add_parameter_dc(param_name, [sync_elementary_set for sync_elementary_set in sync_elementary_sets])) for param_name, sync_elementary_sets in stoch_sets_sync_dict.items()]
