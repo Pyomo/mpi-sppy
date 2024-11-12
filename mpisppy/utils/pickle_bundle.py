@@ -39,19 +39,18 @@ def dill_unpickle(fname):
 def check_args(cfg):
     """ Make sure the pickle bundle args make sense; this assumes the config
     has all the appropriate fields."""
-    assert cfg.pickle_bundles_dir is None or cfg.unpickle_bundles_dir is None
-    assert cfg.pickle_scenarios_dir is None or cfg.unpickle_scenarios_dir is None
-    assert cfg.unpickle_scenarios_dir is None or cfg.bundles_per_rank != 0, "Unpickled scenarios in proper bundles are not supported"
+    assert cfg.get("pickle_bundles_dir") is None or cfg.get("unpickle_bundles_dir") is None
+    assert cfg.get("pickle_scenarios_dir") is None or cfg.get("unpickle_scenarios_dir") is None
+    assert cfg.get("unpickle_scenarios_dir") is None or cfg.get("bundles_per_rank") != 0, "Unpickled scenarios in proper bundles are not supported"
     if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank != 0:
         raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
                            "and --bundles-per-rank, which is for loose bundles, cannot be")
-    if cfg.unpickle_bundles_dir is not None and not os.path.isdir(cfg.unpickle_bundles_dir):
+    if cfg.get("unpickle_bundles_dir") is not None and not os.path.isdir(cfg.unpickle_bundles_dir):
         raise RuntimeError(f"Directory to load pickled bundle files from not found: {cfg.unpickle_bundles_dir}")
-    if cfg.unpickle_scenarios_dir is not None and not os.path.isdir(cfg.unpickle_scenarios_dir):
+    if cfg.get("unpickle_scenarios_dir") is not None and not os.path.isdir(cfg.unpickle_scenarios_dir):
         raise RuntimeError(f"Directory to load pickled scenarios files from not found: {cfg.unpickle_scenarios_dir}")
     
 
 def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
-    return (hasattr(cfg, "pickle_bundles_dir") and cfg.pickle_bundles_dir is not None)\
-       or (hasattr(cfg, "unpickle_bundles_dir") and cfg.unpickle_bundles_dir is not None)
+    return cfg.get("scenarios_per_bundle", ifmissing=0) > 0
