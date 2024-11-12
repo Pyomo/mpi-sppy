@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 # Utilities to support formation and use of "proper" bundles
+# TBD: we should consider restructuring this and moving the capability to spbase
 
 import os
 import mpisppy.utils.sputils as sputils

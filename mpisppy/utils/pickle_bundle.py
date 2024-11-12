@@ -53,4 +53,7 @@ def check_args(cfg):
 
 def have_proper_bundles(cfg):
     """ boolean to indicate we have pickled bundles"""
-    return cfg.get("scenarios_per_bundle", ifmissing=0) > 0
+    return cfg.get("scenarios_per_bundle") is not None\
+        and cfg.scenarios_per_bundle > 0
+        
+
