@@ -558,7 +558,7 @@ class SPBase:
             return False
 
 
-    def gather_var_values_to_rank0(self, get_zero_prob_values=False):
+    def gather_var_values_to_rank0(self, get_zero_prob_values=False, fixed_vars=True):
         """ Gather the values of the nonanticipative variables to the root of
         the `mpicomm` for the cylinder
 
@@ -572,6 +572,8 @@ class SPBase:
         for (sname, model) in self.local_scenarios.items():
             for node in model._mpisppy_node_list:
                 for var in node.nonant_vardata_list:
+                    if not fixed_vars and var.fixed:
+                        continue
                     var_name = var.name
                     if self.bundling:
                         dot_index = var_name.find('.')
@@ -595,11 +597,11 @@ class SPBase:
             return result
 
 
-    def report_var_values_at_rank0(self, header="", print_zero_prob_values=False):
+    def report_var_values_at_rank0(self, header="", print_zero_prob_values=False, fixed_vars=True):
         """ Pretty-print the values and associated statistics for
         non-anticipative variables across all scenarios. """
 
-        var_values = self.gather_var_values_to_rank0(get_zero_prob_values=print_zero_prob_values)
+        var_values = self.gather_var_values_to_rank0(get_zero_prob_values=print_zero_prob_values, fixed_vars=fixed_vars)
 
         if self.cylinder_rank == 0:
 
