@@ -86,7 +86,7 @@ class Config(pyofig.ConfigDict):
 
 
     #===============
-    def add_and_assign(self, name, description, domain, default, value, complain=False):
+    def add_and_assign(self, name, description, domain, default, value, complain=True):
         """ Add an arg to the self dict and assign it a value
         Args:
              name (str): the argument name, underscore separated
@@ -98,8 +98,7 @@ class Config(pyofig.ConfigDict):
         """
         if name in self:
             if complain:
-                print(f"Duplicate {name} will not be added to self by add_and_assign {value}.")
-                # raise RuntimeError(f"Trying to add duplicate {name} to self.")
+                raise RuntimeError(f"Trying to add duplicate {name=} to cfg {value=}")
         else:
             self.add_to_config(name, description, domain, default, argparse=False)
             self[name] = value
@@ -150,9 +149,9 @@ class Config(pyofig.ConfigDict):
         
         if self.grad_rho_setter and self.sensi_rho:
             _bad_rho_setters("Only one rho setter can be active.")
-        if not self.grad_rho_setter and not self.sensi_rho:
+        if not (self.grad_rho_setter or self.sensi_rho or self.sep_rho or self.reduced_costs_rho):
             if self.dynamic_rho_primal_crit or self.dynamic_rho_dual_crit:
-                _bad_rho_setters("dynamic rho only works with grad- and sensi-")
+                _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
@@ -188,7 +187,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="bundles per rank (default 0 (no bundles))",
+                            description="Loose bundles per rank (default 0 (no bundles))",
                             domain=int,
                             default=0)
 
@@ -441,6 +440,15 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-2)
 
+    def reduced_costs_rho_args(self):
+        self.add_to_config("reduced_costs_rho",
+                           description="have a ReducedCostsRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("reduced_costs_rho_multiplier",
+                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
 
     def sep_rho_args(self):
         self.add_to_config("sep_rho",
@@ -562,6 +570,11 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-4)
 
+        self.add_to_config('rc_fix_fraction_pre_iter0',
+                            description="target fix fraction for rc fixer before the first iteration",
+                            domain=float,
+                            default=0.0)
+
         self.add_to_config('rc_fix_fraction_iter0',
                             description="target fix fraction for rc fixer in first iteration",
                             domain=float,
@@ -570,7 +583,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config('rc_fix_fraction_iterk',
                             description="target fix fraction for rc fixer in subsequent iterations",
                             domain=float,
-                            default=0.8)
+                            default=0.0)
         
         self.add_to_config('rc_bound_tightening',
                             description="use reduced cost bound tightening",
@@ -863,12 +876,12 @@ class Config(pyofig.ConfigDict):
         self.gradient_args()
 
         self.add_to_config('dynamic_rho_primal_crit',
-                           description="Use dynamic primal criterion for some rho updates",
+                           description="Use dynamic primal criterion for some types of rho updates",
                            domain=bool,
                            default=False)
 
         self.add_to_config('dynamic_rho_dual_crit',
-                           description="Use dynamic dual criterion for some rho updates",
+                           description="Use dynamic dual criterion for some stypes of rho updates",
                            domain=bool,
                            default=False)
 
@@ -969,6 +982,33 @@ class Config(pyofig.ConfigDict):
                                 domain=bool,
                                 default=False)
 
+    def proper_bundle_config(self):
+        self.add_to_config('pickle_bundles_dir',
+                            description="Write bundles to a dill pickle files in this dir (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config('unpickle_bundles_dir',
+                            description="Read bundles from a dill pickle files in this dir; (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config("scenarios_per_bundle",
+                            description="Used for `proper` bundles only (might also be used when reading pickled bundles) (default None)",
+                            domain=int,
+                            default=None)
+
+    def pickle_scenarios_config(self):
+        # Distinct from pickle bundles
+        self.add_to_config('pickle_scenarios_dir',
+                            description="Write individual scenarios to a dill pickle files in this dir (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config('unpickle_scenarios_dir',
+                            description="Read individual scenarios_per_bundle from a dill pickle files in this dir; (default None)",
+                            domain=str,
+                            default=None)
 
     #================
     def create_parser(self,progname=None):

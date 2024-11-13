@@ -93,5 +93,15 @@ arguments:
 This node list must be attached to the scenario model instance under
 the name `model._mpisppy_node_list`. See, e.g., the AirCond example.
 
+Speed-up
+========
 
+If you are using a Pyomo model, you might be able to get a big speed
+up by pickling your base model. Your `scenario_creator` function can
+load the pickle file quickly, then make the modifications to the base
+model according to the scenario. You should probably use the `dill`
+package if you do this.  Note that if you run the same large base
+model every time you run, this might be a very significant speed-up. (To be
+extra clear: this suggestion is not related to pickling scenarios, but
+rather to pickling a common base model).
 

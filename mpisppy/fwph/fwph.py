@@ -331,29 +331,29 @@ class FWPH(mpisppy.phbase.PHBase):
 
         # Add new variable and update \sum a_i = 1 constraint
         new_var = qp.a.add() # Add the new convex comb. variable
+        lb, body, ub = qp.sum_one.to_bounded_expression()
+        body += new_var
+        qp.sum_one.set_value((lb, body, ub))
         if (persistent):
             solver.add_var(new_var)
             solver.remove_constraint(qp.sum_one)
-            qp.sum_one._body += new_var
             solver.add_constraint(qp.sum_one)
-        else:
-            qp.sum_one._body += new_var
 
         target = mip.ref_vars if self.bundling else mip.nonant_vars
         for (node, ix) in qp.eqx.index_set():
+            lb, body, ub = qp.eqx[node, ix].to_bounded_expression()
+            body += new_var * target[node, ix].value
+            qp.eqx[node, ix].set_value((lb, body, ub))
             if (persistent):
                 solver.remove_constraint(qp.eqx[node, ix])
-                qp.eqx[node, ix]._body += new_var * target[node, ix].value
                 solver.add_constraint(qp.eqx[node, ix])
-            else:
-                qp.eqx[node, ix]._body += new_var * target[node,ix].value
         for key in mip._mpisppy_model.y_indices:
+            lb, body, ub = qp.eqy[key].to_bounded_expression()
+            body += new_var * pyo.value(mip.leaf_vars[key])
+            qp.eqy[key].set_value((lb, body, ub))
             if (persistent):
                 solver.remove_constraint(qp.eqy[key])
-                qp.eqy[key]._body += new_var * pyo.value(mip.leaf_vars[key])
                 solver.add_constraint(qp.eqy[key])
-            else:
-                qp.eqy[key]._body += new_var * pyo.value(mip.leaf_vars[key])
 
     def _attach_indices(self):
         ''' Attach the fields x_indices and y_indices to the model objects in

@@ -183,7 +183,8 @@ class SPOpt(SPBase):
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
         elif disable_pyomo_signal_handling:
-            solve_keyword_args["use_signal_handling"] = False
+            # solve_keyword_args["use_signal_handling"] = False
+            pass
 
         try:
             results = s._solver_plugin.solve(s,
@@ -620,7 +621,10 @@ class SPOpt(SPBase):
                                        .format(nlens[ndn], ndn, len(cache[ndn])))
                 for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
-                    this_vardata._value = cache[ndn][i]
+                    if this_vardata.is_binary() or this_vardata.is_integer():
+                        this_vardata._value = round(cache[ndn][i])
+                    else:
+                        this_vardata._value = cache[ndn][i]
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
@@ -663,7 +667,10 @@ class SPOpt(SPBase):
 
             for i in range(nlens['ROOT']):
                 this_vardata = node.nonant_vardata_list[i]
-                this_vardata._value = root_cache[i]
+                if this_vardata.is_binary() or this_vardata.is_integer():
+                    this_vardata._value = round(root_cache[i])
+                else:
+                    this_vardata._value = root_cache[i]
                 this_vardata.fix()
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
