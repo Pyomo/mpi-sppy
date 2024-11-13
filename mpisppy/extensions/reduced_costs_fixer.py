@@ -31,13 +31,16 @@ class ReducedCostsFixer(Extension):
         # Percentage of variables which are at the bound we will target
         # to fix. We never fix varibles with reduced costs less than
         # the `zero_rc_tol` in absolute value
+        self._fix_fraction_target_pre_iter0 = rc_options.get('fix_fraction_target_pre_iter0', 0)
+        if self._fix_fraction_target_pre_iter0 < 0 or self._fix_fraction_target_pre_iter0 > 1:
+            raise ValueError("fix_fraction_target_pre_iter0 must be between 0 and 1")
         self._fix_fraction_target_iter0 = rc_options['fix_fraction_target_iter0']
         if self._fix_fraction_target_iter0 < 0 or self._fix_fraction_target_iter0 > 1:
             raise ValueError("fix_fraction_target_iter0 must be between 0 and 1")
         self._fix_fraction_target_iterK = rc_options['fix_fraction_target_iterK']
         if self._fix_fraction_target_iterK < 0 or self._fix_fraction_target_iterK > 1:
             raise ValueError("fix_fraction_target_iterK must be between 0 and 1")
-        self.fix_fraction_target = self._fix_fraction_target_iter0
+        self.fix_fraction_target = self._fix_fraction_target_pre_iter0
 
         # TODO: This should be same as in rc spoke?
         self.bound_tol = rc_options['rc_bound_tol']
@@ -46,14 +49,15 @@ class ReducedCostsFixer(Extension):
             self.opt.cylinder_rank == 0:
             print("Warning: ReducedCostsFixer will be idle. Enable use_rc_bt or use_rc_fixer in options.")
 
-        #self._options = rc_options
-
         self._last_serial_number = -1
         self._heuristic_fixed_vars = 0
 
+    def _get_serial_number(self):
+        return int(round(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index][-1]))
+
     def pre_iter0(self):
         self._modeler_fixed_nonants = set()
-        self._integer_nonants = []
+        self._integer_nonants = set()
         self.nonant_length = self.opt.nonant_length
         for k,s in self.opt.local_scenarios.items():
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
@@ -61,9 +65,21 @@ class ReducedCostsFixer(Extension):
                     self._modeler_fixed_nonants.add(ndn_i)
                     continue
                 if xvar.is_integer():
-                    self._integer_nonants.append(ndn_i)
-            break
-        
+                    self._integer_nonants.add(ndn_i)
+
+    def iter0_post_solver_creation(self):
+        self.fix_fraction_target = self._fix_fraction_target_pre_iter0
+        if self._use_rc_fixer and self.fix_fraction_target > 0:
+            # wait for the reduced costs
+            if self.opt.cylinder_rank == 0 and self.verbose:
+                print("Fixing based on reduced costs prior to iteration 0!")
+            if self._get_serial_number() == 0:
+                while not self.opt.spcomm.hub_from_spoke(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index], self.reduced_costs_spoke_index):
+                    continue
+            self.sync_with_spokes(pre_iter0 = True)
+            self.opt.spcomm.use_trivial_bound = False
+        self.fix_fraction_target = self._fix_fraction_target_iter0
+
     def post_iter0_after_sync(self):
         self.fix_fraction_target = self._fix_fraction_target_iterK
 
@@ -72,17 +88,17 @@ class ReducedCostsFixer(Extension):
             if spoke["spoke_class"] == ReducedCostsSpoke:
                 self.reduced_costs_spoke_index = i + 1
 
-    def sync_with_spokes(self):
-        spcomm = self.opt.spcomm
-        idx = self.reduced_costs_spoke_index
-        serial_number = int(round(spcomm.outerbound_receive_buffers[idx][-1]))
+    def sync_with_spokes(self, pre_iter0 = False):
+        serial_number = self._get_serial_number()
         if serial_number > self._last_serial_number:
+            spcomm = self.opt.spcomm
+            idx = self.reduced_costs_spoke_index
             self._last_serial_number = serial_number
             reduced_costs = spcomm.outerbound_receive_buffers[idx][1:1+self.nonant_length]
             this_outer_bound = spcomm.outerbound_receive_buffers[idx][0]
-            if self._use_rc_bt:
+            if not pre_iter0 and self._use_rc_bt:
                 self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
-            if self._use_rc_fixer:
+            if self._use_rc_fixer and self.fix_fraction_target > 0.0:
                 self.reduced_costs_fixing(reduced_costs)
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
@@ -188,7 +204,7 @@ class ReducedCostsFixer(Extension):
             print(f"Bounds tightened by reduced cost: {int(round(total_bounds_tightened))}/{self.nonant_length}")
 
 
-    def reduced_costs_fixing(self, reduced_costs):
+    def reduced_costs_fixing(self, reduced_costs, pre_iter0 = False):
 
         if np.all(np.isnan(reduced_costs)):
             # Note: If all rc = nan at some later iteration,
@@ -249,13 +265,13 @@ class ReducedCostsFixer(Extension):
                             if (this_expected_rc >= target):
                                 if self.opt.is_minimizing:
                                     # TODO: First check can be simplified as abs(rc) is already checked above
-                                    if (reduced_costs[ci] > 0 + self.zero_rc_tol) and (xb - xvar.lb <= self.bound_tol):
+                                    if (reduced_costs[ci] > 0 + self.zero_rc_tol) and (pre_iter0 or (xb - xvar.lb <= self.bound_tol)):
                                         xvar.fix(xvar.lb)
                                         if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to lb {xvar.lb}; reduced cost is {reduced_costs[ci]} LP-LR")
                                         update_var = True
                                         raw_fixed_this_iter += 1
-                                    elif (reduced_costs[ci] < 0 - self.zero_rc_tol) and (xvar.ub - xb <= self.bound_tol):
+                                    elif (reduced_costs[ci] < 0 - self.zero_rc_tol) and (pre_iter0 or (xvar.ub - xb <= self.bound_tol)):
                                         xvar.fix(xvar.ub)
                                         if self.debug and self.opt.cylinder_rank == 0:
                                             print(f"fixing var {xvar.name} to ub {xvar.ub}; reduced cost is {reduced_costs[ci]} LP-LR")

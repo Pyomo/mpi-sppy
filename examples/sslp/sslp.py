@@ -57,7 +57,7 @@ def scenario_names_creator(num_scens,start=None):
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=1
-    return [f"Scenario{i}" for i in range(start,start+num_scens)]
+    return [f"Scenario{i}" for i in range(start, start+num_scens)]
 
 
 #=========

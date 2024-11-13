@@ -27,3 +27,18 @@ needed even with the ``--help`` argument, e.g.,
 
 .. Note::
     This functionality is at the level of alpha-release.
+
+Pickled Scenarios
+-----------------
+
+The ``generic_cylinders`` program supports pickling and unpickling
+scenarios. When pickling, all ranks are used for pickling, no other
+processing is done and command line arguments other than
+``pickle-scenarios-dir`` are
+ignored.
+
+.. Note::
+   When unpickling, `num_scens` might be needed on `cfg` so `num-scens` is
+   probably needed on the command line. Consistency with the files in the
+   pickle directory might not be checked by the program.
+

@@ -77,7 +77,7 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 active=True,
                 sort=True):
             var_name = var.name
-            if bundling:
+            if bundling:  # loose bundling
                 dot_index = var_name.find('.')
                 assert dot_index >= 0
                 var_name = var_name[(dot_index+1):]
@@ -281,13 +281,13 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         obj_func = scenario_objs[0] # Select the first objective
         try:
             EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
-            EF_instance._mpisppy_probability   += scenario_instance._mpisppy_probability
+            EF_instance._mpisppy_probability += scenario_instance._mpisppy_probability
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
                         " _mpisppy_probability and try again.") from e
     # Normalization does nothing when solving the full EF, but is required for
-    # appropraite scaling of EFs used as bundles.
+    # appropriate scaling of EFs used as bundles.
     EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the

@@ -967,7 +967,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
         if dconvergence_detail:
-            self.report_var_values_at_rank0(header="Convergence detail:")
+            self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
         self.reenable_W_and_prox()
 
@@ -1075,7 +1075,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if dconvergence_detail:
-                self.report_var_values_at_rank0(header="Convergence detail:")
+                self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
         else: # no break, (self._PHIter == max_iterations)
             # NOTE: If we return for any other reason things are reasonably in-sync.

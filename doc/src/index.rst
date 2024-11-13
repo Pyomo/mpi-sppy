@@ -27,7 +27,7 @@ MPI is used.
    ef.rst
    nompi4py.rst
    secretmenu.rst
-   pickledbundles.rst
+   properbundles.rst
    grad_rho.rst
    w_rho.rst
    admmWrapper.rst

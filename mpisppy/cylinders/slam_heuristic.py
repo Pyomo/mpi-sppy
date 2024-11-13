@@ -95,7 +95,10 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                     solver = s._solver_plugin if is_pers else None
 
                     for ix, var in enumerate(s._mpisppy_data.nonant_indices.values()):
-                        var.fix(global_candidate[ix])
+                        val = global_candidate[ix]
+                        if var.is_binary() or var.is_integer():
+                            val = round(val)
+                        var.fix(val)
                         if (is_pers):
                             solver.update_var(var)
 
