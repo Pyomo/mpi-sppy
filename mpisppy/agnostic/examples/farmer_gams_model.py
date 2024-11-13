@@ -37,13 +37,14 @@ def stoch_param_name_pairs_creator():
     return [("crop", "yield")]
 
 
-def scenario_creator(scenario_name, mi, cfg=None):
+def scenario_creator(scenario_name, mi, job, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
     
     Args:
         scenario_name (str):
             Name of the scenario to construct.
         mi (gams model instance): the base model
+        job (gams job) : not used for farmer
         cfg: pyomo config
     """
     ### This part is model specific, we define the values of the stochastic parameters depending on scenario_name

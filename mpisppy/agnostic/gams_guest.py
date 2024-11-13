@@ -72,8 +72,7 @@ class GAMS_guest():
         # This functions initializes, by adding records (and values), all the parameters that appear due to PH
         nonant_set_sync_dict = adding_record_for_PH(self.nonants_name_pairs, self.cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job)
 
-        # delete this line (end of factor)
-        mi = self.model_module.scenario_creator(scenario_name, mi, **kwargs)
+        mi = self.model_module.scenario_creator(scenario_name, mi, job, **kwargs)
         mi.solve()
         nonant_variable_list = [nonant_var  for (_, nonant_variables_name) in self.nonants_name_pairs for nonant_var in mi.sync_db.get_variable(nonant_variables_name)]
 

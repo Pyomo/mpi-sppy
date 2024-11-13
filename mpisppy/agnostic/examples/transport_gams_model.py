@@ -37,39 +37,16 @@ def stoch_param_name_pairs_creator():
     return [("j", "b")]
 
 
-def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None):
-    xxxx match factoring from farmer; drop new_file_name a non-specific lines at the beginning of the function xxxx also look at args and returns that are gone
+def scenario_creator(scenario_name, mi, job, cfg=None):
     """ Create a scenario for the (scalable) farmer example.
     
     Args:
         scenario_name (str):
             Name of the scenario to construct.
-        new_file_name (str):
-            the gms file in which is created the gams model with the ph_objective
-        nonants_name_pairs (list of (str,str)): list of (non_ant_support_set_name, non_ant_variable_name)
+        mi (gams model instance): the base model
+        job (gams job)
         cfg: pyomo config
     """
-    assert new_file_name is not None
-    stoch_param_name_pairs = stoch_param_name_pairs_creator()
-
-
-    ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
-    
-    ### Calling this function is required regardless of the model
-    # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
-    mi, job, glist, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict = gams_guest.pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_name_pairs)
-
-    opt = ws.add_options()
-    opt.all_model_types = cfg.solver_name
-    if LINEARIZED:
-        mi.instantiate("transport using lp minimizing objective_ph", glist, opt)
-    else:
-        mi.instantiate("transport using qcp minimizing objective_ph", glist, opt)
-
-    ### Calling this function is required regardless of the model
-    # This functions initializes, by adding records (and values), all the parameters that appear due to PH
-    nonant_set_sync_dict = gams_guest.adding_record_for_PH(nonants_name_pairs, cfg, all_ph_parameters_dicts, xlo_dict, xup_dict, x_out_dict, job)
-
     scennum = sputils.extract_num(scenario_name)
 
     count = 0
@@ -82,7 +59,7 @@ def scenario_creator(scenario_name, new_file_name, nonants_name_pairs, cfg=None)
         count += 1"""
         b.add_record(market.keys[0]).value = (1+2*(scennum-1)/10) * job.out_db.get_parameter("b").find_record(market.keys[0]).value
 
-    return mi, nonants_name_pairs, nonant_set_sync_dict
+    return mi
 
 
 #=========
