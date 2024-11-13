@@ -262,6 +262,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.e-1)
 
+        self.add_to_config('warm_start_prox_approx',
+                           description="Manually warm-start solution from previous iteration "
+                                       "after adding proximal linearization cut.",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("smoothing",
                            description="For PH, add a smoothing term to the objective",
                            domain=bool,
@@ -372,7 +378,19 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=100)
 
+    def timed_mipgap_args(self):
+        self.add_to_config('timed_mipgap',
+                           description="use a time-dependent target mip gap",
+                           domain=bool,
+                           default=False)
 
+        self.add_to_config("timed_mipgap_options",
+                           description=
+                           "Should be a string with the following format: 'gap1:time1 gap2:time2 ... gapN:timeN'."
+                           "Each pair defines a soft solver time limit, i.e. time limit only applied to solver "
+                           "if MIP gap is below specified threshold. Default: 0.05:600",
+                           domain=str,
+                           default="0.05:600")
 
     def mip_options(self):
 
@@ -877,6 +895,14 @@ class Config(pyofig.ConfigDict):
                             description="Tolerance for primal dual converger (default 1e-2)",
                             domain=float,
                             default=1e-2)
+        self.add_to_config("use_time_limit_converger",
+                           description="Use the time limit converger",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("time_limit",
+                           description="Time limit for time limit converger (in seconds)",
+                           domain=float,
+                           default=3600)
 
     def tracking_args(self):
         self.add_to_config("tracking_folder",

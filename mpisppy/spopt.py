@@ -12,6 +12,7 @@ import logging
 import time
 import math
 import inspect
+import os
 import random
 
 import numpy as np
@@ -169,6 +170,10 @@ class SPOpt(SPBase):
             _vb("Using sub-problem solver options="
                 + str(solver_options))
             for option_key,option_value in solver_options.items():
+                if option_key=='LogFile':
+                    lfn,lfn_e = os.path.splitext(option_value)
+                    lfn+=('_'+str(self.cylinder_rank))
+                    option_value = lfn+lfn_e
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()
