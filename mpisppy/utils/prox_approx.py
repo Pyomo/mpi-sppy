@@ -25,11 +25,11 @@ def _newton_step(val, x_pnt, y_pnt):
 class ProxApproxManager:
     __slots__ = ()
 
-    def __new__(cls, xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i):
+    def __new__(cls, mpisppy_model, xvar, ndn_i):
         if xvar.is_integer():
-            return ProxApproxManagerDiscrete(xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i)
+            return ProxApproxManagerDiscrete(mpisppy_model, xvar, ndn_i)
         else:
-            return ProxApproxManagerContinuous(xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i)
+            return ProxApproxManagerContinuous(mpisppy_model, xvar, ndn_i)
 
 class _ProxApproxManager:
     '''
@@ -37,12 +37,12 @@ class _ProxApproxManager:
     '''
     __slots__ = ()
 
-    def __init__(self, xvar, xvarsqrd, xbar, xsqvar_cuts, ndn_i):
+    def __init__(self, mpisppy_model, xvar, ndn_i):
         self.xvar = xvar
-        self.xvarsqrd = xvarsqrd
-        self.xbar = xbar
+        self.xvarsqrd = mpisppy_model.xsqvar[ndn_i]
+        self.cuts = mpisppy_model.xsqvar_cuts
+        self.xbar = mpisppy_model.xbars[ndn_i]
         self.var_index = ndn_i
-        self.cuts = xsqvar_cuts
         self.cut_index = 0
         self._store_bounds()
 
