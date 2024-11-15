@@ -115,7 +115,7 @@ class _ProxApproxManager:
         # rotated_x_val_x_bar around the aug_lagrange_point
         if not isclose(rotated_x_val_x_bar, aug_lagrange_point, abs_tol=tolerance):
             num_cuts += self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
-        # print(f"{len(self.cut_values)=}")
+        # print(f"{self.cut_index=}")
         return num_cuts
 
     def check_tol_add_cut(self, tolerance, persistent_solver=None):
