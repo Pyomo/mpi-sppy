@@ -984,7 +984,8 @@ def nonant_cost_coeffs(s):
         if id(var) in s._mpisppy_data.varid_to_nonant_index:
             raise RuntimeError(
                 "Found nonlinear variables in the objective function. "
-                f"Variable {var} has nonlinear interactions in the objective funtion"
+                f"Variable {var} has nonlinear interactions in the objective funtion. "
+                "Consider using gradient-based rho."
             )
     return cost_coefs
 

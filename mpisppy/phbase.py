@@ -8,6 +8,7 @@
 ###############################################################################
 import time
 import logging
+import math
 
 import numpy as np
 import mpisppy.MPI as MPI
@@ -689,6 +690,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
+            # The proximal approximation code now checks the tolerance based on the x-coordinates
+            # as opposed to the y-coordinates. Therefore, we will use the square root of the
+            # y-coordinate tolerance.
+            self.prox_approx_tol = math.sqrt(self.prox_approx_tol)
         else:
             self._prox_approx = False
 
