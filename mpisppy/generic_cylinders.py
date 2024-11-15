@@ -178,7 +178,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
-    if cfg.grad_rho_setter:
+    if cfg.grad_rho:
         ext_classes.append(Gradient_extension)
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
 
