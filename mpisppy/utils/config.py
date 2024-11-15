@@ -388,7 +388,7 @@ class Config(pyofig.ConfigDict):
 
     def aph_args(self):
         
-        solf.add_to_config(name="APH",
+        self.add_to_config(name="APH",
                            description="Use APH instead of PH (default False)",
                            domain=bool,
                            default=False)
