@@ -63,10 +63,13 @@ class GAMS_guest():
 
         opt = ws.add_options()
         opt.all_model_types = self.cfg.solver_name
+        print(f"about to instantiate {glist=}, {opt=}")
         if LINEARIZED:
             mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
         else:
             mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
+        print("done with instantiate; quitting")
+        quit()
 
         ### Calling this function is required regardless of the model
         # This functions initializes, by adding records (and values), all the parameters that appear due to PH
@@ -343,7 +346,7 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
         if line.startswith("solve"):
             # Should be in the last lines. This line 
             words = re.findall(r'\b\w+\b', line)
-            print(f"{words=}")
+            # print(f"{words=}")
             if "minimizing" in words:
                 sense = "minimizing"
                 sign = "+"
