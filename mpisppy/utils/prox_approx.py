@@ -60,29 +60,44 @@ class _ProxApproxManager:
         else:
             self.ub = self.xvar.ub
 
-    def add_cut(self, val, persistent_solver=None):
+    def add_cut(self, val, tolerance, persistent_solver):
         '''
         create a cut at val
         '''
         pass
+
+    def add_cuts(self, x_val, tolerance, persistent_solver):
+        x_bar = self.xbar.value
+        rho = self.rho.value
+        W = self.W.value
+
+        self.add_cut(x_val, tolerance, persistent_solver)
+        # rotate x_val around x_bar, the minimizer of (\rho / 2)(x - x_bar)^2
+        # to create a vertex at this point
+        rotated_x_val_x_bar = 2*x_bar - x_val
+        if not isclose(x_val, rotated_x_val_x_bar, abs_tol=tolerance):
+            self.add_cut(rotated_x_val_x_bar, tolerance, persistent_solver)
+        # aug_lagrange_point, is the minimizer of w\cdot x + (\rho / 2)(x - x_bar)^2
+        # to create a vertex at this point
+        aug_lagrange_point = -W / rho + x_bar
+        if not isclose(x_val, aug_lagrange_point, abs_tol=tolerance):
+            self.add_cut(2*aug_lagrange_point - x_val, tolerance, persistent_solver)
+        # finally, create another vertex at the aug_lagrange_point by rotating
+        # rotated_x_val_x_bar around the aug_lagrange_point
+        if not isclose(rotated_x_val_x_bar, aug_lagrange_point, abs_tol=tolerance):
+            self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
+        return True
 
     def check_tol_add_cut(self, tolerance, persistent_solver=None):
         '''
         add a cut if the tolerance is not satified
         '''
         x_pnt = self.xvar.value
-        x_bar = self.xbar.value
         y_pnt = self.xvarsqrd.value
         f_val = x_pnt**2
 
         #print(f"y-distance: {actual_val - measured_val})")
-        if y_pnt is None:
-            self.add_cut(x_pnt, persistent_solver)
-            if not isclose(x_pnt, x_bar, abs_tol=1e-6):
-                self.add_cut(2*x_bar - x_pnt, persistent_solver)
-            return True
-
-        if (f_val - y_pnt) > tolerance:
+        if y_pnt is not None:
             '''
             In this case, we project the point x_pnt, y_pnt onto
             the curve y = x**2 by finding the minimum distance
@@ -96,20 +111,17 @@ class _ProxApproxManager:
             #print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
             #print(f"this_val: {this_val}")
             next_val = _newton_step(this_val, x_pnt, y_pnt)
-            while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
-                #print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
-                #print(f"next_val: {next_val}")
-                this_val = next_val
-                next_val = _newton_step(this_val, x_pnt, y_pnt)
-            self.add_cut(next_val, persistent_solver)
-            if not isclose(next_val, x_bar, abs_tol=1e-6):
-                self.add_cut(2*x_bar - next_val, persistent_solver)
-            return True
-        return False
+            # while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
+            #     #print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
+            #     #print(f"next_val: {next_val}")
+            #     this_val = next_val
+            #     next_val = _newton_step(this_val, x_pnt, y_pnt)
+            x_pnt = next_val
+        return self.add_cuts(x_pnt, tolerance,  persistent_solver)
 
 class ProxApproxManagerContinuous(_ProxApproxManager):
 
-    def add_cut(self, val, persistent_solver=None):
+    def add_cut(self, val, tolerance, persistent_solver):
         '''
         create a cut at val using a taylor approximation
         '''
@@ -149,10 +161,12 @@ def _compute_mb(val):
 
 class ProxApproxManagerDiscrete(_ProxApproxManager):
 
-    def add_cut(self, val, persistent_solver=None):
+    def add_cut(self, val, tolerance, persistent_solver):
         '''
         create up to two cuts at val, exploiting integrality
         '''
+        # TODO: tolerance isn't realy used for discrete,
+        # but as long as the tolerance is <=1 it doesn't matter
         val = int(round(val))
 
         ## cuts are indexed by the x-value to the right
