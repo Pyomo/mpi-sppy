@@ -11,16 +11,18 @@ from math import isclose
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
-def _f(val, x_pnt, y_pnt):
-    return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
-def _df(val, x_pnt, y_pnt):
-    #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
-    return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
-def _d2f(val, x_pnt, y_pnt):
-    return 1 + 6*val*val - 2*y_pnt
+# def _f(val, x_pnt, y_pnt):
+#     return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
+# def _df(val, x_pnt, y_pnt):
+#     #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
+#     return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
+# def _d2f(val, x_pnt, y_pnt):
+#     return 1 + 6*val*val - 2*y_pnt
+# def _newton_step(val, x_pnt, y_pnt):
+#     return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
 
 def _newton_step(val, x_pnt, y_pnt):
-    return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
+    return val - (val * (1 - 2*y_pnt + 2*val*val) - x_pnt) / (1 + 6*val*val - 2*y_pnt)
 
 class ProxApproxManager:
     __slots__ = ()
@@ -42,6 +44,8 @@ class _ProxApproxManager:
         self.xvarsqrd = mpisppy_model.xsqvar[ndn_i]
         self.cuts = mpisppy_model.xsqvar_cuts
         self.xbar = mpisppy_model.xbars[ndn_i]
+        self.rho = mpisppy_model.rho[ndn_i]
+        self.W = mpisppy_model.W[ndn_i]
         self.var_index = ndn_i
         self.cut_index = 0
         self._store_bounds()
