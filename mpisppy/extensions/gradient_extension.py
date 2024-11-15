@@ -36,8 +36,7 @@ class Gradient_extension(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base)
         # TBD: stop using files
         # TBD: restore the rho_setter?
         self.cfg_args_cache = {'rho_file_in': self.cfg.rho_file_in,
-                               'grad_rho_file_out': self.cfg.grad_rho_file_out,
-                               'rho_setter': self.cfg.grad_rho_setter}
+                               'grad_rho_file_out': self.cfg.grad_rho_file_out}
         if self.cfg.get('grad_cost_file_out', ifmissing="") == "":
             self.cfg.grad_cost_file_out = './_temp_grad_cost_file.csv'
 #        else:

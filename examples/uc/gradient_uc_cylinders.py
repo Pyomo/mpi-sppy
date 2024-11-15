@@ -123,7 +123,7 @@ def main():
     if cfg.xhat_closest_tree:
         ext_classes.append(XhatClosest)
     
-    if cfg.grad_rho_setter:
+    if cfg.grad_rho:
         ext_classes.append(Gradient_extension)
         
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
@@ -143,7 +143,7 @@ def main():
             "keep_solution" : True
         }
 
-    if cfg.grad_rho_setter:
+    if cfg.grad_rho:
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
 
     if cfg.ph_mipgaps_json is not None:
