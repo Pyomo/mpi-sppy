@@ -834,7 +834,8 @@ class Config(pyofig.ConfigDict):
 #                           default=0.1)
 
         self.add_to_config('grad_rho',
-                           description="use a gradient-based rho setter (if yourproblem is linear, use coeff-rho instead)",
+                           description="use a gradient-based rho setter (if your
+problem is linear, use coeff-rho instead)",
                            domain=bool,
                            default=False)
         """
