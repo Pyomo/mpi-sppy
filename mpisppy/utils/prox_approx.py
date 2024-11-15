@@ -8,6 +8,8 @@
 ###############################################################################
 
 from math import isclose
+from array import array
+from bisect import bisect
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
@@ -48,6 +50,8 @@ class _ProxApproxManager:
         self.W = mpisppy_model.W[ndn_i]
         self.var_index = ndn_i
         self.cut_index = 0
+        self.cut_values = array("d")
+        self.cut_values.append(0.0)
         self._store_bounds()
 
     def _store_bounds(self):
@@ -66,27 +70,53 @@ class _ProxApproxManager:
         '''
         pass
 
+    def check_and_add_value(self, val, tolerance):
+        idx = bisect(self.cut_values, val)
+        # self.cut_values is empty, has one element
+        # or we're appending to the end
+        if idx == len(self.cut_values):
+            if val - self.cut_values[idx-1] < tolerance:
+                return False
+            else:
+                self.cut_values.insert(idx, val)
+                return True
+        # here we're at the beginning
+        if idx == 0:
+            if self.cut_values[idx] - val < tolerance:
+                return False
+            else:
+                self.cut_values.insert(idx, val)
+                return True
+        # in the middle
+        if self.cut_values[idx] - val < tolerance:
+            return False
+        if val - self.cut_values[idx-1] < tolerance:
+            return False
+        self.cut_values.insert(idx, val)
+        return True
+
     def add_cuts(self, x_val, tolerance, persistent_solver):
         x_bar = self.xbar.value
         rho = self.rho.value
         W = self.W.value
 
-        self.add_cut(x_val, tolerance, persistent_solver)
+        num_cuts = self.add_cut(x_val, tolerance, persistent_solver)
         # rotate x_val around x_bar, the minimizer of (\rho / 2)(x - x_bar)^2
         # to create a vertex at this point
         rotated_x_val_x_bar = 2*x_bar - x_val
         if not isclose(x_val, rotated_x_val_x_bar, abs_tol=tolerance):
-            self.add_cut(rotated_x_val_x_bar, tolerance, persistent_solver)
+            num_cuts += self.add_cut(rotated_x_val_x_bar, tolerance, persistent_solver)
         # aug_lagrange_point, is the minimizer of w\cdot x + (\rho / 2)(x - x_bar)^2
         # to create a vertex at this point
         aug_lagrange_point = -W / rho + x_bar
         if not isclose(x_val, aug_lagrange_point, abs_tol=tolerance):
-            self.add_cut(2*aug_lagrange_point - x_val, tolerance, persistent_solver)
+            num_cuts += self.add_cut(2*aug_lagrange_point - x_val, tolerance, persistent_solver)
         # finally, create another vertex at the aug_lagrange_point by rotating
         # rotated_x_val_x_bar around the aug_lagrange_point
         if not isclose(rotated_x_val_x_bar, aug_lagrange_point, abs_tol=tolerance):
-            self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
-        return True
+            num_cuts += self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
+        # print(f"{len(self.cut_values)=}")
+        return num_cuts
 
     def check_tol_add_cut(self, tolerance, persistent_solver=None):
         '''
@@ -125,8 +155,7 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         '''
         create a cut at val using a taylor approximation
         '''
-        # handled by bound
-        if val == 0:
+        if not self.check_and_add_value(val, tolerance):
             return 0
         # f'(a) = 2*val
         # f(a) - f'(a)a = val*val - 2*val*val
@@ -165,9 +194,12 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
         '''
         create up to two cuts at val, exploiting integrality
         '''
-        # TODO: tolerance isn't realy used for discrete,
-        # but as long as the tolerance is <=1 it doesn't matter
         val = int(round(val))
+        if tolerance > 1:
+            # TODO: We should consider how to handle this, maybe.
+            #       Tolerances less than or equal 1 won't affect
+            #       discrete cuts
+            pass
 
         ## cuts are indexed by the x-value to the right
         ## e.g., the cut for (2,3) is indexed by 3
