@@ -115,26 +115,35 @@ class _ProxApproxManager:
         # rotated_x_val_x_bar around the aug_lagrange_point
         if not isclose(rotated_x_val_x_bar, aug_lagrange_point, abs_tol=tolerance):
             num_cuts += self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
+        # If we only added 0 or 1 cuts initially, add up to two more
+        # to capture something of the proximal term. This can happen
+        # when x_bar == x_val and W == 0.
+        if self.cut_index <= 1:
+            num_cuts += self.add_cut(x_val + max(1, tolerance+1e-06), tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val - max(1, tolerance-1e-06), tolerance, persistent_solver)
         # print(f"{x_val=}, {x_bar=}, {W=}")
         # print(f"{self.cut_values=}")
+        # print(f"{self.cut_index=}")
         return num_cuts
 
     def check_tol_add_cut(self, tolerance, persistent_solver=None):
         '''
         add a cut if the tolerance is not satified
         '''
+        if self.xvar.fixed:
+            # don't do anything for fixed variables
+            return 0
         x_pnt = self.xvar.value
         y_pnt = self.xvarsqrd.value
-        f_val = x_pnt**2
+        # f_val = x_pnt**2
 
         # print(f"{x_pnt=}, {y_pnt=}, {f_val=}")
         # print(f"y-distance: {actual_val - measured_val})")
         if y_pnt is None:
             y_pnt = 0.0
-        # In this case, we project the point x_pnt, y_pnt onto
+        # We project the point x_pnt, y_pnt onto
         # the curve y = x**2 by finding the minimum distance
         # between y = x**2 and x_pnt, y_pnt.
-
         # This involves solving a cubic equation, so instead
         # we start at x_pnt, y_pnt and run newtons algorithm
         # to get an approximate good-enough solution.
@@ -156,6 +165,11 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         '''
         create a cut at val using a taylor approximation
         '''
+        lb, ub = self.xvar.bounds
+        if lb is not None and val < lb:
+            val = lb
+        if ub is not None and val > ub:
+            val = ub
         if not self.check_and_add_value(val, tolerance):
             return 0
         # f'(a) = 2*val
