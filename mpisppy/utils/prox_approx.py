@@ -120,7 +120,7 @@ class _ProxApproxManager:
         # when x_bar == x_val and W == 0.
         if self.cut_index <= 1:
             num_cuts += self.add_cut(x_val + max(1, tolerance+1e-06), tolerance, persistent_solver)
-            num_cuts += self.add_cut(x_val - max(1, tolerance-1e-06), tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val - max(1, tolerance+1e-06), tolerance, persistent_solver)
         # print(f"{x_val=}, {x_bar=}, {W=}")
         # print(f"{self.cut_values=}")
         # print(f"{self.cut_index=}")
