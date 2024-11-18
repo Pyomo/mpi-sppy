@@ -115,7 +115,8 @@ class _ProxApproxManager:
         # rotated_x_val_x_bar around the aug_lagrange_point
         if not isclose(rotated_x_val_x_bar, aug_lagrange_point, abs_tol=tolerance):
             num_cuts += self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
-        # print(f"{self.cut_index=}")
+        # print(f"{x_val=}, {x_bar=}, {W=}")
+        # print(f"{self.cut_values=}")
         return num_cuts
 
     def check_tol_add_cut(self, tolerance, persistent_solver=None):
@@ -126,27 +127,27 @@ class _ProxApproxManager:
         y_pnt = self.xvarsqrd.value
         f_val = x_pnt**2
 
-        #print(f"y-distance: {actual_val - measured_val})")
-        if y_pnt is not None:
-            '''
-            In this case, we project the point x_pnt, y_pnt onto
-            the curve y = x**2 by finding the minimum distance
-            between y = x**2 and x_pnt, y_pnt.
+        # print(f"{x_pnt=}, {y_pnt=}, {f_val=}")
+        # print(f"y-distance: {actual_val - measured_val})")
+        if y_pnt is None:
+            y_pnt = 0.0
+        # In this case, we project the point x_pnt, y_pnt onto
+        # the curve y = x**2 by finding the minimum distance
+        # between y = x**2 and x_pnt, y_pnt.
 
-            This involves solving a cubic equation, so instead
-            we start at x_pnt, y_pnt and run newtons algorithm
-            to get an approximate good-enough solution.
-            '''
-            this_val = x_pnt
-            #print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
-            #print(f"this_val: {this_val}")
+        # This involves solving a cubic equation, so instead
+        # we start at x_pnt, y_pnt and run newtons algorithm
+        # to get an approximate good-enough solution.
+        this_val = x_pnt
+        # print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
+        # print(f"this_val: {this_val}")
+        next_val = _newton_step(this_val, x_pnt, y_pnt)
+        while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
+            # print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
+            # print(f"next_val: {next_val}")
+            this_val = next_val
             next_val = _newton_step(this_val, x_pnt, y_pnt)
-            # while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
-            #     #print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
-            #     #print(f"next_val: {next_val}")
-            #     this_val = next_val
-            #     next_val = _newton_step(this_val, x_pnt, y_pnt)
-            x_pnt = next_val
+        x_pnt = next_val
         return self.add_cuts(x_pnt, tolerance,  persistent_solver)
 
 class ProxApproxManagerContinuous(_ProxApproxManager):
