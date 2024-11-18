@@ -119,8 +119,17 @@ class _ProxApproxManager:
         # to capture something of the proximal term. This can happen
         # when x_bar == x_val and W == 0.
         if self.cut_index <= 1:
-            num_cuts += self.add_cut(x_val + max(1, tolerance+1e-06), tolerance, persistent_solver)
-            num_cuts += self.add_cut(x_val - max(1, tolerance+1e-06), tolerance, persistent_solver)
+            lb, ub = self.xvar.bounds
+            upval = 1
+            dnval = 1
+            if ub is not None:
+                # after a lot of calculus, you can show that
+                # this point minimizes the error in the approximation
+                upval = 2.0 * (ub - x_val) / 3.0
+            if lb is not None:
+                dnval = 2.0 * (x_val - lb) / 3.0
+            num_cuts += self.add_cut(x_val + max(upval, tolerance+1e-06), tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val - max(dnval, tolerance+1e-06), tolerance, persistent_solver)
         # print(f"{x_val=}, {x_bar=}, {W=}")
         # print(f"{self.cut_values=}")
         # print(f"{self.cut_index=}")
