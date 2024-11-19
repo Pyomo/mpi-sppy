@@ -149,7 +149,7 @@ class Config(pyofig.ConfigDict):
         
         if self.get(grad_rho) and self.get(sensi_rho):
             _bad_rho_setters("Only one rho setter can be active.")
-        if not (self.get("grad_rho") or self.get("sensi_rho") or self.get("sep_rho") or self.get("reduced_costs_rho"):
+        if not self.get("grad_rho") or self.get("sensi_rho") or self.get("sep_rho") or self.get("reduced_costs_rho"):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
         if self.get("rc_fixer") and not self.get("reduced_costs"):
