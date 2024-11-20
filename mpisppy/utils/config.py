@@ -147,11 +147,14 @@ class Config(pyofig.ConfigDict):
             raise ValueError("Rho setter options do not make sense together:\n"
                              f"{msg}")
         
-        if self.grad_rho_setter and self.sensi_rho:
+        if self.get("grad_rho") and self.get("sensi_rho"):
             _bad_rho_setters("Only one rho setter can be active.")
-        if not (self.grad_rho_setter or self.sensi_rho or self.sep_rho or self.reduced_costs_rho):
-            if self.dynamic_rho_primal_crit or self.dynamic_rho_dual_crit:
+        if not self.get("grad_rho") or self.get("sensi_rho") or self.get("sep_rho") or self.get("reduced_costs_rho"):
+            if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
+        if self.get("rc_fixer") and not self.get("reduced_costs"):
+            _bad_rho_setters("--rc-fixer requires --reduced-costs")
+                                                                          
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
@@ -385,9 +388,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
-
     def aph_args(self):
-
+        
+        self.add_to_config(name="APH",
+                           description="Use APH instead of PH (default False)",
+                           domain=bool,
+                           default=False)
         self.add_to_config('aph_gamma',
                             description='Gamma parameter associated with asychronous projective hedging (default 1.0)',
                             domain=float,
@@ -434,7 +440,7 @@ class Config(pyofig.ConfigDict):
 
     def sep_rho_args(self):
         self.add_to_config("sep_rho",
-                           description="have a SepRho extension",
+                           description="have an extension that computes rho using the seprho method from the Watson/Woodruff CMS paper",
                            domain=bool,
                            default=False)
         self.add_to_config("sep_rho_multiplier",
@@ -445,7 +451,7 @@ class Config(pyofig.ConfigDict):
 
     def sensi_rho_args(self):
         self.add_to_config("sensi_rho",
-                           description="have a SensiRho extension",
+                           description="have an extension that sets rho values based on objective function sensitivity",
                            domain=bool,
                            default=False)
         self.add_to_config("sensi_rho_multiplier",
@@ -833,8 +839,8 @@ class Config(pyofig.ConfigDict):
 #                           domain=float,
 #                           default=0.1)
 
-        self.add_to_config('grad_rho_setter',
-                           description="use rho setter from a rho file",
+        self.add_to_config('grad_rho',
+                           description="use a gradient-based rho setter (if your problem is linear, use coeff-rho instead)",
                            domain=bool,
                            default=False)
         """

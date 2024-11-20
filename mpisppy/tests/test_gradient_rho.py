@@ -202,7 +202,7 @@ class Test_find_rho_farmer(unittest.TestCase):
         """
 
     def test_rho_setter(self):
-        self.cfg.grad_rho_setter = True
+        self.cfg.grad_rho = True
         self.cfg.rho_file_in = './examples/rho_test_data/rho.csv'
         self.rho_object = find_rho.Find_Rho(self.ph_object, self.cfg)
         self.set_rho = find_rho.Set_Rho(self.cfg)

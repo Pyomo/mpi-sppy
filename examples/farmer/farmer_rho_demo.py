@@ -84,7 +84,7 @@ def main():
     if cfg.use_norm_rho_converger:
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
-        elif cfg.grad_rho_setter:
+        elif cfg.grad_rho:
             raise RuntimeError("You cannot have--use-norm-rho-converger and --grad-rho-setter")            
         else:
             ph_converger = NormRhoConverger
@@ -103,7 +103,7 @@ def main():
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     ext_classes = []
-    if cfg.grad_rho_setter:
+    if cfg.grad_rho:
         ext_classes.append(Gradient_extension)
 
     if cfg.run_async:
@@ -119,7 +119,7 @@ def main():
     hub_dict['opt_kwargs']['extensions'] = MultiExtension  # DLW: ???? (seems to not matter)
 
     #gradient extension kwargs
-    if cfg.grad_rho_setter:
+    if cfg.grad_rho:
         ext_classes.append(Gradient_extension)        
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
     
