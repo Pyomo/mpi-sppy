@@ -13,7 +13,6 @@ import time
 import os
 import math
 
-
 from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator, communicator_array
