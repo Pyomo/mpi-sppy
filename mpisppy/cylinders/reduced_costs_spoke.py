@@ -35,13 +35,13 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         self.nonant_length = self.opt.nonant_length
 
-        self._modeler_fixed_nonants = set()
+        self._modeler_fixed_nonants = {}
 
         for k,s in self.opt.local_scenarios.items():
+            self._modeler_fixed_nonants[s] = set()
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.fixed:
-                    self._modeler_fixed_nonants.add(ndn_i)
-            break
+                    self._modeler_fixed_nonants[s].add(ndn_i)
 
         scenario_buffer_len = 0
         for s in self.opt.local_scenarios.values():
@@ -132,7 +132,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 s = self.opt.local_scenarios[sn]
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     # fixed by modeler
-                    if ndn_i in self._modeler_fixed_nonants:
+                    if ndn_i in self._modeler_fixed_nonants[s]:
                         rc[ci] = np.nan
                         continue
                     xb = s._mpisppy_model.xbars[ndn_i].value
@@ -154,8 +154,12 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self._scenario_rc_buffer.fill(0)
         ci = 0 # buffer index
         for s in self.opt.local_scenarios.values():
-            for xvar in s._mpisppy_data.nonant_indices.values():
-                self._scenario_rc_buffer[ci] = s.rc[xvar]
+            for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
+                # fixed by modeler
+                if ndn_i in self._modeler_fixed_nonants[s]:
+                    self._scenario_rc_buffer[ci] = np.nan
+                else:
+                    self._scenario_rc_buffer[ci] = s.rc[xvar]
                 ci += 1
         self.rc_scenario = self._scenario_rc_buffer
         # print(f"In ReducedCostsSpoke; {self.rc_scenario=}")
