@@ -388,9 +388,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
-
     def aph_args(self):
-
+        
+        self.add_to_config(name="APH",
+                           description="Use APH instead of PH (default False)",
+                           domain=bool,
+                           default=False)
         self.add_to_config('aph_gamma',
                             description='Gamma parameter associated with asychronous projective hedging (default 1.0)',
                             domain=float,
