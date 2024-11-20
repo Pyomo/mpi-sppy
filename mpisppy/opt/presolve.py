@@ -143,6 +143,10 @@ class SPIntervalTightener(_SPPresolver):
                                     print(
                                         f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
                                     )
+                            if np.isnan(lb):
+                                lb = None
+                            if np.isnan(ub):
+                                ub = None
                             var.bounds = (lb, ub)
 
             # Now do FBBT
