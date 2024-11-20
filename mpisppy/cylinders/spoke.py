@@ -13,7 +13,6 @@ import time
 import os
 import math
 
-
 from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator, communicator_array
@@ -100,7 +99,8 @@ class Spoke(SPCommunicator):
         window.Get((values, len(values), MPI.DOUBLE), 0)
         window.Unlock(0)
 
-        new_id = int(values[-1])
+        # On rare occasions a NaN is seen...
+        new_id = int(values[-1]) if not math.isnan(values[-1]) else 0
         local_val = np.array((new_id,-new_id), 'i')
         max_min_ids = np.zeros(2, 'i')
         self.cylinder_comm.Allreduce((local_val, MPI.INT),

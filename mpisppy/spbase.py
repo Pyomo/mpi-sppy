@@ -607,7 +607,9 @@ class SPBase:
 
             if len(header) != 0:
                 print(header)
-
+            if len(var_values) == 0:
+                print("No variables to report (perhaps all are fixed?)")
+                return
             scenario_names = sorted(set(x for (x,y) in var_values))
             max_scenario_name_len = max(len(s) for s in scenario_names)
             variable_names = sorted(set(y for (x,y) in var_values))
