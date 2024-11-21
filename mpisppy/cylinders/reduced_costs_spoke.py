@@ -145,7 +145,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
                     # solver takes care of sign of rc, based on lb, ub and max,min
                     # rc can be of wrong sign if numerically 0 - accepted here, checked in extension
-                    if (xb - xvar.lb <= self.bound_tol) or (xvar.ub - xb <= self.bound_tol):
+                    if (xvar.lb is not None and xb - xvar.lb <= self.bound_tol) or (xvar.ub is not None and xvar.ub - xb <= self.bound_tol):
                         rc[ci] += sub._mpisppy_probability * sub.rc[xvar]
                     # not close to either bound -> rc = nan
                     else:
