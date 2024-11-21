@@ -7,6 +7,7 @@ but not necessarily the best ways in any case.
 """
 
 LINEARIZED = True
+GM_NAME = "PH___Model"  # to put in the new GAMS files
 import itertools
 import os
 import gams
@@ -65,11 +66,9 @@ class GAMS_guest():
         opt.all_model_types = self.cfg.solver_name
         print(f"about to instantiate {glist=}, {opt=}")
         if LINEARIZED:
-            mi.instantiate("simple using lp minimizing objective_ph", glist, opt)
+            mi.instantiate(f"{GM_NAME} using lp minimizing objective_ph", glist, opt)
         else:
-            mi.instantiate("simple using qcp minimizing objective_ph", glist, opt)
-        print("done with instantiate; quitting")
-        quit()
+            mi.instantiate(f"{GM_NAME} using qcp minimizing objective_ph", glist, opt)
 
         ### Calling this function is required regardless of the model
         # This functions initializes, by adding records (and values), all the parameters that appear due to PH
@@ -341,8 +340,14 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     # Also captures whether the problem is a minimization or maximization
     # problem and modifies the solve line (although it might not be necessary)
     for i in range(len(lines)):
-        index = len(lines)-1-i
+        index = i #  len(lines)-1-i
         line = lines[index]
+        if line.startswith("Model"):
+            words = re.findall(r'\b\w+\b', line)
+            gmodel_name = words[1]
+            line = line.replace(gmodel_name, GM_NAME)
+            lines[index] = line
+            
         if line.startswith("solve"):
             # Should be in the last lines. This line 
             words = re.findall(r'\b\w+\b', line)
@@ -356,10 +361,12 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
                 sign = "-"
             else:
                 raise RuntimeError(f"The line: {line}, doesn't include any sense")
+            assert gmodel_name == words[1], f"Model line as model name {gmodel_name} but solve line has {words[1]}"
             # The word following the sense is the objective value
             index_word = words.index(sense)
             previous_objective = words[index_word + 1]
             line = line.replace(sense, "minimizing")
+            line = line.replace(gmodel_name, GM_NAME)
             new_obj = "objective_ph"
             lines[index] = new_obj.join(line.rsplit(previous_objective, 1))
             
