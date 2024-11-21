@@ -153,14 +153,16 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         self._scenario_rc_buffer.fill(0)
         ci = 0 # buffer index
-        for s in self.opt.local_scenarios.values():
-            for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
-                # fixed by modeler
-                if ndn_i in self._modeler_fixed_nonants[s]:
-                    self._scenario_rc_buffer[ci] = np.nan
-                else:
-                    self._scenario_rc_buffer[ci] = s.rc[xvar]
-                ci += 1
+        for sub in self.opt.local_subproblems.values():
+            for sn in sub.scen_list:
+                s = self.opt.local_scenarios[sn]
+                for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
+                    # fixed by modeler
+                    if ndn_i in self._modeler_fixed_nonants[s]:
+                        self._scenario_rc_buffer[ci] = np.nan
+                    else:
+                        self._scenario_rc_buffer[ci] = sub.rc[xvar]
+                    ci += 1
         self.rc_scenario = self._scenario_rc_buffer
         # print(f"In ReducedCostsSpoke; {self.rc_scenario=}")
 
