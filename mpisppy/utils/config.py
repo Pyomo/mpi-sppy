@@ -147,11 +147,14 @@ class Config(pyofig.ConfigDict):
             raise ValueError("Rho setter options do not make sense together:\n"
                              f"{msg}")
         
-        if self.grad_rho and self.sensi_rho:
+        if self.get("grad_rho") and self.get("sensi_rho"):
             _bad_rho_setters("Only one rho setter can be active.")
-        if not (self.grad_rho or self.sensi_rho or self.sep_rho or self.reduced_costs_rho):
-            if self.dynamic_rho_primal_crit or self.dynamic_rho_dual_crit:
+        if not self.get("grad_rho") or self.get("sensi_rho") or self.get("sep_rho") or self.get("reduced_costs_rho"):
+            if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
+        if self.get("rc_fixer") and not self.get("reduced_costs"):
+            _bad_rho_setters("--rc-fixer requires --reduced-costs")
+                                                                          
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
@@ -385,9 +388,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
-
     def aph_args(self):
-
+        
+        self.add_to_config(name="APH",
+                           description="Use APH instead of PH (default False)",
+                           domain=bool,
+                           default=False)
         self.add_to_config('aph_gamma',
                             description='Gamma parameter associated with asychronous projective hedging (default 1.0)',
                             domain=float,
