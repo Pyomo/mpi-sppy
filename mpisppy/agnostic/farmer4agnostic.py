@@ -268,7 +268,6 @@ def pysp_instance_creation_callback(
 def scenario_names_creator(num_scens, start=None):
     # return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
-    print(f"names_creator {bunsize=}")
     if (start is None) :
         start=0
     if bunsize == 0:

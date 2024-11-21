@@ -13,6 +13,7 @@ import os
 import gams
 import gamspy_base
 import shutil
+import tempfile
 
 this_dir = os.path.dirname(os.path.abspath(__file__))
 gamspy_base_dir = gamspy_base.__path__[0]
@@ -43,6 +44,11 @@ class GAMS_guest():
         self.new_file_name = new_file_name
         self.nonants_name_pairs = nonants_name_pairs
         self.cfg = cfg
+        self.temp_dir = tempfile.TemporaryDirectory()
+
+    def __del__(self):
+        xxxx we need an option to keep the dir
+        self.temp_dir.cleanup()
 
     def scenario_creator(self, scenario_name, **kwargs):
         """ Wrap the guest (GAMS in this case) scenario creator
@@ -56,7 +62,7 @@ class GAMS_guest():
         assert new_file_name is not None
         stoch_param_name_pairs = self.model_module.stoch_param_name_pairs_creator()
 
-        ws = gams.GamsWorkspace(working_directory=this_dir, system_directory=gamspy_base_dir)
+        ws = gams.GamsWorkspace(working_directory=self.temp_dir, system_directory=gamspy_base_dir)
 
         ### Calling this function is required regardless of the model
         # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
@@ -64,7 +70,6 @@ class GAMS_guest():
 
         opt = ws.add_options()
         opt.all_model_types = self.cfg.solver_name
-        print(f"about to instantiate {glist=}, {opt=}")
         if LINEARIZED:
             mi.instantiate(f"{GM_NAME} using lp minimizing objective_ph", glist, opt)
         else:
