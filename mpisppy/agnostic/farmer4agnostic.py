@@ -298,7 +298,6 @@ def inparser_adder(cfg):
                       default=0)
     
 
-
 #=========
 def kw_creator(cfg):
     # (for Amalgamator): linked to the scenario_creator and inparser_adder

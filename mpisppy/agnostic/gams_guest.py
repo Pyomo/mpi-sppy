@@ -47,7 +47,6 @@ class GAMS_guest():
         self.temp_dir = tempfile.TemporaryDirectory()
 
     def __del__(self):
-        xxxx we need an option to keep the dir
         self.temp_dir.cleanup()
 
     def scenario_creator(self, scenario_name, **kwargs):
@@ -62,7 +61,7 @@ class GAMS_guest():
         assert new_file_name is not None
         stoch_param_name_pairs = self.model_module.stoch_param_name_pairs_creator()
 
-        ws = gams.GamsWorkspace(working_directory=self.temp_dir, system_directory=gamspy_base_dir)
+        ws = gams.GamsWorkspace(working_directory=self.temp_dir.name, system_directory=gamspy_base_dir)
 
         ### Calling this function is required regardless of the model
         # This function creates a model instance not instantiated yet, and gathers in glist all the parameters and variables that need to be modifiable
@@ -112,6 +111,7 @@ class GAMS_guest():
         # creates keywords for scenario creator
         return self.model_module.kw_creator(cfg)
 
+    
     # This is not needed for PH
     def sample_tree_scen_creator(self, sname, stage, sample_branching_factors, seed,
                                  given_scenario=None, **scenario_creator_kwargs):
