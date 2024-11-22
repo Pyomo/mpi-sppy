@@ -1,5 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
-
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 import os
 import sys
@@ -14,11 +20,20 @@ import mpisppy.utils.sputils as sputils
 
 sys.path.insert(0, "../../examples/farmer")
 import farmer_pyomo_agnostic
-import farmer_ampl_agnostic
+try:
+    import mpisppy.agnostic.gams_guest
+    have_GAMS = True
+except ModuleNotFoundError:
+    have_GAMS = False
+try:
+    import farmer_ampl_agnostic
+    hava_AMPL = True
+except ModuleNotFoundError:
+    have_AMPL = False
 try:
     import farmer_gurobipy_agnostic
     have_gurobipy = True
-except:
+except ModuleNotFoundError:
     have_gurobipy = False    
 
 __version__ = 0.2
@@ -115,6 +130,7 @@ class Test_Agnostic_pyomo(unittest.TestCase):
         self.assertAlmostEqual(-110433.4007, obj, places=2)
 
 
+@unittest.skipIf(not have_AMPL, "skipping AMPL")
 class Test_Agnostic_AMPL(unittest.TestCase):
     def test_agnostic_AMPL_constructor(self):
         cfg = _farmer_cfg()
@@ -157,9 +173,7 @@ class Test_Agnostic_AMPL(unittest.TestCase):
 
     def test_agnostic_cylinders_ampl(self):
         # just make sure PH runs
-        # TBD: Nov 2024
-        # this test (or the code) needs work: why does it stop after 3 iterations
-        # why are spbase and phbase initialized at the end
+        print("test_agnostic_cylinders_ampl")
         model_fname = "mpisppy.agnostic.examples.farmer_ampl_model"
         module = sputils.module_name_to_module(model_fname)
         cfg = agnostic_cylinders._setup_args(module)
@@ -172,9 +186,25 @@ class Test_Agnostic_AMPL(unittest.TestCase):
         cfg.ampl_model_file = "../agnostic/examples/farmer.mod"
         agnostic_cylinders.main(model_fname, module, cfg)
         
-        
-print("*********** hack out gurobipy  ***********")
-have_gurobipy = False
+
+@unittest.skipIf(not have_GAMS, "skipping GAMS")
+class Test_Agnostic_GAMS(unittest.TestCase):
+    def test_agnostic_cylinders_gams(self):
+        # just make sure PH runs
+        print("test_agnostic_cylinders_gams")
+        model_fname = "mpisppy.agnostic.examples.farmer_gams_model"
+        module = sputils.module_name_to_module(model_fname)
+        cfg = agnostic_cylinders._setup_args(module)
+        cfg.module_name = model_fname
+        cfg.default_rho = 1
+        cfg.num_scens = 3
+        cfg.solver_name= "gurobi"
+        cfg.guest_language = "GAMS"
+        cfg.max_iterations = 5
+        cfg.gams_model_file = "../agnostic/examples/farmer_average.gms"
+        agnostic_cylinders.main(model_fname, module, cfg)
+
+
 @unittest.skipIf(not have_gurobipy, "skipping gurobipy")
 class Test_Agnostic_gurobipy(unittest.TestCase):
     def test_agnostic_gurobipy_constructor(self):

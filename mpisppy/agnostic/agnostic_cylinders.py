@@ -80,10 +80,10 @@ def main(model_fname, module, cfg):
                          f"   supported guests: {supported_guests}")
     if cfg.guest_language == "Pyomo":
         # now I need the pyomo_guest wrapper, then feed that to agnostic
-        from pyomo_guest import Pyomo_guest
+        from mpisppy.agnostic.pyomo_guest import Pyomo_guest
         pg = Pyomo_guest(model_fname)
-
         Ag = agnostic.Agnostic(pg, cfg)
+        
     elif cfg.guest_language == "AMPL":
         assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you need ampl-model-file"
         from mpisppy.agnostic.ampl_guest import AMPL_guest
@@ -94,7 +94,7 @@ def main(model_fname, module, cfg):
         from mpisppy import MPI
         fullcomm = MPI.COMM_WORLD
         global_rank = fullcomm.Get_rank()
-        import gams_guest
+        import mpisppy.agnostic.gams_guest as gams_guest
         original_file_path = cfg.gams_model_file
         new_file_path = gams_guest.file_name_creator(original_file_path)
         nonants_name_pairs = module.nonants_name_pairs_creator()
@@ -115,6 +115,7 @@ def main(model_fname, module, cfg):
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
+    print(f"in agnostic_cylinder {cfg.max_iterations=}")
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=None,  # kwargs in Ag not here
