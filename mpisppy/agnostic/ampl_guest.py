@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This code sits between the guest model file wrapper and mpi-sppy
 # AMPL is the guest language. Started by DLW June 2024
 """
@@ -24,8 +32,7 @@ given scenario name and kwargs.
 
 For AMPL, the _nonant_varadata_list should contain objects obtained
 from something like the get_variable method of an AMPL model object.
-"""
-"""
+
 Not concerning indexes: 
 To keep it simple and completely generic, we are throwing away a lot
 of index information. This will probably slow down instantantion of 
@@ -34,14 +41,10 @@ See farmer_ample_agnostic.py for an example where indexes are retained.
 
 """
 
-import re
-from amplpy import AMPL
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 
-# for debuggig
-from mpisppy import MPI
+from mpisppy import MPI  # for debuggig
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -136,7 +139,6 @@ class AMPL_guest():
     def attach_Ws_and_prox(self, Ag, sname, scenario):
         # Attach W's and rho to the guest scenario (mutable params).
         gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
-        hs = scenario  # host scenario handle
         gd = scenario._agnostic_dict
         nonants = gd["nonants"]
         # (there must be some way to create and assign *mutable* params in on call to AMPL)
@@ -288,14 +290,14 @@ class AMPL_guest():
         if gd["sense"] == pyo.minimize:
             s._mpisppy_data.outer_bound = objval - mipgap
         else:
-            s._mpisppy_data.inner_bound = objval + mpigap
+            s._mpisppy_data.inner_bound = objval + mipgap
 
         # copy the nonant x values from gs to s so mpisppy can use them in s
         # in general, we need more checks (see the pyomo agnostic guest example)
         for ndn_i, gxvar in gd["nonants"].items():
             try:   # not sure this is needed
                 float(gxvar.value())
-            except:
+            except:  # noqa
                 raise RuntimeError(
                     f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                     "had no value. This usually means this variable "
