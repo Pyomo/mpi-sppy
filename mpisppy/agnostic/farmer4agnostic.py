@@ -15,7 +15,6 @@
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 
 # Use this random stream:
 farmerstream = np.random.RandomState()
@@ -120,7 +119,7 @@ def scenario_creator(
         bundle._mpisppy_probability = 1/numbuns
         return bundle
     else:
-        raise RuntimeError (f"Scenario name does not have scen or bund: {sname}")       
+        raise RuntimeError (f"Scenario name does not have scen or bund: {scenario_name}")
 
 def pysp_instance_creation_callback(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1

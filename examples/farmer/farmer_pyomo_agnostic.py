@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, Pyomo is the guest language just for
 # testing and documentation purposed.
@@ -8,7 +16,7 @@ with the guest language
 """
 
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
+from pyomo.opt import SolutionStatus, TerminationCondition
 import farmer   # the native farmer (makes a few things easy)
 
 # for debuggig
@@ -223,7 +231,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False):
             if not gxvar.fixed and gxvar.stale:
                 try:
                     float(pyo.value(gxvar))
-                except:
+                except:  # noqa
                     raise RuntimeError(
                         f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                         "reported as stale. This usually means this variable "
@@ -245,7 +253,6 @@ def _copy_Ws_xbars_rho_from_host(s):
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
     for ndn_i, gxvar in gd["nonants"].items():
-        hostVar = s._mpisppy_data.nonant_indices[ndn_i]
         assert hasattr(s, "_mpisppy_model"),\
             f"what the heck!! no _mpisppy_model {s.name =} {global_rank =}"
         if hasattr(s._mpisppy_model, "W"):
@@ -261,7 +268,6 @@ def _copy_Ws_xbars_rho_from_host(s):
 def _copy_nonants_from_host(s):
     # values and fixedness; 
     gd = s._agnostic_dict
-    gs = gd["scenario"]  # guest scenario handle
     for ndn_i, gxvar in gd["nonants"].items():
         hostVar = s._mpisppy_data.nonant_indices[ndn_i]
         guestVar = gd["nonants"][ndn_i]

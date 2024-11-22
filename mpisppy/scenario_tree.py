@@ -12,6 +12,7 @@ import logging
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
+from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 
 logger = logging.getLogger('mpisppy.scenario_tree')
 

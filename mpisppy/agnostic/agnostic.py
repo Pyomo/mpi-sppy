@@ -11,8 +11,6 @@ notes by dlw:
 import inspect
 import pyomo.environ as pyo
 from mpisppy.utils import sputils
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
 
 
 #========================================

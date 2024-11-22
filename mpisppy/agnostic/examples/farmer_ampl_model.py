@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # In this example, AMPL is the guest language.
 # This is the python model file for AMPL farmer.
 # It will work with farmer.mod and slight deviations.
@@ -7,15 +15,13 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import mpisppy.agnostic.examples.farmer as farmer
 import numpy as np
+from mpisppy import MPI  # for debugging
+fullcomm = MPI.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 # If you need random numbers, use this random stream:
 farmerstream = np.random.RandomState()
 
-
-# for debugging
-from mpisppy import MPI
-fullcomm = MPI.COMM_WORLD
-global_rank = fullcomm.Get_rank()
 
 # the first two args are in every scenario_creator for an AMPL model
 def scenario_creator(scenario_name, ampl_file_name,
@@ -73,8 +79,6 @@ def scenario_creator(scenario_name, ampl_file_name,
         obj_fct = ampl.get_objective("minus_profit")
     except:
         print("big troubles!!; we can't find the objective function")
-        print("doing export to _export.mod")
-        gs.export_model("_export.mod")
         raise
     return ampl, "uniform", areaVarDatas, obj_fct
     

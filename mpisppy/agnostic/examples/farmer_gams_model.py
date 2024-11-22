@@ -1,22 +1,24 @@
-LINEARIZED = True
-
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import os
-import gams
 import gamspy_base
-
-this_dir = os.path.dirname(os.path.abspath(__file__))
-gamspy_base_dir = gamspy_base.__path__[0]
-
-import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
+import mpisppy.agnostic.farmer4agnostic as farmer
 
-# for debugging
-from mpisppy import MPI
+from mpisppy import MPI # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-from mpisppy.agnostic import gams_guest
-import mpisppy.agnostic.farmer4agnostic as farmer
+LINEARIZED = True
+this_dir = os.path.dirname(os.path.abspath(__file__))
+gamspy_base_dir = gamspy_base.__path__[0]
+
 
 def nonants_name_pairs_creator():
     """Mustn't take any argument. Is called in agnostic cylinders

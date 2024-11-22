@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # In this example, GAMS is the guest language.
 # NOTE: unlike everywhere else, we are using xbar instead of xbars (no biggy)
 
@@ -6,27 +14,25 @@ This file tries to show many ways to do things in gams,
 but not necessarily the best ways in any case.
 """
 
-LINEARIZED = True
-GM_NAME = "PH___Model"  # to put in the new GAMS files
 import itertools
 import os
 import gams
 import gamspy_base
 import shutil
 import tempfile
-
-this_dir = os.path.dirname(os.path.abspath(__file__))
-gamspy_base_dir = gamspy_base.__path__[0]
+import re
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 
-# for debugging
-from mpisppy import MPI
+from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
-import re
 
+LINEARIZED = True
+GM_NAME = "PH___Model"  # to put in the new GAMS files
+this_dir = os.path.dirname(os.path.abspath(__file__))
+gamspy_base_dir = gamspy_base.__path__[0]
 
 class GAMS_guest():
     """
@@ -410,7 +416,7 @@ def create_ph_model(original_file_path, new_file_path, nonants_name_pairs):
     # later in adding_record_for_PH
 
     parameter_definition = ""
-    scalar_definition = f"""
+    scalar_definition = """
    W_on      'activate w term'    /    0 /
    prox_on   'activate prox term' /    0 /"""
     variable_definition = ""
@@ -572,8 +578,8 @@ def pre_instantiation_for_PH(ws, new_file_name, nonants_name_pairs, stoch_param_
     xlo_dict = {nonant_variables_name: mi.sync_db.add_parameter(f"{nonant_variables_name}lo", x_out_dict[nonant_variables_name]._dim, f"lower bound on {nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
     xup_dict = {nonant_variables_name: mi.sync_db.add_parameter(f"{nonant_variables_name}up", x_out_dict[nonant_variables_name]._dim, f"upper bound on {nonant_variables_name}") for _, nonant_variables_name in nonants_name_pairs}
 
-    W_on = mi.sync_db.add_parameter(f"W_on", 0, "activate w term")
-    prox_on = mi.sync_db.add_parameter(f"prox_on", 0, "activate prox term")
+    W_on = mi.sync_db.add_parameter("W_on", 0, "activate w term")
+    prox_on = mi.sync_db.add_parameter("prox_on", 0, "activate prox term")
 
     glist += [gams.GamsModifier(ph_W_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \
         + [gams.GamsModifier(xbar_dict[nonants_name_pair[1]]) for nonants_name_pair in nonants_name_pairs] \

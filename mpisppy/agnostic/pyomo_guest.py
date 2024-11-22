@@ -1,11 +1,18 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This code sits between the guest model file and mpi-sppy
 # Pyomo is the guest language. Started by DLW April 2024
 """
 For other guest languages, the corresponding module is
 still written in Python, it just needs to interact
 with the guest language
-"""
-"""
+
 The guest model file (not this file) provides a scenario creator in the guest
 language that attaches to each scenario a scenario probability (or "uniform")
 and the following items to populate the guest dict (aka gd):
@@ -20,18 +27,15 @@ provide hooks to:
   scenario_names_creator
   scenario_denouement
 
-"""
-"""
   Note: we already have a lot of two-stage models in Pyomo that would
   be handy for testing. All that needs to be done, is to attach
   the nonant varlist as _nonant_vars to the scenario when it is created.
 """
 import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
+from pyomo.opt import SolutionStatus, TerminationCondition
 
-# for debuggig
-from mpisppy import MPI
+from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -248,7 +252,7 @@ class Pyomo_guest():
                 if not gxvar.fixed and gxvar.stale:
                     try:
                         float(pyo.value(gxvar))
-                    except:
+                    except:  # noqa
                         raise RuntimeError(
                             f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                             "reported as stale. This usually means this variable "
@@ -268,7 +272,6 @@ class Pyomo_guest():
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
         for ndn_i, gxvar in gd["nonants"].items():
-            hostVar = s._mpisppy_data.nonant_indices[ndn_i]
             assert hasattr(s, "_mpisppy_model"),\
                 f"what the heck!! no _mpisppy_model {s.name =} {global_rank =}"
             if hasattr(s._mpisppy_model, "W"):
@@ -284,7 +287,6 @@ class Pyomo_guest():
     def _copy_nonants_from_host(self, s):
         # values and fixedness; 
         gd = s._agnostic_dict
-        gs = gd["scenario"]  # guest scenario handle
         for ndn_i, gxvar in gd["nonants"].items():
             hostVar = s._mpisppy_data.nonant_indices[ndn_i]
             guestVar = gd["nonants"][ndn_i]

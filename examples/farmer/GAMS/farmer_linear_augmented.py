@@ -145,7 +145,7 @@ if __name__ == "__main__":
         ###gd["ph"]["xbar"][ndn_i].set_value(100)
     mi.solve()
     print(f"  regular iter {mi.model_status =}")
-    print(f"Note that the levels do not update with status of 19")
+    print("Note that the levels do not update with status of 19")
     """
     for n in gd["nameset"]:    
         list(mi.sync_db[n])

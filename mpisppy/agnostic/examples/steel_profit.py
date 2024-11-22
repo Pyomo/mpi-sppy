@@ -1,19 +1,25 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # In this example, AMPL is the guest language.
 # This is the python model file for AMPL farmer.
 # It will work with farmer.mod and slight deviations.
 
 from amplpy import AMPL
-import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import numpy as np
 
-# If you need random numbers, use this random stream:
-steelstream = np.random.RandomState()
-
-# for debugging
-from mpisppy import MPI
+from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
+
+# If you need random numbers, use this random stream:
+steelstream = np.random.RandomState()
 
 # the first two args are in every scenario_creator for an AMPL model
 ampl = AMPL()
@@ -59,8 +65,6 @@ def scenario_creator(scenario_name, ampl_file_name, cfg=None):
         obj_fct = ampl.get_objective("minus_profit")
     except:
         print("big troubles!!; we can't find the objective function")
-        print("doing export to _export.mod")
-        gs.export_model("_export.mod")
         raise
     return ampl, "uniform", MakeVarDatas, obj_fct
     
@@ -88,8 +92,8 @@ def kw_creator(cfg):
 
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
-    return farmer.sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                                           given_scenario, **scenario_creator_kwargs)
+    raise RuntimeError("sample_tree_scen_creator not implemented for the steel example")
+    
 def scenario_names_creator(num_scens,start=None):
     # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario

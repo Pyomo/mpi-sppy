@@ -6,13 +6,12 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# ruff: noqa: F841
 
-import os
 import sys
 import unittest
-import pyomo.environ as pyo
 import mpisppy.opt.ph
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver
 import mpisppy.utils.config as config
 import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.agnostic.agnostic_cylinders as agnostic_cylinders
@@ -84,8 +83,8 @@ class Test_Agnostic_pyomo(unittest.TestCase):
 
     def test_agnostic_pyomo_constructor(self):
         cfg = _farmer_cfg()
-        Ag = agnostic.Agnostic(farmer_pyomo_agnostic, cfg)
-
+        agnostic.Agnostic(farmer_pyomo_agnostic, cfg)
+        
 
     def test_agnostic_pyomo_scenario_creator(self):
         cfg = _farmer_cfg()

@@ -1,19 +1,23 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # In this example, Gurobipy is the guest language
 import gurobipy as gp
 from gurobipy import GRB
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.scenario_tree as scenario_tree
-from mpisppy.utils import config
-import farmer
 import numpy as np
-
-farmerstream = np.random.RandomState()
-
 # debugging
 from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
+
+farmerstream = np.random.RandomState()
 
 def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops_multiplier=1, num_scens=None, seedoffset=0):
     """ Create a scenario for the (scalable) farmer example

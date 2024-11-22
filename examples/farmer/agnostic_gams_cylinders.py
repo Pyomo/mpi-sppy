@@ -7,6 +7,7 @@ from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.agnostic.agnostic as agnostic
+import mpisppy.utils.sputils as sputils
 
 from mpisppy import MPI
 fullcomm = MPI.COMM_WORLD

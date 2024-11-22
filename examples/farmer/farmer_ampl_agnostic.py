@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # <special for agnostic debugging DLW Aug 2023>
 # In this example, AMPL is the guest language.
 # ***This is a special example where this file serves
@@ -13,14 +21,12 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import numpy as np
 
-# If you need random numbers, use this random stream:
-farmerstream = np.random.RandomState()
-
-
-# for debugging
-from mpisppy import MPI
+from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
+
+# If you need random numbers, use this random stream:
+farmerstream = np.random.RandomState()
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
@@ -135,8 +141,6 @@ def attach_Ws_and_prox(Ag, sname, scenario):
     # this is AMPL farmer specific, so we know there is not a W already, e.g.
     # Attach W's and rho to the guest scenario (mutable params).
     gs = scenario._agnostic_dict["scenario"]  # guest scenario handle
-    hs = scenario  # host scenario handle
-    gd = scenario._agnostic_dict
     # (there must be some way to create and assign *mutable* params in on call to AMPL)
     gs.eval("param W_on;")
     gs.eval("let W_on := 0;")
@@ -252,7 +256,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
         try:
             WParamDatas = list(gs.get_parameter("W").instances())
             print(f" ^^^ in _solve_one {WParamDatas =} {global_rank =}")
-        except:
+        except:  # noqa
             print(f"    ^^^^ no W for xhat {global_rank=}")
         #prox_on = gs.get_parameter("prox_on").value()
         #print(f" ^^^ in _solve_one {prox_on =} {global_rank =}")
@@ -274,7 +278,6 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     try:
         gs.solve()
     except Exception as e:
-        results = None
         solver_exception = e
 
     # debug
@@ -308,7 +311,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     for ndn_i, gxvar in gd["nonants"].items():
         try:   # not sure this is needed
             float(gxvar.value())
-        except:
+        except:  # noqa
             raise RuntimeError(
                 f"Non-anticipative variable {gxvar.name} on scenario {s.name} "
                 "had no value. This usually means this variable "

@@ -2,7 +2,6 @@
 # Started by dlw Aug 2023
 
 import farmer_pyomo_agnostic
-from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.agnostic.agnostic as agnostic
