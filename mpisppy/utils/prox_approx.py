@@ -41,13 +41,14 @@ class _ProxApproxManager:
     '''
     __slots__ = ()
 
-    def __init__(self, mpisppy_model, xvar, ndn_i):
+    def __init__(self, scenario, xvar, ndn_i):
         self.xvar = xvar
-        self.xvarsqrd = mpisppy_model.xsqvar[ndn_i]
-        self.cuts = mpisppy_model.xsqvar_cuts
-        self.xbar = mpisppy_model.xbars[ndn_i]
-        self.rho = mpisppy_model.rho[ndn_i]
-        self.W = mpisppy_model.W[ndn_i]
+        self.xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
+        self.cuts = scenario._mpisppy_model.xsqvar_cuts
+        self.xbar = scenario._mpisppy_model.xbars[ndn_i]
+        self.rho = scenario._mpisppy_model.rho[ndn_i]
+        self.W = scenario._mpisppy_model.W[ndn_i]
+        self.c = scenario._mpisppy_data.nonant_cost_coeffs[ndn_i]
         self.var_index = ndn_i
         self.cut_index = 0
         self.cut_values = array("d")
@@ -95,6 +96,67 @@ class _ProxApproxManager:
         self.cut_values.insert(idx, val)
         return True
 
+    def add_initial_cuts_var(self, x_val, other_bound, sign, tolerance, persistent_solver):
+        if other_bound is not None:
+            min_approx_error_pnt = sign * (2.0 / 3.0) * (other_bound - x_val)
+        else:
+            min_approx_error_pnt = None
+        if self.c > 0:
+            cost_pnt = self.c / self.rho.value
+        elif self.c < 0:
+            cost_pnt = -self.c / self.rho.value
+        else: # c == 0
+            cost_pnt = None
+        num_cuts = 0
+        if cost_pnt is None and min_approx_error_pnt is None:
+            # take a wild guess
+            step = max(1, tolerance)
+            num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val + sign*10*step, tolerance, persistent_solver)
+            return num_cuts
+        # no upper bound, or weak upper bound
+        if min_approx_error_pnt is None or (min_approx_error_pnt > 10*cost_pnt and cost_pnt > tolerance):
+            num_cuts += self.add_cut(x_val + sign*cost_pnt, tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val + sign*10*cost_pnt, tolerance, persistent_solver)
+            return num_cuts
+        # no objective, or the objective is "large"
+        if cost_pnt is None or cost_pnt > min_approx_error_pnt:
+            num_cuts += self.add_cut(x_val + min_approx_error_pnt, tolerance, persistent_solver)
+            # guard against horrible bounds
+            if min_approx_error_pnt / 2.0 > max(1, tolerance):
+                num_cuts += self.add_cut(x_val + sign*max(1, tolerance), tolerance, persistent_solver)
+            else:
+                num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt/2.0, tolerance, persistent_solver)
+            return num_cuts
+        # cost_pnt and min_approx_error_pnt exist, and cost_pnt <= min_approx_error_pnt
+        # and (min_approx_error_pnt <= 10*cost_pnt **or** cost_pnt <= tolerance)
+        if cost_pnt < min_approx_error_pnt / 2.0:
+            num_cuts += self.add_cut(x_val + sign*cost_pnt, tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt, tolerance, persistent_solver)
+            return num_cuts
+        # min_approx_error_pnt / 2.0 <= cost_pnt <= min_approx_error_pnt
+        num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt/2.0, tolerance, persistent_solver)
+        num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt, tolerance, persistent_solver)
+        return num_cuts
+
+
+    def add_initial_cuts_var_right(self, x_val, bounds, tolerance, persistent_solver):
+        return self.add_initial_cuts_var(x_val, bounds[1], 1, tolerance, persistent_solver)
+
+    def add_initial_cuts_var_left(self, x_val, bounds, tolerance, persistent_solver):
+        return self.add_initial_cuts_var(x_val, bounds[0], -1, tolerance, persistent_solver)
+
+    def add_initial_cuts(self, x_val, tolerance, persistent_solver):
+        num_cuts = 0
+        bounds = self.xvar.bounds
+        # no lower bound **or** sufficiently inside lower bound
+        if bounds[0] is None or (x_val > bounds[0] + 3*tolerance):
+            num_cuts += self.add_initial_cuts_var_left(x_val, bounds, tolerance, persistent_solver)
+        # no upper bound **or** sufficiently inside upper bound
+        if bounds[1] is None or (x_val < bounds[1] - 3*tolerance):
+            num_cuts += self.add_initial_cuts_var_right(x_val, bounds, tolerance, persistent_solver)
+        return num_cuts
+
     def add_cuts(self, x_val, tolerance, persistent_solver):
         x_bar = self.xbar.value
         rho = self.rho.value
@@ -119,17 +181,7 @@ class _ProxApproxManager:
         # to capture something of the proximal term. This can happen
         # when x_bar == x_val and W == 0.
         if self.cut_index <= 1:
-            lb, ub = self.xvar.bounds
-            upval = 1
-            dnval = 1
-            if ub is not None:
-                # after a lot of calculus, you can show that
-                # this point minimizes the error in the approximation
-                upval = 2.0 * (ub - x_val) / 3.0
-            if lb is not None:
-                dnval = 2.0 * (x_val - lb) / 3.0
-            num_cuts += self.add_cut(x_val + max(upval, tolerance+1e-06), tolerance, persistent_solver)
-            num_cuts += self.add_cut(x_val - max(dnval, tolerance+1e-06), tolerance, persistent_solver)
+            num_cuts += self.add_initial_cuts(x_val, tolerance, persistent_solver)
         # print(f"{x_val=}, {x_bar=}, {W=}")
         # print(f"{self.cut_values=}")
         # print(f"{self.cut_index=}")

@@ -965,6 +965,8 @@ def find_objective(pyomomodel, active=False):
     raise RuntimeError("Could not identify exactly one objective for model "
                        f"{pyomomodel.name} (found {len(obj)} objectives)")
 
+class NonLinearProblemFound(RuntimeError):
+    pass
 
 def nonant_cost_coeffs(s):
     """
@@ -982,7 +984,7 @@ def nonant_cost_coeffs(s):
 
     for var in repn.nonlinear_vars:
         if id(var) in s._mpisppy_data.varid_to_nonant_index:
-            raise RuntimeError(
+            raise NonLinearProblemFound(
                 "Found nonlinear variables in the objective function. "
                 f"Variable {var} has nonlinear interactions in the objective funtion. "
                 "Consider using gradient-based rho."
