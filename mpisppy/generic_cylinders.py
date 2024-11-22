@@ -29,7 +29,6 @@ from mpisppy import global_toc
 from mpisppy import MPI
 
 
-
 def _parse_args(m):
     # m is the model file module
     cfg = config.Config()
@@ -46,12 +45,6 @@ def _parse_args(m):
                       description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
                       domain=str,
                       default=None)
-    cfg.add_to_config(name="run_async",
-                      description="Use APH instead of PH (default False)",
-                      domain=bool,
-                      default=False)
-    
-
     m.inparser_adder(cfg)
     # many models, e.g., farmer, need num_scens_required
     #  in which case, it should go in the inparser_adder function
@@ -136,7 +129,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
-    if cfg.run_async:
+    if cfg.APH:
         # Vanilla APH hub
         hub_dict = vanilla.aph_hub(*beans,
                                    scenario_creator_kwargs=scenario_creator_kwargs,
@@ -178,7 +171,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
-    if cfg.grad_rho_setter:
+    if cfg.grad_rho:
         ext_classes.append(Gradient_extension)
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
 
