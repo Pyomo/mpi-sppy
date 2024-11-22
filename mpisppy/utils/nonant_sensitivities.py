@@ -68,6 +68,11 @@ def nonant_sensitivies(s, ph):
     # bundles?
     for scenario_name in s.scen_list:
         for ndn_i, v in ph.local_scenarios[scenario_name]._mpisppy_data.nonant_indices.items():
+            if v.fixed:
+                # Modeler fixed  -- reporting 0.
+                # +infy probably makes more conceptual sense, but 0 seems safer.
+                nonant_sensis[ndn_i] = 0.0
+                continue
             var_idx = kkt_builder._nlp._vardata_to_idx[v]
 
             y_vec = np.zeros(kkt.shape[0])
@@ -80,6 +85,8 @@ def nonant_sensitivies(s, ph):
             sensitivity = grad_vec_kkt_inv @ -e_x
             #rho[ndn_i]._value = abs(sensitivity)
             nonant_sensis[ndn_i] = sensitivity
+        # the sensitivity should be the same for nonants in every scenario in a bundle
+        break
 
     relax_int.apply_to(s, options={"undo":True})
     assert not hasattr(s, "_relaxed_integer_vars")
