@@ -14,8 +14,7 @@ import mpisppy.utils.config as config
 import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.utils.sputils as sputils
 
-
-def _parse_args(m):
+def _setup_args(m):
     # m is the model file module
     # NOTE: try to avoid adding features here that are not supported for agnostic
     cfg = config.Config()
@@ -54,23 +53,23 @@ def _parse_args(m):
     cfg.lagrangian_args()
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
+    return cfg    
 
+def _parse_args(m):
+    # m is the model file module
+    cfg = _setup_args(m)
     cfg.parse_command_line("agnostic cylinders")
     return cfg
 
-
-if __name__ == "__main__":
-    if len(sys.argv) == 1:
-        print("need the python model file module name (no .py)")
-        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py --module-name farmer4agnostic" --help)
-        quit()
-
-    model_fname = sys.argv[2]
-
-    module = sputils.module_name_to_module(model_fname)
-
-    cfg = _parse_args(module)
-
+def main(model_fname, module, cfg):
+    """ main is outside __main__ for testing
+    
+    Args:
+        model_fname (str): the module name from the command line)
+        module (Python module): from model_fname (redundant)
+        cfg (Pyomo config object): parsed arguments
+    """
+    
     supported_guests = {"Pyomo", "AMPL", "GAMS"}
     # special hack to support bundles
     if hasattr(module, "bundle_hack"):
@@ -87,7 +86,7 @@ if __name__ == "__main__":
         Ag = agnostic.Agnostic(pg, cfg)
     elif cfg.guest_language == "AMPL":
         assert cfg.ampl_model_file is not None, "If the guest language is AMPL, you need ampl-model-file"
-        from ampl_guest import AMPL_guest
+        from mpisppy.agnostic.ampl_guest import AMPL_guest
         guest = AMPL_guest(model_fname, cfg.ampl_model_file)
         Ag = agnostic.Agnostic(guest, cfg)
 
@@ -147,4 +146,18 @@ if __name__ == "__main__":
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
                 first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
         wheel.write_tree_solution(f'{cfg.solution_base_name}')
-    
+
+
+if __name__ == "__main__":
+    if len(sys.argv) == 1:
+        print("need the python model file module name (no .py)")
+        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py --module-name farmer4agnostic" --help)
+        quit()
+
+    model_fname = sys.argv[2]
+
+    module = sputils.module_name_to_module(model_fname)
+
+    cfg = _parse_args(module)
+
+    main(model_fname, module, cfg)

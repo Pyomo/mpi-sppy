@@ -102,7 +102,12 @@ def inparser_adder(cfg):
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator
-    return farmer.kw_creator(cfg)
+    kwargs = {"use_integer": cfg.get('farmer_with_integers', False),
+              "crops_multiplier": cfg.get('crops_multiplier', 1),
+              "num_scens" : cfg.get('num_scens', None),
+              }
+    return kwargs
+
 
 # This is not needed for PH
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
@@ -243,7 +248,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
     gs = gd["scenario"]  # guest scenario handle
 
     #### start debugging
-    if True:  # global_rank == 0:
+    if False:  # True:  # global_rank == 0:
         try:
             WParamDatas = list(gs.get_parameter("W").instances())
             print(f" ^^^ in _solve_one {WParamDatas =} {global_rank =}")
