@@ -245,7 +245,7 @@ jobs:
           pip install -e .
 
       - name: run tests
-        timeout-minutes: 100
+        timeout-minutes: 10
         run: |
           cd mpisppy/tests
           # envall does nothing
@@ -274,7 +274,7 @@ jobs:
           pip install -e .
 
       - name: run tests
-        timeout-minutes: 100
+        timeout-minutes: 10
         run: |
           cd mpisppy/tests
           # envall does nothing
@@ -454,14 +454,14 @@ jobs:
           pip install -e .
 
       - name: run pysp model tests
-        timeout-minutes: 100
+        timeout-minutes: 10
         run: |
           cd mpisppy/tests
           # envall does nothing
           python test_pysp_model.py
 
       - name: run pysp unit tests
-        timeout-minutes: 100
+        timeout-minutes: 10
         run: |
           cd mpisppy/utils/pysp_model
           pytest -v .
@@ -519,8 +519,14 @@ test-agnostic:
         run: |
           pip install -e .
 
-      - name: run tests
+      - name: run agnostic tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
           python test_agnostic.py 
+
+      - name: run agnostic cylinders
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/agnostic/examples
+          python afew_agnostic.py --oversubscribe
