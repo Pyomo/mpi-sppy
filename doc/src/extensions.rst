@@ -180,6 +180,9 @@ In its current state, the user might opt-in to presolve for two reasons:
    non-anticipative variables may improve the fixer's performance.
 
 .. Note::
+   Like many solvers, the presolver will convert infinite bounds to 1e+100.
+
+.. Note::
    This capability requires the auto-persistent pyomo solver interface (APPSI) extensions
    for Pyomo to be built on your system. This can be achieved by running ``pyomo build-extensions``
    at the command line.
