@@ -493,7 +493,7 @@ jobs:
           cd mpisppy/tests
           mpiexec -np 2 python -m mpi4py test_with_cylinders.py          
 
-test-agnostic:
+  test-agnostic:
     name: tests on agnostic
     runs-on: ubuntu-latest
     needs: [ruff]
