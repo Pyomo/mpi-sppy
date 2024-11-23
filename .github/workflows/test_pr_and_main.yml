@@ -167,7 +167,7 @@ jobs:
     needs: [ruff]
     strategy:
       matrix:
-        python-version: 3.9
+        python-version: [3.8,3.9]
     steps:
     - uses: actions/checkout@v1
     - name: setup conda
@@ -494,7 +494,7 @@ jobs:
           mpiexec -np 2 python -m mpi4py test_with_cylinders.py          
 
 test-agnostic:
-    name: tests on some cylinders
+    name: tests on agnostic
     runs-on: ubuntu-latest
     needs: [ruff]
 
