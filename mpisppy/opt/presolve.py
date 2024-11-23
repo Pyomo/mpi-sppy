@@ -26,6 +26,7 @@ from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
 
+_INF = 1e+100
 
 class _SPPresolver(abc.ABC):
     """Defines a presolver for distributed stochastic optimization problems
@@ -379,7 +380,7 @@ def _lb_generator(var_iterable):
     for v in var_iterable:
         lb = v.lb
         if lb is None:
-            yield -np.inf
+            yield -_INF
         yield lb
 
 
@@ -387,7 +388,7 @@ def _ub_generator(var_iterable):
     for v in var_iterable:
         ub = v.ub
         if ub is None:
-            yield np.inf
+            yield _INF
         yield ub
 
 

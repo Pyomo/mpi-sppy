@@ -63,6 +63,8 @@ class ReducedCostsRho(_SensiRhoBase):
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
+        # These may be `nan` if the nonant is fixed
+        self._scenario_rc_buffer = np.nan_to_num(self._scenario_rc_buffer, copy=False)
 
     def pre_iter0(self):
         self.nonant_length = self.opt.nonant_length

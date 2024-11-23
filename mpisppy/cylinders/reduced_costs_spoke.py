@@ -145,7 +145,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
                     # solver takes care of sign of rc, based on lb, ub and max,min
                     # rc can be of wrong sign if numerically 0 - accepted here, checked in extension
-                    if (xb - xvar.lb <= self.bound_tol) or (xvar.ub - xb <= self.bound_tol):
+                    if (xvar.lb is not None and xb - xvar.lb <= self.bound_tol) or (xvar.ub is not None and xvar.ub - xb <= self.bound_tol):
                         rc[ci] += sub._mpisppy_probability * sub.rc[xvar]
                     # not close to either bound -> rc = nan
                     else:
@@ -153,14 +153,16 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         self._scenario_rc_buffer.fill(0)
         ci = 0 # buffer index
-        for s in self.opt.local_scenarios.values():
-            for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
-                # fixed by modeler
-                if ndn_i in self._modeler_fixed_nonants[s]:
-                    self._scenario_rc_buffer[ci] = np.nan
-                else:
-                    self._scenario_rc_buffer[ci] = s.rc[xvar]
-                ci += 1
+        for sub in self.opt.local_subproblems.values():
+            for sn in sub.scen_list:
+                s = self.opt.local_scenarios[sn]
+                for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
+                    # fixed by modeler
+                    if ndn_i in self._modeler_fixed_nonants[s]:
+                        self._scenario_rc_buffer[ci] = np.nan
+                    else:
+                        self._scenario_rc_buffer[ci] = sub.rc[xvar]
+                    ci += 1
         self.rc_scenario = self._scenario_rc_buffer
         # print(f"In ReducedCostsSpoke; {self.rc_scenario=}")
 
