@@ -185,6 +185,7 @@ class SPOpt(SPBase):
         if Ag is not None:
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
             kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
+            Ag.callout_agnostic(kws)
         else:
             try:
                 results = s._solver_plugin.solve(s,
