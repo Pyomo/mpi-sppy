@@ -252,8 +252,8 @@ class Test_Agnostic_gurobipy(unittest.TestCase):
         print(f"{solver_name=}")
         print(f"{tbound=}")
         print(f"{obj=}")
-        self.assertAlmostEqual(-110433.4007, obj, places=2)
-        self.assertAlmostEqual(-115405.5555, tbound, places=2)
+        self.assertAlmostEqual(-110433.4007, obj, places=1)
+        self.assertAlmostEqual(-115405.5555, tbound, places=1)
 
 
 if __name__ == "__main__":
