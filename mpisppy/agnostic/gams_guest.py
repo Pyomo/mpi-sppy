@@ -164,7 +164,7 @@ class GAMS_guest():
         # Done in create_ph_model
         pass
 
-    def solve_one(self, Ag, s, solve_keyword_args, gripe, tee):
+    def solve_one(self, Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         # s is the host scenario
         # This needs to attach stuff to s (see solve_one in spopt.py)
         # Solve the guest language version, then copy values to the host scenario
@@ -207,7 +207,7 @@ class GAMS_guest():
             s._mpisppy_data._obj_from_agnostic = None
             return
 
-        if solver_exception is not None:
+        if solver_exception is not None and need_solution:
             raise solver_exception
         
         s._mpisppy_data.scenario_feasible = True
