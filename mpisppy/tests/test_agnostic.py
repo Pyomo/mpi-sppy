@@ -38,7 +38,7 @@ except ModuleNotFoundError:
 __version__ = 0.2
 
 solver_available, solver_name, persistent_available, persistent_solver_name = (
-    get_solver()
+    get_solver(persistent_OK=False)
 )
 
 # NOTE Gurobi is hardwired for the AMPL and GAMS tests, so don't install it on github
