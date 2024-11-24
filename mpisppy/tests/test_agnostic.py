@@ -26,7 +26,7 @@ except ModuleNotFoundError:
     have_GAMS = False
 try:
     import farmer_ampl_agnostic
-    hava_AMPL = True
+    have_AMPL = True
 except ModuleNotFoundError:
     have_AMPL = False
 try:
