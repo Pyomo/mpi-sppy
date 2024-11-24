@@ -189,34 +189,6 @@ class SPOpt(SPBase):
         else:
             didcallout = False
             try:
-                if sputils.is_persistent(s._solver_plugin):
-                    s._solver_plugin.load_vars()
-                else:
-                    s.solutions.load_from(results)
-            except Exception as e: # catch everything
-                if need_solution:
-                    raise e
-            if self.is_minimizing:
-                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-                s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
-            else:
-                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
-            s._mpisppy_data.scenario_feasible = True
-        # TBD: get this ready for IPopt (e.g., check feas_prob every time)
-        # propogate down
-        if self.bundling: # must be a bundle
-            for sname in s._ef_scenario_names:
-                 self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
-                     = s._mpisppy_data.scenario_feasible
-                 if s._mpisppy_data.scenario_feasible:
-                     self._check_staleness(self.local_scenarios[sname])
-        else:  # not a bundle
-            if s._mpisppy_data.scenario_feasible:
-                self._check_staleness(s)
-
-        if not didcallout:
-            try:
                 results = s._solver_plugin.solve(s,
                                                  **solve_keyword_args,
                                                  load_solutions=False)
@@ -225,7 +197,6 @@ class SPOpt(SPBase):
                 results = None
                 solver_exception = e
 
-            pyomo_solve_time = time.time() - solve_start_time
             if sputils.not_good_enough_results(results):
                 s._mpisppy_data.scenario_feasible = False
 
@@ -238,32 +209,43 @@ class SPOpt(SPBase):
                         print ("status=", results.solver.status)
                         print ("TerminationCondition=",
                                results.solver.termination_condition)
+                    else:
+                        print("no results object, so solving agin with tee=True")
+                        solve_keyword_args["tee"] = True
+                        results = s._solver_plugin.solve(s,
+                                                 **solve_keyword_args,
+                                                 load_solutions=False)
 
                 if solver_exception is not None:
                     raise solver_exception
 
             else:
-                if sputils.is_persistent(s._solver_plugin):
-                    s._solver_plugin.load_vars()
-                else:
-                    s.solutions.load_from(results)
+                try:
+                    if sputils.is_persistent(s._solver_plugin):
+                        s._solver_plugin.load_vars()
+                    else:
+                        s.solutions.load_from(results)
+                except Exception as e: # catch everything
+                    if need_solution:
+                        raise e
                 if self.is_minimizing:
                     s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                    s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
                 else:
                     s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+                    s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
                 s._mpisppy_data.scenario_feasible = True
-        
             # TBD: get this ready for IPopt (e.g., check feas_prob every time)
             # propogate down
             if self.bundling: # must be a bundle
                 for sname in s._ef_scenario_names:
-                    self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
-                        = s._mpisppy_data.scenario_feasible
-                    if s._mpisppy_data.scenario_feasible:
-                        self._check_staleness(self.local_scenarios[sname])
+                     self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
+                         = s._mpisppy_data.scenario_feasible
+                     if s._mpisppy_data.scenario_feasible:
+                         self._check_staleness(self.local_scenarios[sname])
             else:  # not a bundle
                 if s._mpisppy_data.scenario_feasible:
-                    self._check_staleness(s)                 
+                    self._check_staleness(s)
 
         # end of Agnostic bypass
 
