@@ -218,7 +218,6 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     objstr = objstr[:-1] + "+ (" + phobjstr + ");"
     objstr = objstr.replace("minimize minus_profit", "minimize phobj")
     profitobj.drop()
-    print(f"{objstr =}")
     gs.eval(objstr)
     gs.eval("delete minus_profit;")
     currentobj = gs.get_current_objective()
