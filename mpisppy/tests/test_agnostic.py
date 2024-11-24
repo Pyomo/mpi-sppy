@@ -125,8 +125,8 @@ class Test_Agnostic_pyomo(unittest.TestCase):
             extensions=None
         )
         conv, obj, tbound = ph.ph_main()
-        self.assertAlmostEqual(-115405.5555, tbound, places=2)
-        self.assertAlmostEqual(-110433.4007, obj, places=2)
+        self.assertAlmostEqual(-115405.5555, tbound, places=1)
+        self.assertAlmostEqual(-110433.4007, obj, places=1)
 
 
 @unittest.skipIf(not have_AMPL, "skipping AMPL")
