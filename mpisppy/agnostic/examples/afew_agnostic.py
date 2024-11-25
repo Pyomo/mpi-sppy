@@ -14,7 +14,7 @@
 import os
 import sys
 
-pyomo_solver_name = "cplex"
+pyomo_solver_name = "cplex_direct"
 ampl_solver_name = "gurobi"
 gams_solver_name = "cplex"
 
