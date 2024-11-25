@@ -508,7 +508,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress
+          pip install pyomo xpress cplex
           pip install numpy
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
