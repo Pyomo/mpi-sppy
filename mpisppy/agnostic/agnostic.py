@@ -53,11 +53,11 @@ class Agnostic():
             fname = inspect.stack()[1][3] 
             fct = getattr(self.module, fname, None)
             if fct is None:
-                raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing function {fname}")
+                raise RuntimeError(f"AML-agnostic module or object is missing function {fname}")
             try:
                 fct(Ag=self, **kwargs)
             except Exception as e:
-                print(f"ERROR: AML-agnostic module {self.module.__name__} had an error when calling {fname}", file=sys.stderr)
+                print(f"ERROR: AML-agnostic module or object had an error when calling {fname}", file=sys.stderr)
                 raise e
             return True
         else:

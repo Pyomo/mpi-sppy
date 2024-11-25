@@ -121,7 +121,6 @@ def main(model_fname, module, cfg):
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
-    print(f"in agnostic_cylinder {cfg.max_iterations=}")
     # Vanilla PH hub
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=None,  # kwargs in Ag not here
