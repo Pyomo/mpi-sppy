@@ -3,7 +3,8 @@ AML Agnosticism
 
 The mpi-sppy package provides callouts so that algebraic modeling languages
 (AMLs) other than Pyomo can be used. A growing number of AMLs are supported
-as `guest` languages (we refer to mpi-sppy as the `host`).
+as `guest` languages (we refer to mpi-sppy as the `host`). This code is
+in an alpha-release state; use with extreme caution.
 
 From the end-user's perspective
 -------------------------------
