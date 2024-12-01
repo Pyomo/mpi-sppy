@@ -41,8 +41,9 @@ print("skipping Pyomo because it is not working on github due to cplex_direct ve
 
 do_one(3, f"--module-name mpisppy.agnostic.examples.farmer_ampl_model --default-rho 1 --num-scens 3 --solver-name {ampl_solver_name} --guest-language AMPL --ampl-model-file farmer.mod --lagrangian --xhatshuffle --max-iterations 5")
 
-do_one(3, f"--module-name mpisppy.agnostic.examples.farmer_gams_model --num-scens 3 --default-rho 1 --solver-name {gams_solver_name} --max-iterations=5 --rel-gap 0.01 --display-progress --guest-language GAMS --gams-model-file farmer_average.gms")
+do_one(3, f"--module-name mpisppy.agnostic.examples.steel_ampl_model --default-rho 1 --num-scens 3 --seed 17 --solver-name {ampl_solver_name} --guest-language AMPL --ampl-model-file steel.mod --ampl-data-file steel.dat --max-iterations 10 --rel-gap 0.01 --xhatshuffle --lagrangian --solution-base-name steel")
 
+do_one(3, f"--module-name mpisppy.agnostic.examples.farmer_gams_model --num-scens 3 --default-rho 1 --solver-name {gams_solver_name} --max-iterations=5 --rel-gap 0.01 --display-progress --guest-language GAMS --gams-model-file farmer_average.gms")
 
 
 if len(badguys) > 0:

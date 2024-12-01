@@ -244,7 +244,7 @@ class AMPL_guest():
         gd = s._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
         #### start debugging
-        if global_rank == 0:
+        if global_rank == 0 and False:
             WParamDatas = list(gs.get_parameter("W").instances())
             print(f" in _solve_one {WParamDatas =} {global_rank =}")
             xbarsParamDatas = list(gs.get_parameter("xbars").instances())
