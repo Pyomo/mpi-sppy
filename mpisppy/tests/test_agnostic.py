@@ -17,7 +17,7 @@ import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.agnostic.agnostic_cylinders as agnostic_cylinders
 import mpisppy.utils.sputils as sputils
 
-sys.path.insert(0, "../../examples/farmer")
+sys.path.insert(0, "../../examples/farmer/agnostic")
 import farmer_pyomo_agnostic
 try:
     import mpisppy.agnostic.gams_guest

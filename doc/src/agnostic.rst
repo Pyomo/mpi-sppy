@@ -34,7 +34,8 @@ name argument to the scenario_creator function.
 
 (An exception is when the guest is in Pyomo, then the wrapper
 file might as well contain the model specification as well so
-there typically is only one file.)
+there typically is only one file. However, there is not particularly
+good reason to use the agnostic machinery for a Pyomo model.)
 
 
 From the developers perspective
@@ -57,7 +58,7 @@ for many guest languages because they don't use indexes from the
 original model when updating the objective function. If this is an issue,
 you might want to write a problem-specific module to replace the guest
 interface and the model wrapper with a single module. For an example, see
-``examples.farmer.farmer_xxxx_agnostic``, where xxxx is replaced,
+``examples.farmer.agnostic.farmer_xxxx_agnostic``, where xxxx is replaced,
 e.g., by ampl. 
 
 Architecture
