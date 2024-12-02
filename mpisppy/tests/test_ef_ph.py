@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Author: David L. Woodruff (circa January 2019)
 """
 IMPORTANT:
@@ -86,7 +92,7 @@ class Test_sizes(unittest.TestCase):
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 0
 
-        ph = mpisppy.opt.ph.PH(
+        mpisppy.opt.ph.PH(
             options,
             self.all3_scenario_names,
             scenario_creator,
@@ -108,6 +114,7 @@ class Test_sizes(unittest.TestCase):
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
         )
+        assert ph is not None
 
     def test_ef_constructor(self):
         ScenCount = 3
@@ -117,6 +124,7 @@ class Test_sizes(unittest.TestCase):
             scenario_creator_kwargs={"scenario_count": ScenCount},
             suppress_warnings=True
         )
+        assert ef is not None
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -133,6 +141,7 @@ class Test_sizes(unittest.TestCase):
         if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
+        pyo.assert_optimal_termination(results)
         sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
         self.assertEqual(220000.0, sig2eobj)
 
@@ -150,7 +159,7 @@ class Test_sizes(unittest.TestCase):
         if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
-        sig2eobj = round_pos_sig(pyo.value(ef.EF_Obj),2)
+        pyo.assert_optimal_termination(results)
         # the fix creator fixed num prod first stage for size 5 to 1134
         self.assertEqual(pyo.value(ef.Scenario1.NumProducedFirstStage[5]), 1134)
 
@@ -169,9 +178,6 @@ class Test_sizes(unittest.TestCase):
         )
     
         conv, obj, tbound = ph.ph_main()
-
-        sig2obj = round_pos_sig(obj,2)
-        #self.assertEqual(1400000000, sig2obj)
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -486,12 +492,12 @@ class Test_sizes(unittest.TestCase):
 
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
+        multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
         ph = mpisppy.opt.ph.PH(options, self.all3_scenario_names,
                                     scenario_creator, scenario_denouement,
                                     extensions=MultiExtension,
                                     extension_kwargs=multi_ext,
         )
-        multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
         conv, basic_obj, tbound = ph.ph_main()
 
 
@@ -507,12 +513,12 @@ class Test_sizes(unittest.TestCase):
         from mpisppy.extensions.xhatclosest import XhatClosest
         options = self._copy_of_base_options()
         options["PHIterLimit"] = 2
+        multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
         ph = mpisppy.opt.ph.PH(options, self.all3_scenario_names,
                                     self._fix_creator, scenario_denouement,
                                     extensions=MultiExtension,
                                     extension_kwargs=multi_ext,
         )
-        multi_ext = {"ext_classes": [Fixer, Gapper, XhatLooper, XhatClosest]}
         conv, basic_obj, tbound = ph.ph_main( )
         for k,s in ph.local_scenarios.items():
             self.assertTrue(s.NumProducedFirstStage[5].is_fixed())
@@ -573,6 +579,7 @@ class Test_hydro(unittest.TestCase):
             all_nodenames=self.all_nodenames,
             scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
+        assert ph is not None
 
     def test_ef_constructor(self):
         ef = mpisppy.utils.sputils.create_EF(
@@ -580,6 +587,7 @@ class Test_hydro(unittest.TestCase):
             hydro.scenario_creator,
             scenario_creator_kwargs={"branching_factors": self.branching_factors},
         )
+        assert ef is not None
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -594,6 +602,7 @@ class Test_hydro(unittest.TestCase):
         if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
+        pyo.assert_optimal_termination(results)
         mpisppy.utils.sputils.ef_nonants_csv(ef, "delme.csv")
 
         df = pd.read_csv("delme.csv", index_col=1)
@@ -615,6 +624,7 @@ class Test_hydro(unittest.TestCase):
         if '_persistent' in options["solver_name"]:
             solver.set_instance(ef)
         results = solver.solve(ef, tee=False)
+        pyo.assert_optimal_termination(results)
     
 
     @unittest.skipIf(not solver_available,

@@ -12,8 +12,8 @@ MPI is used.
    install_mpi.rst
    overview.rst
    scenario_creator.rst
+   generic_cylinders.rst
    drivers.rst
-   amalgamator.rst
    examples.rst
    hubs.rst
    spokes.rst
@@ -24,17 +24,19 @@ MPI is used.
    zhat.rst
    confidence_intervals.rst
    seqsamp.rst
-   pysp.rst
    ef.rst
    nompi4py.rst
    secretmenu.rst
-   pickledbundles.rst
+   properbundles.rst
    grad_rho.rst
    w_rho.rst
    admmWrapper.rst
+   stoch_admmWrapper.rst
    helper_functions.rst
    contributors.rst
    internals.rst
+   amalgamator.rst
+   pysp.rst
    api.rst
    refs.rst
 

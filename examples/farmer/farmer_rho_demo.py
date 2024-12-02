@@ -1,5 +1,11 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This program can be used in two different ways:
 # Compute gradient-based cost and rho for a given problem
 # Use the gradient-based rho setter which sets adaptative gradient rho for PH.
@@ -7,9 +13,7 @@
 # Edited by DLW Oct 2023
 # Note: norm_rho_updater is the Gabe thing
 
-import time
 import farmer
-import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -22,10 +26,7 @@ from mpisppy.extensions.extension import MultiExtension
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-import mpisppy.utils.gradient as grad
-import mpisppy.utils.find_rho as find_rho
-from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.extensions.gradient_extension import Gradient_rho_extension
+from mpisppy.extensions.gradient_extension import Gradient_extension
 
 write_solution = False
 
@@ -42,9 +43,9 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.lagranger_args()
+    cfg.ph_ob_args()
     cfg.xhatshuffle_args()
-    cfg.gradient_args() #required to use gradient
-    cfg.grad_rho_args()
+    cfg.dynamic_gradient_args() # gets gradient args for free
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -74,7 +75,6 @@ def main():
     
     cfg = _parse_args()
 
-    num_scen = cfg.num_scens
     crops_multiplier = cfg.crops_mult
     rho_setter = None  # non-grad rho setter?
 
@@ -84,7 +84,7 @@ def main():
     if cfg.use_norm_rho_converger:
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
-        elif cfg.grad_rho_setter:
+        elif cfg.grad_rho:
             raise RuntimeError("You cannot have--use-norm-rho-converger and --grad-rho-setter")            
         else:
             ph_converger = NormRhoConverger
@@ -98,14 +98,13 @@ def main():
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     ext_classes = []
-    if cfg.grad_rho_setter:
-        ext_classes.append(Gradient_rho_extension)
+    if cfg.grad_rho:
+        ext_classes.append(Gradient_extension)
 
     if cfg.run_async:
         raise RuntimeError("APH not supported in this example.")
@@ -120,9 +119,9 @@ def main():
     hub_dict['opt_kwargs']['extensions'] = MultiExtension  # DLW: ???? (seems to not matter)
 
     #gradient extension kwargs
-    if cfg.grad_rho_setter:
-        ext_classes.append(Gradient_rho_extension)        
-        hub_dict['opt_kwargs']['options']['gradient_rho_extension_options'] = {'cfg': cfg}
+    if cfg.grad_rho:
+        ext_classes.append(Gradient_extension)        
+        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
     
     ## Gabe's (way pre-pandemic) adaptive rho
     if cfg.use_norm_rho_updater:
@@ -145,6 +144,12 @@ def main():
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
 
+    # ph outer bounder spoke
+    if cfg.ph_ob:
+        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter)        
+
     # xhat looper bound spoke
     if cfg.xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -160,6 +165,8 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.lagranger:
         list_of_spoke_dict.append(lagranger_spoke)
+    if cfg.ph_ob:
+        list_of_spoke_dict.append(ph_ob_spoke)        
     if cfg.xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:

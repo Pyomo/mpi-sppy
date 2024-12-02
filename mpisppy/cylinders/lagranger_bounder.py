@@ -1,11 +1,17 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Indepedent Lagrangian that takes x values as input and
 # updates its own W.
 
-import time
 import json
 import csv
+import numpy as np
 import mpisppy.cylinders.spoke
 from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 
@@ -28,7 +34,6 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
         self.opt._save_nonants()
 
     def _lagrangian(self, iternum):
-        verbose = self.opt.options['verbose']
         # see if rho should be rescaled
         if self.rho_rescale_factors is not None\
            and iternum in self.rho_rescale_factors:
@@ -58,10 +63,13 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
             mpisppy.utils.wxbarutils.write_xbar_to_file(self.opt, xbar_fname)
 
     def _update_weights_and_solve(self, iternum):
-        # Work with the nonants that we have (and we might not have any yet).
         extensions = self.opt.extensions is not None
-        self.opt._put_nonant_cache(self.localnonants)
-        self.opt._restore_nonants()
+        # Work with the nonants that we have (and we might not have any yet).
+        # Only update if the nonants are not nan:
+        #   otherwise xbar / w will be undefined!
+        if not np.isnan(self.localnonants[0]):
+            self.opt._put_nonant_cache(self.localnonants)
+            self.opt._restore_nonants()
         verbose = self.opt.options["verbose"]
         self.opt.Compute_Xbar(verbose=verbose)
         self.opt.Update_W(verbose=verbose)
@@ -72,10 +80,6 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
         return self._lagrangian(iternum)
 
     def main(self):
-        # The rho_setter should be attached to the opt object
-        rho_setter = None
-        if hasattr(self.opt, 'rho_setter'):
-            rho_setter = self.opt.rho_setter
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()

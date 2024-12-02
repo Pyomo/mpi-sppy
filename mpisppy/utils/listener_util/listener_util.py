@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Async Utility. Started by Bill Hart,
 #    simple generalization by Dave Woodruff 2019.
 # See doc/philosophy.rst
@@ -7,14 +13,13 @@
 # And if having the file named listener_util with a class named
 # Synchronizer makes your head hurt, that's good. Get used to it.
 """
-To avoid errors from Pyomo use,
+Prior to October 2024, to avoid errors from Pyomo we used:
                 solve_keyword_args["use_signal_handling"] = False
 """
 import numpy as np
 import collections
 import mpisppy.MPI as mpi
 import time
-import cProfile
 import threading
 import logging
 
@@ -90,15 +95,15 @@ class Synchronizer(object):
             #ph.setDaemon(True)
 
             listenargs = [self._rank, self]
-            l = threading.Thread(name='listener',
+            listener = threading.Thread(name='listener',
                                  target=Synchronizer.listener_daemon,
                                  args=listenargs)
-            #l.setDaemon(True)
+            #listener.setDaemon(True)
 
-            l.start()
+            listener.start()
             wthread.start()
 
-            l.join()
+            listener.join()
         else:
             self.work_fct(*args, **kwargs)
 

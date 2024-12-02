@@ -1,5 +1,11 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Author:
 """
 IMPORTANT:
@@ -8,24 +14,14 @@ version matter a lot, so we often just do smoke tests.
 """
 
 import os
-import glob
 import unittest
-import pandas as pd
 import csv
-import pyomo.environ as pyo
-import mpisppy.opt.ph
-import mpisppy.phbase
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.rho_utils as rho_utils
-import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.tests.utils import get_solver,round_pos_sig
-import mpisppy.utils.gradient as grad
-import mpisppy.utils.find_rho as find_rho
+from mpisppy.tests.utils import get_solver
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.utils.wxbarreader import WXBarReader
 

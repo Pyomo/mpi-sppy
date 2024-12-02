@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Replace baseparsers.py and enhance functionality.
 # A class drived form pyomo.common.config is defined with
 #   supporting member functions.
@@ -79,7 +86,7 @@ class Config(pyofig.ConfigDict):
 
 
     #===============
-    def add_and_assign(self, name, description, domain, default, value, complain=False):
+    def add_and_assign(self, name, description, domain, default, value, complain=True):
         """ Add an arg to the self dict and assign it a value
         Args:
              name (str): the argument name, underscore separated
@@ -91,8 +98,7 @@ class Config(pyofig.ConfigDict):
         """
         if name in self:
             if complain:
-                print(f"Duplicate {name} will not be added to self by add_and_assign {value}.")
-                # raise RuntimeError(f"Trying to add duplicate {name} to self.")
+                raise RuntimeError(f"Trying to add duplicate {name=} to cfg {value=}")
         else:
             self.add_to_config(name, description, domain, default, argparse=False)
             self[name] = value
@@ -133,6 +139,23 @@ class Config(pyofig.ConfigDict):
         else:
             return ifmissing
 
+    #===============
+    def checker(self):
+        """Verify that options *selected* make sense with respect to each other
+        """
+        def _bad_rho_setters(msg):
+            raise ValueError("Rho setter options do not make sense together:\n"
+                             f"{msg}")
+        
+        if self.get("grad_rho") and self.get("sensi_rho"):
+            _bad_rho_setters("Only one rho setter can be active.")
+        if not self.get("grad_rho") or self.get("sensi_rho") or self.get("sep_rho") or self.get("reduced_costs_rho"):
+            if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
+                _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
+        if self.get("rc_fixer") and not self.get("reduced_costs"):
+            _bad_rho_setters("--rc-fixer requires --reduced-costs")
+                                                                          
+
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
         self.add_to_config(f"{sstr}_name",
@@ -167,7 +190,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="bundles per rank (default 0 (no bundles))",
+                            description="Loose bundles per rank (default 0 (no bundles))",
                             domain=int,
                             default=0)
 
@@ -241,6 +264,23 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.e-1)
 
+        self.add_to_config("smoothing",
+                           description="For PH, add a smoothing term to the objective",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("smoothing_rho_ratio",
+                           description="For PH, when smoothing, the ratio of "
+                           "the smoothing coefficient to rho (default 1e-1)",
+                           domain=float,
+                           default=1.e-1)
+
+        self.add_to_config("smoothing_beta",
+                           description="For PH, when smoothing, the smoothing "
+                           "memory coefficient beta (default 2e-1)",
+                           domain=float,
+                           default=2.e-1)
+
     def make_parser(self, progname=None, num_scens_reqd=False):
         raise RuntimeError("make_parser is no longer used. See comments at top of config.py")
 
@@ -283,33 +323,35 @@ class Config(pyofig.ConfigDict):
 
 
     #### EF ####
-    def make_EF2_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF2_parser is no longer used. See comments at top of config.py")
-
-    def _EF_base(self):
-
+    def EF_base(self):
         self.add_solver_specs(prefix="EF")
 
         self.add_to_config("EF_mipgap",
                            description="mip gap option for the solver if needed (default None)",
                            domain=float,
                            default=None)
+        self.add_to_config("tee_EF",
+                           description="Show log output if solving the extensive form directly",
+                           domain=bool,
+                           default=False)
+
+        # Some EF programs only do EF and don't check this.
+        self.add_to_config("EF",
+                           description="Solve the extensive form directly; ignore most other directives.",
+                           domain=bool,
+                           default=False)
 
 
     def EF2(self):
-        self._EF_base()
+        self.EF_base()
         self.add_to_config("num_scens",
                            description="Number of scenarios (default None)",
                            domain=int,
                            default=None)
 
 
-    def make_EF_multistage_parser(self, progname=None, num_scens_reqd=False):
-        raise RuntimeError("make_EF_multistage_parser is no longer used. See comments at top of config.py")
-
     def EF_multistage(self):
-
-        self._EF_base()
+        self.EF_base()
         # branching factors???
 
     ##### common additions to the command line #####
@@ -346,9 +388,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
-
     def aph_args(self):
-
+        
+        self.add_to_config(name="APH",
+                           description="Use APH instead of PH (default False)",
+                           domain=bool,
+                           default=False)
         self.add_to_config('aph_gamma',
                             description='Gamma parameter associated with asychronous projective hedging (default 1.0)',
                             domain=float,
@@ -383,6 +428,55 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-2)
 
+    def reduced_costs_rho_args(self):
+        self.add_to_config("reduced_costs_rho",
+                           description="have a ReducedCostsRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("reduced_costs_rho_multiplier",
+                           description="multiplier for ReducedCostsRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+    def sep_rho_args(self):
+        self.add_to_config("sep_rho",
+                           description="have an extension that computes rho using the seprho method from the Watson/Woodruff CMS paper",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("sep_rho_multiplier",
+                           description="multiplier for SepRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
+    def sensi_rho_args(self):
+        self.add_to_config("sensi_rho",
+                           description="have an extension that sets rho values based on objective function sensitivity",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("sensi_rho_multiplier",
+                           description="multiplier for SensiRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
+    def coeff_rho_args(self):
+        self.add_to_config("coeff_rho",
+                           description="have a CoeffRho extension",
+                           domain=bool,
+                           default=False)
+        self.add_to_config("coeff_rho_multiplier",
+                           description="multiplier for CoeffRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+
+
+    def gapper_args(self):
+
+        self.add_to_config('mipgaps_json',
+                           description="path to json file with a mipgap schedule for PH iterations",
+                           domain=str,
+                           default=None)
 
 
     def fwph_args(self):
@@ -435,6 +529,59 @@ class Config(pyofig.ConfigDict):
                             description="lgr. iterk solver option mipgap (default None)",
                             domain=float,
                             default=None)
+
+
+    def reduced_costs_args(self):
+
+        self.add_to_config('reduced_costs',
+                              description="have a reduced costs spoke",
+                              domain=bool,
+                              default=False)
+        
+        self.add_to_config('rc_verbose',
+                            description="verbose output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_debug',
+                            description="debug output for reduced costs",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_fixer',
+                            description="use the reduced cost fixer",
+                            domain=bool,
+                            default=False)
+        
+        self.add_to_config('rc_zero_tol',
+                            description="vars with rc below tol will never be fixed",
+                            domain=float,
+                            default=1e-4)
+
+        self.add_to_config('rc_fix_fraction_pre_iter0',
+                            description="target fix fraction for rc fixer before the first iteration",
+                            domain=float,
+                            default=0.0)
+
+        self.add_to_config('rc_fix_fraction_iter0',
+                            description="target fix fraction for rc fixer in first iteration",
+                            domain=float,
+                            default=0.0)
+        
+        self.add_to_config('rc_fix_fraction_iterk',
+                            description="target fix fraction for rc fixer in subsequent iterations",
+                            domain=float,
+                            default=0.0)
+        
+        self.add_to_config('rc_bound_tightening',
+                            description="use reduced cost bound tightening",
+                            domain=bool,
+                            default=True)
+
+        self.add_to_config('rc_bound_tol',
+                            description="tol to consider vars at bound",
+                            domain=float,
+                            default=1e-6)
 
 
     def lagranger_args(self):
@@ -490,9 +637,13 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file: rho rescale factors (default None)",
+                            description="json file with {iternum: rho rescale factor} (default None)",
                             domain=str,
                             default=None)
+        self.add_to_config("ph_ob_initial_rho_rescale_factor",
+                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
+                            domain=float,
+                            default=0.1)
         self.add_to_config("ph_ob_gradient_rho",
                             description="use gradient-based rho in PH OB",
                             domain=bool,
@@ -653,66 +804,84 @@ class Config(pyofig.ConfigDict):
                               "scenario cuts (default 0.01)",
                               domain=float,
                               default=0.01)
-
+        
+    # note: grad_rho_args was subsumed by gradient_args
 
     def gradient_args(self):
-         # we will not try to get the specification from the command line
 
         self.add_to_config("xhatpath",
                            description="path to npy file with xhat",
                            domain=str,
                            default='')
-        self.add_to_config("grad_cost_file",
-                           description="name of the gradient cost file (must be csv)",
+        self.add_to_config("grad_cost_file_out",
+                           description="name of the gradient cost file for output (will be csv)",
                            domain=str,
                            default='')
-        self.add_to_config("grad_rho_file",
-                           description="name of the gradient rho file (must be csv)",
+        self.add_to_config("grad_cost_file_in",
+                           description="path to csv file with (grad based?) costs",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_rho_file_out",
+                           description="name of the gradient rho output file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("rho_file_in",
+                           description="name of the (gradient) rho input file (must be csv)",
                            domain=str,
                            default='')
         self.add_to_config("grad_display_rho",
                            description="display rho during gradient calcs (default True)",
                            domain=bool,
                            default=True)
-        self.add_to_config("grad_primal_thresh",
-                           description="primal threshold for diff during gradient calcs",
-                           domain=float,
-                           default=0.001)
-        self.add_to_config("grad_dual_thresh",
-                           description="dual threshold for abs norm during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_pd_thresh",
-                           description="threshold for dual/primal during gradient calcs",
-                           domain=float,
-                           default=0.1)
-        self.add_to_config("grad_order_stat",
-                           description="order statistic for gradient based rho (must be between 0 and 1)",
-                           domain=float,
-                           default=0.5)
+        # likely unused presently
+#        self.add_to_config("grad_pd_thresh",
+#                           description="threshold for dual/primal during gradient calcs",
+#                           domain=float,
+#                           default=0.1)
 
-    def grad_rho_args(self):
-        self.add_to_config("grad_whatpath",
-                           description="path to csv file with what",
-                           domain=str,
-                           default='')
-        self.add_to_config('grad_rho_setter',
-                           description="use rho setter from a rho file",
+        self.add_to_config('grad_rho',
+                           description="use a gradient-based rho setter (if your problem is linear, use coeff-rho instead)",
                            domain=bool,
                            default=False)
-        
-        self.add_to_config("grad_rho_path",
-                           description="csv file for the the grad based rho file (???)",
+        """
+        all occurances of rho_path converted to grad_rho_file July 2024
+        self.add_to_config("rho_path",
+                           description="csv file for the rho setter",
                            domain=str,
                            default='')
+        """
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
                            domain=float,
                            default=-1.0)
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
                            default=1e3)
+
+    def dynamic_rho_args(self): # AKA adaptive
+
+        self.gradient_args()
+
+        self.add_to_config('dynamic_rho_primal_crit',
+                           description="Use dynamic primal criterion for some types of rho updates",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('dynamic_rho_dual_crit',
+                           description="Use dynamic dual criterion for some stypes of rho updates",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("dynamic_rho_primal_thresh",
+                           description="primal threshold for diff during dynamic rho calcs",
+                           domain=float,
+                           default=0.1)
+        
+        self.add_to_config("dynamic_rho_dual_thresh",
+                           description="dual threshold for dirr during dynamic rho calcs",
+                           domain=float,
+                           default=0.1)        
 
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",
@@ -761,6 +930,11 @@ class Config(pyofig.ConfigDict):
                             description="Adds scenario gap tracking (default 0)",
                             domain=int,
                             default=0)
+        self.add_to_config("track_reduced_costs",
+                            description="Adds reduced costs tracking (default 0)",
+                            domain=int,
+                            default=0)
+
 
     def wxbar_read_write_args(self):
         self.add_to_config("init_W_fname",
@@ -788,6 +962,33 @@ class Config(pyofig.ConfigDict):
                                 domain=bool,
                                 default=False)
 
+    def proper_bundle_config(self):
+        self.add_to_config('pickle_bundles_dir',
+                            description="Write bundles to a dill pickle files in this dir (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config('unpickle_bundles_dir',
+                            description="Read bundles from a dill pickle files in this dir; (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config("scenarios_per_bundle",
+                            description="Used for `proper` bundles only (might also be used when reading pickled bundles) (default None)",
+                            domain=int,
+                            default=None)
+
+    def pickle_scenarios_config(self):
+        # Distinct from pickle bundles
+        self.add_to_config('pickle_scenarios_dir',
+                            description="Write individual scenarios to a dill pickle files in this dir (default None)",
+                            domain=str,
+                            default=None)
+
+        self.add_to_config('unpickle_scenarios_dir',
+                            description="Read individual scenarios_per_bundle from a dill pickle files in this dir; (default None)",
+                            domain=str,
+                            default=None)
 
     #================
     def create_parser(self,progname=None):

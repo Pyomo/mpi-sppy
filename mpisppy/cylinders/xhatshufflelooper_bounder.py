@@ -1,11 +1,14 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
-import os
-import time
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import logging
 import random
 import mpisppy.log
-import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 
 from mpisppy.utils.xhat_eval import Xhat_Eval
@@ -23,7 +26,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatbase_prep(self):
 
-        verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
@@ -69,7 +71,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         obj = self.xhatter._try_one(snamedict,
                                     solver_options = self.solver_options,
                                     verbose=False,
-                                    restore_nonants=True,
+                                    restore_nonants=False,
                                     stage2EFsolvern=stage2EFsolvern,
                                     branching_factors=branching_factors)
         def _vb(msg): 
@@ -86,7 +88,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         return update
 
     def main(self):
-        verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhatbase_prep()

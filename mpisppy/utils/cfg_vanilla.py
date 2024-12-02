@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 """ **** cfg version of vanilla that uses the Pyomo configuration system
     Plain versions of dictionaries that can be modified for each example as needed.
     ASSUME the corresponding args have been set up.
@@ -27,11 +33,17 @@ from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
 from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
+from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
+from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
+from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
+from mpisppy.extensions.sep_rho import SepRho
+from mpisppy.extensions.coeff_rho import CoeffRho
+from mpisppy.extensions.sensi_rho import SensiRho
 from mpisppy.utils.wxbarreader import WXBarReader
 from mpisppy.utils.wxbarwriter import WXBarWriter
 
@@ -61,6 +73,9 @@ def shared_options(cfg):
         shoptions["iter0_solver_options"]["mipgap"] = cfg.iter0_mipgap
     if _hasit(cfg, "iterk_mipgap"):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
+    if _hasit(cfg, "reduced_costs"):
+        shoptions["rc_bound_tol"] = cfg.rc_bound_tol
+
     return shoptions
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
@@ -71,9 +86,7 @@ def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
         if all_nodenames is None:
             all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
     if all_nodenames is not None:
-        print("Hello, surprise !!")
         cylinder_dict["opt_kwargs"]["all_nodenames"] = all_nodenames
-    print("Hello,",cylinder_dict)
     return cylinder_dict
 
 def ph_hub(
@@ -96,6 +109,9 @@ def ph_hub(
     options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
+    options["smoothed"] = 2 if cfg.smoothing else 0
+    options["defaultPHp"] = cfg.smoothing_rho_ratio
+    options["defaultPHbeta"] = cfg.smoothing_beta
 
     hub_dict = {
         "hub_class": PHHub,
@@ -166,11 +182,11 @@ def extension_adder(hub_dict,ext_class):
     elif hub_dict["opt_kwargs"]["extensions"] == MultiExtension:
         if hub_dict["opt_kwargs"]["extension_kwargs"] is None:
             hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes": []}
-        if not ext_class in hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]:
+        if ext_class not in hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"]:
             hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"].append(ext_class)
     elif hub_dict["opt_kwargs"]["extensions"] != ext_class:
         #ext_class is the second extension
-        if not "extensions_kwargs" in hub_dict["opt_kwargs"]:
+        if "extensions_kwargs" not in hub_dict["opt_kwargs"]:
             hub_dict["opt_kwargs"]["extension_kwargs"] = {}
         hub_dict["opt_kwargs"]["extension_kwargs"]["ext_classes"] = \
             [hub_dict["opt_kwargs"]["extensions"], ext_class]
@@ -187,6 +203,22 @@ def add_fixer(hub_dict,
                                               "id_fix_list_fct": cfg.id_fix_list_fct}
     return hub_dict
 
+def add_reduced_costs_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,ReducedCostsRho)
+    hub_dict["opt_kwargs"]["options"]["reduced_costs_rho_options"] = {"multiplier" : cfg.reduced_costs_rho_multiplier, "cfg": cfg}
+
+def add_sep_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,SepRho)
+    hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier, "cfg": cfg}
+
+def add_coeff_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,CoeffRho)
+    hub_dict["opt_kwargs"]["options"]["coeff_rho_options"] = {"multiplier" : cfg.coeff_rho_multiplier}
+
+def add_sensi_rho(hub_dict, cfg):
+    hub_dict = extension_adder(hub_dict,SensiRho)
+    hub_dict["opt_kwargs"]["options"]["sensi_rho_options"] = {"multiplier" : cfg.sensi_rho_multiplier, "cfg": cfg}
+
 def add_cross_scenario_cuts(hub_dict,
                             cfg,
                             ):
@@ -194,6 +226,26 @@ def add_cross_scenario_cuts(hub_dict,
     hub_dict = extension_adder(hub_dict, CrossScenarioExtension)
     hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
+    return hub_dict
+
+def add_reduced_costs_fixer(hub_dict,
+                            cfg,
+                            ):
+    #WARNING: Do not use without a reduced_costs_spoke spoke
+    hub_dict = extension_adder(hub_dict, ReducedCostsFixer)
+
+    hub_dict["opt_kwargs"]["options"]["rc_options"] = {
+            "verbose": cfg.rc_verbose,
+            "debug": cfg.rc_debug,
+            "use_rc_fixer": cfg.rc_fixer,
+            "zero_rc_tol": cfg.rc_zero_tol,
+            "fix_fraction_target_pre_iter0": cfg.rc_fix_fraction_pre_iter0,
+            "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
+            "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
+            "use_rc_bt": cfg.rc_bound_tightening,
+            "rc_bound_tol": cfg.rc_bound_tol,
+        }
+
     return hub_dict
 
 def add_wxbar_read_write(hub_dict, cfg):
@@ -247,7 +299,7 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
         cylinder_dict = extension_adder(cylinder_dict, PHTracker)
         phtrackeroptions = {"results_folder": cfg.tracking_folder}
 
-        t_vars = ['convergence', 'xbars', 'duals', 'nonants', 'scen_gaps']
+        t_vars = ['convergence', 'xbars', 'duals', 'nonants', 'scen_gaps', 'reduced_costs']
         for t_var in t_vars:
             if _hasit(cfg, f'track_{t_var}'):
                 trval = cfg[f'track_{t_var}']
@@ -278,6 +330,7 @@ def fwph_spoke(
     all_scenario_names,
     scenario_creator_kwargs=None,
     all_nodenames=None,
+    rho_setter=None,
 ):
     shoptions = shared_options(cfg)
 
@@ -308,7 +361,8 @@ def fwph_spoke(
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,
             "scenario_denouement": scenario_denouement,
-            "all_nodenames": all_nodenames
+            "all_nodenames": all_nodenames,
+            "rho_setter" : rho_setter,
         },
     }
     return fw_dict
@@ -405,6 +459,31 @@ def lagrangian_spoke(
     add_ph_tracking(lagrangian_spoke, cfg, spoke=True)
 
     return lagrangian_spoke
+
+
+def reduced_costs_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+):
+    rc_spoke = _PHBase_spoke_foundation(
+        ReducedCostsSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+    )
+
+    add_ph_tracking(rc_spoke, cfg, spoke=True)
+
+    return rc_spoke
 
 
 # special lagrangian: computes its own xhat and W (does not seem to work well)
@@ -726,6 +805,8 @@ def ph_ob_spoke(
         ph_ob_spoke["opt_kwargs"]["options"]\
             ["ph_ob_rho_rescale_factors_json"]\
             = cfg.ph_ob_rho_rescale_factors_json
+    ph_ob_spoke["opt_kwargs"]["options"]["ph_ob_initial_rho_rescale_factor"]\
+        = cfg.ph_ob_initial_rho_rescale_factor
     if cfg.ph_ob_gradient_rho:
         ph_ob_spoke["opt_kwargs"]["options"]\
             ["ph_ob_gradient_rho"]\

@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import time
 import logging
 
@@ -9,7 +15,6 @@ import mpisppy.MPI as MPI
 import pyomo.environ as pyo
 
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.listener_util.listener_util as listener_util
 import mpisppy.spopt
 
 from mpisppy.utils.prox_approx import ProxApproxManager
@@ -250,6 +255,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         rho_setter=None,
         variable_probability=None,
     ):
+        self._PHIter = 0  # moved to _init June 2024 so extensions can see it
         """ PHBase constructor. """
         super().__init__(
             options,
@@ -263,7 +269,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
-
         global_toc("Initializing PHBase")
 
         # Note that options can be manipulated from outside on-the-fly.
@@ -320,6 +325,26 @@ class PHBase(mpisppy.spopt.SPOpt):
                     (lndn, li) = ndn_i
                     s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.prob0_mask[lndn][li]
 
+
+    def Update_z(self, verbose):
+        """ Update the smoothing variable z during the PH algorithm.
+
+        Args:
+            verbose (bool):
+                If True, displays verbose output during update.
+        """
+        # Assumes the scenarios are up to date
+        for k,s in self.local_scenarios.items():
+            for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+
+                xzdiff = nonant._value \
+                        - s._mpisppy_model.z[ndn_i]._value
+                s._mpisppy_model.z[ndn_i]._value += pyo.value(s._mpisppy_model.beta[ndn_i]) * xzdiff
+                if verbose and self.cylinder_rank == 0:
+                    print ("rank, node, scen, var, z", ndn_i[0], k,
+                           self.cylinder_rank, nonant.name,
+                           pyo.value(s._mpisppy_model.z[ndn_i]))
+    
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
@@ -502,7 +527,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                    gripe=False,
                    disable_pyomo_signal_handling=False,
                    tee=False,
-                   verbose=False):
+                   verbose=False,
+                   need_solution=True):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -533,6 +559,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, displays solver output. Default False.
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
+            need_solution (boolean, optional):
+                If True, raises an exception if a solution is not available.
+                Default True
         """
 
         """ Developer notes:
@@ -555,13 +584,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
 
-        super().solve_loop(solver_options,
-                   use_scenarios_not_subproblems,
-                   dtiming,
-                   gripe,
-                   disable_pyomo_signal_handling,
-                   tee,
-                   verbose)
+        super().solve_loop(
+            solver_options,
+            use_scenarios_not_subproblems,
+            dtiming,
+            gripe,
+            disable_pyomo_signal_handling,
+            tee,
+            verbose,
+            need_solution,
+        )
 
         if dis_W and dis_prox:
             self.reenable_W_and_prox()
@@ -604,7 +636,24 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.options["defaultPHrho"])
+            
+    
+    def attach_smoothing(self):
+        """ Attach the smoothing terms to the models in `local_scenarios`.
+        """
+        for (sname, scenario) in self.local_scenarios.items():
+            scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+                                        initialize=0.0,
+                                        mutable=True)
 
+            scenario._mpisppy_model.p = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+                                        mutable=True,
+                                        default=self.options["defaultPHp"])
+            
+            scenario._mpisppy_model.beta = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+                                        mutable=True,
+                                        default=self.options["defaultPHbeta"])
+    
 
     @property
     def W_disabled(self):
@@ -616,9 +665,9 @@ class PHBase(mpisppy.spopt.SPOpt):
     def prox_disabled(self):
         assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'prox_on')
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
+    
 
-
-    def attach_PH_to_objective(self, add_duals, add_prox):
+    def attach_PH_to_objective(self, add_duals, add_prox, add_smooth=0):
         """ Attach dual weight and prox terms to the objective function of the
         models in `local_scenarios`.
 
@@ -675,6 +724,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # Prox term (quadratic)
             if (add_prox):
                 prox_expr = 0.
+                smooth_expr = 0.
                 for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items():
                     # expand (x - xbar)**2 to (x**2 - 2*xbar*x + xbar**2)
                     # x**2 is the only qradratic term, which might be
@@ -689,8 +739,20 @@ class PHBase(mpisppy.spopt.SPOpt):
                         xvarsqrd = xvar**2
                     prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
                                  (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
+                    
+                    # Computing smoothing term (quadratic)
+                    if (add_smooth):
+                        smooth_expr += (scenario._mpisppy_model.p[ndn_i] / 2.0) * \
+                                    (xvarsqrd - 2.0 * scenario._mpisppy_model.z[ndn_i] * xvar \
+                                    + scenario._mpisppy_model.z[ndn_i]**2)
+
                 scenario._mpisppy_model.ProxExpr = pyo.Expression(expr=prox_expr)
                 ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.ProxExpr
+
+                if (add_smooth):
+                    # Adding smoothing term
+                    scenario._mpisppy_model.SmoothExpr = pyo.Expression(expr=smooth_expr)
+                    ph_term += scenario._mpisppy_model.prox_on * scenario._mpisppy_model.SmoothExpr
 
             if (is_min_problem):
                 objfct.expr += ph_term
@@ -702,6 +764,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         self,
         attach_duals=True,
         attach_prox=True,
+        attach_smooth=0
     ):
         """ Set up PH objectives (duals and prox terms), and prepare
         extensions, if available.
@@ -711,17 +774,20 @@ class PHBase(mpisppy.spopt.SPOpt):
                 If True, adds dual weight (Ws) to the objective. Default True.
             add_prox (boolean, optional):
                 If True, adds prox terms to the objective. Default True.
+            attach_smooth (int, optional):
+                If 0, no smoothing; if 1, p_value is used; if 2, p_ratio is used. 
 
         Note:
             This function constructs an Extension object if one was specified
-            at the time the PH object was created. It also calls the
-            `pre_iter0` method of the Extension object.
+            at the time the PH object was created. 
         """
 
         self.attach_Ws_and_prox()
-        self.attach_PH_to_objective(attach_duals, attach_prox)
+        if attach_smooth:
+            self.attach_smoothing()
+        self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
 
-
+    
     def options_check(self):
         """ Check whether the options in the `options` attribute are
         acceptable.
@@ -752,6 +818,9 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.options["display_timing"] = False
         if "display_convergence_detail" not in self.options:
             self.options["display_convergence_detail"] = False
+        # Smoothed is optional, not required
+        if "smoothed" not in self.options:
+            self.options["smoothed"] = 0
 
 
     def Iter0(self):
@@ -769,13 +838,15 @@ class PHBase(mpisppy.spopt.SPOpt):
                 stochastic program with the nonanticipativity constraints
                 removed.
         """
+
         if (self.extensions is not None):
             self.extobject.pre_iter0()
-
+        
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
+        smooth_type = self.options["smoothed"]
         have_extensions = self.extensions is not None
         have_converger = self.ph_converger is not None
 
@@ -788,6 +859,9 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         global_toc("Creating solvers")
         self._create_solvers()
+
+        if (self.extensions is not None):
+            self.extobject.iter0_post_solver_creation()        
 
         teeme = ("tee-rank0-solves" in self.options
                  and self.options['tee-rank0-solves']
@@ -838,7 +912,12 @@ class PHBase(mpisppy.spopt.SPOpt):
             else:
                 self._use_rho_setter(False)
 
-        converged = False
+        ## If ratio: Add reset p according to rho
+        if smooth_type == 2:
+            for _, scenario in self.local_scenarios.items():
+                for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
+                        scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
+
         if have_converger:
             # Call the constructor of the converger object
             self.convobject = self.ph_converger(self)
@@ -855,7 +934,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             print("Elapsed time: %6.2f" % (time.perf_counter() - self.start_time))
 
         if dconvergence_detail:
-            self.report_var_values_at_rank0(header="Convergence detail:")
+            self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
         self.reenable_W_and_prox()
 
@@ -886,6 +965,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
+        smoothed = bool(self.options["smoothed"])
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
@@ -894,7 +974,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             iteration_start_time = time.time()
 
             if dprogress:
-                global_toc(f"\nInitiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
+                global_toc(f"Initiating PH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
             # Compute xbar
             #global_toc('Rank: {} - Before Compute_Xbar'.format(self.cylinder_rank), True)
@@ -905,6 +985,9 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.Update_W(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
+            if smoothed:
+                self.Update_z(verbose)
+            
             self.conv = self.convergence_diff()
             #global_toc('Rank: {} - After convergence_diff'.format(self.cylinder_rank), True)
             if have_extensions:
@@ -916,12 +999,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             # latest data, even at termination
             if have_converger:
                 if self.convobject.is_converged():
-                    converged = True
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
             elif self.conv is not None:
                 if self.conv < self.options["convthresh"]:
-                    converged = True
                     global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
                     break
 
@@ -930,6 +1011,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                  and self.options["tee-rank0-solves"]
                 and self.cylinder_rank == 0
             )
+
             self.solve_loop(
                 solver_options=self.current_solver_options,
                 dtiming=dtiming,
@@ -959,7 +1041,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
 
             if dconvergence_detail:
-                self.report_var_values_at_rank0(header="Convergence detail:")
+                self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
         else: # no break, (self._PHIter == max_iterations)
             # NOTE: If we return for any other reason things are reasonably in-sync.

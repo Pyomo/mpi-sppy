@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #
 # pyomo documentation build configuration file, created by
 # sphinx-quickstart on Mon Dec 12 16:08:36 2016.
@@ -21,6 +29,8 @@ import sys
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../../examples/distr'))
+sys.path.insert(0, os.path.abspath('../../examples/stoch_distr'))
 
 
 # -- General configuration ------------------------------------------------
@@ -60,8 +70,8 @@ root_doc = 'index'
 
 # General information about the project.
 project = u'mpi-sppy'
-copyright = u'2020-2023'
-author = u'David L. Woodruff'
+copyright = u'2020-2024'
+author = u'mpi-sppy Developers'
 
 # The version info for the project you're documenting, acts as replacement for
 # |version| and |release|, also used in various other places throughout the

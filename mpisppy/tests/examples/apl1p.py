@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #ReferenceModel for full set of scenarios for APL1P; May 2021
 #We use costs from Bailey, Jensen and Morton, Response Surface Analysis of Two-Stage Stochastic Linear Programming with Recourse
 #(costs are 10x higher than in the original [Infanger 1992] paper)

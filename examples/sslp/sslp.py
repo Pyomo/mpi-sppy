@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # update April 2020: BUT this really needs upper and lower bound spokes
 # dlw February 2019: PySP 2 for the sslp example
 
@@ -7,13 +13,16 @@ import os
 import sys
 import socket
 import datetime as dt
-import pyomo.environ as pyo
 import mpisppy.opt.ph
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.fixer as fixer
 
 import model.ReferenceModel as ref
+
+
+from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+
 
 def scenario_creator(scenario_name, data_dir=None):
     """ The callback needs to create an instance and then attach
@@ -31,6 +40,8 @@ def scenario_creator(scenario_name, data_dir=None):
             "ROOT", 1.0, 1, model.FirstStageCost, [model.FacilityOpen], model
         )
     ]
+    model._mpisppy_probability = "uniform"
+    
     return model
 
 
@@ -38,8 +49,76 @@ def scenario_denouement(rank, scenario_name, scenario):
     pass
 
 
+########## helper functions ########
+
+#=========
+def scenario_names_creator(num_scens,start=None):
+    # one-based scenarios
+    # if start!=None, the list starts with the 'start' labeled scenario
+    if (start is None) :
+        start=1
+    return [f"Scenario{i}" for i in range(start, start+num_scens)]
+
+
+#=========
+def inparser_adder(cfg):
+    # add options unique to sizes
+    # we don't want num_scens from the command line
+    cfg.mip_options()
+    cfg.add_to_config("instance_name",
+                        description="sslp instance name (e.g., sslp_15_45_10)",
+                        domain=str,
+                        default=None)                
+    cfg.add_to_config("sslp_data_path",
+                        description="path to sslp data (e.g., ./data)",
+                        domain=str,
+                        default=None)                
+
+
+#=========
+def kw_creator(cfg):
+    # linked to the scenario_creator and inparser_adder
+    # side-effect is dealing with num_scens
+    inst = cfg.instance_name
+    ns = int(inst.split("_")[-1])
+    if hasattr(cfg, "num_scens"):
+        if cfg.num_scens != ns:
+            raise RuntimeError(f"Argument num-scens={cfg.num_scens} does not match the number "
+                               "implied by instance name={ns} "
+                               "\n(--num-scens is not needed for sslp)")
+    else:
+        cfg.add_and_assign("num_scens","number of scenarios", int, None, ns)
+    data_dir = os.path.join(cfg.sslp_data_path, inst, "scenariodata")
+    kwargs = {"data_dir": data_dir}
+    return kwargs
+
+
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    """ Create a scenario within a sample tree. Mainly for multi-stage and simple for two-stage.
+        (this function supports zhat and confidence interval code)
+    Args:
+        sname (string): scenario name to be created
+        stage (int >=1 ): for stages > 1, fix data based on sname in earlier stages
+        sample_branching_factors (list of ints): branching factors for the sample tree
+        seed (int): To allow random sampling (for some problems, it might be scenario offset)
+        given_scenario (Pyomo concrete model): if not None, use this to get data for ealier stages
+        scenario_creator_kwargs (dict): keyword args for the standard scenario creator funcion
+    Returns:
+        scenario (Pyomo concrete model): A scenario for sname with data in stages < stage determined
+                                         by the arguments
+    """
+    # Since this is a two-stage problem, we don't have to do much.
+    sca = scenario_creator_kwargs.copy()
+    sca["seedoffset"] = seed
+    sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
+    return scenario_creator(sname, **sca)
+
+######## end helper functions #########
+
+# special helper function
 def id_fix_list_fct(s):
-    """ specify tuples used by the fixer.
+    """ specify tuples used by the classic (non-RC-based) fixer.
 
         Args:
             s (ConcreteModel): the sizes instance.
@@ -81,17 +160,17 @@ if __name__ == "__main__":
         quit()
     try:
         bunper = int(sys.argv[2])
-    except:
+    except Exception:
         print(msg, "\n    bad number of bundles per rank=", sys.argv[2])
         quit()
     try:
         maxit = int(sys.argv[3])
-    except:
+    except Exception:
         print(msg, "\n    bad max iterations=", sys.argv[3])
         quit()
     try:
         rho = int(sys.argv[4])
-    except:
+    except Exception:
         print(msg, "\n    bad rho=", sys.argv[4])
         quit()
 
@@ -109,8 +188,15 @@ if __name__ == "__main__":
     options["verbose"] = False
     options["display_timing"] = False
     options["display_progress"] = True
+
+    options["primal_dual_converger_options"] = {"tol" : 1e-6}
+    options["display_convergence_detail"] = True
+    options["smoothed"] = True
+    options["defaultPHp"] = .5
+    options["defaultPHbeta"] = 0.1
+
     ### async section ###
-    options["asynchronous"] = True
+    options["asynchronous"] = False
     options["async_frac_needed"] = 0.5
     options["async_sleep_secs"] = 1
     ### end asyn section ###
@@ -145,6 +231,7 @@ if __name__ == "__main__":
         scenario_creator,
         scenario_denouement,
         scenario_creator_kwargs={"data_dir": data_dir},
+        ph_converger = PrimalDualConverger
     )
 
     if ph.cylinder_rank == 0:

@@ -1,38 +1,27 @@
-# Copyright 2023 by U. Naepels and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Code to compute gradient cost and rhos from the gradient. It also provides a corresponding rho setter.
 # To test: /examples/farmer/farmer_rho_demo.py
 
-import sys
-import os
 import inspect
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
-import logging
-import numpy as np
-import math
 import importlib
 import csv
-import inspect
-import typing
 import copy
-import time
 
-import mpisppy.log
-from mpisppy import global_toc
-from mpisppy import MPI
-import mpisppy.utils.sputils as sputils
-import mpisppy.spopt
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.confidence_intervals.ciutils as ciutils
 from pyomo.contrib.pynumero.interfaces.pyomo_nlp import PyomoNLP
-import mpisppy.utils.wxbarutils as wxbarutils
-import mpisppy.utils.rho_utils as rho_utils
 import mpisppy.utils.find_rho as find_rho
-import mpisppy.phbase as phbase
 
 
 # Could also pass, e.g., sys.stdout instead of a filename
@@ -74,19 +63,32 @@ class Find_Grad():
            grad_dict (dict): a dictionnary {nonant indice: -gradient}
 
         """
-        global_toc("gradient: relaxing integer variables")
+
+        # grab all discrete variables so they can be restored (out-of-place creation
+        # via pyomo transformations is barfing.
+        all_discrete_vars = []
+        for var in scenario.component_objects(pyo.Var, active=True):
+            for var_idx, var_data in var.items():
+                if var_data.domain is pyo.Binary:
+                    all_discrete_vars.append((var_data, pyo.Binary))
+                elif var_data.domain is pyo.Integers:
+                    all_discrete_vars.append((var_data, pyo.Integers))                    
+        
         relax_int = pyo.TransformationFactory('core.relax_integer_vars')
         relax_int.apply_to(scenario)
         nlp = PyomoNLP(scenario)
 
-        nlp_vars = nlp.get_pyomo_variables()
         try:
             grad = nlp.evaluate_grad_objective()
-        except:
+        except Exception:
             raise RuntimeError("Cannot compute the gradient")
         grad = nlp.evaluate_grad_objective()
         grad_dict = {ndn_i: -grad[ndn_i[1]]
                      for ndn_i, var in scenario._mpisppy_data.nonant_indices.items()}
+
+        for (var_data, var_domain) in all_discrete_vars:
+            var_data.domain = var_domain
+
         return grad_dict
         
 
@@ -97,38 +99,34 @@ class Find_Grad():
            The cfg object should contain an xhat path corresponding to the xhat file.
 
         """
-        if self.cfg.grad_cost_file == '': pass
-        else:
-            assert self.cfg.xhatpath != '', "to compute gradient cost, you have to give an xhat path using --xhatpath"
-            
-            self.ph_object.disable_W_and_prox()
-            xhatfile = self.cfg.xhatpath
-            xhat = ciutils.read_xhat(xhatfile)
-            xhat_one = xhat["ROOT"]
-            self.ph_object._save_nonants()
-            self.ph_object._fix_nonants(xhat)
-            self.ph_object.solve_loop()
-            for (sname, scenario) in self.ph_object.local_scenarios.items():
-                for node in scenario._mpisppy_node_list:
-                    for v in node.nonant_vardata_list:
-                        v.unfix()
+        assert self.cfg.xhatpath != '', "to compute gradient cost, you have to give an xhat path using --xhatpath"
 
-            grad_dict = {sname: self.compute_grad(sname, scenario)
-                         for sname, scenario in self.ph_object.local_scenarios.items()}
-            local_costs = {(sname, var.name): grad_dict[sname][node.name, ix]
-                           for (sname, scenario) in self.ph_object.local_scenarios.items()
-                           for node in scenario._mpisppy_node_list
-                           for (ix, var) in enumerate(node.nonant_vardata_list)}
-            comm = self.ph_object.comms['ROOT']
-            costs = comm.gather(local_costs, root=0)
-            rank = self.ph_object.cylinder_rank
-            if (self.ph_object.cylinder_rank == 0):
-                self.c = {key: val 
-                          for cost in costs
-                          for key, val in cost.items()}
-            comm.Barrier()
-            self.ph_object._restore_nonants()
-            self.ph_object.reenable_W_and_prox()
+        self.ph_object.disable_W_and_prox()
+        xhatfile = self.cfg.xhatpath
+        xhat = ciutils.read_xhat(xhatfile)
+        self.ph_object._save_nonants()
+        self.ph_object._fix_nonants(xhat)
+        self.ph_object.solve_loop()
+        for (sname, scenario) in self.ph_object.local_scenarios.items():
+            for node in scenario._mpisppy_node_list:
+                for v in node.nonant_vardata_list:
+                    v.unfix()
+
+        grad_dict = {sname: self.compute_grad(sname, scenario)
+                     for sname, scenario in self.ph_object.local_scenarios.items()}
+        local_costs = {(sname, var.name): grad_dict[sname][node.name, ix]
+                       for (sname, scenario) in self.ph_object.local_scenarios.items()
+                       for node in scenario._mpisppy_node_list
+                       for (ix, var) in enumerate(node.nonant_vardata_list)}
+        comm = self.ph_object.comms['ROOT']
+        costs = comm.gather(local_costs, root=0)
+        if (self.ph_object.cylinder_rank == 0):
+            self.c = {key: val 
+                      for cost in costs
+                      for key, val in cost.items()}
+        comm.Barrier()
+        self.ph_object._restore_nonants()
+        self.ph_object.reenable_W_and_prox()
 
 
     def write_grad_cost(self):
@@ -139,51 +137,55 @@ class Find_Grad():
 
         """
         self.find_grad_cost()
-        comm = self.ph_object.comms['ROOT']
         if (self.ph_object.cylinder_rank == 0):
-            with open(self.cfg.grad_cost_file, 'a') as f:
+            with open(self.cfg.grad_cost_file_out, 'w') as f:
                 writer = csv.writer(f)
                 writer.writerow(['#grad cost values'])
                 for (key, val) in self.c.items():
                     sname, vname = key[0], key[1]
                     row = ','.join([sname, vname, str(val)]) + '\n'
                     f.write(row)
-        comm.Barrier()
 
+        # all ranks rely on the existence of this file.
+        # barrier perhaps should be imposed at the caller level.
+        comm = self.ph_object.comms['ROOT']                    
+        comm.Barrier()
 
 #====================================================================================
 
+# TBD from JPW-  why are these two here at all? SHOULD NOT BE IN THE "GRADIENT" FILE
+#   (partial answer, the ph_object is needed; but maybe the code could be untangled)
+
     def find_grad_rho(self):
-        """Writes gradient cost for all variables.
+        """computes rho based on cost file for all variables (does not write ????).
 
         ASSUMES:
-           The cfg object should contain a grad_cost_file.
+           The cfg object should contain a grad_cost_file_in.
 
         """
-        assert self.cfg.grad_cost_file != '', "to compute rho you have to give the name of a csv file (using --grad-cost-file) where grad cost will be written"
-        if (not os.path.exists(self.cfg.grad_cost_file)):
-            raise RuntimeError('Could not find file {fn}'.format(fn=self.cfg.grad_cost_file))
-        self.cfg.grad_whatpath = self.cfg.grad_cost_file
         return find_rho.Find_Rho(self.ph_object, self.cfg).compute_rho()
 
     def write_grad_rho(self):
-         """Writes gradient rho for all variables.
+         """Writes gradient rho for all variables. (Does not compute it)
 
         ASSUMES:
-           The cfg object should contain a grad_cost_file.
+           The cfg object should contain a grad_cost_file_in.
 
         """
-         if self.cfg.grad_rho_file == '':
-             pass
+         if self.cfg.grad_rho_file_out == '':
+             raise RuntimeError("write_grad_rho without grad_rho_file_out")
          else:
              rho_data = self.find_grad_rho()
              if self.ph_object.cylinder_rank == 0:
-                 with open(self.cfg.grad_rho_file, 'a', newline='') as file:
+                 with open(self.cfg.grad_rho_file_out, 'w', newline='') as file:
                      writer = csv.writer(file)
                      writer.writerow(['#grad rho values'])
                      for (vname, rho) in rho_data.items():
                          writer.writerow([vname, rho_data[vname]])
 
+             # barrier added to avoid race-conditions involving other ranks reading.
+             comm = self.ph_object.comms['ROOT']                    
+             comm.Barrier()
 
 ###################################################################################
 
@@ -219,11 +221,12 @@ def grad_cost_and_rho(mname, original_cfg):
        original_cfg (Config object): config object
 
     """
-    if  (original_cfg.grad_rho_file == '') and (original_cfg.grad_cost_file == ''): return
+    if  (original_cfg.grad_rho_file_out == '') and (original_cfg.grad_cost_file_out == ''):
+        raise RuntimeError ("Presently, grad-rho-file-out and grad-cost-file cannot both be empty")
 
     try:
         model_module = importlib.import_module(mname)
-    except:
+    except Exception:
         raise RuntimeError(f"Could not import module: {mname}")
     cfg = copy.deepcopy(original_cfg)
     cfg.max_iterations = 0 #we only need x0 here
@@ -258,6 +261,7 @@ def grad_cost_and_rho(mname, original_cfg):
 
 
 if __name__ == "__main__":
-    print("call gradient.grad_cost_and_rho(modulename, cfg) and use --xhatpath --grad-cost-file --grad-rho-file to compute and write gradient cost and rho") 
+    #### not valid as of July 2024: print("call gradient.grad_cost_and_rho(modulename, cfg) and use --xhatpath --grad-cost-file --grad-rho-file to compute and write gradient cost and rho")
+    print("no main")
     
     

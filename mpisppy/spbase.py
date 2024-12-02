@@ -1,14 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # base class for hub and for spoke strata
 
 import os
 import time
 import logging
 import weakref
-import math
 import numpy as np
-import re
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
@@ -341,7 +345,7 @@ class SPBase:
         # check the node names given by the scenarios
         for nodename in nonleafnodes:
             if nodename not in self.all_nodenames:
-                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames}")
+                raise RuntimeError(f"Tree node '{nodename}' not in all_nodenames list {self.all_nodenames} for {self.global_rank=}")
 
         # loop over all nodes and make the comms (split requires all ranks)
         # make sure we loop in the same order, so every rank iterate over
@@ -511,7 +515,7 @@ class SPBase:
                 scenario._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
 
             if hasattr(scenario, "PySP_prob"):
-                raise RuntimeError(f"PySP_prob is deprecated; use _mpisppy_probability")
+                raise RuntimeError("PySP_prob is deprecated; use _mpisppy_probability")
             pspec =  scenario._mpisppy_probability if hasattr(scenario, "_mpisppy_probability") else None
             if pspec is None or pspec == "uniform":
                 prob = 1./len(self.all_scenario_names)
@@ -554,7 +558,7 @@ class SPBase:
             return False
 
 
-    def gather_var_values_to_rank0(self, get_zero_prob_values=False):
+    def gather_var_values_to_rank0(self, get_zero_prob_values=False, fixed_vars=True):
         """ Gather the values of the nonanticipative variables to the root of
         the `mpicomm` for the cylinder
 
@@ -568,6 +572,8 @@ class SPBase:
         for (sname, model) in self.local_scenarios.items():
             for node in model._mpisppy_node_list:
                 for var in node.nonant_vardata_list:
+                    if not fixed_vars and var.fixed:
+                        continue
                     var_name = var.name
                     if self.bundling:
                         dot_index = var_name.find('.')
@@ -591,17 +597,19 @@ class SPBase:
             return result
 
 
-    def report_var_values_at_rank0(self, header="", print_zero_prob_values=False):
+    def report_var_values_at_rank0(self, header="", print_zero_prob_values=False, fixed_vars=True):
         """ Pretty-print the values and associated statistics for
         non-anticipative variables across all scenarios. """
 
-        var_values = self.gather_var_values_to_rank0(get_zero_prob_values=print_zero_prob_values)
+        var_values = self.gather_var_values_to_rank0(get_zero_prob_values=print_zero_prob_values, fixed_vars=fixed_vars)
 
         if self.cylinder_rank == 0:
 
             if len(header) != 0:
                 print(header)
-
+            if len(var_values) == 0:
+                print("No variables to report (perhaps all are fixed?)")
+                return
             scenario_names = sorted(set(x for (x,y) in var_values))
             max_scenario_name_len = max(len(s) for s in scenario_names)
             variable_names = sorted(set(y for (x,y) in var_values))
@@ -617,12 +625,15 @@ class SPBase:
             for this_var in variable_names:
                 print("{0: <{width}} | ".format(this_var, width=max_variable_name_len), end='')
                 for this_scenario in scenario_names:
-                    this_var_value = var_values[this_scenario, this_var]
-                    if (this_var_value == None) and (not print_zero_prob_values):
+                    if (this_scenario, this_var) not in var_values:
                         print("{0: ^{width}s}".format("-", width=value_field_len), end='')
                     else:
-                        print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
-                    print(" ", end='')
+                        this_var_value = var_values[this_scenario, this_var]
+                        if (this_var_value is None) and (not print_zero_prob_values):
+                            print("{0: ^{width}s}".format("-", width=value_field_len), end='')
+                        else:
+                            print("{0: {width}.4f}".format(this_var_value, width=value_field_len), end='')
+                        print(" ", end='')
                 print("")
 
     def write_first_stage_solution(self, file_name,

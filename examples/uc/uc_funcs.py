@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # NOTE: this file has some "legacy" functions with wrappers
 #  (but it even has some legacy wrappers....)
@@ -9,8 +15,6 @@ import os
 
 from pyomo.dataportal import DataPortal
 
-import mpisppy.scenario_tree as scenario_tree
-from mpisppy.utils import config
 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
@@ -58,12 +62,6 @@ def pysp_instance_creation_callback(scenario_name, path=None, scenario_count=Non
 
 def scenario_creator(scenario_name, scenario_count=None, path=None,
                      num_scens=None, seedoffset=0):
-
-    # Do some calculations that might be needed by confidence interval software
-    scennum = sputils.extract_num(scenario_name)
-    newnum = scennum + seedoffset
-    newname = f"Scenario{newnum}"
-    
     return pysp2_callback(scenario_name, scenario_count=scenario_count,
                           path=path, num_scens=num_scens, seedoffset=seedoffset)
 
@@ -119,7 +117,6 @@ def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
     computed_rhos = []
     for t in scenario_instance.TimePeriods:
         for g in scenario_instance.ThermalGenerators:
-            max_capacity = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
             min_power = pyo.value(scenario_instance.MinimumPowerOutput[g,t])
             max_power = pyo.value(scenario_instance.MaximumPowerOutput[g,t])
             avg_power = min_power + ((max_power - min_power) / 2.0)
@@ -152,7 +149,7 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
                                     rho_scale_factor=rho_scale_factor)
     try:
         trial_rhos = _get_saved_rhos(fname)
-    except:
+    except Exception:
         raise RuntimeError('Formatting issue in specified rho file ' + fname +
                            '. Format should be (variable_name,rho_value) for '
                            'each row, with no blank lines, and no '
@@ -163,7 +160,6 @@ def scenario_rhos_trial_from_file(scenario_instance, rho_scale_factor=0.01,
         for t in sorted(scenario_instance.TimePeriods):
             for g in sorted(scenario_instance.ThermalGeneratorsAtBus[b]):
                 var = scenario_instance.UnitOn[g,t]
-                computed_rho = computed_rhos[index]
                 try:
                     trial_rho = trial_rhos[var.name]
                 except KeyError:

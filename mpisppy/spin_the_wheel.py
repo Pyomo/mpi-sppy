@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 from pyomo.environ import value
 from mpisppy import haveMPI, global_toc, MPI
@@ -44,7 +50,6 @@ class WheelSpinner:
 
         hub_dict = self.hub_dict
         list_of_spoke_dict = self.list_of_spoke_dict
-
         # Confirm that the provided dictionaries specifying
         # the hubs and spokes contain the appropriate keys
         if "hub_class" not in hub_dict:
@@ -131,8 +136,8 @@ class WheelSpinner:
         # to ensure the messages below are True
         cylinder_comm.Barrier()
         global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
-        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
-    
+        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0)) 
+          
         fullcomm.Barrier()
     
         ## give the hub the chance to catch new values

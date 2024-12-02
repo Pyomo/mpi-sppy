@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 #ReferenceModel for full set of scenarios for AirCond; June 2021
 # PICKLE BUNDLE VERSION!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 # Dec 2021; numerous enhancements by DLW; do not change defaults
@@ -6,16 +13,11 @@
 # exccept Last Inventory cost, which should be negative.
 import os
 import numpy as np
-import time
 import pyomo.environ as pyo
-import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.utils.pickle_bundle as pickle_bundle
 import mpisppy.tests.examples.aircond as base_aircond
 from mpisppy.utils.sputils import attach_root_node
-from mpisppy.utils import config
-from mpisppy import global_toc
 
 # Use this random stream:
 aircondstream = np.random.RandomState()
@@ -194,7 +196,7 @@ def scenario_names_creator(num_scens,start=None):
 def inparser_adder(cfg):
     base_aircond.inparser_adder(cfg)
     # special "proper" bundle arguments
-    pickle_bundle.pickle_bundle_parser(cfg)
+    cfg.proper_bundle_config()
     
 
 #=========

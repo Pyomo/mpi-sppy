@@ -1,18 +1,24 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # general example driver for distr with cylinders
 import mpisppy.utils.admmWrapper as admmWrapper
 import distr_data
 import distr
-#import distr_no_dummy as distr
-import mpisppy.cylinders
 
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import MPI
-global_rank = MPI.COMM_WORLD.Get_rank()
-
 import time
+
+global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False
 
@@ -73,7 +79,7 @@ def main():
     else:
         inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
         all_nodes_dict = None
-        data_params = None
+        data_params = {"max revenue": 1200} # hard-coded because the model is hard-coded
 
     ph_converger = None
 

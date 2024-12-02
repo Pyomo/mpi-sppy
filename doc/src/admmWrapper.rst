@@ -3,7 +3,15 @@
 AdmmWrapper
 ===========
 
-**ADMM_PH** uses progressive hedging implemented in mpi-sppy 
+.. automodule:: distr
+   :noindex:
+   :show-inheritance:
+
+.. automodule:: distr_data
+   :noindex:
+   :show-inheritance:
+
+**AdmmWrapper** uses progressive hedging implemented in mpi-sppy 
 to solve a non-stochastic problem by breaking them into subproblems.
 
 An example of usage is given below.
@@ -12,7 +20,7 @@ Usage
 -----
 
 The driver (in the example ``distr_admm_cylinders.py``) calls ``admmWrapper.py``,
-thanks to the formated model provided by the model file (in the example ``examples.distr.distr.py``).
+using the model provided by the model file (in the example ``examples.distr.distr.py``).
 The file ``admmWrapper.py`` returns variable probabilities that can be used in the driver to create the PH (or APH) 
 object which will solve the subproblems in a parallel way, insuring that merging conditions are respected.
 
@@ -36,7 +44,7 @@ The driver file also requires helper arguments that are used in mpi-sppy. They a
 and in the example below.
 Here is a summary:
 
-* ``scenario_creator_kwargs``(dict[str]): key words arguments needed in ``scenario_creator``
+* ``scenario_creator_kwargs`` (dict[str]): key words arguments needed in ``scenario_creator``
         
 * ``all_scenario_names`` (list of str): the subproblem names
 
@@ -68,14 +76,13 @@ It should be provided in ``consensus_vars``.
 
 .. note::
 
-    Every variable in ``consensus_vars[subproblem]`` should also appear as a variable of the subproblem.
+    Every variable in ``consensus_vars[subproblem]`` should also appear as a variable in the pyomo model of the subproblem.
 
 Using the config system
 +++++++++++++++++++++++
 
-In addition to the previously presented data, the driver also requires arguments tocreate the PH Model and solve it. 
+In addition to the previously presented data, the driver also requires arguments to create the PH Model and solve it. 
 Some arguments may be passed to the user via config, but the cylinders need to be added.
-.. TBD add external link on precedent line
 
 
 Direct solver of the extensive form
@@ -104,12 +111,14 @@ Other models are created pseudo-randomly thanks to parameters defined in ``data_
 
 In the example the ``inter_region_dict_creator`` (or ``scalable_inter_region_dict_creator``) creates the inter-region information.
 
-.. autofunction:: examples.distr.distr.inter_region_dict_creator
+.. autofunction:: distr_data.inter_region_dict_creator
+    :no-index:
 
 The ``region_dict_creator`` (or ``scalable_region_dict_creator``) creates the information specific to a region,
 regardless of the other regions.
 
-.. autofunction:: examples.distr.distr.region_dict_creator
+.. autofunction:: distr_data.region_dict_creator
+    :no-index:
 
 Adapting the data to create the model
 +++++++++++++++++++++++++++++++++++++
@@ -120,22 +129,22 @@ models were merged. To impose this, consensus variables are introduced.
 In our example a consensus variable is the flow among regions. Indeed, in each regional model we introduce the inter-region arcs 
 for which either the source or target is in the region to impose the flow balance rule inside the region. But at this stage, nothing 
 ensures that the flow from DC1 to DC2 represented in Region 1 is the same as the flow from DC1 to DC2 represented in Region 2.
-That is why the flow ``flow["DC1DC2"]`` is a consensus variable in both regions: to ensure it is the same.\\
+That is why the flow ``flow["DC1DC2"]`` is a consensus variable in both regions: to ensure it is the same.
 
 The purpose of ``examples.distr.distr.inter_arcs_adder`` is to do that.
 
-.. autofunction:: examples.distr.distr.inter_arcs_adder
+.. autofunction:: distr.inter_arcs_adder
 
 .. note::
 
     In the example the cost of transport is chosen to be split equally in the region source and the region target.
 
-    We here represent the flow problem with a directed graph. If, in additio to the flow from DC1 to DC2 represented by ``flow["DC1DC2"]``,
+    We here represent the flow problem with a directed graph. If, in addition to the flow from DC1 to DC2 represented by ``flow["DC1DC2"]``,
     a flow from DC2 to DC1 were to be authorized we would also have ``flow["DC2DC1"]`` in both regions. 
 
 Once the local_dict is created, the Pyomo model can be created thanks to ``min_cost_distr_problem``.
 
-.. autofunction:: examples.distr.distr.min_cost_distr_problem
+.. autofunction:: distr.min_cost_distr_problem
 
 .. _sectiondatafordriver:
 
@@ -149,19 +158,20 @@ The driver requires five elements given by the model: ``all_scenario_names``, ``
 
 ``scenario_creator`` is created thanks to the previous functions.
 
-.. autofunction:: examples.distr.distr.scenario_creator
+.. autofunction:: distr.scenario_creator
 
 The dictionary ``scenario_creator_kwargs`` is created with
 
-.. autofunction:: examples.distr.distr.kw_creator
+.. autofunction:: distr.kw_creator
 
 The function ``inparser_adder`` requires the user to give ``num_scens`` (the number of regions) during the configuration.
-.. autofunction:: examples.distr.distr.inparser_adder
+
+.. autofunction:: distr.inparser_adder
 
 Contrary to the other helper functions, ``consensus_vars_creator`` is specific to admmWrapper.
 The function ``consensus_vars_creator`` creates the required ``consensus_vars`` dictionary.
 
-.. autofunction:: examples.distr.distr.consensus_vars_creator
+.. autofunction:: distr.consensus_vars_creator
 
 Understanding the driver
 ++++++++++++++++++++++++

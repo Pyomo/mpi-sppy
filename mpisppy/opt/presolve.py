@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 # This module defines a presolver, which is used like an extension to an
 # SPBase object. However, it may be useful for this presolver extension
@@ -20,6 +26,7 @@ from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
 
+_INF = 1e+100
 
 class _SPPresolver(abc.ABC):
     """Defines a presolver for distributed stochastic optimization problems
@@ -137,6 +144,10 @@ class SPIntervalTightener(_SPPresolver):
                                     print(
                                         f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
                                     )
+                            if np.isnan(lb):
+                                lb = None
+                            if np.isnan(ub):
+                                ub = None
                             var.bounds = (lb, ub)
 
             # Now do FBBT
@@ -369,7 +380,7 @@ def _lb_generator(var_iterable):
     for v in var_iterable:
         lb = v.lb
         if lb is None:
-            yield -np.inf
+            yield -_INF
         yield lb
 
 
@@ -377,7 +388,7 @@ def _ub_generator(var_iterable):
     for v in var_iterable:
         ub = v.ub
         if ub is None:
-            yield np.inf
+            yield _INF
         yield ub
 
 

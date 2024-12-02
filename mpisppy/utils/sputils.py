@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Base and utility functions for mpisppy
 # Note to developers: things called spcomm are way more than just a comm; SPCommunicator
 
@@ -7,17 +13,18 @@ import pyomo.environ as pyo
 import sys
 import os
 import re
-import time
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
+from pyomo.repn import generate_standard_repn
 
 from mpisppy import MPI, haveMPI
-global_rank = MPI.COMM_WORLD.Get_rank()
 from pyomo.core.expr.numeric_expr import LinearExpression
 from pyomo.opt import SolutionStatus, TerminationCondition
 
-from mpisppy import tt_timer, global_toc
+from mpisppy import tt_timer
+
+global_rank = MPI.COMM_WORLD.Get_rank()
 
 def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
@@ -70,7 +77,7 @@ def scenario_tree_solution_writer( directory_name, scenario_name, scenario, bund
                 active=True,
                 sort=True):
             var_name = var.name
-            if bundling:
+            if bundling:  # loose bundling
                 dot_index = var_name.find('.')
                 assert dot_index >= 0
                 var_name = var_name[(dot_index+1):]
@@ -99,7 +106,7 @@ def get_objs(scenario_instance, allow_none=False):
         raise RuntimeError(f"Scenario {scenario_instance.name} has no active "
                            "objective functions.")
     if (len(scenario_objs) > 1):
-        print("WARNING: Scenario", sname, "has multiple active "
+        print("WARNING: Scenario", scenario_instance.name, "has multiple active "
               "objectives. Selecting the first objective.")
     return scenario_objs
 
@@ -274,13 +281,13 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
         obj_func = scenario_objs[0] # Select the first objective
         try:
             EF_instance.EF_Obj.expr += scenario_instance._mpisppy_probability * obj_func.expr
-            EF_instance._mpisppy_probability   += scenario_instance._mpisppy_probability
+            EF_instance._mpisppy_probability += scenario_instance._mpisppy_probability
         except AttributeError as e:
             raise AttributeError("Scenario " + sname + " has no specified "
                         "probability. Specify a value for the attribute "
                         " _mpisppy_probability and try again.") from e
     # Normalization does nothing when solving the full EF, but is required for
-    # appropraite scaling of EFs used as bundles.
+    # appropriate scaling of EFs used as bundles.
     EF_instance.EF_Obj.expr /= EF_instance._mpisppy_probability
 
     # For each node in the scenario tree, we need to collect the
@@ -591,7 +598,7 @@ def option_string_to_dict(ostr):
             solver_options[option_key] = None
         else:
             raise RuntimeError("Illegally formed subsolve directive"\
-                               + " option=%s detected" % this_option)
+                               + " option=%s detected" % this_option_string)
     return solver_options
 
 
@@ -701,11 +708,11 @@ class _TreeNode():
         if len(desc_leaf_dict)==1 and list(desc_leaf_dict.keys()) == ['ROOT']: 
             #2-stage problem, we don't create leaf nodes
             self.kids = []
-        elif not name+"_0" in desc_leaf_dict:
+        elif name+"_0" not in desc_leaf_dict:
             self.is_leaf = True
             self.kids = []
         else:
-            if len(desc_leaf_dict) < numscens:                
+            if len(desc_leaf_dict) < numscens:  
                 raise RuntimeError(f"There are more scenarios ({numscens}) than remaining leaves, for the node {name}")
             # make children
             first = scenfirst
@@ -714,7 +721,7 @@ class _TreeNode():
             child_list = [x for x in desc_leaf_dict if child_regex.match(x) ]
             for i in range(len(desc_leaf_dict)):
                 childname = name+f"_{i}"
-                if not childname in desc_leaf_dict:
+                if childname not in desc_leaf_dict:
                     if len(child_list) != i:
                         raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
                                            f"The node {name} has {len(child_list)} children, but {childname} is not one of them.")
@@ -740,13 +747,13 @@ class _TreeNode():
         if self.is_leaf:
             return 1
         else:
-            l = [child.stage_max() for child in self.kids]
-            if l.count(l[0]) != len(l):
-                maxstage = max(l)+ self.stage
-                minstage = min(l)+ self.stage
+            leaves = [child.stage_max() for child in self.kids]
+            if leaves.count(leaves[0]) != len(leaves):
+                maxstage = max(leaves)+ self.stage
+                minstage = min(leaves)+ self.stage
                 raise RuntimeError("The all_nodenames argument is giving an inconsistent tree. "
                                    f"The node {self.name} has descendant leaves with stages going from {minstage} to {maxstage}")
-            return 1+l[0]
+            return 1+leaves[0]
             
                     
 
@@ -915,7 +922,7 @@ def check4losses(numscens, branching_factors,
         for s in scenlist:
             snum = int(s[8:])
             stagepresents[stagenum][snum] = True
-    missingone = False
+    missingsome = False
     for stage in stagepresents:
         for scen, there in enumerate(stagepresents[stage]):
             if not there:
@@ -935,16 +942,52 @@ def reenable_tictoc_output():
     tt_timer._ostream.close()
     tt_timer._ostream = sys.stdout
 
-    
+
 def find_active_objective(pyomomodel):
+    return find_objective(pyomomodel, active=True)
+
+
+def find_objective(pyomomodel, active=False):
     # return the only active objective or raise and error
     obj = list(pyomomodel.component_data_objects(
         Objective, active=True, descend_into=True))
-    if len(obj) != 1:
+    if len(obj) == 1:
+        return obj[0]
+    if active or len(obj) > 1:
         raise RuntimeError("Could not identify exactly one active "
                            "Objective for model '%s' (found %d objectives)"
                            % (pyomomodel.name, len(obj)))
-    return obj[0]
+    # search again for a single inactive objective
+    obj = list(pyomomodel.component_data_objects(
+        Objective, descend_into=True))
+    if len(obj) == 1:
+        return obj[0]
+    raise RuntimeError("Could not identify exactly one objective for model "
+                       f"{pyomomodel.name} (found {len(obj)} objectives)")
+
+
+def nonant_cost_coeffs(s):
+    """
+    return a dictionary from s._mpisppy_data.nonant_indices.keys()
+    to the objective cost coefficient
+    """
+    objective = find_objective(s)
+
+    # initialize to 0
+    cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
+    repn = generate_standard_repn(objective.expr, quadratic=False)
+    for coef, var in zip(repn.linear_coefs, repn.linear_vars):
+        if id(var) in s._mpisppy_data.varid_to_nonant_index:
+            cost_coefs[s._mpisppy_data.varid_to_nonant_index[id(var)]] = coef
+
+    for var in repn.nonlinear_vars:
+        if id(var) in s._mpisppy_data.varid_to_nonant_index:
+            raise RuntimeError(
+                "Found nonlinear variables in the objective function. "
+                f"Variable {var} has nonlinear interactions in the objective funtion"
+            )
+    return cost_coefs
+
 
 def create_nodenames_from_branching_factors(BFS):
     """

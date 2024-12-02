@@ -1,10 +1,17 @@
-import pyomo.environ as pe
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import farmer
-import mpisppy.utils.sputils as sputils
 from mpisppy.opt import ef, sc
 import logging
 from mpisppy import MPI
 import sys
+import pyomo.environ as pyo
 
 
 if MPI.COMM_WORLD.Get_rank() == 0:
@@ -30,6 +37,8 @@ def solve_with_extensive_form(scen_count):
                            scenario_creator=farmer.scenario_creator,
                            scenario_creator_kwargs=scenario_kwargs)
     results = opt.solve_extensive_form()
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
     opt.report_var_values_at_rank0()
     return opt
 
@@ -47,6 +56,7 @@ def solve_with_sc(scen_count, linear_solver=None):
                              scenario_creator=farmer.scenario_creator,
                              scenario_creator_kwargs=scenario_kwargs)
     results = opt.solve()
+    print(f"SchurComplement solver status: {results}")
     opt.report_var_values_at_rank0()
     return opt
 

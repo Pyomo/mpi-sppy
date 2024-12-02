@@ -1,4 +1,11 @@
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 ''' An extension to track the PH object (mpisppy.opt.ph.PH) during execution.
     Must use the PH object for this to work
 '''
@@ -9,6 +16,7 @@ import pandas as pd
 from mpisppy.extensions.extension import Extension
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 from mpisppy.cylinders.spoke import Spoke
+from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
 
 class TrackedData():
     ''' A class to manage the data for a single variable (e.g. gaps, bounds, etc.)
@@ -31,8 +39,10 @@ class TrackedData():
         name = name[:-4] if name.endswith('.csv') else name
 
         self.fname = os.path.join(self.folder, f'{name}.csv')
-        if self.plot:
-            self.plot_fname = os.path.join(self.folder, f'{name}.png')
+        # LRL: Encountered a bug where plot = False, but plots where still generated,
+        # leading to error where plot_fname is None. So, always setting it here.
+        #if self.plot:
+        self.plot_fname = os.path.join(self.folder, f'{name}.png')
 
     def initialize_df(self, columns):
         """ Initialize the dataframe for saving the data and write out the column names
@@ -112,7 +122,9 @@ class PHTracker(Extension):
             'xbars': {'track': self.add_xbars,
                       'finalize': self.plot_xbars_bounds_gaps},
             'scen_gaps': {'track': self.add_scen_gaps,
-                          'finalize': self.plot_nonants_sgaps_duals}
+                          'finalize': self.plot_nonants_sgaps_duals},
+            'reduced_costs': {'track': self.add_rc,
+                              'finalize': self.plot_rc}
         }
 
         # will initialize these after spcomm is initialized
@@ -129,7 +141,7 @@ class PHTracker(Extension):
         cylinder_name = self.tracker_options.get(
             "cylinder_name", type(self.spcomm).__name__)
         self.cylinder_folder = os.path.join(self.results_folder, cylinder_name)
-        track_types = ['gaps', 'bounds', 'nonants', 'duals', 'xbars', 'scen_gaps']
+        track_types = ['gaps', 'bounds', 'nonants', 'duals', 'xbars', 'scen_gaps', 'reduced_costs']
 
         self.track_dict = {}
         for t in track_types:
@@ -224,6 +236,8 @@ class PHTracker(Extension):
             df_columns = self.get_var_names(xbar=True)
         elif track_var == 'scen_gaps':
             df_columns = self.get_scen_colnames()
+        elif track_var == 'reduced_costs':
+            df_columns = self.get_var_names(xbar=True)
         else:
             raise RuntimeError("track_var not recognized")
 
@@ -253,7 +267,10 @@ class PHTracker(Extension):
         if gather:
             comm = self.opt.comms['ROOT']
             data = comm.gather(data, root=0)
-            data = data[0]
+
+            # LRL: Bugfix to only get gathered data on rank 0.
+            if self._rank == 0:
+                data = data[0]
 
         if isinstance(data, dict):
             data['iteration'] = self.curr_iter
@@ -275,6 +292,12 @@ class PHTracker(Extension):
             hub_inner_bound = self.spcomm.BestInnerBound
             hub_outer_bound = self.spcomm.BestOuterBound
         return hub_outer_bound, hub_inner_bound, spoke_bound
+    
+    def _get_rc(self):
+        if not isinstance(self.spcomm, ReducedCostsSpoke):
+            return None
+        reduced_costs = self.spcomm.rc
+        return reduced_costs
 
     def _ob_ib_process(self, ob, ib):
         """ process the outer and inner bounds
@@ -382,6 +405,24 @@ class PHTracker(Extension):
                     nonants[(k, var.name)] = var.value
 
         self._add_data_and_write('nonants', nonants, gather=True, final=final)
+
+    def add_rc(self, final=False):
+        """ add iteration reduced costs to rpw
+        """
+        if self._rank != 0:
+            return
+
+        reduced_costs = self._get_rc()
+
+        if reduced_costs is None:
+            return
+        rc = {}
+        sname = list(self.opt.local_scenarios.keys())[0]
+        s = self.opt.local_scenarios[sname]
+        rc = {xvar.name: reduced_costs[ci]
+                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items())}
+
+        self._add_data_and_write('reduced_costs', rc, gather=False, final=final)
 
     def add_duals(self, final=False):
         """ add iteration duals to rpw
@@ -498,6 +539,32 @@ class PHTracker(Extension):
         plt.ylabel(f'{var.capitalize()} values')
         plt.title(f'{var.capitalize()} Over Iterations')
         plt.legend()
+        plt.grid(True)
+        plt.savefig(self.track_dict[var].plot_fname)
+        plt.close()
+
+    def plot_rc(self, var):
+        if self._rank != 0:
+            return
+
+        if var not in ['reduced_costs']:
+            raise RuntimeError('var must be reduced_costs')
+
+        df = pd.read_csv(self.track_dict[var].fname, sep=',')
+        df = df.replace([np.inf, -np.inf], np.nan)
+        #df.dropna(inplace=True)
+
+        plt.figure(figsize=(10, 6))  # Adjust the figure size as needed
+        column_names = df.columns[1:]
+
+        for col in column_names:
+            if not np.isnan(df[col]).all():
+                plt.plot(df['iteration'], df[col], label=col.capitalize())
+
+        plt.xlabel('Iteration')
+        plt.ylabel(f'{var.capitalize()} values')
+        plt.title(f'{var.capitalize()} Over Iterations')
+        plt.legend(bbox_to_anchor=(1, 1))
         plt.grid(True)
         plt.savefig(self.track_dict[var].plot_fname)
         plt.close()

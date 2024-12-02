@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Run a few examples; dlw June 2020
 # See also runall.py
 # Assumes you run from the examples directory.
@@ -41,20 +47,12 @@ def do_one(dirname, progname, np, argstring):
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_cylinders.py", 3,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 --display-convergence-detail "
+       "--default-rho=1 --sep-rho --display-convergence-detail "
        "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        " --xhatlshaped --max-solver-threads=1".format(solver_name))
-do_one("sizes",
-       "sizes_cylinders.py",
-       4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
-       " --xhatshuffle --lagrangian --fwph "
-       "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
-
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "

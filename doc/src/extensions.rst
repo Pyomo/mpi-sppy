@@ -74,6 +74,14 @@ in ``examples.sizes.uc_ama.py``. The ``uc_ama`` example illustrates
 that when ``amgalgamator`` is used ``"id_fix_list_fct"`` needs
 to be on the ``Config`` object so the amalgamator can find it.
 
+.. note::
+
+   For the iteration zero fixer tuples, the iteration counts are just
+   compared with None. If you provide a count for iteration zero, the
+   variable will be fixed if it is within the tolerance of being converged.
+   So if you don't want to fix a variable at iteration zero, provide a
+   tolerance, but set all count values to ``None``.
+
 xhat
 ^^^^
 
@@ -108,6 +116,23 @@ constructor or in the hub dictionary under ``opt_kwargs`` as the
 
 There is an example of the function in the sizes example (``_rho_setter``).
 
+SepRho
+^^^^^^
+
+Set per variable rho values using the "SEP" algorithm from
+
+Progressive hedging innovations for a class of stochastic mixed-integer resource allocation problems
+Jean-Paul Watson, David L. Woodruff, Compu Management Science, 2011
+DOI 10.1007/s10287-010-0125-4
+
+One can additional specify a multiplier on the computed value (default = 1.0).
+If the cost coefficient on a non-anticipative variable is 0, the default rho value is used instead.
+
+CoeffRho
+^^^^^^^^
+
+Set per variable rho values proportional to the cost coefficient on each non-anticipative variable,
+with an optional multiplier (default = 1.0). If the coefficient is 0, the default rho value is used instead.
 
 wtracker_extension
 ^^^^^^^^^^^^^^^^^^
@@ -153,6 +178,9 @@ In its current state, the user might opt-in to presolve for two reasons:
 
 2. For problems where a "fixer" extension or spoke is used, determining tight bounds on the
    non-anticipative variables may improve the fixer's performance.
+
+.. Note::
+   Like many solvers, the presolver will convert infinite bounds to 1e+100.
 
 .. Note::
    This capability requires the auto-persistent pyomo solver interface (APPSI) extensions

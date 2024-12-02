@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 ''' A template for creating PH_extension.py files
     NOTE: we pass in the ph object, so extensions can wreck everything
     if they want to!
@@ -87,10 +93,15 @@ class Extension:
         pass
 
     def pre_iter0(self):
-        ''' Method called at the end of PH_Prep().
-            When this method is called, all scenarios have been created, and
+        ''' When this method is called, all scenarios have been created, and
             the dual/prox terms have been attached to the objective, but the
             solvers have not yet been created.
+        '''
+        pass
+
+    def iter0_post_solver_creation(self):
+        ''' When this method is called, PH iteration 0 has been initiated and 
+            all solver objects have been created.
         '''
         pass
 
@@ -185,6 +196,10 @@ class MultiExtension(Extension):
     def pre_iter0(self):
         for lobject in self.extdict.values():
             lobject.pre_iter0()
+
+    def iter0_post_solver_creation(self):
+        for lobject in self.extdict.values():
+            lobject.iter0_post_solver_creation()        
 
     def post_iter0(self):
         for lobject in self.extdict.values():

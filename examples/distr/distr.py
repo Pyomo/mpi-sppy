@@ -1,6 +1,13 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Network Flow - various formulations
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import distr_data
 import time
 
@@ -44,7 +51,7 @@ def inter_arcs_adder(region_dict, inter_region_dict):
     return local_dict
 
 ###Creates the model when local_dict is given
-def min_cost_distr_problem(local_dict, sense=pyo.minimize):
+def min_cost_distr_problem(local_dict, cfg, sense=pyo.minimize, max_revenue=None):
     """ Create an arcs formulation of network flow
 
     Args:
@@ -75,17 +82,31 @@ def min_cost_distr_problem(local_dict, sense=pyo.minimize):
         elif n in local_dict["buyer nodes"]:
             return (local_dict["supply"][n], 0)
         elif n in local_dict["distribution center nodes"]:
-            return (0,0)
+            if cfg.ensure_xhat_feas:
+                # Should be (0,0) but to avoid infeasibility we add a negative slack variable
+                return (None, 0)
+            else:
+                return (0,0)
         else:
             raise ValueError(f"unknown node type for node {n}")
         
     model.y = pyo.Var(local_dict["nodes"], bounds=slackBounds_rule)
 
-    model.MinCost = pyo.Objective(expr=\
+    if cfg.ensure_xhat_feas:
+        # too big penalty to allow the stack to be non-zero
+        model.MinCost = pyo.Objective(expr=\
                     sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
                     + sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]) \
-                    + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) ,
+                    + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) \
+                    + sum(2*max_revenue*(-model.y[n]) for n in local_dict["distribution center nodes"]) ,
                       sense=sense)
+    
+    else:
+        model.MinCost = pyo.Objective(expr=\
+                        sum(local_dict["flow costs"][a]*model.flow[a] for a in local_dict["arcs"]) \
+                        + sum(local_dict["production costs"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["factory nodes"]) \
+                        + sum(local_dict["revenues"][n]*(local_dict["supply"][n]-model.y[n]) for n in local_dict["buyer nodes"]) ,
+                        sense=sense)
     
     def FlowBalance_rule(m, n):
         return sum(m.flow[a] for a in arcsout[n])\
@@ -122,7 +143,7 @@ def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_param
     # Adding inter region arcs nodes and associated features
     local_dict = inter_arcs_adder(region_dict, inter_region_dict)
     # Generating the model
-    model = min_cost_distr_problem(local_dict)
+    model = min_cost_distr_problem(local_dict, cfg, max_revenue=data_params["max revenue"])
 
     #varlist = list()
     #sputils.attach_root_node(model, model.MinCost, varlist)    
@@ -132,14 +153,20 @@ def scenario_creator(scenario_name, inter_region_dict=None, cfg=None, data_param
 
 ###Functions required in other files, which constructions are specific to the problem
 
-def scenario_denouement(rank, scenario_name, scenario):
+def scenario_denouement(rank, scenario_name, scenario, eps=10**(-6)):
     """for each scenario prints its name and the final variable values
 
     Args:
         rank (int): not used here, but could be helpful to know the location
         scenario_name (str): name of the scenario
         scenario (Pyomo ConcreteModel): the instantiated model
+        eps (float, opt): ensures that the dummy slack variables introduced have small values
     """
+    for var in scenario.y:
+        if 'DC' in var:
+            if (abs(scenario.y[var].value) > eps):
+                print(f"The penalty slack {scenario.y[var].name} is too big, its absolute value is {abs(scenario.y[var].value)}")
+    return
     print(f"flow values for {scenario_name}")
     scenario.flow.pprint()
     print(f"slack values for {scenario_name}")
@@ -165,15 +192,15 @@ def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
         region_source,node_source = source
         region_target,node_target = target
         arc = node_source, node_target
-        vstr = f"flow[{arc}]" #variable name as string, y is the slack
+        vstr = f"flow[{arc}]" #variable name as string
 
         #adds inter region arcs in the source region
-        if not region_source in consensus_vars: #initiates consensus_vars[region_source]
+        if region_source not in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
         consensus_vars[region_source].append(vstr)
 
         #adds inter region arcs in the target region
-        if not region_target in consensus_vars: #initiates consensus_vars[region_target]
+        if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append(vstr)
     for region in all_scenario_names:
@@ -225,3 +252,8 @@ def inparser_adder(cfg):
                       description="max number of nodes per region and per type",
                       domain=int,
                       default=4)
+    
+    cfg.add_to_config("ensure_xhat_feas",
+                      description="adds slacks with high costs to ensure the feasibility of xhat yet maintaining the optimal",
+                      domain=bool,
+                      default=False)

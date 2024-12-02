@@ -1,9 +1,14 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import numpy as np
 import abc
 import logging
-import time
 import mpisppy.log
 from mpisppy.opt.aph import APH
 
@@ -168,7 +173,7 @@ class Hub(SPCommunicator):
 
         if self.global_rank == 0:
             self.print_init = True
-            global_toc(f"Statistics at termination", True)
+            global_toc("Statistics at termination", True)
             self.screen_trace()
 
     def receive_innerbounds(self):
@@ -464,6 +469,11 @@ class PHHub(Hub):
                 "Cannot call setup_hub before memory windows are constructed"
             )
 
+        # attribute to set False if some extension
+        # modified the iteration 0 subproblems such
+        # that the trivial bound is no longer valid
+        self.use_trivial_bound = True
+
         self.initialize_spoke_indices()
         self.initialize_bound_values()
 
@@ -526,7 +536,7 @@ class PHHub(Hub):
 
     def is_converged(self):
         ## might as well get a bound, in this case
-        if self.opt._PHIter == 1:
+        if self.opt._PHIter == 1 and self.use_trivial_bound:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
 
         if not self.has_innerbound_spokes:
