@@ -95,6 +95,7 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
                 logging.debug('  and its new! on global rank {}'.\
                               format(global_rank))
                 logging.debug('  localnonants={}'.format(str(self.localnonants)))
+                self.opt._restore_original_fixedness()
                 self.opt._put_nonant_cache(self.localnonants)  # don't really need all caches
                 self.opt._restore_nonants()
                 innerbound = xhatter.xhat_tryit(restore_nonants=False)

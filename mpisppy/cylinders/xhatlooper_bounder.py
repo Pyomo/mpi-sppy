@@ -72,6 +72,7 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   *got a new one! on rank {self.global_rank}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
+                self.opt._restore_original_fixedness()
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
                 upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=False)

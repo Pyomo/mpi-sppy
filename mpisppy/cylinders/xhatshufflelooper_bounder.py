@@ -138,6 +138,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
                 # update the caches
+                self.opt._restore_original_fixedness()
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
                 

@@ -433,6 +433,18 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-2)
 
+    def integer_relax_then_enforce_args(self):
+        self.add_to_config('integer_relax_then_enforce',
+                           description="have an integer relax then enforce extensions",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('integer_relax_then_enforce_ratio',
+                           description="fraction of time limit or iterations (whichever is sooner) "
+                                       "to spend with relaxed integers",
+                           domain=float,
+                           default=0.5)
+
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
                            description="have a ReducedCostsRho extension",
