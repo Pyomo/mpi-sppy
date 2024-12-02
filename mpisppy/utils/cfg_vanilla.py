@@ -57,6 +57,7 @@ def shared_options(cfg):
         "defaultPHrho": cfg.default_rho,
         "convthresh": 0,
         "PHIterLimit": cfg.max_iterations,  # not needed by all
+        "time_limit": cfg.time_limit,  # not needed by all
         "verbose": cfg.verbose,
         "display_progress": cfg.display_progress,
         "display_convergence_detail": cfg.display_convergence_detail,
