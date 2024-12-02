@@ -28,6 +28,7 @@ class ReducedCostsFixer(Extension):
         # will be considered 0
         self.zero_rc_tol = rc_options['zero_rc_tol']
         self._use_rc_fixer = rc_options['use_rc_fixer']
+        self._rc_fixer_require_improving_lagrangian = rc_options.get('rc_fixer_require_improving_lagrangian', True)
         # Percentage of variables which are at the bound we will target
         # to fix. We never fix varibles with reduced costs less than
         # the `zero_rc_tol` in absolute value
@@ -51,9 +52,21 @@ class ReducedCostsFixer(Extension):
 
         self._last_serial_number = -1
         self._heuristic_fixed_vars = 0
+        if spobj.is_minimizing:
+            self._best_outer_bound = -float("inf")
+            self._outer_bound_update = lambda new, old : (new > old)
+        else:
+            self._best_outer_bound = float("inf")
+            self._outer_bound_update = lambda new, old : (new < old)
 
     def _get_serial_number(self):
         return int(round(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index][-1]))
+
+    def _update_best_outer_bound(self, new_outer_bound):
+        if self._outer_bound_update(new_outer_bound, self._best_outer_bound):
+            self._best_outer_bound = new_outer_bound
+            return True
+        return False
 
     def pre_iter0(self):
         self._modeler_fixed_nonants = set()
@@ -96,10 +109,12 @@ class ReducedCostsFixer(Extension):
             self._last_serial_number = serial_number
             reduced_costs = spcomm.outerbound_receive_buffers[idx][1:1+self.nonant_length]
             this_outer_bound = spcomm.outerbound_receive_buffers[idx][0]
+            new_outer_bound = self._update_best_outer_bound(this_outer_bound)
             if not pre_iter0 and self._use_rc_bt:
                 self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
             if self._use_rc_fixer and self.fix_fraction_target > 0.0:
-                self.reduced_costs_fixing(reduced_costs)
+                if new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
+                    self.reduced_costs_fixing(reduced_costs)
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
