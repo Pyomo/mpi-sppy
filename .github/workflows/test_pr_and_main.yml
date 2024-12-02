@@ -167,7 +167,7 @@ jobs:
     needs: [ruff]
     strategy:
       matrix:
-        python-version: [3.9, 3.11]
+        python-version: [3.9, '3.10']
     steps:
     - uses: actions/checkout@v1
     - name: setup conda
