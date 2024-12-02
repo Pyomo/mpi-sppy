@@ -14,7 +14,8 @@ in a ``Config`` object) is often set to a negative number so internal
 convergence is ignored in favor of the threshhold on the gap between
 upper and lower bounds as computed by the spokes (``rel_gap`` and
 ``abs_gap`` in ``Config`` object).  Most hubs can be terminated
-based on an iteration limit (``max_iterations`` in a ``Config`` object).
+based on an iteration limit (``max_iterations`` in a ``Config`` object),
+or a time limit in seconds (``time_limit`` in a ``Config`` object).
 
 An additional gap-based termination option is supported by
 ``Config`` and ``cfg_vanilla.py``: ``max_stalled_iters``

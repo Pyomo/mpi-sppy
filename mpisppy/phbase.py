@@ -821,6 +821,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Smoothed is optional, not required
         if "smoothed" not in self.options:
             self.options["smoothed"] = 0
+        # time_limit is optional, not required
+        if "time_limit" not in self.options:
+            self.options["time_limit"] = None
 
 
     def Iter0(self):
@@ -1001,9 +1004,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if self.convobject.is_converged():
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
-            elif self.conv is not None:
+            if self.conv is not None:
                 if self.conv < self.options["convthresh"]:
                     global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
+                    break
+            if self.options["time_limit"] is not None:
+                time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+                if time_to_stop:
+                    global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
                     break
 
             teeme = (

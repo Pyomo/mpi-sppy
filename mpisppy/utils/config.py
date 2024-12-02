@@ -173,9 +173,14 @@ class Config(pyofig.ConfigDict):
 
     def popular_args(self):
         self.add_to_config("max_iterations",
-                            description="hub max iiterations (default 1)",
+                            description="hub max iterations (default 1)",
                             domain=int,
                             default=1)
+
+        self.add_to_config("time_limit",
+                            description="hub time limit in seconds (default None)",
+                            domain=int,
+                            default=None)
 
         self.add_solver_specs(prefix="")
 
