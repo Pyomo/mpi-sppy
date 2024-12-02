@@ -553,6 +553,12 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         
+        self.add_to_config('rc_fixer_require_improving_lagrangian',
+                            description="Only consider fixing / unfixing variables after the lagrangian "
+                                        "bound computed by the reduced cost spoke has improved. (default True)",
+                            domain=bool,
+                            default=True)
+
         self.add_to_config('rc_zero_tol',
                             description="vars with rc below tol will never be fixed",
                             domain=float,

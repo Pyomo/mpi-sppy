@@ -244,6 +244,7 @@ def add_reduced_costs_fixer(hub_dict,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "use_rc_bt": cfg.rc_bound_tightening,
             "rc_bound_tol": cfg.rc_bound_tol,
+            "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
         }
 
     return hub_dict
