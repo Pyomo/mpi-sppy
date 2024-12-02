@@ -115,7 +115,7 @@ class _ProxApproxManager:
             num_cuts += self.add_cut(x_val + sign*10*step, tolerance, persistent_solver)
             return num_cuts
         # no upper bound, or weak upper bound
-        if min_approx_error_pnt is None or (min_approx_error_pnt > 10*cost_pnt and cost_pnt > tolerance):
+        if min_approx_error_pnt is None or (cost_pnt is not None and min_approx_error_pnt > 10*cost_pnt and cost_pnt > tolerance):
             num_cuts += self.add_cut(x_val + sign*cost_pnt, tolerance, persistent_solver)
             num_cuts += self.add_cut(x_val + sign*10*cost_pnt, tolerance, persistent_solver)
             return num_cuts
