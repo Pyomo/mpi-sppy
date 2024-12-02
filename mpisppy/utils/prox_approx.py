@@ -130,11 +130,11 @@ class _ProxApproxManager:
             return num_cuts
         # cost_pnt and min_approx_error_pnt exist, and cost_pnt <= min_approx_error_pnt
         # and (min_approx_error_pnt <= 10*cost_pnt **or** cost_pnt <= tolerance)
-        if cost_pnt < min_approx_error_pnt / 2.0:
+        if cost_pnt < min_approx_error_pnt / 2.0 and cost_pnt > tolerance:
             num_cuts += self.add_cut(x_val + sign*cost_pnt, tolerance, persistent_solver)
             num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt, tolerance, persistent_solver)
             return num_cuts
-        # min_approx_error_pnt / 2.0 <= cost_pnt <= min_approx_error_pnt
+        # min_approx_error_pnt / 2.0 <= cost_pnt <= min_approx_error_pnt or cost_pnt <= tolerance
         num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt/2.0, tolerance, persistent_solver)
         num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt, tolerance, persistent_solver)
         return num_cuts
