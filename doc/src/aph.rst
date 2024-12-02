@@ -4,7 +4,7 @@ APH
 ===
 
 The code is based on "Algorithm 2: Asynchronous projective hedging
-(APH) -- Algorithm 1 specialize to the setup S1-S4" from "Asynchronous
+(APH) -- Algorithm 1 specialized to the setup S1-S4" from "Asynchronous
 Projective Hedging for Stochastic Programming"
 http://www.optimization-online.org/DB_HTML/2018/10/6895.html
 
@@ -100,7 +100,7 @@ farmer
 ^^^^^^
 
 The scripts for this example are currently in the paper repo in
-`AsyncPH/experiments/challange/farmer`; the driver is
+`AsyncPH/experiments/challenge/farmer`; the driver is
 `farmer_driver.py`.  The driver references the model, which is in the
 `mpi-sppy` repo.  The `aph05.bash` script is intended
 to have a dispatch fraction of 1/2 (hence the 05 for 0.5 in the name).
@@ -119,7 +119,7 @@ A Peek Under the Hood
 
 The APH implementation has a listener thread that continuously does
 MPI reductions and a worker thread that does most of the work. A wrinkle
-is that the listenter thread does a `side gig` if enough ranks have reported
+is that the listener thread does a `side gig` if enough ranks have reported
 (the "async_frac_needed" option) because after it has
 done the reductions to get u and v and needs to do some calculations, and
 then reductions to compute tau and theta.
