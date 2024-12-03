@@ -5,7 +5,7 @@
 
 This function instantiates models for scenarios and usually attaches
 some information about the scenario tree. It is required, but can have
-any name, and its first argment must be the scenario name. The other
+any name, and its first argument must be the scenario name. The other
 two arguments are optional. The `scenario_creator_kwargs` option specifies data that is
 passed through from the calling program.
 `scenario_creator_kwargs` must be a dictionary, and might give, e.g., a data
@@ -51,7 +51,7 @@ illustrated in the netdes example:
 
 ::
    
-   # Add all index of model.x using wild cards
+   # Add all indexes of model.x using wild cards
    sputils.attach_root_node(model, model.FirstStageCost, [model.x[:,:], ])
 
 Scenario Probability
@@ -70,13 +70,13 @@ The function ``attach_root_node`` takes an optional argument ``nonant_ef_suppl_l
 multipliers by algorithms such as PH, but will be given non-anticipativity
 constraints when an EF is formed, either to solve the EF or when bundles are
 formed. For some problems, with the appropriate solver, adding redundant nonanticipativity constraints
-for auxilliary variables to the bundle/EF will result in a (much) smaller pre-solved model.
+for auxiliary variables to the bundle/EF will result in a (much) smaller pre-solved model.
 
 Multi-stage
 -----------
 
 When there are scenario tree nodes other than root, their names,
-although strings, must indicates their position in the tree, 
+although strings, must indicate their position in the tree, 
 like "ROOT_3_0_1". A given non-root node, which is the child number `k` of
 a node with name `parentname`, should be named `parentname_k`.
 The node constructor, ``scenario_tree.ScenarioNode`` takes as
