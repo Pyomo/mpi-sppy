@@ -31,10 +31,13 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         scenario_creator (callable):
             Scenario creator function, which takes as input a scenario
             name, and returns a Pyomo model of that scenario.
+        scenario_creator_kwargs (dict, optional):
+            Keyword arguments passed to `scenario_creator`.
+        all_nodenames (list, optional):
+            List of all node names, incl. leaves. Can be None for two-stage
+            problem.
         model_name (str, optional):
             Name of the resulting EF model object.
-        scenario_creator_kwargs (dict):
-            Keyword args passed to `scenario_creator`.
         suppress_warnings (bool, optional):
             Boolean to suppress warnings when building the EF. Default
             is False.
