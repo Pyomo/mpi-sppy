@@ -88,6 +88,21 @@ xhat
 Most of the xhat methods can be used as an extension instead of being used
 as a spoke, when that is desired (e.g. for serial applications).
 
+integer_relax_then_enforce
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This extension is for problems with integer variables. The scenario subproblems
+have the integrality restrictions initially relaxed, and then at a later point
+the subproblem integrality restrictions are re-enabled. The parameter ``ratio``
+(default = 0.5) controls how much of the progressive hedging algorithm, either
+in the iteration or time limit, is used for relaxed progressive hedging iterations.
+The extension will also re-enforce the integrality restrictions if the convergence
+threshold is within 10\%  of the convergence tolerance.
+
+This extension can be especially effective if (1) solving the relaxation
+is much easier than solving the problem with integrality constraints or (2) the
+relaxation is reasonably "tight".
+
 WXBarWriter and WXBarReader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
 

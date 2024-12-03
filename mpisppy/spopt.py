@@ -59,6 +59,7 @@ class SPOpt(SPBase):
         self._subproblem_creation(options.get("verbose", False))
         if options.get("presolve", False):
             self._presolver = SPPresolve(self)
+            self._presolver.presolve()
         else:
             self._presolver = None
         self.current_solver_options = None
@@ -672,7 +673,7 @@ class SPOpt(SPBase):
 
 
 
-    def _restore_nonants(self):
+    def _restore_nonants(self, update_persistent=True):
         """ Restore nonanticipative variables to their original values.
 
         This function works in conjunction with _save_nonants.
@@ -688,7 +689,7 @@ class SPOpt(SPBase):
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
-            if (sputils.is_persistent(s._solver_plugin)):
+            if (update_persistent and sputils.is_persistent(s._solver_plugin)):
                 persistent_solver = s._solver_plugin
 
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
@@ -874,9 +875,6 @@ class SPOpt(SPBase):
 
 
     def _create_solvers(self, presolve=True):
-
-        if self._presolver is not None and presolve:
-            self._presolver.presolve()
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
         local_sit = [] # Local set instance time for time tracking

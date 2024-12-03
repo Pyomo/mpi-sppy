@@ -33,6 +33,7 @@ def _parse_args():
     cfg.subgradient_args()
     cfg.reduced_costs_args()
     cfg.coeff_rho_args()
+    cfg.integer_relax_then_enforce_args()
     cfg.parse_command_line("sslp_cylinders")
     return cfg
 
@@ -90,6 +91,9 @@ def main():
 
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
+
+    if cfg.integer_relax_then_enforce:
+        vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
     # FWPH spoke
     if fwph:
