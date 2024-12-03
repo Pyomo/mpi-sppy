@@ -714,6 +714,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False, bounds=(0, None))
                 scenario._mpisppy_model.xsqvar_cuts = pyo.Constraint(scenario._mpisppy_data.nonant_indices, pyo.Integers)
                 scenario._mpisppy_data.xsqvar_prox_approx = {}
+                try:
+                    scenario._mpisppy_data.nonant_cost_coeffs = sputils.nonant_cost_coeffs(scenario)
+                except sputils.NonLinearProblemFound:
+                    raise RuntimeError("The proximal term approximation can only be used with a linear objective function")
             else:
                 scenario._mpisppy_model.xsqvar = None
                 scenario._mpisppy_data.xsqvar_prox_approx = False
@@ -739,7 +743,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     elif self._prox_approx:
                         xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
                         scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(scenario._mpisppy_model, xvar, ndn_i)
+                                ProxApproxManager(scenario, xvar, ndn_i)
                     else:
                         xvarsqrd = xvar**2
                     prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
