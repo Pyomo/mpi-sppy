@@ -8,6 +8,7 @@
 ###############################################################################
 import time
 import logging
+import math
 
 import numpy as np
 import mpisppy.MPI as MPI
@@ -703,6 +704,10 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
+            # The proximal approximation code now checks the tolerance based on the x-coordinates
+            # as opposed to the y-coordinates. Therefore, we will use the square root of the
+            # y-coordinate tolerance.
+            self.prox_approx_tol = math.sqrt(self.prox_approx_tol)
         else:
             self._prox_approx = False
 
@@ -748,7 +753,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     elif self._prox_approx:
                         xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
                         scenario._mpisppy_data.xsqvar_prox_approx[ndn_i] = \
-                                ProxApproxManager(xvar, xvarsqrd, xbars[ndn_i], scenario._mpisppy_model.xsqvar_cuts, ndn_i)
+                                ProxApproxManager(scenario._mpisppy_model, xvar, ndn_i)
                     else:
                         xvarsqrd = xvar**2
                     prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
@@ -840,6 +845,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Smoothed is optional, not required
         if "smoothed" not in self.options:
             self.options["smoothed"] = 0
+        # time_limit is optional, not required
+        if "time_limit" not in self.options:
+            self.options["time_limit"] = None
 
 
     def Iter0(self):
@@ -1020,9 +1028,14 @@ class PHBase(mpisppy.spopt.SPOpt):
                 if self.convobject.is_converged():
                     global_toc("User-supplied converger determined termination criterion reached", self.cylinder_rank == 0)
                     break
-            elif self.conv is not None:
+            if self.conv is not None:
                 if self.conv < self.options["convthresh"]:
                     global_toc("Convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]), self.cylinder_rank == 0)
+                    break
+            if self.options["time_limit"] is not None:
+                time_to_stop = self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
+                if time_to_stop:
+                    global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
                     break
 
             teeme = (
