@@ -1,9 +1,14 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import datetime
 import logging
 import sys
-import os
 import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
@@ -16,7 +21,7 @@ from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 # extensions for the hub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
-from mpisppy.cylinders.cross_scen_hub import CrossScenarioHub
+from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.opt.lshaped import LShapedMethod
 
@@ -62,7 +67,7 @@ if __name__ == "__main__":
         ScenCount = int(sys.argv[1])
         bundles_per_rank = int(sys.argv[2])
         PHIterLimit = int(sys.argv[3])
-    except:
+    except Exception:
         _usage()
     if sys.argv[4] == "fixer":
         usefixer = True
@@ -112,7 +117,7 @@ if __name__ == "__main__":
         },
         "cross_scen_options":{"valid_eta_bound": {i:0 for i in all_scenario_names}},
     }
-    if usefixer == True:
+    if usefixer:
         multi_ext = {"ext_classes": [Fixer, Gapper]}
     else:
         multi_ext = {"ext_classes": [Gapper]}
@@ -121,7 +126,7 @@ if __name__ == "__main__":
 
     # PH hub
     hub_dict = {
-        "hub_class": CrossScenarioHub,
+        "hub_class": PHHub,
         "hub_kwargs": dict(),
         "opt_class": PH,
         "opt_kwargs": {

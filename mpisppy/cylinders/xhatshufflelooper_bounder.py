@@ -1,11 +1,14 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
-import os
-import time
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import logging
 import random
 import mpisppy.log
-import mpisppy.utils.sputils as sputils
 import mpisppy.cylinders.spoke as spoke
 
 from mpisppy.utils.xhat_eval import Xhat_Eval
@@ -23,7 +26,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
     def xhatbase_prep(self):
 
-        verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
@@ -86,7 +88,6 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         return update
 
     def main(self):
-        verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
         self.xhatbase_prep()
@@ -139,6 +140,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 # update the caches
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
+                
+                scenario_cycler.begin_epoch()
 
             next_scendict = scenario_cycler.get_next()
             if next_scendict is not None:
@@ -146,9 +149,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 update = self.try_scenario_dict(next_scendict)
                 if update:
                     _vb(f"   Updating best to {next_scendict}")
-                    scenario_cycler.best = next_scendict
-            else:
-                scenario_cycler.begin_epoch()
+                    scenario_cycler.best = next_scendict["ROOT"]
 
             #_vb(f"    scenario_cycler._scenarios_this_epoch {scenario_cycler._scenarios_this_epoch}")
 
@@ -174,9 +175,10 @@ class ScenarioCycler:
         self._shuffled_scenarios = shuffled_scenarios
         self._num_scenarios = len(shuffled_scenarios)
         
+        self._cycle_idx = 0
+        self._best = None
         self._begin_normal_epoch()
         
-        self._best = None
 
     @property
     def best(self):
@@ -249,8 +251,7 @@ class ScenarioCycler:
             self._reversed = False
         self._shuffled_snames = [s[1] for s in self._shuffled_scenarios]
         self._original_order = [s[0] for s in self._shuffled_scenarios]
-        self._cycle_idx = 0
-        self._cur_ROOTscen = self._shuffled_snames[0]
+        self._cur_ROOTscen = self._shuffled_snames[0] if self.best is None else self.best
         self.create_nodescen_dict()
         
         self._scenarios_this_epoch = set()
@@ -259,8 +260,7 @@ class ScenarioCycler:
         self._reversed = True
         self._shuffled_snames = [s[1] for s in reversed(self._shuffled_scenarios)]
         self._original_order = [s[0] for s in reversed(self._shuffled_scenarios)]
-        self._cycle_idx = 0
-        self._cur_ROOTscen = self._shuffled_snames[0]
+        self._cur_ROOTscen = self._shuffled_snames[0] if self.best is None else self.best
         self.create_nodescen_dict()
         
         self._scenarios_this_epoch = set()

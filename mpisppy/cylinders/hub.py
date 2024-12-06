@@ -1,14 +1,19 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import numpy as np
 import abc
 import logging
-import time
 import mpisppy.log
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spcommunicator import SPCommunicator, communicator_array
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
@@ -168,7 +173,7 @@ class Hub(SPCommunicator):
 
         if self.global_rank == 0:
             self.print_init = True
-            global_toc(f"Statistics at termination", True)
+            global_toc("Statistics at termination", True)
             self.screen_trace()
 
     def receive_innerbounds(self):
@@ -242,8 +247,8 @@ class Hub(SPCommunicator):
         """
         self.outerbound_receive_buffers = dict()
         for idx in self.outerbound_spoke_indices:
-            self.outerbound_receive_buffers[idx] = np.zeros(
-                self.remote_lengths[idx - 1] + 1
+            self.outerbound_receive_buffers[idx] = communicator_array(
+                self.remote_lengths[idx - 1]
             )
 
     def initialize_inner_bound_buffers(self):
@@ -251,8 +256,8 @@ class Hub(SPCommunicator):
         """
         self.innerbound_receive_buffers = dict()
         for idx in self.innerbound_spoke_indices:
-            self.innerbound_receive_buffers[idx] = np.zeros(
-                self.remote_lengths[idx - 1] + 1
+            self.innerbound_receive_buffers[idx] = communicator_array(
+                self.remote_lengths[idx - 1]
             )
 
     def initialize_nonants(self):
@@ -263,7 +268,7 @@ class Hub(SPCommunicator):
         for idx in self.nonant_spoke_indices:
             if self.nonant_send_buffer is None:
                 # for hub outer/inner bounds and kill signal
-                self.nonant_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+                self.nonant_send_buffer = communicator_array(self.local_lengths[idx - 1])
             elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
                 raise RuntimeError("Nonant buffers disagree on size")
 
@@ -274,7 +279,7 @@ class Hub(SPCommunicator):
         self.boundsout_send_buffer = None
         for idx in self.bounds_only_indices:
             if self.boundsout_send_buffer is None:
-                self.boundsout_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+                self.boundsout_send_buffer = communicator_array(self.local_lengths[idx - 1])
             if self.local_lengths[idx - 1] != 2:
                 raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
 
@@ -341,6 +346,10 @@ class Hub(SPCommunicator):
         self.has_nonant_spokes = len(self.nonant_spoke_indices) > 0
         self.has_w_spokes = len(self.w_spoke_indices) > 0
         self.has_bounds_only_spokes = len(self.bounds_only_indices) > 0
+
+        # Not all opt classes may have extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.initialize_spoke_indices()
 
     def make_windows(self):
         if self._windows_constructed:
@@ -460,6 +469,11 @@ class PHHub(Hub):
                 "Cannot call setup_hub before memory windows are constructed"
             )
 
+        # attribute to set False if some extension
+        # modified the iteration 0 subproblems such
+        # that the trivial bound is no longer valid
+        self.use_trivial_bound = True
+
         self.initialize_spoke_indices()
         self.initialize_bound_values()
 
@@ -497,6 +511,8 @@ class PHHub(Hub):
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
             )
+        if self.opt.extensions is not None:
+            self.opt.extobject.setup_hub()
 
     def sync(self):
         """
@@ -512,13 +528,15 @@ class PHHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        if self.opt.extensions is not None:
+            self.opt.extobject.sync_with_spokes()
 
     def sync_with_spokes(self):
         self.sync()
 
     def is_converged(self):
         ## might as well get a bound, in this case
-        if self.opt._PHIter == 1:
+        if self.opt._PHIter == 1 and self.use_trivial_bound:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
 
         if not self.has_innerbound_spokes:
@@ -583,7 +601,7 @@ class PHHub(Hub):
         self.w_send_buffer = None
         for idx in self.w_spoke_indices:
             if self.w_send_buffer is None:
-                self.w_send_buffer = np.zeros(self.local_lengths[idx - 1] + 1)
+                self.w_send_buffer = communicator_array(self.local_lengths[idx - 1])
             elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
                 raise RuntimeError("W buffers disagree on size")
 
@@ -645,6 +663,9 @@ class LShapedHub(Hub):
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        # in case LShaped ever gets extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.sync_with_spokes()
 
     def is_converged(self):
         """ Returns a boolean. If True, then LShaped will terminate
@@ -689,74 +710,6 @@ class LShapedHub(Hub):
             self.hub_to_spoke(nonant_send_buffer, idx)
 
 class APHHub(PHHub):
-    def setup_hub(self):
-        """ Must be called after make_windows(), so that
-            the hub knows the sizes of all the spokes windows
-        """
-        if not self._windows_constructed:
-            raise RuntimeError(
-                "Cannot call setup_hub before memory windows are constructed"
-            )
-
-        self.initialize_spoke_indices()
-        self.initialize_bound_values()
-
-        if self.has_outerbound_spokes:
-            ###raise RuntimeError("APH not ready for outer bound spokes yet")
-            self.initialize_outer_bound_buffers()
-        if self.has_innerbound_spokes:
-            self.initialize_inner_bound_buffers()
-        if self.has_w_spokes:
-            ###raise RuntimeError("APH not ready for W spokes")
-            self.initialize_ws()
-        if self.has_nonant_spokes:
-            self.initialize_nonants()
-
-        ## Do some checking for things we currently don't support
-        if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke providing both inner and outer "
-                "bounds is currently unsupported"
-            )
-        if len(self.w_spoke_indices & self.nonant_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke needing both Ws and nonants is currently unsupported"
-            )
-
-        ## Generate some warnings if nothing is giving bounds
-        if not self.has_outerbound_spokes:
-            logger.warn(
-                "No OuterBound Spokes defined, this converger "
-                "will not cause the hub to terminate"
-            )
-
-        if not self.has_innerbound_spokes:
-            logger.warn(
-                "No InnerBound Spokes defined, this converger "
-                "will not cause the hub to terminate"
-            )
-
-
-    def sync(self):
-        """
-            Manages communication with Spokes
-        """
-        if self.has_w_spokes:
-            self.send_ws()
-        if self.has_nonant_spokes:
-            self.send_nonants()
-        if self.has_outerbound_spokes:
-            self.receive_outerbounds()
-        if self.has_innerbound_spokes:
-            self.receive_innerbounds()
-
-
-    def sync_with_spokes(self):
-        self.sync()
-
-    def current_iteration(self):
-        """ Return the current APH iteration."""
-        return self.opt._PHIter
 
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """

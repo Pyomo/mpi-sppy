@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # updated april 26
 # mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3
 # (see the first lines of main() to change instances)
@@ -17,8 +23,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 # the problem
 import ACtree as etree
 from ccopf_multistage import pysp2_callback,\
-    scenario_denouement, _md_dict, FixFast, FixNever, FixGaussian
-import rho_setter
+    scenario_denouement, _md_dict, FixFast
 
 import pyomo.environ as pyo
 import socket
@@ -126,7 +131,7 @@ def main():
         options["iter0_solver_options"] = None
         options["iterk_solver_options"] = None
     options["PHIterLimit"] = PHIterLimit
-    options["defaultPHrho"] = 1
+    options["defaultPHrho"] = 1000
     options["convthresh"] = 0.001
     options["subsolvedirectives"] = None
     options["verbose"] = False
@@ -135,6 +140,10 @@ def main():
     options["iter0_solver_options"] = None
     options["iterk_solver_options"] = None
     options["branching_factors"] = branching_factors
+
+    options["smoothed"] = 0
+    options["defaultPHp"] = 5000
+    options["defaultPHbeta"] = .05
 
     # try to do something interesting for bundles per rank
     if scenperbun > 0:
@@ -167,7 +176,7 @@ def main():
 
 
     # PH hub
-    options["tee-rank0-solves"] = True
+    options["tee-rank0-solves"] = False
     hub_dict = {
         "hub_class": PHHub,
         "hub_kwargs": {"options": None},
@@ -176,9 +185,9 @@ def main():
             "options": options,
             "all_scenario_names": all_scenario_names,
             "scenario_creator": pysp2_callback,
-            'scenario_denouement': scenario_denouement,
+            # 'scenario_denouement': scenario_denouement,
             "scenario_creator_kwargs": scenario_creator_kwargs,
-            "rho_setter": rho_setter.ph_rhosetter_callback,
+            # "rho_setter": rho_setter.ph_rhosetter_callback,
             "extensions": None,
             "all_nodenames":all_nodenames,
         }

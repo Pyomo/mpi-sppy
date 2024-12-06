@@ -1,5 +1,11 @@
-# Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Code that is producing a xhat and a confidence interval using sequential sampling 
 # This is the implementation of the 2 following papers:
 # [bm2011] Bayraksan, G., Morton,D.P.: A Sequential Sampling Procedure for Stochastic Programming. Operations Research 59(4), 898-913 (2011)
@@ -7,7 +13,6 @@
 
 # see also multi_seqsampling.py, which has a class derived from this class
 
-import pyomo.environ as pyo
 import mpisppy.MPI as mpi
 import mpisppy.utils.sputils as sputils
 import numpy as np
@@ -17,13 +22,12 @@ from mpisppy import global_toc
 from mpisppy.utils import config
 import mpisppy.utils.solver_spec as solver_spec
 
-fullcomm = mpi.COMM_WORLD
-global_rank = fullcomm.Get_rank()
-
 import mpisppy.utils.amalgamator as amalgamator
-import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
+
+fullcomm = mpi.COMM_WORLD
+global_rank = fullcomm.Get_rank()
 
 print("\nTBD: check seqsampling for start vs start_seed")
 
@@ -46,7 +50,7 @@ def is_needed(cfg, needed_things, message=""):
 def add_options(cfg, optional_things):
     # allow for defaults on options that Bayraksan et al establish 
     for i,v  in optional_things.items():
-        if not i in cfg:
+        if i not in cfg:
             # there must be a better way...
             if isinstance(v, str):
                 cfg.quick_assign(i, str, v)
@@ -191,7 +195,7 @@ class SeqSampling():
         """        
 
         if self.stochastic_sampling :
-                add_options(options, ["n0min"], [50])
+            add_options(cfg, {"n0min": 50})
                 
                 
         if self.stopping_criterion == "BM":

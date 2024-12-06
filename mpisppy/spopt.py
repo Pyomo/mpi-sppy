@@ -1,21 +1,29 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # base class for hub and for spoke strata
 
 import logging
 import time
 import math
 import inspect
+import random
 
 import numpy as np
 from mpisppy import MPI
 
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
+from pyomo.opt import SolverFactory
 
-from mpisppy import global_toc
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
+
+from mpisppy.opt.presolve import SPPresolve
 
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
@@ -35,7 +43,7 @@ class SPOpt(SPBase):
             extension_kwargs=None,
             scenario_creator_kwargs=None,
             variable_probability=None,
-            E1_tolerance=1e-5
+            E1_tolerance=1e-5,
     ):
         super().__init__(
             options,
@@ -47,6 +55,12 @@ class SPOpt(SPBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
+        self._save_active_objectives()
+        self._subproblem_creation(options.get("verbose", False))
+        if options.get("presolve", False):
+            self._presolver = SPPresolve(self)
+        else:
+            self._presolver = None
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -74,7 +88,7 @@ class SPOpt(SPBase):
                 else:
                     try:
                         float(pyo.value(v))
-                    except:
+                    except Exception:
                         raise RuntimeError(
                             f"Non-anticipative variable {v.name} on scenario {s.name} "
                             "reported as stale. This usually means this variable "
@@ -88,7 +102,8 @@ class SPOpt(SPBase):
                   tee=False,
                   verbose=False,
                   disable_pyomo_signal_handling=False,
-                  update_objective=True):
+                  update_objective=True,
+                  need_solution=True):
         """ Solve one subproblem.
 
         Args:
@@ -112,6 +127,9 @@ class SPOpt(SPBase):
             update_objective (boolean, optional):
                 If True, and a persistent solver is used, update
                 the persistent solver's objective
+            need_solution (boolean, optional):
+                If True, raises an exception if a solution is not available.
+                Default True
 
         Returns:
             float:
@@ -160,7 +178,8 @@ class SPOpt(SPBase):
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
         elif disable_pyomo_signal_handling:
-            solve_keyword_args["use_signal_handling"] = False
+            # solve_keyword_args["use_signal_handling"] = False
+            pass
 
         try:
             results = s._solver_plugin.solve(s,
@@ -172,12 +191,7 @@ class SPOpt(SPBase):
             solver_exception = e
 
         pyomo_solve_time = time.time() - solve_start_time
-        if (results is None) or (len(results.solution) == 0) or \
-                (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-                (results.solver.termination_condition == TerminationCondition.unbounded):
-
+        if sputils.not_good_enough_results(results):
             s._mpisppy_data.scenario_feasible = False
 
             if gripe:
@@ -189,15 +203,25 @@ class SPOpt(SPBase):
                     print ("status=", results.solver.status)
                     print ("TerminationCondition=",
                            results.solver.termination_condition)
+                else:
+                    print("no results object, so solving agin with tee=True")
+                    solve_keyword_args["tee"] = True
+                    results = s._solver_plugin.solve(s,
+                                             **solve_keyword_args,
+                                             load_solutions=False)
 
             if solver_exception is not None:
                 raise solver_exception
 
         else:
-            if sputils.is_persistent(s._solver_plugin):
-                s._solver_plugin.load_vars()
-            else:
-                s.solutions.load_from(results)
+            try:
+                if sputils.is_persistent(s._solver_plugin):
+                    s._solver_plugin.load_vars()
+                else:
+                    s.solutions.load_from(results)
+            except Exception as e: # catch everything
+                if need_solution:
+                    raise e
             if self.is_minimizing:
                 s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
                 s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
@@ -229,7 +253,8 @@ class SPOpt(SPBase):
                    gripe=False,
                    disable_pyomo_signal_handling=False,
                    tee=False,
-                   verbose=False):
+                   verbose=False,
+                   need_solution=True):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -254,6 +279,9 @@ class SPOpt(SPBase):
                 If True, displays solver output. Default False.
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
+            need_solution (boolean, optional):
+                If True, raises an exception if a solution is not available.
+                Default True
         """
 
         """ Developer notes:
@@ -285,13 +313,19 @@ class SPOpt(SPBase):
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
-            pyomo_solve_times.append(self.solve_one(solver_options, k, s,
-                                              dtiming=dtiming,
-                                              verbose=verbose,
-                                              tee=tee,
-                                              gripe=gripe,
-                disable_pyomo_signal_handling=disable_pyomo_signal_handling
-            ))
+            pyomo_solve_times.append(
+                self.solve_one(
+                    solver_options,
+                    k,
+                    s,
+                    dtiming=dtiming,
+                    verbose=verbose,
+                    tee=tee,
+                    gripe=gripe,
+                    disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+                    need_solution=need_solution,
+                )
+            )
 
         if self.extensions is not None:
                 self.extobject.post_solve_loop()
@@ -326,10 +360,7 @@ class SPOpt(SPBase):
         """
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if self.bundling:
-                objfct = self.saved_objs[k]
-            else:
-                objfct = sputils.find_active_objective(s)
+            objfct = self.saved_objectives[k]
             local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             if verbose:
                 print ("caller", inspect.stack()[1][3])
@@ -585,7 +616,10 @@ class SPOpt(SPBase):
                                        .format(nlens[ndn], ndn, len(cache[ndn])))
                 for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
-                    this_vardata._value = cache[ndn][i]
+                    if this_vardata.is_binary() or this_vardata.is_integer():
+                        this_vardata._value = round(cache[ndn][i])
+                    else:
+                        this_vardata._value = cache[ndn][i]
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
@@ -628,7 +662,10 @@ class SPOpt(SPBase):
 
             for i in range(nlens['ROOT']):
                 this_vardata = node.nonant_vardata_list[i]
-                this_vardata._value = root_cache[i]
+                if this_vardata.is_binary() or this_vardata.is_integer():
+                    this_vardata._value = round(root_cache[i])
+                else:
+                    this_vardata._value = root_cache[i]
                 this_vardata.fix()
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
@@ -736,8 +773,16 @@ class SPOpt(SPBase):
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
                 vardata._value = s._mpisppy_data.original_nonants[ci]
                 vardata.fixed = s._mpisppy_data.original_fixedness[ci]
-                if persistent_solver != None:
+                if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
+
+
+    def _save_active_objectives(self):
+        """ Save the active objectives for use in PH, bundles, and calculation """
+        self.saved_objectives = dict()
+
+        for sname, scenario_instance in self.local_scenarios.items():
+            self.saved_objectives[sname] = sputils.find_active_objective(scenario_instance)
 
 
     def FormEF(self, scen_dict, EF_name=None):
@@ -777,6 +822,8 @@ class SPOpt(SPBase):
         Note:
             Objectives are scaled (normalized) by _mpisppy_probability
         """
+        # The individual scenario instances are sub-blocks of the binding
+        # instance. Needed to facilitate bundles + persistent solvers
         if len(scen_dict) == 0:
             raise RuntimeError("Empty scenario list for EF")
 
@@ -787,22 +834,12 @@ class SPOpt(SPBase):
                 print ("MAJOR WARNING: a bundle of size one encountered; if you try to compute bounds it might crash (Feb 2019)")
             return scenario_instance
 
-        # The individual scenario instances are sub-blocks of the binding
-        # instance. Needed to facilitate bundles + persistent solvers
-        if not hasattr(self, "saved_objs"): # First bundle
-             self.saved_objs = dict()
-
-        for sname, scenario_instance in scen_dict.items():
-            if sname not in self.local_scenarios:
-                raise RuntimeError("EF scen not in local_scenarios="+sname)
-            self.saved_objs[sname] = sputils.find_active_objective(scenario_instance)
-
         EF_instance = sputils._create_EF_from_scen_dict(scen_dict, EF_name=EF_name,
                         nonant_for_fixed_vars=False)
         return EF_instance
 
 
-    def subproblem_creation(self, verbose=False):
+    def _subproblem_creation(self, verbose=False):
         """ Create local subproblems (not local scenarios).
 
         If bundles are specified, this function creates the bundles.
@@ -836,7 +873,10 @@ class SPOpt(SPBase):
                 self.local_subproblems[sname].scen_list = [sname]
 
 
-    def _create_solvers(self):
+    def _create_solvers(self, presolve=True):
+
+        if self._presolver is not None and presolve:
+            self._presolver.presolve()
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
         local_sit = [] # Local set instance time for time tracking
@@ -850,6 +890,9 @@ class SPOpt(SPBase):
 
                 if dtiming:
                     local_sit.append( time.time() - set_instance_start_time )
+            else:
+                if dtiming:
+                    local_sit.append(0.0)
 
             ## if we have bundling, attach
             ## the solver plugin to the scenarios
@@ -863,16 +906,29 @@ class SPOpt(SPBase):
                                                      root=0)
             if self.cylinder_rank == 0:
                 asit = [sit for l_sit in all_set_instance_times for sit in l_sit]
-                print("Set instance times:")
-                print("\tmin=%4.2f mean=%4.2f max=%4.2f" %
+                if len(asit) == 0:
+                    print("Set instance times not available.")
+                else:
+                    print("Set instance times: \tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(asit), np.mean(asit), np.max(asit)))
+
+
+    def subproblem_scenario_generator(self):
+        """
+        Iterate over every scenario, yielding the
+        subproblem_name, subproblem, scenario_name, scenario.
+
+        Useful for managing bundles
+        """
+        for sub_name, sub in self.local_subproblems.items():
+            for s_name in sub.scen_list:
+                yield sub_name, sub, s_name, self.local_scenarios[s_name]
 
 
 # these parameters should eventually be promoted to a non-PH
 # general class / location. even better, the entire retry
 # logic can be encapsulated in a sputils.py function.
 MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS = 5
-LICENSE_RETRY_SLEEP_TIME = 2 # in seconds
 
 def set_instance_retry(subproblem, solver_plugin, subproblem_name):
 
@@ -890,7 +946,7 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
             break
         # pyomo presently has no general way to trap a license acquisition
         # error - so we're stuck with trapping on "any" exception. not ideal.
-        except:
+        except Exception:
             if num_retry_attempts == 0:
                 print("Failed to acquire solver license (call to set_instance() for scenario=%s) after first attempt" % (sname))
             else:
@@ -898,6 +954,7 @@ def set_instance_retry(subproblem, solver_plugin, subproblem_name):
             if num_retry_attempts == MAX_ACQUIRE_LICENSE_RETRY_ATTEMPTS:
                 raise RuntimeError("Failed to acquire solver license - call to set_instance() for scenario=%s failed after %d retry attempts" % (sname, num_retry_attempts))
             else:
-                print("Sleeping for %d seconds before re-attempting" % LICENSE_RETRY_SLEEP_TIME)
-                time.sleep(LICENSE_RETRY_SLEEP_TIME)
+                sleep_time = random.random()
+                print(f"Sleeping for {sleep_time:.2f} seconds before re-attempting")
+                time.sleep(sleep_time)
                 num_retry_attempts += 1

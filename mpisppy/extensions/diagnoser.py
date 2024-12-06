@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # An extension to output diagnostic information at each iteration
 # to a file for each scenario.
 # DLW, March 2019
@@ -11,7 +17,6 @@ import datetime as dt
 import os
 import pyomo.environ as pyo
 import mpisppy.extensions.xhatbase
-from mpisppy.utils.sputils import find_active_objective
 
 class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """
@@ -42,12 +47,10 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
             fname = self.dirname+os.sep+sname+".dag"
             with open(fname, "a") as f:
                 f.write(str(self.ph._PHIter)+",")
-                if not bundling:
-                    objfct = find_active_objective(s)
-                    f.write(str(pyo.value(objfct)))
-                else:
+                objfct = self.ph.saved_objectives[sname]
+                if bundling:
                     f.write("Bundling"+",")
-                    f.write(str(pyo.value(self.ph.saved_objs[sname])))
+                f.write(str(pyo.value(objfct)))
                 f.write("\n")
 
     def pre_iter0(self):

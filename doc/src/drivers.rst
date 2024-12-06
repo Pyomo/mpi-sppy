@@ -40,11 +40,11 @@ Extending Examples
 Many developers
 will need to add extensions. Here are few examples:
 
-* In the ``farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario create in the ``scenario_creator_kwargs`` dictionary.
+* In the ``farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario creator in the ``scenario_creator_kwargs`` dictionary.
 
 * In the ``hydro_cylinders.py`` example (which has three stages). The branching factors are obtained from the command line and passed to the scenario constructor via ``scenario_creator_kwargs`` and also passed to ``sputils.create_nodenames_from_BFs`` to create a node list.
 
-* The ``uc_cylinders.py`` example adds arguments that are used to provide data or trigger the inclusion of extensions. The  extension specifications and arguments are added to the dictionaries  (e.g., ``hub_dict``) create by ``vanilla.py``.
+* The ``uc_cylinders.py`` example adds arguments that are used to provide data or trigger the inclusion of extensions. The extension specifications and arguments are added to the dictionaries (e.g., ``hub_dict``) created by ``vanilla.py``.
 
 Not Using Examples Utilities
 ----------------------------

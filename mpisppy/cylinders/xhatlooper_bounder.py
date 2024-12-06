@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # updated April 2020
 import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatlooper import XhatLooper
@@ -19,7 +25,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
     converger_spoke_char = 'X'
 
     def xhatlooper_prep(self):
-        verbose = self.opt.options['verbose']
         if "bundles_per_rank" in self.opt.options\
            and self.opt.options["bundles_per_rank"] != 0:
             raise RuntimeError("xhat spokes cannot have bundles (yet)")
@@ -50,7 +55,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
         return xhatter
 
     def main(self):
-        verbose = self.opt.options["verbose"] # typing aid  
         logger.debug(f"Entering main on xhatlooper spoke rank {self.global_rank}")
 
         xhatter = self.xhatlooper_prep()

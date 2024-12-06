@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # updated april 2020
 # DLW: mpisppy version, May 2019
 #
@@ -184,7 +192,8 @@ def MakeNodesforScen(model, BFs, scennum):
         Args:
             BFs (list of int): branching factors
     """
-    ndn = "ROOT_"+str((scennum-1) // BFs[0]) # scennum is one-based
+    # In general divide by the product of the branching factors that come after the node (here prod(BFs[1:])=BFs[1])
+    ndn = "ROOT_"+str((scennum-1) // BFs[1]) # scennum is one-based
     retval = [scenario_tree.ScenarioNode("ROOT",
                                          1.0,
                                          1,
@@ -228,12 +237,49 @@ def scenario_creator(scenario_name, branching_factors=None, data_path=None):
     instance = model.create_instance(fname, name=scenario_name)
 
     instance._mpisppy_node_list = MakeNodesforScen(instance, branching_factors, snum)
+    model._mpisppy_probability = "uniform"
     return instance
 
 #=============================================================================
 def scenario_denouement(rank, scenario_name, scenario):
     pass
 
+#=============================================================================
+# helper functions
+
+#=========
+def inparser_adder(cfg):
+    cfg.multistage()
+    cfg.add_to_config(name ="stage2EFsolvern",
+                      description="Solver to use for xhatlooper stage2ef option (default None)",
+                      domain = str,
+                      default=None)
+    cfg.add_to_config(name ="hydro_data_path",
+                      description="Path to hydro data (seldom used; default None)",
+                      domain = str,
+                      default=None)
+
+
+#=========
+def scenario_names_creator(num_scens,start=0):
+    # return the full list of num_scens scenario names
+    # (We hope this doesn't get used much for a multistage problem)
+    return [f"Scen{i+1}" for i in range(start, start+num_scens)]
+
+
+#=========
+def kw_creator(cfg):
+    # (for Amalgamator): linked to the scenario_creator and inparser_adder
+    kwargs = {"branching_factors": cfg.branching_factors,
+              "data_path": cfg.hydro_data_path
+              }
+    return kwargs
+
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
+                             given_scenario=None, **scenario_creator_kwargs):
+    raise RuntimeError("sample_tree_scen_creator is not written yet for hydro; feel free to write it!")
+
+# This main is for ad hoc testing by developers
 if __name__ == "__main__":
     options = {}
     options["asynchronousPH"] = False
@@ -299,24 +345,10 @@ if __name__ == "__main__":
     
     conv, obj, tbound = ph.ph_main()
     if ph.cylinder_rank == 0:
-         print ("Trival bound =",tbound)
+        print("Trival bound =",tbound)
 
     ph._disable_W_and_prox()
     e_obj = ph.Eobjective()
     if ph.cylinder_rank == 0:
-         print ("unweighted e_obj={}".format(e_obj))
+        print("unweighted e_obj={}".format(e_obj))
 
-    """
-    #******* APH ******
-    print ("APH")
-    options["async_frac_needed"] = 1
-    options["async_sleep_secs"] = 1
-    aph = mpisppy.opt.aph.APH(options, all_scenario_names,
-                        scenario_creator,
-                              scenario_denouement,
-                              all_nodenames = all_nodenames)
-
-    conv, obj, bnd = aph.APH_main(extensions = XhatSpecific,
-        scenario_creator_kwargs={"branching_factors": BFs},
-    )
-    """

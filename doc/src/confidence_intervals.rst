@@ -7,7 +7,7 @@ If we want to assess the quality of a given candidate solution ``xhat_one``
 (a first stage solution), we could try and evaluate the optimality gap, i.e. 
 the gap between the value of the objective function
 at ``xhat_one`` and the value of the solution to the problem.
-The class ``MMWConfidenceIntervals`` compute an estimator of the optimality gap
+The class ``MMWConfidenceIntervals`` computes an estimator of the optimality gap
 as described in [mmw1999]_ (Section 3.2) and an asymptotic confidence interval for
 this gap. 
 
@@ -40,7 +40,7 @@ Evaluating a candidate solution
 To evaluate a candidate solution with some scenarios, one might
 create a ``Xhat_Eval`` object and call its ``evaluate`` method 
 (resp. ``evaluate_one`` for a single scenario). It takes as
-an argument ``xhats``, a dictionary of noon-anticipative policies for all 
+an argument ``xhats``, a dictionary of non-anticipative policies for all 
 non-leaf nodes of a scenario tree. While for a 2-stage problem, ``xhats`` is
 just the candidate solution ``xhat_one``, for multistage problem the 
 dictionary can be computed using the function ``walking_tree_xhats`` 
@@ -57,16 +57,16 @@ This object has a ``run`` method that returns a gap estimator and a confidence i
 Examples
 --------
 
-There are example scrips for sequential sampling in both ``farmer`` and ``aircond``.
+There are example scripts for sequential sampling in both ``farmer`` and ``aircond``.
 
-Using stand alone ``mmw_conf.py``
+Using stand-alone ``mmw_conf.py``
 ---------------------------------
 
-(The stand-alone module is currently for use with 2-stage problem only; for multi-stage problems, instantiate an ``MMWConfidenceItervals`` object directly)
+(The stand-alone module is currently for use with 2-stage problem only; for multi-stage problems, instantiate an ``MMWConfidenceIntervals`` object directly)
 
 ``mmw_conf`` uses the ``MMWConfidenceIntervals`` class from ``mmw_ci`` in order to construct a confidence interval on the optimality gap of a particular candidate solution ``xhat`` of a model instance. 
 
-To use the stand along program a model compatible with ``Amalgamator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
+To use the stand-alone program a model compatible with ``Amalgamator`` and ``.npy`` file with a candidate solution to an instance of the model are required.
 
 First, ensure that the model to be used is compatible with the
 ``Amalgamator`` class. This requires the model to have each of the

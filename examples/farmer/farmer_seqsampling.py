@@ -1,5 +1,11 @@
-# Copyright 2020, 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Illustrate the use of sequential sampling for programmers.
 #
 # This is an atypical program in that it allows for a command line
@@ -8,11 +14,8 @@
 # the command line parameters for both (so either way,
 # many command line parameters will be ignored). 
 
-import sys
 import numpy as np
-import argparse
 import farmer
-import pyomo.environ as pyo
 from mpisppy.utils import config
 import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
@@ -85,7 +88,6 @@ def main(cfg):
         results (dict): the solution, gap confidence interval and T 
     """
     refmodelname = "farmer"
-    scenario_creator = farmer.scenario_creator
 
     scen_count = cfg.num_scens
     assert cfg.EF_solver_name is not None
@@ -187,7 +189,7 @@ if __name__ == '__main__':
     cfg = _parse_args()
     
     results = main(cfg)
-    print(f"Final gap confidence interval results:", results)
+    print("Final gap confidence interval results:", results)
 
     if cfg.xhat1_file is not None:
         print(f"Writing xhat1 to {cfg.xhat1_file}.npy")

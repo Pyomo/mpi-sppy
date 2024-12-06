@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # special for ph debugging DLW Dec 2018
 # unlimited crops
 # ALL INDEXES ARE ZERO-BASED
@@ -17,7 +25,6 @@ import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
 
 # Use this random stream:
 farmerstream = np.random.RandomState()
@@ -102,7 +109,7 @@ def pysp_instance_creation_callback(
     scengroupnum = sputils.extract_num(scenario_name)
     scenario_base_name = scenario_name.rstrip("0123456789")
     
-    model = pyo.ConcreteModel()
+    model = pyo.ConcreteModel(scenario_name)
 
     def crops_init(m):
         retval = []

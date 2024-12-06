@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # general example driver for the hydro example with cylinders
 # Modfied April 2022 by DLW to illustrate config.py
 
@@ -11,7 +17,6 @@ from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
-import mpisppy.cylinders as cylinders
 
 write_solution = True
 
@@ -31,7 +36,7 @@ def _parse_args():
                          domain = str,
                          default=None)
 
-    cfg.parse_command_line("farmer_cylinders")
+    cfg.parse_command_line("hydro_cylinders")
     return cfg
 
 
@@ -92,6 +97,7 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
 
     if cfg.stage2EFsolvern is not None:
+        assert xhatshuffle is not None, "xhatshuffle is required for stage2EFsolvern"
         xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
         xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 

@@ -1,7 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
-import sys
-import copy
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import sizes
 
 from mpisppy.utils import config
@@ -23,7 +27,7 @@ def _parse_args():
     cfg.xhatlooper_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
-
+    cfg.reduced_costs_args()
     cfg.parse_command_line("sizes_cylinders")
     return cfg
 
@@ -40,6 +44,7 @@ def main():
     lagrangian = cfg.lagrangian
     fixer = cfg.fixer
     fixer_tol = cfg.fixer_tol
+    reduced_costs = cfg.reduced_costs
 
     if num_scen not in (3, 10):
         raise RuntimeError(f"num_scen must the 3 or 10; was {num_scen}")
@@ -62,6 +67,9 @@ def main():
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=ph_ext,
                               rho_setter = rho_setter)
+
+    if reduced_costs:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
     if fixer:
         hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
@@ -105,6 +113,11 @@ def main():
             *beans,
             scenario_creator_kwargs=scenario_creator_kwargs,
         )
+
+    if reduced_costs:
+        reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = rho_setter)
        
     list_of_spoke_dict = list()
     if fwph:
@@ -117,6 +130,8 @@ def main():
         list_of_spoke_dict.append(xhatshuffle_spoke)
     if xhatxbar:
         list_of_spoke_dict.append(xhatxbar_spoke)
+    if reduced_costs:
+        list_of_spoke_dict.append(reduced_costs_spoke)
 
     WheelSpinner(hub_dict, list_of_spoke_dict).spin()
 

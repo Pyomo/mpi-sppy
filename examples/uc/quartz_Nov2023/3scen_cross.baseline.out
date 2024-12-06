@@ -1,0 +1,51 @@
+[    0.00] Initializing mpi-sppy
+[    6.10] Initializing SPBase
+[   11.22] Initializing PHBase
+[   11.30] Starting spcomm.main()
+[   11.47] Creating solvers
+[   20.66] Entering solve loop in PHBase.Iter0
+[   25.69] Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap
+[   25.69]     1  L X      64107.2553      64155.8333         0.076%         48.5780
+[   27.74]     2           64107.2553      64155.8333         0.076%         48.5780
+[   29.68]     3    X      64107.2553      64142.5438         0.055%         35.2884
+[   31.60]     4           64107.2553      64142.5438         0.055%         35.2884
+[   33.49]     5    X      64107.2553      64142.2576         0.055%         35.0023
+[   35.40]     6           64107.2553      64142.2576         0.055%         35.0023
+[   37.32]     7           64107.2553      64142.2576         0.055%         35.0023
+[   38.15]     8           64107.2553      64142.2576         0.055%         35.0023
+[   38.94]     9           64107.2553      64142.2576         0.055%         35.0023
+[   39.69]    10           64107.2553      64142.2576         0.055%         35.0023
+[   40.32]    11           64107.2553      64142.2576         0.055%         35.0023
+[   40.36] Attempting to update Best Bound with CrossScenarioExtension
+[   41.47]    12  C X      64107.2553      64142.1055         0.054%         34.8502
+[   42.11]    13           64107.2553      64142.1055         0.054%         34.8502
+[   42.74]    14           64107.2553      64142.1055         0.054%         34.8502
+[   43.35]    15    X      64107.2553      64142.0688         0.054%         34.8135
+[   44.15]    16           64107.2553      64142.0688         0.054%         34.8135
+[   44.92]    17  L        64107.4840      64142.0688         0.054%         34.5849
+[   45.56]    18           64107.4840      64142.0688         0.054%         34.5849
+[   45.60] Attempting to update Best Bound with CrossScenarioExtension
+[   46.72]    19           64107.4840      64142.0688         0.054%         34.5849
+[   47.35]    20           64107.4840      64142.0688         0.054%         34.5849
+[   47.99]    21    X      64107.4840      64142.0659         0.054%         34.5819
+[   48.78]    22           64107.4840      64142.0659         0.054%         34.5819
+[   48.84] Attempting to update Best Bound with CrossScenarioExtension
+[   49.98]    23  C        64107.4840      64142.0659         0.054%         34.5819
+[   50.61]    24           64107.4840      64142.0659         0.054%         34.5819
+[   50.66] Attempting to update Best Bound with CrossScenarioExtension
+[   51.77]    25           64107.4840      64142.0659         0.054%         34.5819
+[   52.58]    26           64107.4840      64142.0659         0.054%         34.5819
+[   53.30]    27           64107.4840      64142.0659         0.054%         34.5819
+[   53.93]    28           64107.4840      64142.0659         0.054%         34.5819
+[   53.97] Attempting to update Best Bound with CrossScenarioExtension
+[   55.30]    29  C        64136.8248      64142.0659         0.008%          5.2411
+[   55.30] Terminating based on inter-cylinder relative gap        0.008%
+[   55.30] Cylinder convergence
+[   55.50] Hub algorithm PH complete, waiting for spoke finalization
+[   55.89] Spoke XhatShuffleInnerBound finalized
+[   55.92] Spoke CrossScenarioCutSpoke finalized
+[   60.32] Spoke LagrangianOuterBound finalized
+[   60.32] Statistics at termination
+[   60.32] Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap
+[   60.32]    29           64136.8248      64142.0659         0.008%          5.2411
+[   60.32] Windows freed

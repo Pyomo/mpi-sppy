@@ -1,0 +1,17 @@
+Node, EF_VarName, Value
+ROOT, Scen1.Pgt[1], 30.0
+ROOT, Scen1.Pgh[1], 60.0
+ROOT, Scen1.PDns[1], 0.0
+ROOT, Scen1.Vol[1], 54.431999999999995
+ROOT_0, Scen1.Pgt[2], 100.0
+ROOT_0, Scen1.Pgh[2], 60.0
+ROOT_0, Scen1.PDns[2], 0.0
+ROOT_0, Scen1.Vol[2], 24.192
+ROOT_1, Scen4.Pgt[2], 60.0
+ROOT_1, Scen4.Pgh[2], 100.0
+ROOT_1, Scen4.PDns[2], 0.0
+ROOT_1, Scen4.Vol[2], 24.192
+ROOT_2, Scen7.Pgt[2], 60.0
+ROOT_2, Scen7.Pgh[2], 100.0
+ROOT_2, Scen7.PDns[2], 0.0
+ROOT_2, Scen7.Vol[2], 48.38399999999999

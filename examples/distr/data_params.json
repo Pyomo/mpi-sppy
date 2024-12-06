@@ -1,0 +1,46 @@
+{
+    "revenues mean": 1200,
+    "revenues cv": 300,
+    "max revenue": 3000,
+    "production costs mean": 400,
+    "production costs cv": 100,
+    "supply factory mean": 150,
+    "supply factory cv": 50,
+    "supply buyer mean": 170,
+    "supply buyer cv": 40,
+    "arc_F_B": {
+        "prob": 0.4,
+        "mean cost": 800,
+        "cv cost": 200,
+        "mean capacity": 50,
+        "cv capacity": 10
+    },
+    "arc_F_DC": {
+        "prob": 0.8,
+        "mean cost": 400,
+        "cv cost": 250,
+        "mean capacity": 100,
+        "cv capacity": 30
+    },
+    "arc_DC_DC": {
+        "prob": 0.6,
+        "mean cost": 200,
+        "cv cost": 100,
+        "mean capacity": 120,
+        "cv capacity": 50
+    },
+    "arc_DC_B": {
+        "prob": 0.9,
+        "mean cost": 300,
+        "cv cost": 200,
+        "mean capacity": 110,
+        "cv capacity": 50
+    },
+    "inter_region_arc": {
+        "prob": 0.4,
+        "mean cost": 300,
+        "cv cost": 50,
+        "mean capacity": 40,
+        "cv capacity": 10
+    }
+  }

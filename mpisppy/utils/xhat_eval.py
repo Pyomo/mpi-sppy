@@ -1,14 +1,18 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Code to evaluate a given x-hat, but given as a nonant-cache
 # To test: python xhat_eval.py --num-scens=3 --EF-solver-name=cplex
 
 import inspect
 import pyomo.environ as pyo
-from pyomo.opt import SolverFactory, SolutionStatus, TerminationCondition
 import logging
 import numpy as np
-import math
 
 import mpisppy.log
 from mpisppy import MPI
@@ -39,6 +43,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         mpicomm=None,
         scenario_creator_kwargs=None,
         variable_probability=None,
+        ph_extensions=None,
         ):
         
         super().__init__(
@@ -47,24 +52,20 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             scenario_creator,
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
+            extensions=ph_extensions,
             mpicomm=mpicomm,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
         )
         
         self.verbose = self.options['verbose']
-        
-        #TODO: CHANGE THIS AFTER UPDATE
-        self.PH_extensions = None
-
         self._subproblems_solvers_created = False
-        
+
 
     def _lazy_create_solvers(self):
         if self._subproblems_solvers_created:
             return
-        self.subproblem_creation(self.verbose)
-        self._create_solvers()
+        self._create_solvers(presolve=False)
         self._subproblems_solvers_created = True
 
 
@@ -87,54 +88,14 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective)
 
-        solve_keyword_args = dict()
-        if self.cylinder_rank == 0:
-            if tee is not None and tee is True:
-                solve_keyword_args["tee"] = True
-        if (sputils.is_persistent(s._solver_plugin)):
-            solve_keyword_args["save_results"] = False
-        elif disable_pyomo_signal_handling:
-            solve_keyword_args["use_signal_handling"] = False
-
-        try:
-            results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
-            solver_exception = None
-        except Exception as e:
-            results = None
-            solver_exception = e
-
-        if (results is None) or (len(results.solution) == 0) or \
-                (results.solution(0).status == SolutionStatus.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasible) or \
-                (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
-                (results.solver.termination_condition == TerminationCondition.unbounded):
-
-            s._mpisppy_data.scenario_feasible = False
-        else:
-            if sputils.is_persistent(s._solver_plugin):
-                s._solver_plugin.load_vars()
-            else:
-                s.solutions.load_from(results)
-            if self.is_minimizing:
-                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-            else:
-                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                s._mpisppy_data.scenario_feasible = True
-
 
         if compute_val_at_nonant:
-                if self.bundling:
-                    objfct = self.saved_objs[k]
-                    
-                else:
-                    objfct = sputils.find_active_objective(s)
-                    if self.verbose:
-                        print ("caller", inspect.stack()[1][3])
-                        print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
-                               .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
-                self.objs_dict[k] = pyo.value(objfct)
+            objfct = self.saved_objectives[k]
+            if self.verbose:
+                print ("caller", inspect.stack()[1][3])
+                print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
+                       .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
+            self.objs_dict[k] = pyo.value(objfct)
         return(pyomo_solve_time)
 
 
@@ -245,7 +206,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            if not k in self.objs_dict:
+            if k not in self.objs_dict:
                 raise RuntimeError(f"No value has been calculated for the scenario {k}")
             local_Eobjs.append(s._mpisppy_probability * fct(self.objs_dict[k]))
         local_Eobjs = np.array(local_Eobjs)
@@ -278,7 +239,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
 
         solver_options = self.options["solver_options"] if "solver_options" in self.options else None
         k = scenario_name
-        pyomo_solve_time = self.solve_one(solver_options,k, s,
+        self.solve_one(solver_options,k, s,
                                           dtiming=False,
                                           verbose=self.verbose,
                                           tee=False,
@@ -356,7 +317,10 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                            .format(nlens[ndn], ndn, len(cache[ndn])))
                     for i in range(nlens[ndn]): 
                         this_vardata = node.nonant_vardata_list[i]
-                        this_vardata._value = cache[ndn][i]
+                        if this_vardata.is_binary() or this_vardata.is_integer():
+                            this_vardata._value = round(cache[ndn][i])
+                        else:
+                            this_vardata._value = cache[ndn][i]
                         this_vardata.fix()
                         if persistent_solver is not None:
                             persistent_solver.update_var(this_vardata)
@@ -378,6 +342,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                     persistent_solver = s._solver_plugin
 
             for var in s._mpisppy_data.nonant_indices.values():
+                if var.is_binary() or var.is_integer():
+                    var._value = round(var._value)
                 var.fix()
                 if not self.bundling and persistent_solver is not None:
                     persistent_solver.update_var(var)

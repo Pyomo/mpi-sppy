@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # PH-specific code
 
 import mpisppy.phbase
@@ -49,9 +55,8 @@ class PH(mpisppy.phbase.PHBase):
             You need an xhat finder either in denoument or in an extension.
         """
         verbose = self.options['verbose']
-        self.PH_Prep()
-        # Why is subproblem_creation() not called in PH_Prep? Answer: xhat_eval.
-        self.subproblem_creation(verbose)
+        smoothed = self.options['smoothed']
+        self.PH_Prep(attach_smooth = smoothed)
 
         if (verbose):
             print('Calling PH Iter0 on global rank {}'.format(global_rank))
@@ -131,12 +136,11 @@ if __name__ == "__main__":
         try:
             shutil.rmtree("delme_diagdir")
             print ("...deleted delme_diagdir")
-        except:
+        except Exception:
             pass
     ph.options["diagnoser_options"] = {"diagnoser_outdir": "delme_diagdir"}
     conv, obj, bnd = ph.ph_main()
 
-    import mpisppy.extensions.avgminmaxer as minmax_extension
     from mpisppy.extensions.avgminmaxer import MinMaxAvg
     ph = PH(PHopt, all_scenario_names, scenario_creator, scenario_denouement,
             extensions=MinMaxAvg,

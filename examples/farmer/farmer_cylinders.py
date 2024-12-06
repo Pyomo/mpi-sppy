@@ -1,9 +1,14 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # general example driver for farmer with cylinders
 
 import farmer
-import mpisppy.cylinders
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -16,6 +21,8 @@ from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.utils.cfg_vanilla import extension_adder
+
+import pyomo.environ as pyo
 
 write_solution = True
 
@@ -32,10 +39,15 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.lagranger_args()
+    cfg.ph_ob_args()
     cfg.xhatshuffle_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
+    cfg.reduced_costs_args()
+    cfg.sep_rho_args()
+    cfg.coeff_rho_args()
+    cfg.dynamic_rho_args()
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -80,8 +92,8 @@ def main():
     scenario_creator_kwargs = {
         'use_integer': False,
         "crops_multiplier": crops_multiplier,
+        'sense': pyo.minimize
     }
-    scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -112,6 +124,15 @@ def main():
         extension_adder(hub_dict, NormRhoUpdater)
         hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
 
+
+    if cfg.reduced_costs:
+        vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+
+    if cfg.sep_rho:
+        vanilla.add_sep_rho(hub_dict, cfg)
+    if cfg.coeff_rho:
+        vanilla.add_coeff_rho(hub_dict, cfg)
+
     # FWPH spoke
     if cfg.fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
@@ -127,6 +148,15 @@ def main():
         lagranger_spoke = vanilla.lagranger_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
+    # ph outer bounder spoke
+    if cfg.ph_ob:
+        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter)
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(ph_ob_spoke, cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(ph_ob_spoke, cfg)
 
     # xhat looper bound spoke
     if cfg.xhatlooper:
@@ -135,6 +165,11 @@ def main():
     # xhat shuffle bound spoke
     if cfg.xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+    
+    if cfg.reduced_costs:
+        reduced_costs_spoke = vanilla.reduced_costs_spoke(*beans,
+                                              scenario_creator_kwargs=scenario_creator_kwargs,
+                                              rho_setter = None)
 
     list_of_spoke_dict = list()
     if cfg.fwph:
@@ -143,10 +178,14 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.lagranger:
         list_of_spoke_dict.append(lagranger_spoke)
+    if cfg.ph_ob:
+        list_of_spoke_dict.append(ph_ob_spoke)
     if cfg.xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:
         list_of_spoke_dict.append(xhatshuffle_spoke)
+    if cfg.reduced_costs:
+        list_of_spoke_dict.append(reduced_costs_spoke)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()

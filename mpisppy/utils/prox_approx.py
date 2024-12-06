@@ -1,30 +1,39 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 from math import isclose
-from pyomo.environ import value
+from array import array
+from bisect import bisect
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
-def _f(val, x_pnt, y_pnt):
-    return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
-def _df(val, x_pnt, y_pnt):
-    #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
-    return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
-def _d2f(val, x_pnt, y_pnt):
-    return 1 + 6*val*val - 2*y_pnt
+# def _f(val, x_pnt, y_pnt):
+#     return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
+# def _df(val, x_pnt, y_pnt):
+#     #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
+#     return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
+# def _d2f(val, x_pnt, y_pnt):
+#     return 1 + 6*val*val - 2*y_pnt
+# def _newton_step(val, x_pnt, y_pnt):
+#     return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
 
 def _newton_step(val, x_pnt, y_pnt):
-    return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
+    return val - (val * (1 - 2*y_pnt + 2*val*val) - x_pnt) / (1 + 6*val*val - 2*y_pnt)
 
 class ProxApproxManager:
     __slots__ = ()
 
-    def __new__(cls, xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity=2):
+    def __new__(cls, mpisppy_model, xvar, ndn_i):
         if xvar.is_integer():
-            return ProxApproxManagerDiscrete(xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity)
+            return ProxApproxManagerDiscrete(mpisppy_model, xvar, ndn_i)
         else:
-            return ProxApproxManagerContinuous(xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity)
+            return ProxApproxManagerContinuous(mpisppy_model, xvar, ndn_i)
 
 class _ProxApproxManager:
     '''
@@ -32,110 +41,146 @@ class _ProxApproxManager:
     '''
     __slots__ = ()
 
-    def __init__(self, xvar, xvarsqrd, xsqvar_cuts, ndn_i, initial_cut_quantity):
+    def __init__(self, mpisppy_model, xvar, ndn_i):
         self.xvar = xvar
-        self.xvarsqrd = xvarsqrd
+        self.xvarsqrd = mpisppy_model.xsqvar[ndn_i]
+        self.cuts = mpisppy_model.xsqvar_cuts
+        self.xbar = mpisppy_model.xbars[ndn_i]
+        self.rho = mpisppy_model.rho[ndn_i]
+        self.W = mpisppy_model.W[ndn_i]
         self.var_index = ndn_i
-        self.cuts = xsqvar_cuts
         self.cut_index = 0
-        self._verify_store_bounds(xvar)
-        self._create_initial_cuts(initial_cut_quantity)
+        self.cut_values = array("d")
+        self.cut_values.append(0.0)
+        self._store_bounds()
 
-    def _verify_store_bounds(self, xvar):
-        if not (xvar.has_lb() and xvar.has_ub()):
-            raise RuntimeError(f"linearize_nonbinary_proximal_terms requires all "
-                                "nonanticipative variables to have bounds")
-        self.lb = value(xvar.lb)
-        self.ub = value(xvar.ub)
+    def _store_bounds(self):
+        if self.xvar.lb is None:
+            self.lb = -float("inf")
+        else:
+            self.lb = self.xvar.lb
+        if self.xvar.ub is None:
+            self.ub = float("inf")
+        else:
+            self.ub = self.xvar.ub
 
-    def _get_additional_points(self, initial_cut_quantity):
-        '''
-        calculate additional points for initial cuts
-        '''
-        # we add 2 cuts at the bound
-        if initial_cut_quantity <= 2:
-            return ()
-
-        lb, ub = self.lb, self.ub
-        bound_range = ub - lb
-        # n+1 points is n hyperplanes,
-        # but we've already added the bounds
-        delta = bound_range / (initial_cut_quantity-1)
-
-        return (lb + i*delta for i in range(1,initial_cut_quantity-1))
-
-    def _create_initial_cuts(self, initial_cut_quantity):
-        '''
-        create initial cuts at val
-        '''
-        pass
-
-    def add_cut(self, val, persistent_solver=None):
+    def add_cut(self, val, tolerance, persistent_solver):
         '''
         create a cut at val
         '''
         pass
 
+    def check_and_add_value(self, val, tolerance):
+        idx = bisect(self.cut_values, val)
+        # self.cut_values is empty, has one element
+        # or we're appending to the end
+        if idx == len(self.cut_values):
+            if val - self.cut_values[idx-1] < tolerance:
+                return False
+            else:
+                self.cut_values.insert(idx, val)
+                return True
+        # here we're at the beginning
+        if idx == 0:
+            if self.cut_values[idx] - val < tolerance:
+                return False
+            else:
+                self.cut_values.insert(idx, val)
+                return True
+        # in the middle
+        if self.cut_values[idx] - val < tolerance:
+            return False
+        if val - self.cut_values[idx-1] < tolerance:
+            return False
+        self.cut_values.insert(idx, val)
+        return True
+
+    def add_cuts(self, x_val, tolerance, persistent_solver):
+        x_bar = self.xbar.value
+        rho = self.rho.value
+        W = self.W.value
+
+        num_cuts = self.add_cut(x_val, tolerance, persistent_solver)
+        # rotate x_val around x_bar, the minimizer of (\rho / 2)(x - x_bar)^2
+        # to create a vertex at this point
+        rotated_x_val_x_bar = 2*x_bar - x_val
+        if not isclose(x_val, rotated_x_val_x_bar, abs_tol=tolerance):
+            num_cuts += self.add_cut(rotated_x_val_x_bar, tolerance, persistent_solver)
+        # aug_lagrange_point, is the minimizer of w\cdot x + (\rho / 2)(x - x_bar)^2
+        # to create a vertex at this point
+        aug_lagrange_point = -W / rho + x_bar
+        if not isclose(x_val, aug_lagrange_point, abs_tol=tolerance):
+            num_cuts += self.add_cut(2*aug_lagrange_point - x_val, tolerance, persistent_solver)
+        # finally, create another vertex at the aug_lagrange_point by rotating
+        # rotated_x_val_x_bar around the aug_lagrange_point
+        if not isclose(rotated_x_val_x_bar, aug_lagrange_point, abs_tol=tolerance):
+            num_cuts += self.add_cut(2*aug_lagrange_point - rotated_x_val_x_bar, tolerance, persistent_solver)
+        # If we only added 0 or 1 cuts initially, add up to two more
+        # to capture something of the proximal term. This can happen
+        # when x_bar == x_val and W == 0.
+        if self.cut_index <= 1:
+            lb, ub = self.xvar.bounds
+            upval = 1
+            dnval = 1
+            if ub is not None:
+                # after a lot of calculus, you can show that
+                # this point minimizes the error in the approximation
+                upval = 2.0 * (ub - x_val) / 3.0
+            if lb is not None:
+                dnval = 2.0 * (x_val - lb) / 3.0
+            num_cuts += self.add_cut(x_val + max(upval, tolerance+1e-06), tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val - max(dnval, tolerance+1e-06), tolerance, persistent_solver)
+        # print(f"{x_val=}, {x_bar=}, {W=}")
+        # print(f"{self.cut_values=}")
+        # print(f"{self.cut_index=}")
+        return num_cuts
+
     def check_tol_add_cut(self, tolerance, persistent_solver=None):
         '''
         add a cut if the tolerance is not satified
         '''
+        if self.xvar.fixed:
+            # don't do anything for fixed variables
+            return 0
         x_pnt = self.xvar.value
         y_pnt = self.xvarsqrd.value
-        f_val = x_pnt**2
+        # f_val = x_pnt**2
 
-        #print(f"y-distance: {actual_val - measured_val})")
-
-        if (f_val - y_pnt) > tolerance:
-            '''
-            In this case, we project the point x_pnt, y_pnt onto
-            the curve y = x**2 by finding the minimum distance
-            between y = x**2 and x_pnt, y_pnt.
-
-            This involves solving a cubic equation, so instead
-            we start at x_pnt, y_pnt and run newtons algorithm
-            to get an approximate good-enough solution.
-            '''
-            this_val = x_pnt
-            #print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
-            #print(f"this_val: {this_val}")
+        # print(f"{x_pnt=}, {y_pnt=}, {f_val=}")
+        # print(f"y-distance: {actual_val - measured_val})")
+        if y_pnt is None:
+            y_pnt = 0.0
+        # We project the point x_pnt, y_pnt onto
+        # the curve y = x**2 by finding the minimum distance
+        # between y = x**2 and x_pnt, y_pnt.
+        # This involves solving a cubic equation, so instead
+        # we start at x_pnt, y_pnt and run newtons algorithm
+        # to get an approximate good-enough solution.
+        this_val = x_pnt
+        # print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
+        # print(f"this_val: {this_val}")
+        next_val = _newton_step(this_val, x_pnt, y_pnt)
+        while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
+            # print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
+            # print(f"next_val: {next_val}")
+            this_val = next_val
             next_val = _newton_step(this_val, x_pnt, y_pnt)
-            while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
-                #print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
-                #print(f"next_val: {next_val}")
-                this_val = next_val
-                next_val = _newton_step(this_val, x_pnt, y_pnt)
-            #self.add_cut(x_pnt, persistent_solver)
-            self.add_cut(next_val, persistent_solver)
-            return True
-        return False
+        x_pnt = next_val
+        return self.add_cuts(x_pnt, tolerance,  persistent_solver)
 
 class ProxApproxManagerContinuous(_ProxApproxManager):
 
-    def _create_initial_cuts(self, initial_cut_quantity):
-
-        lb, ub = self.lb, self.ub
-
-        # we get zero for free
-        if lb != 0.:
-            self.add_cut(lb)
-
-        if lb == ub:
-            # var is fixed
-            return
-
-        if ub != 0.:
-            self.add_cut(ub)
-
-        additional_points = self._get_additional_points(initial_cut_quantity)
-        for ptn in additional_points:
-            self.add_cut(ptn)
-
-    def add_cut(self, val, persistent_solver=None):
+    def add_cut(self, val, tolerance, persistent_solver):
         '''
         create a cut at val using a taylor approximation
         '''
-        #print(f"adding cut for {val}")
+        lb, ub = self.xvar.bounds
+        if lb is not None and val < lb:
+            val = lb
+        if ub is not None and val > ub:
+            val = ub
+        if not self.check_and_add_value(val, tolerance):
+            return 0
         # f'(a) = 2*val
         # f(a) - f'(a)a = val*val - 2*val*val
         f_p_a = 2*val
@@ -151,6 +196,7 @@ class ProxApproxManagerContinuous(_ProxApproxManager):
         if persistent_solver is not None:
             persistent_solver.add_constraint(self.cuts[self.var_index, self.cut_index])
         self.cut_index += 1
+        #print(f"added continuous cut for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
 
         return 1
 
@@ -168,31 +214,16 @@ def _compute_mb(val):
 
 class ProxApproxManagerDiscrete(_ProxApproxManager):
 
-    def _create_initial_cuts(self, initial_cut_quantity):
-        lb, ub = self.lb, self.ub
-
-        if lb == ub:
-            # var is fixed
-            self.create_cut(lb)
-            return
-
-        #print(f"adding cut for lb {lb}")
-        self.add_cut(lb)
-        #print(f"adding cut for ub {ub}")
-        self.add_cut(ub)
-
-        # there's a left and right cut associated with each discrete point
-        # so there's only half the points we cut on total
-        # This rounds down, e.g., 7 cuts specified becomes 6
-        additional_points = self._get_additional_points(initial_cut_quantity//2+1)
-        for ptn in additional_points:
-            self.add_cut(ptn)
-
-    def add_cut(self, val, persistent_solver=None):
+    def add_cut(self, val, tolerance, persistent_solver):
         '''
         create up to two cuts at val, exploiting integrality
         '''
         val = int(round(val))
+        if tolerance > 1:
+            # TODO: We should consider how to handle this, maybe.
+            #       Tolerances less than or equal 1 won't affect
+            #       discrete cuts
+            pass
 
         ## cuts are indexed by the x-value to the right
         ## e.g., the cut for (2,3) is indexed by 3
@@ -224,6 +255,7 @@ class ProxApproxManagerDiscrete(_ProxApproxManager):
             if persistent_solver is not None:
                 persistent_solver.add_constraint(self.cuts[self.var_index, val])
             cuts_added += 1
+        #print(f"added {cuts_added} integer cut(s) for {self.xvar.name} at {val}, lb: {self.xvar.lb}, ub: {self.xvar.ub}")
 
         return cuts_added
 
@@ -236,24 +268,23 @@ if __name__ == '__main__':
     #m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
     m.xsqrd = pyo.Var(within=pyo.NonNegativeReals)
 
-    zero = -73.2
+    m.zero = pyo.Param(initialize=-73.2, mutable=True)
     ## ( x - zero )^2 = x^2 - 2 x zero + zero^2
-    m.obj = pyo.Objective( expr = m.xsqrd - 2*zero*m.x + zero**2 )
+    m.obj = pyo.Objective( expr = m.xsqrd - 2*m.zero*m.x + m.zero**2 )
 
     m.xsqrdobj = pyo.Constraint([0], pyo.Integers)
 
-    s = pyo.SolverFactory('gurobi_persistent')
-    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.xsqrdobj, 0, 2)
+    s = pyo.SolverFactory('xpress_persistent')
+    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.zero, m.xsqrdobj, 0)
     s.set_instance(m)
     m.pprint()
     new_cuts = True
     iter_cnt = 0
     while new_cuts:
-        print("")
         s.solve(m,tee=False)
-        print(f"x: {pyo.value(m.x)}")
+        print(f"x: {pyo.value(m.x):.2e}, obj: {pyo.value(m.obj):.2e}")
         new_cuts = prox_manager.check_tol_add_cut(1e-1, persistent_solver=s)
         #m.pprint()
         iter_cnt += 1
 
-    print(f"objval: {pyo.value(m.obj)}, x: {pyo.value(m.x)}, iters: {iter_cnt}")
+    print(f"cuts: {len(m.xsqrdobj)}, iters: {iter_cnt}")

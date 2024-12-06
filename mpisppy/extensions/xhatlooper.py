@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # look for an xhat. 
 # Written to be the only extension or called from an extension "manager."
 # DLW, Jan 2019
@@ -39,6 +45,7 @@ class XhatLooper(mpisppy.extensions.xhatbase.XhatBase):
             restore_nonants (bool): if True, restores the nonants to their original
                                     values in all scenarios. If False, leaves the
                                     nonants as they are in the tried scenario
+                                    You want true; False would be a bug!
         Returns:
             xhojbective (float or None), sname (string): the objective function
                 or None if one could not be obtained.

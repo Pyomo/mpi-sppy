@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 ''' Implementation of the Frank-Wolfe Progressive Hedging (FW-PH) algorithm
     described in the paper:
 
@@ -42,7 +48,6 @@ import numpy as np
 import pyomo.environ as pyo
 import time
 import re # For manipulating scenario names
-from mpisppy import global_toc
 
 from mpisppy import MPI
 from pyomo.repn.standard_repn import generate_standard_repn
@@ -64,6 +69,7 @@ class FWPH(mpisppy.phbase.PHBase):
         scenario_creator_kwargs=None,
         ph_converger=None,
         rho_setter=None,
+        variable_probability=None,
     ):
         super().__init__(
             PH_options, 
@@ -77,8 +83,8 @@ class FWPH(mpisppy.phbase.PHBase):
             extension_kwargs=None,
             ph_converger=ph_converger,
             rho_setter=rho_setter,
-        )
-
+        )      
+        assert (variable_probability is None), "variable probability is not allowed with fwph"
         self._init(FW_options)
 
     def _init(self, FW_options):
@@ -90,7 +96,6 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def fw_prep(self):
         self.PH_Prep(attach_duals=True, attach_prox=False)
-        self.subproblem_creation(self.options['verbose'])
         self._output_header()
 
         if ('point_creator' in self.FW_options):
@@ -104,7 +109,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (check):
                 self._check_initial_points()
             self._create_solvers()
-            self._use_rho_setter(verbose and self.cylinder_rank==0)
+            self._use_rho_setter(self.options['verbose'] and self.cylinder_rank==0)
             self._initialize_MIP_var_values()
             best_bound = -np.inf if self.is_minimizing else np.inf
         else:
@@ -196,7 +201,6 @@ class FWPH(mpisppy.phbase.PHBase):
             secs = time.time() - self.t0
             self._output(itr+1, self._local_bound, best_bound, diff, secs)
             self.Update_W(self.options['verbose'])
-            timed_out = self._is_timed_out()
             if (self._is_timed_out()):
                 if (self.cylinder_rank == 0 and self.vb):
                     print('Timeout.')
@@ -327,29 +331,29 @@ class FWPH(mpisppy.phbase.PHBase):
 
         # Add new variable and update \sum a_i = 1 constraint
         new_var = qp.a.add() # Add the new convex comb. variable
+        lb, body, ub = qp.sum_one.to_bounded_expression()
+        body += new_var
+        qp.sum_one.set_value((lb, body, ub))
         if (persistent):
             solver.add_var(new_var)
             solver.remove_constraint(qp.sum_one)
-            qp.sum_one._body += new_var
             solver.add_constraint(qp.sum_one)
-        else:
-            qp.sum_one._body += new_var
 
         target = mip.ref_vars if self.bundling else mip.nonant_vars
         for (node, ix) in qp.eqx.index_set():
+            lb, body, ub = qp.eqx[node, ix].to_bounded_expression()
+            body += new_var * target[node, ix].value
+            qp.eqx[node, ix].set_value((lb, body, ub))
             if (persistent):
                 solver.remove_constraint(qp.eqx[node, ix])
-                qp.eqx[node, ix]._body += new_var * target[node, ix].value
                 solver.add_constraint(qp.eqx[node, ix])
-            else:
-                qp.eqx[node, ix]._body += new_var * target[node,ix].value
         for key in mip._mpisppy_model.y_indices:
+            lb, body, ub = qp.eqy[key].to_bounded_expression()
+            body += new_var * pyo.value(mip.leaf_vars[key])
+            qp.eqy[key].set_value((lb, body, ub))
             if (persistent):
                 solver.remove_constraint(qp.eqy[key])
-                qp.eqy[key]._body += new_var * pyo.value(mip.leaf_vars[key])
                 solver.add_constraint(qp.eqy[key])
-            else:
-                qp.eqy[key]._body += new_var * pyo.value(mip.leaf_vars[key])
 
     def _attach_indices(self):
         ''' Attach the fields x_indices and y_indices to the model objects in
@@ -424,7 +428,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     leaf_var_dict = {(scenario_name, 'LEAF', ix):
                         var for ix, var in enumerate(self._get_leaf_vars(mip))}
                     EF.leaf_vars.update(leaf_var_dict)
-                    EF.num_leaf_vars[scenario_name] = len(leaf_vars_dict)
+                    EF.num_leaf_vars[scenario_name] = len(leaf_var_dict)
                     # Reference variables are already attached: EF.ref_vars
                     # indexed by (node_name, index)
         else:
@@ -460,7 +464,6 @@ class FWPH(mpisppy.phbase.PHBase):
         points = {key: value for block in init_pts 
                              for (key, value) in block.items()}
         scenario_names = points.keys()
-        num_scenarios = len(points)
 
         # Some index sets we will need..
         conv_ix = [(scenario_name, var_name) 

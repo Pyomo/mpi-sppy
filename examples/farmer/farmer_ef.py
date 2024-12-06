@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # This shows two ways to get parameters to the EF for solution; both are fairly short.
 
 import sys
@@ -12,19 +18,20 @@ import pyomo.environ as pyo
 
 def main_no_cfg():
     # Some parameters from sys.argv and some hard-wired.
-    if len(sys.argv) != 4:
-        print("usage python farmer_ef.py {crops_multiplier} {scen_count} {solver_name}")
-        print("e.g., python farmer_ef.py 1 3 gurobi")
+    if len(sys.argv) != 5:
+        print("usage python farmer_ef.py {crops_multiplier} {scen_count} {use_integer} {solver_name}")
+        print("e.g., python farmer_ef.py 1 3 1 gurobi")
         quit()
 
     scenario_creator = farmer.scenario_creator
 
     crops_multiplier = int(sys.argv[1])
     scen_count = int(sys.argv[2])
-    solver_name = sys.argv[3]
+    use_integer = int(sys.argv[3])
+    solver_name = sys.argv[4]
     
     scenario_creator_kwargs = {
-        "use_integer": False,
+        "use_integer": use_integer,
         "crops_multiplier": crops_multiplier,
     }
 
@@ -73,6 +80,8 @@ def main_with_cfg():
         results = solver.solve(tee=True)
     else:
         results = solver.solve(ef, tee=True, symbolic_solver_labels=True,)
+    if not pyo.check_optimal_termination(results):
+        print("Warning: solver reported non-optimal termination status")
         
     return ef
 

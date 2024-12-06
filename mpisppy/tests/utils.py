@@ -1,5 +1,11 @@
-# Copyright 2021 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 
 import pyomo.environ as pyo
@@ -11,7 +17,7 @@ def get_solver():
     for solver_name in solvers:
         try:
             solver_available = pyo.SolverFactory(solver_name).available()
-        except:
+        except Exception:
             solver_available = False
         if solver_available:
             break
@@ -22,7 +28,7 @@ def get_solver():
         persistent_solver_name = solver_name+"_persistent"
     try:
         persistent_available = pyo.SolverFactory(persistent_solver_name).available()
-    except:
+    except Exception:
         persistent_available = False
     
     return solver_available, solver_name, persistent_available, persistent_solver_name

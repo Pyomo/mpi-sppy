@@ -1,8 +1,13 @@
-# This software is distributed under the 3-clause BSD License.
 #!/bin/usr/env python3
-import glob
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import sys
-import os
 
 # We raise an error if trying to install with python2
 if sys.version[0] == '2':
@@ -21,7 +26,7 @@ long_description = (this_directory / "README.rst").read_text()
 # intentionally leaving out mpi4py to help readthedocs
 setup(
     name='mpi-sppy',
-    version='0.12.dev0',
+    version='0.12.2.dev0',
     description="mpi-sppy",
     long_description=long_description,
     url='https://github.com/Pyomo/mpi-sppy',
@@ -30,8 +35,15 @@ setup(
     packages=packages,
     python_requires='>=3.8',
     install_requires=[
-        'numpy',
+        'sortedcollections',
+        'numpy<2',
         'scipy',
         'pyomo>=6.4',
-    ]
+    ],
+    extras_require={
+        'doc': [
+            'sphinx_rtd_theme',
+            'sphinx',
+        ]
+    },
 )

@@ -1,5 +1,16 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+
+import pyomo.environ as pyo
+import mpisppy.utils.sputils as sputils
+import mpisppy.extensions.extension
+
 """ Code for WW style fixing of integers. This can be used
     as the only extension, but it could be called from a "multi"
     extension.
@@ -12,10 +23,6 @@ There is one for iter0 and one for iterk.
 For iter0, if the lag is not None, do it.
 For other iters, use count;  None is also how you avoid.
 """
-
-import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
-import mpisppy.extensions.extension
 
 def Fixer_tuple(xvar, th=None, nb=None, lb=None, ub=None):
     """ Somewhat self-documenting way to make a fixer tuple.
@@ -112,10 +119,11 @@ class Fixer(mpisppy.extensions.extension.Extension):
             print ("(rank0) " + str)
 
     def _update_fix_counts(self):
-        nodesdone = []  # avoid multiple updates of a node's Vars
         for k,s in self.local_scenarios.items():
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.is_fixed():
+                    continue
+                if ndn_i not in self.threshold:
                     continue
                 xb = pyo.value(s._mpisppy_model.xbars[ndn_i])
                 diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[ndn_i])
@@ -131,7 +139,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def iter0(self, local_scenarios):
 
         # first, do some persistent solver with bundles gymnastics        
-        have_bundles = hasattr(self.ph, "saved_objs") # indicates bundles
+        have_bundles = self.ph.bundling # indicates bundles
         if have_bundles:
             subpname = next(iter(self.ph.local_subproblems))
             subp = self.ph.local_subproblems[subpname]
@@ -140,7 +148,6 @@ class Fixer(mpisppy.extensions.extension.Extension):
             if solver_is_persistent:
                 vars_to_update = {}
 
-        fixoptions = self.fixeroptions
         # modelers might have already fixed variables - count those up and output the result
         raw_fixed_on_arrival = 0
         raw_fixed_this_iter = 0   
@@ -227,7 +234,7 @@ class Fixer(mpisppy.extensions.extension.Extension):
         """ Before iter k>1 solves, but after x-bar update.
         """
         # first, do some persistent solver with bundles gymnastics        
-        have_bundles = hasattr(self.ph, "saved_objs") # indicates bundles
+        have_bundles = self.ph.bundling # indicates bundles
         if have_bundles:
             subpname = next(iter(self.ph.local_subproblems))
             subp = self.ph.local_subproblems[subpname]
@@ -236,7 +243,6 @@ class Fixer(mpisppy.extensions.extension.Extension):
             if solver_is_persistent:
                 vars_to_update = {}
 
-        fixoptions = self.fixeroptions
         raw_fixed_this_iter = 0
         self._update_fix_counts()
         for sname,s in self.local_scenarios.items():
@@ -252,7 +258,6 @@ class Fixer(mpisppy.extensions.extension.Extension):
                 except:
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
-                tolval = self.threshold[(ndn, i)]
                 xvar = s._mpisppy_data.nonant_indices[ndn,i]
                 if not xvar.is_fixed():
                     xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])

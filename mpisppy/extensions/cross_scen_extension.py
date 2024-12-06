@@ -1,10 +1,16 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
-from mpisppy import global_toc
+from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 
 import pyomo.environ as pyo
 import sys
@@ -16,6 +22,9 @@ import mpisppy.MPI as mpi
 class CrossScenarioExtension(Extension):
     def __init__(self, spbase_object):
         super().__init__(spbase_object)
+        if self.opt.multistage:
+            raise RuntimeError('CrossScenarioExtension only supports '
+                                'two-stage models at this time')
 
         opt = self.opt
         if 'cross_scen_options' in opt.options and \
@@ -71,12 +80,12 @@ class CrossScenarioExtension(Extension):
     def _check_bound(self):
         opt = self.opt
 
-        chached_ph_obj = dict()
+        cached_ph_obj = dict()
 
         for k,s in opt.local_subproblems.items():
             phobj = find_active_objective(s)
             phobj.deactivate()
-            chached_ph_obj[k] = phobj
+            cached_ph_obj[k] = phobj
             s._mpisppy_model.EF_Obj.activate()
 
         teeme = (
@@ -114,7 +123,146 @@ class CrossScenarioExtension(Extension):
 
         for k,s in opt.local_subproblems.items():
             s._mpisppy_model.EF_Obj.deactivate()
-            chached_ph_obj[k].activate()
+            cached_ph_obj[k].activate()
+
+    def get_from_cross_cuts(self):
+        spcomm = self.opt.spcomm
+        idx = self.cut_gen_spoke_index
+        receive_buffer = np.empty(spcomm.remote_lengths[idx - 1] + 1, dtype="d") # Must be doubles
+        is_new = spcomm.hub_from_spoke(receive_buffer, idx)
+        if is_new:
+            self.make_cuts(receive_buffer)
+
+    def send_to_cross_cuts(self):
+        idx = self.cut_gen_spoke_index
+
+        # get the stuff we want to send
+        self.opt._save_nonants()
+        ci = 0  ## index to self.nonant_send_buffer
+
+        # get all the nonants
+        all_nonants_and_etas = self.all_nonants_and_etas
+        for k, s in self.opt.local_scenarios.items():
+            for xvar in s._mpisppy_data.nonant_indices.values():
+                all_nonants_and_etas[ci] = xvar._value
+                ci += 1
+
+        # get all the etas
+        for k, s in self.opt.local_scenarios.items():
+            for sn in self.opt.all_scenario_names:
+                all_nonants_and_etas[ci] = s._mpisppy_model.eta[sn]._value
+                ci += 1
+        self.opt.spcomm.hub_to_spoke(all_nonants_and_etas, idx)
+
+    def make_cuts(self, coefs):
+        # take the coefficient array and assemble cuts accordingly
+
+        # this should have already been set in the extension !
+        opt = self.opt
+
+        # rows are:
+        # [ const, eta_coeff, *nonant_coeffs ]
+        row_len = 1+1+self.nonant_len
+        outer_iter = int(coefs[-1])
+
+        if opt.bundling:
+            for bn,b in opt.local_subproblems.items():
+                persistent_solver = sputils.is_persistent(b._solver_plugin)
+                ## get an arbitrary scenario
+                s = opt.local_scenarios[b.scen_list[0]]
+                for idx, k in enumerate(opt.all_scenario_names):
+                    row = coefs[row_len*idx:row_len*(idx+1)]
+                    # the row could be all zeros,
+                    # which doesn't do anything
+                    if (row == 0.).all():
+                        continue
+                    # rows are:
+                    # [ const, eta_coeff, *nonant_coeffs ]
+                    linear_const = row[0]
+                    linear_coefs = list(row[1:])
+                    linear_vars = [b._mpisppy_model.eta[k]]
+
+                    for ndn_i in s._mpisppy_data.nonant_indices:
+                        ## for bundles, we add the constrains only
+                        ## to the reference first stage variables
+                        linear_vars.append(b.ref_vars[ndn_i])
+
+                    cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
+                                                linear_vars=linear_vars)
+                    b._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0)
+                    if persistent_solver:
+                        b._solver_plugin.add_constraint(b._mpisppy_model.benders_cuts[outer_iter, k])
+
+        else:
+            for sn,s in opt.local_subproblems.items():
+                persistent_solver = sputils.is_persistent(s._solver_plugin)
+                for idx, k in enumerate(opt.all_scenario_names):
+                    row = coefs[row_len*idx:row_len*(idx+1)]
+                    # the row could be all zeros,
+                    # which doesn't do anything
+                    if (row == 0.).all():
+                        continue
+                    # rows are:
+                    # [ const, eta_coeff, *nonant_coeffs ]
+                    linear_const = row[0]
+                    linear_coefs = list(row[1:])
+                    linear_vars = [s._mpisppy_model.eta[k]]
+                    linear_vars.extend(s._mpisppy_data.nonant_indices.values())
+
+                    cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
+                                                linear_vars=linear_vars)
+                    s._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0.)
+                    if persistent_solver:
+                        s._solver_plugin.add_constraint(s._mpisppy_model.benders_cuts[outer_iter, k])
+
+        # NOTE: the LShaped code negates the objective, so
+        #       we do the same here for consistency
+        ib = self.opt.spcomm.BestInnerBound
+        ob = self.opt.spcomm.BestOuterBound
+        if not opt.is_minimizing:
+            ib = -ib
+            ob = -ob
+        add_cut = (math.isfinite(ib) or math.isfinite(ob)) and \
+                ((ib < self.best_inner_bound) or (ob > self.best_outer_bound))
+        if add_cut:
+            self.best_inner_bound = ib
+            self.best_outer_bound = ob
+            for sn,s in opt.local_subproblems.items():
+                persistent_solver = sputils.is_persistent(s._solver_plugin)
+                prior_outer_iter = list(s._mpisppy_model.inner_bound_constr.keys())
+                s._mpisppy_model.inner_bound_constr[outer_iter] = (ob, s._mpisppy_model.EF_obj, ib)
+                if persistent_solver:
+                    s._solver_plugin.add_constraint(s._mpisppy_model.inner_bound_constr[outer_iter])
+                # remove other ib constraints (we only need the tightest)
+                for it in prior_outer_iter:
+                    if persistent_solver:
+                        s._solver_plugin.remove_constraint(s._mpisppy_model.inner_bound_constr[it])
+                    del s._mpisppy_model.inner_bound_constr[it]
+
+        ## helping the extention track cuts
+        self.new_cuts = True
+
+    def setup_hub(self):
+        idx = self.cut_gen_spoke_index
+        self.all_nonants_and_etas = np.zeros(self.opt.spcomm.local_lengths[idx - 1] + 1)
+
+        self.nonant_len = self.opt.nonant_length
+
+        # save the best bounds so far
+        self.best_inner_bound = math.inf
+        self.best_outer_bound = -math.inf
+
+        # helping the extension track cuts
+        self.new_cuts = False
+
+    def initialize_spoke_indices(self):
+        for (i, spoke) in enumerate(self.opt.spcomm.spokes):
+            if spoke["spoke_class"] == CrossScenarioCutSpoke:
+                self.cut_gen_spoke_index = i + 1
+
+    def sync_with_spokes(self):
+        self.send_to_cross_cuts()
+        self.get_from_cross_cuts()
 
     def pre_iter0(self):
         if self.opt.multistage:
@@ -134,11 +282,14 @@ class CrossScenarioExtension(Extension):
                 _eta_init = { k: -v for k,v in valid_eta_bound.items() }
             else:
                 _eta_init = valid_eta_bound
-            _eta_bounds = lambda m,k : (_eta_init[k], None)
+            def _eta_bounds(m, k):
+                return _eta_init[k], None
         else:
             lb = (-sys.maxsize - 1) * 1. / len(opt.all_scenario_names)
-            _eta_init = lambda m,k : lb
-            _eta_bounds = lambda m,k : (lb, None)
+            def _eta_init(m, k):
+                return lb
+            def _eta_bounds(m, k):
+                return lb, None
 
         # eta is attached to each subproblem, regardless of bundles
         bundling = opt.bundling
@@ -240,7 +391,7 @@ class CrossScenarioExtension(Extension):
 
         # try to get the initial eta LB cuts
         # (may not be available)
-        opt.spcomm.get_from_cross_cuts()
+        self.get_from_cross_cuts()
 
     def miditer(self):
         self.iter_since_last_check += 1
@@ -260,7 +411,7 @@ class CrossScenarioExtension(Extension):
             ob_new = True
         
         if not self.any_cuts:
-            if self.opt.spcomm.new_cuts:
+            if self.new_cuts:
                 self.any_cuts = True
 
         ## if its the second time or more with this IB, we'll only check
@@ -268,12 +419,11 @@ class CrossScenarioExtension(Extension):
         check = (self.check_bound_iterations is not None) and self.any_cuts and ( \
                 (self.iter_at_cur_ib == self.check_bound_iterations) or \
                 (self.iter_at_cur_ib > self.check_bound_iterations and ob_new) or \
-                ((self.iter_since_last_check%self.check_bound_iterations == 0) and self.opt.spcomm.new_cuts))
+                ((self.iter_since_last_check%self.check_bound_iterations == 0) and self.new_cuts))
                 # if there hasn't been OB movement, check every so often if we have new cuts
         if check:
-            global_toc(f"Attempting to update Best Bound with CrossScenarioExtension")
             self._check_bound()
-            self.opt.spcomm.new_cuts = False
+            self.new_cuts = False
             self.iter_since_last_check = 0
 
     def enditer(self):

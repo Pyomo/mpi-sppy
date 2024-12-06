@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Run a lot of examples for regression testing; dlw May 2020
 # Not intended to be user-friendly.
 # Assumes you run from the examples directory.
@@ -39,13 +45,13 @@ badguys = dict()
 def egret_avail():
     try:
         import egret
-    except:
+    except Exception:
         return False
 
-    p = str(egret.__path__)
-    l = p.find("'")
-    r = p.find("'", l+1)
-    egretrootpath = p[l+1:r]
+    path = str(egret.__path__)
+    left = path.find("'")
+    right = path.find("'", left+1)
+    egretrootpath = path[left+1:right]
 
     egret_thirdparty_path = os.path.join(egretrootpath, "thirdparty")
     if os.path.exists(os.path.join(egret_thirdparty_path, "pglib-opf-master")):
@@ -58,7 +64,7 @@ def egret_avail():
 def do_one(dirname, progname, np, argstring):
     """ return the code"""
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
+    runstring = "mpiexec {} -np {} python -u -m mpi4py {} {}".\
                 format(mpiexec_arg, np, progname, argstring)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
@@ -100,6 +106,8 @@ def time_one(ID, dirname, progname, np, argstring):
         if (i % 2) == 0:
             foo = i * i
             bar = str(i)+"!"
+    del foo
+    del bar
     finish = dt.now()
     refsecs = (finish-start).total_seconds()
 
@@ -242,7 +250,7 @@ do_one("farmer",
 
 do_one("netdes", "netdes_cylinders.py", 5,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
-       "--solver-name={} --rel-gap=0.0 --default-rho=1 "
+       "--solver-name={} --rel-gap=0.0 --default-rho=1 --presolve "
        "--slammax --lagrangian --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
 
 # sizes is slow for xpress so try linearizing the proximal term.
@@ -264,23 +272,16 @@ do_one("sizes",
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--solver-name={}".format(solver_name))
 
-do_one("sizes",
-       "sizes_cylinders.py",
-       4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
-       "--default-rho=1 --lagrangian --xhatshuffle --fwph "
-       "--solver-name={} --display-progress".format(solver_name))
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
-
 do_one("sslp",
        "sslp_cylinders.py",
-       4,
-       "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
+       3,
+       "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
        "--max-iterations=5 --default-rho=1 "
-       "--lagrangian --xhatshuffle --fwph "
+       "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
-       "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
+       "--rel-gap=0.0 "
+       "--solver-name={}".format(solver_name))
 
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
@@ -330,74 +331,102 @@ do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonan
 
 #============================
 
-if egret_avail():
-    do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
-    do_one("acopf3", "fourstage.py", 4, f"2 2 2 1 0 {solver_name}")
-
 #  sizes kills the github tests using xpress
 #  so we use linearized proximal terms
-do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
-do_one("sizes",
-       "special_cylinders.py",
-       3,
-       "--lagrangian --xhatshuffle "
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
-       "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
+if not nouc:
+    # put a few slow runs and/or runs that are trouble on github in the uc group
 
-if not nouc and egret_avail():
-    print("\nSlow runs ahead...\n")
-    # 3-scenario UC
-    do_one("uc", "uc_ef.py", 1, solver_name+" 3")
+    do_one("sslp",
+           "sslp_cylinders.py",
+           4,
+           "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
+           "--max-iterations=5 --default-rho=1 "
+           "--subgradient --xhatshuffle --fwph  --coeff-rho "
+           "--linearize-proximal-terms "
+           "--rel-gap=0.0 "
+           "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
+    do_one("sizes",
+           "special_cylinders.py",
+           3,
+           "--lagrangian --xhatshuffle "
+           "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+           "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
+           "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
 
-    do_one("uc", "uc_cylinders.py", 4,
-           "--bundles-per-rank=0 --max-iterations=2 "
-           "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 --fwph "
-           " --lagrangian --xhatshuffle "
-           "--ph-mipgaps-json=phmipgaps.json "
-           "--solver-name={}".format(solver_name))
-    do_one("uc", "uc_lshaped.py", 2,
-           "--bundles-per-rank=0 --max-iterations=5 "
-           "--default-rho=1 --num-scens=3 --xhatlshaped "
-           "--solver-name={} --max-solver-threads=1".format(solver_name))
-    do_one("uc", "uc_cylinders.py", 3,
-           "--run-aph --bundles-per-rank=0 --max-iterations=2 "
-           "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
-           "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
-           "--ph-mipgaps-json=phmipgaps.json "
-           "--solver-name={}".format(solver_name))
-    # as of May 2022, this one works well, but outputs some crazy messages
-    do_one("uc", "uc_ama.py", 3,
-           "--bundles-per-rank=0 --max-iterations=2 "
-           "--default-rho=1 --num-scens=3 "
-           "--fixer-tol=1e-2 --lagranger --xhatshuffle "
-           "--solver-name={}".format(solver_name))
+    do_one("sizes",
+           "sizes_cylinders.py",
+           4,
+           "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+           "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
+           "--default-rho=1 --lagrangian --xhatshuffle --fwph "
+           "--solver-name={} --display-progress".format(solver_name))
 
-    # 10-scenario UC
-    time_one("UC_cylinder10scen", "uc", "uc_cylinders.py", 3,
-             "--bundles-per-rank=5 --max-iterations=2 "
-             "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-             "--lagrangian-iter0-mipgap=1e-7 "
-             "--ph-mipgaps-json=phmipgaps.json "
-             "--lagrangian --xhatshuffle "
-             "--solver-name={}".format(solver_name))
-    # note that fwph takes a long time to do one iteration
-    do_one("uc", "uc_cylinders.py", 4,
-           "--bundles-per-rank=5 --max-iterations=2 "
-           "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-           " --lagrangian --xhatshuffle --fwph "
-           "--lagrangian-iter0-mipgap=1e-7 "
-           "--ph-mipgaps-json=phmipgaps.json "
-           "--solver-name={}".format(solver_name))
-    do_one("uc", "uc_cylinders.py", 5,
-           "--bundles-per-rank=5 --max-iterations=2 "
-           "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-           " --lagrangian --xhatshuffle --fwph "
-           "--lagrangian-iter0-mipgap=1e-7 --cross-scenario-cuts "
-           "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
-           "--solver-name={}".format(solver_name))
+    if egret_avail():
+        print("\nSlow runs ahead...\n")
+        do_one("acopf3", "ccopf2wood.py", 2, f"2 3 2 0 {solver_name}")
+        do_one("acopf3", "fourstage.py", 4, f"2 2 2 1 0 {solver_name}")
+
+        # 3-scenario UC
+        do_one("uc", "uc_ef.py", 1, solver_name+" 3")
+
+        do_one("uc", "gradient_uc_cylinders.py", 15,
+               "--bundles-per-rank=0 --max-iterations=100 --default-rho=1 "
+               "--xhatshuffle --ph-ob --num-scens=5 --max-solver-threads=2 "
+               "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
+               f"--solver-name={solver_name} --xhatpath uc_cyl_nonants.npy "
+               "--rel-gap 0.00001 --abs-gap=1 --intra-hub-conv-thresh=-1 "
+               "--grad-rho-setter --grad-order-stat 0.5 "
+               "--grad-dynamic-primal-crit")
+
+        do_one("uc", "uc_cylinders.py", 4,
+               "--bundles-per-rank=0 --max-iterations=2 "
+               "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
+               "--lagrangian-iter0-mipgap=1e-7 --fwph "
+               " --lagrangian --xhatshuffle "
+               "--ph-mipgaps-json=phmipgaps.json "
+               "--solver-name={}".format(solver_name))
+        do_one("uc", "uc_lshaped.py", 2,
+               "--bundles-per-rank=0 --max-iterations=5 "
+               "--default-rho=1 --num-scens=3 --xhatlshaped "
+               "--solver-name={} --max-solver-threads=1".format(solver_name))
+        do_one("uc", "uc_cylinders.py", 3,
+               "--run-aph --bundles-per-rank=0 --max-iterations=2 "
+               "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
+               "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
+               "--ph-mipgaps-json=phmipgaps.json "
+               "--solver-name={}".format(solver_name))
+        # as of May 2022, this one works well, but outputs some crazy messages
+        do_one("uc", "uc_ama.py", 3,
+               "--bundles-per-rank=0 --max-iterations=2 "
+               "--default-rho=1 --num-scens=3 "
+               "--fixer-tol=1e-2 --lagranger --xhatshuffle "
+               "--solver-name={}".format(solver_name))
+
+        # 10-scenario UC
+        time_one("UC_cylinder10scen", "uc", "uc_cylinders.py", 3,
+                 "--bundles-per-rank=5 --max-iterations=2 "
+                 "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+                 "--lagrangian-iter0-mipgap=1e-7 "
+                 "--ph-mipgaps-json=phmipgaps.json "
+                 "--lagrangian --xhatshuffle "
+                 "--solver-name={}".format(solver_name))
+        # note that fwph takes a long time to do one iteration
+        do_one("uc", "uc_cylinders.py", 4,
+               "--bundles-per-rank=5 --max-iterations=2 "
+               "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+               " --lagrangian --xhatshuffle --fwph "
+               "--lagrangian-iter0-mipgap=1e-7 "
+               "--ph-mipgaps-json=phmipgaps.json "
+               "--solver-name={}".format(solver_name))
+        do_one("uc", "uc_cylinders.py", 5,
+               "--bundles-per-rank=5 --max-iterations=2 "
+               "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
+               " --lagrangian --xhatshuffle --fwph "
+               "--lagrangian-iter0-mipgap=1e-7 --cross-scenario-cuts "
+               "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
+               "--solver-name={}".format(solver_name))
+        do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 if len(badguys) > 0:
     print("\nBad Guys:")

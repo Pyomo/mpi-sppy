@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # udpated April 20
 # xbar from xhat (copied from xhat specific, DLW Feb 2023)
 
@@ -46,7 +52,6 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         if not isinstance(self.opt, Xhat_Eval):
             raise RuntimeError("XhatXbarInnerBound must be used with Xhat_Eval.")
 
-        verbose = self.opt.options['verbose']
         xhatter = XhatXbar(self.opt)
         # somehow deal with the prox option .... TBD .... important for aph APH
 
@@ -58,16 +63,11 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
         self.opt._update_E1()  
         if (abs(1 - self.opt.E1) > self.opt.E1_tolerance):
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.opt.E1)
-                print("E1_tolerance = ", self.opt.E1_tolerance)
-            quit()
+            raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
 
         ### end iter0 stuff
 
         xhatter.post_iter0()
-        print("about to attach xbars")
         _attach_xbars(self.opt)
         self.opt._save_nonants()  # make the cache
 
@@ -79,13 +79,11 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
 
         """
         dtm = logging.getLogger(f'dtm{global_rank}')
-        verbose = self.opt.options["verbose"] # typing aid  
         logging.debug("Enter xhatxbar main on rank {}".format(global_rank))
 
         xhatter = self.ib_prep()
 
         ib_iter = 1  # ib is for inner bound
-        got_kill_signal = False
         while (not self.got_kill_signal()):
             logging.debug('   IB loop iter={} on global rank {}'.\
                           format(ib_iter, global_rank))

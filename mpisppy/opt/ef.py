@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 import mpisppy.spbase
 import pyomo.environ as pyo
 import logging
@@ -25,10 +31,13 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         scenario_creator (callable):
             Scenario creator function, which takes as input a scenario
             name, and returns a Pyomo model of that scenario.
+        scenario_creator_kwargs (dict, optional):
+            Keyword arguments passed to `scenario_creator`.
+        all_nodenames (list, optional):
+            List of all node names, incl. leaves. Can be None for two-stage
+            problem.
         model_name (str, optional):
             Name of the resulting EF model object.
-        scenario_creator_kwargs (dict):
-            Keyword args passed to `scenario_creator`.
         suppress_warnings (bool, optional):
             Boolean to suppress warnings when building the EF. Default
             is False.

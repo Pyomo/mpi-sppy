@@ -1,0 +1,14 @@
+scen2.DevotedAcreage[CORN0],80.0
+scen2.DevotedAcreage[SUGAR_BEETS0],250.0
+scen2.DevotedAcreage[WHEAT0],170.0
+scen2.FirstStageCost,108900.0
+scen2.QuantityPurchased[CORN0],0.0
+scen2.QuantityPurchased[SUGAR_BEETS0],0.0
+scen2.QuantityPurchased[WHEAT0],0.0
+scen2.QuantitySubQuotaSold[CORN0],48.0
+scen2.QuantitySubQuotaSold[SUGAR_BEETS0],6000.0
+scen2.QuantitySubQuotaSold[WHEAT0],310.0
+scen2.QuantitySuperQuotaSold[CORN0],0.0
+scen2.QuantitySuperQuotaSold[SUGAR_BEETS0],0.0
+scen2.QuantitySuperQuotaSold[WHEAT0],0.0
+scen2.SecondStageCost,-275900.0

@@ -1,5 +1,11 @@
-# Copyright 2020 by B. Knueven, D. Mildebrath, C. Muir, J-P Watson, and D.L. Woodruff
-# This software is distributed under the 3-clause BSD License.
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # Provide some test for confidence intervals
 """
 
@@ -9,17 +15,13 @@ import os
 import tempfile
 import numpy as np
 import unittest
-import subprocess
-import importlib
 
-import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
 import mpisppy.utils.sputils as sputils
 import mpisppy.tests.examples.aircond as aircond
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
-import mpisppy.confidence_intervals.zhat4xhat as zhat4xhat
 import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
@@ -129,6 +131,7 @@ class Test_confint_aircond(unittest.TestCase):
         ama_object = ama.from_module(self.refmodelname,
                                      cfg=options,
                                      use_command_line=False)   
+        assert ama_object is not None
         
     def test_MMW_constructor(self):
         options, scenario_creator_kwargs = self._get_base_options()
@@ -138,10 +141,9 @@ class Test_confint_aircond(unittest.TestCase):
                           options,
                           xhat,
                           options['num_batches'], batch_size = options["batch_size"], start = options['num_scens'])
+        assert MMW is not None
 
     def test_seqsampling_creator(self):
-        BFs = [4, 3, 2]
-        xhat_gen_options = self._get_xhat_gen_options(BFs)
         optionsBM = config.Config()
         confidence_config.confidence_config(optionsBM)
         confidence_config.sequential_config(optionsBM)
@@ -167,8 +169,6 @@ class Test_confint_aircond(unittest.TestCase):
         
     def test_indepscens_seqsampling_creator(self):
         options, scenario_creator_kwargs = self._get_base_options()
-        branching_factors= global_BFs
-        xhat_gen_options = self._get_xhat_gen_options(branching_factors)
         
         # We want a very small instance for testing on GitHub.
         optionsBM = config.Config()
@@ -209,6 +209,7 @@ class Test_confint_aircond(unittest.TestCase):
                      "no solver is available")      
     def test_xhat_eval_creator(self):
         ev = self._eval_creator()
+        assert ev is not None
 
         
     @unittest.skipIf(not solver_available,
