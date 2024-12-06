@@ -1,0 +1,5 @@
+# include farmer.run
+model farmer_test.ampl;
+option solver xpress;
+solve;
+
