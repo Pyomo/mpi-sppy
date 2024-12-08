@@ -12,7 +12,7 @@ Here are two methods that seem to work well for installation, at least when cons
 
    * ``conda install openmpi; conda install mpi4py``  (in that order)
   
-#. If you already have an existing version of MPI, it may be better compile mpi4py against it. This can be done by installing mpi4py though pip.
+#. If you already have an existing version of MPI, it may be better compile mpi4py against it. This can be done by installing mpi4py through pip.
 
    * ``pip install mpi4py``
 
