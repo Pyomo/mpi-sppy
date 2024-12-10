@@ -57,6 +57,7 @@ def _parse_args(m):
     cfg.ph_args()
     cfg.aph_args()
     cfg.fixer_args()    
+    cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()    
     cfg.fwph_args()
     cfg.lagrangian_args()
@@ -170,6 +171,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         }
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+
+    if cfg.integer_relax_then_enforce:
+        vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
     if cfg.grad_rho:
         ext_classes.append(Gradient_extension)
