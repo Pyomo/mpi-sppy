@@ -140,7 +140,10 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def nonant_cost_coeffs(self, s):
         if s not in self._nonant_cost_coeffs:
-            self._nonant_cost_coeffs[s] = nonant_cost_coeffs(s)
+            if hasattr(s._mpisppy_data, "nonant_cost_coeffs"):
+                self._nonant_cost_coeffs[s] = s._mpisppy_model.nonant_cost_coeffs
+            else:
+                self._nonant_cost_coeffs[s] = nonant_cost_coeffs(s)
         return self._nonant_cost_coeffs[s]
 
     def _compute_and_update_rho(self):
