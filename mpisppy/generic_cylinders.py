@@ -80,7 +80,7 @@ def _parse_args(m):
     cfg.checker()  # looks for inconsistencies 
     return cfg
 
-def _name_lists(module, cfg):
+def _name_lists(module, cfg, bundle_wrapper=None):
 
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
@@ -99,7 +99,8 @@ def _name_lists(module, cfg):
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
         num_buns = cfg.num_scens // cfg.scenarios_per_bundle
-        all_scenario_names = wrapper.bundle_names_creator(num_buns, cfg=cfg)
+        all_scenario_names = bundle_wrapper.bundle_names_creator(num_buns, cfg=cfg)
+        all_nodenames = None  # This is seldom used; also, proper bundles result in two stages
     else:
         all_scenario_names = module.scenario_names_creator(num_scens)
 
@@ -107,7 +108,7 @@ def _name_lists(module, cfg):
 
 
 #==========
-def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
+def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
@@ -125,7 +126,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     else:
         ph_converger = None
 
-    all_scenario_names, all_nodenames = _name_lists(module, cfg)    
+    all_scenario_names, all_nodenames = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)    
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -397,9 +398,9 @@ def _write_bundles(module,
     global_toc(f"Bundles written to {cfg.pickle_bundles_dir}")
         
 #==========
-def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement):
+def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
 
-    all_scenario_names, _ = _name_lists(module, cfg)
+    all_scenario_names, _ = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
     ef = sputils.create_EF(
         all_scenario_names,
         module.scenario_creator,
@@ -481,16 +482,17 @@ if __name__ == "__main__":
     
     cfg = _parse_args(module)
 
+    bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
         # TBD: remove the need for dill if you are not reading or writing
         import mpisppy.utils.pickle_bundle as pickle_bundle
         import mpisppy.utils.proper_bundler as proper_bundler
     
-        wrapper = proper_bundler.ProperBundler(module)
-        scenario_creator = wrapper.scenario_creator
+        bundle_wrapper = proper_bundler.ProperBundler(module)
+        scenario_creator = bundle_wrapper.scenario_creator
         # The scenario creator is wrapped, so these kw_args will not go the original
         # creator (the kw_creator will keep the original args)
-        scenario_creator_kwargs = wrapper.kw_creator(cfg)
+        scenario_creator_kwargs = bundle_wrapper.kw_creator(cfg)
     elif cfg.unpickle_scenarios_dir is not None:
         # So reading pickled scenarios cannot be composed with proper bundles
         import mpisppy.utils.pickle_bundle as pickle_bundle
@@ -520,6 +522,6 @@ if __name__ == "__main__":
                          scenario_denouement,
                          global_comm)
     elif cfg.EF:
-        _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)
+        _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
     else:
-        _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement)
+        _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
