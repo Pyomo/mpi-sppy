@@ -275,9 +275,12 @@ do_one("sizes",
 do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
-       3,
+       4,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
-       "--max-iterations=5 --default-rho=1 "
+       "--integer-relax-then-enforce "
+       "--integer-relax-then-enforce-ratio=0.95 "
+       "--lagrangian "
+       "--max-iterations=100 --default-rho=1 "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 "
