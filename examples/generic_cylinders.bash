@@ -4,6 +4,11 @@
 SOLVER="cplex"
 SPB=1
 
+echo "^^^ write scenario lp and nonant json files ^^^"
+cd sizes
+python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles
+cd ..
+exit
 echo "^^^ pickle the scenarios ^^^"
 cd farmer
 python ../../mpisppy/generic_cylinders.py --module-name farmer --pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10
