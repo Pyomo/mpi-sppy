@@ -8,7 +8,21 @@ echo "^^^ write scenario lp and nonant json files ^^^"
 cd sizes
 python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles
 cd ..
+
+echo "^^^ pickle sizes bundles ^^^"
+cd sizes
+python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --pickle-bundles-dir sizes_pickles --scenarios-per-bundle 5 --default-rho 1
+cd ..
+
+echo "^^^ unpickle the sizes bundles and write the lp and nonant files ^^^"
+# note that numscens need to match the number before pickling...
+# so does scenarios per bundle
+cd sizes
+python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
+cd ..
+echo "xxx also write a test?"
 exit
+
 echo "^^^ pickle the scenarios ^^^"
 cd farmer
 python ../../mpisppy/generic_cylinders.py --module-name farmer --pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10
