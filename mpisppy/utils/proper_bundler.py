@@ -94,7 +94,6 @@ class ProperBundler():
             # snames are scenario names
             snames = self.module.scenario_names_creator(lastnum-firstnum+1,
                                                         firstnum)
-
             # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
                                        scenario_creator_kwargs=self.original_kwargs,
