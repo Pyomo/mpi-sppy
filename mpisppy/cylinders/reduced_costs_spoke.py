@@ -89,10 +89,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self.opt.PH_Prep(attach_prox=False)
         self.opt._reenable_W()
 
-        if self.opt._presolver is not None:
-            # do this before we relax the integer variables
-            self.opt._presolver.presolve()
-
         relax_integer_vars = pyo.TransformationFactory("core.relax_integer_vars")
         for s in self.opt.local_subproblems.values():
             relax_integer_vars.apply_to(s)
