@@ -119,11 +119,12 @@ class TestStochAdmmWrapper(unittest.TestCase):
             if result.stderr:
                 print("Error output:")
                 print(result.stderr)
-
+                raise RuntimeError("Error encountered as shown above.")
             # Check the standard output
             if result.stdout:
                 result_by_line = result.stdout.strip().split('\n')
-                
+            else:
+                raise RuntimeError(f"No results in stdout for {command=}.")
             target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
             precedent_line_target = False
             i = 0

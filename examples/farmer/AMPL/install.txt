@@ -1,0 +1,7 @@
+0. follow instructions at https://pypi.org/project/amplpy
+1. install asl:
+   get asl from coin-or tools third party ASL
+   $ ./get.asl
+   $ ./configure
+   $ make
+   $ make install
