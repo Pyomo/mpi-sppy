@@ -58,10 +58,13 @@ class SPOpt(SPBase):
         self._save_active_objectives()
         self._subproblem_creation(options.get("verbose", False))
         if options.get("presolve", False):
-            self._presolver = SPPresolve(self)
-            self._presolver.presolve()
-        else:
-            self._presolver = None
+            # NOTE: This creates another representation
+            #       of each scenario subproblem in C++
+            #       to presolve the model on. For large
+            #       models, it is imperative we allow this
+            #       object to get garbage collected to
+            #       free the memory the C++ model uses.
+            SPPresolve(self).presolve()
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
