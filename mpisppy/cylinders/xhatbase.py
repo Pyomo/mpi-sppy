@@ -33,7 +33,7 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
 
         ### begin iter0 stuff
         xhatter.pre_iter0()
-        if self.opt.extobject is not None:
+        if self.opt.extensions is not None:
             self.opt.extobject.pre_iter0()  # for an extension
         self.opt._save_original_nonants()
 
@@ -46,7 +46,7 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
         ### end iter0 stuff (but note: no need for iter 0 solves in an xhatter)
 
         xhatter.post_iter0()
-        if self.opt.extobject is not None:
+        if self.opt.extensions is not None:
             self.opt.extobject.post_iter0()  # for an extension
  
         self.opt._save_nonants() # make the cache
