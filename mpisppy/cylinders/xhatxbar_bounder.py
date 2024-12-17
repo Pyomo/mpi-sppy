@@ -10,9 +10,8 @@
 # xbar from xhat (copied from xhat specific, DLW Feb 2023)
 
 import pyomo.environ as pyo
-import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.utils.xhat_eval import Xhat_Eval
+from mpisppy.extensions.xhatbase import XhatInnerBoundBase
 
 import mpisppy.MPI as mpi
 import logging
@@ -34,43 +33,22 @@ def _attach_xbars(opt):
 
 
 ############################################################################
-class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
+class XhatXbarInnerBound(XhatInnerBoundBase):
 
     converger_spoke_char = 'B'
 
-    def ib_prep(self):
+    def xhat_extension(self):
+        return XhatXbar(self.opt)
+
+    def xhat_prep(self):
         """
         Set up the objects needed for bounding.
 
         Returns:
             xhatter (xhatxbar object): Constructed by a call to Prep
         """
-        if "bundles_per_rank" in self.opt.options\
-           and self.opt.options["bundles_per_rank"] != 0:
-            raise RuntimeError("xhat spokes cannot have bundles (yet)")
-
-        if not isinstance(self.opt, Xhat_Eval):
-            raise RuntimeError("XhatXbarInnerBound must be used with Xhat_Eval.")
-
-        xhatter = XhatXbar(self.opt)
-        # somehow deal with the prox option .... TBD .... important for aph APH
-
-        # begin iter0 stuff
-        xhatter.pre_iter0()
-        self.opt._save_original_nonants()
-
-        self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
-
-        self.opt._update_E1()  
-        if (abs(1 - self.opt.E1) > self.opt.E1_tolerance):
-            raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
-
-        ### end iter0 stuff
-
-        xhatter.post_iter0()
+        xhatter = super().xhat_prep()
         _attach_xbars(self.opt)
-        self.opt._save_nonants()  # make the cache
-
         return xhatter
 
     def main(self):
@@ -81,7 +59,7 @@ class XhatXbarInnerBound(spoke.InnerBoundNonantSpoke):
         dtm = logging.getLogger(f'dtm{global_rank}')
         logging.debug("Enter xhatxbar main on rank {}".format(global_rank))
 
-        xhatter = self.ib_prep()
+        xhatter = self.xhat_prep()
 
         ib_iter = 1  # ib is for inner bound
         while (not self.got_kill_signal()):

@@ -9,10 +9,9 @@
 import logging
 import random
 import mpisppy.log
-import mpisppy.cylinders.spoke as spoke
 
-from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.extensions.xhatbase import XhatBase
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
@@ -20,41 +19,15 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          level=logging.CRITICAL)                         
 logger = logging.getLogger("mpisppy.cylinders.xhatshufflelooper_bounder")
 
-class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
+class XhatShuffleInnerBound(XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
-    def xhatbase_prep(self):
+    def xhat_extension(self):
+        return XhatBase(self.opt)
 
-        if "bundles_per_rank" in self.opt.options\
-           and self.opt.options["bundles_per_rank"] != 0:
-            raise RuntimeError("xhat spokes cannot have bundles (yet)")
-
-        ## for later
-        self.verbose = self.opt.options["verbose"] # typing aid  
-        self.solver_options = self.opt.options["xhat_looper_options"]["xhat_solver_options"]
-
-        if not isinstance(self.opt, Xhat_Eval):
-            raise RuntimeError("XhatShuffleInnerBound must be used with Xhat_Eval.")
-            
-        xhatter = XhatBase(self.opt)
-        self.xhatter = xhatter
-
-        ### begin iter0 stuff
-        xhatter.pre_iter0()  # for an extension
-        self.opt._save_original_nonants()
-
-        self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
-
-        self.opt._update_E1()
-        if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            raise ValueError(f"Total probability of scenarios was {self.opt.E1} "+\
-                                 f"(E1_tolerance is {self.opt.E1_tolerance})")
-        ### end iter0 stuff (but note: no need for iter 0 solves in an xhatter)
-
-        xhatter.post_iter0()
- 
-        self.opt._save_nonants() # make the cache
+    def xhat_prep(self):
+        self.xhatter = super().xhat_prep()
 
         ## option drive this? (could be dangerous)
         self.random_seed = 42
@@ -90,7 +63,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
     def main(self):
         logger.debug(f"Entering main on xhatshuffle spoke rank {self.global_rank}")
 
-        self.xhatbase_prep()
+        self.xhat_prep()
         if "reverse" in self.opt.options["xhat_looper_options"]:
             self.reverse = self.opt.options["xhat_looper_options"]["reverse"]
         else:
@@ -99,6 +72,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             self.iter_step = self.opt.options["xhat_looper_options"]["iter_step"]
         else:
             self.iter_step = None
+        self.solver_options = self.opt.options["xhat_looper_options"]["xhat_solver_options"]
 
         # give all ranks the same seed
         self.random_stream.seed(self.random_seed)

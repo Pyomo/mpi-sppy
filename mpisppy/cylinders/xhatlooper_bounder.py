@@ -7,9 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 # updated April 2020
-import mpisppy.cylinders.spoke as spoke
 from mpisppy.extensions.xhatlooper import XhatLooper
-from mpisppy.utils.xhat_eval import Xhat_Eval
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 import logging
 import mpisppy.log
 
@@ -20,44 +19,17 @@ mpisppy.log.setup_logger("mpisppy.cylinders.xhatlooper_bounder",
 logger = logging.getLogger("mpisppy.cylinders.xhatlooper_bounder")
 
 
-class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
+class XhatLooperInnerBound(XhatInnerBoundBase):
 
     converger_spoke_char = 'X'
 
-    def xhatlooper_prep(self):
-        if "bundles_per_rank" in self.opt.options\
-           and self.opt.options["bundles_per_rank"] != 0:
-            raise RuntimeError("xhat spokes cannot have bundles (yet)")
-
-        if not isinstance(self.opt, Xhat_Eval):
-            raise RuntimeError("XhatShuffleInnerBound must be used with Xhat_Eval.")
-
-        xhatter = XhatLooper(self.opt)
-
-        ### begin iter0 stuff
-        xhatter.pre_iter0()
-        self.opt._save_original_nonants()
-        
-        self.opt._lazy_create_solvers()  # no iter0 loop, but we need the solvers
-
-        self.opt._update_E1()
-        if abs(1 - self.opt.E1) > self.opt.E1_tolerance:
-            if self.opt.cylinder_rank == 0:
-                print("ERROR")
-                print("Total probability of scenarios was ", self.opt.E1)
-                print("E1_tolerance = ", self.opt.E1_tolerance)
-            quit()
-        ### end iter0 stuff
-
-        xhatter.post_iter0()
-        self.opt._save_nonants() # make the cache
-
-        return xhatter
+    def xhat_extension(self):
+        return XhatLooper(self.opt)
 
     def main(self):
         logger.debug(f"Entering main on xhatlooper spoke rank {self.global_rank}")
 
-        xhatter = self.xhatlooper_prep()
+        xhatter = self.xhat_prep()
 
         scen_limit = self.opt.options['xhat_looper_options']['scen_limit']
 
