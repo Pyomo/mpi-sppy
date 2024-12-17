@@ -600,7 +600,7 @@ def xhatlooper_spoke(
         scenario_denouement,
         all_scenario_names,
         scenario_creator_kwargs=scenario_creator_kwargs,
-        extensions=ph_extensions,
+        ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
 
