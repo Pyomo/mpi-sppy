@@ -11,7 +11,7 @@
 
 import pyomo.environ as pyo
 from mpisppy.extensions.xhatxbar import XhatXbar
-from mpisppy.extensions.xhatbase import XhatInnerBoundBase
+from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 
 import mpisppy.MPI as mpi
 import logging
