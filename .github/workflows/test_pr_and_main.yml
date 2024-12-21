@@ -380,13 +380,14 @@ jobs:
 
     steps:
       - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
+          conda install conda-forge::libstdcxx-ng
           conda install mpi4py "numpy<2" setuptools cmake
           pip install pyomo pandas xpress cplex scipy sympy dill
 
