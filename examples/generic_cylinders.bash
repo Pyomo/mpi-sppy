@@ -5,7 +5,9 @@ SOLVER="cplex"
 SPB=1
 
 echo "^^^ Multi-stage AirCond ^^^"
-mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --num-scens 9 --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --solution-base-name aircond_nonants --stag2EFsolvern
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
+# Hey something better compute numscens as a side-effect
+# --xhatshuffle --stag2EFsolvern
 exit
 
 

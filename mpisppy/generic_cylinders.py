@@ -90,8 +90,6 @@ def _name_lists(module, cfg):
         num_scens = np.prod(cfg.branching_factors)
         assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None,\
             "For now, stage2EFsolvern is required for multistage xhat"
-        assert cfg.scenarios_per_bundle is None, "proper bundles in generic_cylinders does not yet support multistage"
-
     else:
         all_nodenames = None
         num_scens = cfg.num_scens
