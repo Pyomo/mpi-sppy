@@ -8,6 +8,10 @@ echo "^^^ Multi-stage AirCond ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
 # Hey something better compute numscens as a side-effect
 # --xhatshuffle --stag2EFsolvern
+
+echo "^^^ Multi-stage AirCond, pickle the scenarios ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --pickle-scenarios-dir aircond/pickles
+
 exit
 
 
