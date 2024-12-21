@@ -99,9 +99,15 @@ class SPBase:
             raise RuntimeError("More ranks than scenarios")
 
         self._calculate_scenario_ranks()
+        # Put the deprecation message in the init so they should only see it once per rank
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
             self._assign_bundles()
             self.bundling = True
+            print("WARNING: The bundles-per-rank is now called `loose bundling' and\n"
+                  "loose bundling will be deprecated in the next release\n."
+                  "You should switch to the use of 'proper bundles'.\n"
+                  " See the documentation and also misppy.generic_cylinders.py"
+                  )
         else:
             self.bundling = False
         self._create_scenarios(scenario_creator_kwargs)
