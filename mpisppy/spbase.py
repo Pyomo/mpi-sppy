@@ -104,7 +104,7 @@ class SPBase:
             self._assign_bundles()
             self.bundling = True
             print("WARNING: The bundles-per-rank is now called `loose bundling' and\n"
-                  "loose bundling will be deprecated in the next release\n. 
+                  "loose bundling will be deprecated in the next release\n."
                   "You should switch to the use of 'proper bundles'.\n"
                   " See the documentation and also misppy.generic_cylinders.py"
                   )
