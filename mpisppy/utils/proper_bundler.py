@@ -19,8 +19,12 @@ import mpisppy.utils.pickle_bundle as pickle_bundle
 #  - read a bundle
 #  - make a bundle 
 #  - make a bundle and write it
-# Multi-stage (as of Sept 2024) not supported in class or generic_cylinders
-#  You need to do something clever like in aircondB
+# Multi-stage
+#  Is not very special because all we do is make sure that
+#  bundles cover entire second-stage nodes so the new bundled
+#  problem is a two-stage problem no matter how many stages
+#  were in the original problem. As of Dec 2024, support
+#  is provided only when there are branching factors.
 # NOTE:: the caller needs to make sure it is two stage
 #        the caller needs to worry about what is in what rank
 #        (local_scenarios might have bundle names, e.g.)
@@ -50,6 +54,16 @@ class ProperBundler():
         return cfg.model.scenario_names_creator(num_scens, start=start)
 
     def bundle_names_creator(self, num_buns, start=None, cfg=None):
+
+        def _multistage_check(bunsize):
+            # returns bunBFs as a side-effect
+            BFs = cfg.branching_factors
+            beyond2size = np.prod(BFs[1:])
+            if bunsize % beyond2size!= 0:
+                raise RuntimeError(f"Bundles must consume entire second stage nodes: {beyond2size=} {bunsize=}")
+            # we need bunBFs for EF formulation
+            self.bunBFs = [bunsize // beyond2size] + BFs[1:]
+        
         # start refers to the bundle number; bundles are always zero-based
         if start is None:
             start = 0
@@ -58,6 +72,10 @@ class ProperBundler():
         assert cfg.get("scenarios_per_bundle") is not None
         assert cfg.num_scens % cfg.scenarios_per_bundle == 0
         bsize = cfg.scenarios_per_bundle  # typing aid
+        if cfg.get("branching_factors") is not None:
+            _multistage_check(bsize)
+        else:
+            self.bundBFs = None
         # We need to know if scenarios (not bundles) are one-based.
         inum = sputils.extract_num(self.module.scenario_names_creator(1)[0])
         names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in range(start+num_buns)]
@@ -87,7 +105,6 @@ class ProperBundler():
             bundle = pickle_bundle.dill_unpickle(fname)
             return bundle
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is None:
-            # this is also the branch for proper_no_files
             # If we are still here, we have to create the bundle.
             firstnum = int(sname.split("_")[1])  # sname is a bundle name
             lastnum = int(sname.split("_")[2])
@@ -95,9 +112,13 @@ class ProperBundler():
             snames = self.module.scenario_names_creator(lastnum-firstnum+1,
                                                         firstnum)
 
+            kws = self.original_kwargs
+            if self.bunBFs is not None:
+                # The original scenario creator needs to handle these
+                kws["branching_factors"] = self.bunBFs
             # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
-                                       scenario_creator_kwargs=self.original_kwargs,
+                                       scenario_creator_kwargs=kws,
                                        EF_name=sname,
                                        suppress_warnings=True,                                       
                                        nonant_for_fixed_vars = False)
@@ -112,6 +133,12 @@ class ProperBundler():
                 bprob = bundle._mpisppy_probability 
             sputils.attach_root_node(bundle, 0, nonantlist)
             bundle._mpisppy_probability = bprob
+            if (len(self.all_nodenames) > 1 and not self.multistage:
+                raise RuntimeError("You are creating proper bundles for a\n"
+                      "multi-stage problem, but without cfg.branching_factors.\n"
+                      "We need branching factors and all bundles\n"
+                      "must cover entire second stage nodes.\n"
+                      )
             return bundle
         else:
             raise RuntimeError (f"Scenario name does not have scen or Bundle: {sname}")
