@@ -40,16 +40,12 @@ class FieldArray:
     def __init__(self, length: int):
         self._array = communicator_array(length)
         self._is_new = False
-        self._id = -1
+        self._id = 0
         return
 
     def array(self):
         # return self._array[:-1]
         return self._array
-
-    # def new_write_id(self):
-    #     self._id += 1
-    #     return self._id
 
     def is_new(self):
         return self._is_new

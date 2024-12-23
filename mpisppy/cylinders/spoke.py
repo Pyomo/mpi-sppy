@@ -158,6 +158,18 @@ class Spoke(SPCommunicator):
 
         return False
 
+    def _got_kill_signal(self):
+        shutdown_buf = self._locals[self._make_key(Field.SHUTDOWN, 0)]
+        if shutdown_buf.is_new():
+            shutdown = (self.shutdown[0] == 1.0)
+        else:
+            shutdown = False
+        ## End if
+        # print("SHUTDOWN: ", self.shutdown[0],
+        #       "  New: ", shutdown_buf.is_new(),
+        #       "  RetVal: ", shutdown)
+        return shutdown
+
     def got_kill_signal(self):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
@@ -165,7 +177,7 @@ class Spoke(SPCommunicator):
         # return self._got_kill_signal()
         # self.window.get(self.shutdown, 0, Field.SHUTDOWN)
         self.update_locals()
-        return self.shutdown[0] == 1.0
+        return self._got_kill_signal()
 
     @abc.abstractmethod
     def main(self):

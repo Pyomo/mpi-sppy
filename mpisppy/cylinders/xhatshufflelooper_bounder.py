@@ -14,6 +14,8 @@ import mpisppy.cylinders.spoke as spoke
 from mpisppy.utils.xhat_eval import Xhat_Eval
 from mpisppy.extensions.xhatbase import XhatBase
 
+from mpisppy.cylinders.spwindow import Field
+
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
                          "xhatclp.log",
@@ -123,7 +125,10 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         while not self.got_kill_signal():
             # When there is no iter0, the serial number must be checked.
             # (unrelated: uncomment the next line to see the source of delay getting an xhat)
-            if self.get_serial_number() == 0:
+            # if self.get_serial_number() == 0:
+            #     continue
+
+            if self._locals[self._make_key(Field.NONANT, 0)].id() == 0:
                 continue
 
             if (xh_iter-1) % 100 == 0:
