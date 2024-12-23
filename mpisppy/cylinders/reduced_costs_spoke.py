@@ -8,9 +8,10 @@
 ###############################################################################
 import pyomo.environ as pyo
 import numpy as np
-from mpisppy.cylinders.spcommunicator import communicator_array
+# from mpisppy.cylinders.spcommunicator import communicator_array
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
-from mpisppy.utils.sputils import is_persistent 
+from mpisppy.cylinders.spwindow import Field
+from mpisppy.utils.sputils import is_persistent
 from mpisppy import MPI
 
 class ReducedCostsSpoke(LagrangianOuterBound):
@@ -22,14 +23,54 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self.bound_tol = self.opt.options['rc_bound_tol']
         self.consensus_threshold = np.sqrt(self.bound_tol)
 
-    def make_windows(self):
+    # def make_windows(self):
+    #     if not hasattr(self.opt, "local_scenarios"):
+    #         raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
+
+    #     if len(self.opt.local_scenarios) == 0:
+    #         raise RuntimeError("Rank has zero local_scenarios")
+
+    #     rbuflen = 2
+    #     for s in self.opt.local_scenarios.values():
+    #         rbuflen += len(s._mpisppy_data.nonant_indices)
+
+    #     self.nonant_length = self.opt.nonant_length
+
+    #     self._modeler_fixed_nonants = {}
+
+    #     for k,s in self.opt.local_scenarios.items():
+    #         self._modeler_fixed_nonants[s] = set()
+    #         for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
+    #             if xvar.fixed:
+    #                 self._modeler_fixed_nonants[s].add(ndn_i)
+
+    #     scenario_buffer_len = 0
+    #     for s in self.opt.local_scenarios.values():
+    #         scenario_buffer_len += len(s._mpisppy_data.nonant_indices)
+    #     self._scenario_rc_buffer = np.zeros(scenario_buffer_len)
+    #     # over load the _bound attribute here
+    #     # so the rest of the class works as expected
+    #     # first float will be the bound we're sending
+    #     # indices 1:1+self.nonant_length will be the
+    #     # expected reduced costs,
+    #     # 1+self.nonant_length:1+self.nonant_length+|S|*self.nonant_length
+    #     # will be the scenario reduced costs, and
+    #     # the last index will be the serial number
+    #     sbuflen = 1 + self.nonant_length + scenario_buffer_len
+
+    #     self._make_windows(sbuflen, rbuflen)
+    #     self._locals = communicator_array(rbuflen)
+    #     self._bound = communicator_array(sbuflen)
+    #     # print(f"nonant_length: {self.nonant_length}, integer_nonant_length: {self.integer_nonant_length}")
+
+    def build_window_spec(self):
         if not hasattr(self.opt, "local_scenarios"):
             raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
 
         if len(self.opt.local_scenarios) == 0:
             raise RuntimeError("Rank has zero local_scenarios")
 
-        rbuflen = 2
+        rbuflen = 0
         for s in self.opt.local_scenarios.values():
             rbuflen += len(s._mpisppy_data.nonant_indices)
 
@@ -42,6 +83,9 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
                 if xvar.fixed:
                     self._modeler_fixed_nonants[s].add(ndn_i)
+                ## End if
+            ## End for
+        ## End for
 
         scenario_buffer_len = 0
         for s in self.opt.local_scenarios.values():
@@ -55,28 +99,49 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # 1+self.nonant_length:1+self.nonant_length+|S|*self.nonant_length
         # will be the scenario reduced costs, and
         # the last index will be the serial number
-        sbuflen = 1 + self.nonant_length + scenario_buffer_len
+        # sbuflen = 1 + self.nonant_length + scenario_buffer_len
 
-        self._make_windows(sbuflen, rbuflen)
-        self._locals = communicator_array(rbuflen)
-        self._bound = communicator_array(sbuflen)
-        # print(f"nonant_length: {self.nonant_length}, integer_nonant_length: {self.integer_nonant_length}")
+        # # self._make_windows(sbuflen, rbuflen)
+        # self._locals = communicator_array(rbuflen)
+        # self._bound = communicator_array(sbuflen)
+        # # print(f"nonant_length: {self.nonant_length}, integer_nonant_length: {self.integer_nonant_length}")
+
+        # window_spec = dict()
+        # window_spec[Field.OUTER_BOUND] = 1
+        window_spec = super().build_window_spec()
+        window_spec[Field.EXPECTED_REDUCED_COST] = self.nonant_length
+        window_spec[Field.SCENARIO_REDUCED_COST] = scenario_buffer_len
+
+        self.register_send_field(Field.OUTER_BOUND, 1)
+        self.register_send_field(Field.EXPECTED_REDUCED_COST, self.nonant_length)
+        self.register_send_field(Field.SCENARIO_REDUCED_COST, scenario_buffer_len)
+
+        return window_spec
+
 
     @property
     def rc_global(self):
-        return self._bound[1:1+self.nonant_length]
+        # return self._bound[1:1+self.nonant_length]
+        return self._sends[Field.EXPECTED_REDUCED_COST].array()
 
     @rc_global.setter
     def rc_global(self, vals):
-        self._bound[1:1+self.nonant_length] = vals
+        # self._bound[1:1+self.nonant_length] = vals
+        arr = self._sends[Field.EXPECTED_REDUCED_COST].array()
+        arr[:] = vals
+        return
 
     @property
     def rc_scenario(self):
-        return self._bound[1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)]
+        # return self._bound[1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)]
+        return self._sends[Field.SCENARIO_REDUCED_COST].array()
 
     @rc_scenario.setter
     def rc_scenario(self, vals):
-        self._bound[1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)] = vals
+        # self._bound[1+self.nonant_length:1+self.nonant_length+len(self._scenario_rc_buffer)] = vals
+        arr = self._sends[Field.SCENARIO_REDUCED_COST].array()
+        arr[:] = vals
+        return
 
     def lagrangian_prep(self):
         """
@@ -115,7 +180,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
         for sub in self.opt.local_subproblems.values():
             if is_persistent(sub._solver_plugin):
-                # Note: what happens with non-persistent solvers? 
+                # Note: what happens with non-persistent solvers?
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
                 # - if not, the solver should throw an error
                 # - direct solvers seem to behave the same as persistent solvers
@@ -134,7 +199,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                     xb = s._mpisppy_model.xbars[ndn_i].value
                     # check variance of xb to determine if consensus achieved
                     var_xb = pyo.value(s._mpisppy_model.xsqbars[ndn_i]) - xb * xb
-            
+
                     if var_xb  > self.consensus_threshold * self.consensus_threshold:
                         rc[ci] = np.nan
                         continue

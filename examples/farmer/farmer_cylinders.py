@@ -8,6 +8,9 @@
 ###############################################################################
 # general example driver for farmer with cylinders
 
+import warnings
+warnings.filterwarnings("ignore")
+
 import farmer
 
 # Make it all go

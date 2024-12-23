@@ -13,11 +13,13 @@ import mpisppy.log
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SPCommunicator, communicator_array
+from mpisppy.cylinders.spcommunicator import SendArray, RecvArray, SPCommunicator, communicator_array
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
 from mpisppy import global_toc
+
+from mpisppy.cylinders.spwindow import Field, SPWindow
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
@@ -29,10 +31,12 @@ class Hub(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, spokes, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
         assert len(spokes) == self.n_spokes
-        self.local_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
-        self.remote_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
-        self.local_lengths = np.zeros(self.n_spokes, dtype=np.int64)
-        self.remote_lengths = np.zeros(self.n_spokes, dtype=np.int64)
+        # self.local_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
+        # self.local_write_ids = dict()
+        # self.remote_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
+        # TODO: Cleanup the usage of local_lengths and remote_lengths
+        # self.local_lengths = np.zeros(self.n_spokes, dtype=np.int64)
+        # self.remote_lengths = np.zeros(self.n_spokes, dtype=np.int64)
         # ^^^ Does NOT include +1
         self.spokes = spokes  # List of dicts
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
@@ -45,6 +49,11 @@ class Hub(SPCommunicator):
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
         self.last_gap = float('inf')  # abs_gap tracker
+
+        # All hubs need to be able to tell spokes to terminate. Register that here.
+        self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
+
+        return
 
     @abc.abstractmethod
     def setup_hub(self):
@@ -183,9 +192,17 @@ class Hub(SPCommunicator):
         """
         logging.debug("Hub is trying to receive from InnerBounds")
         for idx in self.innerbound_spoke_indices:
-            is_new = self.hub_from_spoke(self.innerbound_receive_buffers[idx], idx)
+            key = self._make_key(Field.INNER_BOUND, idx)
+            recv_buf = self._locals[key]
+            # is_new = self.hub_from_spoke(self.innerbound_receive_buffers[idx],
+            is_new = self.hub_from_spoke(recv_buf.array(),
+                                         idx,
+                                         Field.INNER_BOUND,
+                                         recv_buf.id())
             if is_new:
-                bound = self.innerbound_receive_buffers[idx][0]
+                recv_buf.pull_id()
+                # bound = self.innerbound_receive_buffers[idx][0]
+                bound = recv_buf.array()[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
                 self.BestInnerBound = self.InnerBoundUpdate(bound, idx)
         logging.debug("ph back from InnerBounds")
@@ -197,9 +214,17 @@ class Hub(SPCommunicator):
         """
         logging.debug("Hub is trying to receive from OuterBounds")
         for idx in self.outerbound_spoke_indices:
-            is_new = self.hub_from_spoke(self.outerbound_receive_buffers[idx], idx)
+            key = self._make_key(Field.OUTER_BOUND, idx)
+            recv_buf = self._locals[key]
+            # is_new = self.hub_from_spoke(self.outerbound_receive_buffers[idx],
+            is_new = self.hub_from_spoke(recv_buf.array(),
+                                         idx,
+                                         Field.OUTER_BOUND,
+                                         recv_buf.id())
             if is_new:
-                bound = self.outerbound_receive_buffers[idx][0]
+                recv_buf.pull_id()
+                # bound = self.outerbound_receive_buffers[idx][0]
+                bound = recv_buf.array()[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
                 self.BestOuterBound = self.OuterBoundUpdate(bound, idx)
         logging.debug("ph back from OuterBounds")
@@ -247,41 +272,59 @@ class Hub(SPCommunicator):
         """
         self.outerbound_receive_buffers = dict()
         for idx in self.outerbound_spoke_indices:
-            self.outerbound_receive_buffers[idx] = communicator_array(
-                self.remote_lengths[idx - 1]
+            # self.outerbound_receive_buffers[idx] = communicator_array(
+            #     self.remote_lengths[idx - 1]
+            # )
+            self.outerbound_receive_buffers[idx] = self.register_recv_field(
+                Field.OUTER_BOUND, idx, 1,
             )
+        ## End for
+        return
 
     def initialize_inner_bound_buffers(self):
         """ Initialize value of BestInnerBound, and inner bound receive buffers
         """
         self.innerbound_receive_buffers = dict()
         for idx in self.innerbound_spoke_indices:
-            self.innerbound_receive_buffers[idx] = communicator_array(
-                self.remote_lengths[idx - 1]
+            # self.innerbound_receive_buffers[idx] = communicator_array(
+            #     self.remote_lengths[idx - 1]
+            # )
+            self.innerbound_receive_buffers[idx] = self.register_recv_field(
+                Field.INNER_BOUND, idx, 1
             )
+        ## End for
+        return
 
     def initialize_nonants(self):
         """ Initialize the buffer for the hub to send nonants
             to the appropriate spokes
         """
         self.nonant_send_buffer = None
-        for idx in self.nonant_spoke_indices:
-            if self.nonant_send_buffer is None:
-                # for hub outer/inner bounds and kill signal
-                self.nonant_send_buffer = communicator_array(self.local_lengths[idx - 1])
-            elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
-                raise RuntimeError("Nonant buffers disagree on size")
+        # for idx in self.nonant_spoke_indices:
+        #     if self.nonant_send_buffer is None:
+        #         # for hub outer/inner bounds and kill signal
+        #         self.nonant_send_buffer = communicator_array(self.local_lengths[idx - 1])
+        #     elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
+        #         raise RuntimeError("Nonant buffers disagree on size")
+        if self.has_nonant_spokes:
+            self.nonant_send_buffer = self._sends[Field.NONANT].array()
+        ## End if
+        return
 
     def initialize_boundsout(self):
         """ Initialize the buffer for the hub to send bounds
             to bounds only spokes
         """
         self.boundsout_send_buffer = None
-        for idx in self.bounds_only_indices:
-            if self.boundsout_send_buffer is None:
-                self.boundsout_send_buffer = communicator_array(self.local_lengths[idx - 1])
-            if self.local_lengths[idx - 1] != 2:
-                raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
+        # for idx in self.bounds_only_indices:
+        #     if self.boundsout_send_buffer is None:
+        #         self.boundsout_send_buffer = communicator_array(self.local_lengths[idx - 1])
+        #     if self.local_lengths[idx - 1] != 2:
+        #         raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
+        if self.has_bounds_only_spokes:
+            self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
+        ## End if
+        return
 
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
@@ -294,10 +337,15 @@ class Hub(SPCommunicator):
         This is called only for spokes which are bounds only.
         w and nonant spokes are passed bounds through the w and nonant buffers
         """
-        self._populate_boundsout_cache(self.boundsout_send_buffer)
-        logging.debug("hub is sending bounds={}".format(self.boundsout_send_buffer))
-        for idx in self.bounds_only_indices:
-            self.hub_to_spoke(self.boundsout_send_buffer, idx)
+        # NOTE: boundsout_send_buffer should be the same numpy array as my_bounds.array()
+        # self._populate_boundsout_cache(self.boundsout_send_buffer)
+        my_bounds = self._sends[Field.BOUNDS]
+        self._populate_boundsout_cache(my_bounds.array())
+        logging.debug("hub is sending bounds={}".format(my_bounds.array()))
+        # for idx in self.bounds_only_indices:
+        #     self.hub_to_spoke(self.boundsout_send_buffer, idx)
+        self.hub_to_spoke(my_bounds.array(), Field.BOUNDS, my_bounds.next_write_id())
+        return
 
     def initialize_spoke_indices(self):
         """ Figure out what types of spokes we have,
@@ -351,32 +399,86 @@ class Hub(SPCommunicator):
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.initialize_spoke_indices()
 
-    def make_windows(self):
-        if self._windows_constructed:
-            # different parts of the hub may call make_windows,
-            # we just care about the first call
-            return
+    # def make_windows(self):
+    #     if self._windows_constructed:
+    #         # different parts of the hub may call make_windows,
+    #         # we just care about the first call
+    #         return
 
-        # Spokes notify the hub of the buffer sizes
-        for i in range(self.n_spokes):
-            pair_of_sizes = np.zeros(2, dtype="i")
-            self.strata_comm.Recv((pair_of_sizes, MPI.INT), source=i + 1, tag=i + 1)
-            self.remote_lengths[i] = pair_of_sizes[0]
-            self.local_lengths[i] = pair_of_sizes[1]
+    #     # # Spokes notify the hub of the buffer sizes
+    #     # for i in range(self.n_spokes):
+    #     #     pair_of_sizes = np.zeros(2, dtype="i")
+    #     #     self.strata_comm.Recv((pair_of_sizes, MPI.INT), source=i + 1, tag=i + 1)
+    #     #     self.remote_lengths[i] = pair_of_sizes[0]
+    #     #     self.local_lengths[i] = pair_of_sizes[1]
 
-        # Make the windows of the appropriate buffer sizes
-        self.windows = [None for _ in range(self.n_spokes)]
-        self.buffers = [None for _ in range(self.n_spokes)]
-        for i in range(self.n_spokes):
-            length = self.local_lengths[i]
-            win, buff = self._make_window(length)
-            self.windows[i] = win
-            self.buffers[i] = buff
+    #     # # Make the windows of the appropriate buffer sizes
+    #     # self.windows = [None for _ in range(self.n_spokes)]
+    #     # self.buffers = [None for _ in range(self.n_spokes)]
+    #     # for i in range(self.n_spokes):
+    #     #     length = self.local_lengths[i]
+    #     #     win, buff = self._make_window(length)
+    #     #     self.windows[i] = win
+    #     #     self.buffers[i] = buff
 
-        # flag this for multiple calls from the hub
-        self._windows_constructed = True
+    #     # flag this for multiple calls from the hub
+    #     self._windows_constructed = True
+    #     return
 
-    def hub_to_spoke(self, values, spoke_strata_rank):
+
+    def build_window_spec(self) -> dict[Field, int]:
+
+        required_fields = set()
+        for spoke in self.spokes:
+            spoke_class = spoke["spoke_class"]
+            if hasattr(spoke_class, "converger_spoke_types"):
+                for cst in spoke_class.converger_spoke_types:
+                    if cst == ConvergerSpokeType.W_GETTER:
+                        required_fields.add(Field.DUALS)
+                    elif cst == ConvergerSpokeType.NONANT_GETTER:
+                        required_fields.add(Field.NONANT)
+                    elif cst == ConvergerSpokeType.INNER_BOUND or cst == ConvergerSpokeType.OUTER_BOUND:
+                        required_fields.add(Field.BOUNDS)
+                    else:
+                        pass # Intentional no-op
+                    ## End if
+                ## End for
+            else:
+                # TODO: Do non-converger spoke types use info from the hub? If so,
+                # need to account for that here.
+                pass
+            ## End if
+        ## End for
+
+        window_spec = dict()
+        window_spec[Field.SHUTDOWN] = 1
+
+        n_nonants = 0
+        for s in self.opt.local_scenarios.values():
+            n_nonants += len(s._mpisppy_data.nonant_indices)
+        ## End for
+
+        # for field in required_fields:
+        #     self.local_write_ids[field] = 0
+        # ## End for
+
+        if Field.DUALS in required_fields:
+            window_spec[Field.DUALS] = n_nonants
+            self.register_send_field(Field.DUALS, n_nonants)
+        if Field.NONANT in required_fields:
+            window_spec[Field.NONANT] = n_nonants
+            self.register_send_field(Field.NONANT, n_nonants)
+        if Field.BOUNDS in required_fields:
+            window_spec[Field.BOUNDS] = 2
+            self.register_send_field(Field.BOUNDS, 2)
+
+        # TODO: We can build the window spec directly from the self._sends dictionary
+        # after all the register_send_field calls are complete.
+
+        return window_spec
+
+
+    def hub_to_spoke(self, values: np.typing.NDArray, field: Field, write_id: int):
         """ Put the specified values into the specified locally-owned buffer
             for the spoke to pick up.
 
@@ -386,48 +488,72 @@ class Hub(SPCommunicator):
                 This assumes that values contains a slot at the end for the
                 write_id
         """
-        expected_length = self.local_lengths[spoke_strata_rank - 1] + 1
-        if len(values) != expected_length:
-            raise RuntimeError(
-                f"Attempting to put array of length {len(values)} "
-                f"into local buffer of length {expected_length}"
-            )
-        # this is so the spoke ranks all get the same write_id at approximately the same time
+        # expected_length = self.local_lengths[spoke_strata_rank - 1] + 1
+        # if len(values) != expected_length:
+        #     raise RuntimeError(
+        #         f"Attempting to put array of length {len(values)} "
+        #         f"into local buffer of length {expected_length}"
+        #     )
+        # # this is so the spoke ranks all get the same write_id at approximately the same time
+        # if not isinstance(self.opt, APH):
+        #     self.cylinder_comm.Barrier()
+        # self.local_write_ids[spoke_strata_rank - 1] += 1
+        # values[-1] = self.local_write_ids[spoke_strata_rank - 1]
+        # window = self.windows[spoke_strata_rank - 1]
+        # window.Lock(self.strata_rank)
+        # window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
+        # window.Unlock(self.strata_rank)
+
         if not isinstance(self.opt, APH):
             self.cylinder_comm.Barrier()
-        self.local_write_ids[spoke_strata_rank - 1] += 1
-        values[-1] = self.local_write_ids[spoke_strata_rank - 1]
-        window = self.windows[spoke_strata_rank - 1]
-        window.Lock(self.strata_rank)
-        window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
-        window.Unlock(self.strata_rank)
+        ## End if
 
-    def hub_from_spoke(self, values, spoke_num):
+        values[-1] = write_id
+        self.window.put(values, field)
+
+        return
+
+
+    def hub_from_spoke(self,
+                       values: np.typing.NDArray,
+                       spoke_num: int,
+                       field: Field,
+                       last_write_id: int,
+                       ):
         """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
 
             Returns:
                 is_new (bool): Indicates whether the "gotten" values are new,
                     based on the write_id.
         """
-        expected_length = self.remote_lengths[spoke_num - 1] + 1
-        if len(values) != expected_length:
-            raise RuntimeError(
-                f"Hub trying to get buffer of length {expected_length} "
-                f"from spoke, but provided buffer has length {len(values)}."
-            )
+        # expected_length = self.remote_lengths[spoke_num - 1] + 1
+        # if len(values) != expected_length:
+        #     raise RuntimeError(
+        #         f"Hub trying to get buffer of length {expected_length} "
+        #         f"from spoke, but provided buffer has length {len(values)}."
+        #     )
+        # # so the window in each rank gets read at approximately the same time,
+        # # and so has the same write_id
+        # if not isinstance(self.opt, APH):
+        #     self.cylinder_comm.Barrier()
+        # window = self.windows[spoke_num - 1]
+        # window.Lock(spoke_num)
+        # window.Get((values, len(values), MPI.DOUBLE), spoke_num)
+        # window.Unlock(spoke_num)
+
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
         if not isinstance(self.opt, APH):
             self.cylinder_comm.Barrier()
-        window = self.windows[spoke_num - 1]
-        window.Lock(spoke_num)
-        window.Get((values, len(values), MPI.DOUBLE), spoke_num)
-        window.Unlock(spoke_num)
+        ## End if
+        self.window.get(values, spoke_num, field)
 
         if isinstance(self.opt, APH):
-            # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
-            if values[-1] > self.remote_write_ids[spoke_num - 1]:
-                self.remote_write_ids[spoke_num - 1] = values[-1]
+            # # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
+            # if values[-1] > self.remote_write_ids[spoke_num - 1]:
+            #     self.remote_write_ids[spoke_num - 1] = values[-1]
+            #     return True
+            if values[-1] > last_write_id:
                 return True
         else:
             new_id = int(values[-1])
@@ -438,11 +564,17 @@ class Hub(SPCommunicator):
                                          op=MPI.SUM)
             if new_id != sum_ids[0] / self.cylinder_comm.size:
                 return False
-
-            if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
-                self.remote_write_ids[spoke_num - 1] = new_id
+            ## End if
+            # if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
+            #     self.remote_write_ids[spoke_num - 1] = new_id
+            #     return True
+            if new_id > last_write_id or new_id < 0:
                 return True
+            ## End if
+        ## End if
+
         return False
+
 
     def send_terminate(self):
         """ Send an array of zeros with a -1 appended to the
@@ -450,13 +582,17 @@ class Hub(SPCommunicator):
             buffer, so every spoke will see it simultaneously.
             processes (don't need to call them one at a time).
         """
-        for rank in range(1, self.n_spokes + 1):
-            dummies = np.zeros(self.local_lengths[rank - 1] + 1)
-            dummies[-1] = -1
-            window = self.windows[rank - 1]
-            window.Lock(0)
-            window.Put((dummies, len(dummies), MPI.DOUBLE), 0)
-            window.Unlock(0)
+        # for rank in range(1, self.n_spokes + 1):
+        #     dummies = np.zeros(self.local_lengths[rank - 1] + 1)
+        #     dummies[-1] = -1
+        #     window = self.windows[rank - 1]
+        #     window.Lock(0)
+        #     window.Put((dummies, len(dummies), MPI.DOUBLE), 0)
+        #     window.Unlock(0)
+        term_buf = self._sends[Field.SHUTDOWN]
+        self.shutdown[0] = 1.0
+        self.hub_to_spoke(term_buf.array(), Field.SHUTDOWN, term_buf.next_write_id())
+        return
 
 
 class PHHub(Hub):
@@ -583,37 +719,52 @@ class PHHub(Hub):
         """
         self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.nonant_send_buffer
+        # nonant_send_buffer = self.nonant_send_buffer
+        my_nonants = self._sends[Field.NONANT]
+        nonant_send_buffer = my_nonants.array()
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
-        self._populate_boundsout_cache(nonant_send_buffer)
+        # self._populate_boundsout_cache(nonant_send_buffer)
 
-        for idx in self.nonant_spoke_indices:
-            self.hub_to_spoke(nonant_send_buffer, idx)
+        # for idx in self.nonant_spoke_indices:
+        #     self.hub_to_spoke(nonant_send_buffer, idx)
+        self.hub_to_spoke(nonant_send_buffer, Field.NONANT, my_nonants.next_write_id())
+
+        return
 
     def initialize_ws(self):
         """ Initialize the buffer for the hub to send dual weights
             to the appropriate spokes
         """
         self.w_send_buffer = None
-        for idx in self.w_spoke_indices:
-            if self.w_send_buffer is None:
-                self.w_send_buffer = communicator_array(self.local_lengths[idx - 1])
-            elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
-                raise RuntimeError("W buffers disagree on size")
+        # for idx in self.w_spoke_indices:
+        #     if self.w_send_buffer is None:
+        #         self.w_send_buffer = communicator_array(self.local_lengths[idx - 1])
+        #     elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
+        #         raise RuntimeError("W buffers disagree on size")
+        if self.has_w_spokes:
+            self.w_send_buffer = self._sends[Field.DUALS].array()
+        ## End if
+        return
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
         """
-        self.opt._populate_W_cache(self.w_send_buffer, padding=3)
-        logging.debug("hub is sending Ws={}".format(self.w_send_buffer))
-        self._populate_boundsout_cache(self.w_send_buffer)
+        # NOTE: my_ws.array() and self.w_send_buffer should be the same array.
+        my_ws = self._sends[Field.DUALS]
+        # self.opt._populate_W_cache(self.w_send_buffer, padding=1)
+        self.opt._populate_W_cache(my_ws.array(), padding=1)
+        logging.debug("hub is sending Ws={}".format(my_ws.array()))
+        # self._populate_boundsout_cache(self.w_send_buffer)
 
-        for idx in self.w_spoke_indices:
-            self.hub_to_spoke(self.w_send_buffer, idx)
+        # for idx in self.w_spoke_indices:
+        #     self.hub_to_spoke(self.w_send_buffer, idx)
+        self.hub_to_spoke(my_ws.array(), Field.DUALS, my_ws.next_write_id())
+
+        return
 
 class LShapedHub(Hub):
 
@@ -706,8 +857,12 @@ class LShapedHub(Hub):
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
         self._populate_boundsout_cache(nonant_send_buffer)
 
-        for idx in self.nonant_spoke_indices:
-            self.hub_to_spoke(nonant_send_buffer, idx)
+        # for idx in self.nonant_spoke_indices:
+        #     self.hub_to_spoke(nonant_send_buffer, idx)
+        my_nonants = self._sends[Field.NONANT]
+        self.hub_to_spoke(nonant_send_buffer, Field.NONANT, my_nonants.next_write_id())
+
+        return
 
 class APHHub(PHHub):
 

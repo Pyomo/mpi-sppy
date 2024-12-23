@@ -6,9 +6,11 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+from mpisppy.cylinders.spcommunicator import communicator_array
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy import MPI
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
+from mpisppy.cylinders.spwindow import Field
 
 import numpy as np
 import pyomo.environ as pyo
@@ -18,7 +20,32 @@ class CrossScenarioCutSpoke(spoke.Spoke):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
-    def make_windows(self):
+    # def make_windows(self):
+    #     nscen = len(self.opt.all_scenario_names)
+    #     if nscen == 0:
+    #         raise RuntimeError(f"(rank: {self.cylinder_rank}), no local_scenarios")
+
+    #     self.nscen = nscen
+    #     vbuflen = 0
+    #     self.nonant_per_scen = 0
+    #     for s in self.opt.local_scenarios.values():
+    #         vbuflen += len(s._mpisppy_data.nonant_indices)
+    #     local_scen_count = len(self.opt.local_scenario_names)
+    #     self.nonant_per_scen = int(vbuflen / local_scen_count)
+
+    #     ## the _locals will also have the kill signal
+    #     self.all_nonant_len = vbuflen
+    #     self.all_eta_len = nscen*local_scen_count
+    #     self._locals = np.zeros(nscen*local_scen_count + vbuflen + 1)
+    #     self._coefs = np.zeros(nscen*(nscen + self.nonant_per_scen) + 1 + 1)
+    #     self._new_locals = False
+
+    #     # local, remote
+    #     # send, receive
+    #     self._make_windows(nscen*(self.nonant_per_scen + 1 + 1), nscen*local_scen_count + vbuflen)
+
+    def build_window_spec(self) -> dict[Field, int]:
+
         nscen = len(self.opt.all_scenario_names)
         if nscen == 0:
             raise RuntimeError(f"(rank: {self.cylinder_rank}), no local_scenarios")
@@ -34,19 +61,25 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ## the _locals will also have the kill signal
         self.all_nonant_len = vbuflen
         self.all_eta_len = nscen*local_scen_count
-        self._locals = np.zeros(nscen*local_scen_count + vbuflen + 1)
-        self._coefs = np.zeros(nscen*(nscen + self.nonant_per_scen) + 1 + 1)
+        self._locals = communicator_array(nscen * local_scen_count + vbuflen)
+        self._coefs = communicator_array(nscen*(nscen + self.nonant_per_scen) + 1)
         self._new_locals = False
 
-        # local, remote
-        # send, receive
-        self._make_windows(nscen*(self.nonant_per_scen + 1 + 1), nscen*local_scen_count + vbuflen)
+        # TODO: Figure out what fields this spoke creates
+        window_spec = dict()
+        window_spec[Field.TODO] = nscen*(nscen + self.nonant_per_scen) + 1
 
-    def _got_kill_signal(self):
-        ''' returns True if a kill signal was received,
-            and refreshes the array and _locals'''
-        self._new_locals = self.spoke_from_hub(self._locals)
-        return self.remote_write_id == -1 
+        return window_spec
+
+    # def _got_kill_signal(self):
+    #     ''' returns True if a kill signal was received,
+    #         and refreshes the array and _locals'''
+    #     self._new_locals = self.spoke_from_hub(self._locals)
+    #     return self.remote_write_id == -1
+
+    # def update_locals(self):
+    #     self._new_locals = self.spoke_from_hub(self._locals, Field.TODO)
+    #     return
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
@@ -62,7 +95,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         # add copies of the nonanticipatory variables to the root problem
         # NOTE: the LShaped code expects the nonant vars to be in a particular
         #       order and with a particular *name*.
-        #       We're also creating an index for reference against later 
+        #       We're also creating an index for reference against later
         nonant_vid_to_copy_map = dict()
         root_vars = list()
         for v in non_ants:
@@ -84,7 +117,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         self.opt.root.eta = pyo.Var(self.opt.all_scenario_names)
 
         self.opt.root.bender = LShapedCutGenerator()
-        self.opt.root.bender.set_input(root_vars=self.opt.root_vars, 
+        self.opt.root.bender.set_input(root_vars=self.opt.root_vars,
                                             tol=1e-4, comm=self.cylinder_comm)
         self.opt.root.bender.set_ls(self.opt)
 
@@ -133,7 +166,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
             all_coefs[row_len*idx] = self._eta_lb_array[idx]
             all_coefs[row_len*idx+1] = -1
-        self.spoke_to_hub(all_coefs)
+        self.spoke_to_hub(all_coefs, Field.TODO)
 
     def make_cut(self):
 
@@ -289,7 +322,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
                 all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
             elif feas_cuts:
                 all_coefs[row_len*idx:row_len*(idx+1)] = feas_cuts.pop()
-        self.spoke_to_hub(all_coefs)
+        self.spoke_to_hub(all_coefs, Field.TODO)
 
     def main(self):
         # call main cut generation routine

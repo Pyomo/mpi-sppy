@@ -23,12 +23,63 @@ import abc
 import time
 from mpisppy import MPI
 
+from mpisppy.cylinders.spwindow import Field, SPWindow
+
 
 def communicator_array(size):
     arr = np.empty(size+1)
     arr[:] = np.nan
     arr[-1] = 0
     return arr
+
+
+class FieldArray:
+    """ Notes: Buffer that tracks new/old state as well
+    """
+
+    def __init__(self, length: int):
+        self._array = communicator_array(length)
+        self._is_new = False
+        self._id = -1
+        return
+
+    def array(self):
+        # return self._array[:-1]
+        return self._array
+
+    # def new_write_id(self):
+    #     self._id += 1
+    #     return self._id
+
+    def is_new(self):
+        return self._is_new
+
+    def id(self):
+        return self._id
+
+    # def raw_array(self):
+    #     return self._array
+
+class SendArray(FieldArray):
+
+    def __init__(self, length: int):
+        super().__init__(length)
+        return
+
+    def next_write_id(self):
+        self._id += 1
+        return self._id
+
+
+class RecvArray(FieldArray):
+
+    def __init__(self, length: int):
+        super().__init__(length)
+        return
+
+    def pull_id(self):
+        self._id = int(self._array[-1])
+        return self._id
 
 
 class SPCommunicator:
@@ -52,9 +103,37 @@ class SPCommunicator:
         else:
             self.options = options
 
+        # Common fields for spokes and hubs
+        self._locals = dict()
+        self._sends = dict()
+
         # attach the SPCommunicator to
         # the SPBase object
         self.opt.spcomm = self
+
+    def _make_key(self, field: Field, origin: int):
+        """Given a field and an origin (i.e. a strata_rank), generate a key for indexing
+           into the self._locals dictionary and getting the corresponding RecvArray.
+        """
+        return (field, origin)
+
+    def _split_key(self, key):
+        """Take the given key and return a tuple (field, origin) where origin in the strata_rank
+           from which the field comes.
+
+           Undoes `_make_key`.  Currently, this is a no-op.
+        """
+        return key
+
+    def register_recv_field(self, field: Field, origin: int, length: int) -> np.typing.NDArray:
+        key = self._make_key(field, origin)
+        my_fa = RecvArray(length)
+        self._locals[key] = my_fa
+        return my_fa.array()
+
+    def register_send_field(self, field: Field, length: int) -> np.typing.NDArray:
+        self._sends[field] = SendArray(length)
+        return self._sends[field].array()
 
     @abc.abstractmethod
     def main(self):
@@ -92,37 +171,59 @@ class SPCommunicator:
         """
         """
         if self._windows_constructed:
-            for i in range(self.n_spokes):
-                self.windows[i].Free()
-            del self.buffers
+            # for i in range(self.n_spokes):
+            #     self.windows[i].Free()
+            # del self.buffers
+            self.window.free()
         self._windows_constructed = False
 
-    def _make_window(self, length, comm=None):
-        """ Create a local window object and its corresponding 
-            memory buffer using MPI.Win.Allocate()
+    # def _make_window(self, length, comm=None):
+    #     """ Create a local window object and its corresponding
+    #         memory buffer using MPI.Win.Allocate()
 
-            Args: 
-                length (int): length of the buffer to create
-                comm (MPI Communicator, optional): MPI communicator object to
-                    create the window over. Default is self.strata_comm.
+    #         Args:
+    #             length (int): length of the buffer to create
+    #             comm (MPI Communicator, optional): MPI communicator object to
+    #                 create the window over. Default is self.strata_comm.
 
-            Returns:
-                window (MPI.Win object): The created window
-                buff (ndarray): Pointer to corresponding memory
+    #         Returns:
+    #             window (MPI.Win object): The created window
+    #             buff (ndarray): Pointer to corresponding memory
 
-            Notes:
-                The created buffer will actually be +1 longer than length.
-                The last entry is a write number to keep track of new info.
+    #         Notes:
+    #             The created buffer will actually be +1 longer than length.
+    #             The last entry is a write number to keep track of new info.
 
-                This function assumes that the user has provided the correct
-                window size for the local buffer based on whether this process
-                is a hub or spoke, etc.
+    #             This function assumes that the user has provided the correct
+    #             window size for the local buffer based on whether this process
+    #             is a hub or spoke, etc.
+    #     """
+    #     if comm is None:
+    #         comm = self.strata_comm
+    #     size = MPI.DOUBLE.size * (length + 1)
+    #     window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
+    #     buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())
+    #     buff[:] = np.nan
+    #     buff[-1] = 0. # Initialize the write number to zero
+    #     return window, buff
+
+    # def _make_window(self, comm):
+    #     buffer_spec = self.build_buffer_spec()
+    #     self.window = SPWindow(buffer_spec, comm)
+    #     return
+
+    def make_windows(self) -> None:
+        if self._windows_constructed:
+            return
+
+        window_spec = self.build_window_spec()
+        self.window = SPWindow(window_spec, self.strata_comm)
+        self._windows_constructed = True
+
+        return
+
+    @abc.abstractmethod
+    def build_window_spec(self) -> dict[Field, int]:
+        """ Build dict with fields and lengths needed for local MPI window
         """
-        if comm is None:
-            comm = self.strata_comm
-        size = MPI.DOUBLE.size * (length + 1)
-        window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
-        buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())
-        buff[:] = np.nan
-        buff[-1] = 0. # Initialize the write number to zero
-        return window, buff
+        return {}
