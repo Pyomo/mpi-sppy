@@ -13,11 +13,13 @@ json file will be the same for all scenarios.)
 
 import json
 import mpisppy.extensions.extension
+import pyomo.core.base.label as pyomo_label
 
 
 def lpize(varname):
     # convert varname to the string that will appear in the lp file
-    return varname.replace("[", "(").replace("]", ")").replace(",", "_").replace(".","_")
+    # return varname.replace("[", "(").replace("]", ")").replace(",", "_").replace(".","_")
+    return pyomo_label.cpxlp_label_from_name(varname)
 
 
 class Scenario_lpfiles(mpisppy.extensions.extension.Extension):
