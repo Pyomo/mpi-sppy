@@ -111,11 +111,11 @@ class ProperBundler():
             # snames are scenario names
             snames = self.module.scenario_names_creator(lastnum-firstnum+1,
                                                         firstnum)
-
             kws = self.original_kwargs
             if self.bunBFs is not None:
                 # The original scenario creator needs to handle these
                 kws["branching_factors"] = self.bunBFs
+
             # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
                                        scenario_creator_kwargs=kws,
