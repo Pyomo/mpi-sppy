@@ -8,15 +8,18 @@ echo "^^^ Multi-stage AirCond ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
 # --xhatshuffle --stag2EFsolvern
 
-cecho "^^^ Multi-stage AirCond, pickle  the scenarios ^^^"
+echo "^^^ Multi-stage AirCond, pickle  the scenarios ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --pickle-scenarios-dir aircond/pickles
 
 echo "^^^ Multi-stage AirCond, bundle the scenarios ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --scenarios-per-bundle 9
+
+echo "^^^ Multi-stage AirCond, bundle the scenarios and write ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --pickle-scenarios-dir aircond/pickles --scenarios-per-bundle 9
 
 #### HEY! check on error messages for bad bundle sizes
 
-echo "xxxx Early exit. xxxx"
+echo "xxxx Early exit from bash script. xxxx"
 exit
 
 echo "^^^ write scenario lp and nonant json files ^^^"

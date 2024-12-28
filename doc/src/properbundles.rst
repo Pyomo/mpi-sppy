@@ -65,15 +65,21 @@ there are two modules that have most of the support for proper bundles:
   - ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
 
 
-Multistage and notes
---------------------
+Multistage
+----------
 
-At the time of this writing, multi-stage proper, pickled bundles is a
-little bit beyond the bleeding edge.  The idea is that bundles are
-formed and then saved as dill pickle files for rapid retrieval. The
+The most flexible way to create proper bundles is to write
+your own problem-specific code to do it. The
 file ``aircond_cylinders.py`` in the aircond example directory
 provides an example.  The latter part of the ``allways.bash`` script
 demonstrates how to run it.
+
+There is support for multi-stage bundles in mpi-sppy, but the scenario
+probabilities must be uniform and the bundles must span the same number
+of entire second stage nodes.
+
+Notes
+-----
 
 Pickled bundles are clearly useful for algorithm tuning and algorithm
 experimentation. In some, but not all, settings they can also improve

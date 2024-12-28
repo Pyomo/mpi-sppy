@@ -319,17 +319,8 @@ def scenario_creator(sname, **kwargs):
     
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
-    model._mpisppy_probability = 1 / np.prod(branching_factors)
-    """
-    from mpisppy import MPI
-
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    if rank == 0:
-        with open("efmodel.txt", "w") as fileh:
-            model.pprint(fileh)
-    quit()
-    """
+    #model._mpisppy_probability = 1 / np.prod(branching_factors)
+    model._mpisppy_probability = "uniform"
     return(model)
 
 
