@@ -23,6 +23,7 @@ global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False
 
+
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
