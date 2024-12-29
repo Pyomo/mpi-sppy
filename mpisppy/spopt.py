@@ -185,66 +185,77 @@ class SPOpt(SPBase):
             # solve_keyword_args["use_signal_handling"] = False
             pass
 
-        try:
-            results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
-            solver_exception = None
-        except Exception as e:
-            results = None
-            solver_exception = e
-
-        pyomo_solve_time = time.time() - solve_start_time
-        if sputils.not_good_enough_results(results):
-            s._mpisppy_data.scenario_feasible = False
-
-            if gripe:
-                name = self.__class__.__name__
-                if self.spcomm:
-                    name = self.spcomm.__class__.__name__
-                print (f"[{name}] Solve failed for scenario {s.name}")
-                if results is not None:
-                    print ("status=", results.solver.status)
-                    print ("TerminationCondition=",
-                           results.solver.termination_condition)
-                else:
-                    print("no results object, so solving agin with tee=True")
-                    solve_keyword_args["tee"] = True
-                    results = s._solver_plugin.solve(s,
-                                             **solve_keyword_args,
-                                             load_solutions=False)
-
-            if solver_exception is not None:
-                raise solver_exception
-
+        Ag = getattr(self, "Ag", None)  # agnostic
+        if Ag is not None:
+            assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
+            kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
+            Ag.callout_agnostic(kws)  # not going to use the return values
         else:
+            #  didcallout = False  (returned true by the callout, but not used)
             try:
-                if sputils.is_persistent(s._solver_plugin):
-                    s._solver_plugin.load_vars()
-                else:
-                    s.solutions.load_from(results)
-            except Exception as e: # catch everything
-                if need_solution:
-                    raise e
-            if self.is_minimizing:
-                s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
-                s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
-            else:
-                s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
-                s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
-            s._mpisppy_data.scenario_feasible = True
-        # TBD: get this ready for IPopt (e.g., check feas_prob every time)
-        # propogate down
-        if self.bundling: # must be a bundle
-            for sname in s._ef_scenario_names:
-                 self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
-                     = s._mpisppy_data.scenario_feasible
-                 if s._mpisppy_data.scenario_feasible:
-                     self._check_staleness(self.local_scenarios[sname])
-        else:  # not a bundle
-            if s._mpisppy_data.scenario_feasible:
-                self._check_staleness(s)
+                results = s._solver_plugin.solve(s,
+                                                 **solve_keyword_args,
+                                                 load_solutions=False)
+                solver_exception = None
+            except Exception as e:
+                results = None
+                solver_exception = e
 
+            if sputils.not_good_enough_results(results):
+                s._mpisppy_data.scenario_feasible = False
+
+                if gripe:
+                    name = self.__class__.__name__
+                    if self.spcomm:
+                        name = self.spcomm.__class__.__name__
+                    print (f"[{name}] Solve failed for scenario {s.name}")
+                    if results is not None:
+                        print ("status=", results.solver.status)
+                        print ("TerminationCondition=",
+                               results.solver.termination_condition)
+                    else:
+                        print("no results object, so solving agin with tee=True")
+                        solve_keyword_args["tee"] = True
+                        results = s._solver_plugin.solve(s,
+                                                 **solve_keyword_args,
+                                                 load_solutions=False)
+
+                if solver_exception is not None:
+                    raise solver_exception
+
+            else:
+                try:
+                    if sputils.is_persistent(s._solver_plugin):
+                        s._solver_plugin.load_vars()
+                    else:
+                        s.solutions.load_from(results)
+                except Exception as e: # catch everything
+                    if need_solution:
+                        raise e
+                if self.is_minimizing:
+                    s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
+                    s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
+                else:
+                    s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
+                    s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
+                s._mpisppy_data.scenario_feasible = True
+            # TBD: get this ready for IPopt (e.g., check feas_prob every time)
+            # propogate down
+            if self.bundling: # must be a bundle
+                for sname in s._ef_scenario_names:
+                     self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
+                         = s._mpisppy_data.scenario_feasible
+                     if s._mpisppy_data.scenario_feasible:
+                         self._check_staleness(self.local_scenarios[sname])
+            else:  # not a bundle
+                if s._mpisppy_data.scenario_feasible:
+                    self._check_staleness(s)
+
+        # end of Agnostic bypass
+
+        # Time capture moved down August 2023
+        pyomo_solve_time = time.time() - solve_start_time
+        
         if self.extensions is not None:
             results = self.extobject.post_solve(s, results)
 
@@ -364,8 +375,13 @@ class SPOpt(SPBase):
         """
         local_Eobjs = []
         for k,s in self.local_scenarios.items():
-            objfct = self.saved_objectives[k]
-            local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
+            objfct = self.saved_objectives[k]  # if bundling?
+            Ag = getattr(self, "Ag", None)
+            if Ag is None:
+                local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
+            else:
+                # Agnostic will have attached the objective (and doesn't bundle as of Aug 2023)
+                local_Eobjs.append(s._mpisppy_probability * s._mpisppy_data._obj_from_agnostic)              
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
@@ -586,6 +602,9 @@ class SPOpt(SPBase):
         for k,s in self.local_scenarios.items():
             for ci, _ in enumerate(s._mpisppy_data.nonant_indices):
                 s._mpisppy_data.fixedness_cache[ci] = s._mpisppy_data.original_fixedness[ci]
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
         self._restore_nonants()
 
 
@@ -627,6 +646,10 @@ class SPOpt(SPBase):
                     this_vardata.fix()
                     if persistent_solver is not None:
                         persistent_solver.update_var(this_vardata)
+
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
 
     def _fix_root_nonants(self,root_cache):
         """ Fix the 1st stage Vars subject to non-anticipativity at given values.
@@ -673,7 +696,10 @@ class SPOpt(SPBase):
                 this_vardata.fix()
                 if persistent_solver is not None:
                     persistent_solver.update_var(this_vardata)
-
+                        
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
 
 
     def _restore_nonants(self, update_persistent=True):
@@ -701,6 +727,10 @@ class SPOpt(SPBase):
 
                 if persistent_solver is not None:
                     persistent_solver.update_var(vardata)
+                    
+            Ag = getattr(self, "Ag", None)
+            if Ag is not None:
+                Ag.callout_agnostic({"s": s})
 
 
     def _save_nonants(self):
@@ -735,9 +765,6 @@ class SPOpt(SPBase):
         the variable was fixed is stored in `_PySP_original_fixedness`.
         """
         for k,s in self.local_scenarios.items():
-            if hasattr(s,"_PySP_original_fixedness"):
-                print ("ERROR: Attempt to replace original nonants")
-                raise
             if not hasattr(s._mpisppy_data,"nonant_cache"):
                 # uses nonant cache to signal other things have not
                 # been created

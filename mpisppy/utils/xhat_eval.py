@@ -60,6 +60,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         
         self.verbose = self.options['verbose']
         self._subproblems_solvers_created = False
+        self.Ag = options.get("Ag", None)
 
 
     def _lazy_create_solvers(self):
@@ -88,7 +89,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective)
 
-
         if compute_val_at_nonant:
             objfct = self.saved_objectives[k]
             if self.verbose:
@@ -96,6 +96,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\
                        .format(k, s._mpisppy_probability, pyo.value(objfct), objfct.expr))
             self.objs_dict[k] = pyo.value(objfct)
+
         return(pyomo_solve_time)
 
 
@@ -279,7 +280,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         )
         
         Eobj = self.Eobjective(self.verbose,fct=fct)
-        
+
         return Eobj
     
     
