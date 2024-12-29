@@ -39,11 +39,11 @@ def scenario_denouement(rank, scenario_name, scenario):
 
 #=========
 def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
+    # note that the scenarios for the sizes problem are one-based
     if (start is None) :
-        start=0
-    return [f"Scenario{i+1}" for i in range(start,start+num_scens)]
+        start=1
+    return [f"Scenario{i}" for i in range(start, start+num_scens)]
 
 
 #=========
@@ -97,8 +97,13 @@ def _rho_setter(scen, **kwargs):
         scen (pyo.ConcreteModel): the scenario
     Returns:
         a list of (id(vardata), rho)
+    Note:
+        This rho_setter will not work with proper bundles.
     """
     retlist = []
+    if not hasattr(scen, "UnitReductionCost"):
+        print("WARNING: _rho_setter not used (probably because of proper bundles)")
+        return retlist        
     RF = 0.001  # a factor for rho, if you like
 
     if "RF" in kwargs and isinstance(kwargs["RF"], float):
