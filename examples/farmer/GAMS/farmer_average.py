@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# This is a program for testing and development
 import os
 import sys
 import gams
