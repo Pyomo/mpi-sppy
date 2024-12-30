@@ -161,3 +161,11 @@ The example ``mpisppy.agnostic.farmer4agnostic.py`` contains example code.
 
 The script ``mpisppy.agnostic.examples.go.bash`` runs the example (and maybe some
 other examples).
+
+
+Notes about Gurobipy
+--------------------
+
+The current implementation of gurobipy assumes that nonants that are in
+the objective function appear direclty there (not via some other
+variable constrained in some way to represent them).
