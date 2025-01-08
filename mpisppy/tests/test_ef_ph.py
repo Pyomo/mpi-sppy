@@ -15,6 +15,7 @@ version matter a lot, so we often just do smoke tests.
 
 import os
 import glob
+import json
 import unittest
 import pandas as pd
 import pyomo.environ as pyo
@@ -379,6 +380,45 @@ class Test_sizes(unittest.TestCase):
         xhatobj1 = round_pos_sig(ph.extobject._xhat_looper_obj_final, 1)
         self.assertEqual(xhatobj1, 200000)
 
+
+    @unittest.skipIf(not pyo.SolverFactory('glpk').available(),
+                     "glpk is not available")
+    def test_scenario_lpwriter_extension(self):
+        print("test scenarip_lpwriter")
+        from mpisppy.extensions.scenario_lpfiles import Scenario_lpfiles
+        options = self._copy_of_base_options()
+        options["iter0_solver_options"] = {"mipgap": 0.1}    
+        options["PHIterLimit"] = 0
+        options["solver_name"] = "glpk"
+        options["tee_rank0_solves"] = True
+
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+            extensions=Scenario_lpfiles,
+        )
+        conv, basic_obj, tbound = ph.ph_main()
+        # The idea is to detect a change in Pyomo's writing of lp files
+        with open("Scenario1_nonants.json", "r") as jfile:
+            nonants_by_node = json.load(jfile)
+        vname = nonants_by_node["ROOT"][0]  # first name in the file
+        gotit = False
+        with open("Scenario1.lp", 'r') as lpfile:
+            for line in lpfile:
+                if vname in line:
+                    gotit = True
+                    break
+        assert gotit, f"The first nonant in Scenario1_nonants.json ({vname}) not found in Scenario1.lp"
+        print("   deleting Scenario*.p and Scenario*_nonants.json")        
+        for fn in glob.glob("Scenario*.lp"):
+            os.remove(fn)
+        for fn in glob.glob("Scenario*_nonants.json"):
+            os.remove(fn)
+        
+        
     @unittest.skipIf(not solver_available,
                      "no solver is available")
     def test_wtracker_extension(self):

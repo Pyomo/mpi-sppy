@@ -195,7 +195,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="Loose bundles per rank (default 0 (no bundles))",
+                            description="Loose bundles per rank (default 0 (no bundles)) WILL BE DEPRECATED",
                             domain=int,
                             default=0)
 
