@@ -23,6 +23,7 @@ global_rank = MPI.COMM_WORLD.Get_rank()
 
 write_solution = False
 
+
 def _parse_args():
     # create a config object and parse
     cfg = config.Config()
@@ -40,6 +41,10 @@ def _parse_args():
                          description="Run with async projective hedging instead of progressive hedging",
                          domain=bool,
                          default=False)
+    cfg.add_to_config("json_file_path",
+                         description="JSON file with the data paramaters (default ../distr/data_params.json)",
+                         domain=str,
+                         default="../distr/data_params.json")
 
     cfg.parse_command_line("stoch_distr_admm_cylinders")
     return cfg
@@ -163,7 +168,7 @@ def main(cfg):
 
     if cfg.scalable:
         import json
-        json_file_path = "../distr/data_params.json"
+        json_file_path = cfg.json_file_path
 
         # Read the JSON file
         with open(json_file_path, 'r') as file:

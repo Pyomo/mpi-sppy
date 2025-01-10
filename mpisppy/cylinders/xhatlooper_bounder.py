@@ -73,8 +73,10 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
 
                 self.opt._put_nonant_cache(self.localnonants)
-                self.opt._restore_nonants()
-                upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=True)
+                # just for sending the values to other scenarios
+                # so we don't need to tell persistent solvers
+                self.opt._restore_nonants(update_persistent=False)
+                upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=False)
 
                 # send a bound to the opt companion
                 self.update_if_improving(upperbound)

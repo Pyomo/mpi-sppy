@@ -94,9 +94,8 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
 
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
-            # restoring does no harm
-            # if this solution is infeasible
-            self.opt._restore_nonants()
+            if restore_nonants:
+                self.opt._restore_nonants()
             return None
         else:
             if verbose and self.cylinder_rank == 0:

@@ -15,6 +15,13 @@ extension can be included in some applications, but not others.
 There are a number of extensions, particularly for PH, that are provided
 with ``mpi-sppy`` and they provide examples that can be used for the
 creation of more. Extensions can be found in ``mpisppy.extensions``.
+Note that some things (e.g. some xhatters) can be used as a cylinder
+or as an extension. A few other things (e.g., cross scenario cuts) need
+both an extension and a cylinder.
+
+Many extensions are supported in :ref:`generic_cylinders`. The rest of
+this help file describes extensions released with mpisppy along with
+some hints for including them in your own cylinders driver program.
 
 Multiple Extensions
 -------------------
@@ -87,6 +94,21 @@ xhat
 
 Most of the xhat methods can be used as an extension instead of being used
 as a spoke, when that is desired (e.g. for serial applications).
+
+integer_relax_then_enforce
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This extension is for problems with integer variables. The scenario subproblems
+have the integrality restrictions initially relaxed, and then at a later point
+the subproblem integrality restrictions are re-enabled. The parameter ``ratio``
+(default = 0.5) controls how much of the progressive hedging algorithm, either
+in the iteration or time limit, is used for relaxed progressive hedging iterations.
+The extension will also re-enforce the integrality restrictions if the convergence
+threshold is within 10\%  of the convergence tolerance.
+
+This extension can be especially effective if (1) solving the relaxation
+is much easier than solving the problem with integrality constraints or (2) the
+relaxation is reasonably "tight".
 
 WXBarWriter and WXBarReader
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -180,6 +202,9 @@ In its current state, the user might opt-in to presolve for two reasons:
    non-anticipative variables may improve the fixer's performance.
 
 .. Note::
+   Like many solvers, the presolver will convert infinite bounds to 1e+100.
+
+.. Note::
    This capability requires the auto-persistent pyomo solver interface (APPSI) extensions
    for Pyomo to be built on your system. This can be achieved by running ``pyomo build-extensions``
    at the command line.
@@ -248,3 +273,12 @@ If some variables have zero probability in all scenarios, then you will need to 
 ``do_not_check_variable_probabilities`` to True in the options for ``spbase``. This will result in skipping the checks for
 all variable probabilities! So you might want to set this to False to verify that the probabilities sum to one
 only for the Vars you expect before setting it to True.
+
+Scenario_lpwriter
+-----------------
+
+This extension writes an lp file with the model and json file with (a) list(s) of
+scenario tree node names and nonanticaptive variables for each scenario before
+the iteration zero solve of PH or APH. Note that for two-stage problems, all
+json files will be the same. See ``mpisppy.generic_cylinders.py``
+for an example of use.
