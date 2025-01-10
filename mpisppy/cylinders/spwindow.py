@@ -43,21 +43,21 @@ class SPWindow:
         for field in self.field_order:
             length = my_fields[field]
             length += 1 # Add 1 for the read id field
-            layout[field] = (offset, length, MPI.DOUBLE)
+            # layout[field] = (offset, length, MPI.DOUBLE)
+            layout[field] = (offset, length)
             offset += length
         ## End for
 
         # If not present already, add field for WHOLE buffer so the entire window
         # buffer can be copied or set in one go
         if Field.WHOLE not in layout:
-            layout[Field.WHOLE] = (0, offset, MPI.DOUBLE)
+            # layout[Field.WHOLE] = (0, offset, MPI.DOUBLE)
+            layout[Field.WHOLE] = (0, offset)
         ## End if
 
         self.buffer_layout = layout
         total_buffer_length = offset
         window_size_bytes = MPI.DOUBLE.size * total_buffer_length
-
-        # print("Rank: {}    Total Buffer Length: {}".format(self.strata_rank, total_buffer_length))
 
         self.buffer_length = total_buffer_length
         self.window = MPI.Win.Allocate(window_size_bytes, MPI.DOUBLE.size, comm=strata_comm)
@@ -65,7 +65,8 @@ class SPWindow:
         self.buff[:] = np.nan
 
         for field in self.buffer_layout.keys():
-            (offset, length, mpi_type) = self.buffer_layout[field]
+            # (offset, length, mpi_type) = self.buffer_layout[field]
+            (offset, length) = self.buffer_layout[field]
             self.buff[offset + length - 1] = 0.0
         ## End for
 
@@ -95,30 +96,32 @@ class SPWindow:
     #### Functions ####
     def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field):
 
-        # print("Target Rank: {}  Target Field: {}".format(strata_rank, field))
-
         that_layout = self.strata_buffer_layouts[strata_rank]
         assert field in that_layout.keys()
 
-        (offset, length, mpi_type) = that_layout[field]
+        # (offset, length, mpi_type) = that_layout[field]
+        (offset, length) = that_layout[field]
         assert np.size(dest) == length
 
         window = self.window
         window.Lock(strata_rank, MPI.LOCK_SHARED)
-        window.Get((dest, length, mpi_type), strata_rank, offset)
+        # window.Get((dest, length, mpi_type), strata_rank, offset)
+        window.Get((dest, length, MPI.DOUBLE), strata_rank, offset)
         window.Unlock(strata_rank)
 
         return
 
     def put(self, values: nptyping.ArrayLike, field: Field):
 
-        (offset, length, mpi_type) = self.buffer_layout[field]
+        # (offset, length, mpi_type) = self.buffer_layout[field]
+        (offset, length) = self.buffer_layout[field]
 
         assert(np.size(values) == length)
 
         window = self.window
         window.Lock(self.strata_rank, MPI.LOCK_EXCLUSIVE)
-        window.Put((values, length, mpi_type), self.strata_rank, offset)
+        # window.Put((values, length, mpi_type), self.strata_rank, offset)
+        window.Put((values, length, MPI.DOUBLE), self.strata_rank, offset)
         window.Unlock(self.strata_rank)
 
         return
