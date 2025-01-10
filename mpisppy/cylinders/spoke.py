@@ -13,10 +13,9 @@ import time
 import os
 import math
 
-from mpisppy.cylinders.spwindow import SPWindow
 from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SendArray, RecvArray, SPCommunicator, communicator_array
+from mpisppy.cylinders.spcommunicator import SPCommunicator
 from mpisppy.cylinders.spwindow import Field
 
 

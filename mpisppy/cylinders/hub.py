@@ -13,13 +13,13 @@ import mpisppy.log
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SendArray, RecvArray, SPCommunicator, communicator_array
+from mpisppy.cylinders.spcommunicator import SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
 from mpisppy import global_toc
 
-from mpisppy.cylinders.spwindow import Field, SPWindow
+from mpisppy.cylinders.spwindow import Field
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.Hub",

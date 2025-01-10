@@ -76,7 +76,7 @@ def main():
     ph.ph_main()
     variables = ph.gather_var_values_to_rank0()
 
-    if variables == None:
+    if variables is None:
         variables = []
 
     for (scenario_name, variable_name) in variables:

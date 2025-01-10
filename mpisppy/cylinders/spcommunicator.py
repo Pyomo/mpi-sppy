@@ -21,7 +21,6 @@
 import numpy as np
 import abc
 import time
-from mpisppy import MPI
 
 from mpisppy.cylinders.spwindow import Field, SPWindow
 

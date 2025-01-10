@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2025, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 
 from mpisppy import MPI
 
@@ -7,10 +15,10 @@ import numpy.typing as nptyping
 import enum
 
 class Field(enum.IntEnum):
-    SHUTDOWN = -1000
-    NONANT = 1
-    DUALS = 2
-    BOUNDS = 100
+    SHUTDOWN=-1000
+    NONANT=1
+    DUALS=2
+    BOUNDS=100
     INNER_BOUND=101
     OUTER_BOUND=102
     EXPECTED_REDUCED_COST=200
@@ -25,7 +33,7 @@ class SPWindow:
         self.strata_rank = strata_comm.Get_rank()
 
         # Sorted by the integer value of the enumeration value
-        if field_order == None:
+        if field_order is None:
             self.field_order = sorted(my_fields.keys())
         else:
             self.field_order = field_order
