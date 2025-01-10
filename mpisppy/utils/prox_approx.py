@@ -160,7 +160,9 @@ class _ProxApproxManager:
         # print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
         # print(f"this_val: {this_val}")
         next_val = _newton_step(this_val, x_pnt, y_pnt)
-        while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
+        for _ in range(10):
+            if isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
+                break
             # print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
             # print(f"next_val: {next_val}")
             this_val = next_val

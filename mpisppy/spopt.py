@@ -176,9 +176,8 @@ class SPOpt(SPBase):
                 s._solver_plugin.options[option_key] = option_value
 
         solve_keyword_args = dict()
-        if self.cylinder_rank == 0:
-            if tee is not None and tee is True:
-                solve_keyword_args["tee"] = True
+        if tee is not None and tee is True:
+            solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
         elif disable_pyomo_signal_handling:
