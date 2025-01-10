@@ -30,12 +30,6 @@ class Spoke(SPCommunicator):
 
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
 
-        # self.local_write_id = 0
-        # self.remote_write_id = 0
-
-        # self.local_length = 0  # Does NOT include the + 1
-        # self.remote_length = 0  # Length on hub; does NOT include + 1
-
         self.last_call_to_got_kill_signal = time.time()
 
         # All spokes need the SHUTDOWN field to know when to terminate. Just
@@ -43,44 +37,6 @@ class Spoke(SPCommunicator):
         self.shutdown = self.register_recv_field(Field.SHUTDOWN, 0, 1)
 
         return
-
-    # def _make_windows(self, local_length, remote_length):
-    #     # Spokes notify the hub of the buffer sizes
-    #     pair_of_lengths = np.array([local_length, remote_length], dtype="i")
-    #     self.strata_comm.Send((pair_of_lengths, MPI.INT), dest=0, tag=self.strata_rank)
-    #     self.local_length = local_length
-    #     self.remote_length = remote_length
-
-    #     # Make the windows of the appropriate buffer sizes
-    #     # To do?: Spoke should not need to know how many other spokes there are.
-    #     # Just call a single _make_window()? Do you need to create empty
-    #     # windows?
-    #     # ANSWER (dlw July 2020): Since the windows have zero length and since
-    #     # the number of spokes is not expected to be large, it is probably OK.
-    #     # The (minor) benefit is that free_windows does not need to know if it
-    #     # was called by a hub or a spoke. If we ever move to dynamic spoke
-    #     # creation, then this needs to be reimagined.
-    #     self.windows = [None for _ in range(self.n_spokes)]
-    #     self.buffers = [None for _ in range(self.n_spokes)]
-    #     for i in range(self.n_spokes):
-    #         length = self.local_length if self.strata_rank == i + 1 else 0
-    #         win, buff = self._make_window(length)
-    #         self.windows[i] = win
-    #         self.buffers[i] = buff
-
-    #     buffer_spec = self.build_buffer_spec()
-    #     self.window = SPWindow(buffer_spec, self.strata_comm)
-
-    #     self._make_window(self.strata_comm)
-    #     self._windows_constructed = True
-
-    #     return
-
-    # def buffer(self, field: Field) -> np.typing.ArrayLike:
-    #     return self._locals[field]
-
-    # def is_field_new(self, field: Field) -> bool:
-    #     return self._new_locals[field]
 
     def spoke_to_hub(self, values: np.typing.NDArray, field: Field, write_id: int):
         """ Put the specified values into the locally-owned buffer for the hub
@@ -92,19 +48,7 @@ class Spoke(SPCommunicator):
                 This assumes that values contains a slot at the end for the
                 write_id
         """
-        # expected_length = self.local_length + 1
-        # if len(values) != expected_length:
-        #     raise RuntimeError(
-        #         f"Attempting to put array of length {len(values)} "
-        #         f"into local buffer of length {expected_length}"
-        #     )
         self.cylinder_comm.Barrier()
-        # self.local_write_id += 1
-        # values[-1] = self.local_write_id
-        # window = self.windows[self.strata_rank - 1]
-        # window.Lock(self.strata_rank)
-        # window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
-        # window.Unlock(self.strata_rank)
         values[-1] = write_id
         self.window.put(values, field)
         return
@@ -116,17 +60,6 @@ class Spoke(SPCommunicator):
                        ):
         """
         """
-        # expected_length = self.remote_length + 1
-        # if len(values) != expected_length:
-        #     raise RuntimeError(
-        #         f"Spoke trying to get buffer of length {expected_length} "
-        #         f"from hub, but provided buffer has length {len(values)}."
-        #     )
-        # self.cylinder_comm.Barrier()
-        # window = self.windows[self.strata_rank - 1]
-        # window.Lock(0)
-        # window.Get((values, len(values), MPI.DOUBLE), 0)
-        # window.Unlock(0)
 
         self.cylinder_comm.Barrier()
         self.window.get(values, 0, field)
@@ -148,10 +81,6 @@ class Spoke(SPCommunicator):
 
         assert max_id == min_id == new_id
 
-        # if (new_id > self.remote_write_id) or (new_id < 0):
-        #     self.remote_write_id = new_id
-        #     return True
-
         if new_id > last_write_id or new_id < 0:
             return True
 
@@ -164,17 +93,12 @@ class Spoke(SPCommunicator):
         else:
             shutdown = False
         ## End if
-        # print("SHUTDOWN: ", self.shutdown[0],
-        #       "  New: ", shutdown_buf.is_new(),
-        #       "  RetVal: ", shutdown)
         return shutdown
 
     def got_kill_signal(self):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        # return self._got_kill_signal()
-        # self.window.get(self.shutdown, 0, Field.SHUTDOWN)
         self.update_locals()
         return self._got_kill_signal()
 
@@ -188,10 +112,6 @@ class Spoke(SPCommunicator):
         """
         pass
 
-    # def get_serial_number(self):
-    #     return self.remote_write_id
-
-    # @abc.abstractmethod
     def update_locals(self):
         for (key, recv_buf) in self._locals.items():
             field, rank = self._split_key(key)
@@ -201,19 +121,6 @@ class Spoke(SPCommunicator):
             ## End if
         ## End for
         return
-
-    # @abc.abstractmethod
-    # def _got_kill_signal(self):
-    #     """ Every spoke needs a way to get the signal to terminate
-    #         from the hub
-    #     """
-    #     pass
-
-    # @abc.abstractmethod
-    # def init_local_buffer(self) -> None:
-    #     """ Initialize buffers for local copies of hub values
-    #     """
-    #     pass
 
 
 class _BoundSpoke(Spoke):
@@ -236,32 +143,12 @@ class _BoundSpoke(Spoke):
         else:
             self.trace_filen = None
 
-        # self._new_locals = False
-        # self._bound = None
-        # self._locals = None
-
         return
-
-    # def make_windows(self):
-    #     """ Makes the bound window and a remote window to
-    #         look for a kill signal
-    #     """
-    #     self._make_windows(1, 2) # kill signals are accounted for in _make_window
-    #     self._bound = communicator_array(1) # spoke bound + kill signal
-    #     self._locals = communicator_array(2) # hub outer/inner bounds and kill signal
 
 
     @abc.abstractmethod
     def bound_type(self) -> Field:
         pass
-        # # TODO: Does this work? Probably not...
-        # if ConvergerSpokeType.OUTER_BOUND in self.converger_spoke_types:
-        #     my_type = Field.OUTER_BOUND
-        # elif ConvergerSpokeType.INNER_BOUND in self.converger_spoke_types:
-        #     my_type = Field.INNER_BOUND
-        # else:
-        #     raise RuntimeError(f"Unabale to determine bound type {self.converger_spoke_types}")
-        # return my_type
 
 
     def build_window_spec(self) -> dict[Field, int]:
@@ -299,15 +186,6 @@ class _BoundSpoke(Spoke):
         # NOTE: This should be the same as _hub_bounds[0]
         return self._hub_bounds[-3]
 
-    # def update_locals(self):
-    #     self._new_locals = self.spoke_from_hub([self._locals], [Field.BOUNDS])
-    #     return
-
-    # def _got_kill_signal(self):
-    #     """Looks for the kill signal and returns True if sent"""
-    #     self._new_locals = self.spoke_from_hub(self._locals)
-    #     return self.remote_write_id == -1
-
     def _append_trace(self, value):
         if self.cylinder_rank != 0 or self.trace_filen is None:
             return
@@ -319,33 +197,6 @@ class _BoundNonantLenSpoke(_BoundSpoke):
     """ A base class for bound spokes which also
         want something of len nonants from OPT
     """
-
-    # def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-    #     super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
-    #     self._local_nonant_len = None
-    #     return
-
-    # def make_windows(self):
-    #     """ Makes the bound window and with a remote buffer long enough
-    #         to hold an array as long as the nonants.
-
-    #         Input:
-    #             opt (SPBase): Must have local_scenarios attached already!
-
-    #     """
-    #     if not hasattr(self.opt, "local_scenarios"):
-    #         raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
-
-    #     if len(self.opt.local_scenarios) == 0:
-    #         raise RuntimeError("Rank has zero local_scenarios")
-
-    #     vbuflen = 2
-    #     for s in self.opt.local_scenarios.values():
-    #         vbuflen += len(s._mpisppy_data.nonant_indices)
-
-    #     self._make_windows(1, vbuflen)
-    #     self._bound = communicator_array(1)
-    #     self._locals = communicator_array(vbuflen)
 
     @abc.abstractmethod
     def nonant_len_type(self) -> Field:
@@ -404,16 +255,9 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     def nonant_len_type(self) -> Field:
         return Field.DUALS
 
-    # def build_window_spec(self) -> dict[Field, int]:
-    #     window_spec = super().build_window_spec()
-    #     self.register_recv_field(Field.DUALS, )
-    #     return window_spec
-
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
-        # return self._locals[:-3] # -3 for the bounds and kill signal
-        # return self._local_nonant_len[:-1] # -1 to ignore the read_id
         key = self._make_key(Field.DUALS, 0)
         return self._locals[key].array()
 
@@ -425,13 +269,6 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
         """
         key = self._make_key(Field.DUALS, 0)
         return self._locals[key].is_new()
-
-    # def update_locals(self):
-    #     # self.spoke_from_hub(self._locals, Field.BOUNDS)
-    #     # self._new_locals = self.spoke_from_hub(self._local_nonant_len, Field.DUALS)
-    #     # self._new_locals = self.spoke_from_hub([self._locals, self._local_nonant_len],
-    #     #                                        [Field.BOUNDS, Field.DUALS])
-    #     return
 
 
 class OuterBoundWSpoke(_BoundWSpoke):
@@ -463,8 +300,6 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     @property
     def localnonants(self):
         """Returns the local copy of the nonants"""
-        # return self._locals[:-3]
-        # return self._local_nonant_len[:-1] # -1 to avoid returning the read_id
         key = self._make_key(Field.NONANT, 0)
         return self._locals[key].array()
 
@@ -473,16 +308,8 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
         """Returns True if the local copy of
            the nonants has been updated since
            the last call to got_kill_signal"""
-        # return self._new_locals[Field.NONANT]
         key = self._make_key(Field.NONANT, 0)
         return self._locals[key].is_new()
-
-    # def update_locals(self):
-    #     # self.spoke_from_hub(self._locals, Field.BOUNDS)
-    #     # self._new_locals = self.spoke_from_hub(self._local_nonant_len, Field.NONANT)
-    #     # self._new_locals = self.spoke_from_hub([self._locals, self._local_nonant_len],
-    #     #                                        [Field.BOUNDS, Field.NONANT])
-    #     return
 
 
 class InnerBoundNonantSpoke(_BoundNonantSpoke):

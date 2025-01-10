@@ -31,13 +31,6 @@ class Hub(SPCommunicator):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, spokes, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
         assert len(spokes) == self.n_spokes
-        # self.local_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
-        # self.local_write_ids = dict()
-        # self.remote_write_ids = np.zeros(self.n_spokes, dtype=np.int64)
-        # TODO: Cleanup the usage of local_lengths and remote_lengths
-        # self.local_lengths = np.zeros(self.n_spokes, dtype=np.int64)
-        # self.remote_lengths = np.zeros(self.n_spokes, dtype=np.int64)
-        # ^^^ Does NOT include +1
         self.spokes = spokes  # List of dicts
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # for logging
@@ -272,9 +265,6 @@ class Hub(SPCommunicator):
         """
         self.outerbound_receive_buffers = dict()
         for idx in self.outerbound_spoke_indices:
-            # self.outerbound_receive_buffers[idx] = communicator_array(
-            #     self.remote_lengths[idx - 1]
-            # )
             self.outerbound_receive_buffers[idx] = self.register_recv_field(
                 Field.OUTER_BOUND, idx, 1,
             )
@@ -286,9 +276,6 @@ class Hub(SPCommunicator):
         """
         self.innerbound_receive_buffers = dict()
         for idx in self.innerbound_spoke_indices:
-            # self.innerbound_receive_buffers[idx] = communicator_array(
-            #     self.remote_lengths[idx - 1]
-            # )
             self.innerbound_receive_buffers[idx] = self.register_recv_field(
                 Field.INNER_BOUND, idx, 1
             )
@@ -300,12 +287,6 @@ class Hub(SPCommunicator):
             to the appropriate spokes
         """
         self.nonant_send_buffer = None
-        # for idx in self.nonant_spoke_indices:
-        #     if self.nonant_send_buffer is None:
-        #         # for hub outer/inner bounds and kill signal
-        #         self.nonant_send_buffer = communicator_array(self.local_lengths[idx - 1])
-        #     elif self.local_lengths[idx - 1] + 1 != len(self.nonant_send_buffer):
-        #         raise RuntimeError("Nonant buffers disagree on size")
         if self.has_nonant_spokes:
             self.nonant_send_buffer = self._sends[Field.NONANT].array()
         ## End if
@@ -316,11 +297,6 @@ class Hub(SPCommunicator):
             to bounds only spokes
         """
         self.boundsout_send_buffer = None
-        # for idx in self.bounds_only_indices:
-        #     if self.boundsout_send_buffer is None:
-        #         self.boundsout_send_buffer = communicator_array(self.local_lengths[idx - 1])
-        #     if self.local_lengths[idx - 1] != 2:
-        #         raise RuntimeError(f'bounds only local length buffers must be 2 (bounds). Currently {self.local_lengths[idx - 1]}')
         if self.has_bounds_only_spokes:
             self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
         ## End if
@@ -342,8 +318,6 @@ class Hub(SPCommunicator):
         my_bounds = self._sends[Field.BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
         logging.debug("hub is sending bounds={}".format(my_bounds.array()))
-        # for idx in self.bounds_only_indices:
-        #     self.hub_to_spoke(self.boundsout_send_buffer, idx)
         self.hub_to_spoke(my_bounds.array(), Field.BOUNDS, my_bounds.next_write_id())
         return
 
@@ -399,31 +373,7 @@ class Hub(SPCommunicator):
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.initialize_spoke_indices()
 
-    # def make_windows(self):
-    #     if self._windows_constructed:
-    #         # different parts of the hub may call make_windows,
-    #         # we just care about the first call
-    #         return
-
-    #     # # Spokes notify the hub of the buffer sizes
-    #     # for i in range(self.n_spokes):
-    #     #     pair_of_sizes = np.zeros(2, dtype="i")
-    #     #     self.strata_comm.Recv((pair_of_sizes, MPI.INT), source=i + 1, tag=i + 1)
-    #     #     self.remote_lengths[i] = pair_of_sizes[0]
-    #     #     self.local_lengths[i] = pair_of_sizes[1]
-
-    #     # # Make the windows of the appropriate buffer sizes
-    #     # self.windows = [None for _ in range(self.n_spokes)]
-    #     # self.buffers = [None for _ in range(self.n_spokes)]
-    #     # for i in range(self.n_spokes):
-    #     #     length = self.local_lengths[i]
-    #     #     win, buff = self._make_window(length)
-    #     #     self.windows[i] = win
-    #     #     self.buffers[i] = buff
-
-    #     # flag this for multiple calls from the hub
-    #     self._windows_constructed = True
-    #     return
+        return
 
 
     def build_window_spec(self) -> dict[Field, int]:
@@ -458,10 +408,6 @@ class Hub(SPCommunicator):
             n_nonants += len(s._mpisppy_data.nonant_indices)
         ## End for
 
-        # for field in required_fields:
-        #     self.local_write_ids[field] = 0
-        # ## End for
-
         if Field.DUALS in required_fields:
             window_spec[Field.DUALS] = n_nonants
             self.register_send_field(Field.DUALS, n_nonants)
@@ -488,21 +434,6 @@ class Hub(SPCommunicator):
                 This assumes that values contains a slot at the end for the
                 write_id
         """
-        # expected_length = self.local_lengths[spoke_strata_rank - 1] + 1
-        # if len(values) != expected_length:
-        #     raise RuntimeError(
-        #         f"Attempting to put array of length {len(values)} "
-        #         f"into local buffer of length {expected_length}"
-        #     )
-        # # this is so the spoke ranks all get the same write_id at approximately the same time
-        # if not isinstance(self.opt, APH):
-        #     self.cylinder_comm.Barrier()
-        # self.local_write_ids[spoke_strata_rank - 1] += 1
-        # values[-1] = self.local_write_ids[spoke_strata_rank - 1]
-        # window = self.windows[spoke_strata_rank - 1]
-        # window.Lock(self.strata_rank)
-        # window.Put((values, len(values), MPI.DOUBLE), self.strata_rank)
-        # window.Unlock(self.strata_rank)
 
         if not isinstance(self.opt, APH):
             self.cylinder_comm.Barrier()
@@ -526,21 +457,6 @@ class Hub(SPCommunicator):
                 is_new (bool): Indicates whether the "gotten" values are new,
                     based on the write_id.
         """
-        # expected_length = self.remote_lengths[spoke_num - 1] + 1
-        # if len(values) != expected_length:
-        #     raise RuntimeError(
-        #         f"Hub trying to get buffer of length {expected_length} "
-        #         f"from spoke, but provided buffer has length {len(values)}."
-        #     )
-        # # so the window in each rank gets read at approximately the same time,
-        # # and so has the same write_id
-        # if not isinstance(self.opt, APH):
-        #     self.cylinder_comm.Barrier()
-        # window = self.windows[spoke_num - 1]
-        # window.Lock(spoke_num)
-        # window.Get((values, len(values), MPI.DOUBLE), spoke_num)
-        # window.Unlock(spoke_num)
-
         # so the window in each rank gets read at approximately the same time,
         # and so has the same write_id
         if not isinstance(self.opt, APH):
@@ -565,9 +481,6 @@ class Hub(SPCommunicator):
             if new_id != sum_ids[0] / self.cylinder_comm.size:
                 return False
             ## End if
-            # if (new_id > self.remote_write_ids[spoke_num - 1]) or (new_id < 0):
-            #     self.remote_write_ids[spoke_num - 1] = new_id
-            #     return True
             if new_id > last_write_id or new_id < 0:
                 return True
             ## End if
@@ -582,13 +495,6 @@ class Hub(SPCommunicator):
             buffer, so every spoke will see it simultaneously.
             processes (don't need to call them one at a time).
         """
-        # for rank in range(1, self.n_spokes + 1):
-        #     dummies = np.zeros(self.local_lengths[rank - 1] + 1)
-        #     dummies[-1] = -1
-        #     window = self.windows[rank - 1]
-        #     window.Lock(0)
-        #     window.Put((dummies, len(dummies), MPI.DOUBLE), 0)
-        #     window.Unlock(0)
         term_buf = self._sends[Field.SHUTDOWN]
         self.shutdown[0] = 1.0
         self.hub_to_spoke(term_buf.array(), Field.SHUTDOWN, term_buf.next_write_id())
@@ -727,10 +633,7 @@ class PHHub(Hub):
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
-        # self._populate_boundsout_cache(nonant_send_buffer)
 
-        # for idx in self.nonant_spoke_indices:
-        #     self.hub_to_spoke(nonant_send_buffer, idx)
         self.hub_to_spoke(nonant_send_buffer, Field.NONANT, my_nonants.next_write_id())
 
         return
@@ -740,11 +643,6 @@ class PHHub(Hub):
             to the appropriate spokes
         """
         self.w_send_buffer = None
-        # for idx in self.w_spoke_indices:
-        #     if self.w_send_buffer is None:
-        #         self.w_send_buffer = communicator_array(self.local_lengths[idx - 1])
-        #     elif self.local_lengths[idx - 1] + 1 != len(self.w_send_buffer):
-        #         raise RuntimeError("W buffers disagree on size")
         if self.has_w_spokes:
             self.w_send_buffer = self._sends[Field.DUALS].array()
         ## End if
@@ -755,13 +653,9 @@ class PHHub(Hub):
         """
         # NOTE: my_ws.array() and self.w_send_buffer should be the same array.
         my_ws = self._sends[Field.DUALS]
-        # self.opt._populate_W_cache(self.w_send_buffer, padding=1)
         self.opt._populate_W_cache(my_ws.array(), padding=1)
         logging.debug("hub is sending Ws={}".format(my_ws.array()))
-        # self._populate_boundsout_cache(self.w_send_buffer)
 
-        # for idx in self.w_spoke_indices:
-        #     self.hub_to_spoke(self.w_send_buffer, idx)
         self.hub_to_spoke(my_ws.array(), Field.DUALS, my_ws.next_write_id())
 
         return

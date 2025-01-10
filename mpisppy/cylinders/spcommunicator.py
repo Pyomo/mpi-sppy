@@ -112,7 +112,7 @@ class SPCommunicator:
         """
         return (field, origin)
 
-    def _split_key(self, key):
+    def _split_key(self, key) -> tuple[Field, int]:
         """Take the given key and return a tuple (field, origin) where origin in the strata_rank
            from which the field comes.
 
@@ -221,4 +221,5 @@ class SPCommunicator:
     def build_window_spec(self) -> dict[Field, int]:
         """ Build dict with fields and lengths needed for local MPI window
         """
-        return {}
+        pass
+        # return {}
