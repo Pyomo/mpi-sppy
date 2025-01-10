@@ -71,7 +71,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         obj = self.xhatter._try_one(snamedict,
                                     solver_options = self.solver_options,
                                     verbose=False,
-                                    restore_nonants=True,
+                                    restore_nonants=False,
                                     stage2EFsolvern=stage2EFsolvern,
                                     branching_factors=branching_factors)
         def _vb(msg): 
@@ -139,7 +139,9 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
 
                 # update the caches
                 self.opt._put_nonant_cache(self.localnonants)
-                self.opt._restore_nonants()
+                # just for sending the values to other scenarios
+                # so we don't need to tell persistent solvers
+                self.opt._restore_nonants(update_persistent=False)
                 
                 scenario_cycler.begin_epoch()
 

@@ -38,6 +38,7 @@ from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.hub import APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
 from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
@@ -57,6 +58,7 @@ def shared_options(cfg):
         "defaultPHrho": cfg.default_rho,
         "convthresh": 0,
         "PHIterLimit": cfg.max_iterations,  # not needed by all
+        "time_limit": cfg.time_limit,  # not needed by all
         "verbose": cfg.verbose,
         "display_progress": cfg.display_progress,
         "display_convergence_detail": cfg.display_convergence_detail,
@@ -205,6 +207,13 @@ def add_fixer(hub_dict,
                                               "id_fix_list_fct": cfg.id_fix_list_fct}
     return hub_dict
 
+def add_integer_relax_then_enforce(hub_dict,
+              cfg,
+              ):
+    hub_dict = extension_adder(hub_dict,IntegerRelaxThenEnforce)
+    hub_dict["opt_kwargs"]["options"]["integer_relax_then_enforce_options"] = {"ratio":cfg.integer_relax_then_enforce_ratio}
+    return hub_dict
+
 def add_reduced_costs_rho(hub_dict, cfg):
     hub_dict = extension_adder(hub_dict,ReducedCostsRho)
     hub_dict["opt_kwargs"]["options"]["reduced_costs_rho_options"] = {"multiplier" : cfg.reduced_costs_rho_multiplier, "cfg": cfg}
@@ -246,6 +255,7 @@ def add_reduced_costs_fixer(hub_dict,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "use_rc_bt": cfg.rc_bound_tightening,
             "rc_bound_tol": cfg.rc_bound_tol,
+            "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
         }
 
     return hub_dict

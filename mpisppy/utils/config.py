@@ -173,9 +173,14 @@ class Config(pyofig.ConfigDict):
 
     def popular_args(self):
         self.add_to_config("max_iterations",
-                            description="hub max iiterations (default 1)",
+                            description="hub max iterations (default 1)",
                             domain=int,
                             default=1)
+
+        self.add_to_config("time_limit",
+                            description="hub time limit in seconds (default None)",
+                            domain=int,
+                            default=None)
 
         self.add_solver_specs(prefix="")
 
@@ -190,7 +195,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="Loose bundles per rank (default 0 (no bundles))",
+                            description="Loose bundles per rank (default 0 (no bundles)) WILL BE DEPRECATED",
                             domain=int,
                             default=0)
 
@@ -451,6 +456,18 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=1e-2)
 
+    def integer_relax_then_enforce_args(self):
+        self.add_to_config('integer_relax_then_enforce',
+                           description="have an integer relax then enforce extensions",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('integer_relax_then_enforce_ratio',
+                           description="fraction of time limit or iterations (whichever is sooner) "
+                                       "to spend with relaxed integers",
+                           domain=float,
+                           default=0.5)
+
     def reduced_costs_rho_args(self):
         self.add_to_config("reduced_costs_rho",
                            description="have a ReducedCostsRho extension",
@@ -576,6 +593,12 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         
+        self.add_to_config('rc_fixer_require_improving_lagrangian',
+                            description="Only consider fixing / unfixing variables after the lagrangian "
+                                        "bound computed by the reduced cost spoke has improved. (default True)",
+                            domain=bool,
+                            default=True)
+
         self.add_to_config('rc_zero_tol',
                             description="vars with rc below tol will never be fixed",
                             domain=float,

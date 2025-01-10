@@ -7,6 +7,9 @@ scenarios. We will refer to these as `loose bundles`. This bundling scheme
 is very flexible with respect to the numbers of scenarios in each bundle.
 There are various if-blocks in the mpisppy code to support this type of bundle.
 
+.. Warning::
+   In relase 1.0, loose bundles scheduled to be deprecated.
+
 In 2024, `proper bundles` were supported. After the extensive form
 for a proper bundle is created, the original scenarios are more or less
 forgotten and all processing takes place for the bundle. At the time
