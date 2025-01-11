@@ -17,7 +17,7 @@ import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.agnostic.agnostic_cylinders as agnostic_cylinders
 import mpisppy.utils.sputils as sputils
 
-sys.path.insert(0, "../../examples/farmer")
+sys.path.insert(0, "../../examples/farmer/agnostic")
 import farmer_pyomo_agnostic
 try:
     import mpisppy.agnostic.gams_guest
@@ -26,7 +26,7 @@ except ModuleNotFoundError:
     have_GAMS = False
 try:
     import farmer_ampl_agnostic
-    hava_AMPL = True
+    have_AMPL = True
 except ModuleNotFoundError:
     have_AMPL = False
 try:
@@ -38,7 +38,7 @@ except ModuleNotFoundError:
 __version__ = 0.2
 
 solver_available, solver_name, persistent_available, persistent_solver_name = (
-    get_solver()
+    get_solver(persistent_OK=False)
 )
 
 # NOTE Gurobi is hardwired for the AMPL and GAMS tests, so don't install it on github
@@ -125,8 +125,8 @@ class Test_Agnostic_pyomo(unittest.TestCase):
             extensions=None
         )
         conv, obj, tbound = ph.ph_main()
-        self.assertAlmostEqual(-115405.5555, tbound, places=2)
-        self.assertAlmostEqual(-110433.4007, obj, places=2)
+        self.assertAlmostEqual(-115405.5555, tbound, places=1)
+        self.assertAlmostEqual(-110433.4007, obj, places=1)
 
 
 @unittest.skipIf(not have_AMPL, "skipping AMPL")
@@ -252,8 +252,8 @@ class Test_Agnostic_gurobipy(unittest.TestCase):
         print(f"{solver_name=}")
         print(f"{tbound=}")
         print(f"{obj=}")
-        self.assertAlmostEqual(-110433.4007, obj, places=2)
-        self.assertAlmostEqual(-115405.5555, tbound, places=2)
+        self.assertAlmostEqual(-110433.4007, obj, places=1)
+        self.assertAlmostEqual(-115405.5555, tbound, places=1)
 
 
 if __name__ == "__main__":

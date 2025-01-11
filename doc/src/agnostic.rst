@@ -3,7 +3,8 @@ AML Agnosticism
 
 The mpi-sppy package provides callouts so that algebraic modeling languages
 (AMLs) other than Pyomo can be used. A growing number of AMLs are supported
-as `guest` languages (we refer to mpi-sppy as the `host`).
+as `guest` languages (we refer to mpi-sppy as the `host`). This code is
+in an alpha-release state; use with extreme caution.
 
 From the end-user's perspective
 -------------------------------
@@ -34,7 +35,8 @@ name argument to the scenario_creator function.
 
 (An exception is when the guest is in Pyomo, then the wrapper
 file might as well contain the model specification as well so
-there typically is only one file.)
+there typically is only one file. However, there is not particularly
+good reason to use the agnostic machinery for a Pyomo model.)
 
 
 From the developers perspective
@@ -57,7 +59,7 @@ for many guest languages because they don't use indexes from the
 original model when updating the objective function. If this is an issue,
 you might want to write a problem-specific module to replace the guest
 interface and the model wrapper with a single module. For an example, see
-``examples.farmer.farmer_xxxx_agnostic``, where xxxx is replaced,
+``examples.farmer.agnostic.farmer_xxxx_agnostic``, where xxxx is replaced,
 e.g., by ampl. 
 
 Architecture
@@ -159,3 +161,11 @@ The example ``mpisppy.agnostic.farmer4agnostic.py`` contains example code.
 
 The script ``mpisppy.agnostic.examples.go.bash`` runs the example (and maybe some
 other examples).
+
+
+Notes about Gurobipy
+--------------------
+
+The current implementation of gurobipy assumes that nonants that are in
+the objective function appear direclty there (not via some other
+variable constrained in some way to represent them).

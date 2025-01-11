@@ -218,7 +218,6 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     objstr = objstr[:-1] + "+ (" + phobjstr + ");"
     objstr = objstr.replace("minimize minus_profit", "minimize phobj")
     profitobj.drop()
-    print(f"{objstr =}")
     gs.eval(objstr)
     gs.eval("delete minus_profit;")
     currentobj = gs.get_current_objective()
@@ -234,7 +233,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
     }
 
 
-def solve_one(Ag, s, solve_keyword_args, gripe, tee):
+def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     # This needs to attach stuff to s (see solve_one in spopt.py)
     # Solve the guest language version, then copy values to the host scenario
 
@@ -292,7 +291,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee):
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
             print(f"{gs.solve_result =}")
             
-    if solver_exception is not None:
+    if solver_exception is not None and need_solution:
         raise solver_exception
 
 

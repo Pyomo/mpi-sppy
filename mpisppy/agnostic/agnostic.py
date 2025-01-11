@@ -16,6 +16,7 @@ notes by dlw:
    - If a function in mpisppy has two callouts (a rarity), then the kwargs need to distinguish.
 """
 
+import sys
 import inspect
 import pyomo.environ as pyo
 from mpisppy.utils import sputils
@@ -52,8 +53,12 @@ class Agnostic():
             fname = inspect.stack()[1][3] 
             fct = getattr(self.module, fname, None)
             if fct is None:
-                raise RuntimeError(f"AML-agnostic module {self.module.__name__} is missing function {fname}")
-            fct(Ag=self, **kwargs)
+                raise RuntimeError(f"AML-agnostic module or object is missing function {fname}")
+            try:
+                fct(Ag=self, **kwargs)
+            except Exception as e:
+                print(f"ERROR: AML-agnostic module or object had an error when calling {fname}", file=sys.stderr)
+                raise e
             return True
         else:
             return False
