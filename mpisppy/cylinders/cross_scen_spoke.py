@@ -20,30 +20,6 @@ class CrossScenarioCutSpoke(spoke.Spoke):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
-    # def make_windows(self):
-    #     nscen = len(self.opt.all_scenario_names)
-    #     if nscen == 0:
-    #         raise RuntimeError(f"(rank: {self.cylinder_rank}), no local_scenarios")
-
-    #     self.nscen = nscen
-    #     vbuflen = 0
-    #     self.nonant_per_scen = 0
-    #     for s in self.opt.local_scenarios.values():
-    #         vbuflen += len(s._mpisppy_data.nonant_indices)
-    #     local_scen_count = len(self.opt.local_scenario_names)
-    #     self.nonant_per_scen = int(vbuflen / local_scen_count)
-
-    #     ## the _locals will also have the kill signal
-    #     self.all_nonant_len = vbuflen
-    #     self.all_eta_len = nscen*local_scen_count
-    #     self._locals = np.zeros(nscen*local_scen_count + vbuflen + 1)
-    #     self._coefs = np.zeros(nscen*(nscen + self.nonant_per_scen) + 1 + 1)
-    #     self._new_locals = False
-
-    #     # local, remote
-    #     # send, receive
-    #     self._make_windows(nscen*(self.nonant_per_scen + 1 + 1), nscen*local_scen_count + vbuflen)
-
     def build_window_spec(self) -> dict[Field, int]:
 
         nscen = len(self.opt.all_scenario_names)
@@ -70,16 +46,6 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         window_spec[Field.TODO] = nscen*(nscen + self.nonant_per_scen) + 1
 
         return window_spec
-
-    # def _got_kill_signal(self):
-    #     ''' returns True if a kill signal was received,
-    #         and refreshes the array and _locals'''
-    #     self._new_locals = self.spoke_from_hub(self._locals)
-    #     return self.remote_write_id == -1
-
-    # def update_locals(self):
-    #     self._new_locals = self.spoke_from_hub(self._locals, Field.TODO)
-    #     return
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.

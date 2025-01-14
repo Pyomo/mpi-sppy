@@ -187,14 +187,12 @@ class Hub(SPCommunicator):
         for idx in self.innerbound_spoke_indices:
             key = self._make_key(Field.INNER_BOUND, idx)
             recv_buf = self._locals[key]
-            # is_new = self.hub_from_spoke(self.innerbound_receive_buffers[idx],
             is_new = self.hub_from_spoke(recv_buf.array(),
                                          idx,
                                          Field.INNER_BOUND,
                                          recv_buf.id())
             if is_new:
                 recv_buf.pull_id()
-                # bound = self.innerbound_receive_buffers[idx][0]
                 bound = recv_buf.array()[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
                 self.BestInnerBound = self.InnerBoundUpdate(bound, idx)
@@ -209,14 +207,12 @@ class Hub(SPCommunicator):
         for idx in self.outerbound_spoke_indices:
             key = self._make_key(Field.OUTER_BOUND, idx)
             recv_buf = self._locals[key]
-            # is_new = self.hub_from_spoke(self.outerbound_receive_buffers[idx],
             is_new = self.hub_from_spoke(recv_buf.array(),
                                          idx,
                                          Field.OUTER_BOUND,
                                          recv_buf.id())
             if is_new:
                 recv_buf.pull_id()
-                # bound = self.outerbound_receive_buffers[idx][0]
                 bound = recv_buf.array()[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
                 self.BestOuterBound = self.OuterBoundUpdate(bound, idx)
@@ -314,7 +310,6 @@ class Hub(SPCommunicator):
         w and nonant spokes are passed bounds through the w and nonant buffers
         """
         # NOTE: boundsout_send_buffer should be the same numpy array as my_bounds.array()
-        # self._populate_boundsout_cache(self.boundsout_send_buffer)
         my_bounds = self._sends[Field.BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
         logging.debug("hub is sending bounds={}".format(my_bounds.array()))
@@ -466,9 +461,6 @@ class Hub(SPCommunicator):
 
         if isinstance(self.opt, APH):
             # # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
-            # if values[-1] > self.remote_write_ids[spoke_num - 1]:
-            #     self.remote_write_ids[spoke_num - 1] = values[-1]
-            #     return True
             if values[-1] > last_write_id:
                 return True
         else:
@@ -625,7 +617,6 @@ class PHHub(Hub):
         """
         self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
-        # nonant_send_buffer = self.nonant_send_buffer
         my_nonants = self._sends[Field.NONANT]
         nonant_send_buffer = my_nonants.array()
         for k, s in self.opt.local_scenarios.items():

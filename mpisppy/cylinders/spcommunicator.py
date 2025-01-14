@@ -166,46 +166,8 @@ class SPCommunicator:
         """
         """
         if self._windows_constructed:
-            # for i in range(self.n_spokes):
-            #     self.windows[i].Free()
-            # del self.buffers
             self.window.free()
         self._windows_constructed = False
-
-    # def _make_window(self, length, comm=None):
-    #     """ Create a local window object and its corresponding
-    #         memory buffer using MPI.Win.Allocate()
-
-    #         Args:
-    #             length (int): length of the buffer to create
-    #             comm (MPI Communicator, optional): MPI communicator object to
-    #                 create the window over. Default is self.strata_comm.
-
-    #         Returns:
-    #             window (MPI.Win object): The created window
-    #             buff (ndarray): Pointer to corresponding memory
-
-    #         Notes:
-    #             The created buffer will actually be +1 longer than length.
-    #             The last entry is a write number to keep track of new info.
-
-    #             This function assumes that the user has provided the correct
-    #             window size for the local buffer based on whether this process
-    #             is a hub or spoke, etc.
-    #     """
-    #     if comm is None:
-    #         comm = self.strata_comm
-    #     size = MPI.DOUBLE.size * (length + 1)
-    #     window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
-    #     buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())
-    #     buff[:] = np.nan
-    #     buff[-1] = 0. # Initialize the write number to zero
-    #     return window, buff
-
-    # def _make_window(self, comm):
-    #     buffer_spec = self.build_buffer_spec()
-    #     self.window = SPWindow(buffer_spec, comm)
-    #     return
 
     def make_windows(self) -> None:
         if self._windows_constructed:
@@ -222,4 +184,3 @@ class SPCommunicator:
         """ Build dict with fields and lengths needed for local MPI window
         """
         pass
-        # return {}
