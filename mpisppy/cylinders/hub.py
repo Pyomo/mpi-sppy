@@ -6,6 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+
+# TODO Remove after this program no longer support Python 3.8
+from __future__ import annotations
+
 import numpy as np
 import abc
 import logging
@@ -740,10 +744,7 @@ class LShapedHub(Hub):
                 nonant_send_buffer[ci] = nonant_to_root_var_map[xvar]._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
-        self._populate_boundsout_cache(nonant_send_buffer)
 
-        # for idx in self.nonant_spoke_indices:
-        #     self.hub_to_spoke(nonant_send_buffer, idx)
         my_nonants = self._sends[Field.NONANT]
         self.hub_to_spoke(nonant_send_buffer, Field.NONANT, my_nonants.next_write_id())
 

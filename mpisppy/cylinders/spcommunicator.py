@@ -18,12 +18,15 @@
 
     Separate hub and spoke classes for memory/window management?
 """
+
+# TODO Remove after this program no longer support Python 3.8
+from __future__ import annotations
+
 import numpy as np
 import abc
 import time
 
 from mpisppy.cylinders.spwindow import Field, SPWindow
-
 
 def communicator_array(size):
     arr = np.empty(size+1)

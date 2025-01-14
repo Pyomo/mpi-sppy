@@ -6,6 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+
+# TODO Remove after this program no longer support Python 3.8
+from __future__ import annotations
+
 import numpy as np
 import abc
 import enum

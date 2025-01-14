@@ -6,6 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+
+# TODO Remove after this program no longer support Python 3.8
+from __future__ import annotations
+
 from mpisppy.cylinders.spcommunicator import communicator_array
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy import MPI

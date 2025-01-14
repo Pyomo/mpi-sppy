@@ -70,8 +70,6 @@ class SPWindow:
             self.buff[offset + length - 1] = 0.0
         ## End for
 
-        # print(self.buff)
-
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
         self.window_constructed = True
