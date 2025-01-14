@@ -239,6 +239,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Function to set rho values throughout the PH algorithm.
             variable_probability (callable, optional):
                 Function to set variable specific probabilities.
+            cfg (config object, optional?)  controls (mainly from user)
+                (Maybe this should move up to spbase)
 
     """
     def __init__(
@@ -275,6 +277,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         # Note that options can be manipulated from outside on-the-fly.
         # self.options (from super) will archive the original options.
         self.options = options
+        self.Ag = options.get("Ag", None)  # The Agnostic Object
+        
         self.options_check()
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
@@ -373,7 +377,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def _populate_W_cache(self, cache, padding):
-        """ Copy the W values for noants *for all local scenarios*
+        """ Copy the W values for nonants *for all local scenarios*
         Args:
             cache (np vector) to receive the W's for all local scenarios (for sending)
 
@@ -438,6 +442,8 @@ class PHBase(mpisppy.spopt.SPOpt):
     def _disable_prox(self):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 0
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def _disable_W(self):
@@ -446,6 +452,8 @@ class PHBase(mpisppy.spopt.SPOpt):
         #       probably not mathematically useful
         for scenario in self.local_scenarios.values():
             scenario._mpisppy_model.W_on = 0
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def disable_W_and_prox(self):
@@ -456,12 +464,16 @@ class PHBase(mpisppy.spopt.SPOpt):
     def _reenable_prox(self):
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.prox_on = 1
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def _reenable_W(self):
         # TODO: we should eliminate this method
         for k, scenario in self.local_scenarios.items():
             scenario._mpisppy_model.W_on = 1
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"scenario": scenario})
 
 
     def reenable_W_and_prox(self):
@@ -638,6 +650,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                                         mutable=True,
                                         default=self.options["defaultPHrho"])
 
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"sname":sname, "scenario":scenario})
+
 
     def attach_smoothing(self):
         """ Attach the smoothing terms to the models in `local_scenarios`.
@@ -763,6 +778,11 @@ class PHBase(mpisppy.spopt.SPOpt):
                 objfct.expr += ph_term
             else:
                 objfct.expr -= ph_term
+            
+            if self.Ag is not None:
+                self.Ag.callout_agnostic({"sname":sname, "scenario":scenario,
+                                          "add_duals": add_duals, "add_prox": add_prox})
+
 
 
     def PH_Prep(

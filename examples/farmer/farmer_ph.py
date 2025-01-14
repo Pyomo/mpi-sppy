@@ -83,7 +83,7 @@ def main():
         variable_value = variables[scenario_name, variable_name]
         print(scenario_name, variable_name, variable_value)
 
-    # Use the closest per scenario solution to xbar for evaluating objective 
+    # Use the closest per scenario solution to xbar for evaluating objective
     if ph.tree_solution_available:
         print(f"Final objective from XhatClosest: {ph.extobject._final_xhat_closest_obj}")
 

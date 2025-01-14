@@ -6,8 +6,8 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# special for ph debugging DLW Dec 2018
-# unlimited crops
+# The farmer example for general agnostic with Pyomo as guest language
+# This example includes bundles as an option
 # ALL INDEXES ARE ZERO-BASED
 #  ___________________________________________________________________________
 #
@@ -19,7 +19,6 @@
 #  This software is distributed under the 3-clause BSD License.
 #  ___________________________________________________________________________
 #
-# special scalable farmer for stress-testing
 
 import pyomo.environ as pyo
 import numpy as np
@@ -27,6 +26,11 @@ import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
 farmerstream = np.random.RandomState()
+
+# to support a hack needed for bundles (ignore if you are not using bundles)
+numbuns = 0
+bunsize = 0
+original_num_scens = None
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,
@@ -36,7 +40,7 @@ def scenario_creator(
     
     Args:
         scenario_name (str):
-            Name of the scenario to construct.
+            Name of the scenario to construct, which might be a bundle.
         use_integer (bool, optional):
             If True, restricts variables to be integer. Default is False.
         sense (int, optional):
@@ -50,45 +54,80 @@ def scenario_creator(
             Default is None.
         seedoffset (int): used by confidence interval code
     """
-    # scenario_name has the form <str><int> e.g. scen12, foobar7
-    # The digits are scraped off the right of scenario_name using regex then
-    # converted mod 3 into one of the below avg./avg./above avg. scenarios
-    scennum   = sputils.extract_num(scenario_name)
-    basenames = ['BelowAverageScenario', 'AverageScenario', 'AboveAverageScenario']
-    basenum   = scennum  % 3
-    groupnum  = scennum // 3
-    scenname  = basenames[basenum]+str(groupnum)
+    if "scen" == scenario_name[:4] or "Scen" == scenario_name[:4]:
+        # scenario_name has the form <str><int> e.g. scen12, foobar7
+        # The digits are scraped off the right of scenario_name using regex then
+        # converted mod 3 into one of the below avg./avg./above avg. scenarios
+        scennum   = sputils.extract_num(scenario_name)
+        basenames = ['BelowAverageScenario', 'AverageScenario', 'AboveAverageScenario']
+        basenum   = scennum  % 3
+        groupnum  = scennum // 3
+        scenname  = basenames[basenum]+str(groupnum)
 
-    # The RNG is seeded with the scenario number so that it is
-    # reproducible when used with multiple threads.
-    # NOTE: if you want to do replicates, you will need to pass a seed
-    # as a kwarg to scenario_creator then use seed+scennum as the seed argument.
-    farmerstream.seed(scennum+seedoffset)
+        # The RNG is seeded with the scenario number so that it is
+        # reproducible when used with multiple threads.
+        # NOTE: if you want to do replicates, you will need to pass a seedoffset
+        # as a kwarg to scenario_creator 
+        farmerstream.seed(scennum+seedoffset)
 
-    # Check for minimization vs. maximization
-    if sense not in [pyo.minimize, pyo.maximize]:
-        raise ValueError("Model sense Not recognized")
+        # Check for minimization vs. maximization
+        if sense not in [pyo.minimize, pyo.maximize]:
+            raise ValueError("Model sense Not recognized")
 
-    # Create the concrete model object
-    model = pysp_instance_creation_callback(
-        scenname,
-        use_integer=use_integer,
-        sense=sense,
-        crops_multiplier=crops_multiplier,
-    )
+        # Create the concrete model object
+        model = pysp_instance_creation_callback(
+            scenname,
+            use_integer=use_integer,
+            sense=sense,
+            crops_multiplier=crops_multiplier,
+        )
 
-    # Create the list of nodes associated with the scenario (for two stage,
-    # there is only one node associated with the scenario--leaf nodes are
-    # ignored).
-    varlist = [model.DevotedAcreage]
-    sputils.attach_root_node(model, model.FirstStageCost, varlist)    
+        # create a varlist, which is used to create a vardata list
+        # (This list needs to whatever the guest needs, not what Pyomo needs)
+        varlist = [model.DevotedAcreage]
+        model._nonant_vardata_list = sputils.build_vardatalist(model, varlist)
+        sputils.attach_root_node(model, 0, varlist)
+
+        #Add the probability of the scenario
+        if num_scens is not None :
+            model._mpisppy_probability = 1/num_scens
+        else:
+            model._mpisppy_probability = "uniform"
+        return model
     
-    #Add the probability of the scenario
-    if num_scens is not None :
-        model._mpisppy_probability = 1/num_scens
+    elif "bund" == scenario_name[:4] or "Bund" == scenario_name[:4]:
+        firstnum = int(scenario_name.split("_")[1])
+        lastnum = int(scenario_name.split("_")[2])
+        assert (lastnum-firstnum+1) == bunsize
+        assert num_scens % bunsize != 0, "Due to laziness, we need equal sized bundels"
+        snames = [f"scen{i}" for i in range(firstnum, lastnum+1)]
+
+        bunkwargs = {"use_integer": use_integer,
+                     "sense": sense,
+                     "crops_multiplier": crops_multiplier, 
+                     "num_scens":None}
+        bunkwargs["seedoffset"] = seedoffset + firstnum
+
+        # it is easy to make the EF in Pyomo; see create_EF
+        # Note that it call scenario_creator, but this time it will be
+        #    with scenario names.
+        bundle = sputils.create_EF(snames, scenario_creator,
+                                   scenario_creator_kwargs=bunkwargs,
+                                   EF_name=scenario_name,
+                                   nonant_for_fixed_vars = False)
+        # It simplifies things if we assume that it is a 2-stage problem,
+        # or that the bundles consume entire second stage nodes,
+        # then all we need is a root node and the only nonants that need to be reported are
+        # at the root node (otherwise, more coding is required here to figure out which nodes and Vars
+        # are shared with other bundles)
+        # Note: farmer is 2 stage.
+        nonantlist = [v for idx,v in bundle.ref_vars.items() if idx[0] =="ROOT"]
+        sputils.attach_root_node(bundle, 0, nonantlist)
+        # scenarios are equally likely so bundles are too
+        bundle._mpisppy_probability = 1/numbuns
+        return bundle
     else:
-        model._mpisppy_probability = "uniform"
-    return model
+        raise RuntimeError (f"Scenario name does not have scen or bund: {scenario_name}")
 
 def pysp_instance_creation_callback(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1
@@ -231,16 +270,20 @@ def pysp_instance_creation_callback(
 
     return model
 
-# begin functions not needed by farmer_cylinders
-# (but needed by special codes such as confidence intervals)
+# begin helper functions
 #=========
-def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
+def scenario_names_creator(num_scens, start=None):
+    # return the full list of num_scens scenario names
     # if start!=None, the list starts with the 'start' labeled scenario
     if (start is None) :
         start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
+    if bunsize == 0:
+        return [f"scen{i}" for i in range(start,start+num_scens)]
+    else:
+        # The hack should have changed the value of num_scens to be a fib!
+        # We will assume that start and and num_scens refers to bundle counts.
+        # Bundle numbers are zero based and scenario numbers as well.
+        return [f"bundle_{i*bunsize}_{(i+1)*bunsize-1}" for i in range(start,start+num_scens)]
 
 
 #=========
@@ -256,7 +299,11 @@ def inparser_adder(cfg):
                       description="make the version that has integers (default False)",
                       domain=bool,
                       default=False)
-
+    cfg.add_to_config("bundle_size",
+                      description="number of scenarios per bundle (default 0, which means no bundles, as does 1)",
+                      domain=int,
+                      default=0)
+    
 
 #=========
 def kw_creator(cfg):
@@ -289,15 +336,35 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     return scenario_creator(sname, **sca)
 
 
-# end functions not needed by farmer_cylinders
+# end helper functions
 
 
 #============================
 def scenario_denouement(rank, scenario_name, scenario):
     sname = scenario_name
+    #print("denouement needs work")
+    #scenario.pprint()
+    return
     s = scenario
     if sname == 'scen0':
         print("Arbitrary sanity checks:")
         print ("SUGAR_BEETS0 for scenario",sname,"is",
                pyo.value(s.DevotedAcreage["SUGAR_BEETS0"]))
         print ("FirstStageCost for scenario",sname,"is", pyo.value(s.FirstStageCost))
+
+
+# special helper function (hack) for bundles
+def bundle_hack(cfg):
+    # Hack to put bundle information in global variables to be used by
+    # the names creator.  (only relevant for bundles)
+    # numbuns and bunsize are globals with default value 0
+    if cfg.bundle_size > 1:
+        assert cfg.num_scens % cfg.bundle_size == 0,\
+            "Due to laziness, the bundle size must divide the number of scenarios"
+        global bunsize, numbuns, original_num_scens
+        bunsize = cfg.bundle_size
+        numbuns = cfg.num_scens // cfg.bundle_size
+        original_num_scens = cfg.num_scens
+        cfg.num_scens = numbuns
+
+        
