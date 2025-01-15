@@ -896,7 +896,7 @@ class _ScenTree():
     
     
 ######## Utility to attach the one and only node to a two-stage scenario #######
-def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, do_uniform=True):
+def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrogate_nonant_list=None, do_uniform=True):
     """ Create a root node as a list to attach to a scenario model
     Args:
         model (ConcreteModel): model to which this will be attached
@@ -905,6 +905,11 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, do_uni
         nonant_ef_suppl_list (list of pyo Var, Vardata or slices):
               vars for which nonanticipativity constraints tighten the EF
               (important for bundling)
+        surrogate_nonant_list (list of pyo Var, VarData or slices):
+              vars for which nonanticipativity constraints are enforced implicitly
+              but which may speed PH convergence and/or aid in cut generation.
+              These vars will be ignored for fixers and incumbent finders which
+              fix nonants to calculate solutions
         do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
@@ -912,7 +917,9 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, do_uni
     """
     model._mpisppy_node_list = [
         scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
-                                   nonant_ef_suppl_list = nonant_ef_suppl_list)
+                                   nonant_ef_suppl_list = nonant_ef_suppl_list,
+                                   surrogate_nonant_list = surrogate_nonant_list,
+                                  )
     ]
     if do_uniform:
         # Avoid a warning per scenario
