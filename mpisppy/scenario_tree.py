@@ -13,6 +13,7 @@ import logging
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
+from pyomo.common.collections import ComponentSet
 
 logger = logging.getLogger('mpisppy.scenario_tree')
 
@@ -70,8 +71,8 @@ class ScenarioNode:
       surrogate_nonant_list (list of pyo Var, VarData or slices):
               vars for which nonanticipativity constraints are enforced implicitly
               but which may speed PH convergence and/or aid in cut generation.
-              These vars will be ignored for fixers and incumbent finders which
-              fix nonants to calculate solutions
+              These vars will be ignored for fixers, incumbent finders which
+              fix nonants to calculate solutions, and the EF creator
       parent_name (str): name of the parent node      
 
     Lists:
@@ -111,12 +112,11 @@ class ScenarioNode:
 
         # For the surrogate nonants, we'll add them to the nonant_vardata_list,
         # since for most purposes in mpi-sppy we'll treat them as nonants.
-        # But, we'll also keep the original nonant_vardata_list as a list
-        # without the surrogate nonants for fixers, etc.
-        self.nonant_vardata_list_no_surrogates = self.nonant_vardata_list[:]
-
         if self.surrogate_nonant_list is not None:
-            self.nonant_vardata_list.extend(sputils.build_vardatalist(
+            surrogate_vardatas = sputils.build_vardatalist(
                                                          scen_model,
                                                          self.surrogate_nonant_list)
-                                           )
+            self.nonant_vardata_list.extend(surrogate_vardatas)
+            self.surrogate_vardatas = ComponentSet(surrogate_vardatas)
+        else:
+            self.surrogate_vardatas = ComponentSet()

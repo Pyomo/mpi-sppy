@@ -370,7 +370,10 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                         ref_vars[(ndn, i)] = v
                 # Add a non-anticipativity constraint, except in the case when
                 # the variable is fixed and nonant_for_fixed_vars=False.
+                # or we're in the surrogate nonants
                 elif (nonant_for_fixed_vars) or (not v.is_fixed()):
+                    if v in node.surrogate_nonants:
+                        continue
                     expr = LinearExpression(linear_coefs=[1,-1],
                                             linear_vars=[v,ref_vars[(ndn,i)]],
                                             constant=0.)
@@ -908,8 +911,8 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
         surrogate_nonant_list (list of pyo Var, VarData or slices):
               vars for which nonanticipativity constraints are enforced implicitly
               but which may speed PH convergence and/or aid in cut generation.
-              These vars will be ignored for fixers and incumbent finders which
-              fix nonants to calculate solutions
+              These vars will be ignored for fixers, incumbent finders which
+              fix nonants to calculate solutions, and the EF creator
         do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
