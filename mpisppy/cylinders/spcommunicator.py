@@ -45,18 +45,23 @@ class FieldArray:
         self._id = 0
         return
 
-    def array(self):
-        # return self._array[:-1]
+    def array(self) -> np.typing.NDArray:
+        """
+        Returns the numpy array for the field data including the read id
+        """
         return self._array
 
-    def is_new(self):
+    def value_array(self) -> np.typing.NDArray:
+        """
+        Returns the numpy array for the field data without the read id
+        """
+        return self._array[:-1]
+
+    def is_new(self) -> bool:
         return self._is_new
 
-    def id(self):
+    def id(self) -> int:
         return self._id
-
-    # def raw_array(self):
-    #     return self._array
 
 class SendArray(FieldArray):
 
@@ -64,7 +69,10 @@ class SendArray(FieldArray):
         super().__init__(length)
         return
 
-    def next_write_id(self):
+    def next_write_id(self) -> int:
+        """
+        Updates the internal id field to the next write id and returns that id
+        """
         self._id += 1
         return self._id
 
@@ -75,7 +83,11 @@ class RecvArray(FieldArray):
         super().__init__(length)
         return
 
-    def pull_id(self):
+    def pull_id(self) -> int:
+        """
+        Updates the internal id field to the write id currently held in the numpy buffer
+        and returns that id
+        """
         self._id = int(self._array[-1])
         return self._id
 
@@ -125,13 +137,23 @@ class SPCommunicator:
 
     def register_recv_field(self, field: Field, origin: int, length: int) -> np.typing.NDArray:
         key = self._make_key(field, origin)
-        my_fa = RecvArray(length)
-        self._locals[key] = my_fa
+        if key in self._locals:
+            my_fa = self._locals[key]
+        else:
+            my_fa = RecvArray(length)
+            self._locals[key] = my_fa
+        ## End if
         return my_fa.array()
 
     def register_send_field(self, field: Field, length: int) -> np.typing.NDArray:
-        self._sends[field] = SendArray(length)
-        return self._sends[field].array()
+        # assert(field not in self._sends)
+        if field in self._sends:
+            my_fa = self._sends[field]
+        else:
+            my_fa = SendArray(length)
+            self._sends[field] = my_fa
+        ## End if else
+        return my_fa.array()
 
     @abc.abstractmethod
     def main(self):

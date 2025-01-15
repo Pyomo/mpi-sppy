@@ -72,6 +72,8 @@ class SPWindow:
 
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
+        print(self.strata_buffer_layouts)
+
         self.window_constructed = True
 
         return
@@ -93,6 +95,8 @@ class SPWindow:
 
     #### Functions ####
     def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field):
+
+        assert(strata_rank >= 0 and strata_rank < len(self.strata_buffer_layouts))
 
         that_layout = self.strata_buffer_layouts[strata_rank]
         assert field in that_layout.keys()
@@ -123,6 +127,5 @@ class SPWindow:
         window.Unlock(self.strata_rank)
 
         return
-
 
 ## End SPWindow

@@ -64,21 +64,21 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     @property
     def rc_global(self):
-        return self._sends[Field.EXPECTED_REDUCED_COST].array()
+        return self._sends[Field.EXPECTED_REDUCED_COST].value_array()
 
     @rc_global.setter
     def rc_global(self, vals):
-        arr = self._sends[Field.EXPECTED_REDUCED_COST].array()
+        arr = self._sends[Field.EXPECTED_REDUCED_COST].value_array()
         arr[:] = vals
         return
 
     @property
     def rc_scenario(self):
-        return self._sends[Field.SCENARIO_REDUCED_COST].array()
+        return self._sends[Field.SCENARIO_REDUCED_COST].value_array()
 
     @rc_scenario.setter
     def rc_scenario(self, vals):
-        arr = self._sends[Field.SCENARIO_REDUCED_COST].array()
+        arr = self._sends[Field.SCENARIO_REDUCED_COST].value_array()
         arr[:] = vals
         return
 

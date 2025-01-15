@@ -17,7 +17,7 @@ import mpisppy.log
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
@@ -50,6 +50,8 @@ class Hub(SPCommunicator):
         # All hubs need to be able to tell spokes to terminate. Register that here.
         self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
 
+        self.extension_recv = set()
+
         return
 
     @abc.abstractmethod
@@ -79,6 +81,37 @@ class Hub(SPCommunicator):
     @abc.abstractmethod
     def main(self):
         pass
+
+
+    def register_extension_recv_field(self, field: Field, strata_rank: int, buf_len: int) -> RecvArray:
+        """
+        Register an extensions interest in the given field from the given spoke. The hub
+        is then responsible for updating this field into a local buffer prior to the call
+        to the extension sync_with_spokes function.
+        """
+        self.register_recv_field(field, strata_rank, buf_len)
+        key = self._make_key(field, strata_rank)
+        self.extension_recv.add(key)
+        return self._locals[key]
+
+    def get_extension_field(self, strata_rank: int, field: Field) -> RecvArray:
+        key = self._make_key(field, strata_rank)
+        assert(key in self.extension_recv)
+        return self._locals[key]
+
+    def sync_extension_fields(self):
+        """
+        Update all registered extension fields. Safe to call even when there are no extension fields.
+        """
+        for key in self.extension_recv:
+            ext_buf = self._locals[key]
+            (field, srank) = self._split_key(key)
+            ext_buf._is_new = self.hub_from_spoke(ext_buf.array(), srank, field, ext_buf.id())
+            if ext_buf.is_new():
+                ext_buf.pull_id()
+            ## End if
+        ## End for
+        return
 
     def clear_latest_chars(self):
         self.latest_ib_char = None
@@ -261,7 +294,7 @@ class Hub(SPCommunicator):
             self._outer_bound_update = lambda new, old : (new < old)
 
     def initialize_outer_bound_buffers(self):
-        """ Initialize value of BestOuterBound, and outer bound receive buffers
+        """ Initialize outer bound receive buffers
         """
         self.outerbound_receive_buffers = dict()
         for idx in self.outerbound_spoke_indices:
@@ -272,7 +305,7 @@ class Hub(SPCommunicator):
         return
 
     def initialize_inner_bound_buffers(self):
-        """ Initialize value of BestInnerBound, and inner bound receive buffers
+        """ Initialize inner bound receive buffers
         """
         self.innerbound_receive_buffers = dict()
         for idx in self.innerbound_spoke_indices:
@@ -567,6 +600,7 @@ class PHHub(Hub):
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
         if self.opt.extensions is not None:
+            self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
 
     def sync_with_spokes(self):
@@ -705,6 +739,7 @@ class LShapedHub(Hub):
             self.receive_innerbounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
+            self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
 
     def is_converged(self):
