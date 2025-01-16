@@ -19,7 +19,7 @@ import math
 
 from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
 from mpisppy.cylinders.spwindow import Field
 
 
@@ -42,26 +42,35 @@ class Spoke(SPCommunicator):
 
         return
 
-    def spoke_to_hub(self, values: np.typing.NDArray, field: Field, write_id: int):
+    def spoke_to_hub(self, buf: SendArray, field: Field):
         """ Put the specified values into the locally-owned buffer for the hub
             to pick up.
 
             Notes:
-                This automatically does the -1 indexing
-
-                This assumes that values contains a slot at the end for the
-                write_id
+            Automatically handles write id updating and setting
         """
+        return self._spoke_to_hub(buf.array(), field, buf._next_write_id())
+
+    def _spoke_to_hub(self, values: np.typing.NDArray, field: Field, write_id: int):
         self.cylinder_comm.Barrier()
         values[-1] = write_id
         self.window.put(values, field)
         return
 
     def spoke_from_hub(self,
-                       values: np.typing.NDArray,
+                       buf: RecvArray,
                        field: Field,
-                       last_write_id: int
                        ):
+        buf._is_new = self._spoke_from_hub(buf.array(), field, buf.id())
+        if buf.is_new():
+            buf._pull_id()
+        return buf.is_new()
+
+    def _spoke_from_hub(self,
+                        values: np.typing.NDArray,
+                        field: Field,
+                        last_write_id: int
+                        ):
         """
         """
 
@@ -119,10 +128,11 @@ class Spoke(SPCommunicator):
     def update_locals(self):
         for (key, recv_buf) in self._locals.items():
             field, rank = self._split_key(key)
-            recv_buf._is_new = self.spoke_from_hub(recv_buf.array(), field, recv_buf.id())
-            if recv_buf._is_new:
-                recv_buf.pull_id()
-            ## End if
+            # recv_buf._is_new = self.spoke_from_hub(recv_buf.array(), field, recv_buf.id())
+            # if recv_buf._is_new:
+            #     recv_buf.pull_id()
+            # ## End if
+            self.spoke_from_hub(recv_buf, field)
         ## End for
         return
 
@@ -174,8 +184,7 @@ class _BoundSpoke(Spoke):
     def bound(self, value):
         self._append_trace(value)
         self._bound[0] = value
-        # sbuf = self._sends[self.bound_type()]
-        self.spoke_to_hub(self._bound.array(), self.bound_type(), self._bound.next_write_id())
+        self.spoke_to_hub(self._bound, self.bound_type())
         return
 
     @property

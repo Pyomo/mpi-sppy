@@ -83,7 +83,7 @@ class SendArray(FieldArray):
         np_array[key] = value
         return
 
-    def next_write_id(self) -> int:
+    def _next_write_id(self) -> int:
         """
         Updates the internal id field to the next write id and returns that id
         """
@@ -101,7 +101,7 @@ class RecvArray(FieldArray):
     def is_new(self) -> bool:
         return self._is_new
 
-    def pull_id(self) -> int:
+    def _pull_id(self) -> int:
         """
         Updates the internal id field to the write id currently held in the numpy buffer
         and returns that id

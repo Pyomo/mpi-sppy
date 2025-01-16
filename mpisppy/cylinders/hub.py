@@ -124,10 +124,7 @@ class Hub(SPCommunicator):
         for key in self.extension_recv:
             ext_buf = self._locals[key]
             (field, srank) = self._split_key(key)
-            ext_buf._is_new = self.hub_from_spoke(ext_buf.array(), srank, field, ext_buf.id())
-            if ext_buf.is_new():
-                ext_buf.pull_id()
-            ## End if
+            ext_buf._is_new = self.hub_from_spoke(ext_buf, srank, field)
         ## End for
         return
 
@@ -242,13 +239,13 @@ class Hub(SPCommunicator):
         for idx in self.innerbound_spoke_indices:
             key = self._make_key(Field.INNER_BOUND, idx)
             recv_buf = self._locals[key]
-            is_new = self.hub_from_spoke(recv_buf.array(),
-                                         idx,
-                                         Field.INNER_BOUND,
-                                         recv_buf.id())
+            # is_new = self.hub_from_spoke(recv_buf.array(),
+            #                              idx,
+            #                              Field.INNER_BOUND,
+            #                              recv_buf.id())
+            is_new = self.hub_from_spoke(recv_buf, idx, Field.INNER_BOUND)
             if is_new:
-                recv_buf.pull_id()
-                bound = recv_buf.array()[0]
+                bound = recv_buf[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
                 self.BestInnerBound = self.InnerBoundUpdate(bound, idx)
         logging.debug("ph back from InnerBounds")
@@ -262,13 +259,13 @@ class Hub(SPCommunicator):
         for idx in self.outerbound_spoke_indices:
             key = self._make_key(Field.OUTER_BOUND, idx)
             recv_buf = self._locals[key]
-            is_new = self.hub_from_spoke(recv_buf.array(),
-                                         idx,
-                                         Field.OUTER_BOUND,
-                                         recv_buf.id())
+            # is_new = self.hub_from_spoke(recv_buf.array(),
+            #                              idx,
+            #                              Field.OUTER_BOUND,
+            #                              recv_buf.id())
+            is_new = self.hub_from_spoke(recv_buf, idx, Field.OUTER_BOUND)
             if is_new:
-                recv_buf.pull_id()
-                bound = recv_buf.array()[0]
+                bound = recv_buf[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
                 self.BestOuterBound = self.OuterBoundUpdate(bound, idx)
         logging.debug("ph back from OuterBounds")
@@ -370,8 +367,8 @@ class Hub(SPCommunicator):
         # my_bounds = self._sends[Field.BOUNDS]
         my_bounds = self.boundsout_send_buffer
         self._populate_boundsout_cache(my_bounds.array())
-        logging.debug("hub is sending bounds={}".format(my_bounds.array()))
-        self.hub_to_spoke(my_bounds.array(), Field.BOUNDS, my_bounds.next_write_id())
+        logging.debug("hub is sending bounds={}".format(my_bounds))
+        self.hub_to_spoke(my_bounds, Field.BOUNDS)
         return
 
     def initialize_spoke_indices(self):
@@ -477,7 +474,17 @@ class Hub(SPCommunicator):
         return window_spec
 
 
-    def hub_to_spoke(self, values: np.typing.NDArray, field: Field, write_id: int):
+    def hub_to_spoke(self, buf: SendArray, field: Field):
+        """ Put the specified values into the specified locally-owned buffer
+            for the spoke to pick up.
+
+            Notes:
+                This automatically updates handles the write id.
+        """
+        return self._hub_to_spoke(buf.array(), field, buf._next_write_id())
+
+
+    def _hub_to_spoke(self, values: np.typing.NDArray, field: Field, write_id: int):
         """ Put the specified values into the specified locally-owned buffer
             for the spoke to pick up.
 
@@ -499,11 +506,27 @@ class Hub(SPCommunicator):
 
 
     def hub_from_spoke(self,
-                       values: np.typing.NDArray,
+                       buf: RecvArray,
                        spoke_num: int,
                        field: Field,
-                       last_write_id: int,
                        ):
+        """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
+
+            Returns:
+                is_new (bool): Indicates whether the "gotten" values are new,
+                    based on the write_id.
+        """
+        buf._is_new = self._hub_from_spoke(buf.array(), spoke_num, field, buf.id())
+        if buf.is_new():
+            buf._pull_id()
+        return buf.is_new()
+
+    def _hub_from_spoke(self,
+                        values: np.typing.NDArray,
+                        spoke_num: int,
+                        field: Field,
+                        last_write_id: int,
+                        ):
         """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
 
             Returns:
@@ -548,7 +571,8 @@ class Hub(SPCommunicator):
         # term_buf = self._sends[Field.SHUTDOWN]
         shutdown = self.shutdown
         shutdown[0] = 1.0
-        self.hub_to_spoke(shutdown.array(), Field.SHUTDOWN, shutdown.next_write_id())
+        # self.hub_to_spoke(shutdown.array(), Field.SHUTDOWN, shutdown.next_write_id())
+        self.hub_to_spoke(shutdown, Field.SHUTDOWN)
         return
 
 
@@ -685,7 +709,8 @@ class PHHub(Hub):
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.hub_to_spoke(nonant_send_buffer.array(), Field.NONANT, nonant_send_buffer.next_write_id())
+        # self.hub_to_spoke(nonant_send_buffer.array(), Field.NONANT, nonant_send_buffer.next_write_id())
+        self.hub_to_spoke(nonant_send_buffer, Field.NONANT)
 
         return
 
@@ -707,7 +732,8 @@ class PHHub(Hub):
         self.opt._populate_W_cache(my_ws.array(), padding=1)
         logging.debug("hub is sending Ws={}".format(my_ws.array()))
 
-        self.hub_to_spoke(my_ws.array(), Field.DUALS, my_ws.next_write_id())
+        # self.hub_to_spoke(my_ws.array(), Field.DUALS, my_ws.next_write_id())
+        self.hub_to_spoke(my_ws, Field.DUALS)
 
         return
 
@@ -803,7 +829,7 @@ class LShapedHub(Hub):
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
         my_nonants = self._sends[Field.NONANT]
-        self.hub_to_spoke(nonant_send_buffer.array(), Field.NONANT, nonant_send_buffer.next_write_id())
+        self.hub_to_spoke(nonant_send_buffer, Field.NONANT)
 
         return
 
