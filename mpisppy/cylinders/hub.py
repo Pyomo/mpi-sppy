@@ -828,7 +828,6 @@ class LShapedHub(Hub):
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        my_nonants = self._sends[Field.NONANT]
         self.hub_to_spoke(nonant_send_buffer, Field.NONANT)
 
         return
