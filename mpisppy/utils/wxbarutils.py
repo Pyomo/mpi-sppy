@@ -411,7 +411,7 @@ def fix_ef_ROOT_nonants(ef, root_nonants):
             if node.name == "ROOT":
                 break
         varlist = node.nonant_vardata_list
-        all_root_surrogate_nonant_vardatas = node.surrogate_vardatas
+        all_root_surrogate_nonant_vardatas = ComponentSet(node.surrogate_vardatas)
     assert len(varlist) == len(root_nonants)
     for var, vval in zip(varlist, root_nonants):
         if var in all_root_surrogate_nonant_vardatas:
