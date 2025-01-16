@@ -372,7 +372,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                 # the variable is fixed and nonant_for_fixed_vars=False.
                 # or we're in the surrogate nonants
                 elif (nonant_for_fixed_vars) or (not v.is_fixed()):
-                    if v in node.surrogate_nonants:
+                    if v in node.surrogate_vardatas:
                         continue
                     expr = LinearExpression(linear_coefs=[1,-1],
                                             linear_vars=[v,ref_vars[(ndn,i)]],
