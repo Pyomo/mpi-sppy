@@ -174,8 +174,8 @@ class _BoundSpoke(Spoke):
     def bound(self, value):
         self._append_trace(value)
         self._bound[0] = value
-        sbuf = self._sends[self.bound_type()]
-        self.spoke_to_hub(self._bound, self.bound_type(), sbuf.next_write_id())
+        # sbuf = self._sends[self.bound_type()]
+        self.spoke_to_hub(self._bound.array(), self.bound_type(), self._bound.next_write_id())
         return
 
     @property

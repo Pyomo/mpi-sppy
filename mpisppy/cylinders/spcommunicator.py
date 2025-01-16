@@ -36,14 +36,24 @@ def communicator_array(size):
 
 
 class FieldArray:
-    """ Notes: Buffer that tracks new/old state as well
+    """
+    Notes: Buffer that tracks new/old state as well. Light-weight wrapper around a numpy array.
+
+    The intention here is that these are passive data holding classes. That is, other classes are
+    expected to update the internal fields. The lone exception to this is the read/write id field.
+    See the `SendArray` and `RecvArray` classes for how that field is updated.
     """
 
     def __init__(self, length: int):
         self._array = communicator_array(length)
-        self._is_new = False
         self._id = 0
         return
+
+    def __getitem__(self, key):
+        # TODO: Should probably be hiding the read/write id field but there are many functions
+        # that expect it to be there and being able to read it is not really a problem.
+        np_array = self.array()
+        return np_array[key]
 
     def array(self) -> np.typing.NDArray:
         """
@@ -57,9 +67,6 @@ class FieldArray:
         """
         return self._array[:-1]
 
-    def is_new(self) -> bool:
-        return self._is_new
-
     def id(self) -> int:
         return self._id
 
@@ -67,6 +74,13 @@ class SendArray(FieldArray):
 
     def __init__(self, length: int):
         super().__init__(length)
+        return
+
+    def __setitem__(self, key, value):
+        # Use value_array function to hide the read/write id field so it is
+        # not accidentally overwritten
+        np_array = self.value_array()
+        np_array[key] = value
         return
 
     def next_write_id(self) -> int:
@@ -81,7 +95,11 @@ class RecvArray(FieldArray):
 
     def __init__(self, length: int):
         super().__init__(length)
+        self._is_new = False
         return
+
+    def is_new(self) -> bool:
+        return self._is_new
 
     def pull_id(self) -> int:
         """
@@ -122,20 +140,24 @@ class SPCommunicator:
         self.opt.spcomm = self
 
     def _make_key(self, field: Field, origin: int):
-        """Given a field and an origin (i.e. a strata_rank), generate a key for indexing
-           into the self._locals dictionary and getting the corresponding RecvArray.
+        """
+        Given a field and an origin (i.e. a strata_rank), generate a key for indexing
+        into the self._locals dictionary and getting the corresponding RecvArray.
+
+        Undone by `_split_key`. Currently, the key is simply a Tuple[field, origin].
         """
         return (field, origin)
 
     def _split_key(self, key) -> tuple[Field, int]:
-        """Take the given key and return a tuple (field, origin) where origin in the strata_rank
-           from which the field comes.
+        """
+        Take the given key and return a tuple (field, origin) where origin in the strata_rank
+        from which the field comes.
 
-           Undoes `_make_key`.  Currently, this is a no-op.
+        Undoes `_make_key`.  Currently, this is a no-op.
         """
         return key
 
-    def register_recv_field(self, field: Field, origin: int, length: int) -> np.typing.NDArray:
+    def register_recv_field(self, field: Field, origin: int, length: int) -> RecvArray:
         key = self._make_key(field, origin)
         if key in self._locals:
             my_fa = self._locals[key]
@@ -143,9 +165,9 @@ class SPCommunicator:
             my_fa = RecvArray(length)
             self._locals[key] = my_fa
         ## End if
-        return my_fa.array()
+        return my_fa
 
-    def register_send_field(self, field: Field, length: int) -> np.typing.NDArray:
+    def register_send_field(self, field: Field, length: int) -> SendArray:
         # assert(field not in self._sends)
         if field in self._sends:
             my_fa = self._sends[field]
@@ -153,7 +175,7 @@ class SPCommunicator:
             my_fa = SendArray(length)
             self._sends[field] = my_fa
         ## End if else
-        return my_fa.array()
+        return my_fa
 
     @abc.abstractmethod
     def main(self):

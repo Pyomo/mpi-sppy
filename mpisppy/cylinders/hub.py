@@ -17,7 +17,7 @@ import mpisppy.log
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
+from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
 from math import inf
 from mpisppy.cylinders.spoke import ConvergerSpokeType
 
@@ -89,15 +89,33 @@ class Hub(SPCommunicator):
         is then responsible for updating this field into a local buffer prior to the call
         to the extension sync_with_spokes function.
         """
-        self.register_recv_field(field, strata_rank, buf_len)
+        # TODO: What is the correct action when registering a field that is already registered?
+        ra = self.register_recv_field(field, strata_rank, buf_len)
         key = self._make_key(field, strata_rank)
         self.extension_recv.add(key)
-        return self._locals[key]
+        return ra
 
-    def get_extension_field(self, strata_rank: int, field: Field) -> RecvArray:
+    def register_extension_send_field(self, field: Field, buf_len: int) -> SendArray:
+        """
+        Register a field with the hub that an extension will be making available to spokes. Returns a
+        buffer that is usable for sending the desired values. The extension is responsible for calling
+        the hub publish_extension_field when ready to send the values. Returns a SendArray to use
+        to publish values to spokes.
+        """
+        # TODO: What is the correct action when registering a field that is already registered?
+        # TODO: This needs to be executed BEFORE the SPWindow is setup and somehow be included in
+        # the buffer spec...
+        sa = self.register_send_field(field, buf_len)
+        return sa
+
+    def get_extension_recv_field(self, strata_rank: int, field: Field) -> RecvArray:
         key = self._make_key(field, strata_rank)
         assert(key in self.extension_recv)
         return self._locals[key]
+
+    def publish_extension_field(self, field: Field, buf: SendArray):
+        # TODO: Implement this...
+        return
 
     def sync_extension_fields(self):
         """
@@ -321,7 +339,8 @@ class Hub(SPCommunicator):
         """
         self.nonant_send_buffer = None
         if self.has_nonant_spokes:
-            self.nonant_send_buffer = self._sends[Field.NONANT].array()
+            # self.nonant_send_buffer = self._sends[Field.NONANT].array()
+            self.nonant_send_buffer = self._sends[Field.NONANT]
         ## End if
         return
 
@@ -331,7 +350,8 @@ class Hub(SPCommunicator):
         """
         self.boundsout_send_buffer = None
         if self.has_bounds_only_spokes:
-            self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
+            # self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
+            self.boundsout_send_buffer = self._sends[Field.BOUNDS]
         ## End if
         return
 
@@ -347,7 +367,8 @@ class Hub(SPCommunicator):
         w and nonant spokes are passed bounds through the w and nonant buffers
         """
         # NOTE: boundsout_send_buffer should be the same numpy array as my_bounds.array()
-        my_bounds = self._sends[Field.BOUNDS]
+        # my_bounds = self._sends[Field.BOUNDS]
+        my_bounds = self.boundsout_send_buffer
         self._populate_boundsout_cache(my_bounds.array())
         logging.debug("hub is sending bounds={}".format(my_bounds.array()))
         self.hub_to_spoke(my_bounds.array(), Field.BOUNDS, my_bounds.next_write_id())
@@ -524,9 +545,10 @@ class Hub(SPCommunicator):
             buffer, so every spoke will see it simultaneously.
             processes (don't need to call them one at a time).
         """
-        term_buf = self._sends[Field.SHUTDOWN]
-        self.shutdown[0] = 1.0
-        self.hub_to_spoke(term_buf.array(), Field.SHUTDOWN, term_buf.next_write_id())
+        # term_buf = self._sends[Field.SHUTDOWN]
+        shutdown = self.shutdown
+        shutdown[0] = 1.0
+        self.hub_to_spoke(shutdown.array(), Field.SHUTDOWN, shutdown.next_write_id())
         return
 
 
@@ -655,15 +677,15 @@ class PHHub(Hub):
         """
         self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
-        my_nonants = self._sends[Field.NONANT]
-        nonant_send_buffer = my_nonants.array()
+        # my_nonants = self._sends[Field.NONANT]
+        nonant_send_buffer = self.nonant_send_buffer
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.hub_to_spoke(nonant_send_buffer, Field.NONANT, my_nonants.next_write_id())
+        self.hub_to_spoke(nonant_send_buffer.array(), Field.NONANT, nonant_send_buffer.next_write_id())
 
         return
 
@@ -781,7 +803,7 @@ class LShapedHub(Hub):
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
         my_nonants = self._sends[Field.NONANT]
-        self.hub_to_spoke(nonant_send_buffer, Field.NONANT, my_nonants.next_write_id())
+        self.hub_to_spoke(nonant_send_buffer.array(), Field.NONANT, nonant_send_buffer.next_write_id())
 
         return
 
