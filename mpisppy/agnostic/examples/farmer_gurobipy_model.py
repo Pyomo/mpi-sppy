@@ -153,20 +153,25 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
 
     _copy_Ws_xbars_rho_from_host(scenario)
 
-def solve_one(Ag, s, solve_keyword_args, gripe, tee):
+def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     _copy_Ws_xbars_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
 
+    solver_exception = None
     # Assuming gs is a Gurobi model, we can start solving
     try:
         gs.optimize()
     except gp.GurobiError as e:
-        print(f"Error occurred: {str(e)}")
         s._mpisppy_data.scenario_feasible = False
+        solver_exception = e
         if gripe:
-            print(f"Solve failed for scenario {s.name}")
+            print(f"Solve failed with error {str(e)} for scenario {s.name}")
         return
+
+    # TBD: what about not optimal and need_solution?
+    if solver_exception is not None and need_solution:
+        raise solver_exception
 
     if gs.status != gp.GRB.Status.OPTIMAL:
         s._mpisppy_data.scenario_feasible = False

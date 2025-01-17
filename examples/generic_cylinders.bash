@@ -19,9 +19,6 @@ mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpi
 
 #### HEY! check on error messages for bad bundle sizes
 
-echo "xxxx Early exit from bash script. xxxx"
-exit
-
 echo "^^^ write scenario lp and nonant json files ^^^"
 cd sizes
 python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles
@@ -38,7 +35,6 @@ echo "^^^ unpickle the sizes bundles and write the lp and nonant files ^^^"
 cd sizes
 python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
 cd ..
-
 
 echo "^^^ pickle the scenarios ^^^"
 cd farmer
