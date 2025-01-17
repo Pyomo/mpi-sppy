@@ -910,7 +910,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
               the extensive form (important for bundling), but for which mpi-sppy
               will not enforce them as nonanticipative elsewhere.
               NOTE: These types of variables are often indicator variables
-                          that are already present in the deterministic model.
+                    that are already present in the deterministic model.
         surrogate_nonant_list (list of pyo Var, VarData or slices):
               Vars for which nonanticipativity constraints are enforced implicitly
               by the vars in varlist, but which may speed PH convergence and/or
@@ -918,7 +918,7 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrog
               These vars will be ignored for fixers, incumbent finders which
               fix nonants to calculate solutions, and the EF creator.
               NOTE: These types of variables are typically artificially added
-                          to the model to capture hierarchical model features.
+                    to the model to capture hierarchical model features.
         do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
