@@ -14,6 +14,8 @@ import sys
 import os
 import re
 import numpy as np
+import inspect
+import importlib
 import mpisppy.scenario_tree as scenario_tree
 from pyomo.core import Objective
 from pyomo.repn import generate_standard_repn
@@ -21,10 +23,46 @@ from pyomo.repn import generate_standard_repn
 from mpisppy import MPI, haveMPI
 from pyomo.core.expr.numeric_expr import LinearExpression
 from pyomo.opt import SolutionStatus, TerminationCondition
+from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 
 from mpisppy import tt_timer
 
 global_rank = MPI.COMM_WORLD.Get_rank()
+
+
+def build_vardatalist(model, varlist=None):
+    """
+    Convert a list of pyomo variables to a list of SimpleVar and _GeneralVarData. If varlist is none, builds a
+    list of all variables in the model. Written by CD Laird
+
+    Parameters
+    ----------
+    model: ConcreteModel
+    varlist: None or list of pyo.Var
+    """
+    vardatalist = None
+
+    # if the varlist is None, then assume we want all the active variables
+    if varlist is None:
+        raise RuntimeError("varlist is None in scenario_tree.build_vardatalist")
+        vardatalist = [v for v in model.component_data_objects(pyo.Var, active=True, sort=True)]
+    elif isinstance(varlist, (pyo.Var, IndexedComponent_slice)):
+        # user provided a variable, not a list of variables. Let's work with it anyway
+        varlist = [varlist]
+
+    if vardatalist is None:
+        # expand any indexed components in the list to their
+        # component data objects
+        vardatalist = list()
+        for v in varlist:
+            if isinstance(v, IndexedComponent_slice):
+                vardatalist.extend(v.__iter__())
+            elif v.is_indexed():
+                vardatalist.extend((v[i] for i in sorted(v.keys())))
+            else:
+                vardatalist.append(v)
+    return vardatalist
+    
 
 def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
@@ -106,8 +144,9 @@ def get_objs(scenario_instance, allow_none=False):
         raise RuntimeError(f"Scenario {scenario_instance.name} has no active "
                            "objective functions.")
     if (len(scenario_objs) > 1):
-        print("WARNING: Scenario", scenario_instance.name, "has multiple active "
-              "objectives. Selecting the first objective.")
+        print(f"WARNING: Scenario {scenario_instance.name} has multiple active "
+              "objectives, returning a list.")
+
     return scenario_objs
 
 
@@ -1037,7 +1076,15 @@ def number_of_nodes(branching_factors):
     #How many nodes does a tree with a given branching_factors have ?
     last_node_stage_num = [i-1 for i in branching_factors]
     return node_idx(last_node_stage_num, branching_factors)
-    
+   
+
+def module_name_to_module(module_name):
+    if inspect.ismodule(module_name):
+        module = module_name
+    else:
+        module = importlib.import_module(module_name)
+    return module
+
 
 if __name__ == "__main__":
     branching_factors = [2,2,2,3]
@@ -1057,3 +1104,4 @@ if __name__ == "__main__":
         print(ndn, v)
     print(f"slices: {slices}")
     check4losses(numscens, branching_factors, sntr, slices, ranks_per_scenario)
+
