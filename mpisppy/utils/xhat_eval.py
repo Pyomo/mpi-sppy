@@ -345,7 +345,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                     persistent_solver = s._solver_plugin
 
             for var in s._mpisppy_data.nonant_indices.values():
-                if var in s.all_surrogate_nonants:
+                if var in s._mpisppy_data.all_surrogate_nonants:
                     continue
                 if var.is_binary() or var.is_integer():
                     var._value = round(var._value)
