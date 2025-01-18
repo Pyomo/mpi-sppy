@@ -465,8 +465,9 @@ def kw_creator(cfg, optionsin=None):
                                    default=None
                                    )
             else:
-                assert ns == np.prod(BFs),\
-                f"num_scens != prod(BFs); {ns=}, {BFs=}"
+                pass  # we cannot do the assert because of tree sampling
+                #assert ns == np.prod(BFs),\
+                #f"num_scens != prod(BFs); {ns=}, {BFs=}"
     return kwargs
 
 
