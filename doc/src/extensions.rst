@@ -15,6 +15,13 @@ extension can be included in some applications, but not others.
 There are a number of extensions, particularly for PH, that are provided
 with ``mpi-sppy`` and they provide examples that can be used for the
 creation of more. Extensions can be found in ``mpisppy.extensions``.
+Note that some things (e.g. some xhatters) can be used as a cylinder
+or as an extension. A few other things (e.g., cross scenario cuts) need
+both an extension and a cylinder.
+
+Many extensions are supported in :ref:`generic_cylinders`. The rest of
+this help file describes extensions released with mpisppy along with
+some hints for including them in your own cylinders driver program.
 
 Multiple Extensions
 -------------------
@@ -266,3 +273,12 @@ If some variables have zero probability in all scenarios, then you will need to 
 ``do_not_check_variable_probabilities`` to True in the options for ``spbase``. This will result in skipping the checks for
 all variable probabilities! So you might want to set this to False to verify that the probabilities sum to one
 only for the Vars you expect before setting it to True.
+
+Scenario_lpwriter
+-----------------
+
+This extension writes an lp file with the model and json file with (a) list(s) of
+scenario tree node names and nonanticaptive variables for each scenario before
+the iteration zero solve of PH or APH. Note that for two-stage problems, all
+json files will be the same. See ``mpisppy.generic_cylinders.py``
+for an example of use.

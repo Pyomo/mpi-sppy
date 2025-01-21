@@ -1,0 +1,138 @@
+newest notes on top
+----------------------------------------
+
+host means mpisppy
+guest means whatever the guest language is (which can even be Pyomo, of course)
+
+
+Jan 3 2024: We are going to require that the guest takes care of
+               bundling and presents the host with "proper" bundles
+	       that look to the host like regular scenarios.
+   We have AMPL and Pyomo working as guests and GAMS seems to work OK,
+   except that there are file contention issues that can probably be solved
+   easily (I think they have an example with parallel execution)
+
+-------------------------
+
+
+Aug 27
+
+
+The example is now farmer_agnostic.py and agnostic_cylinders.py (ag.bash)
+in the farmer example directory.
+
+HEY::: who updates W? Let's do it right before the solve so we don't have to care...
+       this is a little dangerous at present because we are being silent when
+       they are not there because of xhatters
+ 
+
+== nonant communication needs to be on the host side, of course, but
+   then callouts need to get values copied to/from the guest
+
+== we need to enforce the assumption that the nonants match in every way possible
+   between host and guest at all times (e.g. _restore_nonants needs to callout,
+   but _save_nonants does not.
+
+== bundling is left hanging in dangerous ways: e.g. Eobjective in two places
+
+Aug 26
+
+Work proceeds on three fronts:
+
+- Addiing callouts to mpisppy
+- creating the example guest language functions (in Pyomo)
+- creating examples of the guest language funtions in other languages
+
+= note: the callouts are almost always inside the local scenario loop in mpisspy
+
+= note: after the solve we are going update the host model x values so
+it can update the xbars
+
+= The host will update the w's then a callout will send the new values to
+  the guest
+
+= I am not even thinking about extensions...
+
+= For bundling, we need to be able to solve EFs (to state the obvious)
+
+circa Aug 25
+
+- no changes needed in spbase so long as agnostic scenario creator is passed in
+
+- EF will be basically a rewrite because we use blocks
+
+-  ? for the phbase constructor: pass cfg that contains Ag or pass Ag?; use the options dict for now
+
+- working on an example, which is farmer_agnostic.py run from the __main__ of agnostic.py
+  (farmer_agnostic is presently run from the utils directory and I have a copy of farmer.py there as well)
+
+
+===============================================================
+Thoughts about AML-agnostic extensions to mpi-sppy
+(started by DLW 18 Dec 2022)
+Just thinking about support for straight PH for now. Bundles are probably the first thing to add.
+
+-1. BTW: both GAMS and AMPL have python APIs.
+
+0. On the Python side each scenario is still a Pyomo "model" (that perhaps has only the nonant Vars)
+with _mpisppy_data and _mpisppy_model attached.
+  - it might result in a little speed-up to cut Pyomo out some day, but we should start with Pyomo, I think
+
+1. Some functions in spbase, most functions in phbase, and maybe some functions in spopt  will call this function:
+
+   def callout_agnostic(cfg, name, **kwargs):
+       """ callout for AML-agnostic support
+       Args:
+           cfg (Config): the field "AML_agnostic" might contain a module with callouts
+	   name (str): the function name to call
+	   kwargs (dict): the keywords args for the callout function
+       Calls:
+           a callout function that presumably has side-effects
+       Returns:
+           True if the callout was done and False if not
+       """
+       
+       if cfg.get(AML_agnostic, ifmissing=None) is not None:
+           if not hasattr(cfg.AML_agnostic, name):
+	       raise RuntimeError(f"AML-agnostic module is missing function {name}")
+	   fct = getattr(cfg.AML_agnostic, name)
+	   fct(**kwargs)
+	   return True
+       else:
+           return False
+
+  The function that is called by fct(**kwargs) will do the work of
+  interacting with the AML and updating mpi-sppy structures that are
+  passed in as kwargs. Note that cfg is going to need to be attached
+  some some objects that don't presently have it (e.g. SPOpt).  Some
+  functions in mpi-sppy will want to return immediately if
+  callout_agnostic returns True (i.e., have the callout function do
+  all the work).
+
+
+2 in spbase:
+  - don't support variable_prob
+  - _set_scense needs a callout
+
+3 The scenario_creator function will be in Python and needs to call an AML scenario creator function
+
+4. In solve_one it might be easiest to just do everything in the callout function. Maybe that will be the
+case for many callouts.  But from a maintenance perspective, it would best to have mpi-sppy code
+do as much as possible and the callout Python do as little as possible.
+
+5. Think about Compute_Xbar and Update_W. They probably need to do all their processing then do
+a callout at the end so the AML model can be updated.
+
+=======================================
+Notes about callouts
+
+- There are going to be a lot of them!
+
+- Maybe it would be better to drop the name argument and use
+inspect.stack()[1][3] in callout_agnostic so the name of the cfg field
+is the name of the calling function in mpi-sppy.
+   This would
+   o standardize names,
+   o eliminate some cut-and-paste errors,
+   o make it a little wierd if there were ever two callouts from one function,
+     but not that wierd (just handled with kwarg flag) and two callouts should be rare.
