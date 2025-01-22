@@ -10,20 +10,14 @@
 from math import isclose
 from array import array
 from bisect import bisect
-from scipy.optimize import minimize
+from scipy.optimize import least_squares
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
-def _f(val, x_pnt, y_pnt):
-    return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
-def _df(val, x_pnt, y_pnt):
-    #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
-    return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
-def _d2f(val, x_pnt, y_pnt):
-    return 1 + 6*val*val - 2*y_pnt
-
-def _newton_step(val, x_pnt, y_pnt):
-    return val - (val * (1 - 2*y_pnt + 2*val*val) - x_pnt) / (1 + 6*val*val - 2*y_pnt)
+def _f_ls(val, x_pnt, y_pnt):
+    return ( val[0] - x_pnt ,  val[0]**2 - y_pnt )
+def _df_ls(val, x_pnt, y_pnt):
+    return ( (val[0],), (2*val[0],) )
 
 class ProxApproxManager:
     __slots__ = ()
@@ -152,7 +146,7 @@ class _ProxApproxManager:
         # We project the point x_pnt, y_pnt onto
         # the curve y = x**2 by finding the minimum distance
         # between y = x**2 and x_pnt, y_pnt.
-        res = minimize(_f, x_pnt, args=(x_pnt, y_pnt), jac=_df)
+        res = least_squares(_f_ls, x_pnt, args=(x_pnt, y_pnt), jac=_df_ls, method="lm", x_scale="jac")
         if not res.success:
             raise RuntimeError(f"Error in projecting {(x_pnt, y_pnt)} onto parabola for "
                                f"proximal approximation. Message: {res.message}")
