@@ -155,7 +155,7 @@ class _ProxApproxManager:
         res = minimize(_f, x_pnt, args=(x_pnt, y_pnt), jac=_df)
         if not res.success:
             raise RuntimeError(f"Error in projecting {(x_pnt, y_pnt)} onto parabola for "
-                               "proximal approximation. Message: {res.message}")
+                               f"proximal approximation. Message: {res.message}")
         return self.add_cuts(res.x[0], tolerance,  persistent_solver)
 
 class ProxApproxManagerContinuous(_ProxApproxManager):
