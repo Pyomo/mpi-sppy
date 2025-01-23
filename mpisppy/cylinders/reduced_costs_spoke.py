@@ -22,7 +22,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self.bound_tol = self.opt.options['rc_bound_tol']
         self.consensus_threshold = np.sqrt(self.bound_tol)
 
-    def build_window_spec(self):
+    def register_send_fields(self) -> None:
+
+        super().register_send_fields()
+
         if not hasattr(self.opt, "local_scenarios"):
             raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
 
@@ -51,16 +54,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             scenario_buffer_len += len(s._mpisppy_data.nonant_indices)
         self._scenario_rc_buffer = np.zeros(scenario_buffer_len)
 
-        window_spec = super().build_window_spec()
-        window_spec[Field.EXPECTED_REDUCED_COST] = self.nonant_length
-        window_spec[Field.SCENARIO_REDUCED_COST] = scenario_buffer_len
-
-        self.register_send_field(Field.OUTER_BOUND, 1)
         self.register_send_field(Field.EXPECTED_REDUCED_COST, self.nonant_length)
         self.register_send_field(Field.SCENARIO_REDUCED_COST, scenario_buffer_len)
 
-        return window_spec
-
+        return
 
     @property
     def rc_global(self):

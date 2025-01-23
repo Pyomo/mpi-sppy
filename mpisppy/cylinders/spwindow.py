@@ -18,11 +18,13 @@ class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
     DUALS=2
-    BOUNDS=100
-    INNER_BOUND=101
-    OUTER_BOUND=102
+    OBJECTIVE_BOUNDS=100 # TODO: Comment on this and document order...
+    OBJECTIVE_INNER_BOUND=101
+    OBJECTIVE_OUTER_BOUND=102
     EXPECTED_REDUCED_COST=200
     SCENARIO_REDUCED_COST=201
+    CROSS_SCENARIO_CUT=300
+    NONANT_COEFS=400
     WHOLE=1_000_000
 
 class SPWindow:
@@ -42,7 +44,7 @@ class SPWindow:
         layout = {}
         for field in self.field_order:
             length = my_fields[field]
-            length += 1 # Add 1 for the read id field
+            # length += 1 # Add 1 for the read id field
             # layout[field] = (offset, length, MPI.DOUBLE)
             layout[field] = (offset, length)
             offset += length

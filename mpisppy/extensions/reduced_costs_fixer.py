@@ -84,7 +84,7 @@ class ReducedCostsFixer(Extension):
             # wait for the reduced costs
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("Fixing based on reduced costs prior to iteration 0!")
-            if self._get_serial_number() == 0:
+            if self.reduced_cost_buf.id() == 0:
                 while not self.opt.spcomm.hub_from_spoke(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index], self.reduced_costs_spoke_index):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
@@ -109,7 +109,7 @@ class ReducedCostsFixer(Extension):
                 self.opt.nonant_length,
             )
             self.outer_bound_buf = spcomm.register_extension_recv_field(
-                Field.OUTER_BOUND,
+                Field.OBJECTIVE_OUTER_BOUND,
                 self.reduced_costs_spoke_index,
                 1,
             )

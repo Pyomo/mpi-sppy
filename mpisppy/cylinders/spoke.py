@@ -128,10 +128,8 @@ class Spoke(SPCommunicator):
     def update_locals(self):
         for (key, recv_buf) in self._locals.items():
             field, rank = self._split_key(key)
-            # recv_buf._is_new = self.spoke_from_hub(recv_buf.array(), field, recv_buf.id())
-            # if recv_buf._is_new:
-            #     recv_buf.pull_id()
-            # ## End if
+            # The below code will need to be updated for spoke to spoke communication
+            assert(rank == 0)
             self.spoke_from_hub(recv_buf, field)
         ## End for
         return
@@ -160,21 +158,14 @@ class _BoundSpoke(Spoke):
         return
 
 
+    def register_send_fields(self) -> None:
+        self._bound = self.register_send_field(self.bound_type(), 1)
+        self._hub_bounds = self.register_recv_field(Field.OBJECTIVE_BOUNDS, 0, 2)
+        return
+
     @abc.abstractmethod
     def bound_type(self) -> Field:
         pass
-
-
-    def build_window_spec(self) -> dict[Field, int]:
-
-        window_spec = dict()
-        window_spec[self.bound_type()] = 1
-
-        self._bound = self.register_send_field(self.bound_type(), 1)
-        self._hub_bounds = self.register_recv_field(Field.BOUNDS, 0, 2)
-
-        return window_spec
-
 
     @property
     def bound(self):
@@ -216,17 +207,9 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         # TODO: Make this a static method?
         pass
 
-    def build_window_spec(self) -> dict[Field, int]:
+    def register_send_fields(self) -> None:
 
-        window_spec = super().build_window_spec()
-
-        if not hasattr(self.opt, "local_scenarios"):
-            raise RuntimeError("Provided SPBase object does not have local_scenarios attribute")
-        ## End if
-
-        if len(self.opt.local_scenarios) == 0:
-            raise RuntimeError("Rank has zero local_scenarios")
-        ## End if
+        super().register_send_fields()
 
         vbuflen = 0
         for s in self.opt.local_scenarios.values():
@@ -235,7 +218,7 @@ class _BoundNonantLenSpoke(_BoundSpoke):
 
         self.register_recv_field(self.nonant_len_type(), 0, vbuflen)
 
-        return window_spec
+        return
 
 
 class InnerBoundSpoke(_BoundSpoke):
@@ -246,7 +229,7 @@ class InnerBoundSpoke(_BoundSpoke):
     converger_spoke_char = 'I'
 
     def bound_type(self) -> Field:
-        return Field.INNER_BOUND
+        return Field.OBJECTIVE_INNER_BOUND
 
 
 class OuterBoundSpoke(_BoundSpoke):
@@ -257,7 +240,7 @@ class OuterBoundSpoke(_BoundSpoke):
     converger_spoke_char = 'O'
 
     def bound_type(self) -> Field:
-        return Field.OUTER_BOUND
+        return Field.OBJECTIVE_OUTER_BOUND
 
 
 class _BoundWSpoke(_BoundNonantLenSpoke):
@@ -272,7 +255,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     def localWs(self):
         """Returns the local copy of the weights"""
         key = self._make_key(Field.DUALS, 0)
-        return self._locals[key].array()
+        return self._locals[key].value_array()
 
     @property
     def new_Ws(self):
@@ -299,7 +282,7 @@ class OuterBoundWSpoke(_BoundWSpoke):
     converger_spoke_char = 'O'
 
     def bound_type(self) -> Field:
-        return Field.OUTER_BOUND
+        return Field.OBJECTIVE_OUTER_BOUND
 
 
 class _BoundNonantSpoke(_BoundNonantLenSpoke):
@@ -314,7 +297,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     def localnonants(self):
         """Returns the local copy of the nonants"""
         key = self._make_key(Field.NONANT, 0)
-        return self._locals[key].array()
+        return self._locals[key].value_array()
 
     @property
     def new_nonants(self):
@@ -385,7 +368,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
             s._mpisppy_data.best_solution_cache = scenario_cache
 
     def bound_type(self) -> Field:
-        return Field.INNER_BOUND
+        return Field.OBJECTIVE_INNER_BOUND
 
 
 
@@ -402,4 +385,4 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
     converger_spoke_char = 'A'  # probably Lagrangian
 
     def bound_type(self) -> Field:
-        return Field.OUTER_BOUND
+        return Field.OBJECTIVE_OUTER_BOUND

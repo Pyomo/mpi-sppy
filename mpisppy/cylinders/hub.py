@@ -47,8 +47,8 @@ class Hub(SPCommunicator):
         self.stalled_iter_cnt = 0
         self.last_gap = float('inf')  # abs_gap tracker
 
-        # All hubs need to be able to tell spokes to terminate. Register that here.
-        self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
+        # # All hubs need to be able to tell spokes to terminate. Register that here.
+        # self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
 
         self.extension_recv = set()
 
@@ -89,10 +89,12 @@ class Hub(SPCommunicator):
         is then responsible for updating this field into a local buffer prior to the call
         to the extension sync_with_spokes function.
         """
-        # TODO: What is the correct action when registering a field that is already registered?
-        ra = self.register_recv_field(field, strata_rank, buf_len)
         key = self._make_key(field, strata_rank)
-        self.extension_recv.add(key)
+        if key not in self._locals:
+            # if it is not already registered, we need to update the local buffer
+            self.extension_recv.add(key)
+        ## End if
+        ra = self.register_recv_field(field, strata_rank, buf_len)
         return ra
 
     def register_extension_send_field(self, field: Field, buf_len: int) -> SendArray:
@@ -100,22 +102,25 @@ class Hub(SPCommunicator):
         Register a field with the hub that an extension will be making available to spokes. Returns a
         buffer that is usable for sending the desired values. The extension is responsible for calling
         the hub publish_extension_field when ready to send the values. Returns a SendArray to use
-        to publish values to spokes.
+        to publish values to spokes. Meant to be called within the extension function
+        `register_send_fields`.
         """
-        # TODO: What is the correct action when registering a field that is already registered?
-        # TODO: This needs to be executed BEFORE the SPWindow is setup and somehow be included in
-        # the buffer spec...
-        sa = self.register_send_field(field, buf_len)
-        return sa
+        return self.register_send_field(field, buf_len)
 
-    def get_extension_recv_field(self, strata_rank: int, field: Field) -> RecvArray:
-        key = self._make_key(field, strata_rank)
-        assert(key in self.extension_recv)
-        return self._locals[key]
+    def is_send_field_registered(self, field: Field) -> bool:
+        return field in self._sends
 
-    def publish_extension_field(self, field: Field, buf: SendArray):
-        # TODO: Implement this...
-        return
+    # def get_extension_recv_field(self, strata_rank: int, field: Field) -> RecvArray:
+    #     key = self._make_key(field, strata_rank)
+    #     assert(key in self.extension_recv)
+    #     return self._locals[key]
+
+    def extension_send_field(self, field: Field, buf: SendArray):
+        """
+        Send the data in the SendArray `buf` which stores the Field `field`. This will make
+        the data available to the spokes in this strata.
+        """
+        return self.hub_to_spoke(buf, field)
 
     def sync_extension_fields(self):
         """
@@ -237,13 +242,13 @@ class Hub(SPCommunicator):
         """
         logging.debug("Hub is trying to receive from InnerBounds")
         for idx in self.innerbound_spoke_indices:
-            key = self._make_key(Field.INNER_BOUND, idx)
+            key = self._make_key(Field.OBJECTIVE_INNER_BOUND, idx)
             recv_buf = self._locals[key]
             # is_new = self.hub_from_spoke(recv_buf.array(),
             #                              idx,
-            #                              Field.INNER_BOUND,
+            #                              Field.OBJECTIVE_INNER_BOUND,
             #                              recv_buf.id())
-            is_new = self.hub_from_spoke(recv_buf, idx, Field.INNER_BOUND)
+            is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_INNER_BOUND)
             if is_new:
                 bound = recv_buf[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
@@ -257,13 +262,13 @@ class Hub(SPCommunicator):
         """
         logging.debug("Hub is trying to receive from OuterBounds")
         for idx in self.outerbound_spoke_indices:
-            key = self._make_key(Field.OUTER_BOUND, idx)
+            key = self._make_key(Field.OBJECTIVE_OUTER_BOUND, idx)
             recv_buf = self._locals[key]
             # is_new = self.hub_from_spoke(recv_buf.array(),
             #                              idx,
-            #                              Field.OUTER_BOUND,
+            #                              Field.OBJECTIVE_OUTER_BOUND,
             #                              recv_buf.id())
-            is_new = self.hub_from_spoke(recv_buf, idx, Field.OUTER_BOUND)
+            is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_OUTER_BOUND)
             if is_new:
                 bound = recv_buf[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
@@ -314,7 +319,7 @@ class Hub(SPCommunicator):
         self.outerbound_receive_buffers = dict()
         for idx in self.outerbound_spoke_indices:
             self.outerbound_receive_buffers[idx] = self.register_recv_field(
-                Field.OUTER_BOUND, idx, 1,
+                Field.OBJECTIVE_OUTER_BOUND, idx, 1,
             )
         ## End for
         return
@@ -325,32 +330,32 @@ class Hub(SPCommunicator):
         self.innerbound_receive_buffers = dict()
         for idx in self.innerbound_spoke_indices:
             self.innerbound_receive_buffers[idx] = self.register_recv_field(
-                Field.INNER_BOUND, idx, 1
+                Field.OBJECTIVE_INNER_BOUND, idx, 1
             )
         ## End for
         return
 
-    def initialize_nonants(self):
-        """ Initialize the buffer for the hub to send nonants
-            to the appropriate spokes
-        """
-        self.nonant_send_buffer = None
-        if self.has_nonant_spokes:
-            # self.nonant_send_buffer = self._sends[Field.NONANT].array()
-            self.nonant_send_buffer = self._sends[Field.NONANT]
-        ## End if
-        return
+    # def initialize_nonants(self):
+    #     """ Initialize the buffer for the hub to send nonants
+    #         to the appropriate spokes
+    #     """
+    #     # self.nonant_send_buffer = None
+    #     if self.has_nonant_spokes:
+    #         # self.nonant_send_buffer = self._sends[Field.NONANT].array()
+    #         self.nonant_send_buffer = self._sends[Field.NONANT]
+    #     ## End if
+    #     return
 
-    def initialize_boundsout(self):
-        """ Initialize the buffer for the hub to send bounds
-            to bounds only spokes
-        """
-        self.boundsout_send_buffer = None
-        if self.has_bounds_only_spokes:
-            # self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
-            self.boundsout_send_buffer = self._sends[Field.BOUNDS]
-        ## End if
-        return
+    # def initialize_boundsout(self):
+    #     """ Initialize the buffer for the hub to send bounds
+    #         to bounds only spokes
+    #     """
+    #     # self.boundsout_send_buffer = None
+    #     if self.has_bounds_only_spokes:
+    #         # self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
+    #         self.boundsout_send_buffer = self._sends[Field.OBJECTIVE_BOUNDS]
+    #     ## End if
+    #     return
 
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
@@ -363,12 +368,10 @@ class Hub(SPCommunicator):
         This is called only for spokes which are bounds only.
         w and nonant spokes are passed bounds through the w and nonant buffers
         """
-        # NOTE: boundsout_send_buffer should be the same numpy array as my_bounds.array()
-        # my_bounds = self._sends[Field.BOUNDS]
         my_bounds = self.boundsout_send_buffer
         self._populate_boundsout_cache(my_bounds.array())
         logging.debug("hub is sending bounds={}".format(my_bounds))
-        self.hub_to_spoke(my_bounds, Field.BOUNDS)
+        self.hub_to_spoke(my_bounds, Field.OBJECTIVE_BOUNDS)
         return
 
     def initialize_spoke_indices(self):
@@ -426,7 +429,9 @@ class Hub(SPCommunicator):
         return
 
 
-    def build_window_spec(self) -> dict[Field, int]:
+    def register_send_fields(self):
+
+        self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
 
         required_fields = set()
         for spoke in self.spokes:
@@ -438,20 +443,18 @@ class Hub(SPCommunicator):
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
                         required_fields.add(Field.NONANT)
                     elif cst == ConvergerSpokeType.INNER_BOUND or cst == ConvergerSpokeType.OUTER_BOUND:
-                        required_fields.add(Field.BOUNDS)
+                        required_fields.add(Field.OBJECTIVE_BOUNDS)
                     else:
                         pass # Intentional no-op
                     ## End if
                 ## End for
             else:
-                # TODO: Do non-converger spoke types use info from the hub? If so,
-                # need to account for that here.
+                # Intentional no-op. Non-converger spokes need to register any needed
+                # fields separately. See the functions `register_extension_recv_field`
+                # and `register_extension_send_field`.
                 pass
             ## End if
         ## End for
-
-        window_spec = dict()
-        window_spec[Field.SHUTDOWN] = 1
 
         n_nonants = 0
         for s in self.opt.local_scenarios.values():
@@ -459,19 +462,18 @@ class Hub(SPCommunicator):
         ## End for
 
         if Field.DUALS in required_fields:
-            window_spec[Field.DUALS] = n_nonants
-            self.register_send_field(Field.DUALS, n_nonants)
+            self.w_send_buffer = self.register_send_field(Field.DUALS, n_nonants)
         if Field.NONANT in required_fields:
-            window_spec[Field.NONANT] = n_nonants
-            self.register_send_field(Field.NONANT, n_nonants)
-        if Field.BOUNDS in required_fields:
-            window_spec[Field.BOUNDS] = 2
-            self.register_send_field(Field.BOUNDS, 2)
+            self.nonant_send_buffer = self.register_send_field(Field.NONANT, n_nonants)
+        if Field.OBJECTIVE_BOUNDS in required_fields:
+            self.boundsout_send_buffer = self.register_send_field(Field.OBJECTIVE_BOUNDS, 2)
 
-        # TODO: We can build the window spec directly from the self._sends dictionary
-        # after all the register_send_field calls are complete.
+        # Not all opt classes may have extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.register_send_fields()
 
-        return window_spec
+        return
+
 
 
     def hub_to_spoke(self, buf: SendArray, field: Field):
@@ -598,12 +600,12 @@ class PHHub(Hub):
             self.initialize_outer_bound_buffers()
         if self.has_innerbound_spokes:
             self.initialize_inner_bound_buffers()
-        if self.has_w_spokes:
-            self.initialize_ws()
-        if self.has_nonant_spokes:
-            self.initialize_nonants()
-        if self.has_bounds_only_spokes:
-            self.initialize_boundsout()  # bounds going out
+        # if self.has_w_spokes:
+        #     self.initialize_ws()
+        # if self.has_nonant_spokes:
+        #     self.initialize_nonants()
+        # if self.has_bounds_only_spokes:
+        #     self.initialize_boundsout()  # bounds going out
 
         ## Do some checking for things we currently don't support
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
@@ -714,15 +716,15 @@ class PHHub(Hub):
 
         return
 
-    def initialize_ws(self):
-        """ Initialize the buffer for the hub to send dual weights
-            to the appropriate spokes
-        """
-        self.w_send_buffer = None
-        if self.has_w_spokes:
-            self.w_send_buffer = self._sends[Field.DUALS].array()
-        ## End if
-        return
+    # def initialize_ws(self):
+    #     """ Initialize the buffer for the hub to send dual weights
+    #         to the appropriate spokes
+    #     """
+    #     self.w_send_buffer = None
+    #     if self.has_w_spokes:
+    #         self.w_send_buffer = self._sends[Field.DUALS].array()
+    #     ## End if
+    #     return
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
@@ -760,8 +762,8 @@ class LShapedHub(Hub):
         ## do not support
         if self.has_w_spokes:
             raise RuntimeError("LShaped hub does not compute dual weights (Ws)")
-        if self.has_nonant_spokes:
-            self.initialize_nonants()
+        # if self.has_nonant_spokes:
+        #     self.initialize_nonants()
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
             raise RuntimeError(
                 "A Spoke providing both inner and outer "

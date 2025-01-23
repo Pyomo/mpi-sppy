@@ -24,7 +24,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
-    def build_window_spec(self) -> dict[Field, int]:
+    def register_send_fields(self) -> None:
+
+        super().register_send_fields()
 
         nscen = len(self.opt.all_scenario_names)
         if nscen == 0:
@@ -36,20 +38,20 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         for s in self.opt.local_scenarios.values():
             vbuflen += len(s._mpisppy_data.nonant_indices)
         local_scen_count = len(self.opt.local_scenario_names)
-        self.nonant_per_scen = int(vbuflen / local_scen_count)
+        (self.nonant_per_scen, remainder) = divmod(vbuflen, local_scen_count)
+        assert(remainder == 0)
 
         ## the _locals will also have the kill signal
         self.all_nonant_len = vbuflen
         self.all_eta_len = nscen*local_scen_count
-        self._locals = communicator_array(nscen * local_scen_count + vbuflen)
-        self._coefs = communicator_array(nscen*(nscen + self.nonant_per_scen) + 1)
-        self._new_locals = False
 
-        # TODO: Figure out what fields this spoke creates
-        window_spec = dict()
-        window_spec[Field.TODO] = nscen*(nscen + self.nonant_per_scen) + 1
+        self.all_nonants = self.register_recv_field(Field.NONANT, 0, vbuflen)
+        self.all_etas = self.register_recv_field(Field.NONANT_COEFS, 0, nscen * nscen)
 
-        return window_spec
+        self.all_coefs = self.register_send_field(Field.CROSS_SCENARIO_CUT,
+                                                  nscen*(self.nonant_per_scen + 1 + 1))
+
+        return
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
@@ -130,13 +132,15 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
         row_len = 1+1+len(self.root_nonants)
-        all_coefs = np.zeros( self.nscen*row_len+1, dtype='d')
+        # all_coefs = np.zeros( self.nscen*row_len+1, dtype='d')
+        all_coefs = self.all_coefs
+        all_coefs.value_array().fill(0.0)
         for idx, k in enumerate(self.opt.all_scenario_names):
             ## cut_array -- [ constant, eta_coef, *nonant_coefs ]
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
             all_coefs[row_len*idx] = self._eta_lb_array[idx]
             all_coefs[row_len*idx+1] = -1
-        self.spoke_to_hub(all_coefs, Field.TODO)
+        self.spoke_to_hub(all_coefs, Field.CROSS_SCENARIO_CUT)
 
     def make_cut(self):
 
@@ -144,19 +148,24 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         opt = self.opt
 
         ## unpack these the way they were packed:
-        all_nonants_and_etas = self._locals
+        # all_nonants_and_etas = self._locals
+        all_nonants = self.all_nonants
         nonants = dict()
         etas = dict()
         ci = 0
         for k, s in opt.local_scenarios.items():
             for ndn, i in s._mpisppy_data.nonant_indices:
-                nonants[k, ndn, i] = all_nonants_and_etas[ci]
+                # nonants[k, ndn, i] = all_nonants_and_etas[ci]
+                nonants[k, ndn, i] = all_nonants[ci]
                 ci += 1
 
         # get all the etas
+        all_etas = self.all_etas
+        ci = 0
         for k, s in opt.local_scenarios.items():
             for sn in opt.all_scenario_names:
-                etas[k, sn] = all_nonants_and_etas[ci]
+                # etas[k, sn] = all_nonants_and_etas[ci]
+                etas[k, sn] = all_etas[ci]
                 ci += 1
 
         ## self.nscen == len(opt.all_scenario_names)
@@ -218,7 +227,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         # if we are the winner, grab the xhat and bcast it to the other ranks
         if self.cylinder_comm.Get_rank() == global_rank[0]:
-            farthest_xhat = np.fromiter( (nonants[local_winner, nname, ix] 
+            farthest_xhat = np.fromiter( (nonants[local_winner, nname, ix]
                                             for nname, ix in root_nonants),
                                          dtype='d', count=len(root_nonants) )
         else:
@@ -286,13 +295,14 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
         row_len = 1+1+len(root_nonants)
-        all_coefs = np.zeros( self.nscen*row_len +1, dtype='d')
+        # all_coefs = np.zeros( self.nscen*row_len +1, dtype='d')
+        all_coefs = self.all_coefs
         for idx, k in enumerate(opt.all_scenario_names):
             if k in coef_dict:
                 all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
             elif feas_cuts:
                 all_coefs[row_len*idx:row_len*(idx+1)] = feas_cuts.pop()
-        self.spoke_to_hub(all_coefs, Field.TODO)
+        self.spoke_to_hub(all_coefs, Field.CROSS_SCENARIO_CUT)
 
     def main(self):
         # call main cut generation routine
@@ -302,5 +312,10 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         # main loop
         while not (self.got_kill_signal()):
-            if self._new_locals:
+            # if self._new_locals:
+            if self.all_nonants.is_new() and self.all_etas.is_new():
                 self.make_cut()
+            ## End if
+        ## End while
+
+        return

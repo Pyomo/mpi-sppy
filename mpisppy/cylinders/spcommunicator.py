@@ -29,7 +29,7 @@ import time
 from mpisppy.cylinders.spwindow import Field, SPWindow
 
 def communicator_array(size):
-    arr = np.empty(size+1)
+    arr = np.empty(size+1, dtype='d')
     arr[:] = np.nan
     arr[-1] = 0
     return arr
@@ -139,6 +139,10 @@ class SPCommunicator:
         # the SPBase object
         self.opt.spcomm = self
 
+        # self.register_send_fields()
+
+        return
+
     def _make_key(self, field: Field, origin: int):
         """
         Given a field and an origin (i.e. a strata_rank), generate a key for indexing
@@ -157,10 +161,21 @@ class SPCommunicator:
         """
         return key
 
+    def _build_window_spec(self) -> dict[Field, int]:
+        """ Build dict with fields and lengths needed for local MPI window
+        """
+        self.register_send_fields()
+        window_spec = dict()
+        for (field,buf) in self._sends.items():
+            window_spec[field] = np.size(buf.array())
+        ## End for
+        return window_spec
+
     def register_recv_field(self, field: Field, origin: int, length: int) -> RecvArray:
         key = self._make_key(field, origin)
         if key in self._locals:
             my_fa = self._locals[key]
+            assert(length + 1 == np.size(my_fa.array()))
         else:
             my_fa = RecvArray(length)
             self._locals[key] = my_fa
@@ -168,13 +183,16 @@ class SPCommunicator:
         return my_fa
 
     def register_send_field(self, field: Field, length: int) -> SendArray:
-        # assert(field not in self._sends)
-        if field in self._sends:
-            my_fa = self._sends[field]
-        else:
-            my_fa = SendArray(length)
-            self._sends[field] = my_fa
-        ## End if else
+        assert field not in self._sends, "Field {} is already registered".format(field)
+        # if field in self._sends:
+        #     my_fa = self._sends[field]
+        #     assert(length + 1 == np.size(my_fa.array()))
+        # else:
+        #     my_fa = SendArray(length)
+        #     self._sends[field] = my_fa
+        # ## End if else
+        my_fa = SendArray(length)
+        self._sends[field] = my_fa
         return my_fa
 
     @abc.abstractmethod
@@ -220,14 +238,12 @@ class SPCommunicator:
         if self._windows_constructed:
             return
 
-        window_spec = self.build_window_spec()
+        window_spec = self._build_window_spec()
         self.window = SPWindow(window_spec, self.strata_comm)
         self._windows_constructed = True
 
         return
 
     @abc.abstractmethod
-    def build_window_spec(self) -> dict[Field, int]:
-        """ Build dict with fields and lengths needed for local MPI window
-        """
+    def register_send_fields(self) -> None:
         pass
