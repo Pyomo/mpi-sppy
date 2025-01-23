@@ -71,7 +71,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
         obj = self.xhatter._try_one(snamedict,
                                     solver_options = self.solver_options,
                                     verbose=False,
-                                    restore_nonants=False,
+                                    restore_nonants=True,
                                     stage2EFsolvern=stage2EFsolvern,
                                     branching_factors=branching_factors)
         def _vb(msg): 
@@ -83,7 +83,8 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             return False
         _vb(f"    Feasible {snamedict}, obj: {obj}")
 
-        update = self.update_if_improving(obj)
+        # the xhatter updates the cache in the opt object for us
+        update = self.update_if_improving(obj, update_cache=False)
         logger.debug(f'   bottom of try_scenario_dict on rank {self.global_rank}')
         return update
 
@@ -143,6 +144,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                 # so we don't need to tell persistent solvers
                 self.opt._restore_nonants(update_persistent=False)
                 
+                _vb("   Begin epoch")
                 scenario_cycler.begin_epoch()
 
             next_scendict = scenario_cycler.get_next()
