@@ -117,7 +117,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
                                          self.iter_step)
 
         def _vb(msg): 
-            if True and self.opt.cylinder_rank == 0:
+            if self.verbose and self.opt.cylinder_rank == 0:
                 print("(rank0) " + msg)
 
         xh_iter = 1
