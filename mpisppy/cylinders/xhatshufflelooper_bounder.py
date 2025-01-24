@@ -83,7 +83,7 @@ class XhatShuffleInnerBound(spoke.InnerBoundNonantSpoke):
             return False
         _vb(f"    Feasible {snamedict}, obj: {obj}")
 
-        # the xhatter updates the cache in the opt object for us
+        # XhatBase._try_one updates the solution cache in the opt object for us
         update = self.update_if_improving(obj, update_cache=False)
         logger.debug(f'   bottom of try_scenario_dict on rank {self.global_rank}')
         return update
