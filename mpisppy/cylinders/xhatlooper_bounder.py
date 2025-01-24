@@ -79,6 +79,6 @@ class XhatLooperInnerBound(spoke.InnerBoundNonantSpoke):
                 upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=True)
 
                 # send a bound to the opt companion
-                # the xhatter updates the cache in the opt object for us
+                # XhatBase._try_one updates the solution cache on the opt object for us
                 self.update_if_improving(upperbound, update_cache=False)
             xh_iter += 1
