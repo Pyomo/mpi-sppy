@@ -107,29 +107,30 @@ class _ProxApproxManager:
             num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
             num_cuts += self.add_cut(x_val + sign*10*step, tolerance, persistent_solver)
             return num_cuts
-        # no upper bound, or weak upper bound
-        if min_approx_error_pnt is None or (cost_pnt is not None and min_approx_error_pnt > 10*cost_pnt and cost_pnt > tolerance):
-            num_cuts += self.add_cut(x_val + sign*cost_pnt, tolerance, persistent_solver)
-            num_cuts += self.add_cut(x_val + sign*10*cost_pnt, tolerance, persistent_solver)
+        # no upper bound, or weak upper bound compared to cost_pnt
+        if (min_approx_error_pnt is None) or (cost_pnt is not None and min_approx_error_pnt > 10*cost_pnt):
+            step = max(cost_pnt, tolerance)
+            num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val + sign*10*step, tolerance, persistent_solver)
             return num_cuts
-        # no objective, or the objective is "large"
-        if cost_pnt is None or cost_pnt > min_approx_error_pnt:
-            num_cuts += self.add_cut(x_val + min_approx_error_pnt, tolerance, persistent_solver)
+        # no objective, or the objective is "large" compared to min_approx_error_pnt
+        if (cost_pnt is None) or (cost_pnt >= min_approx_error_pnt / 2.0):
+            step = max(min_approx_error_pnt, tolerance)
+            num_cuts += self.add_cut(x_val + step, tolerance, persistent_solver)
             # guard against horrible bounds
             if min_approx_error_pnt / 2.0 > max(1, tolerance):
-                num_cuts += self.add_cut(x_val + sign*max(1, tolerance), tolerance, persistent_solver)
+                step = max(1, tolerance)
+                num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
             else:
-                num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt/2.0, tolerance, persistent_solver)
+                step = max(min_approx_error_pnt/2.0, tolerance)
+                num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
             return num_cuts
-        # cost_pnt and min_approx_error_pnt exist, and cost_pnt <= min_approx_error_pnt
-        # and (min_approx_error_pnt <= 10*cost_pnt **or** cost_pnt <= tolerance)
-        if cost_pnt < min_approx_error_pnt / 2.0 and cost_pnt > tolerance:
-            num_cuts += self.add_cut(x_val + sign*cost_pnt, tolerance, persistent_solver)
-            num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt, tolerance, persistent_solver)
-            return num_cuts
-        # min_approx_error_pnt / 2.0 <= cost_pnt <= min_approx_error_pnt or cost_pnt <= tolerance
-        num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt/2.0, tolerance, persistent_solver)
-        num_cuts += self.add_cut(x_val + sign*min_approx_error_pnt, tolerance, persistent_solver)
+        # cost_pnt and min_approx_error_pnt are *not* None
+        # and (cost_pnt < min_approx_error_pnt / 2.0 <= min_approx_error_pnt)
+        step = max(cost_pnt, tolerance)
+        num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+        step = max(min_approx_error_pnt, tolerance)
+        num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
         return num_cuts
 
 
