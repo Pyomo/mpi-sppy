@@ -13,7 +13,6 @@ import time
 import os
 import math
 
-from pyomo.environ import ComponentMap, Var
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import SPCommunicator, communicator_array
 
@@ -328,43 +327,26 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
 
-        # set up best solution cache
-        for k,s in self.opt.local_scenarios.items():
-            s._mpisppy_data.best_solution_cache = None
-
-    def update_if_improving(self, candidate_inner_bound):
-        if candidate_inner_bound is None:
-            return False
-        update = (candidate_inner_bound < self.best_inner_bound) \
-                if self.is_minimizing else \
+    def update_if_improving(self, candidate_inner_bound, update_best_solution_cache=True):
+        if update_best_solution_cache:
+            update = self.opt.update_best_solution_if_improving(candidate_inner_bound)
+        else:
+            update = ( (candidate_inner_bound < self.best_inner_bound)
+                if self.is_minimizing else
                 (self.best_inner_bound < candidate_inner_bound)
-        if not update:
-            return False
-
-        self.best_inner_bound = candidate_inner_bound
-        # send to hub
-        self.bound = candidate_inner_bound
-        self._cache_best_solution()
-        return True
+                )
+        if update:
+            self.best_inner_bound = candidate_inner_bound
+            # send to hub
+            self.bound = candidate_inner_bound
+            return True
+        return False
 
     def finalize(self):
-        for k,s in self.opt.local_scenarios.items():
-            if s._mpisppy_data.best_solution_cache is None:
-                return None
-            for var, value in s._mpisppy_data.best_solution_cache.items():
-                var.set_value(value, skip_validation=True)
-
-        self.opt.first_stage_solution_available = True
-        self.opt.tree_solution_available = True
-        self.final_bound = self.bound
-        return self.final_bound
-
-    def _cache_best_solution(self):
-        for k,s in self.opt.local_scenarios.items():
-            scenario_cache = ComponentMap()
-            for var in s.component_data_objects(Var):
-                scenario_cache[var] = var.value
-            s._mpisppy_data.best_solution_cache = scenario_cache
+        if self.opt.load_best_solution():
+            self.final_bound = self.bound
+            return self.final_bound
+        return None
 
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):
