@@ -48,8 +48,9 @@ class XhatLooperInnerBound(XhatInnerBoundBase):
                 # just for sending the values to other scenarios
                 # so we don't need to tell persistent solvers
                 self.opt._restore_nonants(update_persistent=False)
-                upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=False)
+                upperbound, srcsname = xhatter.xhat_looper(scen_limit=scen_limit, restore_nonants=True)
 
                 # send a bound to the opt companion
-                self.update_if_improving(upperbound)
+                # XhatBase._try_one updates the solution cache on the opt object for us
+                self.update_if_improving(upperbound, update_best_solution_cache=False)
             xh_iter += 1
