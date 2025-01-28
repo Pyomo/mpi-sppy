@@ -122,7 +122,7 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
                 scenario_cycler.begin_epoch()
 
                 # always try at least two for each set of nonants
-                # so we continue the explore the scenarios and
+                # so we continue to explore the scenarios and
                 # do not stall out on a single scenario because
                 # the hub is moving very fast
                 next_scendict = scenario_cycler.get_next()
