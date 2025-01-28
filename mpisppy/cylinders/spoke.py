@@ -327,8 +327,8 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
 
-    def update_if_improving(self, candidate_inner_bound, update_cache=True):
-        if update_cache:
+    def update_if_improving(self, candidate_inner_bound, update_best_solution_cache=True):
+        if update_best_solution_cache:
             update = self.opt.update_best_solution_if_improving(candidate_inner_bound)
         else:
             update = ( (candidate_inner_bound < self.best_inner_bound)

@@ -43,7 +43,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         mpicomm=None,
         scenario_creator_kwargs=None,
         variable_probability=None,
-        ph_extensions=None,
+        extensions=None,
+        extension_kwargs=None,
         ):
         
         super().__init__(
@@ -52,7 +53,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             scenario_creator,
             scenario_denouement=scenario_denouement,
             all_nodenames=all_nodenames,
-            extensions=ph_extensions,
+            extensions=extensions,
+            extension_kwargs=extension_kwargs,
             mpicomm=mpicomm,
             scenario_creator_kwargs=scenario_creator_kwargs,
             variable_probability=variable_probability,
