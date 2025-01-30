@@ -26,7 +26,8 @@ from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
 
-_INF = 1e+100
+_INF = 1e100
+
 
 class _SPPresolver(abc.ABC):
     """Defines a presolver for distributed stochastic optimization problems
@@ -106,7 +107,6 @@ class SPIntervalTightener(_SPPresolver):
         )
 
         while True:
-
             if not same_nonant_bounds:
                 update = True
 
@@ -380,8 +380,16 @@ class SPIntervalTightener(_SPPresolver):
 
                 printed_nodes.add(ndn)
 
-        if bounds_tightened > 0 and self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0:
-            print(f"{self.opt.__class__.__name__}: Presolve tightend {bounds_tightened} bounds.")
+        if (
+            bounds_tightened > 0
+            and self.opt.spcomm is None
+            or self.opt.spcomm.strata_rank == 0
+        ):
+            if self.opt.spcomm is None:
+                spoke_algo_name = self.opt.__class__.__name__
+            else:
+                spoke_algo_name = self.opt.spcomm.__class__.__name__
+            print(f"{spoke_algo_name}: Presolve tightend {bounds_tightened} bounds.")
 
 
 def _lb_generator(var_iterable):
