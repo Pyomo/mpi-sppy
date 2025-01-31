@@ -121,6 +121,18 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
                 _vb("   Begin epoch")
                 scenario_cycler.begin_epoch()
 
+                # always try at least two for each set of nonants
+                # so we continue to explore the scenarios and
+                # do not stall out on a single scenario because
+                # the hub is moving very fast
+                next_scendict = scenario_cycler.get_next()
+                if next_scendict is not None:
+                    _vb(f"   Trying next {next_scendict}")
+                    update = self.try_scenario_dict(next_scendict)
+                    if update:
+                        _vb(f"   Updating best to {next_scendict}")
+                        scenario_cycler.best = next_scendict["ROOT"]
+
             next_scendict = scenario_cycler.get_next()
             if next_scendict is not None:
                 _vb(f"   Trying next {next_scendict}")
@@ -140,13 +152,14 @@ class ScenarioCycler:
         root_kids = nonleaves['ROOT'].kids if 'ROOT' in nonleaves else None
         if root_kids is None or len(root_kids)==0 or root_kids[0].is_leaf:
             self._multi = False
-            self._iter_shift = 1 if iter_step is None else iter_step
+            self._iter_shift = 0 if iter_step is None else iter_step
             self._use_reverse = False #It is useless to reverse for 2stage SP
         else:
             self._multi = True
             self.BF0 = len(root_kids)
             self._nonleaves = nonleaves
-            
+            # TODO: is this right for multistage, or should the default be
+            #       0 like in the two-stage case?
             self._iter_shift = self.BF0 if iter_step is None else iter_step
             self._use_reverse = True if reverse is None else reverse
             self._reversed = False #Do we iter in reverse mode ?
@@ -189,7 +202,7 @@ class ScenarioCycler:
             filling_idx +=1
             filling_idx %= self._num_scenarios
         
-    def create_nodescen_dict(self):
+    def _create_nodescen_dict(self):
         '''
         Creates an attribute nodescen_dict. 
         Keys are nonleaf names, values are local scenario names 
@@ -203,7 +216,7 @@ class ScenarioCycler:
             self.nodescen_dict = dict()
             self._fill_nodescen_dict(self._nonleaves.keys())
     
-    def update_nodescen_dict(self,snames_to_remove):
+    def _update_nodescen_dict(self,snames_to_remove):
         '''
         WARNING: _cur_ROOTscen must be up to date when calling this method
         '''
@@ -230,7 +243,7 @@ class ScenarioCycler:
         self._shuffled_snames = [s[1] for s in self._shuffled_scenarios]
         self._original_order = [s[0] for s in self._shuffled_scenarios]
         self._cur_ROOTscen = self._shuffled_snames[0] if self.best is None else self.best
-        self.create_nodescen_dict()
+        self._create_nodescen_dict()
         
         self._scenarios_this_epoch = set()
     
@@ -239,7 +252,7 @@ class ScenarioCycler:
         self._shuffled_snames = [s[1] for s in reversed(self._shuffled_scenarios)]
         self._original_order = [s[0] for s in reversed(self._shuffled_scenarios)]
         self._cur_ROOTscen = self._shuffled_snames[0] if self.best is None else self.best
-        self.create_nodescen_dict()
+        self._create_nodescen_dict()
         
         self._scenarios_this_epoch = set()
 
@@ -270,9 +283,9 @@ class ScenarioCycler:
         #Updating scenarios
         self._cur_ROOTscen = self._shuffled_snames[self._cycle_idx]
         if old_idx<self._cycle_idx:
-            scens_to_remove = self._shuffled_snames[old_idx:self._cycle_idx]
+            scens_to_remove = set(self._shuffled_snames[old_idx:self._cycle_idx])
         else:
-            scens_to_remove = self._shuffled_snames[old_idx:]+self._shuffled_snames[:self._cycle_idx]
-        self.update_nodescen_dict(scens_to_remove)
+            scens_to_remove = set(self._shuffled_snames[old_idx:]+self._shuffled_snames[:self._cycle_idx])
+        self._update_nodescen_dict(scens_to_remove)
         
     
