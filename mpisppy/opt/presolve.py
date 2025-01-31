@@ -26,7 +26,8 @@ from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
 
-_INF = 1e+100
+_INF = 1e100
+
 
 class _SPPresolver(abc.ABC):
     """Defines a presolver for distributed stochastic optimization problems
@@ -106,7 +107,6 @@ class SPIntervalTightener(_SPPresolver):
         )
 
         while True:
-
             if not same_nonant_bounds:
                 update = True
 
@@ -336,6 +336,7 @@ class SPIntervalTightener(_SPPresolver):
             )
 
         printed_nodes = set()
+        bounds_tightened = 0
         for k, s in self.opt.local_scenarios.items():
             for node in s._mpisppy_node_list:
                 ndn = node.name
@@ -354,9 +355,11 @@ class SPIntervalTightener(_SPPresolver):
                             self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0
                         )
                     ):
-                        print(
-                            f"Tightened lower bound for {var.name} from {original_lower_bound} to {var.lb}"
-                        )
+                        bounds_tightened += 1
+                        if self.verbose:
+                            print(
+                                f"Tightened lower bound for {var.name} from {original_lower_bound} to {var.lb}"
+                            )
                 for original_upper_bound, upper_bound_move, var in zip(
                     self._upper_bound_cache[k, ndn],
                     global_upper_bound_movement[ndn],
@@ -369,11 +372,24 @@ class SPIntervalTightener(_SPPresolver):
                             self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0
                         )
                     ):
-                        print(
-                            f"Tightened upper bound for {var.name} from {original_upper_bound} to {var.ub}"
-                        )
+                        bounds_tightened += 1
+                        if self.verbose:
+                            print(
+                                f"Tightened upper bound for {var.name} from {original_upper_bound} to {var.ub}"
+                            )
 
                 printed_nodes.add(ndn)
+
+        if (
+            bounds_tightened > 0
+            and self.opt.spcomm is None
+            or self.opt.spcomm.strata_rank == 0
+        ):
+            if self.opt.spcomm is None:
+                spoke_algo_name = self.opt.__class__.__name__
+            else:
+                spoke_algo_name = self.opt.spcomm.__class__.__name__
+            print(f"{spoke_algo_name}: Presolve tightend {bounds_tightened} bounds.")
 
 
 def _lb_generator(var_iterable):
