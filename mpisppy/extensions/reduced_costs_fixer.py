@@ -257,6 +257,8 @@ class ReducedCostsFixer(Extension):
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     if ndn_i in self._modeler_fixed_nonants:
                         continue
+                    if xvar in s._mpisppy_data.all_surrogate_nonants:
+                        continue
                     this_expected_rc = abs_reduced_costs[ci]
                     update_var = False
                     if np.isnan(this_expected_rc):
