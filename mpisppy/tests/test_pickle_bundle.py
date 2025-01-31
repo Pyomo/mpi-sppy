@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Provide some test for pickled bundles
+# Provide a test for special-purpose (aircond only)multi-stage pickled bundles
 """
 
 """
