@@ -4,4 +4,5 @@ extend-exclude = [
     "./mpisppy/utils/callbacks/termination/tests/markshare2.py",
     "./mpisppy/tests/examples/hydro/hydro.py",
     "./examples/hydro/hydro.py",
+    "./examples/sizes/models/ExpressionModel.py",
 ]
