@@ -163,6 +163,12 @@ hydroa = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
 do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline")
 
+# write hydro bundles for at least some testing of multi-stage proper bundles
+# (just looking for smoke)
+hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3"
+            "--branching-factors '3 3' ")
+do_one("hydro", "hydro", 3, hydro_wr, xhat_baseline_dir=None)
+
 # write, then read, pickled scenarios
 print("starting write/read pickled scenarios")
 farmer_wr = "--pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10"

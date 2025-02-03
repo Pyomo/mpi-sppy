@@ -1020,6 +1020,8 @@ def find_objective(pyomomodel, active=False):
     raise RuntimeError("Could not identify exactly one objective for model "
                        f"{pyomomodel.name} (found {len(obj)} objectives)")
 
+class NonLinearProblemFound(RuntimeError):
+    pass
 
 def nonant_cost_coeffs(s):
     """
