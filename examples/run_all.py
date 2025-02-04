@@ -283,7 +283,7 @@ do_one("sslp",
        "--max-iterations=100 --default-rho=1 "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
-       "--rel-gap=0.0 "
+       "--rel-gap=0.0 --surrogate-nonant "
        "--solver-name={}".format(solver_name))
 
 do_one("hydro", "hydro_cylinders.py", 3,

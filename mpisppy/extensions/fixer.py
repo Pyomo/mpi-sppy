@@ -168,6 +168,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
                 xvar = s._mpisppy_data.nonant_indices[ndn,i]
+                if xvar in s._mpisppy_data.all_surrogate_nonants:
+                    continue
                 if not xvar.is_fixed():
                     xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                     diff = xb * xb - pyo.value(s._mpisppy_model.xsqbars[(ndn,i)])
@@ -259,6 +261,8 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     print ("Are you trying to fix a Var that is not nonant?")
                     raise
                 xvar = s._mpisppy_data.nonant_indices[ndn,i]
+                if xvar in s._mpisppy_data.all_surrogate_nonants:
+                    continue
                 if not xvar.is_fixed():
                     xb = pyo.value(s._mpisppy_model.xbars[(ndn,i)])
                     fx = s._mpisppy_data.conv_iter_count[(ndn,i)]
