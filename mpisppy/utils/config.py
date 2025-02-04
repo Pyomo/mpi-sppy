@@ -420,6 +420,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=0.01)
 
+    def sub_args(self):
+
+        self.add_to_config(name="SUB",
+                           description="Use subgradient hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
 
     def fixer_args(self):
 
