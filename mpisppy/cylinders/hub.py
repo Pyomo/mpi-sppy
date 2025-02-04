@@ -10,6 +10,7 @@ import numpy as np
 import abc
 import logging
 import mpisppy.log
+from mpisppy.opt.subgradient import Subgradient
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
@@ -538,6 +539,7 @@ class PHHub(Hub):
         ## might as well get a bound, in this case
         if self.opt._PHIter == 1 and self.use_trivial_bound:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
+        self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
 
         if not self.has_innerbound_spokes:
             if self.opt._PHIter == 1:
@@ -553,7 +555,7 @@ class PHHub(Hub):
             return False
 
         if not self.has_outerbound_spokes:
-            if self.opt._PHIter == 1:
+            if self.opt._PHIter == 1 and not isinstance(self.opt, Subgradient):
                 global_toc(
                     "Without outer bound spokes, no progress "
                     "will be made on the Best Bound")

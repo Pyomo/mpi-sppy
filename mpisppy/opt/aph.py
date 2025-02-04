@@ -1067,6 +1067,7 @@ class APH(ph_base.PHBase):
         # End APH-specific Prep
 
         trivial_bound = self.Iter0()
+        self.best_bound_obj_val = trivial_bound
 
         self.setup_Lens()
         self.setup_dispatchrecord()
