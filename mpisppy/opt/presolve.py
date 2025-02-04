@@ -128,10 +128,6 @@ class SPIntervalTightener(_SPPresolver):
                                 (not printed_warning or self.verbose)
                                 and (lb, ub) != var.bounds
                                 and (node_comm.Get_rank() == 0)
-                                and (
-                                    self.opt.spcomm is None
-                                    or self.opt.spcomm.strata_rank == 0
-                                )
                             ):
                                 if not printed_warning:
                                     msg = "WARNING: SPIntervalTightener found different bounds on nonanticipative variables from different scenarios."
@@ -351,9 +347,6 @@ class SPIntervalTightener(_SPPresolver):
                     if (
                         (lower_bound_move > 1e-6)
                         and (node_comm.Get_rank() == 0)
-                        and (
-                            self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0
-                        )
                     ):
                         bounds_tightened += 1
                         if self.verbose:
@@ -368,9 +361,6 @@ class SPIntervalTightener(_SPPresolver):
                     if (
                         (upper_bound_move > 1e-6)
                         and (node_comm.Get_rank() == 0)
-                        and (
-                            self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0
-                        )
                     ):
                         bounds_tightened += 1
                         if self.verbose:
@@ -382,14 +372,9 @@ class SPIntervalTightener(_SPPresolver):
 
         if (
             bounds_tightened > 0
-            and self.opt.spcomm is None
-            or self.opt.spcomm.strata_rank == 0
+            and self.opt.cylinder_rank == 0
         ):
-            if self.opt.spcomm is None:
-                spoke_algo_name = self.opt.__class__.__name__
-            else:
-                spoke_algo_name = self.opt.spcomm.__class__.__name__
-            print(f"{spoke_algo_name}: Presolve tightend {bounds_tightened} bounds.")
+            print(f"SPIntervalTightener tightend {bounds_tightened} bounds.")
 
 
 def _lb_generator(var_iterable):
