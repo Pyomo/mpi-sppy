@@ -26,7 +26,8 @@ from pyomo.contrib.appsi.fbbt import IntervalTightener
 
 from mpisppy import MPI
 
-_INF = 1e+100
+_INF = 1e100
+
 
 class _SPPresolver(abc.ABC):
     """Defines a presolver for distributed stochastic optimization problems
@@ -106,7 +107,6 @@ class SPIntervalTightener(_SPPresolver):
         )
 
         while True:
-
             if not same_nonant_bounds:
                 update = True
 
@@ -128,10 +128,6 @@ class SPIntervalTightener(_SPPresolver):
                                 (not printed_warning or self.verbose)
                                 and (lb, ub) != var.bounds
                                 and (node_comm.Get_rank() == 0)
-                                and (
-                                    self.opt.spcomm is None
-                                    or self.opt.spcomm.strata_rank == 0
-                                )
                             ):
                                 if not printed_warning:
                                     msg = "WARNING: SPIntervalTightener found different bounds on nonanticipative variables from different scenarios."
@@ -336,6 +332,7 @@ class SPIntervalTightener(_SPPresolver):
             )
 
         printed_nodes = set()
+        bounds_tightened = 0
         for k, s in self.opt.local_scenarios.items():
             for node in s._mpisppy_node_list:
                 ndn = node.name
@@ -350,13 +347,12 @@ class SPIntervalTightener(_SPPresolver):
                     if (
                         (lower_bound_move > 1e-6)
                         and (node_comm.Get_rank() == 0)
-                        and (
-                            self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0
-                        )
                     ):
-                        print(
-                            f"Tightened lower bound for {var.name} from {original_lower_bound} to {var.lb}"
-                        )
+                        bounds_tightened += 1
+                        if self.verbose:
+                            print(
+                                f"Tightened lower bound for {var.name} from {original_lower_bound} to {var.lb}"
+                            )
                 for original_upper_bound, upper_bound_move, var in zip(
                     self._upper_bound_cache[k, ndn],
                     global_upper_bound_movement[ndn],
@@ -365,15 +361,20 @@ class SPIntervalTightener(_SPPresolver):
                     if (
                         (upper_bound_move > 1e-6)
                         and (node_comm.Get_rank() == 0)
-                        and (
-                            self.opt.spcomm is None or self.opt.spcomm.strata_rank == 0
-                        )
                     ):
-                        print(
-                            f"Tightened upper bound for {var.name} from {original_upper_bound} to {var.ub}"
-                        )
+                        bounds_tightened += 1
+                        if self.verbose:
+                            print(
+                                f"Tightened upper bound for {var.name} from {original_upper_bound} to {var.ub}"
+                            )
 
                 printed_nodes.add(ndn)
+
+        if (
+            bounds_tightened > 0
+            and self.opt.cylinder_rank == 0
+        ):
+            print(f"SPIntervalTightener tightend {bounds_tightened} bounds.")
 
 
 def _lb_generator(var_iterable):
