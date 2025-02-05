@@ -8,10 +8,11 @@
 ###############################################################################
 
 import mpisppy.phbase
-import shutil
 import mpisppy.MPI as mpi
 
 from pyomo.common.collections import ComponentSet
+
+_global_rank = mpi.COMM_WORLD.Get_rank()
 
 class Subgradient(mpisppy.phbase.PHBase):
     """ Subgradient Algorithm """
@@ -46,11 +47,11 @@ class Subgradient(mpisppy.phbase.PHBase):
         self.PH_Prep(attach_prox=False, attach_smooth=smoothed)
 
         if (verbose):
-            print('Calling Subgradient Iter0 on global rank {}'.format(global_rank))
+            print('Calling Subgradient Iter0 on global rank {}'.format(_global_rank))
         trivial_bound = self.Iter0()
         self.best_bound_obj_val = trivial_bound
         if (verbose):
-            print ('Completed Subgradient Iter0 on global rank {}'.format(global_rank))
+            print('Completed Subgradient Iter0 on global rank {}'.format(_global_rank))
 
         self.iterk_loop()
 
