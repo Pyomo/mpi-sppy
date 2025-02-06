@@ -19,6 +19,7 @@ from mpisppy import MPI
 
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
+from pyomo.common.collections import ComponentSet
 
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
@@ -65,6 +66,7 @@ class SPOpt(SPBase):
             #       object to get garbage collected to
             #       free the memory the C++ model uses.
             SPPresolve(self).presolve()
+        self._create_fixed_nonant_cache()
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
@@ -940,6 +942,20 @@ class SPOpt(SPBase):
                     print("Set instance times: \tmin=%4.2f mean=%4.2f max=%4.2f" %
                       (np.min(asit), np.mean(asit), np.max(asit)))
 
+    def _create_fixed_nonant_cache(self):
+        self._initial_fixed_varibles = ComponentSet()
+        for s in self.local_scenarios.values():
+            for v in s._mpisppy_data.nonant_indices.values():
+                if v.fixed:
+                    self._initial_fixed_varibles.add(v)
+
+    def _can_update_best_bound(self):
+        for s in self.local_scenarios.values():
+            for v in s._mpisppy_data.nonant_indices.values():
+                if v.fixed:
+                    if v not in self._initial_fixed_varibles:
+                        return False
+        return True
 
     def subproblem_scenario_generator(self):
         """
