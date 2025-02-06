@@ -8,11 +8,9 @@
 ###############################################################################
 
 import mpisppy.phbase
-import mpisppy.MPI as mpi
+import mpisppy.MPI as _mpi
 
-from pyomo.common.collections import ComponentSet
-
-_global_rank = mpi.COMM_WORLD.Get_rank()
+_global_rank = _mpi.COMM_WORLD.Get_rank()
 
 class Subgradient(mpisppy.phbase.PHBase):
     """ Subgradient Algorithm """
@@ -43,13 +41,14 @@ class Subgradient(mpisppy.phbase.PHBase):
         smoothed = self.options['smoothed']
         if smoothed != 0:
             raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
-        self.create_fixed_nonant_cache()
         self.PH_Prep(attach_prox=False, attach_smooth=smoothed)
 
         if (verbose):
             print('Calling Subgradient Iter0 on global rank {}'.format(_global_rank))
         trivial_bound = self.Iter0()
-        self.best_bound_obj_val = trivial_bound
+        # set self.best_bound_obj_val if we don't have any additional fixed variables
+        if self._can_update_best_bound():
+            self.best_bound_obj_val = trivial_bound
         if (verbose):
             print('Completed Subgradient Iter0 on global rank {}'.format(_global_rank))
 
@@ -126,21 +125,7 @@ class Subgradient(mpisppy.phbase.PHBase):
         )
 
         # set self.best_bound_obj_val if we don't have any additional fixed variables
-        if self.can_update_best_bound():
+        if self._can_update_best_bound():
             self.best_bound_obj_val = self.Ebound(verbose)
 
 
-    def create_fixed_nonant_cache(self):
-        self._initial_fixed_varibles = ComponentSet()
-        for s in self.local_scenarios.values():
-            for v in s._mpisppy_data.nonant_indices.values():
-                if v.fixed:
-                    self._initial_fixed_varibles.add(v)
-
-    def can_update_best_bound(self):
-        for s in self.local_scenarios.values():
-            for v in s._mpisppy_data.nonant_indices.values():
-                if v.fixed:
-                    if v not in self._initial_fixed_varibles:
-                        return False
-        return True
