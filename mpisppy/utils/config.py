@@ -420,9 +420,9 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=0.01)
 
-    def sub_args(self):
+    def subgradient_args(self):
 
-        self.add_to_config(name="SUB",
+        self.add_to_config(name="SUBGRAD",
                            description="Use subgradient hub instead of PH (default False)",
                            domain=bool,
                            default=False)
@@ -636,7 +636,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
 
-    def subgradient_args(self):
+    def subgradient_bounder_args(self):
 
         self.add_to_config('subgradient',
                               description="have a subgradient spoke",

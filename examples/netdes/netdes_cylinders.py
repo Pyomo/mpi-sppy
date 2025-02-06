@@ -24,7 +24,7 @@ def _parse_args():
     cfg.ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
-    cfg.subgradient_args()
+    cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.slammax_args()
     cfg.cross_scenario_cuts_args()
