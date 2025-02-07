@@ -960,11 +960,9 @@ class Config(pyofig.ConfigDict):
 
     def wxbar_read_write_args(self):
         import mpisppy.utils.wxbarreader as wxbarreader
-        print("DEPRECATION WARNING: wxbar_read_write_args should be moved to wxbarreader.add_options_to_config")
         wxbarreader.add_options_to_config(self)
 
         import mpisppy.utils.wxbarwriter as wxbarwriter
-        print("DEPRECATION WARNING: wxbar_read_write_args should be moved to wxbarwriter.add_options_to_config")
         wxbarwriter.add_options_to_config(self)        
 
     def proper_bundle_config(self):
