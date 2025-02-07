@@ -97,8 +97,8 @@ def _parse_args(m):
                       default=None)
     # TBD - think about adding directory for json options files
 
-    cfg.add_to_config("hubdict_callback",
-                      description="[FOR EXPERTS ONLY] Module that contains the function hubdict_callback that will be passed the hubdict prior to spin-the-wheel (last chance for intervention)",
+    cfg.add_to_config("hub_and_spoke_dict_callback",
+                      description="[FOR EXPERTS ONLY] Module that contains the function hub_and_spoke_dict_callback that will be passed the hubdict and list of spokedicts prior to spin-the-wheel (last chance for intervention)",
                       domain=str,
                       default=None)    
     
@@ -356,9 +356,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(reduced_costs_spoke)
 
     # if the user dares, let them mess with the hubdict prior to solve
-    if cfg.hubdict_callback is not None:
-        module = sputils.module_name_to_module(cfg.hubdict_callback)
-        module.hubdict_callback(hubdict)
+    if cfg.hub_and_spoke_dict_callback is not None:
+        module = sputils.module_name_to_module(cfg.hub_and_spoke_dict_callback)
+        module.hub_and_spoke_dict_callback(hubdict, list_of_spoke_dict)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
