@@ -61,9 +61,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
     def setUp(self):
         self.cfg = _create_cfg()
 
-    # @unittest.skipIf(not solver_available,
-    #                  "no solver is available")
-    @unittest.skipIf(True, "disabled")
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
     def test_xhatxbar_extended(self):
         from mpisppy.extensions.test_extension import TestExtension
 
@@ -84,9 +83,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
             self.assertIn('post_solve', xhat_object._TestExtension_who_is_called)
 
 
-    # @unittest.skipIf(not solver_available,
-    #                  "no solver is available")
-    @unittest.skipIf(True, "disabled")
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
     def test_xhatshuffle_extended(self):
         print("begin xhatshuffle_extended with test extension")
         from mpisppy.extensions.test_extension import TestExtension
@@ -110,9 +108,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
             self.assertIn('post_solve', xhat_object._TestExtension_who_is_called)
 
 
-    # @unittest.skipIf(not solver_available,
-    #                  "no solver is available")
-    @unittest.skipIf(True, "disabled")
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
     def test_xhatshuffle_coverage(self):
         print("begin xhatshuffle_coverage")
         from helper_extension import TestHelperExtension
@@ -140,7 +137,6 @@ class Test_farmer_with_cylinders(unittest.TestCase):
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
-    # @unittest.skipIf(True, "disabled")
     def test_lagrangian(self):
         print("Start lagrangian")
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff()

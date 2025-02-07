@@ -18,7 +18,7 @@ class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
     DUALS=2
-    OBJECTIVE_BOUNDS=100 # TODO: Comment on this and document order...
+    OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
     EXPECTED_REDUCED_COST=200

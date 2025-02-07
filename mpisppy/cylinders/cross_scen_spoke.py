@@ -131,7 +131,6 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ## we'll be storing a matrix as an array
         ## row_len is the length of each row
         row_len = 1+1+len(self.root_nonants)
-        # all_coefs = np.zeros( self.nscen*row_len+1, dtype='d')
         all_coefs = self.all_coefs
         all_coefs.value_array().fill(0.0)
         for idx, k in enumerate(self.opt.all_scenario_names):
@@ -147,14 +146,12 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         opt = self.opt
 
         ## unpack these the way they were packed:
-        # all_nonants_and_etas = self._locals
         all_nonants = self.all_nonants
         nonants = dict()
         etas = dict()
         ci = 0
         for k, s in opt.local_scenarios.items():
             for ndn, i in s._mpisppy_data.nonant_indices:
-                # nonants[k, ndn, i] = all_nonants_and_etas[ci]
                 nonants[k, ndn, i] = all_nonants[ci]
                 ci += 1
 
@@ -163,11 +160,9 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         ci = 0
         for k, s in opt.local_scenarios.items():
             for sn in opt.all_scenario_names:
-                # etas[k, sn] = all_nonants_and_etas[ci]
                 etas[k, sn] = all_etas[ci]
                 ci += 1
 
-        ## self.nscen == len(opt.all_scenario_names)
         # compute local min etas
         min_eta_vals = np.fromiter(( min(etas[k,sn] for k in opt.local_scenarios) \
                                        for sn in opt.all_scenario_names ),

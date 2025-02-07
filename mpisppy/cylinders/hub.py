@@ -47,9 +47,6 @@ class Hub(SPCommunicator):
         self.stalled_iter_cnt = 0
         self.last_gap = float('inf')  # abs_gap tracker
 
-        # # All hubs need to be able to tell spokes to terminate. Register that here.
-        # self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
-
         self.extension_recv = set()
 
         return
@@ -109,11 +106,6 @@ class Hub(SPCommunicator):
 
     def is_send_field_registered(self, field: Field) -> bool:
         return field in self._sends
-
-    # def get_extension_recv_field(self, strata_rank: int, field: Field) -> RecvArray:
-    #     key = self._make_key(field, strata_rank)
-    #     assert(key in self.extension_recv)
-    #     return self._locals[key]
 
     def extension_send_field(self, field: Field, buf: SendArray):
         """
@@ -244,10 +236,6 @@ class Hub(SPCommunicator):
         for idx in self.innerbound_spoke_indices:
             key = self._make_key(Field.OBJECTIVE_INNER_BOUND, idx)
             recv_buf = self._locals[key]
-            # is_new = self.hub_from_spoke(recv_buf.array(),
-            #                              idx,
-            #                              Field.OBJECTIVE_INNER_BOUND,
-            #                              recv_buf.id())
             is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_INNER_BOUND)
             if is_new:
                 bound = recv_buf[0]
@@ -264,10 +252,6 @@ class Hub(SPCommunicator):
         for idx in self.outerbound_spoke_indices:
             key = self._make_key(Field.OBJECTIVE_OUTER_BOUND, idx)
             recv_buf = self._locals[key]
-            # is_new = self.hub_from_spoke(recv_buf.array(),
-            #                              idx,
-            #                              Field.OBJECTIVE_OUTER_BOUND,
-            #                              recv_buf.id())
             is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_OUTER_BOUND)
             if is_new:
                 bound = recv_buf[0]
@@ -334,28 +318,6 @@ class Hub(SPCommunicator):
             )
         ## End for
         return
-
-    # def initialize_nonants(self):
-    #     """ Initialize the buffer for the hub to send nonants
-    #         to the appropriate spokes
-    #     """
-    #     # self.nonant_send_buffer = None
-    #     if self.has_nonant_spokes:
-    #         # self.nonant_send_buffer = self._sends[Field.NONANT].array()
-    #         self.nonant_send_buffer = self._sends[Field.NONANT]
-    #     ## End if
-    #     return
-
-    # def initialize_boundsout(self):
-    #     """ Initialize the buffer for the hub to send bounds
-    #         to bounds only spokes
-    #     """
-    #     # self.boundsout_send_buffer = None
-    #     if self.has_bounds_only_spokes:
-    #         # self.boundsout_send_buffer = self._sends[Field.BOUNDS].array()
-    #         self.boundsout_send_buffer = self._sends[Field.OBJECTIVE_BOUNDS]
-    #     ## End if
-    #     return
 
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
@@ -570,10 +532,8 @@ class Hub(SPCommunicator):
             buffer, so every spoke will see it simultaneously.
             processes (don't need to call them one at a time).
         """
-        # term_buf = self._sends[Field.SHUTDOWN]
         shutdown = self.shutdown
         shutdown[0] = 1.0
-        # self.hub_to_spoke(shutdown.array(), Field.SHUTDOWN, shutdown.next_write_id())
         self.hub_to_spoke(shutdown, Field.SHUTDOWN)
         return
 
@@ -600,12 +560,6 @@ class PHHub(Hub):
             self.initialize_outer_bound_buffers()
         if self.has_innerbound_spokes:
             self.initialize_inner_bound_buffers()
-        # if self.has_w_spokes:
-        #     self.initialize_ws()
-        # if self.has_nonant_spokes:
-        #     self.initialize_nonants()
-        # if self.has_bounds_only_spokes:
-        #     self.initialize_boundsout()  # bounds going out
 
         ## Do some checking for things we currently don't support
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
@@ -715,16 +669,6 @@ class PHHub(Hub):
         self.hub_to_spoke(nonant_send_buffer, Field.NONANT)
 
         return
-
-    # def initialize_ws(self):
-    #     """ Initialize the buffer for the hub to send dual weights
-    #         to the appropriate spokes
-    #     """
-    #     self.w_send_buffer = None
-    #     if self.has_w_spokes:
-    #         self.w_send_buffer = self._sends[Field.DUALS].array()
-    #     ## End if
-    #     return
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
