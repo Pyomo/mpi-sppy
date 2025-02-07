@@ -14,6 +14,7 @@ import json
 import shutil
 import numpy as np
 import pyomo.environ as pyo
+import pyomo.common.config as pyofig
 
 from mpisppy.spin_the_wheel import WheelSpinner
 
@@ -89,6 +90,12 @@ def _parse_args(m):
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
     cfg.reduced_costs_rho_args()
+
+    cfg.add_to_config("user_defined_extensions",
+                      description="Space-delimited module names for user extensions",
+                      domain=pyofig.ListOf(str),
+                      default=None)
+    
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     
     cfg.checker()  # looks for inconsistencies 
@@ -205,13 +212,23 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.W_writer:
         ext_classes.append(WXBarWriter)
 
+    if cfg.user_defined_extensions is not None:
+        for ext_name in cfg.user_defined_extensions:
+            module = sputils.module_name_to_module(ext_name)
+            vanilla.extension_adder(module)
+            # grab JSON for this module's option dictionary
+            json_filename = ext_name+".json"
+            if os.path.exists(json_filename):
+                ext_options= json.load(json_filename)
+                hub_dict['opt_kwargs']['options'][ext_name] = ext_options
+            else:
+                raise RuntimeError(f"JSON options file {json_filename} for user defined extension not found")
+
     if cfg.sep_rho:
         vanilla.add_sep_rho(hub_dict, cfg)
 
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
-
-
 
     # these should be after sep rho and coeff rho
     # as they will use existing rho values if the
