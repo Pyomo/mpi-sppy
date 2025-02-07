@@ -163,7 +163,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     # the intent of the following is to transition to strictly
     # cfg-based option passing, as opposed to dictionary-based processing.
-    hub_dict['opt_kwargs']['options'] = {'cfg': cfg}                
+    hub_dict['opt_kwargs']['options']['cfg'] = cfg                
         
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
