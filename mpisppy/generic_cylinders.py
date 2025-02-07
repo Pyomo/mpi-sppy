@@ -14,21 +14,29 @@ import json
 import shutil
 import numpy as np
 import pyomo.environ as pyo
+
 from mpisppy.spin_the_wheel import WheelSpinner
+
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
+
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 from mpisppy.extensions.scenario_lpfiles import Scenario_lpfiles
+
+from mpisppy.utils.wxbarwriter import WXBarWriter
+from mpisppy.utils.wxbarreader import WXBarReader
+
 import mpisppy.utils.solver_spec as solver_spec
+
 from mpisppy import global_toc
 from mpisppy import MPI
-
 
 def _parse_args(m):
     # m is the model file module
@@ -152,7 +160,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                   rho_setter = rho_setter,
                                   all_nodenames = all_nodenames,
                                   )
-    
+
+    # the intent of the following is to transition to strictly
+    # cfg-based option passing, as opposed to dictionary-based processing.
+    hub_dict['opt_kwargs']['options'] = {'cfg': cfg}                
+        
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
     # TBD: add cross_scenario_cuts, which also needs a cylinder
@@ -187,11 +199,19 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.scenario_lpfiles:
         ext_classes.append(Scenario_lpfiles)
 
+    if cdf.W_reader:
+        ext_classes.append(WXBarReader)
+
+    if cdf.W_writer:
+        ext_classes.append(WXBarWriter)
+
     if cfg.sep_rho:
         vanilla.add_sep_rho(hub_dict, cfg)
 
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
+
+
 
     # these should be after sep rho and coeff rho
     # as they will use existing rho values if the
