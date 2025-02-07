@@ -44,7 +44,7 @@ def _create_cfg():
 
 #*****************************************************************************
 
-class Test_w_writer_farmer(unittest.TestCase):
+class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     """ Test the gradient code using farmer."""
 
     def _create_ph_farmer(self, ph_extensions=None, max_iter=100):
