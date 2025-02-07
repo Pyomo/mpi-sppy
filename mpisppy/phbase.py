@@ -239,8 +239,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Function to set rho values throughout the PH algorithm.
             variable_probability (callable, optional):
                 Function to set variable specific probabilities.
-            cfg (config object, optional?)  controls (mainly from user)
-                (Maybe this should move up to spbase)
 
     """
     def __init__(

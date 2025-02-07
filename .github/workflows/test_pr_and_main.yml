@@ -405,7 +405,7 @@ jobs:
         run: |
           cd mpisppy/tests
           python test_gradient_rho.py
-          python test_w_writer.py
+          python test_xbar_w_reader_writer.py
 
   test-headers:
     name: header test
