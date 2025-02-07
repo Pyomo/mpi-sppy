@@ -7,12 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 
-import mpisppy.phbase
+import mpisppy.opt.ph
 import mpisppy.MPI as _mpi
 
 _global_rank = _mpi.COMM_WORLD.Get_rank()
 
-class Subgradient(mpisppy.phbase.PHBase):
+class Subgradient(mpisppy.opt.ph.PH):
     """ Subgradient Algorithm """
 
     def subgradient_main(self, finalize=True):
@@ -37,33 +37,13 @@ class Subgradient(mpisppy.phbase.PHBase):
                     The "trivial bound", computed by solving the model with no
                     nonanticipativity constraints (immediately after iter 0).
         """
-        verbose = self.options['verbose']
-        smoothed = self.options['smoothed']
-        if smoothed != 0:
-            raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
-        self.PH_Prep(attach_prox=False, attach_smooth=smoothed)
-
-        if (verbose):
-            print('Calling Subgradient Iter0 on global rank {}'.format(_global_rank))
-        trivial_bound = self.Iter0()
-        # set self.best_bound_obj_val if we don't have any additional fixed variables
-        if self._can_update_best_bound():
-            self.best_bound_obj_val = trivial_bound
-        if (verbose):
-            print('Completed Subgradient Iter0 on global rank {}'.format(_global_rank))
-
-        self.iterk_loop()
-
-        if finalize:
-            Eobj = self.post_loops(self.extensions)
-        else:
-            Eobj = None
-
-        return self.conv, Eobj, trivial_bound
+        return self.ph_main(finalize=finalize)
 
     def ph_main(self, finalize=True):
-        # for working with a PHHub
-        return self.subgradient_main(finalize=finalize)
+        # for use with the PH hub
+        if self.options["smoothed"] != 0:
+            raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
+        return super().ph_main(finalize=finalize, attach_prox=False)
 
     def solve_loop(self,
                    solver_options=None,
