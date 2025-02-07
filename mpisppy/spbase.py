@@ -17,6 +17,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
 
+from pyomo.common.collections import ComponentSet
 from mpisppy import MPI
 
 logger = logging.getLogger("SPBase")
@@ -305,12 +306,15 @@ class SPBase:
     def _attach_nonant_indices(self):
         for (sname, scenario) in self.local_scenarios.items():
             _nonant_indices = dict()
+            _all_surrogate_nonants = ComponentSet()
             nlens = scenario._mpisppy_data.nlens        
             for node in scenario._mpisppy_node_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
+                _all_surrogate_nonants.update(node.surrogate_vardatas)
             scenario._mpisppy_data.nonant_indices = _nonant_indices
+            scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
         self.nonant_length = len(_nonant_indices)
 
 
