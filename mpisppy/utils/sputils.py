@@ -370,7 +370,10 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                         ref_vars[(ndn, i)] = v
                 # Add a non-anticipativity constraint, except in the case when
                 # the variable is fixed and nonant_for_fixed_vars=False.
+                # or we're in the surrogate nonants
                 elif (nonant_for_fixed_vars) or (not v.is_fixed()):
+                    if v in node.surrogate_vardatas:
+                        continue
                     expr = LinearExpression(linear_coefs=[1,-1],
                                             linear_vars=[v,ref_vars[(ndn,i)]],
                                             constant=0.)
@@ -896,15 +899,26 @@ class _ScenTree():
     
     
 ######## Utility to attach the one and only node to a two-stage scenario #######
-def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, do_uniform=True):
+def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, surrogate_nonant_list=None, do_uniform=True):
     """ Create a root node as a list to attach to a scenario model
     Args:
         model (ConcreteModel): model to which this will be attached
         firstobj (Pyomo Expression): First stage cost (e.g. model.FC)
         varlist (list): Pyomo Vars in first stage (e.g. [model.A, model.B])
         nonant_ef_suppl_list (list of pyo Var, Vardata or slices):
-              vars for which nonanticipativity constraints tighten the EF
-              (important for bundling)
+              Vars for which nonanticipativity constraints will only be added to
+              the extensive form (important for bundling), but for which mpi-sppy
+              will not enforce them as nonanticipative elsewhere.
+              NOTE: These types of variables are often indicator variables
+                    that are already present in the deterministic model.
+        surrogate_nonant_list (list of pyo Var, VarData or slices):
+              Vars for which nonanticipativity constraints are enforced implicitly
+              by the vars in varlist, but which may speed PH convergence and/or
+              aid in cut generation when considered explicitly.
+              These vars will be ignored for fixers, incumbent finders which
+              fix nonants to calculate solutions, and the EF creator.
+              NOTE: These types of variables are typically artificially added
+                    to the model to capture hierarchical model features.
         do_uniform (boolean): controls a side-effect to deal with missing probs
 
     Note: 
@@ -912,7 +926,9 @@ def attach_root_node(model, firstobj, varlist, nonant_ef_suppl_list=None, do_uni
     """
     model._mpisppy_node_list = [
         scenario_tree.ScenarioNode("ROOT", 1.0, 1, firstobj, varlist, model,
-                                   nonant_ef_suppl_list = nonant_ef_suppl_list)
+                                   nonant_ef_suppl_list = nonant_ef_suppl_list,
+                                   surrogate_nonant_list = surrogate_nonant_list,
+                                  )
     ]
     if do_uniform:
         # Avoid a warning per scenario

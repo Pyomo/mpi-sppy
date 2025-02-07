@@ -320,6 +320,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                            .format(nlens[ndn], ndn, len(cache[ndn])))
                     for i in range(nlens[ndn]): 
                         this_vardata = node.nonant_vardata_list[i]
+                        if this_vardata in node.surrogate_vardatas:
+                            continue
                         if this_vardata.is_binary() or this_vardata.is_integer():
                             this_vardata._value = round(cache[ndn][i])
                         else:
@@ -345,6 +347,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                     persistent_solver = s._solver_plugin
 
             for var in s._mpisppy_data.nonant_indices.values():
+                if var in s._mpisppy_data.all_surrogate_nonants:
+                    continue
                 if var.is_binary() or var.is_integer():
                     var._value = round(var._value)
                 var.fix()
@@ -366,6 +370,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                     if sname not in self.names_in_bundles[rank_local][bunnum]:
                         break
                     for var in scen._mpisppy_data.nonant_indices.values():
+                        if var in scen._mpisppy_data.all_surrogate_nonants:
+                            continue
                         persistent_solver.update_var(var)
 
     def calculate_incumbent(self, fix_nonants=True, verbose=False):
