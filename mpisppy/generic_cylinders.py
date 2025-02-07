@@ -199,10 +199,10 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.scenario_lpfiles:
         ext_classes.append(Scenario_lpfiles)
 
-    if cdf.W_reader:
+    if cfg.W_reader:
         ext_classes.append(WXBarReader)
 
-    if cdf.W_writer:
+    if cfg.W_writer:
         ext_classes.append(WXBarWriter)
 
     if cfg.sep_rho:
