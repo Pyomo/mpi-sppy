@@ -49,6 +49,8 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                 ndn = node.name
                 for i in range(nlens[ndn]): 
                     this_vardata = node.nonant_vardata_list[i]
+                    if this_vardata in node.surrogate_vardatas:
+                        continue
                     if this_vardata.is_integer() or this_vardata.is_binary():
                         this_vardata._value = round(s._mpisppy_model.xbars[(ndn,i)]._value)
                     else:
