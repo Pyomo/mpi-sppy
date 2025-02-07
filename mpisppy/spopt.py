@@ -641,6 +641,8 @@ class SPOpt(SPBase):
                                        .format(nlens[ndn], ndn, len(cache[ndn])))
                 for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
+                    if this_vardata in node.surrogate_vardatas:
+                        continue
                     if this_vardata.is_binary() or this_vardata.is_integer():
                         this_vardata._value = round(cache[ndn][i])
                     else:
@@ -691,6 +693,8 @@ class SPOpt(SPBase):
 
             for i in range(nlens['ROOT']):
                 this_vardata = node.nonant_vardata_list[i]
+                if this_vardata in node.surrogate_vardatas:
+                    continue
                 if this_vardata.is_binary() or this_vardata.is_integer():
                     this_vardata._value = round(root_cache[i])
                 else:
