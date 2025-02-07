@@ -95,6 +95,12 @@ def _parse_args(m):
                       description="Space-delimited module names for user extensions",
                       domain=pyofig.ListOf(str),
                       default=None)
+    # TBD - think about adding directory for json options files
+
+    cfg.add_to_config("hubdict_callback",
+                      description="[FOR EXPERTS ONLY] Module that contains the function hubdict_callback that will be passed the hubdict prior to spin-the-wheel (last chance for intervention)",
+                      domain=str,
+                      default=None)    
     
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     
@@ -348,7 +354,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(xhatxbar_spoke)
     if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
-        
+
+    # if the user dares, let them mess with the hubdict prior to solve
+    if cfg.hubdict_callback is not None:
+        module = sputils.module_name_to_module(cfg.hubdict_callback)
+        module.hubdict_callback(hubdict)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
