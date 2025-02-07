@@ -358,7 +358,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     # if the user dares, let them mess with the hubdict prior to solve
     if cfg.hub_and_spoke_dict_callback is not None:
         module = sputils.module_name_to_module(cfg.hub_and_spoke_dict_callback)
-        module.hub_and_spoke_dict_callback(hubdict, list_of_spoke_dict)
+        module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
