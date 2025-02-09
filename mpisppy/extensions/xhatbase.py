@@ -202,6 +202,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 self.opt.local_scenarios[sname].pprint()
             # get the global obj
             obj = self.opt.Eobjective(verbose=verbose)
+            self.opt.update_best_solution_if_improving(obj)
             if restore_nonants:
                 self.opt._restore_nonants()
             return obj
@@ -228,6 +229,7 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 print("   Feasible xhat found:")
                 self.opt.local_scenarios[sname].pprint()
             obj = self.opt.Eobjective(verbose=verbose)
+            self.opt.update_best_solution_if_improving(obj)
             if restore_nonants:
                 self.opt._restore_nonants()
             return obj

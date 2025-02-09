@@ -24,26 +24,36 @@ import model.ReferenceModel as ref
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 
-def scenario_creator(scenario_name, data_dir=None):
+def scenario_creator(scenario_name, data_dir=None, surrogate=False):
     """ The callback needs to create an instance and then attach
         the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho.
     """
-    if data_dir is None:    
+    if data_dir is None:
         raise ValueError("kwarg `data_dir` is required for SSLP scenario_creator")
     fname = data_dir + os.sep + scenario_name + ".dat"
     model = ref.model.create_instance(fname, name=scenario_name)
 
+    if surrogate:
+        model.total_facilities = ref.Var(within=ref.NonNegativeIntegers, bounds=(0, model.NumServers))
+
+        @model.Constraint()
+        def total_facilities_constr(m):
+            return (0, sum(m.FacilityOpen.values()) - m.total_facilities)
+
+        surrogate_nonant_list = [model.total_facilities,]
+    else:
+        surrogate_nonant_list = []
+
     # now attach the one and only tree node (ROOT is a reserved word)
     model._mpisppy_node_list = [
         scenario_tree.ScenarioNode(
-            "ROOT", 1.0, 1, model.FirstStageCost, [model.FacilityOpen], model
+            "ROOT", 1.0, 1, model.FirstStageCost, [model.FacilityOpen], model, surrogate_nonant_list=surrogate_nonant_list
         )
     ]
     model._mpisppy_probability = "uniform"
-    
-    return model
 
+    return model
 
 def scenario_denouement(rank, scenario_name, scenario):
     pass
