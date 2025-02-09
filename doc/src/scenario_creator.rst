@@ -72,6 +72,17 @@ constraints when an EF is formed, either to solve the EF or when bundles are
 formed. For some problems, with the appropriate solver, adding redundant nonanticipativity constraints
 for auxiliary variables to the bundle/EF will result in a (much) smaller pre-solved model.
 
+Surrogate Nonant List
+---------------------
+
+The function ``attach_root_node`` takes an additional optional argument ``surrogate_nonant_list`` (that is also passed through to the ``ScenarioNode`` constructor).
+This list is similar to the nonanticipative Var list.
+These variable *will not* be used when forming nonanticipativity constraints in the EF and *will not* be fixed in incubment finders *nor* in fixing heuristics.
+However, these variables *will* be given multipliers by algorithms such as PH.
+The nonanticipativity of these variables should be implied by the nonanticipativity of the variables in the Node list.
+These variables are sometimes useful to help iterative algorithms converge faster by capturing hierarchical model decisions.
+See ``examples/sslp/sslp.py`` for an example, where the single surrogate nonanticipative variable captures the total number of installed servers.
+
 Multi-stage
 -----------
 
