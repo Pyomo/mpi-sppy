@@ -319,17 +319,8 @@ def scenario_creator(sname, **kwargs):
     
     #Constructing the nodes used by the scenario
     model._mpisppy_node_list = MakeNodesforScen(model, nodenames, branching_factors)
-    model._mpisppy_probability = 1 / np.prod(branching_factors)
-    """
-    from mpisppy import MPI
-
-    comm = MPI.COMM_WORLD
-    rank = comm.Get_rank()
-    if rank == 0:
-        with open("efmodel.txt", "w") as fileh:
-            model.pprint(fileh)
-    quit()
-    """
+    #model._mpisppy_probability = 1 / np.prod(branching_factors)
+    model._mpisppy_probability = "uniform"
     return(model)
 
 
@@ -427,7 +418,12 @@ def kw_creator(cfg, optionsin=None):
     create the key word arguments for the creator fucntion(s)
     args:
         cfg (Config object): probably has parsed values
-        optionsin (dict): programmatic options"""
+        optionsin (dict): programmatic options
+    returns:
+        kwargs (dict): the keyword args
+    side-effect:
+        checks and/or adds cfg.num_scens 
+    """
     # use an empty dict instead of None
     options = optionsin if optionsin is not None else dict()
     if "kwargs" in options:
@@ -443,7 +439,7 @@ def kw_creator(cfg, optionsin=None):
             return
         # if not in the options, see if it is availalbe globally
         aname = option_name if arg_name is None else arg_name
-        retval = getattr(cfg, aname) if hasattr(cfg, aname) else None
+        retval = cfg.get(aname)
         retval = default if retval is None else retval
         kwargs[option_name] = retval
             
@@ -457,7 +453,21 @@ def kw_creator(cfg, optionsin=None):
         raise ValueError(f"kw_creator called, but no value given for start_ups, options={options}")
     if kwargs["start_seed"] is None:
         raise ValueError(f"kw_creator called, but no value given for start_seed, options={options}")
-
+    if kwargs["branching_factors"] is not None:
+        BFs = kwargs["branching_factors"]
+        ns = cfg.get("num_scens")
+        if BFs is not None:
+            if ns is None:
+                cfg.add_and_assign("num_scens",
+                                   description="Number of scenarios",
+                                   domain=int,
+                                   value=np.prod(BFs),
+                                   default=None
+                                   )
+            else:
+                pass  # we cannot do the assert because of tree sampling
+                #assert ns == np.prod(BFs),\
+                #f"num_scens != prod(BFs); {ns=}, {BFs=}"
     return kwargs
 
 

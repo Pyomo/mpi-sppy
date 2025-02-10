@@ -189,8 +189,9 @@ class SPOpt(SPBase):
         if Ag is not None:
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
             kws = {"s": s, "solve_keyword_args": solve_keyword_args, "gripe": gripe, "tee": tee, "need_solution": need_solution}
-            Ag.callout_agnostic(kws)
+            Ag.callout_agnostic(kws)  # not going to use the return values
         else:
+            #  didcallout = False  (returned true by the callout, but not used)
             try:
                 results = s._solver_plugin.solve(s,
                                                  **solve_keyword_args,
@@ -638,6 +639,8 @@ class SPOpt(SPBase):
                                        .format(nlens[ndn], ndn, len(cache[ndn])))
                 for i in range(nlens[ndn]):
                     this_vardata = node.nonant_vardata_list[i]
+                    if this_vardata in node.surrogate_vardatas:
+                        continue
                     if this_vardata.is_binary() or this_vardata.is_integer():
                         this_vardata._value = round(cache[ndn][i])
                     else:
@@ -688,6 +691,8 @@ class SPOpt(SPBase):
 
             for i in range(nlens['ROOT']):
                 this_vardata = node.nonant_vardata_list[i]
+                if this_vardata in node.surrogate_vardatas:
+                    continue
                 if this_vardata.is_binary() or this_vardata.is_integer():
                     this_vardata._value = round(root_cache[i])
                 else:

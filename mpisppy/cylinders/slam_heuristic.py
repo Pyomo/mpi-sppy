@@ -95,6 +95,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                     solver = s._solver_plugin if is_pers else None
 
                     for ix, var in enumerate(s._mpisppy_data.nonant_indices.values()):
+                        if var in s._mpisppy_data.all_surrogate_nonants:
+                            continue
                         val = global_candidate[ix]
                         if var.is_binary() or var.is_integer():
                             val = round(val)

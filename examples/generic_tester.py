@@ -163,6 +163,12 @@ hydroa = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
 do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline")
 
+# write hydro bundles for at least some testing of multi-stage proper bundles
+# (just looking for smoke)
+hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3"
+            "--branching-factors '3 3' ")
+do_one("hydro", "hydro", 3, hydro_wr, xhat_baseline_dir=None)
+
 # write, then read, pickled scenarios
 print("starting write/read pickled scenarios")
 farmer_wr = "--pickle-scenarios-dir farmer_pickles --crops-mult 2 --num-scens 10"
@@ -171,8 +177,14 @@ farmer_rd = f"--num-scens 10 --solver-name {solver_name} --max-iterations 10 --m
 #rebaseline_xhat("farmer", "farmer", 3, farmer_rd, "test_data/farmer_rd_baseline")
 do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_baseline")
 
-quit()
+# Just a smoke test to make sure sizes_expression still exists and
+# that lpfiles still executes.
+sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
+          f" --solver-name {solver_name} --max-iterations 0"
+          " --scenario-lpfiles")
+do_one("sizes", "sizes", 3, sizese, xhat_baseline_dir=None)   
 
+quit()
 
 # proper bundles
 sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
@@ -216,8 +228,6 @@ if not nouc:
               f" --solver-name={solver_name}")
     #rebaseline_xhat("sizes", "sizes", 3, sizesa, "test_data/sizesa_baseline")
     do_one("sizes", "sizes", 3, sizesa, xhat_baseline_dir = "test_data/sizesa_baseline")
-
-    
 
 #### final processing ####
 if len(badguys) > 0:
