@@ -91,7 +91,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
 
 
 def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
-    ''' 
+    r'''
     Args:
         fname (str) -- if sep_files=False, file containing the dual weights.
             Otherwise, path of the directory containing the dual weight files
@@ -269,7 +269,7 @@ def _check_W(w_val_dict, PHB, rank):
             dual = sum(c[vname] for c in checks)
             if (abs(dual) > 1e-7):
                 raise RuntimeError('Provided weights do not satisfy '
-                    'dual feasibility: \sum_{scenarios} prob(s) * w(s) != 0. '
+                    r'dual feasibility: \sum_{scenarios} prob(s) * w(s) != 0. '
                     'Error on variable ' + vname)
 
 ''' X-bar utilities '''
