@@ -611,7 +611,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (self.bundling and strip_bundle_names):
                 scenario_weights = dict()
                 for ndn_ix, var in scenario._mpisppy_data.nonant_indices.items():
-                    rexp = '^' + scenario.name + '\.'
+                    rexp = r'^' + scenario.name + r'\.'
                     var_name = re.sub(rexp, '', var.name)
                     scenario_weights[var_name] = \
                                         scenario._mpisppy_model.W[ndn_ix].value
@@ -663,7 +663,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 for (ix, var) in enumerate(node.nonant_vardata_list):
                     var_name = var.name
                     if (self.bundling and strip_bundle_names):
-                        rexp = '^' + random_scenario_name + '\.'
+                        rexp = r'^' + random_scenario_name + r'\.'
                         var_name = re.sub(rexp, '', var_name)
                     xbar_dict[var_name] = scenario._mpisppy_model.xbars[node.name, ix].value
             return xbar_dict
