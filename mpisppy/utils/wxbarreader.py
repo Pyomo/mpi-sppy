@@ -41,8 +41,8 @@ rank = MPI.COMM_WORLD.Get_rank()
 
 def add_options_to_config(cfg):
 
-    cfg.add_to_config("W_reader",
-                      description="Enables the w reader (default False)",
+    cfg.add_to_config("W_and_xbar_reader",
+                      description="Enables the w and xbar reader (default False)",
                       domain=bool,
                       default=False)
     cfg.add_to_config("init_W_fname",
@@ -65,7 +65,8 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
         assert 'cfg' in ph.options
         self.cfg = ph.options['cfg']
-        assert 'W_reader' in self.cfg
+        if self.cfg.get("W_and_xbar_return") is None or not cfg.W_and_xbar_reader:
+            return  # nothing to do here
 
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = self.cfg.init_W_fname, self.cfg.init_Xbar_fname, self.cfg.init_separate_W_files

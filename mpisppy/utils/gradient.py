@@ -190,29 +190,6 @@ class Find_Grad():
 ###################################################################################
 
 
-def _parser_setup():
-    """ Set up config object and return it, but don't parse 
-
-    Returns:
-       cfg (Config): config object
-
-    Notes:
-       parsers for the non-model-specific arguments; but the model_module_name will be pulled off first
-
-    """
-
-    cfg = config.Config()
-    cfg.add_branching_factors()
-    cfg.num_scens_required()
-    cfg.popular_args()
-    cfg.two_sided_args()
-    cfg.ph_args()
-    
-    cfg.gradient_args()
-
-    return cfg
-
-
 def grad_cost_and_rho(mname, original_cfg):
     """ Creates a ph object from cfg and using the module 'mname' functions. Then computes the corresponding grad cost and rho.
 
@@ -244,6 +221,7 @@ def grad_cost_and_rho(mname, original_cfg):
     if hasattr(model_module, '_variable_probability'):
         variable_probability = model_module._variable_probability
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
+    # Note: the callers need to set w_writer cfg options
     hub_dict = vanilla.ph_hub(*beans,
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=WXBarWriter,

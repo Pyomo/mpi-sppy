@@ -212,10 +212,10 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.scenario_lpfiles:
         ext_classes.append(Scenario_lpfiles)
 
-    if cfg.W_reader:
+    if cfg.W_and_xbar_reader:
         ext_classes.append(WXBarReader)
 
-    if cfg.W_writer:
+    if cfg.W_and_xbar_writer:
         ext_classes.append(WXBarWriter)
 
     if cfg.user_defined_extensions is not None:

@@ -39,8 +39,8 @@ n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
 
 def add_options_to_config(cfg):
-    cfg.add_to_config("W_writer",
-                      description="Enables the w writer (default False)",
+    cfg.add_to_config("W_and_xbar_writer",
+                      description="Enables the w and xbar writer(default False)",
                       domain=bool,
                       default=False)
     cfg.add_to_config("W_fname",
@@ -63,7 +63,6 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
 
         assert 'cfg' in ph.options
         self.cfg = ph.options['cfg']
-        assert 'W_writer' in self.cfg
         
         # Check a bunch of files
         w_fname, x_fname, sep_files = self.cfg.W_fname, self.cfg.Xbar_fname, self.cfg.separate_W_files
