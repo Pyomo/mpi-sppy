@@ -65,8 +65,11 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
         assert 'cfg' in ph.options
         self.cfg = ph.options['cfg']
-        if self.cfg.get("W_and_xbar_return") is None or not cfg.W_and_xbar_reader:
+        if self.cfg.get("W_and_xbar_reader") is None or not self.cfg.W_and_xbar_reader:
+            self.not_active = True
             return  # nothing to do here
+        else:
+            self.not_active = False
 
         ''' Do a bunch of checking if files exist '''
         w_fname, x_fname, sep_files = self.cfg.init_W_fname, self.cfg.init_Xbar_fname, self.cfg.init_separate_W_files
@@ -105,6 +108,8 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
     def miditer(self):
         ''' Called before the solveloop is called '''
+        if self.not_active:
+            return  # nothing to do.
         if self.PHB._PHIter == 1:
             if self.w_fname:
                 mpisppy.utils.wxbarutils.set_W_from_file(

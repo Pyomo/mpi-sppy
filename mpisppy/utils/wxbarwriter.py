@@ -63,6 +63,11 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
 
         assert 'cfg' in ph.options
         self.cfg = ph.options['cfg']
+        if self.cfg.get("W_and_xbar_writer") is None or not self.cfg.W_and_xbar_writer:
+            self.not_active = True
+            return  # nothing to do here
+        else:
+            self.not_active = False
         
         # Check a bunch of files
         w_fname, x_fname, sep_files = self.cfg.W_fname, self.cfg.Xbar_fname, self.cfg.separate_W_files
@@ -100,14 +105,19 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
         pass
 
     def enditer(self):
-       """ if (self.w_fname):
-            fname = f'fname{self.PHB._PHIter}.csv'
-            mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, w_fname,
-                sep_files=self.sep_files)"""
-       pass
+        if self.not_active:
+            return  # nothing to do.
+        else:
+            pass
+        #if (self.w_fname):
+        #     fname = f'fname{self.PHB._PHIter}.csv'
+        #     mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, w_fname,
+        #         sep_files=self.sep_files)
 
 
     def post_everything(self):
+        if self.not_active:
+            return  # nothing to do.
         if (self.w_fname):
             fname = self.w_fname
             mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, fname,

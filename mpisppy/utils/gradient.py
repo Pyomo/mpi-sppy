@@ -15,7 +15,6 @@ import importlib
 import csv
 import copy
 
-from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.spin_the_wheel import WheelSpinner
