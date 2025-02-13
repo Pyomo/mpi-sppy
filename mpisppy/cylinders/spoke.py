@@ -177,14 +177,12 @@ class _BoundSpoke(Spoke):
     @property
     def hub_inner_bound(self):
         """Returns the local copy of the inner bound from the hub"""
-        # NOTE: This should be the same as _hub_bounds[1]
-        return self._hub_bounds[-2]
+        return self._hub_bounds[1]
 
     @property
     def hub_outer_bound(self):
         """Returns the local copy of the outer bound from the hub"""
-        # NOTE: This should be the same as _hub_bounds[0]
-        return self._hub_bounds[-3]
+        return self._hub_bounds[0]
 
     def _append_trace(self, value):
         if self.cylinder_rank != 0 or self.trace_filen is None:
