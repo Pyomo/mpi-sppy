@@ -248,6 +248,7 @@ def grad_cost_and_rho(mname, original_cfg):
                               scenario_creator_kwargs=scenario_creator_kwargs,
                               ph_extensions=WXBarWriter,
                               variable_probability=variable_probability)
+    hub_dict['opt_kwargs']['options']['cfg'] = cfg                
     list_of_spoke_dict = list()
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin() #TODO: steal only what's needed in  WheelSpinner
