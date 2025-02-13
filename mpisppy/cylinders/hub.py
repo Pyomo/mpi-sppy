@@ -7,9 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 
-# TODO Remove after this program no longer support Python 3.8
-from __future__ import annotations
-
 import numpy as np
 import abc
 import logging

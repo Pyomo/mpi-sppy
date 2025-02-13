@@ -19,9 +19,6 @@
     Separate hub and spoke classes for memory/window management?
 """
 
-# TODO Remove after this program no longer support Python 3.8
-from __future__ import annotations
-
 import numpy as np
 import abc
 import time
