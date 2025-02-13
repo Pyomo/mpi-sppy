@@ -22,13 +22,13 @@ class WheelSpinner:
         Args:
             hub_dict(dict): controls hub creation
             list_of_spoke_dict(list dict): controls creation of spokes
-    
+
         Returns:
             spcomm (Hub or Spoke object): the object that did the work (windowless)
             opt_dict (dict): the dictionary that controlled creation for this rank
-    
+
         NOTE: the return is after termination; the objects are provided for query.
-    
+
         """
         if not haveMPI:
             raise RuntimeError("spin_the_wheel called, but cannot import mpi4py")
@@ -81,18 +81,18 @@ class WheelSpinner:
                 spoke_dict["spoke_kwargs"] = dict()
             if "opt_kwargs" not in spoke_dict:
                 spoke_dict["opt_kwargs"] = dict()
-    
+
         if comm_world is None:
             comm_world = MPI.COMM_WORLD
         n_spokes = len(list_of_spoke_dict)
-    
+
         # Create the necessary communicators
         fullcomm = comm_world
         strata_comm, cylinder_comm = _make_comms(n_spokes, fullcomm=fullcomm)
         strata_rank = strata_comm.Get_rank()
         cylinder_rank = cylinder_comm.Get_rank()
         global_rank = fullcomm.Get_rank()
-    
+
         # Assign hub/spokes to individual ranks
         if strata_rank == 0: # This rank is a hub
             sp_class = hub_dict["hub_class"]
@@ -111,15 +111,15 @@ class WheelSpinner:
         # Create the appropriate opt object locally
         opt_kwargs["mpicomm"] = cylinder_comm
         opt = opt_class(**opt_kwargs)
-    
+
         # Create the SPCommunicator object (hub/spoke) with
         # the appropriate SPBase object attached
         if strata_rank == 0: # Hub
             spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm,
-                              list_of_spoke_dict, **sp_kwargs) 
+                              list_of_spoke_dict, **sp_kwargs)
         else: # Spokes
-            spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm, **sp_kwargs) 
-    
+            spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm, **sp_kwargs)
+
         # Create the windows, run main(), destroy the windows
         spcomm.make_windows()
         if strata_rank == 0:
@@ -129,20 +129,20 @@ class WheelSpinner:
         spcomm.main()
         if strata_rank == 0: # If this is the hub
             spcomm.send_terminate()
-    
+
         # Anything that's left to do
         spcomm.finalize()
-    
+
         # to ensure the messages below are True
         cylinder_comm.Barrier()
         global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
-        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0)) 
-          
+        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
+
         fullcomm.Barrier()
-    
+
         ## give the hub the chance to catch new values
         spcomm.hub_finalize()
-    
+
         fullcomm.Barrier()
 
         spcomm.free_windows()
@@ -180,7 +180,7 @@ class WheelSpinner:
         winner = self._determine_innerbound_winner()
         if winner:
             self.spcomm.opt.write_first_stage_solution(solution_file_name,first_stage_solution_writer)
-    
+
     def write_tree_solution(self, solution_directory_name,
             scenario_tree_solution_writer=scenario_tree_solution_writer):
         """ Write a tree solution directory, if available, to the solution_directory_name provided
@@ -217,7 +217,7 @@ class WheelSpinner:
                 best_strata_rank = self.spcomm.last_ib_idx
         else:
             best_strata_rank = None
-    
+
         best_strata_rank = self.spcomm.fullcomm.bcast(best_strata_rank, root=0)
         return (self.spcomm.strata_rank == best_strata_rank)
 
@@ -230,7 +230,7 @@ def _make_comms(n_spokes, fullcomm=None):
     nsp1 = n_spokes + 1 # Add 1 for the hub
     if fullcomm is None:
         fullcomm = MPI.COMM_WORLD
-    n_proc = fullcomm.Get_size() 
+    n_proc = fullcomm.Get_size()
     if n_proc % nsp1 != 0:
         raise RuntimeError(f"Need a multiple of {nsp1} processes (got {n_proc})")
 
