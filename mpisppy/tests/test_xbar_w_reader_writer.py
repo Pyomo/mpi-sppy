@@ -25,7 +25,7 @@ from mpisppy.tests.utils import get_solver
 import mpisppy.utils.wxbarreader as wxbarreader
 import mpisppy.utils.wxbarwriter as wxbarwriter
 
-__version__ = 0.1
+__version__ = 0.2
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -61,10 +61,12 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=ph_extensions)
         hub_dict['opt_kwargs']['options']['cfg'] = self.cfg
-        if ph_extensions==wxbarwriter.WXBarWriter: #tbd
+        if ph_extensions==wxbarwriter.WXBarWriter:
+            self.cfg.W_and_xbar_writer = True
             self.cfg.W_fname = self.temp_w_file_name
             self.cfg.Xbar_fname = self.temp_xbar_file_name
         if ph_extensions==wxbarreader.WXBarReader:
+            self.cfg.W_and_xbar_reader = True
             self.cfg.init_W_fname = self.w_file_name
             self.cfg.init_Xbar_fname = self.xbar_file_name
         list_of_spoke_dict = list()
