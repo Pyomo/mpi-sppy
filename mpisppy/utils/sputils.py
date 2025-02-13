@@ -603,7 +603,7 @@ def parent_ndn(nodename):
     if nodename == 'ROOT':
         return None
     else:
-        return re.search('(.+)_(\d+)',nodename).group(1)
+        return re.search(r'(.+)_(\d+)',nodename).group(1)
 
     
 def option_string_to_dict(ostr):
@@ -759,7 +759,7 @@ class _TreeNode():
             # make children
             first = scenfirst
             self.kids = list()
-            child_regex = re.compile(name+'_\d*\Z')
+            child_regex = re.compile(name+r'_\d*\Z')
             child_list = [x for x in desc_leaf_dict if child_regex.match(x) ]
             for i in range(len(desc_leaf_dict)):
                 childname = name+f"_{i}"
@@ -768,7 +768,7 @@ class _TreeNode():
                         raise RuntimeError("The all_nodenames argument is giving an inconsistent tree."
                                            f"The node {name} has {len(child_list)} children, but {childname} is not one of them.")
                     break
-                childdesc_regex = re.compile(childname+'(_\d*)*\Z')
+                childdesc_regex = re.compile(childname+r'(_\d*)*\Z')
                 child_leaf_dict = {ndn:desc_leaf_dict[ndn] for ndn in desc_leaf_dict \
                                    if childdesc_regex.match(ndn)}
                 #We determine the number of children of this node
@@ -1079,7 +1079,7 @@ def get_branching_factors_from_nodenames(all_nodenames):
     staget_node = "ROOT"
     branching_factors = []
     while staget_node+"_0" in all_nodenames:
-        child_regex = re.compile(staget_node+'_\d*\Z')
+        child_regex = re.compile(staget_node+r'_\d*\Z')
         child_list = [x for x in all_nodenames if child_regex.match(x) ]
         
         branching_factors.append(len(child_list))
