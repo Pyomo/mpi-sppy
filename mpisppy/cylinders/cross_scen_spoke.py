@@ -7,9 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 
-# TODO Remove after this program no longer support Python 3.8
-from __future__ import annotations
-
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy import MPI
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
@@ -45,7 +42,7 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         self.all_eta_len = nscen*local_scen_count
 
         self.all_nonants = self.register_recv_field(Field.NONANT, 0, vbuflen)
-        self.all_etas = self.register_recv_field(Field.NONANT_COEFS, 0, nscen * nscen)
+        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0, nscen * nscen)
 
         self.all_coefs = self.register_send_field(Field.CROSS_SCENARIO_CUT,
                                                   nscen*(self.nonant_per_scen + 1 + 1))

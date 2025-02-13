@@ -163,7 +163,7 @@ class CrossScenarioExtension(Extension):
                 all_etas[ci] = s._mpisppy_model.eta[sn]._value
                 ci += 1
 
-        self.opt.spcomm.extension_send_field(Field.NONANT_COEFS, all_etas)
+        self.opt.spcomm.extension_send_field(Field.CROSS_SCENARIO_COST, all_etas)
 
         return
 
@@ -269,7 +269,7 @@ class CrossScenarioExtension(Extension):
             self.send_nonants = True
         ## End if-else
         self.all_etas = spcomm.register_extension_send_field(
-            Field.NONANT_COEFS,
+            Field.CROSS_SCENARIO_COST,
             nscen * nscen,
         )
         return
