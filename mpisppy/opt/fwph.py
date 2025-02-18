@@ -281,7 +281,6 @@ class FWPH(mpisppy.phbase.PHBase):
             val0 = pyo.value(obj)
             new  = replace_expressions(obj.expr, mip._mpisppy_data.mip_to_qp)
             val1 = pyo.value(new)
-            obj.expr = replace_expressions(new, qp._mpisppy_data.qp_to_mip)
             if abs(val0) > 1e-9:
                 stop_check = (val1 - val0) / abs(val0) # \Gamma^t in Boland, but normalized
             else:
