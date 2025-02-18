@@ -422,7 +422,7 @@ class Config(pyofig.ConfigDict):
 
     def subgradient_args(self):
 
-        self.add_to_config(name="SUBGRAD",
+        self.add_to_config(name="subgradient_hub",
                            description="Use subgradient hub instead of PH (default False)",
                            domain=bool,
                            default=False)

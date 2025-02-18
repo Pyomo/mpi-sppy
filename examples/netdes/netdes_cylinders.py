@@ -72,7 +72,7 @@ def main():
     else:
         ph_ext = None
 
-    if cfg.SUBGRAD:
+    if cfg.subgradient_hub:
         hub_dict = vanilla.subgradient_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=ph_ext,

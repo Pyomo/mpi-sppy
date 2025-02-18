@@ -144,7 +144,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                    rho_setter = rho_setter,
                                    all_nodenames = all_nodenames,
                                    )
-    elif cfg.SUBGRAD:
+    elif cfg.subgradient_hub:
         # Vanilla Subgradient hub
         hub_dict = vanilla.subgradient_hub(
                        *beans,

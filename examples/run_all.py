@@ -251,7 +251,7 @@ do_one("farmer",
 do_one("netdes", "netdes_cylinders.py", 4,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
        "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve "
-       "--slammax --SUBGRAD --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
+       "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
 
 # sizes is slow for xpress so try linearizing the proximal term.
 do_one("sizes",
