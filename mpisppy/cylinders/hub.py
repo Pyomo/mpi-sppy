@@ -518,12 +518,12 @@ class PHHub(Hub):
             self.send_ws()
         if self.has_nonant_spokes:
             self.send_nonants()
-        if self.has_bounds_only_spokes:
-            self.send_boundsout()
         if self.has_outerbound_spokes:
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        if self.has_bounds_only_spokes:
+            self.send_boundsout()
         if self.opt.extensions is not None:
             self.opt.extobject.sync_with_spokes()
 
@@ -576,6 +576,7 @@ class PHHub(Hub):
         """ Gather nonants and send them to the appropriate spokes
             TODO: Will likely fail with bundling
         """
+        # TODO: why save here? We get the values directly from the variables
         self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
         nonant_send_buffer = self.nonant_send_buffer
@@ -717,3 +718,28 @@ class APHHub(PHHub):
         #       to APH.post_loops
         Eobj = self.opt.post_loops()
         return Eobj
+
+class FWPHHub(PHHub):
+
+    def main(self):
+        self.opt.fwph_main(finalize=False)
+
+    def sync_bounds(self):
+        if self.has_outerbound_spokes:
+            self.receive_outerbounds()
+        if self.has_innerbound_spokes:
+            self.receive_innerbounds()
+        if self.has_bounds_only_spokes:
+            self.send_boundsout()
+
+    def sync_extensions(self):
+        if self.opt.extensions is not None:
+            self.opt.extobject.sync_with_spokes()
+
+    def sync_nonants(self):
+        if self.has_nonant_spokes:
+            self.send_nonants()
+
+    def sync_Ws(self):
+        if self.has_w_spokes:
+            self.send_ws()

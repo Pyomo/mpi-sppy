@@ -55,37 +55,42 @@ from mpisppy.utils.sputils import find_active_objective
 from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
 
+from mpisppy.cylinders.spoke import Spoke
+from mpisppy.cylinders.hub import FWPHHub
+
 class FWPH(mpisppy.phbase.PHBase):
     
     def __init__(
         self,
-        PH_options,
-        FW_options,
+        options,
         all_scenario_names,
         scenario_creator,
         scenario_denouement=None,
         all_nodenames=None,
         mpicomm=None,
         scenario_creator_kwargs=None,
+        extensions=None,
+        extension_kwargs=None,
         ph_converger=None,
         rho_setter=None,
         variable_probability=None,
     ):
         super().__init__(
-            PH_options, 
+            options,
             all_scenario_names,
             scenario_creator,
             scenario_denouement,
-            all_nodenames=all_nodenames,
-            mpicomm=mpicomm,
-            scenario_creator_kwargs=scenario_creator_kwargs,
-            extensions=None,
-            extension_kwargs=None,
-            ph_converger=ph_converger,
-            rho_setter=rho_setter,
+            all_nodenames,
+            mpicomm,
+            scenario_creator_kwargs,
+            extensions,
+            extension_kwargs,
+            ph_converger,
+            rho_setter,
+            variable_probability,
         )      
         assert (variable_probability is None), "variable probability is not allowed with fwph"
-        self._init(FW_options)
+        self._init(options)
 
     def _init(self, FW_options):
         self.FW_options = FW_options
@@ -144,7 +149,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
         return best_bound
 
-    def fwph_main(self):
+    def fwph_main(self, finalize=True):
         self.t0 = time.time()
         best_bound = self.fw_prep()
 
@@ -154,7 +159,7 @@ class FWPH(mpisppy.phbase.PHBase):
             return None, None, None
 
         # The body of the algorithm
-        for itr in range(self.options['PHIterLimit']):
+        for itr in range(1, self.options['PHIterLimit']+1):
             self._PHIter = itr
             self._local_bound = 0
             for name in self.local_subproblems:
@@ -169,6 +174,8 @@ class FWPH(mpisppy.phbase.PHBase):
 
             ## Hubs/spokes take precedence over convergers
             if self.spcomm:
+                if isinstance(self.spcomm, FWPHHub):
+                    self.spcomm.sync_bounds()
                 if self.spcomm.is_converged():
                     secs = time.time() - self.t0
                     self._output(itr+1, self._local_bound, 
@@ -176,7 +183,8 @@ class FWPH(mpisppy.phbase.PHBase):
                     if (self.cylinder_rank == 0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
-                self.spcomm.sync()
+                if isinstance(self.spcomm, Spoke):
+                    self.spcomm.sync()
             if (self.ph_converger):
                 self.Compute_Xbar(self.options['verbose'])
                 diff = self.convobject.convergence_value()
@@ -195,21 +203,25 @@ class FWPH(mpisppy.phbase.PHBase):
                     self._output(itr+1, self._local_bound, 
                                  best_bound, diff, secs)
                     if (self.cylinder_rank == 0 and self.vb):
-                        print('PH converged based on standard criteria')
+                        print('FWPH converged based on standard criteria')
                     break
 
             secs = time.time() - self.t0
             self._output(itr+1, self._local_bound, best_bound, diff, secs)
             self.Update_W(self.options['verbose'])
+            if isinstance(self.spcomm, FWPHHub):
+                self.spcomm.sync_Ws()
             if (self._is_timed_out()):
                 if (self.cylinder_rank == 0 and self.vb):
                     print('Timeout.')
                 break
 
         self._swap_nonant_vars_back()
-        weight_dict = self._gather_weight_dict() # None if rank != 0
-        xbars_dict  = self._get_xbars() # None if rank != 0
-        return itr+1, weight_dict, xbars_dict
+        if finalize:
+            weight_dict = self._gather_weight_dict() # None if rank != 0
+            xbars_dict  = self._get_xbars() # None if rank != 0
+            return itr+1, weight_dict, xbars_dict
+        return itr+1
 
     def SDM(self, model_name):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
@@ -875,7 +887,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self.options['linearize_proximal_terms'] = False
 
         # 4. Provide a time limit of inf if the user did not specify
-        if ('time_limit' not in self.FW_options.keys()):
+        if ('time_limit' not in self.FW_options or self.FW_options['time_limit'] is None):
             self.FW_options['time_limit'] = np.inf
 
     def _output(self, itr, bound, best_bound, diff, secs):

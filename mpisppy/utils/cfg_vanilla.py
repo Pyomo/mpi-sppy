@@ -19,7 +19,7 @@ from mpisppy.opt.ph import PH
 from mpisppy.opt.aph import APH
 from mpisppy.opt.lshaped import LShapedMethod
 from mpisppy.opt.subgradient import Subgradient
-from mpisppy.fwph.fwph import FWPH
+from mpisppy.opt.fwph import FWPH
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.utils.sputils as sputils
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
@@ -35,8 +35,7 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.hub import PHHub
-from mpisppy.cylinders.hub import APHHub
+from mpisppy.cylinders.hub import PHHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
@@ -218,6 +217,50 @@ def subgradient_hub(cfg,
     add_ph_tracking(hub_dict, cfg)
     return hub_dict
 
+def fwph_hub(cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+    ph_converger=None,
+    rho_setter=None,
+    variable_probability=None,
+    all_nodenames=None,
+):
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)
+    options["convthresh"] = cfg.intra_hub_conv_thresh
+    options["bundles_per_rank"] = cfg.bundles_per_rank
+    options["smoothed"] = 0
+
+    options.update(_fwph_options(cfg))
+
+    hub_dict = {
+        "hub_class": FWPHHub,
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": FWPH,
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "rho_setter": rho_setter,
+            "variable_probability": variable_probability,
+            "extensions": ph_extensions,
+            "extension_kwargs": extension_kwargs,
+            "ph_converger": ph_converger,
+            "all_nodenames": all_nodenames
+        }
+    }
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
+    return hub_dict
+
 def extension_adder(hub_dict,ext_class):
     # TBD March 2023: this is not really good enough
     if "extensions" not in hub_dict["opt_kwargs"] or \
@@ -375,16 +418,7 @@ def add_ph_tracking(cylinder_dict, cfg, spoke=False):
 
     return cylinder_dict
 
-def fwph_spoke(
-    cfg,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    all_nodenames=None,
-    rho_setter=None,
-):
-    shoptions = shared_options(cfg)
+def _fwph_options(cfg):
 
     mip_solver_options, qp_solver_options = dict(), dict()
     if _hasit(cfg, "max_solver_threads"):
@@ -403,12 +437,28 @@ def fwph_spoke(
         "mip_solver_options": mip_solver_options,
         "qp_solver_options": qp_solver_options,
     }
+
+    return fw_options
+
+def fwph_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    all_nodenames=None,
+    rho_setter=None,
+):
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)
+
+    options.update(_fwph_options(cfg))
+
     fw_dict = {
         "spoke_class": FrankWolfeOuterBound,
         "opt_class": FWPH,
         "opt_kwargs": {
-            "PH_options": shoptions,  # be sure convthresh is zero for fwph
-            "FW_options": fw_options,
+            "options": options,  # be sure convthresh is zero for fwph
             "all_scenario_names": all_scenario_names,
             "scenario_creator": scenario_creator,
             "scenario_creator_kwargs": scenario_creator_kwargs,

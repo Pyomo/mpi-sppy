@@ -509,6 +509,11 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config(name="fwph_hub",
+                           description="Use FWPH hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("fwph_iter_limit",
                             description="maximum fwph iterations (default 10)",
                             domain=int,
