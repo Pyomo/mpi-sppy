@@ -62,13 +62,14 @@ def _parse_args(m):
     cfg.two_sided_args()
     cfg.ph_args()
     cfg.aph_args()
+    cfg.subgradient_args()
     cfg.fixer_args()    
     cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()    
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
-    cfg.subgradient_args()
+    cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
     cfg.converger_args()
@@ -143,6 +144,16 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                    rho_setter = rho_setter,
                                    all_nodenames = all_nodenames,
                                    )
+    elif cfg.subgradient_hub:
+        # Vanilla Subgradient hub
+        hub_dict = vanilla.subgradient_hub(
+                       *beans,
+                       scenario_creator_kwargs=scenario_creator_kwargs,
+                       ph_extensions=None,
+                       ph_converger=ph_converger,
+                       rho_setter = rho_setter,
+                       all_nodenames = all_nodenames,
+                   )
     else:
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,

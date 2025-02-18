@@ -34,7 +34,7 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.xhatshuffle_args()
-    cfg.subgradient_args()
+    cfg.subgradient_bounder_args()
     cfg.reduced_costs_args()
     cfg.coeff_rho_args()
     cfg.integer_relax_then_enforce_args()

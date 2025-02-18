@@ -64,6 +64,14 @@ APH
 The implementation of Asynchronous Projective Hedging is described in a
 forthcoming paper.
 
+Subgradient
+-----------
+
+The Subgradient implemenation can be used with most spokes becuase it
+also supplies x and/or W values at every iteration, and is largely based
+on the PH implementation. It utilizes a constant step size rule based on
+`rho` unless modified by an extension.
+
 Hub Convergers
 --------------
 

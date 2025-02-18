@@ -10,6 +10,7 @@ import numpy as np
 import abc
 import logging
 import mpisppy.log
+from mpisppy.opt.subgradient import Subgradient
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
@@ -469,11 +470,6 @@ class PHHub(Hub):
                 "Cannot call setup_hub before memory windows are constructed"
             )
 
-        # attribute to set False if some extension
-        # modified the iteration 0 subproblems such
-        # that the trivial bound is no longer valid
-        self.use_trivial_bound = True
-
         self.initialize_spoke_indices()
         self.initialize_bound_values()
 
@@ -535,9 +531,8 @@ class PHHub(Hub):
         self.sync()
 
     def is_converged(self):
-        ## might as well get a bound, in this case
-        if self.opt._PHIter == 1 and self.use_trivial_bound:
-            self.BestOuterBound = self.OuterBoundUpdate(self.opt.trivial_bound)
+        if self.opt.best_bound_obj_val is not None:
+            self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
 
         if not self.has_innerbound_spokes:
             if self.opt._PHIter == 1:
@@ -553,7 +548,7 @@ class PHHub(Hub):
             return False
 
         if not self.has_outerbound_spokes:
-            if self.opt._PHIter == 1:
+            if self.opt._PHIter == 1 and not isinstance(self.opt, Subgradient):
                 global_toc(
                     "Without outer bound spokes, no progress "
                     "will be made on the Best Bound")
