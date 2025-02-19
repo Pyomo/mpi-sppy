@@ -37,9 +37,6 @@ class Subgradient(mpisppy.opt.ph.PH):
                     The "trivial bound", computed by solving the model with no
                     nonanticipativity constraints (immediately after iter 0).
         """
-        return self.ph_main(finalize=finalize)
-
-    def ph_main(self, finalize=True):
         # for use with the PH hub
         if self.options["smoothed"] != 0:
             raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")

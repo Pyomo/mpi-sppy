@@ -10,7 +10,6 @@ import numpy as np
 import abc
 import logging
 import mpisppy.log
-from mpisppy.opt.subgradient import Subgradient
 from mpisppy.opt.aph import APH
 
 from mpisppy import MPI
@@ -27,6 +26,9 @@ mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
 logger = logging.getLogger("mpisppy.cylinders.Hub")
 
 class Hub(SPCommunicator):
+
+    _hub_algo_best_bound_provider = False
+
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, spokes, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
         assert len(spokes) == self.n_spokes
@@ -548,7 +550,7 @@ class PHHub(Hub):
             return False
 
         if not self.has_outerbound_spokes:
-            if self.opt._PHIter == 1 and not isinstance(self.opt, Subgradient):
+            if self.opt._PHIter == 1 and not self._hub_algo_best_bound_provider:
                 global_toc(
                     "Without outer bound spokes, no progress "
                     "will be made on the Best Bound")
@@ -705,6 +707,16 @@ class LShapedHub(Hub):
         for idx in self.nonant_spoke_indices:
             self.hub_to_spoke(nonant_send_buffer, idx)
 
+
+class SubgradientHub(PHHub):
+
+    _hub_algo_best_bound_provider = True
+
+    def main(self):
+        """ SPComm gets attached in self.__init__ """
+        self.opt.subgradient_main(finalize=False)
+
+
 class APHHub(PHHub):
 
     def main(self):
@@ -720,6 +732,8 @@ class APHHub(PHHub):
         return Eobj
 
 class FWPHHub(PHHub):
+
+    _hub_algo_best_bound_provider = True
 
     def main(self):
         self.opt.fwph_main(finalize=False)
