@@ -752,6 +752,10 @@ class FWPHHub(PHHub):
 
     def sync_nonants(self):
         if self.has_nonant_spokes:
+            # TODO: we need a FWPH version of
+            #       this method so the nonants
+            #       are extracted from the
+            #       mip subproblems
             self.send_nonants()
 
     def sync_Ws(self):
