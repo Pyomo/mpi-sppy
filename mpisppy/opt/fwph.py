@@ -102,6 +102,7 @@ class FWPH(mpisppy.phbase.PHBase):
     def fw_prep(self):
         self.PH_Prep(attach_duals=True, attach_prox=False)
         self._output_header()
+        self._attach_MIP_vars()
 
         if ('point_creator' in self.FW_options):
             # The user cannot both specify and point_creator and use bundles.
@@ -135,7 +136,6 @@ class FWPH(mpisppy.phbase.PHBase):
         # in the MIP objective when _set_QP_objective
         # snarfs it for the QP
         self._disable_W()
-        self._attach_MIP_vars()
         self._initialize_QP_subproblems()
         self._attach_indices()
         self._attach_MIP_QP_maps()
@@ -171,6 +171,8 @@ class FWPH(mpisppy.phbase.PHBase):
                 best_bound = np.maximum(best_bound, self._local_bound)
             else:
                 best_bound = np.minimum(best_bound, self._local_bound)
+            if self._can_update_best_bound():
+                self.best_bound_obj_val = best_bound
 
             ## Hubs/spokes take precedence over convergers
             if self.spcomm:
@@ -940,6 +942,15 @@ class FWPH(mpisppy.phbase.PHBase):
                     scenario.nonant_vars[node.name,ix]
                     for ix in range(num_nonant_vars[node.name])]
         self._attach_nonant_indices()
+
+    # need to overwrite a few methods due to how fwph manages things
+    def _can_update_best_bound(self):
+        for s in self.local_scenarios.values():
+            for v in s.nonant_vars.values():
+                if v.fixed:
+                    if v not in self._initial_fixed_varibles:
+                        return False
+        return True
 
 if __name__=='__main__':
     print('fwph.py has no main()')
