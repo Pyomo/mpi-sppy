@@ -35,8 +35,7 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.hub import PHHub
-from mpisppy.cylinders.hub import APHHub
+from mpisppy.cylinders.hub import PHHub, SubgradientHub, APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
@@ -195,7 +194,7 @@ def subgradient_hub(cfg,
     options["smoothed"] = 0
 
     hub_dict = {
-        "hub_class": PHHub,
+        "hub_class": SubgradientHub,
         "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
                                    "abs_gap": cfg.abs_gap,
                                    "max_stalled_iters": cfg.max_stalled_iters}},
