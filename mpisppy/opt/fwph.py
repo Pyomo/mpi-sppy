@@ -141,7 +141,6 @@ class FWPH(mpisppy.phbase.PHBase):
         self._attach_MIP_QP_maps()
         self._set_QP_objective()
         self._initialize_QP_var_values()
-        self._swap_nonant_vars()
         self._reenable_W()
 
         if (self.ph_converger):
@@ -161,8 +160,12 @@ class FWPH(mpisppy.phbase.PHBase):
         # The body of the algorithm
         for self._PHIter in range(1, self.options['PHIterLimit']+1):
 
+            # TODO: should implement our own Xbar / W computation
+            #       which just considers the QP subproblems
+            self._swap_nonant_vars()
             self.Compute_Xbar(self.options['verbose'])
             self.Update_W(self.options['verbose'])
+            self._swap_nonant_vars_back()
 
             if (self.extensions): 
                 self.extobject.miditer()
@@ -193,6 +196,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         print('FWPH converged based on standard criteria')
                     break
 
+            self._swap_nonant_vars()
             self._local_bound = 0
             for name in self.local_subproblems:
                 dual_bound = self.SDM(name)
@@ -205,6 +209,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 best_bound = np.minimum(best_bound, self._local_bound)
             if self._can_update_best_bound():
                 self.best_bound_obj_val = best_bound
+            self._swap_nonant_vars_back()
 
             if (self.extensions): 
                 self.extobject.enditer()
@@ -230,7 +235,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 self.extobject.enditer_after_sync()
 
 
-        self._swap_nonant_vars_back()
         if finalize:
             weight_dict = self._gather_weight_dict() # None if rank != 0
             xbars_dict  = self._get_xbars() # None if rank != 0
