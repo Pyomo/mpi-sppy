@@ -14,21 +14,30 @@ import json
 import shutil
 import numpy as np
 import pyomo.environ as pyo
+import pyomo.common.config as pyofig
+
 from mpisppy.spin_the_wheel import WheelSpinner
+
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
+
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
 from mpisppy.extensions.scenario_lpfiles import Scenario_lpfiles
+
+from mpisppy.utils.wxbarwriter import WXBarWriter
+from mpisppy.utils.wxbarreader import WXBarReader
+
 import mpisppy.utils.solver_spec as solver_spec
+
 from mpisppy import global_toc
 from mpisppy import MPI
-
 
 def _parse_args(m):
     # m is the model file module
@@ -82,6 +91,18 @@ def _parse_args(m):
     cfg.coeff_rho_args()
     cfg.sensi_rho_args()
     cfg.reduced_costs_rho_args()
+
+    cfg.add_to_config("user_defined_extensions",
+                      description="Space-delimited module names for user extensions",
+                      domain=pyofig.ListOf(str),
+                      default=None)
+    # TBD - think about adding directory for json options files
+
+    cfg.add_to_config("hub_and_spoke_dict_callback",
+                      description="[FOR EXPERTS ONLY] Module that contains the function hub_and_spoke_dict_callback that will be passed the hubdict and list of spokedicts prior to spin-the-wheel (last chance for intervention)",
+                      domain=str,
+                      default=None)    
+    
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     
     cfg.checker()  # looks for inconsistencies 
@@ -163,7 +184,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                   rho_setter = rho_setter,
                                   all_nodenames = all_nodenames,
                                   )
-    
+
+    # the intent of the following is to transition to strictly
+    # cfg-based option passing, as opposed to dictionary-based processing.
+    hub_dict['opt_kwargs']['options']['cfg'] = cfg                
+        
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
     # TBD: add cross_scenario_cuts, which also needs a cylinder
@@ -197,6 +222,24 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     if cfg.scenario_lpfiles:
         ext_classes.append(Scenario_lpfiles)
+
+    if cfg.W_and_xbar_reader:
+        ext_classes.append(WXBarReader)
+
+    if cfg.W_and_xbar_writer:
+        ext_classes.append(WXBarWriter)
+
+    if cfg.user_defined_extensions is not None:
+        for ext_name in cfg.user_defined_extensions:
+            module = sputils.module_name_to_module(ext_name)
+            vanilla.extension_adder(module)
+            # grab JSON for this module's option dictionary
+            json_filename = ext_name+".json"
+            if os.path.exists(json_filename):
+                ext_options= json.load(json_filename)
+                hub_dict['opt_kwargs']['options'][ext_name] = ext_options
+            else:
+                raise RuntimeError(f"JSON options file {json_filename} for user defined extension not found")
 
     if cfg.sep_rho:
         vanilla.add_sep_rho(hub_dict, cfg)
@@ -322,7 +365,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(xhatxbar_spoke)
     if cfg.reduced_costs:
         list_of_spoke_dict.append(reduced_costs_spoke)
-        
+
+    # if the user dares, let them mess with the hubdict prior to solve
+    if cfg.hub_and_spoke_dict_callback is not None:
+        module = sputils.module_name_to_module(cfg.hub_and_spoke_dict_callback)
+        module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict)
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
