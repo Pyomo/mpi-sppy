@@ -121,15 +121,15 @@ class FWPH(mpisppy.phbase.PHBase):
         else:
             trivial_bound = self.Iter0()
             secs = time.time() - self.t0
-            self._output(0, trivial_bound, trivial_bound, np.nan, secs)
+            self._output(trivial_bound, trivial_bound, np.nan, secs)
             best_bound = trivial_bound
 
         if ('mip_solver_options' in self.FW_options):
             self._set_MIP_solver_options()
 
         # Lines 2 and 3 of Algorithm 3 in Boland
-        self.Compute_Xbar(self.options['verbose'])
-        self.Update_W(self.options['verbose'])
+        # self.Compute_Xbar(self.options['verbose'])
+        # self.Update_W(self.options['verbose'])
 
         # Necessary pre-processing steps
         # We disable_W so they don't appear
@@ -159,8 +159,40 @@ class FWPH(mpisppy.phbase.PHBase):
             return None, None, None
 
         # The body of the algorithm
-        for itr in range(1, self.options['PHIterLimit']+1):
-            self._PHIter = itr
+        for self._PHIter in range(1, self.options['PHIterLimit']+1):
+
+            self.Compute_Xbar(self.options['verbose'])
+            self.Update_W(self.options['verbose'])
+
+            if (self.extensions): 
+                self.extobject.miditer()
+
+            if isinstance(self.spcomm, FWPHHub):
+                self.spcomm.sync_Ws()
+            if (self._is_timed_out()):
+                if (self.cylinder_rank == 0 and self.vb):
+                    print('Timeout.')
+                break
+
+            if (self.ph_converger):
+                diff = self.convobject.convergence_value()
+                if (self.convobject.is_converged()):
+                    secs = time.time() - self.t0
+                    self._output(self._local_bound, 
+                                 best_bound, diff, secs)
+                    if (self.cylinder_rank == 0 and self.vb):
+                        print('FWPH converged to user-specified criteria')
+                    break
+            else: # Convergence check from Boland
+                diff = self._conv_diff()
+                if (diff < self.options['convthresh']):
+                    secs = time.time() - self.t0
+                    self._output(self._local_bound, 
+                                 best_bound, diff, secs)
+                    if (self.cylinder_rank == 0 and self.vb):
+                        print('FWPH converged based on standard criteria')
+                    break
+
             self._local_bound = 0
             for name in self.local_subproblems:
                 dual_bound = self.SDM(name)
@@ -174,56 +206,36 @@ class FWPH(mpisppy.phbase.PHBase):
             if self._can_update_best_bound():
                 self.best_bound_obj_val = best_bound
 
+            if (self.extensions): 
+                self.extobject.enditer()
+
+            secs = time.time() - self.t0
+            self._output(self._local_bound, best_bound, diff, secs)
+
             ## Hubs/spokes take precedence over convergers
             if self.spcomm:
                 if isinstance(self.spcomm, FWPHHub):
                     self.spcomm.sync_bounds()
                 if self.spcomm.is_converged():
                     secs = time.time() - self.t0
-                    self._output(itr+1, self._local_bound, 
+                    self._output(self._local_bound, 
                                  best_bound, np.nan, secs)
                     if (self.cylinder_rank == 0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
                 if isinstance(self.spcomm, Spoke):
                     self.spcomm.sync()
-            if (self.ph_converger):
-                self.Compute_Xbar(self.options['verbose'])
-                diff = self.convobject.convergence_value()
-                if (self.convobject.is_converged()):
-                    secs = time.time() - self.t0
-                    self._output(itr+1, self._local_bound, 
-                                 best_bound, diff, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
-                        print('FWPH converged to user-specified criteria')
-                    break
-            else: # Convergence check from Boland
-                diff = self._conv_diff()
-                self.Compute_Xbar(self.options['verbose'])
-                if (diff < self.options['convthresh']):
-                    secs = time.time() - self.t0
-                    self._output(itr+1, self._local_bound, 
-                                 best_bound, diff, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
-                        print('FWPH converged based on standard criteria')
-                    break
 
-            secs = time.time() - self.t0
-            self._output(itr+1, self._local_bound, best_bound, diff, secs)
-            self.Update_W(self.options['verbose'])
-            if isinstance(self.spcomm, FWPHHub):
-                self.spcomm.sync_Ws()
-            if (self._is_timed_out()):
-                if (self.cylinder_rank == 0 and self.vb):
-                    print('Timeout.')
-                break
+            if (self.extensions): 
+                self.extobject.enditer_after_sync()
+
 
         self._swap_nonant_vars_back()
         if finalize:
             weight_dict = self._gather_weight_dict() # None if rank != 0
             xbars_dict  = self._get_xbars() # None if rank != 0
-            return itr+1, weight_dict, xbars_dict
-        return itr+1
+            return self._PHIter, weight_dict, xbars_dict
+        return self._PHIter
 
     def SDM(self, model_name):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
@@ -891,16 +903,16 @@ class FWPH(mpisppy.phbase.PHBase):
         if ('time_limit' not in self.FW_options or self.FW_options['time_limit'] is None):
             self.FW_options['time_limit'] = np.inf
 
-    def _output(self, itr, bound, best_bound, diff, secs):
+    def _output(self, bound, best_bound, diff, secs):
         if (self.cylinder_rank == 0 and self.vb):
             print('{itr:3d} {bound:12.4f} {best_bound:12.4f} {diff:12.4e} {secs:11.1f}s'.format(
-                    itr=itr, bound=bound, best_bound=best_bound, 
+                    itr=self._PHIter, bound=bound, best_bound=best_bound, 
                     diff=diff, secs=secs))
         if (self.cylinder_rank == 0 and 'save_file' in self.FW_options.keys()):
             fname = self.FW_options['save_file']
             with open(fname, 'a') as f:
                 f.write('{itr:d},{bound:.16f},{best_bound:.16f},{diff:.16f},{secs:.16f}\n'.format(
-                    itr=itr, bound=bound, best_bound=best_bound,
+                    itr=self._PHIter, bound=bound, best_bound=best_bound,
                     diff=diff, secs=secs))
 
     def _output_header(self):
