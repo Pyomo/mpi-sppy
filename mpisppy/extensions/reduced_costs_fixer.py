@@ -124,7 +124,10 @@ class ReducedCostsFixer(Extension):
             is_new_outer_bound = self._update_best_outer_bound(this_outer_bound)
             if pre_iter0:
                 # make sure we set the bound we compute prior to iteration 0
-                self.opt.spcomm.BestOuterBound = self.opt.spcomm.OuterBoundUpdate(self._best_outer_bound, idx=idx)
+                self.opt.spcomm.BestOuterBound = self.opt.spcomm.OuterBoundUpdate(
+                    self._best_outer_bound,
+                    idx=self.reduced_costs_spoke_index,
+                )
             if not pre_iter0 and self._use_rc_bt:
                 self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
             ## End if
