@@ -18,17 +18,93 @@
 
     Separate hub and spoke classes for memory/window management?
 """
+
 import numpy as np
 import abc
 import time
-from mpisppy import MPI
 
+from mpisppy.cylinders.spwindow import Field, SPWindow
 
 def communicator_array(size):
-    arr = np.empty(size+1)
+    arr = np.empty(size+1, dtype='d')
     arr[:] = np.nan
     arr[-1] = 0
     return arr
+
+
+class FieldArray:
+    """
+    Notes: Buffer that tracks new/old state as well. Light-weight wrapper around a numpy array.
+
+    The intention here is that these are passive data holding classes. That is, other classes are
+    expected to update the internal fields. The lone exception to this is the read/write id field.
+    See the `SendArray` and `RecvArray` classes for how that field is updated.
+    """
+
+    def __init__(self, length: int):
+        self._array = communicator_array(length)
+        self._id = 0
+        return
+
+    def __getitem__(self, key):
+        # TODO: Should probably be hiding the read/write id field but there are many functions
+        # that expect it to be there and being able to read it is not really a problem.
+        np_array = self.array()
+        return np_array[key]
+
+    def array(self) -> np.typing.NDArray:
+        """
+        Returns the numpy array for the field data including the read id
+        """
+        return self._array
+
+    def value_array(self) -> np.typing.NDArray:
+        """
+        Returns the numpy array for the field data without the read id
+        """
+        return self._array[:-1]
+
+    def id(self) -> int:
+        return self._id
+
+class SendArray(FieldArray):
+
+    def __init__(self, length: int):
+        super().__init__(length)
+        return
+
+    def __setitem__(self, key, value):
+        # Use value_array function to hide the read/write id field so it is
+        # not accidentally overwritten
+        np_array = self.value_array()
+        np_array[key] = value
+        return
+
+    def _next_write_id(self) -> int:
+        """
+        Updates the internal id field to the next write id and returns that id
+        """
+        self._id += 1
+        return self._id
+
+
+class RecvArray(FieldArray):
+
+    def __init__(self, length: int):
+        super().__init__(length)
+        self._is_new = False
+        return
+
+    def is_new(self) -> bool:
+        return self._is_new
+
+    def _pull_id(self) -> int:
+        """
+        Updates the internal id field to the write id currently held in the numpy buffer
+        and returns that id
+        """
+        self._id = int(self._array[-1])
+        return self._id
 
 
 class SPCommunicator:
@@ -52,9 +128,69 @@ class SPCommunicator:
         else:
             self.options = options
 
+        # Common fields for spokes and hubs
+        self._locals = dict()
+        self._sends = dict()
+
         # attach the SPCommunicator to
         # the SPBase object
         self.opt.spcomm = self
+
+        # self.register_send_fields()
+
+        return
+
+    def _make_key(self, field: Field, origin: int):
+        """
+        Given a field and an origin (i.e. a strata_rank), generate a key for indexing
+        into the self._locals dictionary and getting the corresponding RecvArray.
+
+        Undone by `_split_key`. Currently, the key is simply a Tuple[field, origin].
+        """
+        return (field, origin)
+
+    def _split_key(self, key) -> tuple[Field, int]:
+        """
+        Take the given key and return a tuple (field, origin) where origin in the strata_rank
+        from which the field comes.
+
+        Undoes `_make_key`.  Currently, this is a no-op.
+        """
+        return key
+
+    def _build_window_spec(self) -> dict[Field, int]:
+        """ Build dict with fields and lengths needed for local MPI window
+        """
+        self.register_send_fields()
+        window_spec = dict()
+        for (field,buf) in self._sends.items():
+            window_spec[field] = np.size(buf.array())
+        ## End for
+        return window_spec
+
+    def register_recv_field(self, field: Field, origin: int, length: int) -> RecvArray:
+        key = self._make_key(field, origin)
+        if key in self._locals:
+            my_fa = self._locals[key]
+            assert(length + 1 == np.size(my_fa.array()))
+        else:
+            my_fa = RecvArray(length)
+            self._locals[key] = my_fa
+        ## End if
+        return my_fa
+
+    def register_send_field(self, field: Field, length: int) -> SendArray:
+        assert field not in self._sends, "Field {} is already registered".format(field)
+        # if field in self._sends:
+        #     my_fa = self._sends[field]
+        #     assert(length + 1 == np.size(my_fa.array()))
+        # else:
+        #     my_fa = SendArray(length)
+        #     self._sends[field] = my_fa
+        # ## End if else
+        my_fa = SendArray(length)
+        self._sends[field] = my_fa
+        return my_fa
 
     @abc.abstractmethod
     def main(self):
@@ -92,37 +228,19 @@ class SPCommunicator:
         """
         """
         if self._windows_constructed:
-            for i in range(self.n_spokes):
-                self.windows[i].Free()
-            del self.buffers
+            self.window.free()
         self._windows_constructed = False
 
-    def _make_window(self, length, comm=None):
-        """ Create a local window object and its corresponding 
-            memory buffer using MPI.Win.Allocate()
+    def make_windows(self) -> None:
+        if self._windows_constructed:
+            return
 
-            Args: 
-                length (int): length of the buffer to create
-                comm (MPI Communicator, optional): MPI communicator object to
-                    create the window over. Default is self.strata_comm.
+        window_spec = self._build_window_spec()
+        self.window = SPWindow(window_spec, self.strata_comm)
+        self._windows_constructed = True
 
-            Returns:
-                window (MPI.Win object): The created window
-                buff (ndarray): Pointer to corresponding memory
+        return
 
-            Notes:
-                The created buffer will actually be +1 longer than length.
-                The last entry is a write number to keep track of new info.
-
-                This function assumes that the user has provided the correct
-                window size for the local buffer based on whether this process
-                is a hub or spoke, etc.
-        """
-        if comm is None:
-            comm = self.strata_comm
-        size = MPI.DOUBLE.size * (length + 1)
-        window = MPI.Win.Allocate(size, MPI.DOUBLE.size, comm=comm)
-        buff = np.ndarray(dtype="d", shape=(length + 1,), buffer=window.tomemory())
-        buff[:] = np.nan
-        buff[-1] = 0. # Initialize the write number to zero
-        return window, buff
+    @abc.abstractmethod
+    def register_send_fields(self) -> None:
+        pass

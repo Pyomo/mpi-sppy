@@ -11,6 +11,7 @@ from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
+from mpisppy.cylinders.spwindow import Field
 
 import pyomo.environ as pyo
 import sys
@@ -54,18 +55,18 @@ class CrossScenarioExtension(Extension):
         if not opt.W_disabled and not opt.prox_disabled:
             opt.disable_W_and_prox()
             self.reenable_W = True
-            self.reenable_prox = True 
+            self.reenable_prox = True
         elif not opt.W_disabled:
             opt._disable_W()
             self.eenable_W = True
         elif not opt.prox_disabled:
             opt._disable_prox()
-            self.reenable_prox = True 
+            self.reenable_prox = True
 
     def _enable_W_and_prox(self):
         assert self.reenable_W is not None
         assert self.reenable_prox is not None
-        
+
         opt = self.opt
         if self.reenable_W and self.reenable_prox:
             opt.reenable_W_and_prox()
@@ -114,7 +115,7 @@ class CrossScenarioExtension(Extension):
 
         if opt.is_minimizing:
             opt.mpicomm.Allreduce(local_ob, global_ob, op=mpi.MAX)
-        else: 
+        else:
             opt.mpicomm.Allreduce(local_ob, global_ob, op=mpi.MIN)
 
         #print(f"CrossScenarioExtension OB: {global_ob[0]}")
@@ -126,33 +127,45 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
-        spcomm = self.opt.spcomm
-        idx = self.cut_gen_spoke_index
-        receive_buffer = np.empty(spcomm.remote_lengths[idx - 1] + 1, dtype="d") # Must be doubles
-        is_new = spcomm.hub_from_spoke(receive_buffer, idx)
-        if is_new:
-            self.make_cuts(receive_buffer)
+        # spcomm = self.opt.spcomm
+        # idx = self.cut_gen_spoke_index
+        # receive_buffer = np.empty(spcomm.remote_lengths[idx - 1] + 1, dtype="d") # Must be doubles
+        # is_new = spcomm.hub_from_spoke(receive_buffer, idx)
+        # if is_new:
+        #     self.make_cuts(receive_buffer)
+        if self.cuts.is_new():
+            self.make_cuts(self.cuts.array())
 
     def send_to_cross_cuts(self):
-        idx = self.cut_gen_spoke_index
 
-        # get the stuff we want to send
-        self.opt._save_nonants()
-        ci = 0  ## index to self.nonant_send_buffer
+        if self.send_nonants:
 
-        # get all the nonants
-        all_nonants_and_etas = self.all_nonants_and_etas
-        for k, s in self.opt.local_scenarios.items():
-            for xvar in s._mpisppy_data.nonant_indices.values():
-                all_nonants_and_etas[ci] = xvar._value
-                ci += 1
+            # get all the nonants
+            self.opt._save_nonants()
+            all_nonants = self.all_nonants
+            ci = 0  ## index to all_nonants buffer
+            for k, s in self.opt.local_scenarios.items():
+                for xvar in s._mpisppy_data.nonant_indices.values():
+                    all_nonants[ci] = xvar._value
+                    ci += 1
+                ## End for
+            ## End for
+
+            self.opt.spcomm.extension_send_field(Field.NONANT, all_nonants)
+
+        ## End if
 
         # get all the etas
+        all_etas = self.all_etas
+        ci = 0 ## index to all_etas buffer
         for k, s in self.opt.local_scenarios.items():
             for sn in self.opt.all_scenario_names:
-                all_nonants_and_etas[ci] = s._mpisppy_model.eta[sn]._value
+                all_etas[ci] = s._mpisppy_model.eta[sn]._value
                 ci += 1
-        self.opt.spcomm.hub_to_spoke(all_nonants_and_etas, idx)
+
+        self.opt.spcomm.extension_send_field(Field.CROSS_SCENARIO_COST, all_etas)
+
+        return
 
     def make_cuts(self, coefs):
         # take the coefficient array and assemble cuts accordingly
@@ -242,9 +255,28 @@ class CrossScenarioExtension(Extension):
         ## helping the extention track cuts
         self.new_cuts = True
 
+    def register_send_fields(self):
+        spcomm = self.opt.spcomm
+        nscen = len(self.opt.all_scenario_names)
+        local_scen_count = len(self.opt.local_scenario_names)
+        if spcomm.is_send_field_registered(Field.NONANT):
+            self.send_nonants = False
+        else:
+            self.all_nonants = spcomm.register_extension_send_field(
+                Field.NONANT,
+                local_scen_count * self.opt.nonant_length
+            )
+            self.send_nonants = True
+        ## End if-else
+        self.all_etas = spcomm.register_extension_send_field(
+            Field.CROSS_SCENARIO_COST,
+            nscen * nscen,
+        )
+        return
+
     def setup_hub(self):
-        idx = self.cut_gen_spoke_index
-        self.all_nonants_and_etas = np.zeros(self.opt.spcomm.local_lengths[idx - 1] + 1)
+        # idx = self.cut_gen_spoke_index
+        # self.all_nonants_and_etas = np.zeros(self.opt.spcomm.local_lengths[idx - 1] + 1)
 
         self.nonant_len = self.opt.nonant_length
 
@@ -259,6 +291,18 @@ class CrossScenarioExtension(Extension):
         for (i, spoke) in enumerate(self.opt.spcomm.spokes):
             if spoke["spoke_class"] == CrossScenarioCutSpoke:
                 self.cut_gen_spoke_index = i + 1
+            ## End if
+        ## End for
+
+        if hasattr(self, "cut_gen_spoke_index"):
+            spcomm = self.opt.spcomm
+            nscen = len(self.opt.all_scenario_names)
+            self.cuts = spcomm.register_extension_recv_field(
+                Field.CROSS_SCENARIO_CUT,
+                self.cut_gen_spoke_index,
+                nscen*(self.opt.nonant_length + 1 + 1)
+            )
+        ## End if
 
     def sync_with_spokes(self):
         self.send_to_cross_cuts()
@@ -305,7 +349,7 @@ class CrossScenarioExtension(Extension):
 
         ## hold the PH object harmless
         self._disable_W_and_prox()
-        
+
         for k,s in opt.local_subproblems.items():
 
             obj = find_active_objective(s)
@@ -409,7 +453,7 @@ class CrossScenarioExtension(Extension):
         else:
             self.cur_ob = ob
             ob_new = True
-        
+
         if not self.any_cuts:
             if self.new_cuts:
                 self.any_cuts = True
