@@ -932,6 +932,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         if have_extensions:
             self.extobject.post_iter0()
 
+        self.trivial_bound = self.Ebound(verbose)
+        if self._can_update_best_bound():
+            self.best_bound_obj_val = self.trivial_bound
+
         if self.spcomm is not None:
             self.spcomm.sync()
 
@@ -955,8 +959,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.convobject = self.ph_converger(self)
         #global_toc('Rank: {} - Before iter loop'.format(self.cylinder_rank), True)
         self.conv = None
-
-        self.trivial_bound = self.Ebound(verbose)
 
         if dprogress and self.cylinder_rank == 0:
             print("")
@@ -1001,6 +1003,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
+        if self.spcomm is not None:
+            # print a screen trace for iteration 0
+            if self.spcomm.is_converged():
+                global_toc("Cylinder convergence", self.cylinder_rank == 0)
 
         for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
@@ -1159,7 +1165,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.xsqbars = pyo.Param(
                 scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
             )
-
 
 if __name__ == "__main__":
     print ("No main for PHBase")

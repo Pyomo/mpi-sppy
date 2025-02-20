@@ -22,9 +22,10 @@ def _parse_args():
     cfg.two_sided_args()
     cfg.xhatlooper_args()
     cfg.ph_args()
+    cfg.subgradient_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
-    cfg.subgradient_args()
+    cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.slammax_args()
     cfg.cross_scenario_cuts_args()
@@ -71,11 +72,17 @@ def main():
     else:
         ph_ext = None
 
-    # Vanilla PH hub
-    hub_dict = vanilla.ph_hub(*beans,
-                              scenario_creator_kwargs=scenario_creator_kwargs,
-                              ph_extensions=ph_ext,
-                              rho_setter = None)
+    if cfg.subgradient_hub:
+        hub_dict = vanilla.subgradient_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=ph_ext,
+                                  rho_setter = None)
+    else:
+        # Vanilla PH hub
+        hub_dict = vanilla.ph_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=ph_ext,
+                                  rho_setter = None)
 
     if cross_scenario_cuts:
         hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\

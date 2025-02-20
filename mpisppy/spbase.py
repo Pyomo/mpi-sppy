@@ -98,6 +98,9 @@ class SPBase:
         self.first_stage_solution_available = False
         self.best_solution_obj_val = None
 
+        # sometimes we know a best bound
+        self.best_bound_obj_val = None
+
         if options.get("toc", True):
             global_toc("Initializing SPBase")
 

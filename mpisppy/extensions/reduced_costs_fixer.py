@@ -88,7 +88,6 @@ class ReducedCostsFixer(Extension):
                 while not self.opt.spcomm.hub_from_spoke(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index], self.reduced_costs_spoke_index):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
-            self.opt.spcomm.use_trivial_bound = False
         self.fix_fraction_target = self._fix_fraction_target_iter0
 
     def post_iter0_after_sync(self):
@@ -122,12 +121,15 @@ class ReducedCostsFixer(Extension):
         if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
             reduced_costs = self.reduced_cost_buf.value_array()
             this_outer_bound = self.outer_bound_buf.value_array()[0]
-            new_outer_bound = self._update_best_outer_bound(this_outer_bound)
+            is_new_outer_bound = self._update_best_outer_bound(this_outer_bound)
+            if pre_iter0:
+                # make sure we set the bound we compute prior to iteration 0
+                self.opt.spcomm.BestOuterBound = self.opt.spcomm.OuterBoundUpdate(self._best_outer_bound, idx=idx)
             if not pre_iter0 and self._use_rc_bt:
                 self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
             ## End if
             if self._use_rc_fixer and self.fix_fraction_target > 0.0:
-                if new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
+                if is_new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
                     self.reduced_costs_fixing(reduced_costs)
                 ## End if
             ## End if
