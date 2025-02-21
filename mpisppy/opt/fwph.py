@@ -14,32 +14,6 @@
     SIAM J. Optim. 28(2):1312--1336, 2018.
 
     Current implementation supports parallelism and bundling.
-
-    Does not support:
-         1. The use of extensions
-         2. The solution of models with more than two stages
-         3. Simultaneous use of bundling and user-specified initial points
-
-    The FWPH algorithm allows the user to specify an initial set of points
-    (notated V^0_s in Boland) to approximate the convex hull of each scenario
-    subproblem. Points are specified via a callable which takes as input a
-    scenario name (str) and outputs a list of dicts. Each dict corresponds to a
-    point, and is formatted
-
-        point_dict[variable_name] = variable_value
-
-    (e.g. point_dict['Allocation[2,5]'] = 1.7). The order of this list
-    matters--the first point in the list is used to compute the initial dual
-    weights and xBar value (in Boland notation, the first point in the list is
-    the point (x0_s,y0_s) in Algorithm 3). The callable is passed to FWPH as an
-    option in the FW_options dict, with the key "point_creator". The
-    point_creator callable may also take an optional argument,
-    "point_creator_data", which may be any data type, and contain any
-    information needed to create the initial point set. The point_creator_data
-    is passed to FWPH as an option in the FW_options dict, with the key
-    "point_creator_data".
-
-    See fwph_sslp.py for an example of user-specified point creation.
 '''
 
 import mpisppy.phbase
@@ -104,25 +78,10 @@ class FWPH(mpisppy.phbase.PHBase):
         self._output_header()
         self._attach_MIP_vars()
 
-        if ('point_creator' in self.FW_options):
-            # The user cannot both specify and point_creator and use bundles.
-            # At this point, we have already checked for that possibility, so
-            # we can safely use the point_creator without further checks for
-            # bundles.
-            self._create_initial_points()
-            check = True if 'check_initial_points' not in self.FW_options \
-                         else self.FW_options['check_initial_points']
-            if (check):
-                self._check_initial_points()
-            self._create_solvers()
-            self._use_rho_setter(self.options['verbose'] and self.cylinder_rank==0)
-            self._initialize_MIP_var_values()
-            best_bound = -np.inf if self.is_minimizing else np.inf
-        else:
-            trivial_bound = self.Iter0()
-            secs = time.time() - self.t0
-            self._output(trivial_bound, trivial_bound, np.nan, secs)
-            best_bound = trivial_bound
+        trivial_bound = self.Iter0()
+        secs = time.time() - self.t0
+        self._output(trivial_bound, trivial_bound, np.nan, secs)
+        best_bound = trivial_bound
 
         if ('mip_solver_options' in self.FW_options):
             self._set_MIP_solver_options()
@@ -469,78 +428,6 @@ class FWPH(mpisppy.phbase.PHBase):
                     var for ix, var in enumerate(self._get_leaf_vars(mip))
                 }
 
-    def _check_initial_points(self):
-        ''' If t_max (i.e. the inner iteration limit) is set to 1, then the
-            initial point set must satisfy the additional condition (17) in
-            Boland et al. This function verifies that condition (17) is
-            satisfied by solving a linear program (similar to the Phase I
-            auxiliary LP in two-phase simplex).
-
-            This function is only called by a single rank, which MUST be rank
-            0. The rank 0 check happens before this function is called.
-        '''
-        # Need to get the first-stage variable names (as supplied by the user)
-        # by picking them off of any random scenario that's laying around.
-        arb_scenario = list(self.local_scenarios.keys())[0]
-        arb_mip = self.local_scenarios[arb_scenario]
-        root = arb_mip._mpisppy_node_list[0]
-        stage_one_var_names = [var.name for var in root.nonant_vardata_list]
-
-        init_pts = self.comms['ROOT'].gather(self.local_initial_points, root=0)
-        if (self.cylinder_rank != 0):
-            return
-
-        print('Checking initial points...', end='', flush=True)
-        
-        points = {key: value for block in init_pts 
-                             for (key, value) in block.items()}
-        scenario_names = points.keys()
-
-        # Some index sets we will need..
-        conv_ix = [(scenario_name, var_name) 
-                    for scenario_name in scenario_names
-                    for var_name in stage_one_var_names]
-        conv_coeff = [(scenario_name, ix) 
-                    for scenario_name in scenario_names
-                    for ix in range(len(points[scenario_name]))]
-
-        aux = pyo.ConcreteModel()
-        aux.x = pyo.Var(stage_one_var_names, within=pyo.Reals)
-        aux.slack_plus = pyo.Var(conv_ix, within=pyo.NonNegativeReals)
-        aux.slack_minus = pyo.Var(conv_ix, within=pyo.NonNegativeReals)
-        aux.conv = pyo.Var(conv_coeff, within=pyo.NonNegativeReals)
-
-        def sum_one_rule(model, scenario_name):
-            return pyo.quicksum(model.conv[scenario_name,ix] \
-                for ix in range(len(points[scenario_name]))) == 1
-        aux.sum_one = pyo.Constraint(scenario_names, rule=sum_one_rule)
-
-        def conv_rule(model, scenario_name, var_name):
-            return model.x[var_name] \
-                + model.slack_plus[scenario_name, var_name] \
-                - model.slack_minus[scenario_name, var_name] \
-                == pyo.quicksum(model.conv[scenario_name, ix] *
-                    points[scenario_name][ix][var_name] 
-                    for ix in range(len(points[scenario_name])))
-        aux.comb = pyo.Constraint(conv_ix, rule=conv_rule)
-
-        obj_expr = pyo.quicksum(aux.slack_plus.values()) \
-                   + pyo.quicksum(aux.slack_minus.values())
-        aux.obj = pyo.Objective(expr=obj_expr, sense=pyo.minimize)
-
-        solver = pyo.SolverFactory(self.FW_options['solver_name'])
-        results = solver.solve(aux)
-        self._check_solve(results, 'Auxiliary LP')
-
-        check_tol = self.FW_options['check_tol'] \
-                        if 'check_tol' in self.FW_options.keys() else 1e-4
-        if (pyo.value(obj_expr) > check_tol):
-            print('error.')
-            raise ValueError('The specified initial points do not satisfy the '
-                'critera necessary for convergence. Please specify different '
-                'initial points, or increase FW_iter_limit')
-        print('done.')
-
     def _check_solve(self, results, model_name):
         ''' Verify that the solver solved to optimality '''
         if (results.solver.status != pyo.SolverStatus.ok) or \
@@ -579,17 +466,6 @@ class FWPH(mpisppy.phbase.PHBase):
         self.comms['ROOT'].Allreduce(
             [diff, MPI.DOUBLE], [recv, MPI.DOUBLE], op=MPI.SUM)
         return recv
-
-    def _create_initial_points(self):
-        pc = self.FW_options['point_creator']
-        if ('point_creator_data' in self.FW_options.keys()):
-            pd = self.FW_options['point_creator_data']
-        else:
-            pd = None
-        self.local_initial_points = dict()
-        for scenario_name in self.local_scenario_names:
-            pts = pc(scenario_name, point_creator_data=pd)
-            self.local_initial_points[scenario_name] = pts
 
     def _extract_objective(self, mip):
         ''' Extract the original part of the provided MIP's objective function
@@ -699,23 +575,6 @@ class FWPH(mpisppy.phbase.PHBase):
                     xbar_dict[var_name] = scenario._mpisppy_model.xbars[node.name, ix].value
             return xbar_dict
 
-    def _initialize_MIP_var_values(self):
-        ''' Initialize the MIP variable values to the user-specified point.
-
-            For now, arbitrarily choose the first point in each list.
-        '''
-        points = self.local_initial_points
-        for (name, mip) in self.local_subproblems.items():
-            pt = points[name][0] # Select the first point arbitrarily
-            mip_vars = list(mip.component_data_objects(pyo.Var))
-            for var in mip_vars:
-                try:
-                    var.set_value(pt[var.name])
-                except KeyError as e:
-                    raise KeyError('Found variable named' + var.name +
-                        ' in model ' + name + ' not contained in the '
-                        'specified initial point dictionary') from e
-
     def _initialize_QP_subproblems(self):
         ''' Instantiates the (convex) QP subproblems (eqn. (13) in the Boland
             paper) for each scenario. Does not create/attach an objective.
@@ -780,13 +639,13 @@ class FWPH(mpisppy.phbase.PHBase):
                     def x_rule(m, node_name, ix):
                         nm = model.nonant_vars[node_name, ix].name
                         return -m.x[node_name, ix] + \
-                            pyo.quicksum(m.a[i+1] * pts[i][nm] 
-                                for i in range(len(pts))) == 0
+                            pyo.quicksum(m.a[i+1] * pt[nm]
+                                for i, pt in enumerate(pts)) == 0
                     def y_rule(m, node_name, ix):
                         nm = model.leaf_vars[node_name, ix].name
                         return -m.y[node_name,ix] + \
-                            pyo.quicksum(m.a[i+1] * pts[i][nm] 
-                                for i in range(len(pts))) == 0
+                            pyo.quicksum(m.a[i+1] * pt[nm]
+                                for i, pt in enumerate(pts)) == 0
                 else:
                     def x_rule(m, node_name, ix):
                         return -m.x[node_name, ix] + m.a[1] * \
@@ -811,9 +670,7 @@ class FWPH(mpisppy.phbase.PHBase):
             Notes:
                 Must be called before _swap_nonant_vars()
 
-                Must be called after _initialize_MIP_var_values(), if the user
-                specifies initial sets of points. Otherwise, it must be called
-                after Iter0().
+                Must be called after Iter0().
         '''
         for name in self.local_subproblems.keys():
             mip = self.local_subproblems[name]
@@ -869,22 +726,8 @@ class FWPH(mpisppy.phbase.PHBase):
         use_bundles = ('bundles_per_rank' in self.options 
                         and self.options['bundles_per_rank'] > 0)
         t_max = self.FW_options['FW_iter_limit']
-        specd_init_pts = 'point_creator' in self.FW_options.keys() and \
-                         self.FW_options['point_creator'] is not None
 
-        if (use_bundles and specd_init_pts):
-            if (t_max == 1):
-                raise RuntimeError('Cannot use bundles and specify initial '
-                    'points with t_max=1 at the same time.')
-            else:
-                if (self.cylinder_rank == 0):
-                    print('WARNING: Cannot specify initial points and use '
-                        'bundles at the same time. Ignoring specified initial '
-                        'points')
-                # Remove specified initial points
-                self.FW_options.pop('point_creator', None)
-
-        if (t_max == 1 and not specd_init_pts):
+        if (t_max == 1):
             raise RuntimeError('FW_iter_limit set to 1. To ensure '
                 'convergence, provide initial points, or increase '
                 'FW_iter_limit')
