@@ -21,8 +21,6 @@ import mpisppy.spopt
 from mpisppy.utils.prox_approx import ProxApproxManager
 from mpisppy import global_toc
 
-from mpisppy.cylinders.hub import Hub
-
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=MPI.COMM_WORLD):
     pass
@@ -937,12 +935,11 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self._can_update_best_bound():
             self.best_bound_obj_val = self.trivial_bound
 
-        if self.spcomm is not None:
-            if isinstance(self.spcomm, Hub):
-                self.spcomm.sync_nonants()
-                self.spcomm.sync_extensions()
-            else:
-                self.spcomm.sync()
+        if hasattr(self.spcomm, "sync_nonants"):
+            self.spcomm.sync_nonants()
+            self.spcomm.sync_extensions()
+        elif hasattr(self.spcomm, "sync"):
+            self.spcomm.sync()
 
         if have_extensions:
             self.extobject.post_iter0_after_sync()
@@ -1008,7 +1005,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
-        if self.spcomm is not None:
+        if hasattr(self.spcomm, "is_converged"):
             # print a screen trace for iteration 0
             if self.spcomm.is_converged():
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
@@ -1028,9 +1025,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.Update_W(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
 
-            if self.spcomm is not None:
-                if isinstance(self.spcomm, Hub):
-                    self.spcomm.sync_Ws()
+            if hasattr(self.spcomm, "sync_Ws"):
+                self.spcomm.sync_Ws()
 
             if smoothed:
                 self.Update_z(verbose)
@@ -1076,16 +1072,15 @@ class PHBase(mpisppy.spopt.SPOpt):
             if have_extensions:
                 self.extobject.enditer()
 
-            if self.spcomm is not None:
-                if isinstance(self.spcomm, Hub):
-                    self.spcomm.sync_nonants()
-                    self.spcomm.sync_bounds()
-                    self.spcomm.sync_extensions()
-                    if self.spcomm.is_converged():
-                        global_toc("Cylinder convergence", self.cylinder_rank == 0)
-                        break
-                else:
-                    self.spcomm.sync()
+            if hasattr(self.spcomm, "sync_nonants"):
+                self.spcomm.sync_nonants()
+                self.spcomm.sync_bounds()
+                self.spcomm.sync_extensions()
+                if self.spcomm.is_converged():
+                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
+                    break
+            elif hasattr(self.spcomm, "sync"):
+                self.spcomm.sync()
 
             if have_extensions:
                 self.extobject.enditer_after_sync()
