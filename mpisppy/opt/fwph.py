@@ -22,8 +22,10 @@ import numpy as np
 import pyomo.environ as pyo
 import time
 import re # For manipulating scenario names
+import random
 
 from mpisppy import MPI
+from mpisppy import global_toc
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.core.expr.visitor import replace_expressions
@@ -31,6 +33,8 @@ from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.hub import FWPHHub
+from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
+from mpisppy.extensions.xhatbase import XhatBase
 
 class FWPH(mpisppy.phbase.PHBase):
     
@@ -100,6 +104,13 @@ class FWPH(mpisppy.phbase.PHBase):
         self._attach_MIP_QP_maps()
         self._set_QP_objective()
         self._initialize_QP_var_values()
+
+        if self.FW_options["FW_iter_limit"] == 1:
+            val = self._generate_starting_point()
+            if val is None:
+                global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence")
+                self.FW_options["FW_iter_limit"] = 2
+
         self._reenable_W()
 
         if (self.ph_converger):
@@ -589,15 +600,11 @@ class FWPH(mpisppy.phbase.PHBase):
             iteration this way).
         '''
         self.local_QP_subproblems = dict()
-        has_init_pts = hasattr(self, 'local_initial_points')
         for (name, model) in self.local_subproblems.items():
             if (self.bundling):
                 xr_indices = model.ref_vars.keys()
                 nonant_indices = model.nonant_vars.keys()
                 leaf_indices = model.leaf_vars.keys()
-                if (has_init_pts):
-                    raise RuntimeError('Cannot currently specify '
-                        'initial points while using bundles')
             else:
                 nonant_indices = model._mpisppy_data.nonant_indices.keys()
                 leaf_indices = model.leaf_vars.keys()
@@ -605,11 +612,7 @@ class FWPH(mpisppy.phbase.PHBase):
             ''' Convex comb. coefficients '''
             QP = pyo.ConcreteModel()
             QP.a = pyo.VarList(domain=pyo.NonNegativeReals)
-            if (has_init_pts):
-                for _ in range(len(self.local_initial_points[name])):
-                    QP.a.add()
-            else:
-                QP.a.add() # Just one variable (1-based index!) to start
+            QP.a.add() # Just one variable (1-based index!) to start
 
             ''' Other variables '''
             QP.x = pyo.Var(nonant_indices, within=pyo.Reals)
@@ -634,25 +637,12 @@ class FWPH(mpisppy.phbase.PHBase):
                         * model.leaf_vars[scenario_name,node_name,ix].value == 0 
                 QP.eqx = pyo.Constraint(xr_indices, rule=x_rule)
             else:
-                if (has_init_pts):
-                    pts = self.local_initial_points[name]
-                    def x_rule(m, node_name, ix):
-                        nm = model.nonant_vars[node_name, ix].name
-                        return -m.x[node_name, ix] + \
-                            pyo.quicksum(m.a[i+1] * pt[nm]
-                                for i, pt in enumerate(pts)) == 0
-                    def y_rule(m, node_name, ix):
-                        nm = model.leaf_vars[node_name, ix].name
-                        return -m.y[node_name,ix] + \
-                            pyo.quicksum(m.a[i+1] * pt[nm]
-                                for i, pt in enumerate(pts)) == 0
-                else:
-                    def x_rule(m, node_name, ix):
-                        return -m.x[node_name, ix] + m.a[1] * \
-                                model.nonant_vars[node_name, ix].value == 0
-                    def y_rule(m, node_name, ix):
-                        return -m.y[node_name,ix] + m.a[1] * \
-                                model.leaf_vars['LEAF', ix].value == 0
+                def x_rule(m, node_name, ix):
+                    return -m.x[node_name, ix] + m.a[1] * \
+                            model.nonant_vars[node_name, ix].value == 0
+                def y_rule(m, node_name, ix):
+                    return -m.y[node_name,ix] + m.a[1] * \
+                            model.leaf_vars['LEAF', ix].value == 0
                 QP.eqx = pyo.Constraint(nonant_indices, rule=x_rule)
 
             QP.eqy = pyo.Constraint(leaf_indices, rule=y_rule)
@@ -694,6 +684,50 @@ class FWPH(mpisppy.phbase.PHBase):
                     qp.xr[node_name, ix].set_value(
                         mip.nonant_vars[arb_scenario, node_name, ix].value)
 
+    def _generate_starting_point(self):
+        """ Called after iter 0 to satisfy the condition of equation (17)
+            in Boland et al., if t_max / FW_iter_limit == 1
+        """
+        #We need to keep track of the way scenario_names were sorted
+        scen_names = list(enumerate(self.all_scenario_names))
+
+        self.random_seed = 42
+        # Have a separate stream for shuffling
+        self.random_stream = random.Random()
+        self.random_stream.seed(self.random_seed)
+
+        # shuffle the scenarios associated (i.e., sample without replacement)
+        shuffled_scenarios = self.random_stream.sample(scen_names,
+                                                       len(scen_names))
+
+        scenario_cycler = ScenarioCycler(shuffled_scenarios,
+                                         self.nonleaves,
+                                         False,
+                                         None)
+
+        xhatter = XhatBase(self)
+        xhatter.post_iter0()
+
+        stage2EFsolvern = self.options.get("stage2EFsolvern", None)
+        branching_factors = self.options.get("branching_factors", None)  # for stage2ef
+
+        for _ in range(self.options.get("FW_initialization_attempts", 5)):
+            # will save in best solution
+            snamedict = scenario_cycler.get_next()
+            obj = xhatter._try_one(snamedict,
+                                   solver_options = self.options["mip_solver_options"],
+                                   verbose=False,
+                                   restore_nonants=False,
+                                   stage2EFsolvern=stage2EFsolvern,
+                                   branching_factors=branching_factors)
+            if obj is not None:
+                for model_name in self.local_subproblems:
+                    self._add_QP_column(model_name)
+                self._restore_nonants()
+                return obj
+            self._restore_nonants()
+        return None
+
     def _is_timed_out(self):
         if (self.cylinder_rank == 0):
             time_elapsed = time.time() - self.t0
@@ -719,18 +753,6 @@ class FWPH(mpisppy.phbase.PHBase):
             msg = "FW_options is missing the following key(s): " + \
                   ", ".join(losers)
             raise RuntimeError(msg)
-
-        # 2. Check that bundles, pre-specified points and t_max play nice. This
-        #    is only checked on rank 0, because that is where the initial
-        #    points are supposed to be specified.
-        use_bundles = ('bundles_per_rank' in self.options 
-                        and self.options['bundles_per_rank'] > 0)
-        t_max = self.FW_options['FW_iter_limit']
-
-        if (t_max == 1):
-            raise RuntimeError('FW_iter_limit set to 1. To ensure '
-                'convergence, provide initial points, or increase '
-                'FW_iter_limit')
 
         # 3a. Check that the user did not specify the linearization of binary
         #    proximal terms (no binary variables allowed in FWPH QPs)
