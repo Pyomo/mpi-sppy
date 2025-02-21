@@ -555,6 +555,8 @@ class PHHub(Hub):
     def is_converged(self):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
+        if self.opt.best_solution_obj_val is not None:
+            self.BestInnerBound = self.InnerBoundUpdate(self.opt.best_solution_obj_val)
 
         if not self.has_innerbound_spokes:
             if self.opt._PHIter == 1:
