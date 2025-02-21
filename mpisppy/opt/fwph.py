@@ -220,7 +220,9 @@ class FWPH(mpisppy.phbase.PHBase):
             ## Hubs/spokes take precedence over convergers
             if self.spcomm:
                 if isinstance(self.spcomm, FWPHHub):
+                    self.spcomm.sync_nonants()
                     self.spcomm.sync_bounds()
+                    self.spcomm.sync_extensions()
                 if self.spcomm.is_converged():
                     secs = time.time() - self.t0
                     self._output(self._local_bound, 
