@@ -18,6 +18,7 @@ from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
 from mpisppy.opt.aph import APH
 from mpisppy.opt.lshaped import LShapedMethod
+from mpisppy.opt.subgradient import Subgradient
 from mpisppy.fwph.fwph import FWPH
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.utils.sputils as sputils
@@ -34,8 +35,7 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.hub import PHHub
-from mpisppy.cylinders.hub import APHHub
+from mpisppy.cylinders.hub import PHHub, SubgradientHub, APHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
@@ -175,6 +175,47 @@ def aph_hub(cfg,
 
     return hub_dict
 
+def subgradient_hub(cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+    ph_converger=None,
+    rho_setter=None,
+    variable_probability=None,
+    all_nodenames=None,
+):
+    shoptions = shared_options(cfg)
+    options = copy.deepcopy(shoptions)
+    options["convthresh"] = cfg.intra_hub_conv_thresh
+    options["bundles_per_rank"] = cfg.bundles_per_rank
+    options["smoothed"] = 0
+
+    hub_dict = {
+        "hub_class": SubgradientHub,
+        "hub_kwargs": {"options": {"rel_gap": cfg.rel_gap,
+                                   "abs_gap": cfg.abs_gap,
+                                   "max_stalled_iters": cfg.max_stalled_iters}},
+        "opt_class": Subgradient,
+        "opt_kwargs": {
+            "options": options,
+            "all_scenario_names": all_scenario_names,
+            "scenario_creator": scenario_creator,
+            "scenario_creator_kwargs": scenario_creator_kwargs,
+            "scenario_denouement": scenario_denouement,
+            "rho_setter": rho_setter,
+            "variable_probability": variable_probability,
+            "extensions": ph_extensions,
+            "extension_kwargs": extension_kwargs,
+            "ph_converger": ph_converger,
+            "all_nodenames": all_nodenames
+        }
+    }
+    add_wxbar_read_write(hub_dict, cfg)
+    add_ph_tracking(hub_dict, cfg)
+    return hub_dict
 
 def extension_adder(hub_dict,ext_class):
     # TBD March 2023: this is not really good enough
