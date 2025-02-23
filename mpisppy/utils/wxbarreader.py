@@ -39,18 +39,42 @@ import mpisppy.MPI as MPI
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
 
+def add_options_to_config(cfg):
+
+    cfg.add_to_config("W_and_xbar_reader",
+                      description="Enables the w and xbar reader (default False)",
+                      domain=bool,
+                      default=False)
+    cfg.add_to_config("init_W_fname",
+                      description="Path of initial W file (default None)",
+                      domain=str,
+                      default=None)
+    cfg.add_to_config("init_Xbar_fname",
+                      description="Path of initial Xbar file (default None)",
+                      domain=str,
+                      default=None)
+    cfg.add_to_config("init_separate_W_files",
+                      description="If True, W is read from separate files (default False)",
+                      domain=bool,
+                      default=False)
+
 class WXBarReader(mpisppy.extensions.extension.Extension):
     """ Extension class for reading W values
     """
     def __init__(self, ph):
 
-        ''' Do a bunch of checking if files exist '''
-        w_fname, x_fname, sep_files = None, None, False
-        if ('init_separate_W_files' in ph.options):
-            sep_files = ph.options['init_separate_W_files']
+        assert 'cfg' in ph.options
+        self.cfg = ph.options['cfg']
+        if self.cfg.get("W_and_xbar_reader") is None or not self.cfg.W_and_xbar_reader:
+            self.not_active = True
+            return  # nothing to do here
+        else:
+            self.not_active = False
 
-        if ('init_W_fname' in ph.options):
-            w_fname = ph.options['init_W_fname']
+        ''' Do a bunch of checking if files exist '''
+        w_fname, x_fname, sep_files = self.cfg.init_W_fname, self.cfg.init_Xbar_fname, self.cfg.init_separate_W_files
+
+        if w_fname is not None:
             if (not os.path.exists(w_fname)):
                 if (rank == 0):
                     if (sep_files):
@@ -59,8 +83,7 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
                         print('Cannot find file', w_fname)
                 quit()
 
-        if ('init_Xbar_fname' in ph.options):
-            x_fname = ph.options['init_Xbar_fname']
+        if x_fname is not None:
             if (not os.path.exists(x_fname)):
                 if (rank == 0):
                     print('Cannot find file', x_fname)
@@ -85,6 +108,8 @@ class WXBarReader(mpisppy.extensions.extension.Extension):
 
     def miditer(self):
         ''' Called before the solveloop is called '''
+        if self.not_active:
+            return  # nothing to do.
         if self.PHB._PHIter == 1:
             if self.w_fname:
                 mpisppy.utils.wxbarutils.set_W_from_file(

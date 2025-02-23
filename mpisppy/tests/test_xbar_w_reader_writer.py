@@ -22,16 +22,17 @@ import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
-from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.utils.wxbarreader import WXBarReader
+import mpisppy.utils.wxbarreader as wxbarreader
+import mpisppy.utils.wxbarwriter as wxbarwriter
 
-
-__version__ = 0.1
+__version__ = 0.2
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
 def _create_cfg():
     cfg = config.Config()
+    wxbarreader.add_options_to_config(cfg)        
+    wxbarwriter.add_options_to_config(cfg)
     cfg.add_branching_factors()
     cfg.num_scens_required()
     cfg.popular_args()
@@ -43,7 +44,7 @@ def _create_cfg():
 
 #*****************************************************************************
 
-class Test_w_writer_farmer(unittest.TestCase):
+class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     """ Test the gradient code using farmer."""
 
     def _create_ph_farmer(self, ph_extensions=None, max_iter=100):
@@ -59,14 +60,15 @@ class Test_w_writer_farmer(unittest.TestCase):
         self.cfg.max_iterations = max_iter
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs, ph_extensions=ph_extensions)
-        if ph_extensions==WXBarWriter: #tbd
-            hub_dict['opt_kwargs']['options']["W_and_xbar_writer"] =  {"Wcsvdir": "Wdir"}
-            hub_dict['opt_kwargs']['options']['W_fname'] = self.temp_w_file_name
-            hub_dict['opt_kwargs']['options']['Xbar_fname'] = self.temp_xbar_file_name
-        if ph_extensions==WXBarReader:
-            hub_dict['opt_kwargs']['options']["W_and_xbar_reader"] =  {"Wcsvdir": "Wdir"}
-            hub_dict['opt_kwargs']['options']['init_W_fname'] = self.w_file_name
-            hub_dict['opt_kwargs']['options']['init_Xbar_fname'] = self.xbar_file_name
+        hub_dict['opt_kwargs']['options']['cfg'] = self.cfg
+        if ph_extensions==wxbarwriter.WXBarWriter:
+            self.cfg.W_and_xbar_writer = True
+            self.cfg.W_fname = self.temp_w_file_name
+            self.cfg.Xbar_fname = self.temp_xbar_file_name
+        if ph_extensions==wxbarreader.WXBarReader:
+            self.cfg.W_and_xbar_reader = True
+            self.cfg.init_W_fname = self.w_file_name
+            self.cfg.init_Xbar_fname = self.xbar_file_name
         list_of_spoke_dict = list()
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()
@@ -79,7 +81,7 @@ class Test_w_writer_farmer(unittest.TestCase):
         self.ph_object = None
     
     def test_wwriter(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarWriter, max_iter=5)
+        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarwriter.WXBarWriter, max_iter=5)
         with open(self.temp_w_file_name, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
@@ -88,7 +90,7 @@ class Test_w_writer_farmer(unittest.TestCase):
         os.remove(self.temp_w_file_name)
 
     def test_xbarwriter(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarWriter, max_iter=5)
+        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarwriter.WXBarWriter, max_iter=5)
         with open(self.temp_xbar_file_name, 'r') as f:
             read = csv.reader(f)
             rows = list(read)
@@ -97,7 +99,7 @@ class Test_w_writer_farmer(unittest.TestCase):
         os.remove(self.temp_xbar_file_name)
 
     def test_wreader(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=1)
+        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader, max_iter=1)
         for sname, scenario in self.ph_object.local_scenarios.items():
             if sname == 'scen0':
                 self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 1)]._value, 70.84705093609978)
@@ -105,7 +107,7 @@ class Test_w_writer_farmer(unittest.TestCase):
                 self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 0)]._value, -41.104251445950844)
 
     def test_xbarreader(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=WXBarReader, max_iter=1)
+        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader, max_iter=1)
         for sname, scenario in self.ph_object.local_scenarios.items():
             if sname == 'scen0':
                 self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 1)]._value, 274.2239371483933)
