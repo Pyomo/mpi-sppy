@@ -19,7 +19,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.slam_heuristic",
                          "slamheur.log",
-                         level=logging.CRITICAL)                         
+                         level=logging.CRITICAL)
 logger = logging.getLogger("mpisppy.cylinders.slam_heuristic")
 
 class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
@@ -77,7 +77,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
 
             if self.new_nonants:
-                
+
                 local_candidate = self.extract_local_candidate_soln()
 
                 global_candidate = np.empty_like(local_candidate)
@@ -107,7 +107,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 obj = self.opt.calculate_incumbent(fix_nonants=False)
 
                 self.update_if_improving(obj)
-                
+
             slam_iter += 1
 
 class SlamMaxHeuristic(_SlamHeuristic):

@@ -8,6 +8,10 @@
 ###############################################################################
 # general example driver for farmer with cylinders
 
+## Uncomment the below to suppress warnings when running this file. Helpful for debugging.
+# import warnings
+# warnings.filterwarnings("ignore")
+
 import farmer
 
 # Make it all go
