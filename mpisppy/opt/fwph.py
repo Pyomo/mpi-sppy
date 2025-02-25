@@ -246,8 +246,8 @@ class FWPH(mpisppy.phbase.PHBase):
         alpha = self.FW_options['FW_weight']
         # Algorithm 3 line 6
         xt = {ndn_i:
-            (1 - alpha) * pyo.value(arb_scen_mip._mpisppy_model.xbars[ndn_i])
-            + alpha * pyo.value(xvar)
+            (1 - alpha) * arb_scen_mip._mpisppy_model.xbars[ndn_i]._value
+            + alpha * xvar._value
             for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()
             }
 
@@ -435,28 +435,18 @@ class FWPH(mpisppy.phbase.PHBase):
         if (self.bundling):
             for (bundle_name, EF) in self.local_subproblems.items():
                 EF.nonant_vars = dict()
-                EF.leaf_vars   = dict()
-                EF.num_leaf_vars = dict() # Keys are scenario names
                 for scenario_name in EF.scen_list:
                     mip = self.local_scenarios[scenario_name]
                     # Non-anticipative variables
                     nonant_dict = {(scenario_name, ndn, ix): nonant
                         for (ndn,ix), nonant in mip._mpisppy_data.nonant_indices.items()}
                     EF.nonant_vars.update(nonant_dict)
-                    # Leaf variables
-                    leaf_var_dict = {(scenario_name, 'LEAF', ix):
-                        var for ix, var in enumerate(self._get_leaf_vars(mip))}
-                    EF.leaf_vars.update(leaf_var_dict)
-                    EF.num_leaf_vars[scenario_name] = len(leaf_var_dict)
                     # Reference variables are already attached: EF.ref_vars
                     # indexed by (node_name, index)
                 self._attach_nonant_objective(mip)
         else:
             for (name, mip) in self.local_scenarios.items():
                 mip.nonant_vars = mip._mpisppy_data.nonant_indices
-                mip.leaf_vars = { ('LEAF', ix):
-                    var for ix, var in enumerate(self._get_leaf_vars(mip))
-                }
                 self._attach_nonant_objective(mip)
 
     def _compute_dual_bound(self):
@@ -563,20 +553,6 @@ class FWPH(mpisppy.phbase.PHBase):
         weights = self.comms['ROOT'].gather(local_weights, root=0)
         return weights
 
-    def _get_leaf_vars(self, scenario):
-        ''' This method simply needs to take an input scenario
-            (pyo.ConcreteModel) and yield the variable objects
-            corresponding to the leaf node variables for that scenario.
-
-            Functions by returning the complement of the set of
-            non-anticipative variables.
-        '''
-        nonant_var_ids = {id(var) for node in scenario._mpisppy_node_list
-                                  for var  in node.nonant_vardata_list}
-        for var in scenario.component_data_objects(pyo.Var):
-            if id(var) not in nonant_var_ids:
-                yield var
-
     def _get_xbars(self, strip_bundle_names=False):
         ''' Return the xbar vector if rank = 0 and None, otherwise
             (Consistent with _gather_weight_dict).
@@ -626,10 +602,8 @@ class FWPH(mpisppy.phbase.PHBase):
             if (self.bundling):
                 xr_indices = model.ref_vars.keys()
                 nonant_indices = model.nonant_vars.keys()
-                leaf_indices = model.leaf_vars.keys()
             else:
                 nonant_indices = model._mpisppy_data.nonant_indices.keys()
-                leaf_indices = model.leaf_vars.keys()
 
             ''' Convex comb. coefficients '''
             QP = pyo.ConcreteModel()
