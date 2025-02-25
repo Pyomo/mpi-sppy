@@ -106,6 +106,9 @@ class FWPH(mpisppy.phbase.PHBase):
         self._set_QP_objective()
         self._initialize_QP_var_values()
 
+        self._QP_nonants = {}
+        self._MIP_nonants = {}
+
         if self.FW_options["FW_iter_limit"] == 1:
             success = self._generate_starting_point()
             if not success:
@@ -176,7 +179,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
             tsdm = time.time() - tbsdm
-            print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
+            # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._compute_dual_bound()
             if (self.is_minimizing):
                 best_bound = np.maximum(best_bound, self._local_bound)
@@ -211,7 +214,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (self.extensions): 
                 self.extobject.enditer_after_sync()
             tphloop = time.time() - tbphloop
-            print(f"PH iter {self._PHIter}, total time: {tphloop}")
+            # print(f"PH iter {self._PHIter}, total time: {tphloop}")
 
 
         if finalize:
@@ -466,12 +469,10 @@ class FWPH(mpisppy.phbase.PHBase):
             arb_mip = self.local_scenarios[mip.scen_list[0]] \
                         if self.bundling else mip
             qp  = self.local_QP_subproblems[name]
-            diff_s = 0.
-            for (node_name, ix) in arb_mip._mpisppy_data.nonant_indices:
-                qpx = qp.xr if self.bundling else qp.x
-                diff_s += np.power(pyo.value(qpx[node_name,ix]) - 
-                        pyo.value(arb_mip._mpisppy_model.xbars[node_name,ix]), 2)
-            diff_s *= mip._mpisppy_probability
+            qpx = qp.xr if self.bundling else qp.x
+            xbars = arb_mip._mpisppy_model.xbars
+            diff_s = mip._mpisppy_probability * sum((qpx[idx]._value - arb_mip._mpisppy_model.xbars[idx]._value)**2
+                                                    for idx in arb_mip._mpisppy_data.nonant_indices)
             diff += diff_s
         diff = np.array(diff)
         recv = np.array(0.)
@@ -612,9 +613,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             ''' Other variables '''
             QP.x = pyo.Var(nonant_indices, within=pyo.Reals)
-
-            obj = find_active_objective(model)
-            mip_recourse_cost = pyo.value(obj.expr) - pyo.value(model._mpisppy_model.nonant_obj_part)
+            mip_recourse_cost = model._mpisppy_data.inner_bound - pyo.value(model._mpisppy_model.nonant_obj_part)
             QP.recourse_cost = pyo.Var(within=pyo.Reals, initialize=mip_recourse_cost)
 
             if (self.bundling):
@@ -888,6 +887,36 @@ class FWPH(mpisppy.phbase.PHBase):
 
             self.local_QP_subproblems[name]._solver_plugin = solver
 
+    def _cache_nonant_var_swap_mip(self):
+        """ cache the lists used for the nonant var swap """
+
+        # MIP nonants
+        for k, s in self.local_scenarios.items():
+            nonant_vardata_lists = {}
+            for node in s._mpisppy_node_list:
+                nonant_vardata_lists[node.name] = node.nonant_vardata_list
+            # this cache should have anything changed by _attach_nonant_indices
+            self._MIP_nonants[s] = {
+                "nonant_vardata_lists" : nonant_vardata_lists,
+                "nonant_indices" : s._mpisppy_data.nonant_indices,
+                "all_surrogate_nonants" : s._mpisppy_data.all_surrogate_nonants,
+            }
+
+    def _cache_nonant_var_swap_qp(self):
+        """ cache the lists used for the nonant var swap """
+
+        # QP nonants
+        for k, s in self.local_scenarios.items():
+            nonant_vardata_lists = {}
+            for node in s._mpisppy_node_list:
+                nonant_vardata_lists[node.name] = node.nonant_vardata_list
+            # this cache should have anything changed by _attach_nonant_indices
+            self._QP_nonants[s] = {
+                "nonant_vardata_lists" : nonant_vardata_lists,
+                "nonant_indices" : s._mpisppy_data.nonant_indices,
+                "all_surrogate_nonants" : s._mpisppy_data.all_surrogate_nonants,
+            }
+
     def _swap_nonant_vars(self):
         ''' Change the pointers in
             scenario._mpisppy_node_list[i].nonant_vardata_list
@@ -905,41 +934,37 @@ class FWPH(mpisppy.phbase.PHBase):
                 
                 Updates nonant_vardata_list but NOT nonant_list.
         '''
-        for (name, model) in self.local_subproblems.items():
-            scens = model.scen_list if self.bundling else [name]
-            for scenario_name in scens:
-                scenario = self.local_scenarios[scenario_name]
-                num_nonant_vars = scenario._mpisppy_data.nlens
-                node_list = scenario._mpisppy_node_list
-                for node in node_list:
-                    node.nonant_vardata_list = [
-                        self.local_QP_subproblems[name].xr[node.name,i]
-                        if self.bundling else
-                        self.local_QP_subproblems[name].x[node.name,i]
-                        for i in range(num_nonant_vars[node.name])]
-        self._attach_nonant_indices()
+        if not self._QP_nonants:
+            self._cache_nonant_var_swap_mip()
+            for (name, model) in self.local_subproblems.items():
+                scens = model.scen_list if self.bundling else [name]
+                for scenario_name in scens:
+                    scenario = self.local_scenarios[scenario_name]
+                    num_nonant_vars = scenario._mpisppy_data.nlens
+                    node_list = scenario._mpisppy_node_list
+                    for node in node_list:
+                        node.nonant_vardata_list = [
+                            self.local_QP_subproblems[name].xr[node.name,i]
+                            if self.bundling else
+                            self.local_QP_subproblems[name].x[node.name,i]
+                            for i in range(num_nonant_vars[node.name])]
+            self._attach_nonant_indices()
+            self._cache_nonant_var_swap_qp()
+        else:
+            for s, nonant_data in self._QP_nonants.items():
+                for node in s._mpisppy_node_list:
+                    node.nonant_vardata_list = nonant_data["nonant_vardata_lists"][node.name]
+                s._mpisppy_data.nonant_indices = nonant_data["nonant_indices"]
+                s._mpisppy_data.all_surrogate_nonants = nonant_data["all_surrogate_nonants"]
 
     def _swap_nonant_vars_back(self):
         ''' Swap variables back, in case they're needed somewhere else.
         '''
-        for (name, model) in self.local_subproblems.items():
-            if (self.bundling):
-                EF = self.local_subproblems[name]
-                for scenario_name in EF.scen_list:
-                    scenario = self.local_scenarios[scenario_name]
-                    num_nonant_vars = scenario._mpisppy_data.nlens
-                    for node in scenario._mpisppy_node_list:
-                        node.nonant_vardata_list = [
-                            EF.nonant_vars[scenario_name,node.name,ix]
-                            for ix in range(num_nonant_vars[node.name])]
-            else:
-                scenario = self.local_scenarios[name]
-                num_nonant_vars = scenario._mpisppy_data.nlens
-                for node in scenario._mpisppy_node_list:
-                    node.nonant_vardata_list = [
-                        scenario.nonant_vars[node.name,ix]
-                        for ix in range(num_nonant_vars[node.name])]
-        self._attach_nonant_indices()
+        for s, nonant_data in self._MIP_nonants.items():
+            for node in s._mpisppy_node_list:
+                node.nonant_vardata_list = nonant_data["nonant_vardata_lists"][node.name]
+            s._mpisppy_data.nonant_indices = nonant_data["nonant_indices"]
+            s._mpisppy_data.all_surrogate_nonants = nonant_data["all_surrogate_nonants"]
 
     # need to overwrite a few methods due to how fwph manages things
     def _can_update_best_bound(self):
