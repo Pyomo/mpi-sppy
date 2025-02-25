@@ -176,7 +176,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
             tsdm = time.time() - tbsdm
-            #print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
+            print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._compute_dual_bound()
             if (self.is_minimizing):
                 best_bound = np.maximum(best_bound, self._local_bound)
@@ -211,7 +211,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (self.extensions): 
                 self.extobject.enditer_after_sync()
             tphloop = time.time() - tbphloop
-            #print(f"PH iter {self._PHIter}, total time: {tphloop}")
+            print(f"PH iter {self._PHIter}, total time: {tphloop}")
 
 
         if finalize:
@@ -226,6 +226,12 @@ class FWPH(mpisppy.phbase.PHBase):
         mip = self.local_subproblems[model_name]
         qp  = self.local_QP_subproblems[model_name]
     
+        verbose = self.options["verbose"]
+        dtiming = True # self.options["display_timing"]
+        teeme = ("tee-rank0-solves" in self.options
+                 and self.options['tee-rank0-solves']
+                 and self.cylinder_rank == 0
+                 )
         # Set the QP dual weights to the correct values If we are bundling, we
         # initialize the QP dual weights to be the dual weights associated with
         # the first scenario in the bundle (this should be okay, because each
@@ -245,52 +251,44 @@ class FWPH(mpisppy.phbase.PHBase):
             for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()
             }
 
+        mip_source = mip.scen_list if self.bundling else [model_name]
+
         for itr in range(self.FW_options['FW_iter_limit']):
             loop_start = time.time()
             # Algorithm 2 line 4
-            mip_source = mip.scen_list if self.bundling else [model_name]
             for scenario_name in mip_source:
                 scen_mip = self.local_scenarios[scenario_name]
-                for ndn_i, nonant in scen_mip._mpisppy_data.nonant_indices.items():
-                    x_source = xt[ndn_i] if itr==0 \
-                               else nonant._value
+                for ndn_i in scen_mip._mpisppy_data.nonant_indices:
                     scen_mip._mpisppy_model.W[ndn_i]._value = (
                         qp._mpisppy_model.W[ndn_i]._value
                         + scen_mip._mpisppy_model.rho[ndn_i]._value
-                        * (x_source
+                        * (xt[ndn_i]
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
+            # tbmipsolve = time.time()
             # Algorithm 2 line 5
-            tbset = time.time()
-            if (sputils.is_persistent(mip._solver_plugin)):
-                mip_obj = find_active_objective(mip)
-                mip._solver_plugin.set_objective(mip_obj)
-            tset = time.time() - tbset
-            #print(f"{model_name} MIP set_objective time: {tset}")
-            tbsolve = time.time()
-            mip_results = mip._solver_plugin.solve(mip)
-            tsolve = time.time() - tbsolve
-            #print(f"{model_name} MIP solve time: {tsolve}")
-            self._check_solve(mip_results, model_name + ' (MIP)')
+            self.solve_one(
+                self.options["mip_solver_options"],
+                model_name,
+                mip,
+                dtiming=dtiming,
+                tee=teeme,
+                verbose=verbose,
+            )
+            # tmipsolve = time.time() - tbmipsolve
 
             # Algorithm 2 lines 6--8
             if (itr == 0):
-                if (self.is_minimizing):
-                    dual_bound = mip_results.Problem[0].Lower_bound
-                    primal_bound = mip_results.Problem[0].Upper_bound
-                else:
-                    dual_bound = mip_results.Problem[0].Upper_bound
-                    primal_bound = mip_results.Problem[0].Lower_bound
+                dual_bound = mip._mpisppy_data.outer_bound
 
             # Algorithm 2 line 9 (compute \Gamma^t)
-            #val0 = pyo.value(obj)
-            val0 = primal_bound
+            val0 = mip._mpisppy_data.inner_bound
             val1 = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
             if abs(val0) > 1e-9:
                 stop_check = (val1 - val0) / abs(val0) # \Gamma^t in Boland, but normalized
             else:
                 stop_check = val1 - val0 # \Gamma^t in Boland
-            #print(f"{model_name}, Gamma^t = {stop_check}")
+            # print(f"{model_name}, Gamma^t = {stop_check}")
             stop_check_tol = self.FW_options["stop_check_tol"]\
                              if "stop_check_tol" in self.FW_options else 1e-4
             if (self.is_minimizing and stop_check < -stop_check_tol):
@@ -302,32 +300,37 @@ class FWPH(mpisppy.phbase.PHBase):
                      '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
                 print('Try decreasing the MIP gap tolerance and re-solving')
 
-            tbcol = time.time()
+            # tbcol = time.time()
             self._add_QP_column(model_name)
-            tcol = time.time() - tbcol
-            #print(f"{model_name} QP add_column time: {tcol}")
-            tbsetqp = time.time()
-            if (sputils.is_persistent(qp._QP_solver_plugin)):
-                qp_obj = find_active_objective(qp)
-                qp._QP_solver_plugin.set_objective(qp_obj)
-            tsetqp = time.time() - tbsetqp
-            #print(f"{model_name} QP set_objective time: {tsetqp}")
-            tbsolveqp = time.time()
-            qp_results = qp._QP_solver_plugin.solve(qp)
-            tsolveqp = time.time() - tbsolveqp
-            #print(f"{model_name} QP solve time: {tsolveqp}")
-            self._check_solve(qp_results, model_name + ' (QP)')
+            # tcol = time.time() - tbcol
+            # print(f"{model_name} QP add_column time: {tcol}")
 
-            #print(f"{model_name}, solve + set_obj + add_col time: {tset + tsolve + tcol + tsetqp + tsolveqp}")
+            # tbqpsol = time.time()
+            # QPs are weird if bundled
+            _bundling = self.bundling
+            self.solve_one(
+                self.options["qp_solver_options"],
+                model_name,
+                qp,
+                dtiming=dtiming,
+                tee=teeme,
+                verbose=verbose,
+            )
+            self.bundling = _bundling
+            # tqpsol = time.time() - tbqpsol
+
+            # print(f"{model_name}, solve + add_col time: {tmipsolve + tcol + tqpsol}")
             fwloop = time.time() - loop_start
-            #print(f"{model_name}, total loop time: {fwloop}")
+            # print(f"{model_name}, total loop time: {fwloop}")
 
             if (stop_check < self.FW_options['FW_conv_thresh']):
                 break
 
+            # reset for next loop
+            xt = {ndn_i : xvar._value for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()}
+
         # Re-set the mip._mpisppy_model.W so that the QP objective 
         # is correct in the next major iteration
-        mip_source = mip.scen_list if self.bundling else [model_name]
         for scenario_name in mip_source:
             scen_mip = self.local_scenarios[scenario_name]
             for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
@@ -336,20 +339,16 @@ class FWPH(mpisppy.phbase.PHBase):
 
         return dual_bound
 
-    def _add_QP_column(self, model_name, total_mip_cost=None):
+    def _add_QP_column(self, model_name):
         ''' Add a column to the QP, with values taken from the most recent MIP
-            solve.
+            solve. Assumes the inner_bound is up-to-date in the MIP model.
         '''
         mip = self.local_subproblems[model_name]
         qp  = self.local_QP_subproblems[model_name]
-        solver = qp._QP_solver_plugin
+        solver = qp._solver_plugin
         persistent = sputils.is_persistent(solver)
 
-        obj = find_active_objective(mip)
-
-        if total_mip_cost is None:
-            total_mip_cost = pyo.value(obj.expr)
-        total_recourse_cost = total_mip_cost - pyo.value(mip._mpisppy_model.nonant_obj_part)
+        total_recourse_cost = mip._mpisppy_data.inner_bound - pyo.value(mip._mpisppy_model.nonant_obj_part)
 
         if hasattr(solver, 'add_column'):
             new_var = qp.a.add()
@@ -459,15 +458,6 @@ class FWPH(mpisppy.phbase.PHBase):
                     var for ix, var in enumerate(self._get_leaf_vars(mip))
                 }
                 self._attach_nonant_objective(mip)
-
-    def _check_solve(self, results, model_name):
-        ''' Verify that the solver solved to optimality '''
-        if (results.solver.status != pyo.SolverStatus.ok) or \
-            (results.solver.termination_condition != pyo.TerminationCondition.optimal):
-            print('Solve failed on model', model_name)
-            print('Solver status:', results.solver.status)
-            print('Termination conditions:', results.solver.termination_condition)
-            raise RuntimeError()
 
     def _compute_dual_bound(self):
         ''' Compute the FWPH dual bound using self._local_bound from each rank
@@ -684,6 +674,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             QP._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
             QP._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
+            QP._mpisppy_data.nonant_indices = pyo.Reference(QP.x)
 
             self.local_QP_subproblems[name] = QP
                 
@@ -701,7 +692,8 @@ class FWPH(mpisppy.phbase.PHBase):
             qp  = self.local_QP_subproblems[name]
 
             for key in mip._mpisppy_model.x_indices:
-                qp.x[key].set_value(mip.nonant_vars[key].value)
+                qp.x[key]._value = mip.nonant_vars[key].value
+            qp.recourse_cost._value = mip._mpisppy_data.inner_bound - pyo.value(mip._mpisppy_model.nonant_obj_part)
 
             # Set the non-anticipative reference variables if we're bundling
             if (self.bundling):
@@ -920,7 +912,7 @@ class FWPH(mpisppy.phbase.PHBase):
                     for (key, option) in qp_opts.items():
                         solver.options[key] = option
 
-            self.local_QP_subproblems[name]._QP_solver_plugin = solver
+            self.local_QP_subproblems[name]._solver_plugin = solver
 
     def _swap_nonant_vars(self):
         ''' Change the pointers in
