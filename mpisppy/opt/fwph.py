@@ -88,9 +88,6 @@ class FWPH(mpisppy.phbase.PHBase):
         self._output(trivial_bound, trivial_bound, np.nan, secs)
         best_bound = trivial_bound
 
-        if ('mip_solver_options' in self.FW_options):
-            self._set_MIP_solver_options()
-
         # Lines 2 and 3 of Algorithm 3 in Boland
         # self.Compute_Xbar(self.options['verbose'])
         # self.Update_W(self.options['verbose'])
@@ -271,7 +268,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # tbmipsolve = time.time()
             # Algorithm 2 line 5
             self.solve_one(
-                self.options["mip_solver_options"],
+                self.options["iterk_solver_options"],
                 model_name,
                 mip,
                 dtiming=dtiming,
@@ -830,13 +827,6 @@ class FWPH(mpisppy.phbase.PHBase):
             for (var_name, xbs) in xbars.items():
                 row = '{vn},{vv:.16f}\n'.format(vn=var_name, vv=xbs)
                 f.write(row)
-
-    def _set_MIP_solver_options(self):
-        mip_opts = self.FW_options['mip_solver_options']
-        if (len(mip_opts) > 0):
-            for model in self.local_subproblems.values():
-                for (key, option) in mip_opts.items():
-                    model._solver_plugin.options[key] = option
 
     def _set_QP_objective(self):
         ''' Attach dual weights, objective function and solver to each QP.

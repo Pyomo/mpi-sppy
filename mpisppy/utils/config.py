@@ -534,12 +534,6 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-4)
 
-        self.add_to_config("fwph_mipgap",
-                            description="mip gap option FW subproblems iterations (default None)",
-                            domain=float,
-                            default=None)
-
-
 
     def lagrangian_args(self):
 
