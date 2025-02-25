@@ -514,10 +514,10 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
-        self.add_to_config("fwph_iter_limit",
-                            description="maximum fwph iterations (default 10)",
+        self.add_to_config("fwph_sdm_iter_limit",
+                            description="maximum fwph SDM iterations (default 1)",
                             domain=int,
-                            default=10)
+                            default=1)
 
         self.add_to_config("fwph_weight",
                             description="fwph weight (default 0)",

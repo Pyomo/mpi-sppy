@@ -428,7 +428,7 @@ def _fwph_options(cfg):
         mip_solver_options["mipgap"] = cfg.fwph_mipgap
 
     fw_options = {
-        "FW_iter_limit": cfg.fwph_iter_limit,
+        "FW_iter_limit": cfg.fwph_sdm_iter_limit,
         "FW_weight": cfg.fwph_weight,
         "FW_conv_thresh": cfg.fwph_conv_thresh,
         "stop_check_tol": cfg.fwph_stop_check_tol,
