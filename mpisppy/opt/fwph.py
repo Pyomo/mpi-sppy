@@ -357,7 +357,7 @@ class FWPH(mpisppy.phbase.PHBase):
             new_var = qp.a.add()
             coef_list = [1.]
             constr_list = [qp.sum_one]
-            target = mip.ref_vars if self.bundling else mip.nonant_vars
+            target = mip.ref_vars if self.bundling else mip._mpisppy_data.nonant_vars
             for (node, ix) in qp.eqx.index_set():
                 coef_list.append(target[node, ix].value)
                 constr_list.append(qp.eqx[node, ix])
@@ -376,7 +376,7 @@ class FWPH(mpisppy.phbase.PHBase):
             solver.remove_constraint(qp.sum_one)
             solver.add_constraint(qp.sum_one)
 
-        target = mip.ref_vars if self.bundling else mip.nonant_vars
+        target = mip.ref_vars if self.bundling else mip._mpisppy_data.nonant_vars
         for (node, ix) in qp.eqx.index_set():
             lb, body, ub = qp.eqx[node, ix].to_bounded_expression()
             body += new_var * target[node, ix].value
@@ -425,9 +425,9 @@ class FWPH(mpisppy.phbase.PHBase):
             mip = self.local_subproblems[name]
             qp  = self.local_QP_subproblems[name]
 
-            mip._mpisppy_data.mip_to_qp = {id(mip.nonant_vars[key]): qp.x[key]
+            mip._mpisppy_data.mip_to_qp = {id(mip._mpisppy_data.nonant_vars[key]): qp.x[key]
                                 for key in mip._mpisppy_model.x_indices}
-            qp._mpisppy_data.qp_to_mip = {id(qp.x[key]): mip.nonant_vars[key]
+            qp._mpisppy_data.qp_to_mip = {id(qp.x[key]): mip._mpisppy_data.nonant_vars[key]
                                 for key in mip._mpisppy_model.x_indices}
 
     def _attach_MIP_vars(self):
@@ -437,19 +437,19 @@ class FWPH(mpisppy.phbase.PHBase):
         '''
         if (self.bundling):
             for (bundle_name, EF) in self.local_subproblems.items():
-                EF.nonant_vars = dict()
+                EF._mpisppy_data.nonant_vars = dict()
                 for scenario_name in EF.scen_list:
                     mip = self.local_scenarios[scenario_name]
                     # Non-anticipative variables
                     nonant_dict = {(scenario_name, ndn, ix): nonant
                         for (ndn,ix), nonant in mip._mpisppy_data.nonant_indices.items()}
-                    EF.nonant_vars.update(nonant_dict)
+                    EF._mpisppy_data.nonant_vars.update(nonant_dict)
                     # Reference variables are already attached: EF.ref_vars
                     # indexed by (node_name, index)
                 self._attach_nonant_objective(mip)
         else:
             for (name, mip) in self.local_scenarios.items():
-                mip.nonant_vars = mip._mpisppy_data.nonant_indices
+                mip._mpisppy_data.nonant_vars = mip._mpisppy_data.nonant_indices
                 self._attach_nonant_objective(mip)
 
     def _compute_dual_bound(self):
@@ -491,7 +491,7 @@ class FWPH(mpisppy.phbase.PHBase):
         repn = generate_standard_repn(obj.expr, compute_values=False, quadratic=False)
         if len(repn.nonlinear_vars) > 0:
             raise ValueError("FWPH does not support models with nonlinear objective functions")
-        nonant_var_ids = {id(v) for v in mip.nonant_vars.values()}
+        nonant_var_ids = {id(v) for v in mip._mpisppy_data.nonant_vars.values()}
         linear_coefs = []
         linear_vars = []
         for coef, var in zip(repn.linear_coefs, repn.linear_vars):
@@ -602,7 +602,7 @@ class FWPH(mpisppy.phbase.PHBase):
         for (name, model) in self.local_subproblems.items():
             if (self.bundling):
                 xr_indices = model.ref_vars.keys()
-                nonant_indices = model.nonant_vars.keys()
+                nonant_indices = model._mpisppy_data.nonant_vars.keys()
             else:
                 nonant_indices = model._mpisppy_data.nonant_indices.keys()
 
@@ -637,7 +637,7 @@ class FWPH(mpisppy.phbase.PHBase):
             else:
                 def x_rule(m, node_name, ix):
                     return -m.x[node_name, ix] + m.a[1] * \
-                            model.nonant_vars[node_name, ix].value == 0
+                            model._mpisppy_data.nonant_vars[node_name, ix].value == 0
                 def rc_rule(m):
                     return -m.recourse_cost + m.a[1] * mip_recourse_cost == 0
                 QP.eqx = pyo.Constraint(nonant_indices, rule=x_rule)
@@ -665,7 +665,7 @@ class FWPH(mpisppy.phbase.PHBase):
             qp  = self.local_QP_subproblems[name]
 
             for key in mip._mpisppy_model.x_indices:
-                qp.x[key]._value = mip.nonant_vars[key].value
+                qp.x[key]._value = mip._mpisppy_data.nonant_vars[key].value
             qp.recourse_cost._value = mip._mpisppy_data.inner_bound - pyo.value(mip._mpisppy_model.nonant_obj_part)
 
             # Set the non-anticipative reference variables if we're bundling
@@ -675,11 +675,11 @@ class FWPH(mpisppy.phbase.PHBase):
                 for (node_name, ix) in naix:
                     # Check that non-anticipativity is satisfied
                     # within the bundle (for debugging)
-                    vals = [mip.nonant_vars[scenario_name, node_name, ix].value
+                    vals = [mip._mpisppy_data.nonant_vars[scenario_name, node_name, ix].value
                             for scenario_name in mip.scen_list]
                     assert(max(vals) - min(vals) < 1e-7)
                     qp.xr[node_name, ix].set_value(
-                        mip.nonant_vars[arb_scenario, node_name, ix].value)
+                        mip._mpisppy_data.nonant_vars[arb_scenario, node_name, ix].value)
 
     def _generate_starting_point(self):
         """ Called after iter 0 to satisfy the condition of equation (17)
@@ -969,7 +969,7 @@ class FWPH(mpisppy.phbase.PHBase):
     # need to overwrite a few methods due to how fwph manages things
     def _can_update_best_bound(self):
         for s in self.local_scenarios.values():
-            for v in s.nonant_vars.values():
+            for v in s._mpisppy_data.nonant_vars.values():
                 if v.fixed:
                     if v not in self._initial_fixed_varibles:
                         return False
