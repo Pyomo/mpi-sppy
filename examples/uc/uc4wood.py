@@ -18,7 +18,7 @@ import mpisppy.MPI as mpi
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
-from mpisppy.fwph.fwph import FWPH
+from mpisppy.opt.fwph import FWPH
 from mpisppy.utils.xhat_eval import Xhat_Eval
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
