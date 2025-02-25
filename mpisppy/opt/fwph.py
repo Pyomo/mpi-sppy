@@ -28,7 +28,7 @@ from mpisppy import MPI
 from mpisppy import global_toc
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy.utils.sputils import find_active_objective
-from pyomo.core.expr.visitor import replace_expressions, identify_variables
+from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy.cylinders.spoke import Spoke
@@ -131,7 +131,7 @@ class FWPH(mpisppy.phbase.PHBase):
         # The body of the algorithm
         for self._PHIter in range(1, self.options['PHIterLimit']+1):
 
-            tbphloop = time.time()
+            # tbphloop = time.time()
             # TODO: should implement our own Xbar / W computation
             #       which just considers the QP subproblems
             self._swap_nonant_vars()
@@ -170,12 +170,12 @@ class FWPH(mpisppy.phbase.PHBase):
 
             self._swap_nonant_vars()
             self._local_bound = 0
-            tbsdm = time.time()
+            # tbsdm = time.time()
             for name in self.local_subproblems:
                 dual_bound = self.SDM(name)
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
-            tsdm = time.time() - tbsdm
+            # tsdm = time.time() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._compute_dual_bound()
             if (self.is_minimizing):
@@ -210,7 +210,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             if (self.extensions): 
                 self.extobject.enditer_after_sync()
-            tphloop = time.time() - tbphloop
+            # tphloop = time.time() - tbphloop
             # print(f"PH iter {self._PHIter}, total time: {tphloop}")
 
 
@@ -254,7 +254,7 @@ class FWPH(mpisppy.phbase.PHBase):
         mip_source = mip.scen_list if self.bundling else [model_name]
 
         for itr in range(self.FW_options['FW_iter_limit']):
-            loop_start = time.time()
+            # loop_start = time.time()
             # Algorithm 2 line 4
             for scenario_name in mip_source:
                 scen_mip = self.local_scenarios[scenario_name]
@@ -320,7 +320,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # tqpsol = time.time() - tbqpsol
 
             # print(f"{model_name}, solve + add_col time: {tmipsolve + tcol + tqpsol}")
-            fwloop = time.time() - loop_start
+            # fwloop = time.time() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
 
             if (stop_check < self.FW_options['FW_conv_thresh']):
@@ -399,9 +399,7 @@ class FWPH(mpisppy.phbase.PHBase):
             
             Must be called after the subproblems (MIPs AND QPs) are created.
         '''
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
-            qp  = self.local_QP_subproblems[name]
+        for mip in self.local_subproblems.values():
             if (self.bundling):
                 x_indices = [(scenario_name, node_name, ix)
                     for scenario_name in mip.scen_list
@@ -468,7 +466,7 @@ class FWPH(mpisppy.phbase.PHBase):
             qp  = self.local_QP_subproblems[name]
             qpx = qp.xr if self.bundling else qp.x
             xbars = arb_mip._mpisppy_model.xbars
-            diff_s = mip._mpisppy_probability * sum((qpx[idx]._value - arb_mip._mpisppy_model.xbars[idx]._value)**2
+            diff_s = mip._mpisppy_probability * sum((qpx[idx]._value - xbars[idx]._value)**2
                                                     for idx in arb_mip._mpisppy_data.nonant_indices)
             diff += diff_s
         diff = np.array(diff)
