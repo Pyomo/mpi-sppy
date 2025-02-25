@@ -112,28 +112,6 @@ def _Compute_Xbar(opt, verbose=False):
                            opt.cylinder_rank, k, ndn, node.nonant_vardata_list[i].name,
                            pyo.value(s._mpisppy_model.xbars[(ndn,i)]))
 
-
-def _Update_W(opt, verbose=False):
-    # Assumes the scenarios are up to date
-    for k,s in opt.local_scenarios.items():
-        for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
-
-            ##if nonant._value == None:
-            ##    print(f"***_value is None for nonant var {nonant.name}")
-
-            xdiff = nonant._value \
-                    - s._mpisppy_model.xbars[ndn_i]._value
-            s._mpisppy_model.W[ndn_i]._value += pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
-            if verbose and opt.cylinder_rank == 0:
-                print ("rank, node, scen, var, W", ndn_i[0], k,
-                       opt.cylinder_rank, nonant.name,
-                       pyo.value(s._mpisppy_model.W[ndn_i]))
-        # Special code for variable probabilities to mask W; rarely used.
-        if s._mpisppy_data.has_variable_probability:
-            for ndn_i in s._mpisppy_data.nonant_indices:
-                (lndn, li) = ndn_i
-                s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.prob0_mask[lndn][li]
-
 def _Compute_Wbar(opt, verbose=False, repair=True):
     """ Seldom used (mainly for diagnostics); gather  Wbar for each node.
 
@@ -332,7 +310,25 @@ class PHBase(mpisppy.spopt.SPOpt):
             verbose (bool):
                 If True, displays verbose output during update.
         """
-        _Update_W(self, verbose=verbose)
+        # Assumes the scenarios are up to date
+        for k,s in self.local_scenarios.items():
+            for ndn_i, nonant in s._mpisppy_data.nonant_indices.items():
+
+                ##if nonant._value == None:
+                ##    print(f"***_value is None for nonant var {nonant.name}")
+
+                xdiff = nonant._value \
+                        - s._mpisppy_model.xbars[ndn_i]._value
+                s._mpisppy_model.W[ndn_i]._value += pyo.value(s._mpisppy_model.rho[ndn_i]) * xdiff
+                if verbose and self.cylinder_rank == 0:
+                    print ("rank, node, scen, var, W", ndn_i[0], k,
+                           self.cylinder_rank, nonant.name,
+                           pyo.value(s._mpisppy_model.W[ndn_i]))
+            # Special code for variable probabilities to mask W; rarely used.
+            if s._mpisppy_data.has_variable_probability:
+                for ndn_i in s._mpisppy_data.nonant_indices:
+                    (lndn, li) = ndn_i
+                    s._mpisppy_model.W[ndn_i] *= s._mpisppy_data.prob0_mask[lndn][li]
 
 
     def Update_z(self, verbose):
