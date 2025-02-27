@@ -145,6 +145,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if isinstance(self.spcomm, FWPHHub):
                 self.spcomm.sync_Ws()
             if (self._is_timed_out()):
+                # TODO: replace the convergence messages with global_toc
                 if (self.cylinder_rank == 0 and self.vb):
                     print('Timeout.')
                 break
@@ -265,6 +266,11 @@ class FWPH(mpisppy.phbase.PHBase):
                         * (xt[ndn_i]
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
+            cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
+            #if self.options["fwph_include_cutoff"]:
+            if True:
+                # TODO: add lookup table for absolute cutoff option
+                self.options["iterk_solver_options"]["MIPABSCUTOFF"] = cutoff
             # tbmipsolve = time.time()
             # Algorithm 2 line 5
             self.solve_one(
@@ -282,12 +288,11 @@ class FWPH(mpisppy.phbase.PHBase):
                 dual_bound = mip._mpisppy_data.outer_bound
 
             # Algorithm 2 line 9 (compute \Gamma^t)
-            val0 = mip._mpisppy_data.inner_bound
-            val1 = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-            if abs(val0) > 1e-9:
-                stop_check = (val1 - val0) / abs(val0) # \Gamma^t in Boland, but normalized
+            inner_bound = mip._mpisppy_data.inner_bound
+            if abs(inner_bound) > 1e-9:
+                stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
             else:
-                stop_check = val1 - val0 # \Gamma^t in Boland
+                stop_check = cutoff - inner_bound # \Gamma^t in Boland
             # print(f"{model_name}, Gamma^t = {stop_check}")
             stop_check_tol = self.FW_options["stop_check_tol"]\
                              if "stop_check_tol" in self.FW_options else 1e-4
