@@ -4,6 +4,12 @@
 SOLVER="cplex"
 SPB=1
 
+echo "^^^ hub only with w-writer (smoke) ^^^"
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-writer --W-fname w_values.csv 
+
+echo "^^^ hub only with w-reader (smoke) ^^^"
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-reader --init-W-fname w_values.csv
+
 echo "^^^ Multi-stage AirCond ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
 # --xhatshuffle --stag2EFsolvern

@@ -112,6 +112,8 @@ def main():
                                   ph_converger=ph_converger,
                                   rho_setter = rho_setter)
 
+    hub_dict['opt_kwargs']['options']['cfg'] = cfg                    
+
     if cfg.primal_dual_converger:
         hub_dict['opt_kwargs']['options']\
             ['primal_dual_converger_options'] = {
