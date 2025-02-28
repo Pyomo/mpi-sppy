@@ -107,8 +107,8 @@ class FWPH(mpisppy.phbase.PHBase):
         self._MIP_nonants = {}
 
         if self.FW_options["FW_iter_limit"] == 1:
-            success = self._generate_starting_point()
-            if not success:
+            number_points = self._generate_starting_point()
+            if number_points == 0:
                 global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence")
                 self.FW_options["FW_iter_limit"] = 2
 
@@ -708,9 +708,12 @@ class FWPH(mpisppy.phbase.PHBase):
         stage2EFsolvern = self.options.get("stage2EFsolvern", None)
         branching_factors = self.options.get("branching_factors", None)  # for stage2ef
 
-        for _ in range(self.options.get("FW_initialization_attempts", 3)):
+        number_points = 0
+        for _ in range(self.options.get("FW_initialization_attempts", 20)):
             # will save in best solution
             snamedict = scenario_cycler.get_next()
+            if snamedict is None:
+                return number_points
             obj = xhatter._try_one(snamedict,
                                    solver_options = self.options["mip_solver_options"],
                                    verbose=False,
@@ -720,10 +723,10 @@ class FWPH(mpisppy.phbase.PHBase):
             if obj is not None:
                 for model_name in self.local_subproblems:
                     self._add_QP_column(model_name)
-                self._restore_nonants()
-                return True
+                # self._restore_nonants()
+                number_points += 1
             self._restore_nonants()
-        return False
+        return number_points
 
     def _is_timed_out(self):
         if (self.cylinder_rank == 0):
