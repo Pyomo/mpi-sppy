@@ -102,13 +102,18 @@ class FWPH(mpisppy.phbase.PHBase):
         self._attach_MIP_QP_maps()
         self._set_QP_objective()
         self._initialize_QP_var_values()
+        self._setup_shared_column_generation()
 
         self._QP_nonants = {}
         self._MIP_nonants = {}
 
-        if self.FW_options["FW_iter_limit"] == 1:
-            number_points = self._generate_starting_point()
-            if number_points == 0:
+        number_initial_column_tries = self.options.get("FW_initialization_attempts", 20)
+        if self.FW_options["FW_iter_limit"] == 1 and number_initial_column_tries < 1:
+            global_toc(f"{self.__class__.__name__}: Warning: FWPH needs an initial shared column if FW_iter_limit == 1. Increasing FW_iter_limit to 2 to ensure convergence")
+            self.FW_options["FW_iter_limit"] = 2
+        if self.FW_options["FW_iter_limit"] == 1 or number_initial_column_tries > 0:
+            number_points = self._generate_shared_column(number_initial_column_tries)
+            if number_points == 0 and self.FW_options["FW_iter_limit"] == 1:
                 global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence")
                 self.FW_options["FW_iter_limit"] = 2
 
@@ -193,6 +198,19 @@ class FWPH(mpisppy.phbase.PHBase):
             secs = time.time() - self.t0
             self._output(self._local_bound, best_bound, diff, secs)
 
+            # add a shared column
+            shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 1)
+            if shared_columns > 0:
+                self.mpicomm.Barrier()
+                self._disable_W()
+                for s in self.local_subproblems.values():
+                    if sputils.is_persistent(s._solver_plugin):
+                        active_objective_datas = list(s.component_data_objects(
+                             pyo.Objective, active=True, descend_into=True))
+                        s._solver_plugin.set_objective(active_objective_datas[0])
+                self._generate_shared_column(shared_columns)
+                self._reenable_W()
+
             ## Hubs/spokes take precedence over convergers
             if self.spcomm:
                 if isinstance(self.spcomm, FWPHHub):
@@ -213,7 +231,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 self.extobject.enditer_after_sync()
             # tphloop = time.time() - tbphloop
             # print(f"PH iter {self._PHIter}, total time: {tphloop}")
-
 
         if finalize:
             weight_dict = self._gather_weight_dict() # None if rank != 0
@@ -281,6 +298,8 @@ class FWPH(mpisppy.phbase.PHBase):
                 tee=teeme,
                 verbose=verbose,
             )
+            # TODO: fixme for maxmimization / larger objectives
+            self.options["iterk_solver_options"]["MIPABSCUTOFF"] = 1e40
             # tmipsolve = time.time() - tbmipsolve
 
             # Algorithm 2 lines 6--8
@@ -681,41 +700,44 @@ class FWPH(mpisppy.phbase.PHBase):
                     qp.xr[node_name, ix].set_value(
                         mip._mpisppy_data.nonant_vars[arb_scenario, node_name, ix].value)
 
-    def _generate_starting_point(self):
-        """ Called after iter 0 to satisfy the condition of equation (17)
-            in Boland et al., if t_max / FW_iter_limit == 1
-        """
+    def _setup_shared_column_generation(self):
+        """ helper for shared column generation """
         #We need to keep track of the way scenario_names were sorted
         scen_names = list(enumerate(self.all_scenario_names))
 
-        self.random_seed = 42
+        self._random_seed = 42
         # Have a separate stream for shuffling
-        self.random_stream = random.Random()
-        self.random_stream.seed(self.random_seed)
+        random_stream = random.Random()
+        random_stream.seed(self._random_seed)
 
         # shuffle the scenarios associated (i.e., sample without replacement)
-        shuffled_scenarios = self.random_stream.sample(scen_names,
-                                                       len(scen_names))
+        shuffled_scenarios = random_stream.sample(scen_names, len(scen_names))
 
-        scenario_cycler = ScenarioCycler(shuffled_scenarios,
+        self._scenario_cycler = ScenarioCycler(shuffled_scenarios,
                                          self.nonleaves,
                                          False,
                                          None)
 
-        xhatter = XhatBase(self)
-        xhatter.post_iter0()
+        self._xhatter = XhatBase(self)
+        self._xhatter.post_iter0()
+
+    def _generate_shared_column(self, tries=1):
+        """ Called after iter 0 to satisfy the condition of equation (17)
+            in Boland et al., if t_max / FW_iter_limit == 1
+        """
 
         stage2EFsolvern = self.options.get("stage2EFsolvern", None)
         branching_factors = self.options.get("branching_factors", None)  # for stage2ef
 
         number_points = 0
-        for _ in range(self.options.get("FW_initialization_attempts", 20)):
+        for t in range(min(tries, len(self.all_scenario_names))):
             # will save in best solution
-            snamedict = scenario_cycler.get_next()
+            snamedict = self._scenario_cycler.get_next()
             if snamedict is None:
-                return number_points
-            obj = xhatter._try_one(snamedict,
-                                   solver_options = self.options["mip_solver_options"],
+                self._scenario_cycler.begin_epoch()
+                snamedict = self._scenario_cycler.get_next()
+            obj = self._xhatter._try_one(snamedict,
+                                   solver_options = self.options["iterk_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
                                    stage2EFsolvern=stage2EFsolvern,
