@@ -603,6 +603,26 @@ class PHHub(Hub):
     def sync_with_spokes(self):
         self.sync()
 
+    def sync_bounds(self):
+        if self.has_outerbound_spokes:
+            self.receive_outerbounds()
+        if self.has_innerbound_spokes:
+            self.receive_innerbounds()
+        if self.has_bounds_only_spokes:
+            self.send_boundsout()
+
+    def sync_extensions(self):
+        if self.opt.extensions is not None:
+            self.opt.extobject.sync_with_spokes()
+
+    def sync_nonants(self):
+        if self.has_nonant_spokes:
+            self.send_nonants()
+
+    def sync_Ws(self):
+        if self.has_w_spokes:
+            self.send_ws()
+
     def is_converged(self):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)

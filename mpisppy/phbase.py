@@ -239,8 +239,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 Function to set rho values throughout the PH algorithm.
             variable_probability (callable, optional):
                 Function to set variable specific probabilities.
-            cfg (config object, optional?)  controls (mainly from user)
-                (Maybe this should move up to spbase)
 
     """
     def __init__(
@@ -936,7 +934,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         if self._can_update_best_bound():
             self.best_bound_obj_val = self.trivial_bound
 
-        if self.spcomm is not None:
+        if hasattr(self.spcomm, "sync_nonants"):
+            self.spcomm.sync_nonants()
+            self.spcomm.sync_extensions()
+        elif hasattr(self.spcomm, "sync"):
             self.spcomm.sync()
 
         if have_extensions:
@@ -1003,7 +1004,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
-        if self.spcomm is not None:
+        if hasattr(self.spcomm, "is_converged"):
             # print a screen trace for iteration 0
             if self.spcomm.is_converged():
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
@@ -1022,6 +1023,9 @@ class PHBase(mpisppy.spopt.SPOpt):
             # update the weights
             self.Update_W(verbose)
             #global_toc('Rank: {} - After Update_W'.format(self.cylinder_rank), True)
+
+            if hasattr(self.spcomm, "sync_Ws"):
+                self.spcomm.sync_Ws()
 
             if smoothed:
                 self.Update_z(verbose)
@@ -1067,11 +1071,15 @@ class PHBase(mpisppy.spopt.SPOpt):
             if have_extensions:
                 self.extobject.enditer()
 
-            if self.spcomm is not None:
-                self.spcomm.sync()
+            if hasattr(self.spcomm, "sync_nonants"):
+                self.spcomm.sync_nonants()
+                self.spcomm.sync_bounds()
+                self.spcomm.sync_extensions()
                 if self.spcomm.is_converged():
                     global_toc("Cylinder convergence", self.cylinder_rank == 0)
                     break
+            elif hasattr(self.spcomm, "sync"):
+                self.spcomm.sync()
 
             if have_extensions:
                 self.extobject.enditer_after_sync()
