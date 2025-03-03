@@ -82,6 +82,7 @@ class FWPH(mpisppy.phbase.PHBase):
         self.PH_Prep(attach_duals=True, attach_prox=False)
         self._output_header()
         self._attach_MIP_vars()
+        self._cache_nonant_var_swap_mip()
 
         trivial_bound = self.Iter0()
         secs = time.time() - self.t0
@@ -102,10 +103,8 @@ class FWPH(mpisppy.phbase.PHBase):
         self._attach_MIP_QP_maps()
         self._set_QP_objective()
         self._initialize_QP_var_values()
+        self._cache_nonant_var_swap_qp()
         self._setup_shared_column_generation()
-
-        self._QP_nonants = {}
-        self._MIP_nonants = {}
 
         number_initial_column_tries = self.options.get("FW_initialization_attempts", 20)
         if self.FW_options["FW_iter_limit"] == 1 and number_initial_column_tries < 1:
@@ -197,6 +196,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             secs = time.time() - self.t0
             self._output(self._local_bound, best_bound, diff, secs)
+
 
             # add a shared column
             shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 1)
@@ -907,6 +907,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _cache_nonant_var_swap_mip(self):
         """ cache the lists used for the nonant var swap """
+        self._MIP_nonants = {}
 
         # MIP nonants
         for k, s in self.local_scenarios.items():
@@ -923,6 +924,22 @@ class FWPH(mpisppy.phbase.PHBase):
     def _cache_nonant_var_swap_qp(self):
         """ cache the lists used for the nonant var swap """
 
+        for (name, model) in self.local_subproblems.items():
+            scens = model.scen_list if self.bundling else [name]
+            for scenario_name in scens:
+                scenario = self.local_scenarios[scenario_name]
+                num_nonant_vars = scenario._mpisppy_data.nlens
+                node_list = scenario._mpisppy_node_list
+                for node in node_list:
+                    node.nonant_vardata_list = [
+                        self.local_QP_subproblems[name].xr[node.name,i]
+                        if self.bundling else
+                        self.local_QP_subproblems[name].x[node.name,i]
+                        for i in range(num_nonant_vars[node.name])]
+        self._attach_nonant_indices()
+
+        self._QP_nonants = {}
+
         # QP nonants
         for k, s in self.local_scenarios.items():
             nonant_vardata_lists = {}
@@ -934,6 +951,8 @@ class FWPH(mpisppy.phbase.PHBase):
                 "nonant_indices" : s._mpisppy_data.nonant_indices,
                 "all_surrogate_nonants" : s._mpisppy_data.all_surrogate_nonants,
             }
+
+        self._swap_nonant_vars_back()
 
     def _swap_nonant_vars(self):
         ''' Change the pointers in
@@ -952,28 +971,11 @@ class FWPH(mpisppy.phbase.PHBase):
                 
                 Updates nonant_vardata_list but NOT nonant_list.
         '''
-        if not self._QP_nonants:
-            self._cache_nonant_var_swap_mip()
-            for (name, model) in self.local_subproblems.items():
-                scens = model.scen_list if self.bundling else [name]
-                for scenario_name in scens:
-                    scenario = self.local_scenarios[scenario_name]
-                    num_nonant_vars = scenario._mpisppy_data.nlens
-                    node_list = scenario._mpisppy_node_list
-                    for node in node_list:
-                        node.nonant_vardata_list = [
-                            self.local_QP_subproblems[name].xr[node.name,i]
-                            if self.bundling else
-                            self.local_QP_subproblems[name].x[node.name,i]
-                            for i in range(num_nonant_vars[node.name])]
-            self._attach_nonant_indices()
-            self._cache_nonant_var_swap_qp()
-        else:
-            for s, nonant_data in self._QP_nonants.items():
-                for node in s._mpisppy_node_list:
-                    node.nonant_vardata_list = nonant_data["nonant_vardata_lists"][node.name]
-                s._mpisppy_data.nonant_indices = nonant_data["nonant_indices"]
-                s._mpisppy_data.all_surrogate_nonants = nonant_data["all_surrogate_nonants"]
+        for s, nonant_data in self._QP_nonants.items():
+            for node in s._mpisppy_node_list:
+                node.nonant_vardata_list = nonant_data["nonant_vardata_lists"][node.name]
+            s._mpisppy_data.nonant_indices = nonant_data["nonant_indices"]
+            s._mpisppy_data.all_surrogate_nonants = nonant_data["all_surrogate_nonants"]
 
     def _swap_nonant_vars_back(self):
         ''' Swap variables back, in case they're needed somewhere else.
