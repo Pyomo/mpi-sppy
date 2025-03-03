@@ -175,6 +175,16 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                        rho_setter = rho_setter,
                        all_nodenames = all_nodenames,
                    )
+    elif cfg.fwph_hub:
+        # Vanilla FWPH hub
+        hub_dict = vanilla.fwph_hub(
+                       *beans,
+                       scenario_creator_kwargs=scenario_creator_kwargs,
+                       ph_extensions=None,
+                       ph_converger=ph_converger,
+                       rho_setter = rho_setter,
+                       all_nodenames = all_nodenames,
+                   )
     else:
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
