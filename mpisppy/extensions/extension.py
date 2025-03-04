@@ -21,6 +21,14 @@ class Extension:
     def __init__(self, spopt_object):
         self.opt = spopt_object
 
+    def register_send_fields(self):
+        '''
+        Method called by the Hub SPCommunicator to get any fields that the extension
+        will make available to spokes. Use hub function `register_extension_send_field`
+        to register a field.
+        '''
+        return
+
     def setup_hub(self):
         '''
         Method called when the Hub SPCommunicator is set up (if used)
@@ -100,7 +108,7 @@ class Extension:
         pass
 
     def iter0_post_solver_creation(self):
-        ''' When this method is called, PH iteration 0 has been initiated and 
+        ''' When this method is called, PH iteration 0 has been initiated and
             all solver objects have been created.
         '''
         pass
@@ -199,7 +207,7 @@ class MultiExtension(Extension):
 
     def iter0_post_solver_creation(self):
         for lobject in self.extdict.values():
-            lobject.iter0_post_solver_creation()        
+            lobject.iter0_post_solver_creation()
 
     def post_iter0(self):
         for lobject in self.extdict.values():
