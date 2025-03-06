@@ -87,6 +87,7 @@ class FWPH(mpisppy.phbase.PHBase):
         best_bound = trivial_bound
 
         # Lines 2 and 3 of Algorithm 3 in Boland
+        # Now done a the beginning of the first iteration
         # self.Compute_Xbar(self.options['verbose'])
         # self.Update_W(self.options['verbose'])
 
@@ -146,28 +147,24 @@ class FWPH(mpisppy.phbase.PHBase):
             if hasattr(self.spcomm, "sync_Ws"):
                 self.spcomm.sync_Ws()
             if (self._is_timed_out()):
-                # TODO: replace the convergence messages with global_toc
-                if (self.cylinder_rank == 0 and self.vb):
-                    print('Timeout.')
+                global_toc("FWPH Timed Out", self.cylinder_rank == 0)
                 break
 
             if (self.ph_converger):
                 diff = self.convobject.convergence_value()
                 if (self.convobject.is_converged()):
                     secs = time.time() - self.t0
-                    self._output(self._local_bound, 
-                                 best_bound, diff, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
-                        print('FWPH converged to user-specified criteria')
+                    self._output(self._local_bound, best_bound, diff, secs)
+                    global_toc('FWPH converged to user-specified criteria', self.cylinder_rank == 0)
                     break
             else: # Convergence check from Boland
                 diff = self._conv_diff()
                 if (diff < self.options['convthresh']):
                     secs = time.time() - self.t0
-                    self._output(self._local_bound, 
-                                 best_bound, diff, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
-                        print('FWPH converged based on standard criteria')
+                    self._output(self._local_bound, best_bound, diff, secs)
+                    global_toc(f'FWPH converged based on standard criteria, convergence diff: {diff}',
+                               self.cylinder_rank == 0,
+                    )
                     break
 
             self._swap_nonant_vars()
@@ -213,15 +210,13 @@ class FWPH(mpisppy.phbase.PHBase):
                 self.spcomm.sync_nonants()
                 self.spcomm.sync_bounds()
                 self.spcomm.sync_extensions()
-                if self.spcomm.is_converged():
-                    secs = time.time() - self.t0
-                    self._output(self._local_bound, 
-                                 best_bound, np.nan, secs)
-                    if (self.cylinder_rank == 0 and self.vb):
-                        print('FWPH converged to user-specified criteria')
-                    break
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
+            if self.spcomm and self.spcomm.is_converged():
+                secs = time.time() - self.t0
+                self._output(self._local_bound, best_bound, np.nan, secs)
+                global_toc('FWPH stopped due to cylinder convergence')
+                break
 
             if (self.extensions): 
                 self.extobject.enditer_after_sync()
