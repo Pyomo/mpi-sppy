@@ -963,32 +963,12 @@ class Config(pyofig.ConfigDict):
                             domain=int,
                             default=0)
 
-
     def wxbar_read_write_args(self):
-        self.add_to_config("init_W_fname",
-                                description="Path of initial W file (default None)",
-                                domain=str,
-                                default=None)
-        self.add_to_config("init_Xbar_fname",
-                                description="Path of initial Xbar file (default None)",
-                                domain=str,
-                                default=None)
-        self.add_to_config("init_separate_W_files",
-                                description="If True, W is read from separate files (default False)",
-                                domain=bool,
-                                default=False)
-        self.add_to_config("W_fname",
-                                description="Path of final W file (default None)",
-                                domain=str,
-                                default=None)
-        self.add_to_config("Xbar_fname",
-                                description="Path of final Xbar file (default None)",
-                                domain=str,
-                                default=None)
-        self.add_to_config("separate_W_files",
-                                description="If True, writes W to separate files (default False)",
-                                domain=bool,
-                                default=False)
+        import mpisppy.utils.wxbarreader as wxbarreader
+        wxbarreader.add_options_to_config(self)
+
+        import mpisppy.utils.wxbarwriter as wxbarwriter
+        wxbarwriter.add_options_to_config(self)        
 
     def proper_bundle_config(self):
         self.add_to_config('pickle_bundles_dir',
