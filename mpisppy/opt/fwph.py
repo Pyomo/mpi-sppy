@@ -31,8 +31,6 @@ from mpisppy.utils.sputils import find_active_objective
 from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
 
-from mpisppy.cylinders.spoke import Spoke
-from mpisppy.cylinders.hub import FWPHHub
 from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
 from mpisppy.extensions.xhatbase import XhatBase
 
@@ -72,7 +70,6 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _init(self, FW_options):
         self.FW_options = FW_options
-        self.FW_options["save_file"] = "fwph_bench.out"
         self._options_checks_fw()
         self.vb = True
         if ('FW_verbose' in self.FW_options):
@@ -146,7 +143,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (self.extensions): 
                 self.extobject.miditer()
 
-            if isinstance(self.spcomm, FWPHHub):
+            if hasattr(self.spcomm, "sync_Ws"):
                 self.spcomm.sync_Ws()
             if (self._is_timed_out()):
                 # TODO: replace the convergence messages with global_toc
@@ -212,11 +209,10 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._reenable_W()
 
             ## Hubs/spokes take precedence over convergers
-            if self.spcomm:
-                if isinstance(self.spcomm, FWPHHub):
-                    self.spcomm.sync_nonants()
-                    self.spcomm.sync_bounds()
-                    self.spcomm.sync_extensions()
+            if hasattr(self.spcomm, "sync_nonants"):
+                self.spcomm.sync_nonants()
+                self.spcomm.sync_bounds()
+                self.spcomm.sync_extensions()
                 if self.spcomm.is_converged():
                     secs = time.time() - self.t0
                     self._output(self._local_bound, 
@@ -224,8 +220,8 @@ class FWPH(mpisppy.phbase.PHBase):
                     if (self.cylinder_rank == 0 and self.vb):
                         print('FWPH converged to user-specified criteria')
                     break
-                if isinstance(self.spcomm, Spoke):
-                    self.spcomm.sync()
+            elif hasattr(self.spcomm, "sync"):
+                self.spcomm.sync()
 
             if (self.extensions): 
                 self.extobject.enditer_after_sync()
@@ -509,9 +505,7 @@ class FWPH(mpisppy.phbase.PHBase):
         obj = find_active_objective(mip)
         repn = generate_standard_repn(obj.expr, compute_values=False, quadratic=False)
         nonant_var_ids = mip._mpisppy_data.varid_to_nonant_index
-        if len(repn.nonlinear_vars) > 0:
-            # hopefull a small number
-            nonlinear_vars = {id(v) for v in repn.nonlinear_vars}
+        if repn.nonlinear_vars:
             for v in repn.nonlinear_vars:
                 if id(v) in nonant_var_ids:
                     raise RuntimeError("FWPH does not support models where the nonants "
