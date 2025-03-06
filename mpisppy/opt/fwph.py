@@ -106,14 +106,14 @@ class FWPH(mpisppy.phbase.PHBase):
         self._cache_nonant_var_swap_qp()
         self._setup_shared_column_generation()
 
-        number_initial_column_tries = self.options.get("FW_initialization_attempts", 20)
+        number_initial_column_tries = self.options.get("FW_initialization_attempts", 10)
         if self.FW_options["FW_iter_limit"] == 1 and number_initial_column_tries < 1:
-            global_toc(f"{self.__class__.__name__}: Warning: FWPH needs an initial shared column if FW_iter_limit == 1. Increasing FW_iter_limit to 2 to ensure convergence")
+            global_toc(f"{self.__class__.__name__}: Warning: FWPH needs an initial shared column if FW_iter_limit == 1. Increasing FW_iter_limit to 2 to ensure convergence", self.cylinder_rank == 0)
             self.FW_options["FW_iter_limit"] = 2
         if self.FW_options["FW_iter_limit"] == 1 or number_initial_column_tries > 0:
             number_points = self._generate_shared_column(number_initial_column_tries)
             if number_points == 0 and self.FW_options["FW_iter_limit"] == 1:
-                global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence")
+                global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence", self.cylinder_rank == 0)
                 self.FW_options["FW_iter_limit"] = 2
 
         self._reenable_W()
@@ -199,7 +199,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
 
             # add a shared column
-            shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 1)
+            shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 0)
             if shared_columns > 0:
                 self.mpicomm.Barrier()
                 self._disable_W()
@@ -499,18 +499,28 @@ class FWPH(mpisppy.phbase.PHBase):
             [diff, MPI.DOUBLE], [recv, MPI.DOUBLE], op=MPI.SUM)
         return recv
 
-    def _attach_nonant_objective(self, mip):
+    def _attach_nonant_objective(self, mip, _print_warning=[True]):
         """ Extract the parts of the objective function which involve nonants.
-            Adds to mip._mpisspy_model.nonant_obj_part
+            Adds to mip._mpisppy_model.nonant_obj_part
 
             Args:
                 mip (Pyomo ConcreteModel): MIP model for a scenario or bundle.
         """
         obj = find_active_objective(mip)
         repn = generate_standard_repn(obj.expr, compute_values=False, quadratic=False)
+        nonant_var_ids = mip._mpisppy_data.varid_to_nonant_index
         if len(repn.nonlinear_vars) > 0:
-            raise ValueError("FWPH does not support models with nonlinear objective functions")
-        nonant_var_ids = {id(v) for v in mip._mpisppy_data.nonant_vars.values()}
+            # hopefull a small number
+            nonlinear_vars = {id(v) for v in repn.nonlinear_vars}
+            for v in repn.nonlinear_vars:
+                if id(v) in nonant_var_ids:
+                    raise RuntimeError("FWPH does not support models where the nonants "
+                                       "participate nonlinearly in the objective function")
+            global_toc("Using FWPH with nonlinear recourse cost. "
+                       "Simplicial decomposition iterates may not return vertices!",
+                       (self.cylinder_rank==0 and _print_warning[0])
+            )
+            _print_warning[0] = False
         linear_coefs = []
         linear_vars = []
         for coef, var in zip(repn.linear_coefs, repn.linear_vars):
