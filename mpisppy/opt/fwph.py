@@ -280,10 +280,9 @@ class FWPH(mpisppy.phbase.PHBase):
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
             cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-            #if self.options["fwph_include_cutoff"]:
-            if True:
-                # TODO: add lookup table for absolute cutoff option
-                self.options["iterk_solver_options"]["MIPABSCUTOFF"] = cutoff
+            # TODO: add lookup table for absolute cutoff option
+            # if self.options.get("fwph_include_cutoff", False):
+            #     self.options["iterk_solver_options"]["MIPABSCUTOFF"] = cutoff
             # tbmipsolve = time.time()
             # Algorithm 2 line 5
             self.solve_one(
@@ -294,8 +293,9 @@ class FWPH(mpisppy.phbase.PHBase):
                 tee=teeme,
                 verbose=verbose,
             )
+            # TODO: handle case when there's no solution under the cutoff gracefully
             # TODO: fixme for maxmimization / larger objectives
-            self.options["iterk_solver_options"]["MIPABSCUTOFF"] = 1e40
+            # self.options["iterk_solver_options"]["MIPABSCUTOFF"] = 1e40
             # tmipsolve = time.time() - tbmipsolve
 
             # Algorithm 2 lines 6--8
