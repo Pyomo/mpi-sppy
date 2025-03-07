@@ -35,7 +35,11 @@ class Hub(SPCommunicator):
     _hub_algo_best_bound_provider = False
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
+        # The extensions will be registered in SPCommunicator.__init__
+        self.extension_recv = set()
+
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=options)
+
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # for logging
         self.print_init = True
@@ -46,8 +50,6 @@ class Hub(SPCommunicator):
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
         self.last_gap = float('inf')  # abs_gap tracker
-
-        self.extension_recv = set()
 
         self.initialize_bound_values()
 

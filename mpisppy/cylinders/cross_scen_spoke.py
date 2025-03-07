@@ -41,12 +41,15 @@ class CrossScenarioCutSpoke(Spoke):
         self.all_nonant_len = vbuflen
         self.all_eta_len = nscen*local_scen_count
 
-        self.all_nonants = self.register_recv_field(Field.NONANT, 0, vbuflen)
-        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0, nscen * nscen)
 
         self.all_coefs = self.send_buffers[Field.CROSS_SCENARIO_CUT]
 
         return
+
+    def register_receive_fields(self):
+        super().register_receive_fields()
+        self.all_nonants = self.register_recv_field(Field.NONANT, 0)
+        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0)
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.

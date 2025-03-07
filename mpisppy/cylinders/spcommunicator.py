@@ -22,7 +22,6 @@
 import numpy as np
 import abc
 import time
-import itertools
 
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 
@@ -191,18 +190,26 @@ class SPCommunicator:
 
     def _exchange_send_fields(self) -> None:
         """ Do an all-to-all so we know what the other communicators are sending """
-        self.send_fields_by_rank = self.strata_comm.allgather(tuple(self.send_buffers.keys()))
+        send_buffers = tuple((k, buff._length) for k, buff in self.send_buffers.items())
+        self.send_fields_lengths_by_rank = self.strata_comm.allgather(send_buffers)
+
+        self.send_fields_by_rank = {}
 
         self.available_receive_fields = {}
-        for rank, fields in enumerate(self.send_fields_by_rank):
+        for rank, fields_lengths in enumerate(self.send_fields_lengths_by_rank):
             if rank == self.strata_rank:
                 continue
-            for f in fields:
+            self.send_fields_by_rank[rank] = []
+            for f, length in fields_lengths:
                 if f not in self.available_receive_fields:
                     self.available_receive_fields[f] = []
                 self.available_receive_fields[f].append(rank)
+                self.send_fields_by_rank[rank].append(f)
+
+        # print(f"{self.__class__.__name__}: {self.available_receive_fields=}")
 
     def register_recv_field(self, field: Field, origin: int, length: int = -1) -> RecvArray:
+        # print(f"{self.__class__.__name__}.register_recv_field, {field=}, {origin=}")
         key = self._make_key(field, origin)
         if length == -1:
             length = self._field_lengths[field]
@@ -210,6 +217,13 @@ class SPCommunicator:
             my_fa = self.receive_buffers[key]
             assert(length + 1 == np.size(my_fa.array()))
         else:
+            available_fields_from_origin = self.send_fields_lengths_by_rank[origin]
+            for _field, _length in available_fields_from_origin:
+                if field == _field:
+                    assert length == _length
+                    break
+            else: # couldn't find field!
+                raise RuntimeError(f"Couldn't find {field=} from {origin=}")
             my_fa = RecvArray(length)
             self.receive_buffers[key] = my_fa
         ## End if
@@ -284,6 +298,7 @@ class SPCommunicator:
             self.register_send_field(field)
 
     def register_receive_fields(self) -> None:
+        # print(f"{self.__class__.__name__}: {self.receive_fields=}")
         for field in self.receive_fields:
             self.receive_field_spcomms[field] = []
             for strata_rank, comm in enumerate(self.communicators):

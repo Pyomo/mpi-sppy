@@ -29,10 +29,6 @@ class Spoke(SPCommunicator):
 
         self.last_call_to_got_kill_signal = time.time()
 
-        # All spokes need the SHUTDOWN field to know when to terminate. Just
-        # register that here.
-        self.shutdown = self.register_recv_field(Field.SHUTDOWN, 0, 1)
-
         return
 
     def spoke_to_hub(self, buf: SendArray, field: Field):
@@ -95,7 +91,7 @@ class Spoke(SPCommunicator):
     def _got_kill_signal(self):
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         if shutdown_buf.is_new():
-            shutdown = (self.shutdown[0] == 1.0)
+            shutdown = (shutdown_buf[0] == 1.0)
         else:
             shutdown = False
         ## End if
@@ -158,8 +154,11 @@ class _BoundSpoke(Spoke):
     def register_send_fields(self) -> None:
         super().register_send_fields()
         self._bound = self.send_buffers[self.bound_type()]
-        self._hub_bounds = self.register_recv_field(Field.BEST_OBJECTIVE_BOUNDS, 0, 2)
         return
+
+    def register_receive_fields(self) -> None:
+        super().register_receive_fields()
+        self._hub_bounds = self.register_recv_field(Field.BEST_OBJECTIVE_BOUNDS, 0, 2)
 
     @abc.abstractmethod
     def bound_type(self) -> Field:
@@ -202,19 +201,6 @@ class _BoundNonantLenSpoke(_BoundSpoke):
     def nonant_len_type(self) -> Field:
         # TODO: Make this a static method?
         pass
-
-    def register_send_fields(self) -> None:
-
-        super().register_send_fields()
-
-        vbuflen = 0
-        for s in self.opt.local_scenarios.values():
-            vbuflen += len(s._mpisppy_data.nonant_indices)
-        ## End for
-
-        self.register_recv_field(self.nonant_len_type(), 0, vbuflen)
-
-        return
 
 
 class InnerBoundSpoke(_BoundSpoke):
