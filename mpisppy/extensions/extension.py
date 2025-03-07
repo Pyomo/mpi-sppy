@@ -21,14 +21,6 @@ class Extension:
     def __init__(self, spopt_object):
         self.opt = spopt_object
 
-    def register_send_fields(self):
-        '''
-        Method called by the Hub SPCommunicator to get any fields that the extension
-        will make available to spokes. Use hub function `register_extension_send_field`
-        to register a field.
-        '''
-        return
-
     def setup_hub(self):
         '''
         Method called when the Hub SPCommunicator is set up (if used)
@@ -39,7 +31,15 @@ class Extension:
         '''
         pass
 
-    def initialize_spoke_indices(self):
+    def register_send_fields(self):
+        '''
+        Method called by the Hub SPCommunicator to get any fields that the extension
+        will make available to spokes. Use hub function `register_extension_send_field`
+        to register a field.
+        '''
+        return
+
+    def register_receive_fields(self):
         '''
         Method called when the Hub SPCommunicator initializes its spoke indices
 
@@ -176,9 +176,13 @@ class MultiExtension(Extension):
         for lobject in self.extdict.values():
             lobject.setup_hub()
 
-    def initialize_spoke_indices(self):
+    def register_send_fields(self):
         for lobject in self.extdict.values():
-            lobject.initialize_spoke_indices()
+            lobject.register_send_fields()
+
+    def register_receive_fields(self):
+        for lobject in self.extdict.values():
+            lobject.register_receive_fields()
 
     def sync_with_spokes(self):
         for lobject in self.extdict.values():

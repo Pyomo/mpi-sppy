@@ -22,6 +22,7 @@
 import numpy as np
 import abc
 import time
+import itertools
 
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 
@@ -138,8 +139,10 @@ class SPCommunicator:
             self.options = options
 
         # Common fields for spokes and hubs
-        self.receive_buffers = dict()
-        self.send_buffers = dict()
+        self.receive_buffers = {}
+        self.send_buffers = {}
+        # key: Field, value: list of (strata_rank, SPComm) with that Field
+        self.receive_field_spcomms = {}
 
         # setup FieldLengths which calculates
         # the length of each buffer type based
@@ -151,6 +154,11 @@ class SPCommunicator:
         self.opt.spcomm = self
 
         self.register_send_fields()
+        # TODO: here we can have a dynamic exchange of the send fields
+        #       so we can do error checking (all-to-all in send fields)
+        self.register_receive_fields()
+
+        # TODO: check that we have something in receive_field_spcomms??
 
         return
 
@@ -259,6 +267,17 @@ class SPCommunicator:
         return
 
     def register_send_fields(self) -> None:
-        self.send_buffers = {}
         for field in self.send_fields:
-            self.send_buffers[field] = self.register_send_field(field)
+            self.register_send_field(field)
+
+    def register_receive_fields(self) -> None:
+        # TODO: make receive_fields dynamic? Make the callback handles this???
+        for field in itertools.chain(self.receive_fields, self.optional_receive_fields):
+            self.receive_field_spcomms[field] = []
+            for strata_rank, comm in enumerate(self.communicators):
+                if strata_rank == self.strata_rank:
+                    continue
+                cls = comm["spcomm_class"]
+                if field in cls.send_fields:
+                    buff = self.register_recv_field(field, strata_rank)
+                    self.receive_field_spcomms[field].append((strata_rank, cls, buff))

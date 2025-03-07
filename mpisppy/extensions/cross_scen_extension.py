@@ -127,12 +127,6 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
-        # spcomm = self.opt.spcomm
-        # idx = self.cut_gen_spoke_index
-        # receive_buffer = np.empty(spcomm.remote_lengths[idx - 1] + 1, dtype="d") # Must be doubles
-        # is_new = spcomm.hub_from_spoke(receive_buffer, idx)
-        # if is_new:
-        #     self.make_cuts(receive_buffer)
         if self.cuts.is_new():
             self.make_cuts(self.cuts.array())
 
@@ -275,8 +269,6 @@ class CrossScenarioExtension(Extension):
         return
 
     def setup_hub(self):
-        # idx = self.cut_gen_spoke_index
-        # self.all_nonants_and_etas = np.zeros(self.opt.spcomm.local_lengths[idx - 1] + 1)
 
         self.nonant_len = self.opt.nonant_length
 
@@ -287,22 +279,17 @@ class CrossScenarioExtension(Extension):
         # helping the extension track cuts
         self.new_cuts = False
 
-    def initialize_spoke_indices(self):
-        for (i, spoke) in enumerate(self.opt.spcomm.communicators):
-            if spoke["spcomm_class"] == CrossScenarioCutSpoke:
-                self.cut_gen_spoke_index = i
-            ## End if
-        ## End for
+    def register_receive_fields(self):
+        spcomm = self.opt.spcomm
+        spcomms_cross_scenario_cut = spcomm.receive_field_spcomms[Field.CROSS_SCENARIO_CUT]
+        assert len(spcomms_cross_scenario_cut) == 1
+        index, cls = spcomms_cross_scenario_cut[0]
+        assert cls is CrossScenarioCutSpoke
 
-        if hasattr(self, "cut_gen_spoke_index"):
-            spcomm = self.opt.spcomm
-            nscen = len(self.opt.all_scenario_names)
-            self.cuts = spcomm.register_extension_recv_field(
-                Field.CROSS_SCENARIO_CUT,
-                self.cut_gen_spoke_index,
-                nscen*(self.opt.nonant_length + 1 + 1)
-            )
-        ## End if
+        self.cuts = spcomm.register_extension_recv_field(
+            Field.CROSS_SCENARIO_CUT,
+            index,
+        )
 
     def sync_with_spokes(self):
         self.send_to_cross_cuts()

@@ -16,7 +16,6 @@ from mpisppy.opt.aph import APH
 from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
 from math import inf
-from mpisppy.cylinders.spoke import ConvergerSpokeType
 
 from mpisppy import global_toc
 
@@ -50,6 +49,8 @@ class Hub(SPCommunicator):
         self.last_gap = float('inf')  # abs_gap tracker
 
         self.extension_recv = set()
+
+        self.initialize_bound_values()
 
         return
 
@@ -233,14 +234,12 @@ class Hub(SPCommunicator):
             (but should be harmless to call if there are none)
         """
         logging.debug("Hub is trying to receive from InnerBounds")
-        for idx in self.innerbound_spoke_indices:
-            key = self._make_key(Field.OBJECTIVE_INNER_BOUND, idx)
-            recv_buf = self.receive_buffers[key]
+        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
             is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_INNER_BOUND)
             if is_new:
                 bound = recv_buf[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
-                self.BestInnerBound = self.InnerBoundUpdate(bound, idx)
+                self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
         logging.debug("ph back from InnerBounds")
 
     def receive_outerbounds(self):
@@ -249,37 +248,35 @@ class Hub(SPCommunicator):
             (but should be harmless to call if there are none)
         """
         logging.debug("Hub is trying to receive from OuterBounds")
-        for idx in self.outerbound_spoke_indices:
-            key = self._make_key(Field.OBJECTIVE_OUTER_BOUND, idx)
-            recv_buf = self.receive_buffers[key]
+        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
             is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_OUTER_BOUND)
             if is_new:
                 bound = recv_buf[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
-                self.BestOuterBound = self.OuterBoundUpdate(bound, idx)
+                self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
         logging.debug("ph back from OuterBounds")
 
-    def OuterBoundUpdate(self, new_bound, idx=None, char='*'):
+    def OuterBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
         current_bound = self.BestOuterBound
         if self._outer_bound_update(new_bound, current_bound):
-            if idx is None:
+            if cls is None:
                 self.latest_ob_char = char
                 self.last_ob_idx = 0
             else:
-                self.latest_ob_char = self.outerbound_spoke_chars[idx]
+                self.latest_ib_char = cls.converger_spoke_char
                 self.last_ob_idx = idx
             return new_bound
         else:
             return current_bound
 
-    def InnerBoundUpdate(self, new_bound, idx=None, char='*'):
+    def InnerBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
         current_bound = self.BestInnerBound
         if self._inner_bound_update(new_bound, current_bound):
-            if idx is None:
+            if cls is None:
                 self.latest_ib_char = char
                 self.last_ib_idx = 0
             else:
-                self.latest_ib_char = self.innerbound_spoke_chars[idx]
+                self.latest_ib_char = cls.converger_spoke_char
                 self.last_ib_idx = idx
             return new_bound
         else:
@@ -297,28 +294,6 @@ class Hub(SPCommunicator):
             self._inner_bound_update = lambda new, old : (new > old)
             self._outer_bound_update = lambda new, old : (new < old)
 
-    def initialize_outer_bound_buffers(self):
-        """ Initialize outer bound receive buffers
-        """
-        self.outerbound_receive_buffers = dict()
-        for idx in self.outerbound_spoke_indices:
-            self.outerbound_receive_buffers[idx] = self.register_recv_field(
-                Field.OBJECTIVE_OUTER_BOUND, idx, 1,
-            )
-        ## End for
-        return
-
-    def initialize_inner_bound_buffers(self):
-        """ Initialize inner bound receive buffers
-        """
-        self.innerbound_receive_buffers = dict()
-        for idx in self.innerbound_spoke_indices:
-            self.innerbound_receive_buffers[idx] = self.register_recv_field(
-                Field.OBJECTIVE_INNER_BOUND, idx, 1
-            )
-        ## End for
-        return
-
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
         """
@@ -327,8 +302,6 @@ class Hub(SPCommunicator):
 
     def send_boundsout(self):
         """ Send bounds to the appropriate spokes
-        This is called only for spokes which are bounds only.
-        w and nonant spokes are passed bounds through the w and nonant buffers
         """
         my_bounds = self.send_buffers[Field.BEST_OBJECTIVE_BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
@@ -336,7 +309,7 @@ class Hub(SPCommunicator):
         self.hub_to_spoke(my_bounds, Field.BEST_OBJECTIVE_BOUNDS)
         return
 
-    def initialize_spoke_indices(self):
+    def register_receive_fields(self):
         """ Figure out what types of spokes we have,
         and sort them into the appropriate classes.
 
@@ -344,45 +317,11 @@ class Hub(SPCommunicator):
             Some spokes may be multiple types (e.g. outerbound and nonant),
             though not all combinations are supported.
         """
-        self.outerbound_spoke_indices = set()
-        self.innerbound_spoke_indices = set()
-        self.nonant_spoke_indices = set()
-        self.w_spoke_indices = set()
-
-        self.outerbound_spoke_chars = dict()
-        self.innerbound_spoke_chars = dict()
-
-        for (i, spoke) in enumerate(self.communicators):
-            if i == self.strata_rank:
-                continue
-            spoke_class = spoke["spcomm_class"]
-            if hasattr(spoke_class, "converger_spoke_types"):
-                for cst in spoke_class.converger_spoke_types:
-                    if cst == ConvergerSpokeType.OUTER_BOUND:
-                        self.outerbound_spoke_indices.add(i)
-                        self.outerbound_spoke_chars[i] = spoke_class.converger_spoke_char
-                    elif cst == ConvergerSpokeType.INNER_BOUND:
-                        self.innerbound_spoke_indices.add(i)
-                        self.innerbound_spoke_chars[i] = spoke_class.converger_spoke_char
-                    elif cst == ConvergerSpokeType.W_GETTER:
-                        self.w_spoke_indices.add(i)
-                    elif cst == ConvergerSpokeType.NONANT_GETTER:
-                        self.nonant_spoke_indices.add(i)
-                    else:
-                        raise RuntimeError(f"Unrecognized converger_spoke_type {cst}")
-
-            else:  ##this isn't necessarily wrong, i.e., cut generators
-                logger.debug(f"Spoke class {spoke_class} not recognized by hub")
-
-        # all _BoundSpoke spokes get hub bounds so we determine which spokes
-        # are "bounds only"
-        self.bounds_only_indices = \
-            (self.outerbound_spoke_indices | self.innerbound_spoke_indices) - \
-            (self.w_spoke_indices | self.nonant_spoke_indices)
+        super().register_receive_fields()
 
         # Not all opt classes may have extensions
         if getattr(self.opt, "extensions", None) is not None:
-            self.opt.extobject.initialize_spoke_indices()
+            self.opt.extobject.register_receive_fields()
 
         return
 
@@ -511,31 +450,14 @@ class PHHub(Hub):
                 "Cannot call setup_hub before memory windows are constructed"
             )
 
-        self.initialize_spoke_indices()
-        self.initialize_bound_values()
-
-        self.initialize_outer_bound_buffers()
-        self.initialize_inner_bound_buffers()
-
-        ## Do some checking for things we currently don't support
-        if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke providing both inner and outer "
-                "bounds is currently unsupported"
-            )
-        if len(self.w_spoke_indices & self.nonant_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke needing both Ws and nonants is currently unsupported"
-            )
-
         ## Generate some warnings if nothing is giving bounds
-        if not self.outerbound_spoke_indices:
+        if not self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
             logger.warn(
                 "No OuterBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
             )
 
-        if not self.innerbound_spoke_indices:
+        if not self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
             logger.warn(
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
@@ -578,7 +500,7 @@ class PHHub(Hub):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
 
-        if not self.innerbound_spoke_indices:
+        if not self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
             if self.opt._PHIter == 1:
                 logger.warning(
                     "PHHub cannot compute convergence without "
@@ -591,7 +513,7 @@ class PHHub(Hub):
 
             return False
 
-        if not self.outerbound_spoke_indices:
+        if not self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
             if self.opt._PHIter == 1 and not self._hub_algo_best_bound_provider:
                 global_toc(
                     "Without outer bound spokes, no progress "
@@ -660,24 +582,8 @@ class LShapedHub(Hub):
                 "Cannot call setup_hub before memory windows are constructed"
             )
 
-        self.initialize_spoke_indices()
-        self.initialize_bound_values()
-
-        self.initialize_outer_bound_buffers()
-        self.initialize_inner_bound_buffers()
-
-        ## Do some checking for things we currently
-        ## do not support
-        if self.w_spoke_indices:
-            raise RuntimeError("LShaped hub does not compute dual weights (Ws)")
-        if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
-            raise RuntimeError(
-                "A Spoke providing both inner and outer "
-                "bounds is currently unsupported"
-            )
-
         ## Generate some warnings if nothing is giving bounds
-        if not self.innerbound_spoke_indices:
+        if not self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
             logger.warn(
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
