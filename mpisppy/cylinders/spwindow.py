@@ -14,6 +14,8 @@ import numpy.typing as nptyping
 
 import enum
 
+import pyomo.environ as pyo
+
 class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
@@ -26,6 +28,51 @@ class Field(enum.IntEnum):
     CROSS_SCENARIO_CUT=300
     CROSS_SCENARIO_COST=400
     WHOLE=1_000_000
+
+
+_field_length_components = pyo.ConcreteModel()
+_field_length_components.local_nonant_length = pyo.Param(mutable=True)
+_field_length_components.local_scenario_length = pyo.Param(mutable=True)
+_field_length_components.total_number_nonants = pyo.Param(mutable=True)
+_field_length_components.total_number_scenarios = pyo.Param(mutable=True)
+
+_field_lengths = {
+        Field.SHUTDOWN : 1,
+        Field.NONANT : _field_length_components.local_nonant_length,
+        Field.DUALS : _field_length_components.local_nonant_length,
+        Field.OBJECTIVE_BOUNDS : 2,
+        Field.OBJECTIVE_INNER_BOUND : 1,
+        Field.OBJECTIVE_OUTER_BOUND : 1,
+        Field.EXPECTED_REDUCED_COST : _field_length_components.total_number_nonants,
+        Field.SCENARIO_REDUCED_COST : _field_length_components.local_nonant_length,
+        Field.CROSS_SCENARIO_CUT : _field_length_components.local_nonant_length,
+        Field.CROSS_SCENARIO_COST : _field_length_components.total_number_scenarios * _field_length_components.total_number_scenarios,
+}
+
+
+class FieldLengths:
+    def __init__(self, opt):
+        number_nonants = (
+            sum(
+                len(s._mpisppy_data.nonant_indices)
+                for s in opt.local_scenarios.values()
+               )
+        )
+
+        _field_length_components.local_nonant_length.value = number_nonants
+        _field_length_components.local_scenario_length.value = len(opt.local_scenarios)
+        _field_length_components.total_number_nonants.value = opt.nonant_length
+        _field_length_components.total_number_scenarios.value = len(opt.local_scenarios)
+
+        self._field_lengths = {k : pyo.value(v) for k, v in _field_lengths.items()}
+
+        # reset the _field_length_components
+        for p in _field_length_components.component_data_objects():
+            p.clear()
+
+    def __getitem__(self, field: Field):
+        return self._field_lengths[field]
+
 
 class SPWindow:
 
