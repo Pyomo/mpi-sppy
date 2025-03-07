@@ -19,12 +19,6 @@ from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicato
 from mpisppy.cylinders.spwindow import Field
 
 
-class ConvergerSpokeType(enum.Enum):
-    OUTER_BOUND = 1
-    INNER_BOUND = 2
-    W_GETTER = 3
-    NONANT_GETTER = 4
-
 class Spoke(SPCommunicator):
 
     send_fields = (*SPCommunicator.send_fields, )
@@ -235,7 +229,6 @@ class InnerBoundSpoke(_BoundSpoke):
     receive_fields = (*_BoundSpoke.receive_fields, )
     optional_receive_fields = (*_BoundSpoke.optional_receive_fields,)
 
-    converger_spoke_types = (ConvergerSpokeType.INNER_BOUND,)
     converger_spoke_char = 'I'
 
     def bound_type(self) -> Field:
@@ -251,7 +244,6 @@ class OuterBoundSpoke(_BoundSpoke):
     receive_fields = (*_BoundSpoke.receive_fields, )
     optional_receive_fields = (*_BoundSpoke.optional_receive_fields,)
 
-    converger_spoke_types = (ConvergerSpokeType.OUTER_BOUND,)
     converger_spoke_char = 'O'
 
     def bound_type(self) -> Field:
@@ -294,10 +286,6 @@ class OuterBoundWSpoke(_BoundWSpoke):
     receive_fields = (*_BoundWSpoke.receive_fields, Field.DUALS)
     optional_receive_fields = (*_BoundWSpoke.optional_receive_fields,)
 
-    converger_spoke_types = (
-        ConvergerSpokeType.OUTER_BOUND,
-        ConvergerSpokeType.W_GETTER,
-    )
     converger_spoke_char = 'O'
 
     def bound_type(self) -> Field:
@@ -341,10 +329,6 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
     receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
     optional_receive_fields = (*_BoundNonantSpoke.optional_receive_fields,)
 
-    converger_spoke_types = (
-        ConvergerSpokeType.INNER_BOUND,
-        ConvergerSpokeType.NONANT_GETTER,
-    )
     converger_spoke_char = 'I'
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
@@ -390,10 +374,6 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
     receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
     optional_receive_fields = (*_BoundNonantSpoke.optional_receive_fields,)
 
-    converger_spoke_types = (
-        ConvergerSpokeType.OUTER_BOUND,
-        ConvergerSpokeType.NONANT_GETTER,
-    )
     converger_spoke_char = 'A'  # probably Lagrangian
 
     def bound_type(self) -> Field:
