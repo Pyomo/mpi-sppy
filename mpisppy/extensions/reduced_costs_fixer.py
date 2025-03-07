@@ -95,10 +95,9 @@ class ReducedCostsFixer(Extension):
 
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
-        spcomms_expected_reduced_cost = spcomm.receive_field_spcomms[Field.EXPECTED_REDUCED_COST]
-        assert len(spcomms_expected_reduced_cost) == 1
-        index, cls = spcomms_expected_reduced_cost[0]
-        assert cls is ReducedCostsSpoke
+        expected_reduced_cost_ranks = spcomm.available_receive_fields[Field.EXPECTED_REDUCED_COST]
+        assert len(expected_reduced_cost_ranks) == 1
+        index = expected_reduced_cost_ranks[0]
 
         self.reduced_costs_spoke_index = index
 

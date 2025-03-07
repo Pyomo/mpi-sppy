@@ -10,7 +10,6 @@ from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
-from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.spwindow import Field
 
 import pyomo.environ as pyo
@@ -281,10 +280,9 @@ class CrossScenarioExtension(Extension):
 
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
-        spcomms_cross_scenario_cut = spcomm.receive_field_spcomms[Field.CROSS_SCENARIO_CUT]
-        assert len(spcomms_cross_scenario_cut) == 1
-        index, cls = spcomms_cross_scenario_cut[0]
-        assert cls is CrossScenarioCutSpoke
+        cross_scenario_cut_ranks = spcomm.available_receive_fields[Field.CROSS_SCENARIO_CUT]
+        assert len(cross_scenario_cut_ranks) == 1
+        index = cross_scenario_cut_ranks[0]
 
         self.cuts = spcomm.register_extension_recv_field(
             Field.CROSS_SCENARIO_CUT,
