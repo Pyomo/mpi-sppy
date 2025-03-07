@@ -108,15 +108,24 @@ class RecvArray(FieldArray):
 
 
 class SPCommunicator:
-    """ Notes: TODO
+    """ Base class for communicator objects. Each communicator object should register
+        as a class attribute what Field attributes it provides in its buffer
+        or expects to receive from another SPCommunicator object. Additionally, optional
+        receive attributes can be specified, for which the SPCommunicator will still work
+        but can read additional attributes.
     """
+    send_fields = ()
+    receive_fields = ()
+    optional_receive_fields = ()
 
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
         # flag for if the windows have been constructed
         self._windows_constructed = False
         self.fullcomm = fullcomm
         self.strata_comm = strata_comm
         self.cylinder_comm = cylinder_comm
+        self.communicators = communicators
+        assert len(communicators) == strata_comm.Get_size()
         self.global_rank = fullcomm.Get_rank()
         self.strata_rank = strata_comm.Get_rank()
         self.cylinder_rank = cylinder_comm.Get_rank()
@@ -131,6 +140,11 @@ class SPCommunicator:
         # Common fields for spokes and hubs
         self._locals = dict()
         self._sends = dict()
+
+        # setup FieldLengths which calculates
+        # the length of each buffer type based
+        # on the problem data
+        # self._field_lengths = FieldLengths(self.opt)
 
         # attach the SPCommunicator to
         # the SPBase object
@@ -168,8 +182,10 @@ class SPCommunicator:
         ## End for
         return window_spec
 
-    def register_recv_field(self, field: Field, origin: int, length: int) -> RecvArray:
+    def register_recv_field(self, field: Field, origin: int, length: int = -1) -> RecvArray:
         key = self._make_key(field, origin)
+        if length == -1:
+            length = self._field_lengths[field]
         if key in self._locals:
             my_fa = self._locals[key]
             assert(length + 1 == np.size(my_fa.array()))
@@ -179,8 +195,10 @@ class SPCommunicator:
         ## End if
         return my_fa
 
-    def register_send_field(self, field: Field, length: int) -> SendArray:
+    def register_send_field(self, field: Field, length: int = -1) -> SendArray:
         assert field not in self._sends, "Field {} is already registered".format(field)
+        if length == -1:
+            length = self._field_lengths[field]
         # if field in self._sends:
         #     my_fa = self._sends[field]
         #     assert(length + 1 == np.size(my_fa.array()))

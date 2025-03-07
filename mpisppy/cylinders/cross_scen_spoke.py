@@ -17,8 +17,6 @@ import pyomo.environ as pyo
 import mpisppy.cylinders.spoke as spoke
 
 class CrossScenarioCutSpoke(spoke.Spoke):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
     def register_send_fields(self) -> None:
 

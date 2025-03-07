@@ -288,9 +288,9 @@ class CrossScenarioExtension(Extension):
         self.new_cuts = False
 
     def initialize_spoke_indices(self):
-        for (i, spoke) in enumerate(self.opt.spcomm.spokes):
-            if spoke["spoke_class"] == CrossScenarioCutSpoke:
-                self.cut_gen_spoke_index = i + 1
+        for (i, spoke) in enumerate(self.opt.spcomm.communicators):
+            if spoke["spcomm_class"] == CrossScenarioCutSpoke:
+                self.cut_gen_spoke_index = i
             ## End if
         ## End for
 

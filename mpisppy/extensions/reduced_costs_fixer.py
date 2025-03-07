@@ -94,9 +94,9 @@ class ReducedCostsFixer(Extension):
         self.fix_fraction_target = self._fix_fraction_target_iterK
 
     def initialize_spoke_indices(self):
-        for (i, spoke) in enumerate(self.opt.spcomm.spokes):
-            if spoke["spoke_class"] == ReducedCostsSpoke:
-                self.reduced_costs_spoke_index = i + 1
+        for (i, spoke) in enumerate(self.opt.spcomm.communicators):
+            if spoke["spcomm_class"] == ReducedCostsSpoke:
+                self.reduced_costs_spoke_index = i
             ## End if
         ## End for
 

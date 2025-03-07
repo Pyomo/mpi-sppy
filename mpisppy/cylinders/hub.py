@@ -32,10 +32,8 @@ class Hub(SPCommunicator):
 
     _hub_algo_best_bound_provider = False
 
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, spokes, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
-        assert len(spokes) == self.n_spokes
-        self.spokes = spokes  # List of dicts
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=options)
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # for logging
         self.print_init = True
@@ -352,20 +350,22 @@ class Hub(SPCommunicator):
         self.outerbound_spoke_chars = dict()
         self.innerbound_spoke_chars = dict()
 
-        for (i, spoke) in enumerate(self.spokes):
-            spoke_class = spoke["spoke_class"]
+        for (i, spoke) in enumerate(self.communicators):
+            if i == self.strata_rank:
+                continue
+            spoke_class = spoke["spcomm_class"]
             if hasattr(spoke_class, "converger_spoke_types"):
                 for cst in spoke_class.converger_spoke_types:
                     if cst == ConvergerSpokeType.OUTER_BOUND:
-                        self.outerbound_spoke_indices.add(i + 1)
-                        self.outerbound_spoke_chars[i+1] = spoke_class.converger_spoke_char
+                        self.outerbound_spoke_indices.add(i)
+                        self.outerbound_spoke_chars[i] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.INNER_BOUND:
-                        self.innerbound_spoke_indices.add(i + 1)
-                        self.innerbound_spoke_chars[i+1] = spoke_class.converger_spoke_char
+                        self.innerbound_spoke_indices.add(i)
+                        self.innerbound_spoke_chars[i] = spoke_class.converger_spoke_char
                     elif cst == ConvergerSpokeType.W_GETTER:
-                        self.w_spoke_indices.add(i + 1)
+                        self.w_spoke_indices.add(i)
                     elif cst == ConvergerSpokeType.NONANT_GETTER:
-                        self.nonant_spoke_indices.add(i + 1)
+                        self.nonant_spoke_indices.add(i)
                     else:
                         raise RuntimeError(f"Unrecognized converger_spoke_type {cst}")
 
@@ -396,8 +396,10 @@ class Hub(SPCommunicator):
         self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
 
         required_fields = set()
-        for spoke in self.spokes:
-            spoke_class = spoke["spoke_class"]
+        for i, spoke in enumerate(self.communicators):
+            if i == self.strata_rank:
+                continue
+            spoke_class = spoke["spcomm_class"]
             if hasattr(spoke_class, "converger_spoke_types"):
                 for cst in spoke_class.converger_spoke_types:
                     if cst == ConvergerSpokeType.W_GETTER:

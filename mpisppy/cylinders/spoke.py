@@ -26,9 +26,9 @@ class ConvergerSpokeType(enum.Enum):
     NONANT_GETTER = 4
 
 class Spoke(SPCommunicator):
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
 
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options)
 
         self.last_call_to_got_kill_signal = time.time()
 
