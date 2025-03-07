@@ -111,13 +111,10 @@ class RecvArray(FieldArray):
 class SPCommunicator:
     """ Base class for communicator objects. Each communicator object should register
         as a class attribute what Field attributes it provides in its buffer
-        or expects to receive from another SPCommunicator object. Additionally, optional
-        receive attributes can be specified, for which the SPCommunicator will still work
-        but can read additional attributes.
+        or expects to receive from another SPCommunicator object.
     """
     send_fields = ()
     receive_fields = ()
-    optional_receive_fields = ()
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
         # flag for if the windows have been constructed
@@ -286,7 +283,7 @@ class SPCommunicator:
             self.register_send_field(field)
 
     def register_receive_fields(self) -> None:
-        for field in itertools.chain(self.receive_fields, self.optional_receive_fields):
+        for field in self.receive_fields:
             self.receive_field_spcomms[field] = []
             for strata_rank, comm in enumerate(self.communicators):
                 if strata_rank == self.strata_rank:

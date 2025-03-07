@@ -30,8 +30,7 @@ logger = logging.getLogger("mpisppy.cylinders.Hub")
 class Hub(SPCommunicator):
 
     send_fields = (*SPCommunicator.send_fields, Field.SHUTDOWN, Field.BEST_OBJECTIVE_BOUNDS,)
-    receive_fields = (*SPCommunicator.receive_fields, )
-    optional_receive_fields = (*SPCommunicator.optional_receive_fields, Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND, )
+    receive_fields = (*SPCommunicator.receive_fields, Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND, )
 
     _hub_algo_best_bound_provider = False
 
@@ -439,7 +438,6 @@ class PHHub(Hub):
 
     send_fields = (*Hub.send_fields, Field.NONANT, Field.DUALS)
     receive_fields = (*Hub.receive_fields,)
-    optional_receive_fields = (*Hub.optional_receive_fields,)
 
     def setup_hub(self):
         """ Must be called after make_windows(), so that
@@ -571,7 +569,6 @@ class LShapedHub(Hub):
 
     send_fields = (*Hub.send_fields, Field.NONANT,)
     receive_fields = (*Hub.receive_fields,)
-    optional_receive_fields = (*Hub.optional_receive_fields,)
 
     def setup_hub(self):
         """ Must be called after make_windows(), so that

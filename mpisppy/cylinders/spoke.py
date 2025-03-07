@@ -22,7 +22,6 @@ class Spoke(SPCommunicator):
 
     send_fields = (*SPCommunicator.send_fields, )
     receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, )
-    optional_receive_fields = (*SPCommunicator.optional_receive_fields, )
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
 
@@ -135,7 +134,6 @@ class _BoundSpoke(Spoke):
 
     send_fields = (*Spoke.send_fields, )
     receive_fields = (*Spoke.receive_fields, Field.BEST_OBJECTIVE_BOUNDS)
-    optional_receive_fields = (*Spoke.optional_receive_fields, )
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
@@ -226,7 +224,6 @@ class InnerBoundSpoke(_BoundSpoke):
 
     send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
     receive_fields = (*_BoundSpoke.receive_fields, )
-    optional_receive_fields = (*_BoundSpoke.optional_receive_fields,)
 
     converger_spoke_char = 'I'
 
@@ -241,7 +238,6 @@ class OuterBoundSpoke(_BoundSpoke):
 
     send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
     receive_fields = (*_BoundSpoke.receive_fields, )
-    optional_receive_fields = (*_BoundSpoke.optional_receive_fields,)
 
     converger_spoke_char = 'O'
 
@@ -283,7 +279,6 @@ class OuterBoundWSpoke(_BoundWSpoke):
 
     send_fields = (*_BoundWSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
     receive_fields = (*_BoundWSpoke.receive_fields, Field.DUALS)
-    optional_receive_fields = (*_BoundWSpoke.optional_receive_fields,)
 
     converger_spoke_char = 'O'
 
@@ -326,7 +321,6 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
 
     send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
     receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
-    optional_receive_fields = (*_BoundNonantSpoke.optional_receive_fields,)
 
     converger_spoke_char = 'I'
 
@@ -371,7 +365,6 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
 
     send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
     receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
-    optional_receive_fields = (*_BoundNonantSpoke.optional_receive_fields,)
 
     converger_spoke_char = 'A'  # probably Lagrangian
 

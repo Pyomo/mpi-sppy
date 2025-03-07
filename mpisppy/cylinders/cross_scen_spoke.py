@@ -20,7 +20,6 @@ class CrossScenarioCutSpoke(Spoke):
 
     send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT)
     receive_fields = (*Spoke.receive_fields, Field.NONANT, Field.CROSS_SCENARIO_COST)
-    optional_receive_fields = (*Spoke.optional_receive_fields, )
 
     def register_send_fields(self) -> None:
 

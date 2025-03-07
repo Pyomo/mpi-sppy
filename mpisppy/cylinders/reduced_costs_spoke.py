@@ -17,7 +17,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
 
     send_fields = (*LagrangianOuterBound.send_fields, Field.EXPECTED_REDUCED_COST, Field.SCENARIO_REDUCED_COST ,)
     receive_fields = (*LagrangianOuterBound.receive_fields,)
-    optional_receive_fields = (*LagrangianOuterBound.optional_receive_fields,)
 
     converger_spoke_char = 'R'
 
