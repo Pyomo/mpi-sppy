@@ -219,10 +219,8 @@ class Hub(SPCommunicator):
         return abs_gap_satisfied or rel_gap_satisfied or max_stalled_satisfied
 
     def hub_finalize(self):
-        if self.has_outerbound_spokes:
-            self.receive_outerbounds()
-        if self.has_innerbound_spokes:
-            self.receive_innerbounds()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
 
         if self.global_rank == 0:
             self.print_init = True
@@ -382,12 +380,6 @@ class Hub(SPCommunicator):
             (self.outerbound_spoke_indices | self.innerbound_spoke_indices) - \
             (self.w_spoke_indices | self.nonant_spoke_indices)
 
-        self.has_outerbound_spokes = len(self.outerbound_spoke_indices) > 0
-        self.has_innerbound_spokes = len(self.innerbound_spoke_indices) > 0
-        self.has_nonant_spokes = len(self.nonant_spoke_indices) > 0
-        self.has_w_spokes = len(self.w_spoke_indices) > 0
-        self.has_bounds_only_spokes = len(self.bounds_only_indices) > 0
-
         # Not all opt classes may have extensions
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.initialize_spoke_indices()
@@ -522,10 +514,8 @@ class PHHub(Hub):
         self.initialize_spoke_indices()
         self.initialize_bound_values()
 
-        if self.has_outerbound_spokes:
-            self.initialize_outer_bound_buffers()
-        if self.has_innerbound_spokes:
-            self.initialize_inner_bound_buffers()
+        self.initialize_outer_bound_buffers()
+        self.initialize_inner_bound_buffers()
 
         ## Do some checking for things we currently don't support
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
@@ -539,13 +529,13 @@ class PHHub(Hub):
             )
 
         ## Generate some warnings if nothing is giving bounds
-        if not self.has_outerbound_spokes:
+        if not self.outerbound_spoke_indices:
             logger.warn(
                 "No OuterBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
             )
 
-        if not self.has_innerbound_spokes:
+        if not self.innerbound_spoke_indices:
             logger.warn(
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
@@ -557,16 +547,11 @@ class PHHub(Hub):
         """
             Manages communication with Spokes
         """
-        if self.has_w_spokes:
-            self.send_ws()
-        if self.has_nonant_spokes:
-            self.send_nonants()
-        if self.has_bounds_only_spokes:
-            self.send_boundsout()
-        if self.has_outerbound_spokes:
-            self.receive_outerbounds()
-        if self.has_innerbound_spokes:
-            self.receive_innerbounds()
+        self.send_ws()
+        self.send_nonants()
+        self.send_boundsout()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
         if self.opt.extensions is not None:
             self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
@@ -575,30 +560,25 @@ class PHHub(Hub):
         self.sync()
 
     def sync_bounds(self):
-        if self.has_outerbound_spokes:
-            self.receive_outerbounds()
-        if self.has_innerbound_spokes:
-            self.receive_innerbounds()
-        if self.has_bounds_only_spokes:
-            self.send_boundsout()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
+        self.send_boundsout()
 
     def sync_extensions(self):
         if self.opt.extensions is not None:
             self.opt.extobject.sync_with_spokes()
 
     def sync_nonants(self):
-        if self.has_nonant_spokes:
-            self.send_nonants()
+        self.send_nonants()
 
     def sync_Ws(self):
-        if self.has_w_spokes:
-            self.send_ws()
+        self.send_ws()
 
     def is_converged(self):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
 
-        if not self.has_innerbound_spokes:
+        if not self.innerbound_spoke_indices:
             if self.opt._PHIter == 1:
                 logger.warning(
                     "PHHub cannot compute convergence without "
@@ -611,7 +591,7 @@ class PHHub(Hub):
 
             return False
 
-        if not self.has_outerbound_spokes:
+        if not self.outerbound_spoke_indices:
             if self.opt._PHIter == 1 and not self._hub_algo_best_bound_provider:
                 global_toc(
                     "Without outer bound spokes, no progress "
@@ -638,9 +618,7 @@ class PHHub(Hub):
 
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
-            TODO: Will likely fail with bundling
         """
-        self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
         nonant_send_buffer = self.send_buffers[Field.NONANT]
         for k, s in self.opt.local_scenarios.items():
@@ -685,17 +663,13 @@ class LShapedHub(Hub):
         self.initialize_spoke_indices()
         self.initialize_bound_values()
 
-        if self.has_outerbound_spokes:
-            self.initialize_outer_bound_buffers()
-        if self.has_innerbound_spokes:
-            self.initialize_inner_bound_buffers()
+        self.initialize_outer_bound_buffers()
+        self.initialize_inner_bound_buffers()
 
         ## Do some checking for things we currently
         ## do not support
-        if self.has_w_spokes:
+        if self.w_spoke_indices:
             raise RuntimeError("LShaped hub does not compute dual weights (Ws)")
-        # if self.has_nonant_spokes:
-        #     self.initialize_nonants()
         if len(self.outerbound_spoke_indices & self.innerbound_spoke_indices) > 0:
             raise RuntimeError(
                 "A Spoke providing both inner and outer "
@@ -703,7 +677,7 @@ class LShapedHub(Hub):
             )
 
         ## Generate some warnings if nothing is giving bounds
-        if not self.has_innerbound_spokes:
+        if not self.innerbound_spoke_indices:
             logger.warn(
                 "No InnerBound Spokes defined, this converger "
                 "will not cause the hub to terminate"
@@ -713,12 +687,10 @@ class LShapedHub(Hub):
         """
         Manages communication with Bound Spokes
         """
-        if send_nonants and self.has_nonant_spokes:
+        if send_nonants:
             self.send_nonants()
-        if self.has_outerbound_spokes:
-            self.receive_outerbounds()
-        if self.has_innerbound_spokes:
-            self.receive_innerbounds()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
             self.sync_extension_fields()
