@@ -43,6 +43,7 @@ class FieldArray:
     """
 
     def __init__(self, length: int):
+        self._length = length
         self._array = communicator_array(length)
         self._id = 0
         return

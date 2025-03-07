@@ -82,7 +82,7 @@ class Hub(SPCommunicator):
         pass
 
 
-    def register_extension_recv_field(self, field: Field, strata_rank: int, buf_len: int) -> RecvArray:
+    def register_extension_recv_field(self, field: Field, strata_rank: int, buf_len: int = -1) -> RecvArray:
         """
         Register an extensions interest in the given field from the given spoke. The hub
         is then responsible for updating this field into a local buffer prior to the call
