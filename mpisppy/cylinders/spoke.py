@@ -26,6 +26,11 @@ class ConvergerSpokeType(enum.Enum):
     NONANT_GETTER = 4
 
 class Spoke(SPCommunicator):
+
+    send_fields = (*SPCommunicator.send_fields, )
+    receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, )
+    optional_receive_fields = (*SPCommunicator.optional_receive_fields, )
+
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
 
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options)
@@ -96,7 +101,7 @@ class Spoke(SPCommunicator):
         return False
 
     def _got_kill_signal(self):
-        shutdown_buf = self._locals[self._make_key(Field.SHUTDOWN, 0)]
+        shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         if shutdown_buf.is_new():
             shutdown = (self.shutdown[0] == 1.0)
         else:
@@ -108,7 +113,7 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        self.update_locals()
+        self.updatereceive_buffers()
         return self._got_kill_signal()
 
     @abc.abstractmethod
@@ -121,8 +126,8 @@ class Spoke(SPCommunicator):
         """
         pass
 
-    def update_locals(self):
-        for (key, recv_buf) in self._locals.items():
+    def updatereceive_buffers(self):
+        for (key, recv_buf) in self.receive_buffers.items():
             field, rank = self._split_key(key)
             # The below code will need to be updated for spoke to spoke communication
             assert(rank == 0)
@@ -134,6 +139,11 @@ class Spoke(SPCommunicator):
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
+
+    send_fields = (*Spoke.send_fields, )
+    receive_fields = (*Spoke.receive_fields, Field.BEST_OBJECTIVE_BOUNDS)
+    optional_receive_fields = (*Spoke.optional_receive_fields, )
+
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         if self.cylinder_rank == 0 and \
@@ -155,8 +165,9 @@ class _BoundSpoke(Spoke):
 
 
     def register_send_fields(self) -> None:
-        self._bound = self.register_send_field(self.bound_type(), 1)
-        self._hub_bounds = self.register_recv_field(Field.OBJECTIVE_BOUNDS, 0, 2)
+        super().register_send_fields()
+        self._bound = self.send_buffers[self.bound_type()]
+        self._hub_bounds = self.register_recv_field(Field.BEST_OBJECTIVE_BOUNDS, 0, 2)
         return
 
     @abc.abstractmethod
@@ -219,6 +230,11 @@ class InnerBoundSpoke(_BoundSpoke):
     """ For Spokes that provide an inner bound through self.bound to the
         Hub, and do not need information from the main PH OPT hub.
     """
+
+    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
+    receive_fields = (*_BoundSpoke.receive_fields, )
+    optional_receive_fields = (*_BoundSpoke.optional_receive_fields,)
+
     converger_spoke_types = (ConvergerSpokeType.INNER_BOUND,)
     converger_spoke_char = 'I'
 
@@ -230,6 +246,11 @@ class OuterBoundSpoke(_BoundSpoke):
     """ For Spokes that provide an outer bound through self.bound to the
         Hub, and do not need information from the main PH OPT hub.
     """
+
+    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
+    receive_fields = (*_BoundSpoke.receive_fields, )
+    optional_receive_fields = (*_BoundSpoke.optional_receive_fields,)
+
     converger_spoke_types = (ConvergerSpokeType.OUTER_BOUND,)
     converger_spoke_char = 'O'
 
@@ -249,7 +270,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     def localWs(self):
         """Returns the local copy of the weights"""
         key = self._make_key(Field.DUALS, 0)
-        return self._locals[key].value_array()
+        return self.receive_buffers[key].value_array()
 
     @property
     def new_Ws(self):
@@ -258,7 +279,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
             the last call to got_kill_signal
         """
         key = self._make_key(Field.DUALS, 0)
-        return self._locals[key].is_new()
+        return self.receive_buffers[key].is_new()
 
 
 class OuterBoundWSpoke(_BoundWSpoke):
@@ -268,6 +289,10 @@ class OuterBoundWSpoke(_BoundWSpoke):
     and receive the Ws (or weights) from
     the main PH OPT hub.
     """
+
+    send_fields = (*_BoundWSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
+    receive_fields = (*_BoundWSpoke.receive_fields, Field.DUALS)
+    optional_receive_fields = (*_BoundWSpoke.optional_receive_fields,)
 
     converger_spoke_types = (
         ConvergerSpokeType.OUTER_BOUND,
@@ -291,7 +316,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     def localnonants(self):
         """Returns the local copy of the nonants"""
         key = self._make_key(Field.NONANT, 0)
-        return self._locals[key].value_array()
+        return self.receive_buffers[key].value_array()
 
     @property
     def new_nonants(self):
@@ -299,7 +324,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
            the nonants has been updated since
            the last call to got_kill_signal"""
         key = self._make_key(Field.NONANT, 0)
-        return self._locals[key].is_new()
+        return self.receive_buffers[key].is_new()
 
 
 class InnerBoundNonantSpoke(_BoundNonantSpoke):
@@ -311,6 +336,11 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         Includes some helpful methods for saving
         and restoring results
     """
+
+    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
+    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
+    optional_receive_fields = (*_BoundNonantSpoke.optional_receive_fields,)
+
     converger_spoke_types = (
         ConvergerSpokeType.INNER_BOUND,
         ConvergerSpokeType.NONANT_GETTER,
@@ -355,6 +385,11 @@ class OuterBoundNonantSpoke(_BoundNonantSpoke):
         and receive the nonants from
         the main OPT hub.
     """
+
+    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
+    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
+    optional_receive_fields = (*_BoundNonantSpoke.optional_receive_fields,)
+
     converger_spoke_types = (
         ConvergerSpokeType.OUTER_BOUND,
         ConvergerSpokeType.NONANT_GETTER,

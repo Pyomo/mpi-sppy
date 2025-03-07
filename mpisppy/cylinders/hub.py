@@ -30,6 +30,10 @@ logger = logging.getLogger("mpisppy.cylinders.Hub")
 
 class Hub(SPCommunicator):
 
+    send_fields = (*SPCommunicator.send_fields, Field.SHUTDOWN, Field.BEST_OBJECTIVE_BOUNDS,)
+    receive_fields = (*SPCommunicator.receive_fields, )
+    optional_receive_fields = (*SPCommunicator.optional_receive_fields, Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND, )
+
     _hub_algo_best_bound_provider = False
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
@@ -85,7 +89,7 @@ class Hub(SPCommunicator):
         to the extension sync_with_spokes function.
         """
         key = self._make_key(field, strata_rank)
-        if key not in self._locals:
+        if key not in self.receive_buffers:
             # if it is not already registered, we need to update the local buffer
             self.extension_recv.add(key)
         ## End if
@@ -103,7 +107,7 @@ class Hub(SPCommunicator):
         return self.register_send_field(field, buf_len)
 
     def is_send_field_registered(self, field: Field) -> bool:
-        return field in self._sends
+        return field in self.send_buffers
 
     def extension_send_field(self, field: Field, buf: SendArray):
         """
@@ -117,7 +121,7 @@ class Hub(SPCommunicator):
         Update all registered extension fields. Safe to call even when there are no extension fields.
         """
         for key in self.extension_recv:
-            ext_buf = self._locals[key]
+            ext_buf = self.receive_buffers[key]
             (field, srank) = self._split_key(key)
             ext_buf._is_new = self.hub_from_spoke(ext_buf, srank, field)
         ## End for
@@ -233,7 +237,7 @@ class Hub(SPCommunicator):
         logging.debug("Hub is trying to receive from InnerBounds")
         for idx in self.innerbound_spoke_indices:
             key = self._make_key(Field.OBJECTIVE_INNER_BOUND, idx)
-            recv_buf = self._locals[key]
+            recv_buf = self.receive_buffers[key]
             is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_INNER_BOUND)
             if is_new:
                 bound = recv_buf[0]
@@ -249,7 +253,7 @@ class Hub(SPCommunicator):
         logging.debug("Hub is trying to receive from OuterBounds")
         for idx in self.outerbound_spoke_indices:
             key = self._make_key(Field.OBJECTIVE_OUTER_BOUND, idx)
-            recv_buf = self._locals[key]
+            recv_buf = self.receive_buffers[key]
             is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_OUTER_BOUND)
             if is_new:
                 bound = recv_buf[0]
@@ -320,18 +324,18 @@ class Hub(SPCommunicator):
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
         """
-        buf[-3] = self.BestOuterBound
-        buf[-2] = self.BestInnerBound
+        buf[0] = self.BestOuterBound
+        buf[1] = self.BestInnerBound
 
     def send_boundsout(self):
         """ Send bounds to the appropriate spokes
         This is called only for spokes which are bounds only.
         w and nonant spokes are passed bounds through the w and nonant buffers
         """
-        my_bounds = self.boundsout_send_buffer
+        my_bounds = self.send_buffers[Field.BEST_OBJECTIVE_BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
         logging.debug("hub is sending bounds={}".format(my_bounds))
-        self.hub_to_spoke(my_bounds, Field.OBJECTIVE_BOUNDS)
+        self.hub_to_spoke(my_bounds, Field.BEST_OBJECTIVE_BOUNDS)
         return
 
     def initialize_spoke_indices(self):
@@ -392,52 +396,13 @@ class Hub(SPCommunicator):
 
 
     def register_send_fields(self):
-
-        self.shutdown = self.register_send_field(Field.SHUTDOWN, 1)
-
-        required_fields = set()
-        for i, spoke in enumerate(self.communicators):
-            if i == self.strata_rank:
-                continue
-            spoke_class = spoke["spcomm_class"]
-            if hasattr(spoke_class, "converger_spoke_types"):
-                for cst in spoke_class.converger_spoke_types:
-                    if cst == ConvergerSpokeType.W_GETTER:
-                        required_fields.add(Field.DUALS)
-                    elif cst == ConvergerSpokeType.NONANT_GETTER:
-                        required_fields.add(Field.NONANT)
-                    elif cst == ConvergerSpokeType.INNER_BOUND or cst == ConvergerSpokeType.OUTER_BOUND:
-                        required_fields.add(Field.OBJECTIVE_BOUNDS)
-                    else:
-                        pass # Intentional no-op
-                    ## End if
-                ## End for
-            else:
-                # Intentional no-op. Non-converger spokes need to register any needed
-                # fields separately. See the functions `register_extension_recv_field`
-                # and `register_extension_send_field`.
-                pass
-            ## End if
-        ## End for
-
-        n_nonants = 0
-        for s in self.opt.local_scenarios.values():
-            n_nonants += len(s._mpisppy_data.nonant_indices)
-        ## End for
-
-        if Field.DUALS in required_fields:
-            self.w_send_buffer = self.register_send_field(Field.DUALS, n_nonants)
-        if Field.NONANT in required_fields:
-            self.nonant_send_buffer = self.register_send_field(Field.NONANT, n_nonants)
-        if Field.OBJECTIVE_BOUNDS in required_fields:
-            self.boundsout_send_buffer = self.register_send_field(Field.OBJECTIVE_BOUNDS, 2)
+        super().register_send_fields()
 
         # Not all opt classes may have extensions
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.register_send_fields()
 
         return
-
 
 
     def hub_to_spoke(self, buf: SendArray, field: Field):
@@ -534,13 +499,17 @@ class Hub(SPCommunicator):
             buffer, so every spoke will see it simultaneously.
             processes (don't need to call them one at a time).
         """
-        shutdown = self.shutdown
-        shutdown[0] = 1.0
-        self.hub_to_spoke(shutdown, Field.SHUTDOWN)
+        self.send_buffers[Field.SHUTDOWN][0] = 1.0
+        self.hub_to_spoke(self.send_buffers[Field.SHUTDOWN], Field.SHUTDOWN)
         return
 
 
 class PHHub(Hub):
+
+    send_fields = (*Hub.send_fields, Field.NONANT, Field.DUALS)
+    receive_fields = (*Hub.receive_fields,)
+    optional_receive_fields = (*Hub.optional_receive_fields,)
+
     def setup_hub(self):
         """ Must be called after make_windows(), so that
             the hub knows the sizes of all the spokes windows
@@ -673,8 +642,7 @@ class PHHub(Hub):
         """
         self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
-        # my_nonants = self._sends[Field.NONANT]
-        nonant_send_buffer = self.nonant_send_buffer
+        nonant_send_buffer = self.send_buffers[Field.NONANT]
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
@@ -690,7 +658,7 @@ class PHHub(Hub):
         """ Send dual weights to the appropriate spokes
         """
         # NOTE: my_ws.array() and self.w_send_buffer should be the same array.
-        my_ws = self._sends[Field.DUALS]
+        my_ws = self.send_buffers[Field.DUALS]
         self.opt._populate_W_cache(my_ws.array(), padding=1)
         logging.debug("hub is sending Ws={}".format(my_ws.array()))
 
@@ -700,6 +668,10 @@ class PHHub(Hub):
         return
 
 class LShapedHub(Hub):
+
+    send_fields = (*Hub.send_fields, Field.NONANT,)
+    receive_fields = (*Hub.receive_fields,)
+    optional_receive_fields = (*Hub.optional_receive_fields,)
 
     def setup_hub(self):
         """ Must be called after make_windows(), so that
@@ -781,7 +753,7 @@ class LShapedHub(Hub):
             TODO: Will likely fail with bundling
         """
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.nonant_send_buffer
+        nonant_send_buffer = self.send_buffers[Field.NONANT]
         for k, s in self.opt.local_scenarios.items():
             nonant_to_root_var_map = s._mpisppy_model.subproblem_to_root_vars_map
             for xvar in s._mpisppy_data.nonant_indices.values():
@@ -797,6 +769,8 @@ class LShapedHub(Hub):
 
 class SubgradientHub(PHHub):
 
+    # send / receive fields are same as PHHub
+
     _hub_algo_best_bound_provider = True
 
     def main(self):
@@ -805,6 +779,8 @@ class SubgradientHub(PHHub):
 
 
 class APHHub(PHHub):
+
+    # send / receive fields are same as PHHub
 
     def main(self):
         """ SPComm gets attached by self.__init___; holding APH harmless """

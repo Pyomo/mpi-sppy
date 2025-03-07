@@ -103,7 +103,7 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
             # if self.get_serial_number() == 0:
             #     continue
 
-            if self._locals[self._make_key(Field.NONANT, 0)].id() == 0:
+            if self.receive_buffers[self._make_key(Field.NONANT, 0)].id() == 0:
                 continue
 
             if (xh_iter-1) % 100 == 0:

@@ -23,7 +23,7 @@ import numpy as np
 import abc
 import time
 
-from mpisppy.cylinders.spwindow import Field, SPWindow
+from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 
 def communicator_array(size):
     arr = np.empty(size+1, dtype='d')
@@ -138,26 +138,26 @@ class SPCommunicator:
             self.options = options
 
         # Common fields for spokes and hubs
-        self._locals = dict()
-        self._sends = dict()
+        self.receive_buffers = dict()
+        self.send_buffers = dict()
 
         # setup FieldLengths which calculates
         # the length of each buffer type based
         # on the problem data
-        # self._field_lengths = FieldLengths(self.opt)
+        self._field_lengths = FieldLengths(self.opt)
 
         # attach the SPCommunicator to
         # the SPBase object
         self.opt.spcomm = self
 
-        # self.register_send_fields()
+        self.register_send_fields()
 
         return
 
     def _make_key(self, field: Field, origin: int):
         """
         Given a field and an origin (i.e. a strata_rank), generate a key for indexing
-        into the self._locals dictionary and getting the corresponding RecvArray.
+        into the self.receive_buffers dictionary and getting the corresponding RecvArray.
 
         Undone by `_split_key`. Currently, the key is simply a Tuple[field, origin].
         """
@@ -175,9 +175,8 @@ class SPCommunicator:
     def _build_window_spec(self) -> dict[Field, int]:
         """ Build dict with fields and lengths needed for local MPI window
         """
-        self.register_send_fields()
         window_spec = dict()
-        for (field,buf) in self._sends.items():
+        for (field,buf) in self.send_buffers.items():
             window_spec[field] = np.size(buf.array())
         ## End for
         return window_spec
@@ -186,28 +185,28 @@ class SPCommunicator:
         key = self._make_key(field, origin)
         if length == -1:
             length = self._field_lengths[field]
-        if key in self._locals:
-            my_fa = self._locals[key]
+        if key in self.receive_buffers:
+            my_fa = self.receive_buffers[key]
             assert(length + 1 == np.size(my_fa.array()))
         else:
             my_fa = RecvArray(length)
-            self._locals[key] = my_fa
+            self.receive_buffers[key] = my_fa
         ## End if
         return my_fa
 
     def register_send_field(self, field: Field, length: int = -1) -> SendArray:
-        assert field not in self._sends, "Field {} is already registered".format(field)
+        assert field not in self.send_buffers, "Field {} is already registered".format(field)
         if length == -1:
             length = self._field_lengths[field]
-        # if field in self._sends:
-        #     my_fa = self._sends[field]
+        # if field in self.send_buffers:
+        #     my_fa = self.send_buffers[field]
         #     assert(length + 1 == np.size(my_fa.array()))
         # else:
         #     my_fa = SendArray(length)
-        #     self._sends[field] = my_fa
+        #     self.send_buffers[field] = my_fa
         # ## End if else
         my_fa = SendArray(length)
-        self._sends[field] = my_fa
+        self.send_buffers[field] = my_fa
         return my_fa
 
     @abc.abstractmethod
@@ -259,6 +258,7 @@ class SPCommunicator:
 
         return
 
-    @abc.abstractmethod
     def register_send_fields(self) -> None:
-        pass
+        self.send_buffers = {}
+        for field in self.send_fields:
+            self.send_buffers[field] = self.register_send_field(field)

@@ -11,12 +11,16 @@ from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy import MPI
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.cylinders.spoke import Spoke
 
 import numpy as np
 import pyomo.environ as pyo
-import mpisppy.cylinders.spoke as spoke
 
-class CrossScenarioCutSpoke(spoke.Spoke):
+class CrossScenarioCutSpoke(Spoke):
+
+    send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT)
+    receive_fields = (*Spoke.receive_fields, Field.NONANT, Field.CROSS_SCENARIO_COST)
+    optional_receive_fields = (*Spoke.optional_receive_fields, )
 
     def register_send_fields(self) -> None:
 
@@ -35,15 +39,13 @@ class CrossScenarioCutSpoke(spoke.Spoke):
         (self.nonant_per_scen, remainder) = divmod(vbuflen, local_scen_count)
         assert(remainder == 0)
 
-        ## the _locals will also have the kill signal
         self.all_nonant_len = vbuflen
         self.all_eta_len = nscen*local_scen_count
 
         self.all_nonants = self.register_recv_field(Field.NONANT, 0, vbuflen)
         self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0, nscen * nscen)
 
-        self.all_coefs = self.register_send_field(Field.CROSS_SCENARIO_CUT,
-                                                  nscen*(self.nonant_per_scen + 1 + 1))
+        self.all_coefs = self.send_buffers[Field.CROSS_SCENARIO_CUT]
 
         return
 
@@ -301,7 +303,6 @@ class CrossScenarioCutSpoke(spoke.Spoke):
 
         # main loop
         while not (self.got_kill_signal()):
-            # if self._new_locals:
             if self.all_nonants.is_new() and self.all_etas.is_new():
                 self.make_cut()
             ## End if
