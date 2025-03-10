@@ -31,21 +31,6 @@ class Spoke(SPCommunicator):
 
         return
 
-    def spoke_to_hub(self, buf: SendArray, field: Field):
-        """ Put the specified values into the locally-owned buffer for the hub
-            to pick up.
-
-            Notes:
-            Automatically handles write id updating and setting
-        """
-        return self._spoke_to_hub(buf.array(), field, buf._next_write_id())
-
-    def _spoke_to_hub(self, values: np.typing.NDArray, field: Field, write_id: int):
-        self.cylinder_comm.Barrier()
-        values[-1] = write_id
-        self.window.put(values, field)
-        return
-
     def spoke_from_hub(self,
                        buf: RecvArray,
                        field: Field,
@@ -172,7 +157,7 @@ class _BoundSpoke(Spoke):
     def bound(self, value):
         self._append_trace(value)
         self._bound[0] = value
-        self.spoke_to_hub(self._bound, self.bound_type())
+        self.put_send_buffer(self._bound, self.bound_type())
         return
 
     @property

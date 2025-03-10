@@ -137,7 +137,7 @@ class CrossScenarioCutSpoke(Spoke):
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
             all_coefs[row_len*idx] = self._eta_lb_array[idx]
             all_coefs[row_len*idx+1] = -1
-        self.spoke_to_hub(all_coefs, Field.CROSS_SCENARIO_CUT)
+        self.put_send_buffer(all_coefs, Field.CROSS_SCENARIO_CUT)
 
     def make_cut(self):
 
@@ -295,7 +295,7 @@ class CrossScenarioCutSpoke(Spoke):
                 all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
             elif feas_cuts:
                 all_coefs[row_len*idx:row_len*(idx+1)] = feas_cuts.pop()
-        self.spoke_to_hub(all_coefs, Field.CROSS_SCENARIO_CUT)
+        self.put_send_buffer(all_coefs, Field.CROSS_SCENARIO_CUT)
 
     def main(self):
         # call main cut generation routine

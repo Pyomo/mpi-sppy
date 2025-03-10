@@ -82,9 +82,11 @@ class SendArray(FieldArray):
 
     def _next_write_id(self) -> int:
         """
-        Updates the internal id field to the next write id and returns that id
+        Updates the internal id field to the next write id, uses that id in the field data,
+        and returns that id
         """
         self._id += 1
+        self._array[-1] = self._id
         return self._id
 
 
@@ -153,8 +155,6 @@ class SPCommunicator:
         self._create_field_rank_mappings()
 
         self.register_receive_fields()
-
-        # TODO: check that we have something in receive_field_spcomms??
 
         return
 
@@ -236,13 +236,6 @@ class SPCommunicator:
         assert field not in self.send_buffers, "Field {} is already registered".format(field)
         if length == -1:
             length = self._field_lengths[field]
-        # if field in self.send_buffers:
-        #     my_fa = self.send_buffers[field]
-        #     assert(length + 1 == np.size(my_fa.array()))
-        # else:
-        #     my_fa = SendArray(length)
-        #     self.send_buffers[field] = my_fa
-        # ## End if else
         my_fa = SendArray(length)
         self.send_buffers[field] = my_fa
         return my_fa
@@ -293,6 +286,10 @@ class SPCommunicator:
     def register_receive_fields(self) -> None:
         # print(f"{self.__class__.__name__}: {self.receive_fields=}")
         for field in self.receive_fields:
+            # NOTE: If this list is empty after this method, it is up
+            #       to the caller to raise an error. Sometimes optional
+            #       receive fields are perfectly sensible, and sometimes
+            #       they are nonsensical.
             self.receive_field_spcomms[field] = []
             for strata_rank, comm in enumerate(self.communicators):
                 if strata_rank == self.strata_rank:
@@ -301,3 +298,14 @@ class SPCommunicator:
                 if field in self.ranks_to_fields[strata_rank]:
                     buff = self.register_recv_field(field, strata_rank)
                     self.receive_field_spcomms[field].append((strata_rank, cls, buff))
+
+    def put_send_buffer(self, buf: SendArray, field: Field):
+        """ Put the specified values into the specified locally-owned buffer
+            for the another cylinder to pick up.
+
+            Notes:
+                This automatically updates handles the write id.
+        """
+        buf._next_write_id()
+        self.window.put(buf.array(), field)
+        return

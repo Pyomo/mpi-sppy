@@ -116,7 +116,7 @@ class Hub(SPCommunicator):
         Send the data in the SendArray `buf` which stores the Field `field`. This will make
         the data available to the spokes in this strata.
         """
-        return self.hub_to_spoke(buf, field)
+        return self.put_send_buffer(buf, field)
 
     def sync_extension_fields(self):
         """
@@ -307,7 +307,7 @@ class Hub(SPCommunicator):
         my_bounds = self.send_buffers[Field.BEST_OBJECTIVE_BOUNDS]
         self._populate_boundsout_cache(my_bounds.array())
         logging.debug("hub is sending bounds={}".format(my_bounds))
-        self.hub_to_spoke(my_bounds, Field.BEST_OBJECTIVE_BOUNDS)
+        self.put_send_buffer(my_bounds, Field.BEST_OBJECTIVE_BOUNDS)
         return
 
     def register_receive_fields(self):
@@ -335,38 +335,6 @@ class Hub(SPCommunicator):
             self.opt.extobject.register_send_fields()
 
         return
-
-
-    def hub_to_spoke(self, buf: SendArray, field: Field):
-        """ Put the specified values into the specified locally-owned buffer
-            for the spoke to pick up.
-
-            Notes:
-                This automatically updates handles the write id.
-        """
-        return self._hub_to_spoke(buf.array(), field, buf._next_write_id())
-
-
-    def _hub_to_spoke(self, values: np.typing.NDArray, field: Field, write_id: int):
-        """ Put the specified values into the specified locally-owned buffer
-            for the spoke to pick up.
-
-            Notes:
-                This automatically does the -1 indexing
-
-                This assumes that values contains a slot at the end for the
-                write_id
-        """
-
-        if not isinstance(self.opt, APH):
-            self.cylinder_comm.Barrier()
-        ## End if
-
-        values[-1] = write_id
-        self.window.put(values, field)
-
-        return
-
 
     def hub_from_spoke(self,
                        buf: RecvArray,
@@ -432,7 +400,7 @@ class Hub(SPCommunicator):
             processes (don't need to call them one at a time).
         """
         self.send_buffers[Field.SHUTDOWN][0] = 1.0
-        self.hub_to_spoke(self.send_buffers[Field.SHUTDOWN], Field.SHUTDOWN)
+        self.put_send_buffer(self.send_buffers[Field.SHUTDOWN], Field.SHUTDOWN)
         return
 
 
@@ -541,8 +509,7 @@ class PHHub(Hub):
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        # self.hub_to_spoke(nonant_send_buffer.array(), Field.NONANT, nonant_send_buffer.next_write_id())
-        self.hub_to_spoke(nonant_send_buffer, Field.NONANT)
+        self.put_send_buffer(nonant_send_buffer, Field.NONANT)
 
         return
 
@@ -554,8 +521,7 @@ class PHHub(Hub):
         self.opt._populate_W_cache(my_ws.array(), padding=1)
         logging.debug("hub is sending Ws={}".format(my_ws.array()))
 
-        # self.hub_to_spoke(my_ws.array(), Field.DUALS, my_ws.next_write_id())
-        self.hub_to_spoke(my_ws, Field.DUALS)
+        self.put_send_buffer(my_ws, Field.DUALS)
 
         return
 
@@ -623,7 +589,7 @@ class LShapedHub(Hub):
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.hub_to_spoke(nonant_send_buffer, Field.NONANT)
+        self.put_send_buffer(nonant_send_buffer, Field.NONANT)
 
         return
 
