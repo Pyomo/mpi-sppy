@@ -23,6 +23,7 @@ import numpy as np
 import abc
 import time
 
+from mpisppy import MPI
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 
 def communicator_array(size):
@@ -309,3 +310,62 @@ class SPCommunicator:
         buf._next_write_id()
         self.window.put(buf.array(), field)
         return
+
+    def get_receive_buffer(self,
+                           buf: RecvArray,
+                           field: Field,
+                           origin: int = -1,
+                           synchronize: bool = True,
+                          ):
+        """ Gets the specified values from another cylinder and copies them into
+        the specified locally-owned buffer. Updates the write_id in the locally-
+        owned buffer, if appropriate.
+
+        Args:
+            buf (RecvArray) : Buffer to put the data in
+            field (Field) : The source field
+            origin (:obj:`int`, optional) : The rank on strata_comm to get the data.
+                If not provided (or -1), will attempt to infer a unique origin. If
+                no unique origin is found, will raise an error. Default: -1.
+            synchronize (:obj:`bool`, optional) : If True, will only report
+                updated data if the write_ids are the same across the cylinder_comm
+                are identical. Default: True.
+
+        Returns:
+            is_new (bool): Indicates whether the "gotten" values are new,
+                based on the write_id.
+        """
+        if not synchronize:
+            self.cylinder_comm.Barrier()
+
+        if origin == -1:
+            origin = self.fields_to_ranks[field][0]
+            if len(self.fields_to_ranks[field]) > 1:
+                raise RuntimeError(f"Non-unique origin for {field=}. Possible "
+                                   f"origins are {self.fields_to_ranks[field]=}.")
+
+        last_id = buf.id()
+
+        self.window.get(buf.array(), origin, field)
+
+        new_id = int(buf.array()[-1])
+        if synchronize:
+            local_val = np.array((new_id,), 'i')
+            sum_ids = np.zeros(1, 'i')
+            self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                         (sum_ids, MPI.INT),
+                                         op=MPI.SUM)
+            if new_id != sum_ids[0] / self.cylinder_comm.size:
+                buf._is_new = False
+                return False
+
+        else:
+            if new_id <= last_id:
+                buf._is_new = False
+                return False
+
+        # in either case, now we have new data
+        buf._is_new = True
+        buf._pull_id()
+
+        return True

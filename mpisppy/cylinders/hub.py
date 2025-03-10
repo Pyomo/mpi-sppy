@@ -7,13 +7,10 @@
 # full copyright and license information.
 ###############################################################################
 
-import numpy as np
 import abc
 import logging
 import mpisppy.log
-from mpisppy.opt.aph import APH
 
-from mpisppy import MPI
 from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
 from math import inf
 
@@ -83,7 +80,6 @@ class Hub(SPCommunicator):
     def main(self):
         pass
 
-
     def register_extension_recv_field(self, field: Field, strata_rank: int, buf_len: int = -1) -> RecvArray:
         """
         Register an extensions interest in the given field from the given spoke. The hub
@@ -125,14 +121,13 @@ class Hub(SPCommunicator):
         for key in self.extension_recv:
             ext_buf = self.receive_buffers[key]
             (field, srank) = self._split_key(key)
-            ext_buf._is_new = self.hub_from_spoke(ext_buf, srank, field)
+            ext_buf._is_new = self.get_receive_buffer(ext_buf, field, srank)
         ## End for
         return
 
     def clear_latest_chars(self):
         self.latest_ib_char = None
         self.latest_ob_char = None
-
 
     def compute_gaps(self):
         """ Compute the current absolute and relative gaps,
@@ -156,7 +151,6 @@ class Hub(SPCommunicator):
         else:
             rel_gap = float("inf")
         return abs_gap, rel_gap
-
 
     def get_update_string(self):
         if self.latest_ib_char is None and \
@@ -236,7 +230,7 @@ class Hub(SPCommunicator):
         """
         logging.debug("Hub is trying to receive from InnerBounds")
         for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
-            is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_INNER_BOUND)
+            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_INNER_BOUND, idx)
             if is_new:
                 bound = recv_buf[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
@@ -250,7 +244,7 @@ class Hub(SPCommunicator):
         """
         logging.debug("Hub is trying to receive from OuterBounds")
         for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
-            is_new = self.hub_from_spoke(recv_buf, idx, Field.OBJECTIVE_OUTER_BOUND)
+            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_OUTER_BOUND, idx)
             if is_new:
                 bound = recv_buf[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
@@ -264,7 +258,7 @@ class Hub(SPCommunicator):
                 self.latest_ob_char = char
                 self.last_ob_idx = 0
             else:
-                self.latest_ib_char = cls.converger_spoke_char
+                self.latest_ob_char = cls.converger_spoke_char
                 self.last_ob_idx = idx
             return new_bound
         else:
@@ -326,7 +320,6 @@ class Hub(SPCommunicator):
 
         return
 
-
     def register_send_fields(self):
         super().register_send_fields()
 
@@ -335,63 +328,6 @@ class Hub(SPCommunicator):
             self.opt.extobject.register_send_fields()
 
         return
-
-    def hub_from_spoke(self,
-                       buf: RecvArray,
-                       spoke_num: int,
-                       field: Field,
-                       ):
-        """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
-
-            Returns:
-                is_new (bool): Indicates whether the "gotten" values are new,
-                    based on the write_id.
-        """
-        buf._is_new = self._hub_from_spoke(buf.array(), spoke_num, field, buf.id())
-        if buf.is_new():
-            buf._pull_id()
-        return buf.is_new()
-
-    def _hub_from_spoke(self,
-                        values: np.typing.NDArray,
-                        spoke_num: int,
-                        field: Field,
-                        last_write_id: int,
-                        ):
-        """ spoke_num is the rank in the strata_comm, so it is 1-based not 0-based
-
-            Returns:
-                is_new (bool): Indicates whether the "gotten" values are new,
-                    based on the write_id.
-        """
-        # so the window in each rank gets read at approximately the same time,
-        # and so has the same write_id
-        if not isinstance(self.opt, APH):
-            self.cylinder_comm.Barrier()
-        ## End if
-        self.window.get(values, spoke_num, field)
-
-        if isinstance(self.opt, APH):
-            # # reverting part of changes from Ben getting rid of spoke sleep DLW jan 2023
-            if values[-1] > last_write_id:
-                return True
-        else:
-            new_id = int(values[-1])
-            local_val = np.array((new_id,), 'i')
-            sum_ids = np.zeros(1, 'i')
-            self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                         (sum_ids, MPI.INT),
-                                         op=MPI.SUM)
-            if new_id != sum_ids[0] / self.cylinder_comm.size:
-                return False
-            ## End if
-            if new_id > last_write_id or new_id < 0:
-                return True
-            ## End if
-        ## End if
-
-        return False
-
 
     def send_terminate(self):
         """ Send an array of zeros with a -1 appended to the
@@ -613,6 +549,15 @@ class APHHub(PHHub):
         """ SPComm gets attached by self.__init___; holding APH harmless """
         logger.critical("aph debug main in hub.py")
         self.opt.APH_main(spcomm=self, finalize=False)
+
+    # overwrite the default behavior of this method for APH
+    def get_receive_buffer(self,
+                           buf: RecvArray,
+                           field: Field,
+                           origin: int = -1,
+                           synchronize: bool = False,
+                          ):
+        return super().get_receive_buffer(buf, field, origin, synchronize)
 
     def finalize(self):
         """ does PH.post_loops, returns Eobj """

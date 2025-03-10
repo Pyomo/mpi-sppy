@@ -14,7 +14,7 @@ import os
 import math
 
 from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
+from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
 from mpisppy.cylinders.spwindow import Field
 
 
