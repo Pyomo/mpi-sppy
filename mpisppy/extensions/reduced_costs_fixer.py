@@ -85,7 +85,7 @@ class ReducedCostsFixer(Extension):
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("Fixing based on reduced costs prior to iteration 0!")
             if self.reduced_cost_buf.id() == 0:
-                while not self.opt.spcomm.hub_from_spoke(self.outer_bound_buf, self.reduced_costs_spoke_index, Field.EXPECTED_REDUCED_COST):
+                while not self.opt.spcomm.get_receive_buffer(self.outer_bound_buf, Field.EXPECTED_REDUCED_COST, self.reduced_costs_spoke_index):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
         self.fix_fraction_target = self._fix_fraction_target_iter0
