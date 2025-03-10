@@ -127,8 +127,7 @@ class WheelSpinner:
         spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm,
                           communicator_list, **sp_kwargs)
 
-        # Create the windows, run main(), destroy the windows
-        spcomm.make_windows()
+        # Run main()
         if strata_rank == 0:
             spcomm.setup_hub()
 
@@ -151,9 +150,8 @@ class WheelSpinner:
         spcomm.hub_finalize()
 
         fullcomm.Barrier()
+        global_toc("Finalize Complete")
 
-        spcomm.free_windows()
-        global_toc("Windows freed")
 
         self.spcomm = spcomm
         self.spcomm_dict = spcomm_dict

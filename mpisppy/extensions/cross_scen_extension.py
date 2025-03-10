@@ -280,7 +280,7 @@ class CrossScenarioExtension(Extension):
 
     def register_receive_fields(self):
         spcomm = self.opt.spcomm
-        cross_scenario_cut_ranks = spcomm.available_receive_fields[Field.CROSS_SCENARIO_CUT]
+        cross_scenario_cut_ranks = spcomm.fields_to_ranks[Field.CROSS_SCENARIO_CUT]
         assert len(cross_scenario_cut_ranks) == 1
         index = cross_scenario_cut_ranks[0]
 

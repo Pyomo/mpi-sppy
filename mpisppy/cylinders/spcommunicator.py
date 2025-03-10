@@ -42,7 +42,6 @@ class FieldArray:
     """
 
     def __init__(self, length: int):
-        self._length = length
         self._array = communicator_array(length)
         self._id = 0
         return
@@ -117,8 +116,6 @@ class SPCommunicator:
     receive_fields = ()
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
-        # flag for if the windows have been constructed
-        self._windows_constructed = False
         self.fullcomm = fullcomm
         self.strata_comm = strata_comm
         self.cylinder_comm = cylinder_comm
@@ -152,9 +149,9 @@ class SPCommunicator:
 
         self.register_send_fields()
 
-        self._exchange_send_fields()
-        # TODO: here we can have a dynamic exchange of the send fields
-        #       so we can do error checking (all-to-all in send fields)
+        self._make_windows()
+        self._create_field_rank_mappings()
+
         self.register_receive_fields()
 
         # TODO: check that we have something in receive_field_spcomms??
@@ -188,25 +185,37 @@ class SPCommunicator:
         ## End for
         return window_spec
 
-    def _exchange_send_fields(self) -> None:
-        """ Do an all-to-all so we know what the other communicators are sending """
-        send_buffers = tuple((k, buff._length) for k, buff in self.send_buffers.items())
-        self.send_fields_lengths_by_rank = self.strata_comm.allgather(send_buffers)
+    def _create_field_rank_mappings(self) -> None:
+        self.fields_to_ranks = {}
+        self.ranks_to_fields = {}
 
-        self.send_fields_by_rank = {}
-
-        self.available_receive_fields = {}
-        for rank, fields_lengths in enumerate(self.send_fields_lengths_by_rank):
+        for rank, buffer_layout in enumerate(self.window.strata_buffer_layouts):
             if rank == self.strata_rank:
                 continue
-            self.send_fields_by_rank[rank] = []
-            for f, length in fields_lengths:
-                if f not in self.available_receive_fields:
-                    self.available_receive_fields[f] = []
-                self.available_receive_fields[f].append(rank)
-                self.send_fields_by_rank[rank].append(f)
+            self.ranks_to_fields[rank] = []
+            for field in buffer_layout:
+                if field not in self.fields_to_ranks:
+                    self.fields_to_ranks[field] = []
+                self.fields_to_ranks[field].append(rank)
+                self.ranks_to_fields[rank].append(field)
 
-        # print(f"{self.__class__.__name__}: {self.available_receive_fields=}")
+        # print(f"{self.__class__.__name__}: {self.fields_to_ranks=}, {self.ranks_to_fields=}")
+
+    def _validate_recv_field(self, field: Field, origin: int, length: int):
+        remote_buffer_layout = self.window.strata_buffer_layouts[origin]
+        if field not in remote_buffer_layout:
+            raise RuntimeError(f"{self.__class__.__name__} on local {self.strata_rank=} "
+                               f"could not find {field=} on remote rank {origin} with "
+                               f"class {self.communicators[origin]['spcomm_class']}."
+                              )
+        _, remote_length = remote_buffer_layout[field]
+        if (length + 1) != remote_length:
+            raise RuntimeError(f"{self.__class__.__name__} on local {self.strata_rank=} "
+                               f"{field=} has length {length} on local "
+                               f"{self.strata_rank=} and length {remote_length} "
+                               f"on remote rank {origin} with class "
+                               f"{self.communicators[origin]['spcomm_class']}."
+                              )
 
     def register_recv_field(self, field: Field, origin: int, length: int = -1) -> RecvArray:
         # print(f"{self.__class__.__name__}.register_recv_field, {field=}, {origin=}")
@@ -217,13 +226,7 @@ class SPCommunicator:
             my_fa = self.receive_buffers[key]
             assert(length + 1 == np.size(my_fa.array()))
         else:
-            available_fields_from_origin = self.send_fields_lengths_by_rank[origin]
-            for _field, _length in available_fields_from_origin:
-                if field == _field:
-                    assert length == _length
-                    break
-            else: # couldn't find field!
-                raise RuntimeError(f"Couldn't find {field=} from {origin=}")
+            self._validate_recv_field(field, origin, length)
             my_fa = RecvArray(length)
             self.receive_buffers[key] = my_fa
         ## End if
@@ -276,20 +279,10 @@ class SPCommunicator:
     def allreduce_or(self, val):
         return self.opt.allreduce_or(val)
 
-    def free_windows(self):
-        """
-        """
-        if self._windows_constructed:
-            self.window.free()
-        self._windows_constructed = False
-
-    def make_windows(self) -> None:
-        if self._windows_constructed:
-            return
+    def _make_windows(self) -> None:
 
         window_spec = self._build_window_spec()
         self.window = SPWindow(window_spec, self.strata_comm)
-        self._windows_constructed = True
 
         return
 
@@ -305,6 +298,6 @@ class SPCommunicator:
                 if strata_rank == self.strata_rank:
                     continue
                 cls = comm["spcomm_class"]
-                if field in self.send_fields_by_rank[strata_rank]:
+                if field in self.ranks_to_fields[strata_rank]:
                     buff = self.register_recv_field(field, strata_rank)
                     self.receive_field_spcomms[field].append((strata_rank, cls, buff))

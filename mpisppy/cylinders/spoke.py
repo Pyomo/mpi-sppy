@@ -101,7 +101,7 @@ class Spoke(SPCommunicator):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        self.updatereceive_buffers()
+        self.update_receive_buffers()
         return self._got_kill_signal()
 
     @abc.abstractmethod
@@ -114,7 +114,7 @@ class Spoke(SPCommunicator):
         """
         pass
 
-    def updatereceive_buffers(self):
+    def update_receive_buffers(self):
         for (key, recv_buf) in self.receive_buffers.items():
             field, rank = self._split_key(key)
             # The below code will need to be updated for spoke to spoke communication

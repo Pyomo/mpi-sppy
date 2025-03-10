@@ -125,7 +125,6 @@ class SPWindow:
 
         return
 
-
     def free(self):
 
         if self.window_constructed:

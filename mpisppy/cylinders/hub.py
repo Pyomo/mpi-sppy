@@ -442,14 +442,6 @@ class PHHub(Hub):
     receive_fields = (*Hub.receive_fields,)
 
     def setup_hub(self):
-        """ Must be called after make_windows(), so that
-            the hub knows the sizes of all the spokes windows
-        """
-        if not self._windows_constructed:
-            raise RuntimeError(
-                "Cannot call setup_hub before memory windows are constructed"
-            )
-
         ## Generate some warnings if nothing is giving bounds
         if not self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
             logger.warn(
@@ -573,14 +565,6 @@ class LShapedHub(Hub):
     receive_fields = (*Hub.receive_fields,)
 
     def setup_hub(self):
-        """ Must be called after make_windows(), so that
-            the hub knows the sizes of all the spokes windows
-        """
-        if not self._windows_constructed:
-            raise RuntimeError(
-                "Cannot call setup_hub before memory windows are constructed"
-            )
-
         ## Generate some warnings if nothing is giving bounds
         if not self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
             logger.warn(
