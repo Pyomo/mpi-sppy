@@ -7,14 +7,12 @@
 # full copyright and license information.
 ###############################################################################
 
-import numpy as np
 import abc
 import time
 import os
 import math
 
-from mpisppy import MPI
-from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
+from mpisppy.cylinders.spcommunicator import SPCommunicator
 from mpisppy.cylinders.spwindow import Field
 
 
@@ -30,48 +28,6 @@ class Spoke(SPCommunicator):
         self.last_call_to_got_kill_signal = time.time()
 
         return
-
-    def spoke_from_hub(self,
-                       buf: RecvArray,
-                       field: Field,
-                       ):
-        buf._is_new = self._spoke_from_hub(buf.array(), field, buf.id())
-        if buf.is_new():
-            buf._pull_id()
-        return buf.is_new()
-
-    def _spoke_from_hub(self,
-                        values: np.typing.NDArray,
-                        field: Field,
-                        last_write_id: int
-                        ):
-        """
-        """
-
-        self.cylinder_comm.Barrier()
-        self.window.get(values, 0, field)
-
-        # On rare occasions a NaN is seen...
-        new_id = int(values[-1]) if not math.isnan(values[-1]) else 0
-        local_val = np.array((new_id,-new_id), 'i')
-        max_min_ids = np.zeros(2, 'i')
-        self.cylinder_comm.Allreduce((local_val, MPI.INT),
-                                     (max_min_ids, MPI.INT),
-                                     op=MPI.MAX)
-
-        max_id = max_min_ids[0]
-        min_id = -max_min_ids[1]
-        # NOTE: we only proceed if all the ranks agree
-        #       on the ID
-        if max_id != min_id:
-            return False
-
-        assert max_id == min_id == new_id
-
-        if new_id > last_write_id or new_id < 0:
-            return True
-
-        return False
 
     def _got_kill_signal(self):
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
@@ -103,8 +59,7 @@ class Spoke(SPCommunicator):
         for (key, recv_buf) in self.receive_buffers.items():
             field, rank = self._split_key(key)
             # The below code will need to be updated for spoke to spoke communication
-            assert(rank == 0)
-            self.spoke_from_hub(recv_buf, field)
+            self.get_receive_buffer(recv_buf, field, rank)
         ## End for
         return
 
