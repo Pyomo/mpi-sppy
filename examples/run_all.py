@@ -280,7 +280,7 @@ do_one("sslp",
        "--integer-relax-then-enforce "
        "--integer-relax-then-enforce-ratio=0.95 "
        "--lagrangian "
-       "--max-iterations=100 --default-rho=1 "
+       "--max-iterations=100 --default-rho=1 --reduced-costs-rho "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
