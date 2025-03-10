@@ -167,6 +167,15 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
         self.rc_global = rcg
 
+        self.put_send_buffer(
+            self.send_buffers[Field.EXPECTED_REDUCED_COST],
+            Field.EXPECTED_REDUCED_COST,
+        )
+        self.put_send_buffer(
+            self.send_buffers[Field.SCENARIO_REDUCED_COST],
+            Field.SCENARIO_REDUCED_COST,
+        )
+
     def main(self):
         # need the solution for ReducedCostsSpoke
         super().main(need_solution=True)

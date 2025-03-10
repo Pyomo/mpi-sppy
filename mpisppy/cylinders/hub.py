@@ -384,6 +384,7 @@ class PHHub(Hub):
 
     def sync_extensions(self):
         if self.opt.extensions is not None:
+            self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
 
     def sync_nonants(self):

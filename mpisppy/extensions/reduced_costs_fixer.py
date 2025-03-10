@@ -85,7 +85,7 @@ class ReducedCostsFixer(Extension):
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("Fixing based on reduced costs prior to iteration 0!")
             if self.reduced_cost_buf.id() == 0:
-                while not self.opt.spcomm.get_receive_buffer(self.outer_bound_buf, Field.EXPECTED_REDUCED_COST, self.reduced_costs_spoke_index):
+                while not self.opt.spcomm.get_receive_buffer(self.outer_bound_buf, Field.OBJECTIVE_OUTER_BOUND, self.reduced_costs_spoke_index):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
         self.fix_fraction_target = self._fix_fraction_target_iter0
@@ -114,7 +114,8 @@ class ReducedCostsFixer(Extension):
         return
 
     def sync_with_spokes(self, pre_iter0 = False):
-        # TODO: Not sure the second part of this if clause is necessary...
+        # TODO: if we calculate the new bounds in the spoke we don't need to check if the buffers
+        #       have the same ID
         if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
             reduced_costs = self.reduced_cost_buf.value_array()
             this_outer_bound = self.outer_bound_buf.value_array()[0]

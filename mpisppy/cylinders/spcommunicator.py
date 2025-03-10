@@ -220,6 +220,13 @@ class SPCommunicator:
 
     def register_recv_field(self, field: Field, origin: int, length: int = -1) -> RecvArray:
         # print(f"{self.__class__.__name__}.register_recv_field, {field=}, {origin=}")
+        # TODO: better handle this case...
+        if origin == -1:
+            origin = self.fields_to_ranks[field][0]
+            if len(self.fields_to_ranks[field]) > 1:
+                raise RuntimeError(f"Non-unique origin for {field=}. Possible "
+                                   f"origins are {self.fields_to_ranks[field]=}.")
+
         key = self._make_key(field, origin)
         if length == -1:
             length = self._field_lengths[field]
@@ -314,7 +321,7 @@ class SPCommunicator:
     def get_receive_buffer(self,
                            buf: RecvArray,
                            field: Field,
-                           origin: int = -1,
+                           origin: int,
                            synchronize: bool = True,
                           ):
         """ Gets the specified values from another cylinder and copies them into
@@ -324,9 +331,7 @@ class SPCommunicator:
         Args:
             buf (RecvArray) : Buffer to put the data in
             field (Field) : The source field
-            origin (:obj:`int`, optional) : The rank on strata_comm to get the data.
-                If not provided (or -1), will attempt to infer a unique origin. If
-                no unique origin is found, will raise an error. Default: -1.
+            origin (int) : The rank on strata_comm to get the data.
             synchronize (:obj:`bool`, optional) : If True, will only report
                 updated data if the write_ids are the same across the cylinder_comm
                 are identical. Default: True.
@@ -338,17 +343,12 @@ class SPCommunicator:
         if not synchronize:
             self.cylinder_comm.Barrier()
 
-        if origin == -1:
-            origin = self.fields_to_ranks[field][0]
-            if len(self.fields_to_ranks[field]) > 1:
-                raise RuntimeError(f"Non-unique origin for {field=}. Possible "
-                                   f"origins are {self.fields_to_ranks[field]=}.")
-
         last_id = buf.id()
 
         self.window.get(buf.array(), origin, field)
 
         new_id = int(buf.array()[-1])
+
         if synchronize:
             local_val = np.array((new_id,), 'i')
             sum_ids = np.zeros(1, 'i')
@@ -359,13 +359,10 @@ class SPCommunicator:
                 buf._is_new = False
                 return False
 
+        if new_id > last_id:
+            buf._is_new = True
+            buf._pull_id()
+            return True
         else:
-            if new_id <= last_id:
-                buf._is_new = False
-                return False
-
-        # in either case, now we have new data
-        buf._is_new = True
-        buf._pull_id()
-
-        return True
+            buf._is_new = False
+            return False
