@@ -287,6 +287,9 @@ class SPCommunicator:
 
         return
 
+    def is_send_field_registered(self, field: Field) -> bool:
+        return field in self.send_buffers
+
     def register_send_fields(self) -> None:
         for field in self.send_fields:
             self.register_send_field(field)

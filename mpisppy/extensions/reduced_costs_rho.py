@@ -48,12 +48,17 @@ class ReducedCostsRho(_SensiRhoBase):
         assert len(reduced_cost_ranks) == 1
         self.reduced_costs_spoke_index = reduced_cost_ranks[0]
 
-        self.scenario_reduced_cost_buf = spcomm.register_extension_recv_field(
+        self.scenario_reduced_cost_buf = spcomm.register_recv_field(
             Field.SCENARIO_REDUCED_COST,
             self.reduced_costs_spoke_index,
         )
 
     def sync_with_spokes(self):
+        self.opt.spcomm.get_receive_buffer(
+            self.scenario_reduced_cost_buf,
+            Field.SCENARIO_REDUCED_COST,
+            self.reduced_costs_spoke_index,
+        )
         if self.scenario_reduced_cost_buf.is_new():
             self._scenario_rc_buffer[:] = self.scenario_reduced_cost_buf.value_array()
             # print(f"In ReducedCostsRho; {self._scenario_rc_buffer=}")

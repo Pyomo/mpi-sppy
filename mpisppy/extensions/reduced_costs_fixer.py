@@ -101,11 +101,11 @@ class ReducedCostsFixer(Extension):
 
         self.reduced_costs_spoke_index = index
 
-        self.reduced_cost_buf = spcomm.register_extension_recv_field(
+        self.reduced_cost_buf = spcomm.register_recv_field(
             Field.EXPECTED_REDUCED_COST,
             self.reduced_costs_spoke_index,
         )
-        self.outer_bound_buf = spcomm.register_extension_recv_field(
+        self.outer_bound_buf = spcomm.register_recv_field(
             Field.OBJECTIVE_OUTER_BOUND,
             self.reduced_costs_spoke_index,
         )
@@ -116,6 +116,16 @@ class ReducedCostsFixer(Extension):
     def sync_with_spokes(self, pre_iter0 = False):
         # TODO: if we calculate the new bounds in the spoke we don't need to check if the buffers
         #       have the same ID
+        self.opt.spcomm.get_receive_buffer(
+            self.reduced_cost_buf,
+            Field.EXPECTED_REDUCED_COST,
+            self.reduced_costs_spoke_index,
+        )
+        self.opt.spcomm.get_receive_buffer(
+            self.outer_bound_buf,
+            Field.OBJECTIVE_OUTER_BOUND,
+            self.reduced_costs_spoke_index,
+        )
         if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
             reduced_costs = self.reduced_cost_buf.value_array()
             this_outer_bound = self.outer_bound_buf.value_array()[0]

@@ -11,7 +11,7 @@ import abc
 import logging
 import mpisppy.log
 
-from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
+from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
 from math import inf
 
 from mpisppy import global_toc
@@ -32,9 +32,6 @@ class Hub(SPCommunicator):
     _hub_algo_best_bound_provider = False
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
-        # The extensions will be registered in SPCommunicator.__init__
-        self.extension_recv = set()
-
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=options)
 
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
@@ -79,51 +76,6 @@ class Hub(SPCommunicator):
     @abc.abstractmethod
     def main(self):
         pass
-
-    def register_extension_recv_field(self, field: Field, strata_rank: int, buf_len: int = -1) -> RecvArray:
-        """
-        Register an extensions interest in the given field from the given spoke. The hub
-        is then responsible for updating this field into a local buffer prior to the call
-        to the extension sync_with_spokes function.
-        """
-        key = self._make_key(field, strata_rank)
-        if key not in self.receive_buffers:
-            # if it is not already registered, we need to update the local buffer
-            self.extension_recv.add(key)
-        ## End if
-        ra = self.register_recv_field(field, strata_rank, buf_len)
-        return ra
-
-    def register_extension_send_field(self, field: Field, buf_len: int) -> SendArray:
-        """
-        Register a field with the hub that an extension will be making available to spokes. Returns a
-        buffer that is usable for sending the desired values. The extension is responsible for calling
-        the hub publish_extension_field when ready to send the values. Returns a SendArray to use
-        to publish values to spokes. Meant to be called within the extension function
-        `register_send_fields`.
-        """
-        return self.register_send_field(field, buf_len)
-
-    def is_send_field_registered(self, field: Field) -> bool:
-        return field in self.send_buffers
-
-    def extension_send_field(self, field: Field, buf: SendArray):
-        """
-        Send the data in the SendArray `buf` which stores the Field `field`. This will make
-        the data available to the spokes in this strata.
-        """
-        return self.put_send_buffer(buf, field)
-
-    def sync_extension_fields(self):
-        """
-        Update all registered extension fields. Safe to call even when there are no extension fields.
-        """
-        for key in self.extension_recv:
-            ext_buf = self.receive_buffers[key]
-            (field, srank) = self._split_key(key)
-            ext_buf._is_new = self.get_receive_buffer(ext_buf, field, srank)
-        ## End for
-        return
 
     def clear_latest_chars(self):
         self.latest_ib_char = None
@@ -371,7 +323,6 @@ class PHHub(Hub):
         self.receive_outerbounds()
         self.receive_innerbounds()
         if self.opt.extensions is not None:
-            self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
 
     def sync_with_spokes(self):
@@ -384,7 +335,6 @@ class PHHub(Hub):
 
     def sync_extensions(self):
         if self.opt.extensions is not None:
-            self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
 
     def sync_nonants(self):
@@ -485,7 +435,6 @@ class LShapedHub(Hub):
         self.receive_innerbounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
-            self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
 
     def is_converged(self):

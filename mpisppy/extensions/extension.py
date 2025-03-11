@@ -34,8 +34,7 @@ class Extension:
     def register_send_fields(self):
         '''
         Method called by the Hub SPCommunicator to get any fields that the extension
-        will make available to spokes. Use hub function `register_extension_send_field`
-        to register a field.
+        will make available to spokes.
         '''
         return
 

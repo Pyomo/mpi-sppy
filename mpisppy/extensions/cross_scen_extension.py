@@ -126,6 +126,11 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
+        self.opt.spcomm.get_receive_buffer(
+            self.cuts,
+            Field.CROSS_SCENARIO_CUT,
+            self.cross_scenario_index,
+        )
         if self.cuts.is_new():
             self.make_cuts(self.cuts.array())
 
@@ -144,7 +149,7 @@ class CrossScenarioExtension(Extension):
                 ## End for
             ## End for
 
-            self.opt.spcomm.extension_send_field(Field.NONANT, all_nonants)
+            self.opt.spcomm.put_send_buffer(all_nonants, Field.NONANT)
 
         ## End if
 
@@ -156,7 +161,7 @@ class CrossScenarioExtension(Extension):
                 all_etas[ci] = s._mpisppy_model.eta[sn]._value
                 ci += 1
 
-        self.opt.spcomm.extension_send_field(Field.CROSS_SCENARIO_COST, all_etas)
+        self.opt.spcomm.put_send_buffer(all_etas, Field.CROSS_SCENARIO_COST)
 
         return
 
@@ -255,13 +260,13 @@ class CrossScenarioExtension(Extension):
         if spcomm.is_send_field_registered(Field.NONANT):
             self.send_nonants = False
         else:
-            self.all_nonants = spcomm.register_extension_send_field(
+            self.all_nonants = spcomm.register_send_field(
                 Field.NONANT,
                 local_scen_count * self.opt.nonant_length
             )
             self.send_nonants = True
         ## End if-else
-        self.all_etas = spcomm.register_extension_send_field(
+        self.all_etas = spcomm.register_send_field(
             Field.CROSS_SCENARIO_COST,
             nscen * nscen,
         )
@@ -282,11 +287,11 @@ class CrossScenarioExtension(Extension):
         spcomm = self.opt.spcomm
         cross_scenario_cut_ranks = spcomm.fields_to_ranks[Field.CROSS_SCENARIO_CUT]
         assert len(cross_scenario_cut_ranks) == 1
-        index = cross_scenario_cut_ranks[0]
+        self.cross_scenario_index = cross_scenario_cut_ranks[0]
 
-        self.cuts = spcomm.register_extension_recv_field(
+        self.cuts = spcomm.register_recv_field(
             Field.CROSS_SCENARIO_CUT,
-            index,
+            self.cross_scenario_index,
         )
 
     def sync_with_spokes(self):
