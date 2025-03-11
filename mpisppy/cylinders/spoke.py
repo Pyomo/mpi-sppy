@@ -21,22 +21,9 @@ class Spoke(SPCommunicator):
     send_fields = (*SPCommunicator.send_fields, )
     receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, )
 
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
-
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options)
-
-        self.last_call_to_got_kill_signal = time.time()
-
-        return
-
     def _got_kill_signal(self):
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
-        if shutdown_buf.is_new():
-            shutdown = (shutdown_buf[0] == 1.0)
-        else:
-            shutdown = False
-        ## End if
-        return shutdown
+        return (shutdown_buf.is_new() and shutdown_buf[0] == 1.0)
 
     def got_kill_signal(self):
         """ Spoke should call this method at least every iteration
@@ -58,7 +45,6 @@ class Spoke(SPCommunicator):
     def update_receive_buffers(self):
         for (key, recv_buf) in self.receive_buffers.items():
             field, rank = self._split_key(key)
-            # The below code will need to be updated for spoke to spoke communication
             self.get_receive_buffer(recv_buf, field, rank)
         ## End for
         return
@@ -142,6 +128,15 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         # TODO: Make this a static method?
         pass
 
+    def register_receive_fields(self) -> None:
+        super().register_receive_fields()
+        nonant_len_ranks = self.fields_to_ranks[self.nonant_len_type()]
+        if len(nonant_len_ranks) > 1:
+            raise RuntimeError(
+                f"More than one cylinder to select from for {self.nonant_len_type()}!"
+            )
+        self._receive_rank = nonant_len_ranks[0]
+
 
 class InnerBoundSpoke(_BoundSpoke):
     """ For Spokes that provide an inner bound through self.bound to the
@@ -182,7 +177,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
-        key = self._make_key(Field.DUALS, 0)
+        key = self._make_key(Field.DUALS, self._receive_rank)
         return self.receive_buffers[key].value_array()
 
     @property
@@ -191,7 +186,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
             the weights has been updated since
             the last call to got_kill_signal
         """
-        key = self._make_key(Field.DUALS, 0)
+        key = self._make_key(Field.DUALS, self._receive_rank)
         return self.receive_buffers[key].is_new()
 
 
@@ -223,7 +218,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     @property
     def localnonants(self):
         """Returns the local copy of the nonants"""
-        key = self._make_key(Field.NONANT, 0)
+        key = self._make_key(Field.NONANT, self._receive_rank)
         return self.receive_buffers[key].value_array()
 
     @property
@@ -231,7 +226,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
         """Returns True if the local copy of
            the nonants has been updated since
            the last call to got_kill_signal"""
-        key = self._make_key(Field.NONANT, 0)
+        key = self._make_key(Field.NONANT, self._receive_rank)
         return self.receive_buffers[key].is_new()
 
 
