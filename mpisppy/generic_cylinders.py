@@ -29,7 +29,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.gradient_extension import Gradient_extension
-from mpisppy.extensions.scenario_lpfiles import Scenario_lpfiles
+from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.utils.wxbarreader import WXBarReader
@@ -55,8 +55,8 @@ def _parse_args(m):
                       description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
                       domain=str,
                       default=None)
-    cfg.add_to_config(name="scenario_lpfiles",
-                      description="Invokes an extension that writes an model lp file and a nonants json file for each scenario before iteration 0",
+    cfg.add_to_config(name="scenario_lp_mps_files",
+                      description="Invokes an extension that writes an model lp file, mps file and a nonants json file for each scenario before iteration 0",
                       domain=bool,
                       default=False)
 
@@ -220,8 +220,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         ext_classes.append(Gradient_extension)
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
 
-    if cfg.scenario_lpfiles:
-        ext_classes.append(Scenario_lpfiles)
+    if cfg.scenario_lp_mps_files:
+        ext_classes.append(Scenario_lp_mps_files)
 
     if cfg.W_and_xbar_reader:
         ext_classes.append(WXBarReader)

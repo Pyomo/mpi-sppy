@@ -22,7 +22,7 @@ def lpize(varname):
     return pyomo_label.cpxlp_label_from_name(varname)
 
 
-class Scenario_lpfiles(mpisppy.extensions.extension.Extension):
+class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
         self.ph = ph
@@ -30,6 +30,7 @@ class Scenario_lpfiles(mpisppy.extensions.extension.Extension):
     def pre_iter0(self):
         for k, s in self.ph.local_subproblems.items():
             s.write(f"{k}.lp", io_options={'symbolic_solver_labels': True})
+            s.write(f"{k}.mps", io_options={'symbolic_solver_labels': True})
             nonants_by_node = {nd.name: [lpize(var.name) for var in nd.nonant_vardata_list] for nd in s._mpisppy_node_list}
             with open(f"{k}_nonants.json", "w") as jfile:
                 json.dump(nonants_by_node, jfile)

@@ -4,7 +4,12 @@ AML Agnosticism
 The mpi-sppy package provides callouts so that algebraic modeling languages
 (AMLs) other than Pyomo can be used. A growing number of AMLs are supported
 as `guest` languages (we refer to mpi-sppy as the `host`). This code is
-in an alpha-release state; use with extreme caution.
+in an alpha-release state; use with extreme caution.  This is referred to
+as `tight` integration with the guest. It is also possible to simply read
+scenario data from an mps file and the mps file (and the associated json
+nonant file) that can be created however you like. Code for creating a
+Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``. We now
+return to a discussion of tight integration with a guest AML.
 
 From the end-user's perspective
 -------------------------------
