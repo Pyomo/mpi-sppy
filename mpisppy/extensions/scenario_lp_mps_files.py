@@ -31,9 +31,14 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
         for k, s in self.ph.local_subproblems.items():
             s.write(f"{k}.lp", io_options={'symbolic_solver_labels': True})
             s.write(f"{k}.mps", io_options={'symbolic_solver_labels': True})
-            nonants_by_node = {nd.name: [lpize(var.name) for var in nd.nonant_vardata_list] for nd in s._mpisppy_node_list}
+            scenDict = {"scenProb": s._mpisppy_probability}  # to be added to
+            nodeDict = dict()
+            for nd in s._mpisppy_node_list:
+                nodeDict[nd] = {"condProb": nd.cond_prob}
+                nodeDict[nd].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
+            scenDict.update(nodeDict)
             with open(f"{k}_nonants.json", "w") as jfile:
-                json.dump(nonants_by_node, jfile)
+                json.dump(scenDict, jfile)
                                         
     def post_iter0(self):
         return
