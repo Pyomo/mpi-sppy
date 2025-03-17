@@ -10,7 +10,7 @@
 import mip   # from coin-or (pip install mip)
 import pyomo.environ as pyo
 
-def read_mps_and_create_pyomo_model(mps_file):
+def read_mps_and_create_pyomo_model(mps_path):
     """
     Reads an MPS file using mip and converts it into a Pyomo ConcreteModel.
     
@@ -86,7 +86,7 @@ if __name__ == "__main__":
     solver_name = "cplex"
     fname = "delme.mps"
     #fname = "test1.mps"
-    pyomo_model = def read_mps_and_create_pyomo_model(fname)
+    pyomo_model = read_mps_and_create_pyomo_model(fname)
     pyomo_model.pprint()
 
     opt = pyo.SolverFactory(solver_name)
