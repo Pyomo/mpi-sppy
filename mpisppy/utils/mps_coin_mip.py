@@ -78,12 +78,17 @@ def mip_to_pyomo(mps_path):
 
     return model
 
-# Example usage:
-pyomo_model = mip_to_pyomo("delme.mps")
-# pyomo_model = mip_to_pyomo("test1.mps")
+fname = "delme.mps"
+#fname = "test1.mps"
+pyomo_model = mip_to_pyomo(fname)
 pyomo_model.pprint()
 
 opt = pyo.SolverFactory('cplex')
-
 opt.solve(pyomo_model)
+pyomo_obj = pyo.value(pyomo_model.objective)
 
+m = mip.Model(solver_name="cbc")
+m.read(fname)
+cbcstatus = m.optimize()
+cbc_obj = m.objective_value
+print(f"{cbcstatus=}, {cbc_obj=}, {pyomo_obj=}")
