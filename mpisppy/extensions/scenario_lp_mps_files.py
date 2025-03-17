@@ -17,8 +17,7 @@ import pyomo.core.base.label as pyomo_label
 
 
 def lpize(varname):
-    # convert varname to the string that will appear in the lp file
-    # return varname.replace("[", "(").replace("]", ")").replace(",", "_").replace(".","_")
+    # convert varname to the string that will appear in the lp and mps files
     return pyomo_label.cpxlp_label_from_name(varname)
 
 
