@@ -6,91 +6,107 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# written using many iterations with chatpgt
 
-import pulp
-import re
-from pyomo.environ import ConcreteModel, Var, Objective, Constraint, NonNegativeReals
-
-def sanitize_name(name):
-    """Ensure variable names and constraint names are valid Pyomo indices."""
-    if not isinstance(name, str):
-        name = str(name)  # Convert to string if not already
-    return re.sub(r"[^\w]", "_", name.strip())  # Strip spaces and replace special characters with underscores
+import mip   # from coin-or (pip install mip)
+import pyomo.environ as pyo
 
 def read_mps_and_create_pyomo_model(mps_file):
     """
-    Reads an MPS file using PuLP and converts it into a Pyomo model.
+    Reads an MPS file using mip and converts it into a Pyomo ConcreteModel.
+    
+    :param mps_path: Path to the MPS file.
+    :return: Pyomo ConcreteModel.
 
-    Parameters:
-        mps_file (str): Path to the MPS file.
-
-    Returns:
-        Pyomo ConcreteModel: A Pyomo model equivalent to the one described in the MPS file.
+    aside: Chatgpt was almost negative help with this function...
     """
-    
-    # Read the MPS file using PuLP
-    varNames, lp_problem = pulp.LpProblem.fromMPS(mps_file)  # Ensure we only use the problem object
-    
-    # Create a Pyomo model
-    model = ConcreteModel()
-    
-    # Define variables in Pyomo with sanitized names
-    var_names = [sanitize_name(v.name) for v in lp_problem.variables()]
-    model.variables = Var(var_names, domain=NonNegativeReals)  # Indexed by sanitized names
-    
-    # Define the objective function correctly
-    if lp_problem.sense == pulp.LpMinimize:
-        model.obj = Objective(
-            expr=sum(coeff * model.variables[sanitize_name(var.name)] for var, coeff in lp_problem.objective.items()),
-            sense=1  # Minimize
-        )
-    else:
-        model.obj = Objective(
-            expr=sum(coeff * model.variables[sanitize_name(var.name)] for var, coeff in lp_problem.objective.items()),
-            sense=-1  # Maximize
-        )
-    
-    # Define constraints
-    def get_constraint_expr(constraint):
-        return sum(model.variables[sanitize_name(var)] * coeff for var, coeff in constraint)
-    
-    def constraint_rule(m, cname):
-        """Use the original constraint name for lookup but the sanitized name for Pyomo indexing."""
-        constraint = lp_problem.constraints[cname]  # Keep original constraint name for lookup
-        lhs_expr = get_constraint_expr(constraint.items()) 
-        
-        if constraint.sense == pulp.LpConstraintEQ:
-            return lhs_expr == constraint.constant
-        elif constraint.sense == pulp.LpConstraintLE:
-            return lhs_expr <= constraint.constant
-        elif constraint.sense == pulp.LpConstraintGE:
-            return lhs_expr >= constraint.constant
 
-    # Create constraints with sanitized names, but keep original names for lookup
-    constraint_mapping = {sanitize_name(cname): cname for cname in lp_problem.constraints.keys()}
-    model.constraints = Constraint(
-        constraint_mapping.keys(),
-        rule=lambda m, sanitized_cname: constraint_rule(m, constraint_mapping[sanitized_cname])
-    )
+    def _domain_lookup(v):
+        # given a mip var, return its Pyomo domain
+        if v.var_type == 'C':
+            if v.lb == 0.0:
+                return pyo.NonNegativeReals
+            else:
+                return pyo.Reals
+        elif v.var_type == 'B':
+            return pyo.Binary
+        elif v.var_type == 'I':
+            return pyo.Integers
+        else:
+            raise RuntimeError(f"Unknown type from coin mip {v.var_type=}")
+        # BTW: I don't know how to query the mip object for SOS sets
+        #      (maybe it transforms them?)
     
+    # Read the MPS file and call the coin-mip model m
+    m = mip.Model(solver_name="cbc")
+    m.read(mps_path)
+
+    # Create a Pyomo model
+    model = pyo.ConcreteModel()
+
+    varDict = dict()  # coin mip var to pyomo var
+    # Add variables to Pyomo model with their bounds and domains
+    for v in m.vars:
+        vname = v.name
+        print(f"Processing variable with name {vname} and type {v.var_type=}")
+        varDict[v] = pyo.Var(domain=_domain_lookup(v), bounds=(v.lb, v.ub))
+        setattr(model, vname, varDict[v])
+    #print(f"{dir(v)=}")
+
+    # Add constraints
+    for c in m.constrs:
+        # Extract terms correctly from LinExpr
+        body = sum(coeff * varDict[var] for var, coeff in c.expr.expr.items())
+        
+        if c.expr.sense == "=":
+            pyomoC = pyo.Constraint(expr=body == c.rhs)
+        elif c.expr.sense == ">":
+            pyomoC = pyo.Constraint(expr=body >= c.rhs)
+        elif c.expr.sense == "<":
+            pyomoC = pyo.Constraint(expr=body <= c.rhs)
+        elif c.expr.sense == "":
+            raise RuntimeError(f"Unexpected empty sense for constraint {c.name}"
+                               f" from file {mps_path}")
+        else:
+            raise RuntimeError(f"Unexpected sense {c.expr.sense=}"
+                               f" for constraint {c.name} from file {mps_path}")
+        setattr(model, c.name, pyomoC)
+
+    # objective function
+    obj_expr = sum(coeff * varDict[v] for v, coeff in m.objective.expr.items())
+    if m.sense == mip.MINIMIZE:
+        model.objective = pyo.Objective(expr=obj_expr, sense=pyo.minimize)
+    else:
+        model.objective = pyo.Objective(expr=obj_expr, sense=pyo.maximize)
+
     return model
 
 
-
-########### main for debugging ##########
 if __name__ == "__main__":
+    # for testing
+    solver_name = "cplex"
     fname = "delme.mps"
-    print(f"about to read {fname}")
-    model = read_mps_and_create_pyomo_model(fname)
+    #fname = "test1.mps"
+    pyomo_model = def read_mps_and_create_pyomo_model(fname)
+    pyomo_model.pprint()
 
-    for cname in model.constraints:
-        print(f"Constraint: {cname}")
-        print(model.constraints[cname].expr)
-        print("-" * 80)
-        model.constraints[cname].pprint()
-        print("+" * 80)
-    for v in model.variables:
-        print(f"Variable Name: '{v}'")  # Quoting ensures visibility of leading/trailing spaces
-    model.pprint()
+    opt = pyo.SolverFactory(solver_name)
+    opt.solve(pyomo_model)
+    pyomo_obj = pyo.value(pyomo_model.objective)
+
+    m = mip.Model(solver_name=solver_name)
+    m.read(fname)
+    coinstatus = m.optimize()
+    coin_obj = m.objective_value
+    print(f"{coinstatus=}, {coin_obj=}, {pyomo_obj=}")
+
+    print("\ncoin var values")
+    for v in m.vars:
+        print(f"{v.name}: {v.x}")
+
+    print("\npyomo var values")
+    for v in pyomo_model.component_objects(pyo.Var, active=True):
+        print(f"Variable: {v.name}")
+        for index in v:
+            print(f"  Index: {index}, Value: {v[index].value}")
+        
     
