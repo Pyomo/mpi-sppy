@@ -183,14 +183,13 @@ sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
           " --scenario-lp-mps-files")
 do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
-
+# just smoke for now
 sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
-          f" --solver-name {solver_name} --max-iterations 10"
+          f" --solver-name {solver_name} --max-iterations 0"
           " --mps-files-directory=.")   # we will be in the sizes dir
 do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
 
-
-### end combine mps file runs ###
+### end combined mps file runs ###
 
 quit()
 

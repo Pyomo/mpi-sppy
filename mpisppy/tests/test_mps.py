@@ -29,7 +29,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
         opt.solve(pyomo_model)
         pyomo_obj = pyo.value(pyomo_model.objective)
 
-        m = mip.Model(solver_name=solver_name)
+        m = mip.Model(solver_name="CBC")
         m.read(fname)
         m.optimize()   # returns a status, btw
         coin_obj = m.objective_value
@@ -40,7 +40,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
         self._reader_body("examples/test1.mps")
         
     def test_mps_reader_sizes1(self):
-        self._reader_body("examples/test1.mps")
+        self._reader_body("examples/sizes1.mps")
 
 if __name__ == '__main__':
     unittest.main()
