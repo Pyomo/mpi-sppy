@@ -177,12 +177,20 @@ farmer_rd = f"--num-scens 10 --solver-name {solver_name} --max-iterations 10 --m
 #rebaseline_xhat("farmer", "farmer", 3, farmer_rd, "test_data/farmer_rd_baseline")
 do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_baseline")
 
-# Just a smoke test to make sure sizes_expression still exists and
-# that lpfiles still executes.
+### combined runs to test mps files ####
+# Make sure sizes_expression still exists and lpfiles still executes.
 sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
-          " --scenario-lpfiles")
-do_one("sizes", "sizes", 3, sizese, xhat_baseline_dir=None)   
+          " --scenario-lp-mps-files")
+do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
+
+sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
+          f" --solver-name {solver_name} --max-iterations 10"
+          " --mps-files-directory=.")   # we will be in the sizes dir
+do_one("sizes", "../../mpisppy/utils/mps_module", 3, sizesMPS, xhat_baseline_dir=None)
+
+
+### end combine mps file runs ###
 
 quit()
 
