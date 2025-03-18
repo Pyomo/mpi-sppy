@@ -187,7 +187,7 @@ do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
 sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 10"
           " --mps-files-directory=.")   # we will be in the sizes dir
-do_one("sizes", "../../mpisppy/utils/mps_module", 3, sizesMPS, xhat_baseline_dir=None)
+do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
 
 
 ### end combine mps file runs ###

@@ -18,17 +18,20 @@ Scenario names must have a consistent base (e.g. "scenario" or "scen") and
 must end in a serial number (unless you can't, you should start with 0; 
 otherwise, start with 1).
 
+Parenthesis in variable names in the json file must become underscores
+
 note to dlw from dlw:
   You could offer the option to split up the objective by stages in the lp file
-  You could also offer other types of nonants in the json
+  You should also offer other types of nonants in the json
 
 """
 import os
 import re
 import glob
 import json
+import mpisppy.scenario_tree as scenario_tree
+import mpisppy.utils.sputils as sputils
 import mpisppy.utils.mps_reader as mps_reader
-
 # assume you can get the path from config, set in kw_creator as a side-effect
 mps_files_directory = None
 
@@ -43,7 +46,8 @@ def scenario_creator(sname, cfg=None):
 
     sharedPath = os.path.join(cfg.mps_files_directory, sname)
     mpsPath = sharedPath + ".mps"
-    model = mps_reader(mpsPath)
+    model = mps_reader.read_mps_and_create_pyomo_model(mpsPath)
+
     # now read the JSON file and attach the tree information.
     jsonPath = sharedPath + "_nonants.json"
     with open(jsonPath) as f:
@@ -55,23 +59,29 @@ def scenario_creator(sname, cfg=None):
     assert "ROOT" in nonantDict, f'"ROOT" must be top node in {jsonPath}'
     treeNodes = list()
     parent_ndn = None   # counting on the json file to have ordered nodes
+    stage = 1
     for ndn in nonantDict:
+        if ndn == "scenProb":   # non-nodename at top level of json
+            continue
         cp = nonantDict[ndn]["condProb"]
-        nonant_list = nonantDict[ndn]["nonAnts"]
-        assert parent_ndn == sputils.parent_ndn,\
-        f"bad node names or parent order in {jsonPath} detected at {ndn}"
+        nonants = [model.\
+                   find_component(var_name.replace('(','_').replace(')','_'))
+                   for var_name in nonantDict[ndn]["nonAnts"]]
+        assert parent_ndn == sputils.parent_ndn(ndn),\
+            f"bad node names or parent order in {jsonPath} detected at {ndn}"
         treeNodes.append(scenario_tree.\
                          ScenarioNode(name=ndn,
                                       cond_prob=cp,
                                       stage=stage,
                                       cost_expression=0.0,
-                                      nonant_list=nonant_list,
+                                      nonant_list=nonants,
                                       scen_model=model,
                                       nonant_ef_suppl_list = None,
                                       parent_name = parent_ndn
                                       )
                          )
-        parent_ndn = ndName
+        parent_ndn = ndn
+        stage += 1
         
     model._mpisppy_probability = scenProb
     model._mpisppy_node_list = treeNodes
@@ -93,7 +103,7 @@ def scenario_names_creator(num_scens, start=None):
           f" found {first} for file {os.path.join(mps_files_directory, mps_files[0])}")
     assert start+num_scens <= len(mps_files),\
         f"Trying to create scenarios names with {start=}, {num_scens=} but {len(mps_files)=}"
-    retval = [fn[:-4] for fn in mps_files[start:start+num_scens-1]]
+    retval = [fn[:-4] for fn in mps_files[start:start+num_scens]]
     return retval
 
 #=========

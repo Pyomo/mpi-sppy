@@ -6,7 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-
+# IMPORTANT: parens in variable names will become underscore (_)
 import mip   # from coin-or (pip install mip)
 import pyomo.environ as pyo
 
@@ -46,8 +46,7 @@ def read_mps_and_create_pyomo_model(mps_path):
     varDict = dict()  # coin mip var to pyomo var
     # Add variables to Pyomo model with their bounds and domains
     for v in m.vars:
-        vname = v.name
-        print(f"Processing variable with name {vname} and type {v.var_type=}")
+        vname = v.name.replace("(","_").replace(")","_")
         varDict[v] = pyo.Var(domain=_domain_lookup(v), bounds=(v.lb, v.ub))
         setattr(model, vname, varDict[v])
     #print(f"{dir(v)=}")
