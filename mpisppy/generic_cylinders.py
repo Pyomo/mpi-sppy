@@ -64,6 +64,8 @@ def _parse_args(m):
     # many models, e.g., farmer, need num_scens_required
     #  in which case, it should go in the inparser_adder function
     # cfg.num_scens_required()
+    # On the other hand, this program really wants cfg.num_scens somehow so
+    # maybe it should just require it.
 
     cfg.EF_base()  # If EF is slected, most other options will be moot
     # There are some arguments here that will not make sense for all models
@@ -120,7 +122,7 @@ def _name_lists(module, cfg, bundle_wrapper=None):
             "For now, stage2EFsolvern is required for multistage xhat"
     else:
         all_nodenames = None
-        num_scens = cfg.num_scens
+        num_scens = cfg.get("num_scens")  # maybe None is OK
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:

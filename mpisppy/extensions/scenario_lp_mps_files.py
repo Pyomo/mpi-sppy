@@ -33,11 +33,11 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
             scenDict = {"scenProb": s._mpisppy_probability}  # to be added to
             nodeDict = dict()
             for nd in s._mpisppy_node_list:
-                nodeDict[nd] = {"condProb": nd.cond_prob}
-                nodeDict[nd].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
+                nodeDict[nd.name] = {"condProb": nd.cond_prob}
+                nodeDict[nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
             scenDict.update(nodeDict)
             with open(f"{k}_nonants.json", "w") as jfile:
-                json.dump(scenDict, jfile)
+                json.dump(scenDict, jfile, indent=2)
                                         
     def post_iter0(self):
         return

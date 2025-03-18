@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 # WARNING: the scenario_creator is very dependent on how the mps_reader works.
+# This is designed for use with generic_cylinders.py
 """You pass in a path to a special mps_files_directory in the config and this
 module will become a valid mpi-sppy module.
 The directory has to have file pairs for each scenario where one file
@@ -19,12 +20,12 @@ otherwise, start with 1).
 
 note to dlw from dlw:
   You could offer the option to split up the objective by stages in the lp file
-  You could also offer other classes of nonants in the json
+  You could also offer other types of nonants in the json
 
 """
 import os
 import re
-import path
+import glob
 import json
 import mpisppy.utils.mps_reader as mps_reader
 
@@ -41,7 +42,7 @@ def scenario_creator(sname, cfg=None):
     """
 
     sharedPath = os.path.join(cfg.mps_files_directory, sname)
-    mpsPath = sharedPath + ".lp"
+    mpsPath = sharedPath + ".mps"
     model = mps_reader(mpsPath)
     # now read the JSON file and attach the tree information.
     jsonPath = sharedPath + "_nonants.json"
@@ -57,7 +58,7 @@ def scenario_creator(sname, cfg=None):
     for ndn in nonantDict:
         cp = nonantDict[ndn]["condProb"]
         nonant_list = nonantDict[ndn]["nonAnts"]
-        assert parent_ndn == sputils.parent_ndn,
+        assert parent_ndn == sputils.parent_ndn,\
         f"bad node names or parent order in {jsonPath} detected at {ndn}"
         treeNodes.append(scenario_tree.\
                          ScenarioNode(name=ndn,
@@ -78,21 +79,25 @@ def scenario_creator(sname, cfg=None):
 
 
 #=========
-def scenario_names_creator(self, num_scens, start=None):
+def scenario_names_creator(num_scens, start=None):
     # validate the directory and use it to get names (that have to be numbered)
+    # IMPORTANT: start is zero-based even if the names are one-based!
     mps_files = [os.path.basename(f)
                 for f in glob.glob(os.path.join(mps_files_directory, "*.mps"))]
-    if start = None:
+    if start == None:
         start = 0
+    if num_scens == None:
+        num_scens = len(mps_files) - start
     first = re.search(r"\d+$",mps_files[0][:-4])  # first scenario number
-    assert first == 0, "first scenario number should be zero,"
-    f" found {first} for file {os.path.join(mps_files_directory, lpfiles[0])}"
-        
-    retval = [fn[:-4] for fn in mps_files[start, start+num_scens-1]]
+    print("WARNING: one-based senario names might cause trouble"
+          f" found {first} for file {os.path.join(mps_files_directory, mps_files[0])}")
+    assert start+num_scens <= len(mps_files),\
+        f"Trying to create scenarios names with {start=}, {num_scens=} but {len(mps_files)=}"
+    retval = [fn[:-4] for fn in mps_files[start:start+num_scens-1]]
     return retval
 
 #=========
-def inparser_adder(self, cfg):
+def inparser_adder(cfg):
     # verify that that the mps_files_directory is there, or add it
     if "mps_files_directory" not in cfg:
         cfg.add_to_config("mps_files_directory",
@@ -102,21 +107,22 @@ def inparser_adder(self, cfg):
                           argparse=True)
 
 #=========
-def kw_creator(self, cfg):
+def kw_creator(cfg):
     # creates keywords for scenario creator
     # SIDE EFFECT: A bit of hack to get the directory path
-    global mps_files_directory = cfg.mps_files_directory
+    global mps_files_directory
+    mps_files_directory = cfg.mps_files_directory
     return {"cfg": cfg}
 
 
 # This is only needed for sampling
-def sample_tree_scen_creator(self, sname, stage, sample_branching_factors, seed,
+def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
     # assert two stage, then do the usual for two stages?
     pass
 
     
 #============================
-def scenario_denouement(self, rank, scenario_name, scenario):
+def scenario_denouement(rank, scenario_name, scenario):
     pass
 

@@ -7,9 +7,23 @@ as `guest` languages (we refer to mpi-sppy as the `host`). This code is
 in an alpha-release state; use with extreme caution.  This is referred to
 as `tight` integration with the guest. It is also possible to simply read
 scenario data from an mps file and the mps file (and the associated json
-nonant file) that can be created however you like. Code for creating a
-Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``. We now
-return to a discussion of tight integration with a guest AML.
+nonant file) that can be created however you like. 
+
+Loose integration
+^^^^^^^^^^^^^^^^^
+
+Code for creating a
+Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
+but you can also just use ``generic_cylinders.py`` and give
+it the module ``mpisppy.utils.mps_module`` (you will need to specify
+that path to this module) and the ``--mps-files-directory``
+option.  Note
+that at the time of this writing, the number of scenarios is obtained
+by counting the mps files in the directory given.
+
+
+Tight integration
+^^^^^^^^^^^^^^^^^
 
 From the end-user's perspective
 -------------------------------
