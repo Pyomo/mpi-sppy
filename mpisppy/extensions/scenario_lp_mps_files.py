@@ -30,12 +30,11 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
         for k, s in self.ph.local_subproblems.items():
             s.write(f"{k}.lp", io_options={'symbolic_solver_labels': True})
             s.write(f"{k}.mps", io_options={'symbolic_solver_labels': True})
-            scenDict = {"scenProb": s._mpisppy_probability}  # to be added to
-            nodeDict = dict()
+            scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
+            scenDict = {"scenarioData": scenData}
             for nd in s._mpisppy_node_list:
-                nodeDict[nd.name] = {"condProb": nd.cond_prob}
-                nodeDict[nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
-            scenDict.update(nodeDict)
+                scenDict[nd.name] = {"condProb": nd.cond_prob}
+                scenDict[nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
             with open(f"{k}_nonants.json", "w") as jfile:
                 json.dump(scenDict, jfile, indent=2)
                                         

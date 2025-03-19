@@ -53,7 +53,7 @@ def scenario_creator(sname, cfg=None):
     with open(jsonPath) as f:
         nonantDict = json.load(f)
     try:
-        scenProb = nonantDict["scenProb"]
+        scenProb = nonantDict["scenarioData"]["scenProb"]
     except Exception as e:
         raise RuntimeError(f'Error getting scenProb from {jsonPath}: {e}')
     assert "ROOT" in nonantDict, f'"ROOT" must be top node in {jsonPath}'
@@ -61,7 +61,7 @@ def scenario_creator(sname, cfg=None):
     parent_ndn = None   # counting on the json file to have ordered nodes
     stage = 1
     for ndn in nonantDict:
-        if ndn == "scenProb":   # non-nodename at top level of json
+        if ndn == "scenarioData":   # non-nodename at top level of json
             continue
         cp = nonantDict[ndn]["condProb"]
         nonants = [model.\
@@ -94,13 +94,20 @@ def scenario_names_creator(num_scens, start=None):
     # IMPORTANT: start is zero-based even if the names are one-based!
     mps_files = [os.path.basename(f)
                 for f in glob.glob(os.path.join(mps_files_directory, "*.mps"))]
+    mps_files.sort()
     if start == None:
         start = 0
     if num_scens == None:
         num_scens = len(mps_files) - start
     first = re.search(r"\d+$",mps_files[0][:-4])  # first scenario number
+    try:
+        first = int(first.group())
+    except Exception as e:
+        raise RuntimeError(f'mps files in {mps_files_directory} must end with an integer'
+                           f'found file {mps_files[0]} (error was: {e})')
+    
     print("WARNING: one-based senario names might cause trouble"
-          f" found {first} for file {os.path.join(mps_files_directory, mps_files[0])}")
+          f" found {first} for dir {mps_files_directory}")
     assert start+num_scens <= len(mps_files),\
         f"Trying to create scenarios names with {start=}, {num_scens=} but {len(mps_files)=}"
     retval = [fn[:-4] for fn in mps_files[start:start+num_scens]]
