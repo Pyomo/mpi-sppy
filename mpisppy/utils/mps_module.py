@@ -1,4 +1,4 @@
-##r###########################################################################
+##############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 #
 # Copyright (c) 2025, Lawrence Livermore National Security, LLC, Alliance for
@@ -95,9 +95,9 @@ def scenario_names_creator(num_scens, start=None):
     mps_files = [os.path.basename(f)
                 for f in glob.glob(os.path.join(mps_files_directory, "*.mps"))]
     mps_files.sort()
-    if start == None:
+    if start is None:
         start = 0
-    if num_scens == None:
+    if num_scens is None:
         num_scens = len(mps_files) - start
     first = re.search(r"\d+$",mps_files[0][:-4])  # first scenario number
     try:
