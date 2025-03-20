@@ -17,7 +17,6 @@ import subprocess
 import os
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
-solver_name = 'cplex'
 
 class TestAdmmWrapper(unittest.TestCase):
     def setUp(self):
