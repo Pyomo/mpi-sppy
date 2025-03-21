@@ -60,13 +60,12 @@ def scenario_creator(sname, cfg=None):
     treeNodes = list()
     parent_ndn = None   # counting on the json file to have ordered nodes
     stage = 1
-    for ndn in nonantDict:
-        if ndn == "scenarioData":   # non-nodename at top level of json
-            continue
-        cp = nonantDict[ndn]["condProb"]
+    treeDict = nonantDict["treeData"]
+    for ndn in treeDict:
+        cp = treeDict[ndn]["condProb"]
         nonants = [model.\
                    find_component(var_name.replace('(','_').replace(')','_'))
-                   for var_name in nonantDict[ndn]["nonAnts"]]
+                   for var_name in treeDict[ndn]["nonAnts"]]
         assert parent_ndn == sputils.parent_ndn(ndn),\
             f"bad node names or parent order in {jsonPath} detected at {ndn}"
         treeNodes.append(scenario_tree.\
