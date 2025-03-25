@@ -544,9 +544,13 @@ if __name__ == "__main__":
         fname = os.path.basename(model_fname)
         sys.path.append(dpath)
         module = importlib.import_module(fname)
-    
+
     cfg = _parse_args(module)
 
+    # the initialize function is particularly useful for a class in the module
+    if hasattr(module, "initialize"):
+        module.initialize(cfg)
+    
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
         # TBD: remove the need for dill if you are not reading or writing

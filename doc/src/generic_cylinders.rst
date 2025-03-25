@@ -42,3 +42,34 @@ ignored.
    probably needed on the command line. Consistency with the files in the
    pickle directory might not be checked by the program.
 
+A Class in the module
+---------------------
+
+If you want to have a class in the module to help create return values
+for functions, you will need to have an additional helper file called
+``initialize(cfg)``. It is called by ``generic_cylinders.py``
+after cfg is populated and can
+be used to create a class. Note that the function ``inparser_adder`` cannot
+make use of the class because that function is called before ``initialize``.
+Here is some sudo-code for this idea:
+
+.. code_block:: python
+
+    my_object = None
+
+    def inparser_adder(cfg):
+        cfg.add_to_config('json_file_with_model_params',
+                      ...)
+
+    def initalize(cfg):
+        global my_object
+        my_object = MyClass(cfg)
+
+    def scenario_names_creator(num_scens,...):
+        return my_object.scenario_names_creator(num_scens,...)
+
+    def scenario_creator(scen_name, ...):
+        return my_object.scenario_creator(scen_name, ...)
+
+def scenario_denouement(rank, ...):
+    return my_object.scenario_denoument(rank, ...)   
