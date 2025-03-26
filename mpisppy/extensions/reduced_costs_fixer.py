@@ -109,13 +109,15 @@ class ReducedCostsFixer(Extension):
             Field.OBJECTIVE_OUTER_BOUND,
             self.reduced_costs_spoke_index,
         )
-        ## End if
 
         return
 
     def sync_with_spokes(self, pre_iter0 = False):
-        # TODO: if we calculate the new bounds in the spoke we don't need to check if the buffers
-        #       have the same ID
+        # TODO: If we calculate the new bounds in the spoke we don't need to
+        #       check if the buffers have the same ID.
+        # NOTE: If we do this, then the heuristic reduced cost fixing might fix
+        #       different variables in different subproblems. But this might be
+        #       fine.
         self.opt.spcomm.get_receive_buffer(
             self.reduced_cost_buf,
             Field.EXPECTED_REDUCED_COST,

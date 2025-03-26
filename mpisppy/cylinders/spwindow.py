@@ -13,6 +13,7 @@ import numpy as np
 import numpy.typing as nptyping
 
 import enum
+import weakref
 
 import pyomo.environ as pyo
 
@@ -110,6 +111,8 @@ class SPWindow:
 
         self.buffer_length = total_buffer_length
         self.window = MPI.Win.Allocate(window_size_bytes, MPI.DOUBLE.size, comm=strata_comm)
+        # ensure the memory allocated for the window is freed
+        self._window_finalizer = weakref.finalize(self, self.window.free)
         self.buff = np.ndarray(dtype="d", shape=(total_buffer_length,), buffer=self.window.tomemory())
         self.buff[:] = np.nan
 
@@ -120,22 +123,6 @@ class SPWindow:
         ## End for
 
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
-
-        self.window_constructed = True
-
-        return
-
-    def free(self):
-
-        if self.window_constructed:
-            self.window.Free()
-            self.buff = None
-            self.buffer_layout = None
-            self.buffer_length = 0
-            self.window = None
-            self.strata_buffer_layouts = None
-            self.window_constructed = False
-        ## End if
 
         return
 

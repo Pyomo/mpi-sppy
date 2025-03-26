@@ -48,6 +48,7 @@ class CrossScenarioCutSpoke(Spoke):
 
     def register_receive_fields(self):
         super().register_receive_fields()
+        # TODO: look up rank
         self.all_nonants = self.register_recv_field(Field.NONANT, 0)
         self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0)
 

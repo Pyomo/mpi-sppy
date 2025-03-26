@@ -83,8 +83,8 @@ class SendArray(FieldArray):
 
     def _next_write_id(self) -> int:
         """
-        Updates the internal id field to the next write id, uses that id in the field data,
-        and returns that id
+        Updates the internal id field to the next write id, sets that id in the
+        field data array, and returns that id
         """
         self._id += 1
         self._array[-1] = self._id
@@ -220,13 +220,6 @@ class SPCommunicator:
 
     def register_recv_field(self, field: Field, origin: int, length: int = -1) -> RecvArray:
         # print(f"{self.__class__.__name__}.register_recv_field, {field=}, {origin=}")
-        # TODO: better handle this case...
-        if origin == -1:
-            origin = self.fields_to_ranks[field][0]
-            if len(self.fields_to_ranks[field]) > 1:
-                raise RuntimeError(f"Non-unique origin for {field=}. Possible "
-                                   f"origins are {self.fields_to_ranks[field]=}.")
-
         key = self._make_key(field, origin)
         if length == -1:
             length = self._field_lengths[field]
