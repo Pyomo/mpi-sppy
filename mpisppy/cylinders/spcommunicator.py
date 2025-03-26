@@ -146,16 +146,11 @@ class SPCommunicator:
         # on the problem data
         self._field_lengths = FieldLengths(self.opt)
 
+        self.window = None
+
         # attach the SPCommunicator to
         # the SPBase object
         self.opt.spcomm = self
-
-        self.register_send_fields()
-
-        self._make_windows()
-        self._create_field_rank_mappings()
-
-        self.register_receive_fields()
 
         return
 
@@ -273,12 +268,37 @@ class SPCommunicator:
     def allreduce_or(self, val):
         return self.opt.allreduce_or(val)
 
-    def _make_windows(self) -> None:
+    def make_windows(self) -> None:
+        """ Make MPI windows: blocking call for all ranks in `strata_comm`.
+        """
+
+        if self.window is not None:
+            return
+
+        self.register_send_fields()
 
         window_spec = self._build_window_spec()
         self.window = SPWindow(window_spec, self.strata_comm)
 
+        self._create_field_rank_mappings()
+        self.register_receive_fields()
+
         return
+
+    def free_windows(self) -> None:
+        """ Free MPI windows: blocking call for all ranks in `strata_comm`.
+        """
+
+        if self.window is None:
+            return
+
+        self.receive_buffers = {}
+        self.send_buffers = {}
+        self.receive_field_spcomms = {}
+
+        self.window.free()
+
+        self.window = None
 
     def is_send_field_registered(self, field: Field) -> bool:
         return field in self.send_buffers
