@@ -61,7 +61,7 @@ Here is some sudo-code for this idea:
         cfg.add_to_config('json_file_with_model_params',
                       ...)
 
-    def initalize(cfg):
+    def initialize(cfg):
         global my_object
         my_object = MyClass(cfg)
 
@@ -71,5 +71,28 @@ Here is some sudo-code for this idea:
     def scenario_creator(scen_name, ...):
         return my_object.scenario_creator(scen_name, ...)
 
-def scenario_denouement(rank, ...):
-    return my_object.scenario_denoument(rank, ...)   
+    def scenario_denouement(rank, ...):
+        return my_object.scenario_denoument(rank, ...)   
+
+        
+custom_writer
+-------------
+
+Advanced users might want to write their own solution output function. If the
+module contains a function called ``custom_writer()``, it will be called
+at the end of processing. If you are writing such a function, you should look
+in ``generic_cylinders.py`` to see the two places it appears and the arguments
+that are passed from each place (your function can test the type
+of the first argument to see whence it was called or it can
+examine the call stack for more information).
+
+
+Assuming the first formal parameter in your function is assigned
+to variable named wheel in the non-ef case, your function probably should
+include something along the lines of this:
+
+.. code_block:: python
+
+   if wheel.spcomm.opt.cylinder_rank == 0:
+
+so that you avoid writing the output from every rank.
