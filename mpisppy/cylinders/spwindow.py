@@ -112,7 +112,7 @@ class SPWindow:
         self.buffer_length = total_buffer_length
         self.window = MPI.Win.Allocate(window_size_bytes, MPI.DOUBLE.size, comm=strata_comm)
         # ensure the memory allocated for the window is freed
-        self._window_finalizer = weakref.finalize(self, self.window.free)
+        self._window_finalizer = weakref.finalize(self, self.window.Free)
         self.buff = np.ndarray(dtype="d", shape=(total_buffer_length,), buffer=self.window.tomemory())
         self.buff[:] = np.nan
 
