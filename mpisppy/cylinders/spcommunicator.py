@@ -116,7 +116,7 @@ class SPCommunicator:
         or expects to receive from another SPCommunicator object.
     """
     send_fields = ()
-    receive_fields = ()
+    receive_fields = (Field.NONANT_LOWER_BOUNDS, Field.NONANT_UPPER_BOUNDS,)
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
         self.fullcomm = fullcomm
@@ -138,7 +138,7 @@ class SPCommunicator:
         # Common fields for spokes and hubs
         self.receive_buffers = {}
         self.send_buffers = {}
-        # key: Field, value: list of (strata_rank, SPComm) with that Field
+        # key: Field, value: list of (strata_rank, SPComm, buffer) with that Field
         self.receive_field_spcomms = {}
 
         # setup FieldLengths which calculates
@@ -378,3 +378,27 @@ class SPCommunicator:
             self.get_receive_buffer(recv_buf, field, rank)
         ## End for
         return
+
+    def update_nonant_bounds(self):
+        """ update the bounds on the nonanticipative variables based on
+        Field.NONANT_LOWER_BOUNDS and Field.NONANT_UPPER_BOUNDS. The lower and
+        upper bound buffers should be up-to-date, which can be done by calling
+        `SPCommunicator.update_receive_buffers`.
+        """
+        _INF = float("inf")
+        for _, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
+            for s in self.opt.local_scenarios.items():
+                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                    xvarlb = xvar.lb
+                    if xvarlb is None:
+                        xvarlb = -_INF
+                    if recv_buf[ci] > xvarlb:
+                        xvar.lb = recv_buf[ci]
+        for _, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
+            for s in self.opt.local_scenarios.items():
+                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                    xvarub = xvar.ub
+                    if xvarub is None:
+                        xvarub = _INF
+                    if recv_buf[ci] < xvarub:
+                        xvar.ub = recv_buf[ci]

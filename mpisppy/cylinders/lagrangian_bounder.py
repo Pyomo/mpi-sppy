@@ -19,6 +19,8 @@ class _LagrangianMixin:
         self.opt._create_solvers()
 
     def lagrangian(self, need_solution=True):
+        # update the nonant bounds, if possible, for a tighter relaxation
+        self.update_nonant_bounds()
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
         if "ipopt" in self.opt.options["solver_name"]:
