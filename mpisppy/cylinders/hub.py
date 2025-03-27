@@ -54,13 +54,6 @@ class Hub(SPCommunicator):
         pass
 
     @abc.abstractmethod
-    def sync(self):
-        """ To be called within the whichever optimization algorithm
-            is being run on the hub (e.g. PH)
-        """
-        pass
-
-    @abc.abstractmethod
     def is_converged(self):
         """ The hub has the ability to halt the optimization algorithm on the
             hub before any local convergers.
@@ -167,37 +160,32 @@ class Hub(SPCommunicator):
         return abs_gap_satisfied or rel_gap_satisfied or max_stalled_satisfied
 
     def hub_finalize(self):
-        self.receive_outerbounds()
-        self.receive_innerbounds()
+        self.update_receive_buffers()
+        self.update_outerbounds()
+        self.update_innerbounds()
 
         if self.global_rank == 0:
             self.print_init = True
             global_toc("Statistics at termination", True)
             self.screen_trace()
 
-    def receive_innerbounds(self):
-        """ Get inner bounds from inner bound spokes
-            NOTE: Does not check if there _are_ innerbound spokes
-            (but should be harmless to call if there are none)
+    def update_innerbounds(self):
+        """ Update the inner bounds after receiving them from the spokes
         """
-        logging.debug("Hub is trying to receive from InnerBounds")
+        logging.debug("Hub is trying to update from InnerBounds")
         for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
-            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_INNER_BOUND, idx)
-            if is_new:
+            if recv_buf.is_new():
                 bound = recv_buf[0]
                 logging.debug("!! new InnerBound to opt {}".format(bound))
                 self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
         logging.debug("ph back from InnerBounds")
 
-    def receive_outerbounds(self):
-        """ Get outer bounds from outer bound spokes
-            NOTE: Does not check if there _are_ outerbound spokes
-            (but should be harmless to call if there are none)
+    def update_outerbounds(self):
+        """ Update the outer bounds after receiving them from the spokes
         """
-        logging.debug("Hub is trying to receive from OuterBounds")
+        logging.debug("Hub is trying to update from OuterBounds")
         for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
-            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_OUTER_BOUND, idx)
-            if is_new:
+            if recv_buf.is_new():
                 bound = recv_buf[0]
                 logging.debug("!! new OuterBound to opt {}".format(bound))
                 self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
@@ -320,8 +308,9 @@ class PHHub(Hub):
         self.send_ws()
         self.send_nonants()
         self.send_boundsout()
-        self.receive_outerbounds()
-        self.receive_innerbounds()
+        self.update_receive_buffers()
+        self.update_outerbounds()
+        self.update_innerbounds()
         if self.opt.extensions is not None:
             self.opt.extobject.sync_with_spokes()
 
@@ -329,8 +318,9 @@ class PHHub(Hub):
         self.sync()
 
     def sync_bounds(self):
-        self.receive_outerbounds()
-        self.receive_innerbounds()
+        self.update_receive_buffers()
+        self.update_outerbounds()
+        self.update_innerbounds()
         self.send_boundsout()
 
     def sync_extensions(self):
@@ -431,8 +421,9 @@ class LShapedHub(Hub):
         """
         if send_nonants:
             self.send_nonants()
-        self.receive_outerbounds()
-        self.receive_innerbounds()
+        self.update_receive_buffers()
+        self.update_innerbounds()
+        self.update_outerbounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.sync_with_spokes()

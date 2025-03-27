@@ -35,7 +35,8 @@ class Spoke(SPCommunicator):
         The main call for the Spoke. Derived classe
         should call the got_kill_signal method
         regularly to ensure all ranks terminate
-        with the Hub.
+        with the Hub, and to receive new data
+        from other cylinders.
         """
         pass
 

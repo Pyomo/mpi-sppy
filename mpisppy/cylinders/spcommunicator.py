@@ -240,16 +240,6 @@ class SPCommunicator:
         """
         pass
 
-    def sync(self):
-        """ Every hub/spoke may have a sync function
-        """
-        pass
-
-    def is_converged(self):
-        """ Every hub/spoke may have a is_converged function
-        """
-        return False
-
     def finalize(self):
         """ Every hub/spoke may have a finalize function,
             which does some final calculations/flushing to
@@ -381,3 +371,10 @@ class SPCommunicator:
         else:
             buf._is_new = False
             return False
+
+    def update_receive_buffers(self):
+        for (key, recv_buf) in self.receive_buffers.items():
+            field, rank = self._split_key(key)
+            self.get_receive_buffer(recv_buf, field, rank)
+        ## End for
+        return
