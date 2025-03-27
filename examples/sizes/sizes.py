@@ -82,11 +82,6 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
     sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
     return scenario_creator(sname, **sca)
 
-def initialize(cfg):
-    print("initialize was successfully called."
-          " BTW: it does nothing for the sizes problem,"
-          " it is just here for testing purposes.")
-
 ######## end helper functions #########
 
 ########## a customized rho setter #############

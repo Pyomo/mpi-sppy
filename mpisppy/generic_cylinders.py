@@ -555,9 +555,9 @@ if __name__ == "__main__":
 
     cfg = _parse_args(module)
 
-    # the initialize function is particularly useful for a class in the module
-    if hasattr(module, "initialize"):
-        module.initialize(cfg)
+    # Perhaps use an object as the so-called module.
+    if hasattr(module, "get_function_object"):
+        module = module.module_get_function_object(cfg)
     
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
