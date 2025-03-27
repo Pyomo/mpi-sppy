@@ -48,9 +48,17 @@ class CrossScenarioCutSpoke(Spoke):
 
     def register_receive_fields(self):
         super().register_receive_fields()
-        # TODO: look up rank
-        self.all_nonants = self.register_recv_field(Field.NONANT, 0)
-        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0)
+
+        nonant_ranks = self.opt.spcomm.fields_to_ranks[Field.NONANT]
+        cs_cost_ranks = self.opt.spcomm.fields_to_ranks[Field.CROSS_SCENARIO_COST]
+
+        assert len(nonant_ranks) == 1
+        assert len(cs_cost_ranks) == 1
+        assert nonant_ranks[0] == cs_cost_ranks[0]
+        source_rank = nonant_ranks[0]
+
+        self.all_nonants = self.register_recv_field(Field.NONANT, source_rank)
+        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, source_rank)
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
