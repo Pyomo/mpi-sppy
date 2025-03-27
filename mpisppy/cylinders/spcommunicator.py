@@ -186,8 +186,6 @@ class SPCommunicator:
         self.ranks_to_fields = {}
 
         for rank, buffer_layout in enumerate(self.window.strata_buffer_layouts):
-            if rank == self.strata_rank:
-                continue
             self.ranks_to_fields[rank] = []
             for field in buffer_layout:
                 if field not in self.fields_to_ranks:
@@ -316,8 +314,9 @@ class SPCommunicator:
             #       they are nonsensical.
             self.receive_field_spcomms[field] = []
             for strata_rank, comm in enumerate(self.communicators):
-                if strata_rank == self.strata_rank:
-                    continue
+                # It seems non-sensical, but to enable generic code we'll
+                # let a cylinder register its own receive field.
+                # (In particular, for nonant bounds...)
                 cls = comm["spcomm_class"]
                 if field in self.ranks_to_fields[strata_rank]:
                     buff = self.register_recv_field(field, strata_rank)
