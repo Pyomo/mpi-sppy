@@ -54,11 +54,11 @@ class ReducedCostsRho(_SensiRhoBase):
         )
 
     def sync_with_spokes(self):
-        self.opt.spcomm.get_receive_buffer(
-            self.scenario_reduced_cost_buf,
-            Field.SCENARIO_REDUCED_COST,
-            self.reduced_costs_spoke_index,
-        )
+        # self.opt.spcomm.get_receive_buffer(
+        #     self.scenario_reduced_cost_buf,
+        #     Field.SCENARIO_REDUCED_COST,
+        #     self.reduced_costs_spoke_index,
+        # )
         if self.scenario_reduced_cost_buf.is_new():
             self._scenario_rc_buffer[:] = self.scenario_reduced_cost_buf.value_array()
             # print(f"In ReducedCostsRho; {self._scenario_rc_buffer=}")

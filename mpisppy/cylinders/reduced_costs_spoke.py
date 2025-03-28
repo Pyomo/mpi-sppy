@@ -77,14 +77,14 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                     dtype=float,
                     count=len(s._mpisppy_data.nonant_indices),
                 )
-            self._nonant_lower_bounds = np.maximum(self._nonant_lower_bounds, scenario_lower_bounds)
+            np.maximum(self._nonant_lower_bounds, scenario_lower_bounds, out=self._nonant_lower_bounds)
 
             scenario_upper_bounds = np.fromiter(
                     _ub_generator(s._mpisppy_data.nonant_indices.values()),
                     dtype=float,
                     count=len(s._mpisppy_data.nonant_indices),
                 )
-            self._nonant_upper_bounds = np.minimum(self._nonant_upper_bounds, scenario_upper_bounds)
+            np.minimum(self._nonant_upper_bounds, scenario_upper_bounds, out=self._nonant_upper_bounds)
 
     def create_integer_variable_where(self):
         self._integer_variable_where = np.full(len(self._nonant_lower_bounds), False)
@@ -221,8 +221,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         nonzero_rc = np.where(self.rc_global==0, np.nan, self.rc_global)
         bound_tightening = np.divide(self.BestInnerBound - lr_outer_bound, nonzero_rc)
 
-        tighten_upper = np.where(bound_tightening>0, np.nan, bound_tightening)
-        tighten_lower = np.where(bound_tightening<0, np.nan, bound_tightening)
+        tighten_upper = np.where(bound_tightening>0, bound_tightening, np.nan)
+        tighten_lower = np.where(bound_tightening<0, bound_tightening, np.nan)
 
         tighten_upper += self._nonant_lower_bounds 
         tighten_lower += self._nonant_upper_bounds
@@ -237,7 +237,15 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         np.ceil(self._nonant_lower_bounds, out=self._nonant_lower_bounds, where=self._integer_variable_where)
         # floor of upper bounds for integer variables
         np.floor(self._nonant_upper_bounds, out=self._nonant_upper_bounds, where=self._integer_variable_where)
-         
+
+        self.put_send_buffer(
+            self.send_buffers[Field.NONANT_LOWER_BOUNDS],
+            Field.NONANT_LOWER_BOUNDS,
+        )
+        self.put_send_buffer(
+            self.send_buffers[Field.NONANT_UPPER_BOUNDS],
+            Field.NONANT_UPPER_BOUNDS,
+        )
 
     def main(self):
         # need the solution for ReducedCostsSpoke

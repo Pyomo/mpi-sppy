@@ -126,11 +126,11 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
-        self.opt.spcomm.get_receive_buffer(
-            self.cuts,
-            Field.CROSS_SCENARIO_CUT,
-            self.cross_scenario_index,
-        )
+        # self.opt.spcomm.get_receive_buffer(
+        #     self.cuts,
+        #     Field.CROSS_SCENARIO_CUT,
+        #     self.cross_scenario_index,
+        # )
         if self.cuts.is_new():
             self.make_cuts(self.cuts.array())
 
