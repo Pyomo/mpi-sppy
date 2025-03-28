@@ -12,22 +12,21 @@ import logging
 import mpisppy.log
 
 from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
-from math import inf
 
 from mpisppy import global_toc
 
 from mpisppy.cylinders.spwindow import Field
 
 # Could also pass, e.g., sys.stdout instead of a filename
-mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
+mpisppy.log.setup_logger(__name__,
                          "hub.log",
                          level=logging.CRITICAL)
-logger = logging.getLogger("mpisppy.cylinders.Hub")
+logger = logging.getLogger(__name__)
 
 class Hub(SPCommunicator):
 
     send_fields = (*SPCommunicator.send_fields, Field.SHUTDOWN, Field.BEST_OBJECTIVE_BOUNDS,)
-    receive_fields = (*SPCommunicator.receive_fields, Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND, )
+    receive_fields = (*SPCommunicator.receive_fields,)
 
     _hub_algo_best_bound_provider = False
 
@@ -37,15 +36,9 @@ class Hub(SPCommunicator):
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # for logging
         self.print_init = True
-        self.latest_ib_char = None
-        self.latest_ob_char = None
-        self.last_ib_idx = None
-        self.last_ob_idx = None
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
         self.last_gap = float('inf')  # abs_gap tracker
-
-        self.initialize_bound_values()
 
         return
 
@@ -168,66 +161,6 @@ class Hub(SPCommunicator):
             self.print_init = True
             global_toc("Statistics at termination", True)
             self.screen_trace()
-
-    def update_innerbounds(self):
-        """ Update the inner bounds after receiving them from the spokes
-        """
-        logging.debug("Hub is trying to update from InnerBounds")
-        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
-            if recv_buf.is_new():
-                bound = recv_buf[0]
-                logging.debug("!! new InnerBound to opt {}".format(bound))
-                self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
-        logging.debug("ph back from InnerBounds")
-
-    def update_outerbounds(self):
-        """ Update the outer bounds after receiving them from the spokes
-        """
-        logging.debug("Hub is trying to update from OuterBounds")
-        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
-            if recv_buf.is_new():
-                bound = recv_buf[0]
-                logging.debug("!! new OuterBound to opt {}".format(bound))
-                self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
-        logging.debug("ph back from OuterBounds")
-
-    def OuterBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
-        current_bound = self.BestOuterBound
-        if self._outer_bound_update(new_bound, current_bound):
-            if cls is None:
-                self.latest_ob_char = char
-                self.last_ob_idx = 0
-            else:
-                self.latest_ob_char = cls.converger_spoke_char
-                self.last_ob_idx = idx
-            return new_bound
-        else:
-            return current_bound
-
-    def InnerBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
-        current_bound = self.BestInnerBound
-        if self._inner_bound_update(new_bound, current_bound):
-            if cls is None:
-                self.latest_ib_char = char
-                self.last_ib_idx = 0
-            else:
-                self.latest_ib_char = cls.converger_spoke_char
-                self.last_ib_idx = idx
-            return new_bound
-        else:
-            return current_bound
-
-    def initialize_bound_values(self):
-        if self.opt.is_minimizing:
-            self.BestInnerBound = inf
-            self.BestOuterBound = -inf
-            self._inner_bound_update = lambda new, old : (new < old)
-            self._outer_bound_update = lambda new, old : (new > old)
-        else:
-            self.BestInnerBound = -inf
-            self.BestOuterBound = inf
-            self._inner_bound_update = lambda new, old : (new > old)
-            self._outer_bound_update = lambda new, old : (new < old)
 
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds

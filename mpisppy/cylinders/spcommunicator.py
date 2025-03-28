@@ -19,12 +19,16 @@
     Separate hub and spoke classes for memory/window management?
 """
 
-import numpy as np
 import abc
 import time
+import logging
+import numpy as np
+from math import inf
 
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
+
+logger = logging.getLogger(__name__)
 
 def communicator_array(size):
     arr = np.empty(size+1, dtype='d')
@@ -116,7 +120,8 @@ class SPCommunicator:
         or expects to receive from another SPCommunicator object.
     """
     send_fields = ()
-    receive_fields = (Field.NONANT_LOWER_BOUNDS, Field.NONANT_UPPER_BOUNDS,)
+    receive_fields = (Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND,
+                      Field.NONANT_LOWER_BOUNDS, Field.NONANT_UPPER_BOUNDS,)
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
         self.fullcomm = fullcomm
@@ -151,6 +156,13 @@ class SPCommunicator:
         # attach the SPCommunicator to
         # the SPBase object
         self.opt.spcomm = self
+
+        # for communicating with bounders
+        self.latest_ib_char = None
+        self.latest_ob_char = None
+        self.last_ib_idx = None
+        self.last_ob_idx = None
+        self.initialize_bound_values()
 
         return
 
@@ -385,20 +397,88 @@ class SPCommunicator:
         upper bound buffers should be up-to-date, which can be done by calling
         `SPCommunicator.update_receive_buffers`.
         """
-        _INF = float("inf")
+        bounds_modified = 0
         for _, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
-            for s in self.opt.local_scenarios.items():
+            for s in self.opt.local_scenarios.values():
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     xvarlb = xvar.lb
                     if xvarlb is None:
-                        xvarlb = -_INF
+                        xvarlb = -inf
                     if recv_buf[ci] > xvarlb:
                         xvar.lb = recv_buf[ci]
+                        bounds_modified += 1
         for _, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
-            for s in self.opt.local_scenarios.items():
+            for s in self.opt.local_scenarios.values():
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     xvarub = xvar.ub
                     if xvarub is None:
-                        xvarub = _INF
+                        xvarub = inf 
                     if recv_buf[ci] < xvarub:
                         xvar.ub = recv_buf[ci]
+                        bounds_modified += 1
+
+        bounds_modified /= len(self.opt.local_scenarios)
+
+        if bounds_modified > 0:
+            global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
+
+    def update_innerbounds(self):
+        """ Update the inner bounds after receiving them from the spokes
+        """
+        logger.debug(f"{self.__class__.__name__} is trying to update from InnerBounds")
+        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
+            if recv_buf.is_new():
+                bound = recv_buf[0]
+                logger.debug("!! new InnerBound to opt {}".format(bound))
+                self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
+        logger.debug(f"{self.__class__.__name__} back from InnerBounds")
+
+    def update_outerbounds(self):
+        """ Update the outer bounds after receiving them from the spokes
+        """
+        logger.debug(f"{self.__class__.__name__} is trying to update from OuterBounds")
+        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
+            if recv_buf.is_new():
+                bound = recv_buf[0]
+                logger.debug("!! new OuterBound to opt {}".format(bound))
+                self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
+        logger.debug(f"{self.__class__.__name__} back from OuterBounds")
+
+    def OuterBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
+        current_bound = self.BestOuterBound
+        if self._outer_bound_update(new_bound, current_bound):
+            if cls is None:
+                self.latest_ob_char = char
+                self.last_ob_idx = 0
+            else:
+                self.latest_ob_char = cls.converger_spoke_char
+                self.last_ob_idx = idx
+            return new_bound
+        else:
+            return current_bound
+
+    def InnerBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
+        current_bound = self.BestInnerBound
+        if self._inner_bound_update(new_bound, current_bound):
+            if cls is None:
+                self.latest_ib_char = char
+                self.last_ib_idx = 0
+            else:
+                self.latest_ib_char = cls.converger_spoke_char
+                self.last_ib_idx = idx
+            return new_bound
+        else:
+            return current_bound
+
+    def initialize_bound_values(self):
+        if self.opt.is_minimizing:
+            self.BestInnerBound = inf
+            self.BestOuterBound = -inf
+            self._inner_bound_update = lambda new, old : (new < old)
+            self._outer_bound_update = lambda new, old : (new > old)
+        else:
+            self.BestInnerBound = -inf
+            self.BestOuterBound = inf
+            self._inner_bound_update = lambda new, old : (new > old)
+            self._outer_bound_update = lambda new, old : (new < old)
+
