@@ -118,16 +118,16 @@ class ReducedCostsFixer(Extension):
         # NOTE: If we do this, then the heuristic reduced cost fixing might fix
         #       different variables in different subproblems. But this might be
         #       fine.
-        # self.opt.spcomm.get_receive_buffer(
-        #     self.reduced_cost_buf,
-        #     Field.EXPECTED_REDUCED_COST,
-        #     self.reduced_costs_spoke_index,
-        # )
-        # self.opt.spcomm.get_receive_buffer(
-        #     self.outer_bound_buf,
-        #     Field.OBJECTIVE_OUTER_BOUND,
-        #     self.reduced_costs_spoke_index,
-        # )
+        self.opt.spcomm.get_receive_buffer(
+            self.reduced_cost_buf,
+            Field.EXPECTED_REDUCED_COST,
+            self.reduced_costs_spoke_index,
+        )
+        self.opt.spcomm.get_receive_buffer(
+            self.outer_bound_buf,
+            Field.OBJECTIVE_OUTER_BOUND,
+            self.reduced_costs_spoke_index,
+        )
         if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
             reduced_costs = self.reduced_cost_buf.value_array()
             this_outer_bound = self.outer_bound_buf.value_array()[0]
