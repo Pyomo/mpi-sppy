@@ -21,16 +21,13 @@ class Spoke(SPCommunicator):
     send_fields = (*SPCommunicator.send_fields, )
     receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, )
 
-    def _got_kill_signal(self):
-        shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
-        return (shutdown_buf.is_new() and shutdown_buf[0] == 1.0)
-
     def got_kill_signal(self):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        self.update_receive_buffers()
-        return self._got_kill_signal()
+        shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
+        self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0)
+        return (shutdown_buf.is_new() and shutdown_buf[0] == 1.0)
 
     @abc.abstractmethod
     def main(self):
@@ -41,13 +38,6 @@ class Spoke(SPCommunicator):
         with the Hub.
         """
         pass
-
-    def update_receive_buffers(self):
-        for (key, recv_buf) in self.receive_buffers.items():
-            field, rank = self._split_key(key)
-            self.get_receive_buffer(recv_buf, field, rank)
-        ## End for
-        return
 
 
 class _BoundSpoke(Spoke):
@@ -101,6 +91,10 @@ class _BoundSpoke(Spoke):
         self.put_send_buffer(self._bound, self.bound_type())
         return
 
+    def update_hub_bounds(self) -> None:
+        """ get new hub inner / outer bounds from the hub """
+        return self.get_receive_buffer(self._hub_bounds, Field.BEST_OBJECTIVE_BOUNDS, 0)
+
     @property
     def hub_inner_bound(self):
         """Returns the local copy of the inner bound from the hub"""
@@ -135,7 +129,13 @@ class _BoundNonantLenSpoke(_BoundSpoke):
             raise RuntimeError(
                 f"More than one cylinder to select from for {self.nonant_len_type()}!"
             )
-        self._receive_rank = nonant_len_ranks[0]
+        key = self._make_key(self.nonant_len_type(), nonant_len_ranks[0])
+        self._nonant_len_receive_buffer = self.receive_buffers[key]
+        self._nonant_len_receive_rank = nonant_len_ranks[0]
+
+    def _update_nonant_len_buffer(self) -> bool:
+        """ get new data from the hub """
+        return self.get_receive_buffer(self._nonant_len_receive_buffer, self.nonant_len_type(), self._nonant_len_receive_rank)
 
 
 class InnerBoundSpoke(_BoundSpoke):
@@ -177,17 +177,14 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
-        key = self._make_key(Field.DUALS, self._receive_rank)
-        return self.receive_buffers[key].value_array()
+        return self._nonant_len_receive_buffer.value_array()
 
-    @property
-    def new_Ws(self):
-        """ Returns True if the local copy of
-            the weights has been updated since
-            the last call to got_kill_signal
+    def update_Ws(self) -> bool:
+        """ Check for new Ws from the source.
+        Returns True if the Ws are new. False otherwise.
+        Puts the result in `localWs`.
         """
-        key = self._make_key(Field.DUALS, self._receive_rank)
-        return self.receive_buffers[key].is_new()
+        return self._update_nonant_len_buffer()
 
 
 class OuterBoundWSpoke(_BoundWSpoke):
@@ -218,16 +215,14 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     @property
     def localnonants(self):
         """Returns the local copy of the nonants"""
-        key = self._make_key(Field.NONANT, self._receive_rank)
-        return self.receive_buffers[key].value_array()
+        return self._nonant_len_receive_buffer.value_array()
 
-    @property
-    def new_nonants(self):
-        """Returns True if the local copy of
-           the nonants has been updated since
-           the last call to got_kill_signal"""
-        key = self._make_key(Field.NONANT, self._receive_rank)
-        return self.receive_buffers[key].is_new()
+    def update_nonants(self) -> bool:
+        """ Check for new nonants from the source.
+        Returns True if the nonants are new. False otherwise.
+        Puts the result in `localnonants`.
+        """
+        return self._update_nonant_len_buffer()
 
 
 class InnerBoundNonantSpoke(_BoundNonantSpoke):

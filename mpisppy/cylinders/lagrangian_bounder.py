@@ -78,7 +78,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
             self.opt.extobject.post_iter0_after_sync()
 
         while not self.got_kill_signal():
-            if self.new_Ws:
+            if self.update_Ws():
                 if extensions:
                     self.opt.extobject.miditer()
                 bound = self._set_weights_and_solve(need_solution=need_solution)

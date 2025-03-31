@@ -39,7 +39,7 @@ class XhatLooperInnerBound(XhatInnerBoundBase):
                 logger.debug(f'   Xhatlooper loop iter={xh_iter} on rank {self.global_rank}')
                 logger.debug(f'   Xhatlooper got from opt on rank {self.global_rank}')
 
-            if self.new_nonants:
+            if self.update_nonants():
                 logger.debug(f'   *Xhatlooper loop iter={xh_iter}')
                 logger.debug(f'   *got a new one! on rank {self.global_rank}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')

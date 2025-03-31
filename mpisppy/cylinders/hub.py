@@ -504,7 +504,7 @@ class APHHub(PHHub):
     def get_receive_buffer(self,
                            buf: RecvArray,
                            field: Field,
-                           origin: int = -1,
+                           origin: int,
                            synchronize: bool = False,
                           ):
         return super().get_receive_buffer(buf, field, origin, synchronize)

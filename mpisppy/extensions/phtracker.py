@@ -286,6 +286,7 @@ class PHTracker(Extension):
     def _get_bounds(self):
         spoke_bound = None
         if isinstance(self.spcomm, Spoke):
+            self.spcomm.update_hub_bounds()
             hub_inner_bound = self.spcomm.hub_inner_bound
             hub_outer_bound = self.spcomm.hub_outer_bound
             spoke_bound = self.spcomm.bound
