@@ -134,6 +134,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         return bound
 
     def extract_and_store_reduced_costs(self):
+        # if it's time, don't bother
+        if self.got_kill_signal():
+            return
+
         self.opt.Compute_Xbar()
         # NaN will signal that the x values do not agree in
         # every scenario, we can't extract an expected reduced
@@ -206,13 +210,11 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         )
 
     def extract_and_store_updated_nonant_bounds(self, lr_outer_bound):
-        # update the best bound from the hub
-        # as a side effect, calls update_receive_buffers
-        # TODO: fix this side effect 
+        # if it's time, don't bother
         if self.got_kill_signal():
             return
 
-        self.update_innerbounds()        
+        self.receive_innerbounds()
 
         if math.isinf(self.BestInnerBound):
             # can do anything with no bound

@@ -28,7 +28,7 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         self.bound = self.opt._local_bound
 
         # Update the nonant bounds, if possible
-        self.update_nonant_bounds()
+        self.receive_nonant_bounds()
 
     def finalize(self):
         # The FWPH spoke can call "finalize" before it

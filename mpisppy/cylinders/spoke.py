@@ -39,13 +39,6 @@ class Spoke(SPCommunicator):
         """
         pass
 
-    def update_receive_buffers(self):
-        for (key, recv_buf) in self.receive_buffers.items():
-            field, rank = self._split_key(key)
-            self.get_receive_buffer(recv_buf, field, rank)
-        ## End for
-        return
-
 
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes

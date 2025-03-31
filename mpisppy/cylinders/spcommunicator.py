@@ -394,15 +394,16 @@ class SPCommunicator:
             buf._is_new = False
             return False
 
-    def update_nonant_bounds(self):
-        """ update the bounds on the nonanticipative variables based on
-        Field.NONANT_LOWER_BOUNDS and Field.NONANT_UPPER_BOUNDS. The lower and
-        upper bound buffers should be up-to-date, which can be done by calling
-        `SPCommunicator.update_receive_buffers`.
+    def receive_nonant_bounds(self):
+        """ receive the bounds on the nonanticipative variables based on
+        Field.NONANT_LOWER_BOUNDS and Field.NONANT_UPPER_BOUNDS. Updates the
+        NONANT_LOWER_BOUNDS and NONANT_UPPER_BOUNDS buffers, and if new,
+        updates the corresponding Pyomo nonant variables
         """
         bounds_modified = 0
-        for _, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
-            if not recv_buf.is_new():
+        for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
+            is_new = self.get_receive_buffer(recv_buf, Field.NONANT_LOWER_BOUNDS, idx)
+            if not is_new:
                 break
             for s in self.opt.local_scenarios.values():
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
@@ -412,8 +413,9 @@ class SPCommunicator:
                     if recv_buf[ci] > xvarlb:
                         xvar.lb = recv_buf[ci]
                         bounds_modified += 1
-        for _, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
-            if not recv_buf.is_new():
+        for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
+            is_new = self.get_receive_buffer(recv_buf, Field.NONANT_UPPER_BOUNDS, idx)
+            if not is_new:
                 break
             for s in self.opt.local_scenarios.values():
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):

@@ -249,7 +249,7 @@ class PHHub(Hub):
         self.send_boundsout()
         self.receive_outerbounds()
         self.receive_innerbounds()
-        self.update_nonant_bounds()
+        self.receive_nonant_bounds()
         if self.opt.extensions is not None:
             self.opt.extobject.sync_with_spokes()
 
@@ -259,7 +259,7 @@ class PHHub(Hub):
     def sync_bounds(self):
         self.receive_outerbounds()
         self.receive_innerbounds()
-        self.update_nonant_bounds()
+        self.receive_nonant_bounds()
         self.send_boundsout()
 
     def sync_extensions(self):
@@ -362,7 +362,7 @@ class LShapedHub(Hub):
             self.send_nonants()
         self.receive_outerbounds()
         self.receive_innerbounds()
-        self.update_nonant_bounds()
+        self.receive_nonant_bounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.sync_with_spokes()
