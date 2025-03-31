@@ -56,12 +56,21 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
     converger_spoke_char = 'L'
 
-    def _set_weights_and_solve(self, need_solution=True):
+    def _set_weights_and_solve(self, need_solution):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
         return self.lagrangian(need_solution=need_solution)
 
+    def do_while_waiting_for_new_Ws(self, need_solution):
+        if self.opt.options.get("subgradient_while_waiting", False):
+            # compute a subgradient step
+            self.opt.Compute_Xbar(self.verbose)
+            self.opt.Update_W(self.verbose)
+            bound = self.lagrangian(need_solution=need_solution)
+            if bound is not None:
+                self.bound = bound
+
     def main(self, need_solution=False):
-        verbose = self.opt.options['verbose']
+        self.verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
@@ -91,10 +100,5 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
-            elif self.opt.options.get("subgradient_while_waiting", False):
-                # compute a subgradient step
-                self.opt.Compute_Xbar(verbose)
-                self.opt.Update_W(verbose)
-                bound = self.lagrangian(need_solution=need_solution)
-                if bound is not None:
-                    self.bound = bound
+            else:
+                self.do_while_waiting_for_new_Ws(need_solution=need_solution)

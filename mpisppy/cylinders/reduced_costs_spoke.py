@@ -26,6 +26,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         super().__init__(*args, **kwargs)
         self.bound_tol = self.opt.options['rc_bound_tol']
         self.consensus_threshold = np.sqrt(self.bound_tol)
+        self.current_lr_bound = None
 
     def register_send_fields(self) -> None:
 
@@ -128,6 +129,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         if not need_solution:
             raise RuntimeError("ReducedCostsSpoke always needs a solution to work")
         bound = super().lagrangian(need_solution=need_solution)
+        self.current_lr_bound = bound
         if bound is not None:
             self.extract_and_store_reduced_costs()
             self.extract_and_store_updated_nonant_bounds(bound)
@@ -248,6 +250,12 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             self.send_buffers[Field.NONANT_UPPER_BOUNDS],
             Field.NONANT_UPPER_BOUNDS,
         )
+
+    def do_while_waiting_for_new_Ws(self, need_solution):
+        super().do_while_waiting_for_new_Ws(need_solution=need_solution)
+        # might as well see if a tighter upper bound has come along
+        if self.current_lr_bound is not None:
+            self.extract_and_store_updated_nonant_bounds(self.current_lr_bound)
 
     def main(self):
         # need the solution for ReducedCostsSpoke
