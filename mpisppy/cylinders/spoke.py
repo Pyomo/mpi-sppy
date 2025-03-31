@@ -27,7 +27,7 @@ class Spoke(SPCommunicator):
         """
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0)
-        return (shutdown_buf.is_new() and shutdown_buf[0] == 1.0)
+        return shutdown_buf[0] == 1.0
 
     @abc.abstractmethod
     def main(self):
