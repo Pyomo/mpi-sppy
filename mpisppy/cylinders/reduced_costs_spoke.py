@@ -26,7 +26,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         super().__init__(*args, **kwargs)
         self.bound_tol = self.opt.options['rc_bound_tol']
         self.consensus_threshold = np.sqrt(self.bound_tol)
-        self.current_lr_bound = None
+        self._last_primal_value = math.inf if self.opt.is_minimizing else -math.inf
 
     def register_send_fields(self) -> None:
 
@@ -87,6 +87,12 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 )
             np.minimum(self._nonant_upper_bounds, scenario_upper_bounds, out=self._nonant_upper_bounds)
 
+        self._best_ub_update_function_slope = np.full(len(self._nonant_upper_bounds), 0.0)
+        self._best_ub_update_function_intercept = np.full(len(self._nonant_upper_bounds), np.inf)
+
+        self._best_lb_update_function_slope = np.full(len(self._nonant_lower_bounds), 0.0)
+        self._best_lb_update_function_intercept = np.full(len(self._nonant_lower_bounds), -np.inf)
+
     def create_integer_variable_where(self):
         self._integer_variable_where = np.full(len(self._nonant_lower_bounds), False)
         for s in self.opt.local_scenarios.values():
@@ -129,10 +135,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         if not need_solution:
             raise RuntimeError("ReducedCostsSpoke always needs a solution to work")
         bound = super().lagrangian(need_solution=need_solution)
-        self.current_lr_bound = bound
         if bound is not None:
             self.extract_and_store_reduced_costs()
-            self.extract_and_store_updated_nonant_bounds(bound)
+            self.update_bounding_functions(bound)
+            self.extract_and_store_updated_nonant_bounds(new_dual=True)
         return bound
 
     def extract_and_store_reduced_costs(self):
@@ -211,7 +217,49 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             Field.SCENARIO_REDUCED_COST,
         )
 
-    def extract_and_store_updated_nonant_bounds(self, lr_outer_bound):
+    def update_bounding_functions(self, lr_outer_bound):
+        """ This method attempts to update the best function we've found
+        so far to prove given bounds. Because it's difficult in general
+        to know if one linear function dominates another within a range
+        (and the answer maybe in conclusive), we'll settle for evaluting
+        the function at the current inner bound. If that point does not
+        exist we will go some distance from the current lr_outer_bound.
+        """
+        # if it's time, don't bother
+        if self.got_kill_signal():
+            return
+
+        self.receive_innerbounds()
+
+        if math.isinf(self.BestInnerBound):
+            if self.opt.is_minimizing:
+                # inner_bound > outer_bound
+                test_inner_bound = max(lr_outer_bound*1.01, lr_outer_bound+1)
+            else:
+                # inner_bound < outer_bound
+                test_inner_bound = min(lr_outer_bound*0.99, lr_outer_bound-1)
+        else:
+            test_inner_bound = self.BestInnerBound
+        nonzero_rc = np.where(self.rc_global==0, np.nan, self.rc_global)
+        bound_tightening = np.divide(test_inner_bound - lr_outer_bound, nonzero_rc)
+
+        tighten_upper = np.where(bound_tightening>0, bound_tightening, np.nan)
+        tighten_lower = np.where(bound_tightening<0, bound_tightening, np.nan)
+
+        tighten_upper += self._nonant_lower_bounds
+        tighten_lower += self._nonant_upper_bounds
+
+        current_upper_tightening = self._best_ub_update_function_slope * test_inner_bound + self._best_ub_update_function_intercept
+        current_lower_tightening = self._best_lb_update_function_slope * test_inner_bound + self._best_lb_update_function_intercept
+
+        self._best_ub_update_function_slope = np.where(tighten_upper < current_upper_tightening, 1.0 / nonzero_rc, self._best_ub_update_function_slope)
+        self._best_ub_update_function_intercept = np.where(tighten_upper < current_upper_tightening, tighten_upper - (test_inner_bound / nonzero_rc), self._best_ub_update_function_intercept)
+
+        self._best_lb_update_function_slope = np.where(tighten_lower > current_lower_tightening, 1.0 / nonzero_rc, self._best_lb_update_function_slope)
+        self._best_lb_update_function_intercept = np.where(tighten_lower > current_lower_tightening, tighten_lower - (test_inner_bound / nonzero_rc), self._best_lb_update_function_intercept)
+
+
+    def extract_and_store_updated_nonant_bounds(self, new_dual=False):
         # if it's time, don't bother
         if self.got_kill_signal():
             return
@@ -221,20 +269,20 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         if math.isinf(self.BestInnerBound):
             # can do anything with no bound
             return
-        
-        nonzero_rc = np.where(self.rc_global==0, np.nan, self.rc_global)
-        bound_tightening = np.divide(self.BestInnerBound - lr_outer_bound, nonzero_rc)
 
-        tighten_upper = np.where(bound_tightening>0, bound_tightening, np.nan)
-        tighten_lower = np.where(bound_tightening<0, bound_tightening, np.nan)
+        if self._inner_bound_update(self.BestInnerBound, self._last_primal_value):
+            self._last_primal_value = self.BestInnerBound
+        elif not new_dual:
+            # no better inner bound than last time; and no dual update either
+            return
 
-        tighten_upper += self._nonant_lower_bounds 
-        tighten_lower += self._nonant_upper_bounds
+        tighten_upper = self._best_ub_update_function_slope * self._last_primal_value + self._best_ub_update_function_intercept
+        tighten_lower = self._best_lb_update_function_slope * self._last_primal_value + self._best_lb_update_function_intercept
 
-        # max of existing lower and new lower
+        # max of existing lower and new lower, ignoring nan's
         np.fmax(tighten_lower, self._nonant_lower_bounds, out=self._nonant_lower_bounds)
 
-        # min of existing upper and new upper
+        # min of existing upper and new upper, ignoring nan's
         np.fmin(tighten_upper, self._nonant_upper_bounds, out=self._nonant_upper_bounds)
 
         # ceiling of lower bounds for integer variables
@@ -254,8 +302,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
     def do_while_waiting_for_new_Ws(self, need_solution):
         super().do_while_waiting_for_new_Ws(need_solution=need_solution)
         # might as well see if a tighter upper bound has come along
-        if self.current_lr_bound is not None:
-            self.extract_and_store_updated_nonant_bounds(self.current_lr_bound)
+        self.extract_and_store_updated_nonant_bounds(new_dual=False)
 
     def main(self):
         # need the solution for ReducedCostsSpoke
