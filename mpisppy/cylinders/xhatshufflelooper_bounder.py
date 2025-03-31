@@ -136,6 +136,10 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
                         _vb(f"   Updating best to {next_scendict}")
                         scenario_cycler.best = next_scendict["ROOT"]
 
+                if self.got_kill_signal():
+                    # time to go; don't solve next
+                    return
+
             next_scendict = scenario_cycler.get_next()
             if next_scendict is not None:
                 _vb(f"   Trying next {next_scendict}")
