@@ -35,10 +35,16 @@ class Spoke(SPCommunicator):
         The main call for the Spoke. Derived classe
         should call the got_kill_signal method
         regularly to ensure all ranks terminate
-        with the Hub, and to receive new data
-        from other cylinders.
+        with the Hub.
         """
         pass
+
+    def update_receive_buffers(self):
+        for (key, recv_buf) in self.receive_buffers.items():
+            field, rank = self._split_key(key)
+            self.get_receive_buffer(recv_buf, field, rank)
+        ## End for
+        return
 
 
 class _BoundSpoke(Spoke):

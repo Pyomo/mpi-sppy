@@ -252,6 +252,16 @@ class SPCommunicator:
         """
         pass
 
+    def sync(self):
+        """ Every hub/spoke may have a sync function
+        """
+        pass
+
+    def is_converged(self):
+        """ Every hub/spoke may have a is_converged function
+        """
+        return False
+
     def finalize(self):
         """ Every hub/spoke may have a finalize function,
             which does some final calculations/flushing to
@@ -384,13 +394,6 @@ class SPCommunicator:
             buf._is_new = False
             return False
 
-    def update_receive_buffers(self):
-        for (key, recv_buf) in self.receive_buffers.items():
-            field, rank = self._split_key(key)
-            self.get_receive_buffer(recv_buf, field, rank)
-        ## End for
-        return
-
     def update_nonant_bounds(self):
         """ update the bounds on the nonanticipative variables based on
         Field.NONANT_LOWER_BOUNDS and Field.NONANT_UPPER_BOUNDS. The lower and
@@ -426,23 +429,25 @@ class SPCommunicator:
         if bounds_modified > 0:
             global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
 
-    def update_innerbounds(self):
-        """ Update the inner bounds after receiving them from the spokes
+    def receive_innerbounds(self):
+        """ Get inner bounds from inner bound providers
         """
-        logger.debug(f"{self.__class__.__name__} is trying to update from InnerBounds")
+        logger.debug(f"{self.__class__.__name__} is trying to receive from InnerBounds")
         for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
-            if recv_buf.is_new():
+            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_INNER_BOUND, idx)
+            if is_new:
                 bound = recv_buf[0]
                 logger.debug("!! new InnerBound to opt {}".format(bound))
                 self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
         logger.debug(f"{self.__class__.__name__} back from InnerBounds")
 
-    def update_outerbounds(self):
-        """ Update the outer bounds after receiving them from the spokes
+    def receive_outerbounds(self):
+        """ Get outer bounds from outer bound providers
         """
-        logger.debug(f"{self.__class__.__name__} is trying to update from OuterBounds")
+        logger.debug(f"{self.__class__.__name__} is trying to receive from OuterBounds")
         for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
-            if recv_buf.is_new():
+            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_OUTER_BOUND, idx) 
+            if is_new:
                 bound = recv_buf[0]
                 logger.debug("!! new OuterBound to opt {}".format(bound))
                 self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
@@ -485,4 +490,3 @@ class SPCommunicator:
             self.BestOuterBound = inf
             self._inner_bound_update = lambda new, old : (new > old)
             self._outer_bound_update = lambda new, old : (new < old)
-

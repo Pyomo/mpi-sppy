@@ -47,6 +47,13 @@ class Hub(SPCommunicator):
         pass
 
     @abc.abstractmethod
+    def sync(self):
+        """ To be called within the whichever optimization algorithm
+            is being run on the hub (e.g. PH)
+        """
+        pass
+
+    @abc.abstractmethod
     def is_converged(self):
         """ The hub has the ability to halt the optimization algorithm on the
             hub before any local convergers.
@@ -153,9 +160,8 @@ class Hub(SPCommunicator):
         return abs_gap_satisfied or rel_gap_satisfied or max_stalled_satisfied
 
     def hub_finalize(self):
-        self.update_receive_buffers()
-        self.update_outerbounds()
-        self.update_innerbounds()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
 
         if self.global_rank == 0:
             self.print_init = True
@@ -241,9 +247,8 @@ class PHHub(Hub):
         self.send_ws()
         self.send_nonants()
         self.send_boundsout()
-        self.update_receive_buffers()
-        self.update_outerbounds()
-        self.update_innerbounds()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
         self.update_nonant_bounds()
         if self.opt.extensions is not None:
             self.opt.extobject.sync_with_spokes()
@@ -252,9 +257,8 @@ class PHHub(Hub):
         self.sync()
 
     def sync_bounds(self):
-        self.update_receive_buffers()
-        self.update_outerbounds()
-        self.update_innerbounds()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
         self.update_nonant_bounds()
         self.send_boundsout()
 
@@ -356,9 +360,8 @@ class LShapedHub(Hub):
         """
         if send_nonants:
             self.send_nonants()
-        self.update_receive_buffers()
-        self.update_innerbounds()
-        self.update_outerbounds()
+        self.receive_outerbounds()
+        self.receive_innerbounds()
         self.update_nonant_bounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
