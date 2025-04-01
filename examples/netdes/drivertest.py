@@ -12,7 +12,7 @@ import netdes
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
 from mpisppy.opt.ph import PH
-from mpisppy.fwph.fwph import FWPH
+from mpisppy.opt.fwph import FWPH
 # Hub and spoke SPCommunicator classes
 from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
