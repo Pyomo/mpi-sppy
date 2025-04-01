@@ -343,6 +343,8 @@ class PHHub(Hub):
     def is_converged(self):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
+        if self.opt.best_solution_obj_val is not None:
+            self.BestInnerBound = self.InnerBoundUpdate(self.opt.best_solution_obj_val)
 
         if not self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
             if self.opt._PHIter == 1:
@@ -511,3 +513,10 @@ class APHHub(PHHub):
         #       to APH.post_loops
         Eobj = self.opt.post_loops()
         return Eobj
+
+class FWPHHub(PHHub):
+
+    _hub_algo_best_bound_provider = True
+
+    def main(self):
+        self.opt.fwph_main(finalize=False)
