@@ -172,15 +172,17 @@ class FWPH(mpisppy.phbase.PHBase):
             # tbsdm = time.time()
             for name in self.local_subproblems:
                 dual_bound = self.SDM(name)
+                if dual_bound is None:
+                    dual_bound = np.nan
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
             # tsdm = time.time() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
             self._compute_dual_bound()
             if (self.is_minimizing):
-                best_bound = np.maximum(best_bound, self._local_bound)
+                best_bound = np.fmax(best_bound, self._local_bound)
             else:
-                best_bound = np.minimum(best_bound, self._local_bound)
+                best_bound = np.fmin(best_bound, self._local_bound)
             if self._can_update_best_bound():
                 self.best_bound_obj_val = best_bound
             self._swap_nonant_vars_back()
@@ -275,10 +277,17 @@ class FWPH(mpisppy.phbase.PHBase):
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
             cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-            # TODO: add lookup table for absolute cutoff option
-            # if self.options.get("fwph_include_cutoff", False):
-            #     self.options["iterk_solver_options"]["MIPABSCUTOFF"] = cutoff
             # tbmipsolve = time.time()
+            active_objective = sputils.find_active_objective(mip)
+            if self.is_minimizing:
+                # obj <= cutoff
+                obj_cutoff_constraint = (None, active_objective, cutoff)
+            else:
+                # obj >= cutoff
+                obj_cutoff_constraint = (cutoff, active_objective, None)
+            mip._mpisppy_model.obj_cutoff_constraint = pyo.Constraint(expr=obj_cutoff_constraint)
+            if sputils.is_persistent(mip._solver_plugin):
+                mip._solver_plugin.add_constraint(mip._mpisppy_model.obj_cutoff_constraint)
             # Algorithm 2 line 5
             self.solve_one(
                 self.options["iterk_solver_options"],
@@ -288,37 +297,43 @@ class FWPH(mpisppy.phbase.PHBase):
                 tee=teeme,
                 verbose=verbose,
             )
-            # TODO: handle case when there's no solution under the cutoff gracefully
-            # TODO: fixme for maxmimization / larger objectives
-            # self.options["iterk_solver_options"]["MIPABSCUTOFF"] = 1e40
+            if sputils.is_persistent(mip._solver_plugin):
+                mip._solver_plugin.remove_constraint(mip._mpisppy_model.obj_cutoff_constraint)
+            mip.del_component(mip._mpisppy_model.obj_cutoff_constraint)
             # tmipsolve = time.time() - tbmipsolve
+            if mip._mpisppy_data.scenario_feasible:
 
-            # Algorithm 2 lines 6--8
-            if (itr == 0):
-                dual_bound = mip._mpisppy_data.outer_bound
+                # Algorithm 2 lines 6--8
+                if (itr == 0):
+                    dual_bound = mip._mpisppy_data.outer_bound
 
-            # Algorithm 2 line 9 (compute \Gamma^t)
-            inner_bound = mip._mpisppy_data.inner_bound
-            if abs(inner_bound) > 1e-9:
-                stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
+                # Algorithm 2 line 9 (compute \Gamma^t)
+                inner_bound = mip._mpisppy_data.inner_bound
+                if abs(inner_bound) > 1e-9:
+                    stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
+                else:
+                    stop_check = cutoff - inner_bound # \Gamma^t in Boland
+                # print(f"{model_name}, Gamma^t = {stop_check}")
+                stop_check_tol = self.FW_options["stop_check_tol"]\
+                                 if "stop_check_tol" in self.FW_options else 1e-4
+                if (self.is_minimizing and stop_check < -stop_check_tol):
+                    print('Warning (fwph): convergence quantity Gamma^t = '
+                         '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+                    print('Try decreasing the MIP gap tolerance and re-solving')
+                elif (not self.is_minimizing and stop_check > stop_check_tol):
+                    print('Warning (fwph): convergence quantity Gamma^t = '
+                         '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
+                    print('Try decreasing the MIP gap tolerance and re-solving')
+
+                # tbcol = time.time()
+                self._add_QP_column(model_name)
+                # tcol = time.time() - tbcol
+                # print(f"{model_name} QP add_column time: {tcol}")
+
             else:
-                stop_check = cutoff - inner_bound # \Gamma^t in Boland
-            # print(f"{model_name}, Gamma^t = {stop_check}")
-            stop_check_tol = self.FW_options["stop_check_tol"]\
-                             if "stop_check_tol" in self.FW_options else 1e-4
-            if (self.is_minimizing and stop_check < -stop_check_tol):
-                print('Warning (fwph): convergence quantity Gamma^t = '
-                     '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
-                print('Try decreasing the MIP gap tolerance and re-solving')
-            elif (not self.is_minimizing and stop_check > stop_check_tol):
-                print('Warning (fwph): convergence quantity Gamma^t = '
-                     '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
-                print('Try decreasing the MIP gap tolerance and re-solving')
-
-            # tbcol = time.time()
-            self._add_QP_column(model_name)
-            # tcol = time.time() - tbcol
-            # print(f"{model_name} QP add_column time: {tcol}")
+                dual_bound = None
+                global_toc(f"Could not find an improving column for {model_name} in FWPH!", True)
+                # couldn't find an improving direction, the column would not be added anyways
 
             # tbqpsol = time.time()
             # QPs are weird if bundled
@@ -338,7 +353,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # fwloop = time.time() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
 
-            if (stop_check < self.FW_options['FW_conv_thresh']):
+            if (stop_check < self.FW_options['FW_conv_thresh']) or dual_bound is None:
                 break
 
             # reset for next loop
