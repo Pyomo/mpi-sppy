@@ -332,8 +332,8 @@ class FWPH(mpisppy.phbase.PHBase):
 
             else:
                 dual_bound = None
-                global_toc(f"Could not find an improving column for {model_name} in FWPH!", True)
-                # couldn't find an improving direction, the column would not be added anyways
+                global_toc(f"{self.__class__.__name__}: Could not find an improving column for {model_name}!", True)
+                # couldn't find an improving direction, the column would not become active
 
             # tbqpsol = time.time()
             # QPs are weird if bundled
@@ -353,7 +353,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # fwloop = time.time() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
 
-            if (stop_check < self.FW_options['FW_conv_thresh']) or dual_bound is None:
+            if dual_bound is None or (stop_check < self.FW_options['FW_conv_thresh']):
                 break
 
             # reset for next loop
