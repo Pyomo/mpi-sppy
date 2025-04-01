@@ -291,6 +291,11 @@ class Hub(SPCommunicator):
         self.put_send_buffer(self.send_buffers[Field.SHUTDOWN], Field.SHUTDOWN)
         return
 
+    def sync_bounds(self):
+        self.receive_outerbounds()
+        self.receive_innerbounds()
+        self.send_boundsout()
+
 
 class PHHub(Hub):
 
@@ -317,21 +322,13 @@ class PHHub(Hub):
         """
             Manages communication with Spokes
         """
-        self.send_ws()
-        self.send_nonants()
-        self.send_boundsout()
-        self.receive_outerbounds()
-        self.receive_innerbounds()
-        if self.opt.extensions is not None:
-            self.opt.extobject.sync_with_spokes()
+        self.sync_Ws()
+        self.sync_nonants()
+        self.sync_bounds()
+        self.sync_extensions()
 
     def sync_with_spokes(self):
         self.sync()
-
-    def sync_bounds(self):
-        self.receive_outerbounds()
-        self.receive_innerbounds()
-        self.send_boundsout()
 
     def sync_extensions(self):
         if self.opt.extensions is not None:
@@ -431,8 +428,7 @@ class LShapedHub(Hub):
         """
         if send_nonants:
             self.send_nonants()
-        self.receive_outerbounds()
-        self.receive_innerbounds()
+        self.sync_bounds()
         # in case LShaped ever gets extensions
         if getattr(self.opt, "extensions", None) is not None:
             self.opt.extobject.sync_with_spokes()
