@@ -84,8 +84,7 @@ class _BoundSpoke(Spoke):
     def bound(self):
         return self._bound[0]
 
-    @bound.setter
-    def bound(self, value):
+    def send_bound(self, value):
         self._append_trace(value)
         self._bound[0] = value
         self.put_send_buffer(self._bound, self.bound_type())
@@ -139,7 +138,7 @@ class _BoundNonantLenSpoke(_BoundSpoke):
 
 
 class InnerBoundSpoke(_BoundSpoke):
-    """ For Spokes that provide an inner bound through self.bound to the
+    """ For Spokes that provide an inner bound through self.send_bound to the
         Hub, and do not need information from the main PH OPT hub.
     """
 
@@ -153,7 +152,7 @@ class InnerBoundSpoke(_BoundSpoke):
 
 
 class OuterBoundSpoke(_BoundSpoke):
-    """ For Spokes that provide an outer bound through self.bound to the
+    """ For Spokes that provide an outer bound through self.send_bound to the
         Hub, and do not need information from the main PH OPT hub.
     """
 
@@ -190,7 +189,7 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
 class OuterBoundWSpoke(_BoundWSpoke):
     """
     For Spokes that provide an outer bound
-    through self.bound to the Hub,
+    through self.send_bound to the Hub,
     and receive the Ws (or weights) from
     the main PH OPT hub.
     """
@@ -227,7 +226,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
 
 class InnerBoundNonantSpoke(_BoundNonantSpoke):
     """ For Spokes that provide an inner (incumbent)
-        bound through self.bound to the Hub,
+        bound through self.send_bound to the Hub,
         and receive the nonants from
         the main SPOpt hub.
 
@@ -257,7 +256,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         if update:
             self.best_inner_bound = candidate_inner_bound
             # send to hub
-            self.bound = candidate_inner_bound
+            self.send_bound(candidate_inner_bound)
             return True
         return False
 
@@ -274,7 +273,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):
     """ For Spokes that provide an outer
-        bound through self.bound to the Hub,
+        bound through self.send_bound to the Hub,
         and receive the nonants from
         the main OPT hub.
     """
