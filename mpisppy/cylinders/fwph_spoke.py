@@ -25,7 +25,7 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         if not hasattr(self.opt, '_local_bound'):
             return
         # Tell the hub about the most recent bound
-        self.bound = self.opt._local_bound
+        self.send_bound(self.opt._local_bound)
 
         # Update the nonant bounds, if possible
         self.receive_nonant_bounds()
@@ -37,6 +37,6 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         # if we terminated early
         if not hasattr(self.opt, '_local_bound'):
             return
-        self.bound = self.opt._local_bound
+        self.send_bound(self.opt._local_bound)
         self.final_bound = self.opt._local_bound
         return self.final_bound
