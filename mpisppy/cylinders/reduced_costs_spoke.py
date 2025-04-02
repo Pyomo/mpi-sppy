@@ -12,7 +12,7 @@ import numpy as np
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.utils.sputils import is_persistent
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 
 class ReducedCostsSpoke(LagrangianOuterBound):
 
@@ -299,10 +299,37 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             Field.NONANT_UPPER_BOUNDS,
         )
 
+    def update_nonant_bounds(self):
+        bounds_modified = 0
+        send_buf = self.send_buffers[Field.NONANT_LOWER_BOUNDS]
+        for s in self.opt.local_scenarios.values():
+            for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                xvarlb = xvar.lb
+                if xvarlb is None:
+                    xvarlb = -np.inf
+                if send_buf[ci] > xvarlb:
+                    xvar.lb = send_buf[ci]
+                    bounds_modified += 1
+        send_buf = self.send_buffers[Field.NONANT_UPPER_BOUNDS]
+        for s in self.opt.local_scenarios.values():
+            for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                xvarub = xvar.ub
+                if xvarub is None:
+                    xvarub = np.inf
+                if send_buf[ci] < xvarub:
+                    xvar.ub = send_buf[ci]
+                    bounds_modified += 1
+
+        bounds_modified /= len(self.opt.local_scenarios)
+
+        if bounds_modified > 0:
+            global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
+
     def do_while_waiting_for_new_Ws(self, need_solution):
         super().do_while_waiting_for_new_Ws(need_solution=need_solution)
         # might as well see if a tighter upper bound has come along
         self.extract_and_store_updated_nonant_bounds(new_dual=False)
+        self.update_nonant_bounds()
 
     def main(self):
         # need the solution for ReducedCostsSpoke

@@ -219,6 +219,7 @@ class Hub(SPCommunicator):
         return
 
     def sync_bounds(self):
+        self.receive_nonant_bounds()
         self.receive_outerbounds()
         self.receive_innerbounds()
         self.send_boundsout()
