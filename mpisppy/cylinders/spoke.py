@@ -154,7 +154,7 @@ class InnerBoundSpoke(_BoundSpoke):
         Hub, and do not need information from the main PH OPT hub.
     """
 
-    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
+    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, Field.BEST_XHAT, Field.RECENT_XHATS, )
     receive_fields = (*_BoundSpoke.receive_fields, )
 
     converger_spoke_char = 'I'
@@ -246,7 +246,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         and restoring results
     """
 
-    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
+    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, Field.BEST_XHAT, Field.RECENT_XHATS, )
     receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
 
     converger_spoke_char = 'I'
