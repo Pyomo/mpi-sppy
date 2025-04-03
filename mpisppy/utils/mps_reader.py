@@ -57,11 +57,11 @@ def read_mps_and_create_pyomo_model(mps_path):
         body = sum(coeff * varDict[var] for var, coeff in c.expr.expr.items())
         
         if c.expr.sense == "=":
-            pyomoC = pyo.Constraint(expr=body == c.rhs)
+            pyomoC = pyo.Constraint(expr=(c.rhs, body, c.rhs))
         elif c.expr.sense == ">":
-            pyomoC = pyo.Constraint(expr=body >= c.rhs)
+            pyomoC = pyo.Constraint(expr=(c.rhs, body, None))
         elif c.expr.sense == "<":
-            pyomoC = pyo.Constraint(expr=body <= c.rhs)
+            pyomoC = pyo.Constraint(expr=(None, body, c.rhs))
         elif c.expr.sense == "":
             raise RuntimeError(f"Unexpected empty sense for constraint {c.name}"
                                f" from file {mps_path}")
