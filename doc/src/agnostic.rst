@@ -4,7 +4,34 @@ AML Agnosticism
 The mpi-sppy package provides callouts so that algebraic modeling languages
 (AMLs) other than Pyomo can be used. A growing number of AMLs are supported
 as `guest` languages (we refer to mpi-sppy as the `host`). This code is
-in an alpha-release state; use with extreme caution.
+in an alpha-release state; use with extreme caution.  This is referred to
+as `tight` integration with the guest. It is also possible to simply read
+scenario data from an mps file and the mps file (and the associated json
+nonant file) that can be created however you like. 
+
+Loose integration
+^^^^^^^^^^^^^^^^^
+
+Code for creating a
+Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
+but you can also just use ``generic_cylinders.py`` and give
+it the module ``mpisppy.utils.mps_module`` (you will need to specify
+that path to this module) and the ``--mps-files-directory``
+option.  Note
+that at the time of this writing, the number of scenarios is obtained
+by counting the mps files in the directory given.
+
+The file ``examples.sizes.mps_demo.bash`` has two commands. The second illustrates
+how to instruction ``MPI-SPPY`` to read mps/json file pairs for each scenario from a
+directory. The first command illustrates how to use ``MPI-SPPY`` to write
+them in the first place (but if ``MPI-SPPY`` can get your scenarios, there
+is probably no reason to write them and then read them again!). This
+functionality is intended to be used by users of other AMLs or other
+scenario-based stochastic programming applications.
+
+
+Tight integration
+^^^^^^^^^^^^^^^^^
 
 From the end-user's perspective
 -------------------------------

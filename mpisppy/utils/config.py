@@ -509,10 +509,15 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
-        self.add_to_config("fwph_iter_limit",
-                            description="maximum fwph iterations (default 10)",
+        self.add_to_config(name="fwph_hub",
+                           description="Use FWPH hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("fwph_sdm_iter_limit",
+                            description="maximum fwph SDM iterations (default 1)",
                             domain=int,
-                            default=10)
+                            default=1)
 
         self.add_to_config("fwph_weight",
                             description="fwph weight (default 0)",
@@ -528,12 +533,6 @@ class Config(pyofig.ConfigDict):
                             description="fwph tolerance for Gamma^t (default 1e-4)",
                             domain=float,
                             default=1e-4)
-
-        self.add_to_config("fwph_mipgap",
-                            description="mip gap option FW subproblems iterations (default None)",
-                            domain=float,
-                            default=None)
-
 
 
     def lagrangian_args(self):
@@ -578,9 +577,9 @@ class Config(pyofig.ConfigDict):
         
         self.add_to_config('rc_fixer_require_improving_lagrangian',
                             description="Only consider fixing / unfixing variables after the lagrangian "
-                                        "bound computed by the reduced cost spoke has improved. (default True)",
+                                        "bound computed by the reduced cost spoke has improved. (default False)",
                             domain=bool,
-                            default=True)
+                            default=False)
 
         self.add_to_config('rc_zero_tol',
                             description="vars with rc below tol will never be fixed",

@@ -590,12 +590,12 @@ class PHHub(Hub):
             self.send_ws()
         if self.has_nonant_spokes:
             self.send_nonants()
-        if self.has_bounds_only_spokes:
-            self.send_boundsout()
         if self.has_outerbound_spokes:
             self.receive_outerbounds()
         if self.has_innerbound_spokes:
             self.receive_innerbounds()
+        if self.has_bounds_only_spokes:
+            self.send_boundsout()
         if self.opt.extensions is not None:
             self.sync_extension_fields()
             self.opt.extobject.sync_with_spokes()
@@ -626,6 +626,8 @@ class PHHub(Hub):
     def is_converged(self):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
+        if self.opt.best_solution_obj_val is not None:
+            self.BestInnerBound = self.InnerBoundUpdate(self.opt.best_solution_obj_val)
 
         if not self.has_innerbound_spokes:
             if self.opt._PHIter == 1:
@@ -669,6 +671,7 @@ class PHHub(Hub):
         """ Gather nonants and send them to the appropriate spokes
             TODO: Will likely fail with bundling
         """
+        # TODO: why save here? We get the values directly from the variables
         self.opt._save_nonants()
         ci = 0  ## index to self.nonant_send_buffer
         # my_nonants = self._sends[Field.NONANT]
@@ -815,3 +818,10 @@ class APHHub(PHHub):
         #       to APH.post_loops
         Eobj = self.opt.post_loops()
         return Eobj
+
+class FWPHHub(PHHub):
+
+    _hub_algo_best_bound_provider = True
+
+    def main(self):
+        self.opt.fwph_main(finalize=False)
