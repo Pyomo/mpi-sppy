@@ -19,6 +19,8 @@ class _LagrangianMixin:
         self.opt._create_solvers()
 
     def lagrangian(self, need_solution=True):
+        # update the nonant bounds, if possible, for a tighter relaxation
+        self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
         if "ipopt" in self.opt.options["solver_name"]:
@@ -54,12 +56,21 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
     converger_spoke_char = 'L'
 
-    def _set_weights_and_solve(self, need_solution=True):
+    def _set_weights_and_solve(self, need_solution):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
         return self.lagrangian(need_solution=need_solution)
 
+    def do_while_waiting_for_new_Ws(self, need_solution):
+        if self.opt.options.get("subgradient_while_waiting", False):
+            # compute a subgradient step
+            self.opt.Compute_Xbar(self.verbose)
+            self.opt.Update_W(self.verbose)
+            bound = self.lagrangian(need_solution=need_solution)
+            if bound is not None:
+                self.send_bound(bound)
+
     def main(self, need_solution=False):
-        verbose = self.opt.options['verbose']
+        self.verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
@@ -73,26 +84,21 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
-        self.bound = self.trivial_bound
+        self.send_bound(self.trivial_bound)
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
         while not self.got_kill_signal():
-            if self.new_Ws:
+            if self.update_Ws():
                 if extensions:
                     self.opt.extobject.miditer()
                 bound = self._set_weights_and_solve(need_solution=need_solution)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
-                    self.bound = bound
+                    self.send_bound(bound)
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
-            elif self.opt.options.get("subgradient_while_waiting", False):
-                # compute a subgradient step
-                self.opt.Compute_Xbar(verbose)
-                self.opt.Update_W(verbose)
-                bound = self.lagrangian(need_solution=need_solution)
-                if bound is not None:
-                    self.bound = bound
+            else:
+                self.do_while_waiting_for_new_Ws(need_solution=need_solution)

@@ -76,7 +76,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}')
                 logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
 
-            if self.new_nonants:
+            if self.update_nonants():
 
                 local_candidate = self.extract_local_candidate_soln()
 
