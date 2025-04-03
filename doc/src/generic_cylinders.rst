@@ -54,29 +54,33 @@ populated and can be used to create a class. Note that the function
 is called before ``get_function_object``.
 
 The class definition needs to include all helper functions other than
-``inparser_adder``.
+``inparser_adder``.  The example ``examples.netdes.netdes_with_class.py``
+demonstrates how to implement a class in the module (although in this
+particular example, there is no advantage to doing that).
 
         
 custom_writer
 -------------
 
+This is an advanced topic. 
 Advanced users might want to write their own solution output function. If the
-module contains a function called ``custom_writer()``, it will be called
-at the end of processing. If you are writing such a function, you should look
-in ``generic_cylinders.py`` to see the two places it appears and the arguments
-that are passed from each place (your function can test the type
-of the first argument to see whence it was called or it can
-examine the call stack for more information).
+module contains a function called ``custom_writer()``, it will be passed
+to the solution writer. Up to four functions can be specified in the module (or the
+class if you are using a class):
 
+   - ef_root_nonants_solution_writer
+   - ef_tree_solution_writer
+   - first_stage_solution_writer
+   - tree_solution_writer
 
-Assuming the first formal parameter in your function is assigned
-to variable named wheel in the non-ef case, your function probably should
-include something along the lines of this:
+The first two, if present, will be used for the EF if that is select
+and the second two for hub and spoke solutions.  For further
+information, look at the code in ``mpisppy.generic_cylinders.py`` to
+see how these are used and in ``mpisppy.utils.sputils`` for example functions
+such as ``first_stage_nonant_npy_serializer``.
 
-.. code_block:: python
+.. Warning::
+   These functions will only be used if cfg.solution_base_name has been given a value by the user.
 
-   if wheel.spcomm.opt.cylinder_rank == 0:
-
-so that you avoid writing the output from every rank.
-Note this verification is automatically performed by WheelSpinner if you call your custom writer functions through
-``wheel.write_first_stage_solution(solution_file_name, first_stage_solution_writer=my_first_stage_writer)`` and ``wheel.write_tree_solution(solution_dir_name, scenario_tree_solution_writer=my_tree_solution_writer)``.
+.. Warning::
+   Misspelled function names will not result in an error message, nor will they be called, of course.
