@@ -496,9 +496,9 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
         sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
-        # callout to special solution writer if it exists
-        if hasattr(module, 'custom_writer'):
-            module.custom_writer(ef, cfg)    
+    # callout to special solution writer if it exists
+    if hasattr(module, 'custom_writer'):
+        module.custom_writer(ef, cfg)    
         
         
 
