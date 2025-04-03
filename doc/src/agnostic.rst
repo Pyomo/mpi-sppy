@@ -21,7 +21,7 @@ option.  Note
 that at the time of this writing, the number of scenarios is obtained
 by counting the mps files in the directory given.
 
-The file ``examples.sizes.mps_demo.txt`` has two commands. The second illustrates
+The file ``examples.sizes.mps_demo.bash`` has two commands. The second illustrates
 how to instruction ``MPI-SPPY`` to read mps/json file pairs for each scenario from a
 directory. The first command illustrates how to use ``MPI-SPPY`` to write
 them in the first place (but if ``MPI-SPPY`` can get your scenarios, there
