@@ -556,8 +556,8 @@ if __name__ == "__main__":
     cfg = _parse_args(module)
 
     # Perhaps use an object as the so-called module.
-    if hasattr(module, "get_function_object"):
-        module = module.module_get_function_object(cfg)
+    if hasattr(module, "get_mpisppy_helper_object"):
+        module = module.get_mpisppy_helper_object(cfg)
     
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):

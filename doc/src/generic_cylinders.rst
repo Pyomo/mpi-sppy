@@ -45,15 +45,13 @@ ignored.
 A Class in the module
 ---------------------
 
-If you want to have a class in the module to help create return values
-for functions, your still needs to have an ``inparse_adder`` function
-and it will need to have a function  called
-``get_function_object(cfg)`` that returns the object.
-It is called by ``generic_cylinders.py``
-after cfg is populated and can
-be used to create a class. Note that the function ``inparser_adder`` cannot
-make use of the class because that function is called before
-``get_function_object``.
+If you want to have a class in the module to provide helper functions,
+your module still needs to have an ``inparse_adder`` function and the module will need
+to have a function called ``get_mpisppy_helper_object(cfg)`` that returns
+the object.  It is called by ``generic_cylinders.py`` after cfg is
+populated and can be used to create a class. Note that the function
+``inparser_adder`` cannot make use of the class because that function
+is called before ``get_function_object``.
 
 The class definition needs to include all helper functions other than
 ``inparser_adder``.
@@ -80,3 +78,5 @@ include something along the lines of this:
    if wheel.spcomm.opt.cylinder_rank == 0:
 
 so that you avoid writing the output from every rank.
+Note this verification is automatically performed by WheelSpinner if you call your custom writer functions through
+``wheel.write_first_stage_solution(solution_file_name, first_stage_solution_writer=my_first_stage_writer)`` and ``wheel.write_tree_solution(solution_dir_name, scenario_tree_solution_writer=my_tree_solution_writer)``.
