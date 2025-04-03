@@ -164,7 +164,7 @@ class NetDes:
         sca = scenario_creator_kwargs.copy()
         sca["seedoffset"] = seed
         sca["num_scens"] = sample_branching_factors[0]  # two-stage problem
-        return scenario_creator(sname, **sca)
+        return self.scenario_creator(sname, **sca)
 
     ######## end helper functions #########
 
