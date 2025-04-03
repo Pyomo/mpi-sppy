@@ -181,7 +181,7 @@ do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_
 # Make sure sizes_expression still exists and lpfiles still executes.
 sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
-          " --scenario-lp-mps-files")
+          " --write-scenario-lp-mps-files")
 do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
 # just smoke for now
 sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
