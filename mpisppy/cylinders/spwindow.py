@@ -14,11 +14,13 @@ import numpy.typing as nptyping
 
 import enum
 
+import pyomo.environ as pyo
+
 class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
     DUALS=2
-    OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
+    BEST_OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
     EXPECTED_REDUCED_COST=200
@@ -26,6 +28,51 @@ class Field(enum.IntEnum):
     CROSS_SCENARIO_CUT=300
     CROSS_SCENARIO_COST=400
     WHOLE=1_000_000
+
+
+_field_length_components = pyo.ConcreteModel()
+_field_length_components.local_nonant_length = pyo.Param(mutable=True)
+_field_length_components.local_scenario_length = pyo.Param(mutable=True)
+_field_length_components.total_number_nonants = pyo.Param(mutable=True)
+_field_length_components.total_number_scenarios = pyo.Param(mutable=True)
+
+_field_lengths = {
+        Field.SHUTDOWN : 1,
+        Field.NONANT : _field_length_components.local_nonant_length,
+        Field.DUALS : _field_length_components.local_nonant_length,
+        Field.BEST_OBJECTIVE_BOUNDS : 2,
+        Field.OBJECTIVE_INNER_BOUND : 1,
+        Field.OBJECTIVE_OUTER_BOUND : 1,
+        Field.EXPECTED_REDUCED_COST : _field_length_components.total_number_nonants,
+        Field.SCENARIO_REDUCED_COST : _field_length_components.local_nonant_length,
+        Field.CROSS_SCENARIO_CUT : _field_length_components.total_number_scenarios * (_field_length_components.total_number_nonants + 1 + 1),
+        Field.CROSS_SCENARIO_COST : _field_length_components.total_number_scenarios * _field_length_components.total_number_scenarios,
+}
+
+
+class FieldLengths:
+    def __init__(self, opt):
+        number_nonants = (
+            sum(
+                len(s._mpisppy_data.nonant_indices)
+                for s in opt.local_scenarios.values()
+               )
+        )
+
+        _field_length_components.local_nonant_length.value = number_nonants
+        _field_length_components.local_scenario_length.value = len(opt.local_scenarios)
+        _field_length_components.total_number_nonants.value = opt.nonant_length
+        _field_length_components.total_number_scenarios.value = len(opt.local_scenarios)
+
+        self._field_lengths = {k : pyo.value(v) for k, v in _field_lengths.items()}
+
+        # reset the _field_length_components
+        for p in _field_length_components.component_data_objects():
+            p.clear()
+
+    def __getitem__(self, field: Field):
+        return self._field_lengths[field]
+
 
 class SPWindow:
 
@@ -63,6 +110,7 @@ class SPWindow:
 
         self.buffer_length = total_buffer_length
         self.window = MPI.Win.Allocate(window_size_bytes, MPI.DOUBLE.size, comm=strata_comm)
+        # ensure the memory allocated for the window is freed
         self.buff = np.ndarray(dtype="d", shape=(total_buffer_length,), buffer=self.window.tomemory())
         self.buff[:] = np.nan
 
@@ -74,23 +122,17 @@ class SPWindow:
 
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
 
-        self.window_constructed = True
-
         return
 
-
     def free(self):
-
-        if self.window_constructed:
+        if self.window is not None:
             self.window.Free()
             self.buff = None
             self.buffer_layout = None
             self.buffer_length = 0
             self.window = None
             self.strata_buffer_layouts = None
-            self.window_constructed = False
-        ## End if
-
+            self.window = None
         return
 
     #### Functions ####

@@ -150,7 +150,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         self._rescale_rho(self.opt.options["ph_ob_initial_rho_rescale_factor"] )
 
         self.trivial_bound = self._phsolve(0)
-        self.bound = self.trivial_bound
+        self.send_bound(self.trivial_bound)
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
         self.B_iter = 1
@@ -159,7 +159,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
 
         while not self.got_kill_signal():
             # because of aph, do not check for new data, just go for it
-            self.bound = self._update_weights_and_solve(self.B_iter)
+            self.send_bound(self._update_weights_and_solve(self.B_iter))
             self.B_iter += 1
             self.opt.B_iter = self.B_iter
             wtracker.grab_local_Ws()
@@ -171,5 +171,5 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         and/or iteration limit is the cause of termination
         '''
         self.final_bound = self._update_weights_and_solve(self.B_iter)
-        self.bound = self.final_bound
+        self.send_bound(self.final_bound)
         return self.final_bound
