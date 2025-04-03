@@ -6,9 +6,13 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import mpisppy.cylinders.spoke
+from mpisppy.cylinders.spoke import OuterBoundSpoke
+from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder_Mixin
 
-class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
+class FrankWolfeOuterBound(OuterBoundSpoke, FWPH_Cylinder_Mixin):
+
+    send_fields = (*OuterBoundSpoke.send_fields, *FWPH_Cylinder_Mixin.send_fields)
+    receive_fields = (*OuterBoundSpoke.receive_fields, *FWPH_Cylinder_Mixin.receive_fields)
 
     converger_spoke_char = 'F'
 

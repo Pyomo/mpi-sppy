@@ -32,6 +32,7 @@ from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 from mpisppy.cylinders.xhatshufflelooper_bounder import ScenarioCycler
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.extensions.xhatbase import XhatBase
 
 class FWPH(mpisppy.phbase.PHBase):
@@ -104,15 +105,7 @@ class FWPH(mpisppy.phbase.PHBase):
         self._cache_nonant_var_swap_qp()
         self._setup_shared_column_generation()
 
-        number_initial_column_tries = self.options.get("FW_initialization_attempts", 10)
-        if self.FW_options["FW_iter_limit"] == 1 and number_initial_column_tries < 1:
-            global_toc(f"{self.__class__.__name__}: Warning: FWPH needs an initial shared column if FW_iter_limit == 1. Increasing FW_iter_limit to 2 to ensure convergence", self.cylinder_rank == 0)
-            self.FW_options["FW_iter_limit"] = 2
-        if self.FW_options["FW_iter_limit"] == 1 or number_initial_column_tries > 0:
-            number_points = self._generate_shared_column(number_initial_column_tries)
-            if number_points == 0 and self.FW_options["FW_iter_limit"] == 1:
-                global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence", self.cylinder_rank == 0)
-                self.FW_options["FW_iter_limit"] = 2
+        self._generate_initial_columns_if_needed()
 
         self._reenable_W()
 
@@ -194,22 +187,8 @@ class FWPH(mpisppy.phbase.PHBase):
             self._output(self._local_bound, best_bound, diff, secs)
 
 
-            # add a shared column
-            shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 0)
-            if shared_columns > 0:
-                self.mpicomm.Barrier()
-                self._disable_W()
-                for s in self.local_subproblems.values():
-                    if sputils.is_persistent(s._solver_plugin):
-                        active_objective_datas = list(s.component_data_objects(
-                             pyo.Objective, active=True, descend_into=True))
-                        s._solver_plugin.set_objective(active_objective_datas[0])
-                self._generate_shared_column(shared_columns)
-                self._reenable_W()
-
             ## Hubs/spokes take precedence over convergers
-            if hasattr(self.spcomm, "sync_nonants"):
-                self.spcomm.sync_nonants()
+            if hasattr(self.spcomm, "sync_bounds"):
                 self.spcomm.sync_bounds()
                 self.spcomm.sync_extensions()
             elif hasattr(self.spcomm, "sync"):
@@ -277,14 +256,17 @@ class FWPH(mpisppy.phbase.PHBase):
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
             cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
+            epsilon = 0 #1e-6
+            rel_epsilon = abs(cutoff)*epsilon
+            epsilon = max(epsilon, rel_epsilon)
             # tbmipsolve = time.time()
             active_objective = sputils.find_active_objective(mip)
             if self.is_minimizing:
                 # obj <= cutoff
-                obj_cutoff_constraint = (None, active_objective, cutoff)
+                obj_cutoff_constraint = (None, active_objective.expr, cutoff+epsilon)
             else:
                 # obj >= cutoff
-                obj_cutoff_constraint = (cutoff, active_objective, None)
+                obj_cutoff_constraint = (cutoff-epsilon, active_objective.expr, None)
             mip._mpisppy_model.obj_cutoff_constraint = pyo.Constraint(expr=obj_cutoff_constraint)
             if sputils.is_persistent(mip._solver_plugin):
                 mip._solver_plugin.add_constraint(mip._mpisppy_model.obj_cutoff_constraint)
@@ -335,6 +317,19 @@ class FWPH(mpisppy.phbase.PHBase):
                 global_toc(f"{self.__class__.__name__}: Could not find an improving column for {model_name}!", True)
                 # couldn't find an improving direction, the column would not become active
 
+            # add a shared column(s)
+            shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 0)
+            if shared_columns > 0:
+                self._swap_nonant_vars_back()
+                self._add_shared_columns(shared_columns)
+                self._swap_nonant_vars()
+            # add columns from cylinder(s)
+            if hasattr(self.spcomm, "add_cylinder_columns"):
+                self._swap_nonant_vars_back()
+                self.spcomm.sync_nonants()
+                self.spcomm.add_cylinder_columns()
+                self._swap_nonant_vars()
+
             # tbqpsol = time.time()
             # QPs are weird if bundled
             _bundling = self.bundling
@@ -369,7 +364,18 @@ class FWPH(mpisppy.phbase.PHBase):
 
         return dual_bound
 
-    def _add_QP_column(self, model_name):
+    def _add_shared_columns(self, shared_columns):
+        self.mpicomm.Barrier()
+        self._disable_W()
+        for s in self.local_subproblems.values():
+            if sputils.is_persistent(s._solver_plugin):
+                active_objective_datas = list(s.component_data_objects(
+                     pyo.Objective, active=True, descend_into=True))
+                s._solver_plugin.set_objective(active_objective_datas[0])
+        self._generate_shared_column(shared_columns)
+        self._reenable_W()
+
+    def _add_QP_column(self, model_name, disable_W=False):
         ''' Add a column to the QP, with values taken from the most recent MIP
             solve. Assumes the inner_bound is up-to-date in the MIP model.
         '''
@@ -378,7 +384,11 @@ class FWPH(mpisppy.phbase.PHBase):
         solver = qp._solver_plugin
         persistent = sputils.is_persistent(solver)
 
+        if disable_W:
+            self._disable_W()
         total_recourse_cost = mip._mpisppy_data.inner_bound - pyo.value(mip._mpisppy_model.nonant_obj_part)
+        if disable_W:
+            self._reenable_W()
 
         if hasattr(solver, 'add_column'):
             new_var = qp.a.add()
@@ -734,6 +744,21 @@ class FWPH(mpisppy.phbase.PHBase):
 
         self._xhatter = XhatBase(self)
         self._xhatter.post_iter0()
+
+    def _generate_initial_columns_if_needed(self):
+        if self.spcomm is not None:
+            if self.spcomm.receive_field_spcomms[Field.BEST_XHAT]:
+                # we'll get the initial columns from the incumbent finder spoke
+                return
+        number_initial_column_tries = self.options.get("FW_initialization_attempts", 10)
+        if self.FW_options["FW_iter_limit"] == 1 and number_initial_column_tries < 1:
+            global_toc(f"{self.__class__.__name__}: Warning: FWPH needs an initial shared column if FW_iter_limit == 1. Increasing FW_iter_limit to 2 to ensure convergence", self.cylinder_rank == 0)
+            self.FW_options["FW_iter_limit"] = 2
+        if self.FW_options["FW_iter_limit"] == 1 or number_initial_column_tries > 0:
+            number_points = self._generate_shared_column(number_initial_column_tries)
+            if number_points == 0 and self.FW_options["FW_iter_limit"] == 1:
+                global_toc(f"{self.__class__.__name__}: Warning: FWPH failed to find an initial feasible solution. Increasing FW_iter_limit to 2 to ensure convergence", self.cylinder_rank == 0)
+                self.FW_options["FW_iter_limit"] = 2
 
     def _generate_shared_column(self, tries=1):
         """ Called after iter 0 to satisfy the condition of equation (17)
