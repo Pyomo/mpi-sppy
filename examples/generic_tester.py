@@ -153,8 +153,9 @@ do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir = "test_data/farmeref_
 
 # we need slammax and cross-scenario to make this work well
 netdesC = (f"--max-iterations=3 --instance-name=network-10-20-L-01 --netdes-data-path ./data "
-       f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve "
-       f"--subgradient-hub --xhatshuffle --max-solver-threads=2")
+           f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve "
+           f"--subgradient-hub --xhatshuffle --max-solver-threads=2 "
+           f"--solution-base-name delete_me")
 do_one("netdes", "netdes_with_class", 2, netdesC, xhat_baseline_dir=None)
 # TBD: put in a baseline
 

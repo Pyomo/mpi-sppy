@@ -35,11 +35,9 @@ def inparser_adder(cfg):
                         default=None)                
 
 
-
-
-
 def get_mpisppy_helper_object(cfg):
     return NetDes(cfg)
+
 
 class NetDes:
     def __init__(self, cfg):
@@ -64,7 +62,7 @@ class NetDes:
     def build_scenario_model(self,fname, scenario_ix):
         data = parse(fname, scenario_ix=scenario_ix)
         num_nodes = data['N']
-        adj = data['A']    # Adjacency matrix
+7        adj = data['A']    # Adjacency matrix
         edges = data['el'] # Edge list
         c = data['c']      # First-stage  cost matrix (per edge)
         d = data['d']      # Second-stage cost matrix (per edge)
@@ -117,6 +115,17 @@ class NetDes:
         while (i > 0 and sname[i-1].isdigit()):
             i -= 1
         return int(sname[i:])
+
+
+    def first_stage_solution_writer(self, file_name, bundling):
+        # A custom first stage writer
+        # adapted from sputils.py; look there for sample tree printer code
+        root = scenario._mpisppy_node_list[0]
+        assert root.name == "ROOT"
+        root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
+        print(f"TEST: first stage writer: {filename=}, {root_nonants[0]=}")
+        ## np.save(file_name, root_nonants)
+
 
     ########## helper functions ########
 

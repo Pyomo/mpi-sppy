@@ -51,7 +51,7 @@ to have a function called ``get_mpisppy_helper_object(cfg)`` that returns
 the object.  It is called by ``generic_cylinders.py`` after cfg is
 populated and can be used to create a class. Note that the function
 ``inparser_adder`` cannot make use of the class because that function
-is called before ``get_function_object``.
+is called before ``get_mpisppy_helper_object``.
 
 The class definition needs to include all helper functions other than
 ``inparser_adder``.  The example ``examples.netdes.netdes_with_class.py``
@@ -68,10 +68,10 @@ module contains a function called ``custom_writer()``, it will be passed
 to the solution writer. Up to four functions can be specified in the module (or the
 class if you are using a class):
 
-   - ef_root_nonants_solution_writer
-   - ef_tree_solution_writer
-   - first_stage_solution_writer
-   - tree_solution_writer
+   - ef_root_nonants_solution_writer(file_name, representative_scenario, bundling_indicator)
+   - ef_tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
+   - first_stage_solution_writer(file_name, bundling_indicator)
+   - tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
 
 The first two, if present, will be used for the EF if that is select
 and the second two for hub and spoke solutions.  For further
