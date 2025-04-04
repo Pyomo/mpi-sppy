@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     solver_name = sys.argv[1]
 
 # Use oversubscribe if your computer does not have enough cores.
-# Don't use this unless you have to.
+# Don't use oversubscribe unless you have to.
 # (This may not be allowed on some versions of mpiexec)
 mpiexec_arg = ""  # "--oversubscribe" or "-envall"
 if len(sys.argv) > 2:
@@ -151,6 +151,13 @@ farmeref = (f"--EF --num-scens 3 --EF-solver-name={solver_name}")
 #rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
 do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir = "test_data/farmeref_baseline")
 
+# we need slammax and cross-scenario to make this work well
+netdesC = (f"--max-iterations=60 --instance-name=network-10-20-L-01 --netdes-data-path ./data "
+           f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve "
+           f"--subgradient-hub --xhatshuffle --max-solver-threads=2 "
+           f"--solution-base-name delete_me")
+do_one("netdes", "netdes_with_class", 2, netdesC, xhat_baseline_dir=None)
+# TBD: put in a baseline
 
 hydroef = (f"--EF --branching-factors '3 3' --EF-solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 1, hydroef, "test_data/hydroef_baseline")
