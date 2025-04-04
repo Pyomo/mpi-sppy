@@ -51,7 +51,7 @@ to have a function called ``get_mpisppy_helper_object(cfg)`` that returns
 the object.  It is called by ``generic_cylinders.py`` after cfg is
 populated and can be used to create a class. Note that the function
 ``inparser_adder`` cannot make use of the class because that function
-is called before ``get_function_object``.
+is called before ``get_mpisppy_helper_object``.
 
 The class definition needs to include all helper functions other than
 ``inparser_adder``.  The example ``examples.netdes.netdes_with_class.py``
