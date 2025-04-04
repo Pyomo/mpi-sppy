@@ -387,9 +387,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     wheel.spin()
 
     if cfg.solution_base_name is not None:
-        root_writer = module.getattr(first_stage_solution_writer,
+        root_writer = module.getattr("first_stage_solution_writer",
                                      sputils.first_stage_nonant_npy_serializer)
-        tree_writer = module.getattr(tree_solution_writer, None)
+        tree_writer = module.getattr("tree_solution_writer", None)
     
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
@@ -509,9 +509,9 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
 
     
     if cfg.solution_base_name is not None:
-        root_writer = module.getattr(ef_root_nonants_solution_writer,
+        root_writer = module.getattr("ef_root_nonants_solution_writer",
                                      sputils.first_stage_nonant_npy_serializer)
-        tree_writer = module.getattr(ef_tree_solution_writer, None)
+        tree_writer = module.getattr("ef_tree_solution_writer", None)
         
         sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy',
