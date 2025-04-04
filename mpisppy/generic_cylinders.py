@@ -509,13 +509,14 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
 
     
     if cfg.solution_base_name is not None:
-        root_writer = getattr(module, "ef_root_nonants_solution_writer",
-                                     sputils.first_stage_nonant_npy_serializer)
+        root_writer = getattr(module, "ef_root_nonants_solution_writer", None)
         tree_writer = getattr(module, "ef_tree_solution_writer", None)
         
         sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
-        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy',
-                                               first_stage_solution_writer=root_writer)
+        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
+        sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv',   # might overwite
+                                              first_stage_solution_writer=root_writer)
+       
         sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
                                        scenario_tree_solution_writer=tree_writer)
         global_toc("Wrote EF solution data.")
