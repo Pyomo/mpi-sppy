@@ -77,7 +77,8 @@ The first two, if present, will be used for the EF if that is select
 and the second two for hub and spoke solutions.  For further
 information, look at the code in ``mpisppy.generic_cylinders.py`` to
 see how these are used and in ``mpisppy.utils.sputils`` for example functions
-such as ``first_stage_nonant_npy_serializer``.
+such as ``first_stage_nonant_npy_serializer``.  There is a very simple
+example function in ``examples.netdes.netdes_with_class.py''.
 
 .. Warning::
    These functions will only be used if cfg.solution_base_name has been given a value by the user.
