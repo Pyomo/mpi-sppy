@@ -62,7 +62,7 @@ class NetDes:
     def build_scenario_model(self,fname, scenario_ix):
         data = parse(fname, scenario_ix=scenario_ix)
         num_nodes = data['N']
-7        adj = data['A']    # Adjacency matrix
+        adj = data['A']    # Adjacency matrix
         edges = data['el'] # Edge list
         c = data['c']      # First-stage  cost matrix (per edge)
         d = data['d']      # Second-stage cost matrix (per edge)
@@ -99,8 +99,6 @@ class NetDes:
             model.bals.add(lhs == b[i])
 
         return model
-
-
 
 
     def scenario_denouement(self, rank, scenario_name, scenario):

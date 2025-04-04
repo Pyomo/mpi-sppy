@@ -394,8 +394,11 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
                 first_stage_solution_writer=root_writer)
-        wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir',
-                                  scenario_tree_solution_writer=tree_writer)
+        if tree_writer is not None:
+            wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir',
+                                      scenario_tree_solution_writer=tree_writer)
+        else:
+            wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote solution data.")
 
 
@@ -506,19 +509,22 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
 
     global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
 
-
-    
     if cfg.solution_base_name is not None:
         root_writer = getattr(module, "ef_root_nonants_solution_writer", None)
         tree_writer = getattr(module, "ef_tree_solution_writer", None)
         
         sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
-        sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv',   # might overwite
-                                              first_stage_solution_writer=root_writer)
-       
-        sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
-                                       scenario_tree_solution_writer=tree_writer)
+        if root_writer is not None:
+            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv',   # might overwite
+                                                  first_stage_solution_writer=root_writer)
+        else:
+            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv')            
+        if tree_writer is not None:
+            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
+                                          scenario_tree_solution_writer=tree_writer)
+        else:
+            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
         
 
