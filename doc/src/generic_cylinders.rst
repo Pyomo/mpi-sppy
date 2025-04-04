@@ -70,7 +70,7 @@ class if you are using a class):
 
    - ef_root_nonants_solution_writer(file_name, representative_scenario, bundling_indicator)
    - ef_tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
-   - first_stage_solution_writer(file_name, bundling_indicator)
+   - first_stage_solution_writer(file_name, scenario,bundling_indicator)
    - tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
 
 The first two, if present, will be used for the EF if that is select

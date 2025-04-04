@@ -115,13 +115,13 @@ class NetDes:
         return int(sname[i:])
 
 
-    def first_stage_solution_writer(self, file_name, bundling):
+    def first_stage_solution_writer(self, file_name, scenario, bundling):
         # A custom first stage writer
         # adapted from sputils.py; look there for sample tree printer code
         root = scenario._mpisppy_node_list[0]
         assert root.name == "ROOT"
         root_nonants = np.fromiter((pyo.value(var) for var in root.nonant_vardata_list), float)
-        print(f"TEST: first stage writer: {filename=}, {root_nonants[0]=}")
+        print(f"TEST: first stage writer: {file_name=}, {root_nonants[0]=}")
         ## np.save(file_name, root_nonants)
 
 
