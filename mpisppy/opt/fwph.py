@@ -23,6 +23,7 @@ import pyomo.environ as pyo
 import time
 import re # For manipulating scenario names
 import random
+import math
 
 from mpisppy import MPI
 from mpisppy import global_toc
@@ -163,8 +164,9 @@ class FWPH(mpisppy.phbase.PHBase):
             self._swap_nonant_vars()
             self._local_bound = 0
             # tbsdm = time.time()
+            generate_column = True
             for name in self.local_subproblems:
-                dual_bound = self.SDM(name)
+                dual_bound = self.SDM(name, generate_column)
                 if dual_bound is None:
                     dual_bound = np.nan
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
@@ -210,7 +212,7 @@ class FWPH(mpisppy.phbase.PHBase):
             return self._PHIter, weight_dict, xbars_dict
         return self._PHIter
 
-    def SDM(self, model_name):
+    def SDM(self, model_name, generate_column=True):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
         '''
         mip = self.local_subproblems[model_name]
@@ -244,78 +246,81 @@ class FWPH(mpisppy.phbase.PHBase):
         mip_source = mip.scen_list if self.bundling else [model_name]
 
         for itr in range(self.FW_options['FW_iter_limit']):
-            # loop_start = time.time()
-            # Algorithm 2 line 4
-            for scenario_name in mip_source:
-                scen_mip = self.local_scenarios[scenario_name]
-                for ndn_i in scen_mip._mpisppy_data.nonant_indices:
-                    scen_mip._mpisppy_model.W[ndn_i]._value = (
-                        qp._mpisppy_model.W[ndn_i]._value
-                        + scen_mip._mpisppy_model.rho[ndn_i]._value
-                        * (xt[ndn_i]
-                        -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
+            if generate_column:
+                # loop_start = time.time()
+                # Algorithm 2 line 4
+                for scenario_name in mip_source:
+                    scen_mip = self.local_scenarios[scenario_name]
+                    for ndn_i in scen_mip._mpisppy_data.nonant_indices:
+                        scen_mip._mpisppy_model.W[ndn_i]._value = (
+                            qp._mpisppy_model.W[ndn_i]._value
+                            + scen_mip._mpisppy_model.rho[ndn_i]._value
+                            * (xt[ndn_i]
+                            -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
-            cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-            epsilon = 0 #1e-6
-            rel_epsilon = abs(cutoff)*epsilon
-            epsilon = max(epsilon, rel_epsilon)
-            # tbmipsolve = time.time()
-            active_objective = sputils.find_active_objective(mip)
-            if self.is_minimizing:
-                # obj <= cutoff
-                obj_cutoff_constraint = (None, active_objective.expr, cutoff+epsilon)
-            else:
-                # obj >= cutoff
-                obj_cutoff_constraint = (cutoff-epsilon, active_objective.expr, None)
-            mip._mpisppy_model.obj_cutoff_constraint = pyo.Constraint(expr=obj_cutoff_constraint)
-            if sputils.is_persistent(mip._solver_plugin):
-                mip._solver_plugin.add_constraint(mip._mpisppy_model.obj_cutoff_constraint)
-            # Algorithm 2 line 5
-            self.solve_one(
-                self.options["iterk_solver_options"],
-                model_name,
-                mip,
-                dtiming=dtiming,
-                tee=teeme,
-                verbose=verbose,
-            )
-            if sputils.is_persistent(mip._solver_plugin):
-                mip._solver_plugin.remove_constraint(mip._mpisppy_model.obj_cutoff_constraint)
-            mip.del_component(mip._mpisppy_model.obj_cutoff_constraint)
-            # tmipsolve = time.time() - tbmipsolve
-            if mip._mpisppy_data.scenario_feasible:
-
-                # Algorithm 2 lines 6--8
-                if (itr == 0):
-                    dual_bound = mip._mpisppy_data.outer_bound
-
-                # Algorithm 2 line 9 (compute \Gamma^t)
-                inner_bound = mip._mpisppy_data.inner_bound
-                if abs(inner_bound) > 1e-9:
-                    stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
+                cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
+                epsilon = 0 #1e-6
+                rel_epsilon = abs(cutoff)*epsilon
+                epsilon = max(epsilon, rel_epsilon)
+                # tbmipsolve = time.time()
+                active_objective = sputils.find_active_objective(mip)
+                if self.is_minimizing:
+                    # obj <= cutoff
+                    obj_cutoff_constraint = (None, active_objective.expr, cutoff+epsilon)
                 else:
-                    stop_check = cutoff - inner_bound # \Gamma^t in Boland
-                # print(f"{model_name}, Gamma^t = {stop_check}")
-                stop_check_tol = self.FW_options["stop_check_tol"]\
-                                 if "stop_check_tol" in self.FW_options else 1e-4
-                if (self.is_minimizing and stop_check < -stop_check_tol):
-                    print('Warning (fwph): convergence quantity Gamma^t = '
-                         '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
-                    print('Try decreasing the MIP gap tolerance and re-solving')
-                elif (not self.is_minimizing and stop_check > stop_check_tol):
-                    print('Warning (fwph): convergence quantity Gamma^t = '
-                         '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
-                    print('Try decreasing the MIP gap tolerance and re-solving')
+                    # obj >= cutoff
+                    obj_cutoff_constraint = (cutoff-epsilon, active_objective.expr, None)
+                mip._mpisppy_model.obj_cutoff_constraint = pyo.Constraint(expr=obj_cutoff_constraint)
+                if sputils.is_persistent(mip._solver_plugin):
+                    mip._solver_plugin.add_constraint(mip._mpisppy_model.obj_cutoff_constraint)
+                # Algorithm 2 line 5
+                self.solve_one(
+                    self.options["iterk_solver_options"],
+                    model_name,
+                    mip,
+                    dtiming=dtiming,
+                    tee=teeme,
+                    verbose=verbose,
+                )
+                if sputils.is_persistent(mip._solver_plugin):
+                    mip._solver_plugin.remove_constraint(mip._mpisppy_model.obj_cutoff_constraint)
+                mip.del_component(mip._mpisppy_model.obj_cutoff_constraint)
+                # tmipsolve = time.time() - tbmipsolve
+                if mip._mpisppy_data.scenario_feasible:
 
-                # tbcol = time.time()
-                self._add_QP_column(model_name)
-                # tcol = time.time() - tbcol
-                # print(f"{model_name} QP add_column time: {tcol}")
+                    # Algorithm 2 lines 6--8
+                    if (itr == 0):
+                        dual_bound = mip._mpisppy_data.outer_bound
 
+                    # Algorithm 2 line 9 (compute \Gamma^t)
+                    inner_bound = mip._mpisppy_data.inner_bound
+                    if abs(inner_bound) > 1e-9:
+                        stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
+                    else:
+                        stop_check = cutoff - inner_bound # \Gamma^t in Boland
+                    # print(f"{model_name}, Gamma^t = {stop_check}")
+                    stop_check_tol = self.FW_options["stop_check_tol"]\
+                                     if "stop_check_tol" in self.FW_options else 1e-4
+                    if (self.is_minimizing and stop_check < -stop_check_tol):
+                        print('Warning (fwph): convergence quantity Gamma^t = '
+                             '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+                        print('Try decreasing the MIP gap tolerance and re-solving')
+                    elif (not self.is_minimizing and stop_check > stop_check_tol):
+                        print('Warning (fwph): convergence quantity Gamma^t = '
+                             '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
+                        print('Try decreasing the MIP gap tolerance and re-solving')
+
+                    # tbcol = time.time()
+                    self._add_QP_column(model_name)
+                    # tcol = time.time() - tbcol
+                    # print(f"{model_name} QP add_column time: {tcol}")
+
+                else:
+                    dual_bound = None
+                    global_toc(f"{self.__class__.__name__}: Could not find an improving column for {model_name}!", True)
+                    # couldn't find an improving direction, the column would not become active
             else:
                 dual_bound = None
-                global_toc(f"{self.__class__.__name__}: Could not find an improving column for {model_name}!", True)
-                # couldn't find an improving direction, the column would not become active
 
             # add a shared column(s)
             shared_columns = self.options.get("FWPH_shared_columns_per_iteration", 0)
