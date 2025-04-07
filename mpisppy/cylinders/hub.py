@@ -16,7 +16,7 @@ from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
 from mpisppy import global_toc
 
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder_Mixin
+from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger(__name__,
@@ -441,10 +441,10 @@ class APHHub(PHHub):
         Eobj = self.opt.post_loops()
         return Eobj
 
-class FWPHHub(PHHub, FWPH_Cylinder_Mixin):
+class FWPHHub(PHHub, FWPH_Cylinder):
 
-    send_fields = (*PHHub.send_fields, *FWPH_Cylinder_Mixin.send_fields)
-    receive_fields = (*PHHub.receive_fields, *FWPH_Cylinder_Mixin.receive_fields)
+    send_fields = (*PHHub.send_fields, *FWPH_Cylinder.send_fields)
+    receive_fields = (*PHHub.receive_fields, *FWPH_Cylinder.receive_fields)
 
     _hub_algo_best_bound_provider = True
 
