@@ -139,6 +139,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             self.extract_and_store_reduced_costs()
             self.update_bounding_functions(bound)
             self.extract_and_store_updated_nonant_bounds(new_dual=True)
+        else:
+            self.extract_and_store_updated_nonant_bounds(new_dual=False)
         return bound
 
     def extract_and_store_reduced_costs(self):
