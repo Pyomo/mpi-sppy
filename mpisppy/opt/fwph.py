@@ -313,6 +313,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 # print(f"{model_name} QP add_column time: {tcol}")
 
             else:
+                # TODO: FIXME for FW_iter_limit > 1
                 dual_bound = None
                 global_toc(f"{self.__class__.__name__}: Could not find an improving column for {model_name}!", True)
                 # couldn't find an improving direction, the column would not become active
@@ -326,7 +327,8 @@ class FWPH(mpisppy.phbase.PHBase):
             # add columns from cylinder(s)
             if hasattr(self.spcomm, "add_cylinder_columns"):
                 self._swap_nonant_vars_back()
-                self.spcomm.sync_nonants()
+                if dual_bound is not None:
+                    self.spcomm.sync_nonants()
                 self.spcomm.add_cylinder_columns()
                 self._swap_nonant_vars()
 
