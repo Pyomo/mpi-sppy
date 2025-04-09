@@ -76,16 +76,16 @@ class FWPH(mpisppy.phbase.PHBase):
         if ('FW_verbose' in self.FW_options):
             self.vb = self.FW_options['FW_verbose']
 
-    def fw_prep(self):
+    def fwph_main(self, finalize=True):
         self.PH_Prep(attach_duals=True, attach_prox=False)
         self._output_header()
         self._attach_MIP_vars()
         self._cache_nonant_var_swap_mip()
 
         trivial_bound = self.Iter0()
-        secs = time.time() - self.t0
+        secs = time.perf_counter() - self.start_time
         self._output(trivial_bound, trivial_bound, np.nan, secs)
-        best_bound = trivial_bound
+        self._fwph_best_bound = trivial_bound
 
         # Lines 2 and 3 of Algorithm 3 in Boland
         # Now done a the beginning of the first iteration
@@ -112,21 +112,38 @@ class FWPH(mpisppy.phbase.PHBase):
         if (self.ph_converger):
             self.convobject = self.ph_converger(self, self.cylinder_rank, self.n_proc)
 
-        return best_bound
+        self.iterk_loop()
 
-    def fwph_main(self, finalize=True):
-        self.t0 = time.time()
-        best_bound = self.fw_prep()
+        if finalize:
+            weight_dict = self._gather_weight_dict() # None if rank != 0
+            xbars_dict  = self._get_xbars() # None if rank != 0
+            return self._PHIter, weight_dict, xbars_dict
+        return self._PHIter
 
-        # FWPH takes some time to initialize
+    def iterk_loop(self):
+
+        verbose = self.options["verbose"]
+        have_extensions = self.extensions is not None
+        have_converger = self.ph_converger is not None
+        dprogress = self.options["display_progress"]
+        dtiming = self.options["display_timing"]
+        dconvergence_detail = self.options["display_convergence_detail"]
+        smoothed = bool(self.options["smoothed"])
+        self.conv = None
+
+        max_iterations = int(self.options["PHIterLimit"])
+        # FWPH can take some time to initialize
         # If run as a spoke, check for convergence here
         if self.spcomm and self.spcomm.is_converged():
-            return None, None, None
+            return
 
         # The body of the algorithm
-        for self._PHIter in range(1, self.options['PHIterLimit']+1):
+        for self._PHIter in range(1, max_iterations+1):
+            iteration_start_time = time.perf_counter()
+            if dprogress:
+                global_toc(f"Initiating FWPH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
 
-            # tbphloop = time.time()
+            # tbphloop = time.perf_counter()
             # TODO: should implement our own Xbar / W computation
             #       which just considers the QP subproblems
             self._swap_nonant_vars()
@@ -134,58 +151,54 @@ class FWPH(mpisppy.phbase.PHBase):
             self.Update_W(self.options['verbose'])
             self._swap_nonant_vars_back()
 
-            if (self.extensions): 
-                self.extobject.miditer()
-
             if hasattr(self.spcomm, "sync_Ws"):
                 self.spcomm.sync_Ws()
-            if (self._is_timed_out()):
-                global_toc("FWPH Timed Out", self.cylinder_rank == 0)
-                break
+
+            self.conv = self.convergence_diff()
+
+            if (self.extensions): 
+                self.extobject.miditer()
 
             if (self.ph_converger):
                 diff = self.convobject.convergence_value()
                 if (self.convobject.is_converged()):
-                    secs = time.time() - self.t0
-                    self._output(self._local_bound, best_bound, diff, secs)
+                    secs = time.perf_counter() - self.start_time
+                    self._output(self._local_bound, self._fwph_best_bound, diff, secs)
                     global_toc('FWPH converged to user-specified criteria', self.cylinder_rank == 0)
                     break
-            else: # Convergence check from Boland
-                diff = self._conv_diff()
-                if (diff < self.options['convthresh']):
-                    secs = time.time() - self.t0
-                    self._output(self._local_bound, best_bound, diff, secs)
-                    global_toc(f'FWPH converged based on standard criteria, convergence diff: {diff}',
-                               self.cylinder_rank == 0,
+            if self.conv is not None: # Convergence check from Boland
+                if (self.conv < self.options['convthresh']):
+                    secs = time.perf_counter() - self.start_time
+                    self._output(self._local_bound, self._fwph_best_bound, self.conv, secs)
+                    global_toc(
+                        "FWPH convergence metric=%f dropped below user-supplied threshold=%f" % (self.conv, self.options["convthresh"]),
+                        self.cylinder_rank == 0,
                     )
                     break
 
+            if (self._is_timed_out()):
+                global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
+                break
+
             self._swap_nonant_vars()
             self._local_bound = 0
-            # tbsdm = time.time()
+            # tbsdm = time.perf_counter()
             for name in self.local_subproblems:
                 dual_bound = self.SDM(name)
                 if dual_bound is None:
                     dual_bound = np.nan
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
-            # tsdm = time.time() - tbsdm
+            # tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
-            self._compute_dual_bound()
-            if (self.is_minimizing):
-                best_bound = np.fmax(best_bound, self._local_bound)
-            else:
-                best_bound = np.fmin(best_bound, self._local_bound)
-            if self._can_update_best_bound():
-                self.best_bound_obj_val = best_bound
+            self._update_dual_bounds()
             self._swap_nonant_vars_back()
 
             if (self.extensions): 
                 self.extobject.enditer()
 
-            secs = time.time() - self.t0
-            self._output(self._local_bound, best_bound, diff, secs)
-
+            secs = time.perf_counter() - self.start_time
+            self._output(self._local_bound, self._fwph_best_bound, self.conv, secs)
 
             ## Hubs/spokes take precedence over convergers
             if hasattr(self.spcomm, "sync_bounds"):
@@ -194,21 +207,34 @@ class FWPH(mpisppy.phbase.PHBase):
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
             if self.spcomm and self.spcomm.is_converged():
-                secs = time.time() - self.t0
-                self._output(self._local_bound, best_bound, np.nan, secs)
-                global_toc('FWPH stopped due to cylinder convergence')
+                secs = time.perf_counter() - self.start_time
+                self._output(self._local_bound, self._fwph_best_bound, np.nan, secs)
+                global_toc("Cylinder convergence", self.cylinder_rank == 0)
                 break
 
-            if (self.extensions): 
+            if (self.extensions):
                 self.extobject.enditer_after_sync()
-            # tphloop = time.time() - tbphloop
-            # print(f"PH iter {self._PHIter}, total time: {tphloop}")
 
-        if finalize:
-            weight_dict = self._gather_weight_dict() # None if rank != 0
-            xbars_dict  = self._get_xbars() # None if rank != 0
-            return self._PHIter, weight_dict, xbars_dict
-        return self._PHIter
+            if dprogress and self.cylinder_rank == 0:
+                print("")
+                print("After FWPH Iteration",self._PHIter)
+                print("FWPH Convergence Metric=",self.conv)
+                print("Iteration time: %6.2f" % (time.perf_counter() - iteration_start_time))
+                print("Elapsed time:   %6.2f" % (time.perf_counter() - self.start_time))
+
+            if dconvergence_detail:
+                self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
+
+            # tphloop = time.perf_counter() - tbphloop
+            # print(f"PH iter {self._PHIter}, total time: {tphloop}")
+        else: # no break, (self._PHIter == max_iterations)
+            # NOTE: If we return for any other reason things are reasonably in-sync.
+            #       due to the convergence check. However, here we return we'll be
+            #       out-of-sync because of the solve_loop could take vasty different
+            #       times on different threads. This can especially mess up finalization.
+            #       As a guard, we'll put a barrier here.
+            self.mpicomm.Barrier()
+            global_toc("Reached user-specified limit=%d on number of FWPH iterations" % max_iterations, self.cylinder_rank == 0)
 
     def SDM(self, model_name):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
@@ -244,7 +270,7 @@ class FWPH(mpisppy.phbase.PHBase):
         mip_source = mip.scen_list if self.bundling else [model_name]
 
         for itr in range(self.FW_options['FW_iter_limit']):
-            # loop_start = time.time()
+            # loop_start = time.perf_counter()
             # Algorithm 2 line 4
             for scenario_name in mip_source:
                 scen_mip = self.local_scenarios[scenario_name]
@@ -259,7 +285,7 @@ class FWPH(mpisppy.phbase.PHBase):
             epsilon = 0 #1e-6
             rel_epsilon = abs(cutoff)*epsilon
             epsilon = max(epsilon, rel_epsilon)
-            # tbmipsolve = time.time()
+            # tbmipsolve = time.perf_counter()
             active_objective = sputils.find_active_objective(mip)
             if self.is_minimizing:
                 # obj <= cutoff
@@ -282,7 +308,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if sputils.is_persistent(mip._solver_plugin):
                 mip._solver_plugin.remove_constraint(mip._mpisppy_model.obj_cutoff_constraint)
             mip.del_component(mip._mpisppy_model.obj_cutoff_constraint)
-            # tmipsolve = time.time() - tbmipsolve
+            # tmipsolve = time.perf_counter() - tbmipsolve
             if mip._mpisppy_data.scenario_feasible:
 
                 # Algorithm 2 lines 6--8
@@ -307,9 +333,9 @@ class FWPH(mpisppy.phbase.PHBase):
                          '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
                     print('Try decreasing the MIP gap tolerance and re-solving')
 
-                # tbcol = time.time()
+                # tbcol = time.perf_counter()
                 self._add_QP_column(model_name)
-                # tcol = time.time() - tbcol
+                # tcol = time.perf_counter() - tbcol
                 # print(f"{model_name} QP add_column time: {tcol}")
 
             else:
@@ -332,7 +358,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self.spcomm.add_cylinder_columns()
                 self._swap_nonant_vars()
 
-            # tbqpsol = time.time()
+            # tbqpsol = time.perf_counter()
             # QPs are weird if bundled
             _bundling = self.bundling
             self.solve_one(
@@ -344,10 +370,10 @@ class FWPH(mpisppy.phbase.PHBase):
                 verbose=verbose,
             )
             self.bundling = _bundling
-            # tqpsol = time.time() - tbqpsol
+            # tqpsol = time.perf_counter() - tbqpsol
 
             # print(f"{model_name}, solve + add_col time: {tmipsolve + tcol + tqpsol}")
-            # fwloop = time.time() - loop_start
+            # fwloop = time.perf_counter() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
 
             if dual_bound is None or (stop_check < self.FW_options['FW_conv_thresh']):
@@ -489,7 +515,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 mip._mpisppy_data.nonant_vars = mip._mpisppy_data.nonant_indices
                 self._attach_nonant_objective(mip)
 
-    def _compute_dual_bound(self):
+    def _update_dual_bounds(self):
         ''' Compute the FWPH dual bound using self._local_bound from each rank
         '''
         send = np.array(self._local_bound)
@@ -498,7 +524,14 @@ class FWPH(mpisppy.phbase.PHBase):
             [send, MPI.DOUBLE], [recv, MPI.DOUBLE], op=MPI.SUM)
         self._local_bound = recv
 
-    def _conv_diff(self):
+        if (self.is_minimizing):
+            self._fwph_best_bound = np.fmax(self._fwph_best_bound, self._local_bound)
+        else:
+            self._fwph_best_bound = np.fmin(self._fwph_best_bound, self._local_bound)
+        if self._can_update_best_bound():
+            self.best_bound_obj_val = self._fwph_best_bound
+
+    def convergence_diff(self):
         ''' Perform the convergence check of Algorithm 3 in Boland et al. '''
         diff = 0.
         for name in self.local_subproblems.keys():
@@ -792,14 +825,7 @@ class FWPH(mpisppy.phbase.PHBase):
         return number_points
 
     def _is_timed_out(self):
-        if (self.cylinder_rank == 0):
-            time_elapsed = time.time() - self.t0
-            status = 1 if (time_elapsed > self.FW_options['time_limit']) \
-                       else 0
-        else:
-            status = None
-        status = self.comms['ROOT'].bcast(status, root=0)
-        return status != 0
+        return self.allreduce_or( (time.perf_counter() - self.start_time) >= self.options["time_limit"] )
 
     def _options_checks_fw(self):
         ''' Name                Boland notation (Algorithm 2)
