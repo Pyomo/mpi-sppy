@@ -264,8 +264,10 @@ class FWPH(mpisppy.phbase.PHBase):
         # the first scenario in the bundle (this should be okay, because each
         # scenario in the bundle has the same dual weights, analytically--maybe
         # a numerical problem).
-        arb_scen_mip = self.local_scenarios[mip.scen_list[0]] \
-                       if self.bundling else mip
+        mip_source = mip.scen_list if self.bundling else [model_name]
+
+        arb_scen_mip = self.local_scenarios[mip_source[0]]
+
         for (node_name, ix) in arb_scen_mip._mpisppy_data.nonant_indices:
             qp._mpisppy_model.W[node_name, ix]._value = \
                 arb_scen_mip._mpisppy_model.W[node_name, ix].value
@@ -277,8 +279,6 @@ class FWPH(mpisppy.phbase.PHBase):
             + alpha * xvar._value
             for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()
             }
-
-        mip_source = mip.scen_list if self.bundling else [model_name]
 
         for itr in range(self.FW_options['FW_iter_limit']):
             # loop_start = time.perf_counter()
@@ -312,21 +312,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 # Algorithm 2 line 9 (compute \Gamma^t)
                 inner_bound = mip._mpisppy_data.inner_bound
-                if abs(inner_bound) > 1e-9:
-                    stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
-                else:
-                    stop_check = cutoff - inner_bound # \Gamma^t in Boland
-                # print(f"{model_name}, Gamma^t = {stop_check}")
-                stop_check_tol = self.FW_options["stop_check_tol"]\
-                                 if "stop_check_tol" in self.FW_options else 1e-4
-                if (self.is_minimizing and stop_check < -stop_check_tol):
-                    print('Warning (fwph): convergence quantity Gamma^t = '
-                         '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
-                    print('Try decreasing the MIP gap tolerance and re-solving')
-                elif (not self.is_minimizing and stop_check > stop_check_tol):
-                    print('Warning (fwph): convergence quantity Gamma^t = '
-                         '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
-                    print('Try decreasing the MIP gap tolerance and re-solving')
+                gamma_t = self._compute_gamma_t(cutoff, inner_bound)
 
                 # tbcol = time.perf_counter()
                 self._add_QP_column(model_name)
@@ -334,8 +320,6 @@ class FWPH(mpisppy.phbase.PHBase):
                 # print(f"{model_name} QP add_column time: {tcol}")
 
             else:
-                # TODO: FIXME for FW_iter_limit > 1
-                dual_bound = None
                 global_toc(f"{self.__class__.__name__}: Could not find an improving column for {model_name}!", True)
                 # couldn't find an improving direction, the column would not become active
 
@@ -348,8 +332,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # add columns from cylinder(s)
             if hasattr(self.spcomm, "add_cylinder_columns"):
                 self._swap_nonant_vars_back()
-                if dual_bound is not None:
-                    self.spcomm.sync_nonants()
+                self.spcomm.sync_nonants()
                 self.spcomm.add_cylinder_columns()
                 self._swap_nonant_vars()
 
@@ -371,11 +354,12 @@ class FWPH(mpisppy.phbase.PHBase):
             # fwloop = time.perf_counter() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
 
-            if dual_bound is None or (stop_check < self.FW_options['FW_conv_thresh']):
+            if not mip._mpisppy_data.scenario_feasible or (gamma_t < self.FW_options['FW_conv_thresh']):
                 break
 
             # reset for next loop
-            xt = {ndn_i : xvar._value for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()}
+            for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items():
+                xt[ndn_i] = xvar._value
 
         # Re-set the mip._mpisppy_model.W so that the QP objective 
         # is correct in the next major iteration
@@ -450,6 +434,24 @@ class FWPH(mpisppy.phbase.PHBase):
         if (persistent):
             solver.remove_constraint(qp.eq_recourse_cost)
             solver.add_constraint(qp.eq_recourse_cost)
+
+    def _compute_gamma_t(self, cutoff, inner_bound):
+        if abs(inner_bound) > 1e-9:
+            stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
+        else:
+            stop_check = cutoff - inner_bound # \Gamma^t in Boland
+        # print(f"{model_name}, Gamma^t = {stop_check}")
+        stop_check_tol = self.FW_options["stop_check_tol"]\
+                         if "stop_check_tol" in self.FW_options else 1e-4
+        if (self.is_minimizing and stop_check < -stop_check_tol):
+            print('Warning (fwph): convergence quantity Gamma^t = '
+                 '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
+            print('Try decreasing the MIP gap tolerance and re-solving')
+        elif (not self.is_minimizing and stop_check > stop_check_tol):
+            print('Warning (fwph): convergence quantity Gamma^t = '
+                 '{sc:.2e} (should be non-positive)'.format(sc=stop_check))
+            print('Try decreasing the MIP gap tolerance and re-solving')
+        return stop_check
 
     def _add_objective_cutoff(self, mip, qp):
         """ Add a constraint to the MIP objective ensuring
