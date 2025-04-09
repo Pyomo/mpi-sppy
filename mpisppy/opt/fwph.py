@@ -123,12 +123,15 @@ class FWPH(mpisppy.phbase.PHBase):
     def iterk_loop(self):
 
         verbose = self.options["verbose"]
-        have_extensions = self.extensions is not None
-        have_converger = self.ph_converger is not None
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
         dconvergence_detail = self.options["display_convergence_detail"]
-        smoothed = bool(self.options["smoothed"])
+        teeme = (
+            "tee-rank0-solves" in self.options
+             and self.options["tee-rank0-solves"]
+            and self.cylinder_rank == 0
+        )
+
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
@@ -147,8 +150,8 @@ class FWPH(mpisppy.phbase.PHBase):
             # TODO: should implement our own Xbar / W computation
             #       which just considers the QP subproblems
             self._swap_nonant_vars()
-            self.Compute_Xbar(self.options['verbose'])
-            self.Update_W(self.options['verbose'])
+            self.Compute_Xbar(verbose)
+            self.Update_W(verbose)
             self._swap_nonant_vars_back()
 
             if hasattr(self.spcomm, "sync_Ws"):
@@ -180,19 +183,12 @@ class FWPH(mpisppy.phbase.PHBase):
                 global_toc(f"Time limit {self.options['time_limit']} seconds reached.", self.cylinder_rank == 0)
                 break
 
-            self._swap_nonant_vars()
-            self._local_bound = 0
-            # tbsdm = time.perf_counter()
-            for name in self.local_subproblems:
-                dual_bound = self.SDM(name)
-                if dual_bound is None:
-                    dual_bound = np.nan
-                self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
-                                     dual_bound
-            # tsdm = time.perf_counter() - tbsdm
-            # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
-            self._update_dual_bounds()
-            self._swap_nonant_vars_back()
+            self.fwph_solve_loop(
+                mip_solver_options=self.current_solver_options,
+                dtiming=dtiming,
+                tee=teeme,
+                verbose=verbose
+            )
 
             if (self.extensions): 
                 self.extobject.enditer()
@@ -236,18 +232,33 @@ class FWPH(mpisppy.phbase.PHBase):
             self.mpicomm.Barrier()
             global_toc("Reached user-specified limit=%d on number of FWPH iterations" % max_iterations, self.cylinder_rank == 0)
 
-    def SDM(self, model_name):
+    def fwph_solve_loop(
+            self,
+            mip_solver_options=None,
+            dtiming=False,
+            tee=False,
+            verbose=False,
+        ):
+            self._swap_nonant_vars()
+            self._local_bound = 0
+            # tbsdm = time.perf_counter()
+            for name in self.local_subproblems:
+                dual_bound = self.SDM(name, mip_solver_options, dtiming, tee, verbose)
+                if dual_bound is None:
+                    dual_bound = np.nan
+                self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
+                                     dual_bound
+            # tsdm = time.perf_counter() - tbsdm
+            # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
+            self._update_dual_bounds()
+            self._swap_nonant_vars_back()
+
+    def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
         '''
         mip = self.local_subproblems[model_name]
         qp  = self.local_QP_subproblems[model_name]
     
-        verbose = self.options["verbose"]
-        dtiming = True # self.options["display_timing"]
-        teeme = ("tee-rank0-solves" in self.options
-                 and self.options['tee-rank0-solves']
-                 and self.cylinder_rank == 0
-                 )
         # Set the QP dual weights to the correct values If we are bundling, we
         # initialize the QP dual weights to be the dual weights associated with
         # the first scenario in the bundle (this should be okay, because each
@@ -281,33 +292,17 @@ class FWPH(mpisppy.phbase.PHBase):
                         * (xt[ndn_i]
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
-            cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-            epsilon = 0 #1e-6
-            rel_epsilon = abs(cutoff)*epsilon
-            epsilon = max(epsilon, rel_epsilon)
-            # tbmipsolve = time.perf_counter()
-            active_objective = sputils.find_active_objective(mip)
-            if self.is_minimizing:
-                # obj <= cutoff
-                obj_cutoff_constraint = (None, active_objective.expr, cutoff+epsilon)
-            else:
-                # obj >= cutoff
-                obj_cutoff_constraint = (cutoff-epsilon, active_objective.expr, None)
-            mip._mpisppy_model.obj_cutoff_constraint = pyo.Constraint(expr=obj_cutoff_constraint)
-            if sputils.is_persistent(mip._solver_plugin):
-                mip._solver_plugin.add_constraint(mip._mpisppy_model.obj_cutoff_constraint)
+            cutoff = self._add_objective_cutoff(mip, qp)
             # Algorithm 2 line 5
             self.solve_one(
-                self.options["iterk_solver_options"],
+                mip_solver_options,
                 model_name,
                 mip,
                 dtiming=dtiming,
-                tee=teeme,
+                tee=tee,
                 verbose=verbose,
             )
-            if sputils.is_persistent(mip._solver_plugin):
-                mip._solver_plugin.remove_constraint(mip._mpisppy_model.obj_cutoff_constraint)
-            mip.del_component(mip._mpisppy_model.obj_cutoff_constraint)
+            self._remove_objective_cutoff(mip)
             # tmipsolve = time.perf_counter() - tbmipsolve
             if mip._mpisppy_data.scenario_feasible:
 
@@ -366,7 +361,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 model_name,
                 qp,
                 dtiming=dtiming,
-                tee=teeme,
+                tee=tee,
                 verbose=verbose,
             )
             self.bundling = _bundling
@@ -455,6 +450,38 @@ class FWPH(mpisppy.phbase.PHBase):
         if (persistent):
             solver.remove_constraint(qp.eq_recourse_cost)
             solver.add_constraint(qp.eq_recourse_cost)
+
+    def _add_objective_cutoff(self, mip, qp):
+        """ Add a constraint to the MIP objective ensuring
+            an improving direction in the QP subproblem is generated
+        """
+        assert not hasattr(mip._mpisppy_model, "obj_cutoff_constraint")
+        cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
+        epsilon = 0 #1e-6
+        rel_epsilon = abs(cutoff)*epsilon
+        epsilon = max(epsilon, rel_epsilon)
+        # tbmipsolve = time.perf_counter()
+        active_objective = sputils.find_active_objective(mip)
+        if self.is_minimizing:
+            # obj <= cutoff
+            obj_cutoff_constraint = (None, active_objective.expr, cutoff+epsilon)
+        else:
+            # obj >= cutoff
+            obj_cutoff_constraint = (cutoff-epsilon, active_objective.expr, None)
+        mip._mpisppy_model.obj_cutoff_constraint = pyo.Constraint(expr=obj_cutoff_constraint)
+        if sputils.is_persistent(mip._solver_plugin):
+            mip._solver_plugin.add_constraint(mip._mpisppy_model.obj_cutoff_constraint)
+        return cutoff
+
+    def _remove_objective_cutoff(self, mip):
+        """ Remove the constraint to the MIP objective added by
+            _add_objective_cutoff
+        """
+        assert hasattr(mip._mpisppy_model, "obj_cutoff_constraint")
+        if sputils.is_persistent(mip._solver_plugin):
+            mip._solver_plugin.remove_constraint(mip._mpisppy_model.obj_cutoff_constraint)
+        mip.del_component(mip._mpisppy_model.obj_cutoff_constraint)
+        delattr(mip._mpisppy_model, "obj_cutoff_constraint")
 
     def _attach_indices(self):
         ''' Attach the fields x_indices to the model objects in
