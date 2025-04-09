@@ -36,7 +36,7 @@ if len(sys.argv) > 1:
     solver_name = sys.argv[1]
 
 # Use oversubscribe if your computer does not have enough cores.
-# Don't use this unless you have to.
+# Don't use oversubscribe unless you have to.
 # (This may not be allowed on some versions of mpiexec)
 mpiexec_arg = ""  # "--oversubscribe" or "-envall"
 if len(sys.argv) > 2:
@@ -151,6 +151,13 @@ farmeref = (f"--EF --num-scens 3 --EF-solver-name={solver_name}")
 #rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
 do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir = "test_data/farmeref_baseline")
 
+# we need slammax and cross-scenario to make this work well
+netdesC = (f"--max-iterations=60 --instance-name=network-10-20-L-01 --netdes-data-path ./data "
+           f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve "
+           f"--subgradient-hub --xhatshuffle --max-solver-threads=2 "
+           f"--solution-base-name delete_me")
+do_one("netdes", "netdes_with_class", 2, netdesC, xhat_baseline_dir=None)
+# TBD: put in a baseline
 
 hydroef = (f"--EF --branching-factors '3 3' --EF-solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 1, hydroef, "test_data/hydroef_baseline")
@@ -177,12 +184,19 @@ farmer_rd = f"--num-scens 10 --solver-name {solver_name} --max-iterations 10 --m
 #rebaseline_xhat("farmer", "farmer", 3, farmer_rd, "test_data/farmer_rd_baseline")
 do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_baseline")
 
-# Just a smoke test to make sure sizes_expression still exists and
-# that lpfiles still executes.
+### combined runs to test mps files ####
+# Make sure sizes_expression still exists and lpfiles still executes.
 sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
-          " --scenario-lpfiles")
-do_one("sizes", "sizes", 3, sizese, xhat_baseline_dir=None)   
+          " --write-scenario-lp-mps-files")
+do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
+# just smoke for now
+sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
+          f" --solver-name {solver_name} --max-iterations 0"
+          " --mps-files-directory=.")   # we will be in the sizes dir
+do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
+
+### end combined mps file runs ###
 
 quit()
 

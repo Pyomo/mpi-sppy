@@ -17,12 +17,11 @@ import pyomo.core.base.label as pyomo_label
 
 
 def lpize(varname):
-    # convert varname to the string that will appear in the lp file
-    # return varname.replace("[", "(").replace("]", ")").replace(",", "_").replace(".","_")
+    # convert varname to the string that will appear in the lp and mps files
     return pyomo_label.cpxlp_label_from_name(varname)
 
 
-class Scenario_lpfiles(mpisppy.extensions.extension.Extension):
+class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
         self.ph = ph
@@ -30,9 +29,16 @@ class Scenario_lpfiles(mpisppy.extensions.extension.Extension):
     def pre_iter0(self):
         for k, s in self.ph.local_subproblems.items():
             s.write(f"{k}.lp", io_options={'symbolic_solver_labels': True})
-            nonants_by_node = {nd.name: [lpize(var.name) for var in nd.nonant_vardata_list] for nd in s._mpisppy_node_list}
+            s.write(f"{k}.mps", io_options={'symbolic_solver_labels': True})
+            scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
+            scenDict = {"scenarioData": scenData}
+            treeData = dict()
+            for nd in s._mpisppy_node_list:
+                treeData[nd.name] = {"condProb": nd.cond_prob}
+                treeData[nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
+            scenDict["treeData"] = treeData
             with open(f"{k}_nonants.json", "w") as jfile:
-                json.dump(nonants_by_node, jfile)
+                json.dump(scenDict, jfile, indent=2)
                                         
     def post_iter0(self):
         return

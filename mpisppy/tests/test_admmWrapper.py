@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# TBD: make these tests less fragile
 import unittest
 import mpisppy.utils.admmWrapper as admmWrapper
 import examples.distr as distr
@@ -95,7 +96,8 @@ class TestAdmmWrapper(unittest.TestCase):
             inner_bound = match.group(2)
             return float(outer_bound), float(inner_bound)
         else:
-            raise RuntimeError("The test is probably not correctly adapted: can't match the format of the line")
+            raise RuntimeError("Cannot find outer and inner bounds in pattern"
+                               f" in this output {line=}")
 
     def test_values(self):
         command_line_pairs = [(f"mpiexec -np 3 python -u -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
@@ -112,11 +114,16 @@ class TestAdmmWrapper(unittest.TestCase):
             result = subprocess.run(command, capture_output=True, text=True)
             if result.stderr:
                 print("Error output:")
-                print(result.stderr)
+                raise RuntimeError(result.stderr)
+                
 
             # Check the standard output
             if result.stdout:
                 result_by_line = result.stdout.strip().split('\n')
+            else:
+                print(f"{result.stdout=}, {result.returncode=}")
+                raise RuntimeError(f"Cannot get output from {command=}")
+            
                 
             target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
             precedent_line_target = False
