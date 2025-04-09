@@ -387,10 +387,18 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     wheel.spin()
 
     if cfg.solution_base_name is not None:
+        root_writer = getattr(module, "first_stage_solution_writer",
+                                     sputils.first_stage_nonant_npy_serializer)
+        tree_writer = getattr(module, "tree_solution_writer", None)
+    
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
-                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')    
+                first_stage_solution_writer=root_writer)
+        if tree_writer is not None:
+            wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir',
+                                      scenario_tree_solution_writer=tree_writer)
+        else:
+            wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote solution data.")
 
 
@@ -500,11 +508,25 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         print("Warning: non-optimal solver termination")
 
     global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
+
     if cfg.solution_base_name is not None:
+        root_writer = getattr(module, "ef_root_nonants_solution_writer", None)
+        tree_writer = getattr(module, "ef_tree_solution_writer", None)
+        
         sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
-        sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
+        if root_writer is not None:
+            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv',   # might overwite
+                                                  first_stage_solution_writer=root_writer)
+        else:
+            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv')            
+        if tree_writer is not None:
+            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
+                                          scenario_tree_solution_writer=tree_writer)
+        else:
+            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
+        
 
 def _model_fname():
     def _bad_news():
@@ -556,9 +578,13 @@ if __name__ == "__main__":
         fname = os.path.basename(model_fname)
         sys.path.append(dpath)
         module = importlib.import_module(fname)
-    
+
     cfg = _parse_args(module)
 
+    # Perhaps use an object as the so-called module.
+    if hasattr(module, "get_mpisppy_helper_object"):
+        module = module.get_mpisppy_helper_object(cfg)
+    
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
         # TBD: remove the need for dill if you are not reading or writing
