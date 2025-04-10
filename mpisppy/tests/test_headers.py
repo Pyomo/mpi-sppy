@@ -31,4 +31,5 @@ def test_headers():
         if p.stat().st_size == 0:
             continue
         nonempty_missing_header.append(p)
+    print(f"{nonempty_missing_header=}")
     assert not nonempty_missing_header

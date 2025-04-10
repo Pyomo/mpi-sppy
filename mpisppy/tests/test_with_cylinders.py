@@ -40,7 +40,7 @@ def _create_cfg():
 
 #*****************************************************************************
 
-        
+
 class Test_farmer_with_cylinders(unittest.TestCase):
     """ Test the find rho code using farmer."""
 
@@ -65,7 +65,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
                      "no solver is available")
     def test_xhatxbar_extended(self):
         from mpisppy.extensions.test_extension import TestExtension
-        
+
         self.cfg.xhatxbar_args()
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
 
@@ -88,7 +88,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
     def test_xhatshuffle_extended(self):
         print("begin xhatshuffle_extended with test extension")
         from mpisppy.extensions.test_extension import TestExtension
-        
+
         self.cfg.xhatxbar_args()
         scenario_creator_kwargs, beans, hub_dict = self._create_stuff()
 
@@ -113,9 +113,9 @@ class Test_farmer_with_cylinders(unittest.TestCase):
     def test_xhatshuffle_coverage(self):
         print("begin xhatshuffle_coverage")
         from helper_extension import TestHelperExtension
-        
+
         self.cfg.xhatxbar_args()
-        scenario_creator_kwargs, beans, hub_dict = self._create_stuff(iters=1)
+        scenario_creator_kwargs, beans, hub_dict = self._create_stuff(iters=2)
 
         list_of_spoke_dict = list()
         # xhat shuffle bound spoke
@@ -130,6 +130,8 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         if wheel.global_rank == 1:
             xhat_object = wheel.spcomm.opt
             for idx,v in xhat_object._TestHelperExtension_checked.items():
+                # print("xhat_object = ", xhat_object)
+                # print("idx = ", idx, "    v = ", v)
                 self.assertNotEqual(v[0], v[1], f"xhatshuffle does not seem to change things for {idx} (and maybe others)")
 
 

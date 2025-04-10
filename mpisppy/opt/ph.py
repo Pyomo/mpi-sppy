@@ -25,16 +25,19 @@ class PH(mpisppy.phbase.PHBase):
     """ PH. See PHBase for list of args. """
 
     #======================================================================
-    # uncomment the line below to get per-rank profile outputs, which can 
+    # uncomment the line below to get per-rank profile outputs, which can
     # be examined with snakeviz (or your favorite profile output analyzer)
     #@profile(filename="profile_out")
-    def ph_main(self, finalize=True):
+    def ph_main(self, finalize=True, attach_prox=True):
         """ Execute the PH algorithm.
 
         Args:
             finalize (bool, optional, default=True):
                 If True, call `PH.post_loops()`, if False, do not,
                 and return None for Eobj
+            attach_prox (bool, optional, default=True):
+                If True, use a proximal term, if False, no proximal
+                term is added to the objective function
 
         Returns:
             tuple:
@@ -56,13 +59,15 @@ class PH(mpisppy.phbase.PHBase):
         """
         verbose = self.options['verbose']
         smoothed = self.options['smoothed']
-        self.PH_Prep(attach_smooth = smoothed)
+        self.PH_Prep(attach_prox=attach_prox, attach_smooth = smoothed)
 
         if (verbose):
-            print('Calling PH Iter0 on global rank {}'.format(global_rank))
+            print(f'Calling {self.__class__.__name__} Iter0 on global rank {global_rank}')
         trivial_bound = self.Iter0()
+        if self._can_update_best_bound():
+            self.best_bound_obj_val = trivial_bound
         if (verbose):
-            print ('Completed PH Iter0 on global rank {}'.format(global_rank))
+            print(f'Completed {self.__class__.__name__} Iter0 on global rank {global_rank}')
         if ('asynchronousPH' in self.options) and (self.options['asynchronousPH']):
             raise RuntimeError("asynchronousPH is deprecated; use APH")
 

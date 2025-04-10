@@ -4,6 +4,27 @@
 SOLVER="cplex"
 SPB=1
 
+echo "^^^ hub only with w-writer (smoke) ^^^"
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-writer --W-fname w_values.csv 
+
+echo "^^^ hub only with w-reader (smoke) ^^^"
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-reader --init-W-fname w_values.csv
+
+echo "^^^ Multi-stage AirCond ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
+# --xhatshuffle --stag2EFsolvern
+
+echo "^^^ Multi-stage AirCond, pickle  the scenarios ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --pickle-scenarios-dir aircond/pickles
+
+echo "^^^ Multi-stage AirCond, bundle the scenarios ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --scenarios-per-bundle 9
+
+echo "^^^ Multi-stage AirCond, bundle the scenarios and write ^^^"
+mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants --pickle-scenarios-dir aircond/pickles --scenarios-per-bundle 9
+
+#### HEY! check on error messages for bad bundle sizes
+
 echo "^^^ write scenario lp and nonant json files ^^^"
 cd sizes
 python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles
@@ -20,8 +41,6 @@ echo "^^^ unpickle the sizes bundles and write the lp and nonant files ^^^"
 cd sizes
 python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
 cd ..
-echo "xxxx Early exit. xxxx"
-exit
 
 echo "^^^ pickle the scenarios ^^^"
 cd farmer

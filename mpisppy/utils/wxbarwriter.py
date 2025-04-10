@@ -38,19 +38,39 @@ import mpisppy.MPI as MPI
 n_proc = MPI.COMM_WORLD.Get_size()
 rank = MPI.COMM_WORLD.Get_rank()
 
+def add_options_to_config(cfg):
+    cfg.add_to_config("W_and_xbar_writer",
+                      description="Enables the w and xbar writer(default False)",
+                      domain=bool,
+                      default=False)
+    cfg.add_to_config("W_fname",
+                      description="Path of final W file (default None)",
+                      domain=str,
+                      default=None)
+    cfg.add_to_config("Xbar_fname",
+                      description="Path of final Xbar file (default None)",
+                      domain=str,
+                      default=None)
+    cfg.add_to_config("separate_W_files",
+                      description="If True, writes W to separate files (default False)",
+                      domain=bool,
+                      default=False)            
+
 class WXBarWriter(mpisppy.extensions.extension.Extension):
     """ Extension class for writing the W values
     """
     def __init__(self, ph):
-        # Check a bunch of files
-        w_fname, w_grad_fname, x_fname, sep_files = None, None, None, False
 
-        if ('W_fname' in ph.options): # W_fname is a path if separate_W_files=True
-            w_fname = ph.options['W_fname']
-        if ('Xbar_fname' in ph.options):
-            x_fname = ph.options['Xbar_fname']
-        if ('separate_W_files' in ph.options):
-            sep_files = ph.options['separate_W_files']
+        assert 'cfg' in ph.options
+        self.cfg = ph.options['cfg']
+        if self.cfg.get("W_and_xbar_writer") is None or not self.cfg.W_and_xbar_writer:
+            self.active = False
+            return  # nothing to do here
+        else:
+            self.active = True
+        
+        # Check a bunch of files
+        w_fname, x_fname, sep_files = self.cfg.W_fname, self.cfg.Xbar_fname, self.cfg.separate_W_files
 
         if (x_fname is None and w_fname is None and rank==0):
             print('Warning: no output files provided to WXBarWriter. '
@@ -71,7 +91,6 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
         self.PHB = ph
         self.cylinder_rank = rank
         self.w_fname = w_fname
-        self.w_grad_fname = w_grad_fname
         self.x_fname = x_fname
         self.sep_files = sep_files # Write separate files for each 
                                    # scenario's dual weights
@@ -86,24 +105,23 @@ class WXBarWriter(mpisppy.extensions.extension.Extension):
         pass
 
     def enditer(self):
-       """ if (self.w_fname):
-            fname = f'fname{self.PHB._PHIter}.csv'
-            mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, w_fname,
-                sep_files=self.sep_files)"""
-       pass
+        if not self.active:
+            return  # nothing to do.
+        else:
+            pass
+        #if (self.w_fname):
+        #     fname = f'fname{self.PHB._PHIter}.csv'
+        #     mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, w_fname,
+        #         sep_files=self.sep_files)
 
 
     def post_everything(self):
+        if not self.active:
+            return  # nothing to do.
         if (self.w_fname):
             fname = self.w_fname
             mpisppy.utils.wxbarutils.write_W_to_file(self.PHB, fname,
                 sep_files=self.sep_files)
-        if (self.w_grad_fname):
-            # TODO: finish implementing?
-            #grad_fname = 'grad_fname.csv'
-            #mpisppy.utils.wxbarutils.write_W_grad_to_file(self.PHB, grad_fname,
-            #sep_files=self.sep_files)
-            pass
         if (self.x_fname):
             mpisppy.utils.wxbarutils.write_xbar_to_file(self.PHB, self.x_fname)
 

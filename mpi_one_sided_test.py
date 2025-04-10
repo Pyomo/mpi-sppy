@@ -25,10 +25,10 @@ def main():
     rank = mpi.COMM_WORLD.Get_rank()
 
     array_size = 10
-    win = mpi.Win.Allocate(mpi.DOUBLE.size*array_size, mpi.DOUBLE.size, 
+    win = mpi.Win.Allocate(mpi.DOUBLE.size*array_size, mpi.DOUBLE.size,
                            comm=mpi.COMM_WORLD)
-    buff = np.ndarray(buffer=win.tomemory(), dtype='d', shape=(array_size,)) 
-     
+    buff = np.ndarray(buffer=win.tomemory(), dtype='d', shape=(array_size,))
+
     if (rank == 0):
         buff[:] = 3. * np.ones(array_size, dtype='d')
         time.sleep(3)

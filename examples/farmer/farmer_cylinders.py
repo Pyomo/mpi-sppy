@@ -8,6 +8,10 @@
 ###############################################################################
 # general example driver for farmer with cylinders
 
+## Uncomment the below to suppress warnings when running this file. Helpful for debugging.
+# import warnings
+# warnings.filterwarnings("ignore")
+
 import farmer
 
 # Make it all go
@@ -111,6 +115,8 @@ def main():
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter = rho_setter)
+
+    hub_dict['opt_kwargs']['options']['cfg'] = cfg                    
 
     if cfg.primal_dual_converger:
         hub_dict['opt_kwargs']['options']\

@@ -17,6 +17,7 @@ import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc
 
+from pyomo.common.collections import ComponentSet
 from mpisppy import MPI
 
 logger = logging.getLogger("SPBase")
@@ -91,12 +92,21 @@ class SPBase:
         self.n_proc = self.mpicomm.Get_size()
         self.global_rank = MPI.COMM_WORLD.Get_rank()
 
+        # for writers, if the appropriate
+        # solution is loaded into the subproblems
+        self.tree_solution_available = False
+        self.first_stage_solution_available = False
+        self.best_solution_obj_val = None
+
+        # sometimes we know a best bound
+        self.best_bound_obj_val = None
 
         if options.get("toc", True):
             global_toc("Initializing SPBase")
 
         if self.n_proc > len(self.all_scenario_names):
-            raise RuntimeError("More ranks than scenarios")
+            raise RuntimeError(f"More ranks ({self.n_proc}) than scenarios"
+                               f" ({len(self.all_scenario_names)})")
 
         self._calculate_scenario_ranks()
         # Put the deprecation message in the init so they should only see it once per rank
@@ -120,14 +130,11 @@ class SPBase:
         self._verify_nonant_lengths()
         self._set_sense()
         self._use_variable_probability_setter()
+        self._set_best_solution_cache()
 
         ## SPCommunicator object
         self._spcomm = None
 
-        # for writers, if the appropriate
-        # solution is loaded into the subproblems
-        self.tree_solution_available = False
-        self.first_stage_solution_available = False
 
     def _set_sense(self, comm=None):
         """ Check to confirm that all the models constructed by scenario_crator
@@ -303,12 +310,15 @@ class SPBase:
     def _attach_nonant_indices(self):
         for (sname, scenario) in self.local_scenarios.items():
             _nonant_indices = dict()
+            _all_surrogate_nonants = ComponentSet()
             nlens = scenario._mpisppy_data.nlens        
             for node in scenario._mpisppy_node_list:
                 ndn = node.name
                 for i in range(nlens[ndn]):
                     _nonant_indices[ndn,i] = node.nonant_vardata_list[i]
+                _all_surrogate_nonants.update(node.surrogate_vardatas)
             scenario._mpisppy_data.nonant_indices = _nonant_indices
+            scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
         self.nonant_length = len(_nonant_indices)
 
 
@@ -540,6 +550,48 @@ class SPBase:
         if missing:
             raise ValueError(f"Missing the following required options: {', '.join(missing)}")
 
+    def _set_best_solution_cache(self):
+        # set up best solution cache
+        for k,s in self.local_scenarios.items():
+            s._mpisppy_data.best_solution_cache = None
+
+    def update_best_solution_if_improving(self, obj_val):
+        """ Call if the variable values have a nonanticipative solution
+            with associated obj_val. Will update the best_solution_cache
+            if the solution is better than the existing cached solution
+        """
+        if obj_val is None:
+            return False
+        if self.best_solution_obj_val is None:
+            update = True
+        elif self.is_minimizing:
+            update = (obj_val < self.best_solution_obj_val)
+        else:
+            update = (self.best_solution_obj_val < obj_val)
+        if update:
+            self.best_solution_obj_val = obj_val
+            self._cache_best_solution()
+            return True
+        return False
+
+    def _cache_best_solution(self):
+        for k,s in self.local_scenarios.items():
+            scenario_cache = pyo.ComponentMap()
+            for var in s.component_data_objects(pyo.Var):
+                scenario_cache[var] = var.value
+            s._mpisppy_data.best_solution_cache = scenario_cache
+
+    def load_best_solution(self):
+        for k,s in self.local_scenarios.items():
+            if s._mpisppy_data.best_solution_cache is None:
+                return False
+            for var, value in s._mpisppy_data.best_solution_cache.items():
+                var.set_value(value, skip_validation=True)
+
+        self.first_stage_solution_available = True
+        self.tree_solution_available = True
+        return True
+
     @property
     def spcomm(self):
         if self._spcomm is None:
@@ -652,7 +704,9 @@ class SPBase:
         """
 
         if not self.first_stage_solution_available:
-            raise RuntimeError("No first stage solution available")
+            # try loading a solution
+            if not self.load_best_solution():
+                raise RuntimeError("No first stage solution available")
         if self.cylinder_rank == 0:
             dirname = os.path.dirname(file_name)
             if dirname != '':
@@ -670,7 +724,9 @@ class SPBase:
                 scenario_tree_solution_writer (optional): custom scenario solution writer function
         """
         if not self.tree_solution_available:
-            raise RuntimeError("No tree solution available")
+            # try loading a solution
+            if not self.load_best_solution():
+                raise RuntimeError("No tree solution available")
         if self.cylinder_rank == 0:
             os.makedirs(directory_name, exist_ok=True)
         self.mpicomm.Barrier()

@@ -57,6 +57,7 @@ class Test_gradient_farmer(unittest.TestCase):
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
+        hub_dict['opt_kwargs']['options']['cfg'] = self.cfg                            
         list_of_spoke_dict = list()
         wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
         wheel.spin()

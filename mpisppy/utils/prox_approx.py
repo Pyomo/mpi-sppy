@@ -10,21 +10,14 @@
 from math import isclose
 from array import array
 from bisect import bisect
+from scipy.optimize import least_squares
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
-# def _f(val, x_pnt, y_pnt):
-#     return (( val - x_pnt )**2 + ( val**2 - y_pnt )**2)/2.
-# def _df(val, x_pnt, y_pnt):
-#     #return 2*(val - x_pnt) + 4*(val**2 - y_pnt)*val
-#     return val*(1 - 2*y_pnt + 2*val*val) - x_pnt
-# def _d2f(val, x_pnt, y_pnt):
-#     return 1 + 6*val*val - 2*y_pnt
-# def _newton_step(val, x_pnt, y_pnt):
-#     return val - _df(val, x_pnt, y_pnt) / _d2f(val, x_pnt, y_pnt)
-
-def _newton_step(val, x_pnt, y_pnt):
-    return val - (val * (1 - 2*y_pnt + 2*val*val) - x_pnt) / (1 + 6*val*val - 2*y_pnt)
+def _f_ls(val, x_pnt, y_pnt):
+    return ( val[0] - x_pnt ,  val[0]**2 - y_pnt )
+def _df_ls(val, x_pnt, y_pnt):
+    return ( (val[0],), (2*val[0],) )
 
 class ProxApproxManager:
     __slots__ = ()
@@ -41,13 +34,14 @@ class _ProxApproxManager:
     '''
     __slots__ = ()
 
-    def __init__(self, mpisppy_model, xvar, ndn_i):
+    def __init__(self, scenario, xvar, ndn_i):
         self.xvar = xvar
-        self.xvarsqrd = mpisppy_model.xsqvar[ndn_i]
-        self.cuts = mpisppy_model.xsqvar_cuts
-        self.xbar = mpisppy_model.xbars[ndn_i]
-        self.rho = mpisppy_model.rho[ndn_i]
-        self.W = mpisppy_model.W[ndn_i]
+        self.xvarsqrd = scenario._mpisppy_model.xsqvar[ndn_i]
+        self.cuts = scenario._mpisppy_model.xsqvar_cuts
+        self.xbar = scenario._mpisppy_model.xbars[ndn_i]
+        self.rho = scenario._mpisppy_model.rho[ndn_i]
+        self.W = scenario._mpisppy_model.W[ndn_i]
+        self.c = scenario._mpisppy_data.nonant_cost_coeffs[ndn_i]
         self.var_index = ndn_i
         self.cut_index = 0
         self.cut_values = array("d")
@@ -95,6 +89,68 @@ class _ProxApproxManager:
         self.cut_values.insert(idx, val)
         return True
 
+    def add_initial_cuts_var(self, x_val, other_bound, sign, tolerance, persistent_solver):
+        if other_bound is not None:
+            min_approx_error_pnt = sign * (2.0 / 3.0) * (other_bound - x_val)
+        else:
+            min_approx_error_pnt = None
+        if self.c > 0:
+            cost_pnt = self.c / self.rho.value
+        elif self.c < 0:
+            cost_pnt = -self.c / self.rho.value
+        else: # c == 0
+            cost_pnt = None
+        num_cuts = 0
+        if cost_pnt is None and min_approx_error_pnt is None:
+            # take a wild guess
+            step = max(1, tolerance)
+            num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val + sign*10*step, tolerance, persistent_solver)
+            return num_cuts
+        # no upper bound, or weak upper bound compared to cost_pnt
+        if (min_approx_error_pnt is None) or (cost_pnt is not None and min_approx_error_pnt > 10*cost_pnt):
+            step = max(cost_pnt, tolerance)
+            num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+            num_cuts += self.add_cut(x_val + sign*10*step, tolerance, persistent_solver)
+            return num_cuts
+        # no objective, or the objective is "large" compared to min_approx_error_pnt
+        if (cost_pnt is None) or (cost_pnt >= min_approx_error_pnt / 2.0):
+            step = max(min_approx_error_pnt, tolerance)
+            num_cuts += self.add_cut(x_val + step, tolerance, persistent_solver)
+            # guard against horrible bounds
+            if min_approx_error_pnt / 2.0 > max(1, tolerance):
+                step = max(1, tolerance)
+                num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+            else:
+                step = max(min_approx_error_pnt/2.0, tolerance)
+                num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+            return num_cuts
+        # cost_pnt and min_approx_error_pnt are *not* None
+        # and (cost_pnt < min_approx_error_pnt / 2.0 <= min_approx_error_pnt)
+        step = max(cost_pnt, tolerance)
+        num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+        step = max(min_approx_error_pnt, tolerance)
+        num_cuts += self.add_cut(x_val + sign*step, tolerance, persistent_solver)
+        return num_cuts
+
+
+    def add_initial_cuts_var_right(self, x_val, bounds, tolerance, persistent_solver):
+        return self.add_initial_cuts_var(x_val, bounds[1], 1, tolerance, persistent_solver)
+
+    def add_initial_cuts_var_left(self, x_val, bounds, tolerance, persistent_solver):
+        return self.add_initial_cuts_var(x_val, bounds[0], -1, tolerance, persistent_solver)
+
+    def add_initial_cuts(self, x_val, tolerance, persistent_solver):
+        num_cuts = 0
+        bounds = self.xvar.bounds
+        # no lower bound **or** sufficiently inside lower bound
+        if bounds[0] is None or (x_val > bounds[0] + 3*tolerance):
+            num_cuts += self.add_initial_cuts_var_left(x_val, bounds, tolerance, persistent_solver)
+        # no upper bound **or** sufficiently inside upper bound
+        if bounds[1] is None or (x_val < bounds[1] - 3*tolerance):
+            num_cuts += self.add_initial_cuts_var_right(x_val, bounds, tolerance, persistent_solver)
+        return num_cuts
+
     def add_cuts(self, x_val, tolerance, persistent_solver):
         x_bar = self.xbar.value
         rho = self.rho.value
@@ -119,17 +175,7 @@ class _ProxApproxManager:
         # to capture something of the proximal term. This can happen
         # when x_bar == x_val and W == 0.
         if self.cut_index <= 1:
-            lb, ub = self.xvar.bounds
-            upval = 1
-            dnval = 1
-            if ub is not None:
-                # after a lot of calculus, you can show that
-                # this point minimizes the error in the approximation
-                upval = 2.0 * (ub - x_val) / 3.0
-            if lb is not None:
-                dnval = 2.0 * (x_val - lb) / 3.0
-            num_cuts += self.add_cut(x_val + max(upval, tolerance+1e-06), tolerance, persistent_solver)
-            num_cuts += self.add_cut(x_val - max(dnval, tolerance+1e-06), tolerance, persistent_solver)
+            num_cuts += self.add_initial_cuts(x_val, tolerance, persistent_solver)
         # print(f"{x_val=}, {x_bar=}, {W=}")
         # print(f"{self.cut_values=}")
         # print(f"{self.cut_index=}")
@@ -153,20 +199,11 @@ class _ProxApproxManager:
         # We project the point x_pnt, y_pnt onto
         # the curve y = x**2 by finding the minimum distance
         # between y = x**2 and x_pnt, y_pnt.
-        # This involves solving a cubic equation, so instead
-        # we start at x_pnt, y_pnt and run newtons algorithm
-        # to get an approximate good-enough solution.
-        this_val = x_pnt
-        # print(f"initial distance: {_f(this_val, x_pnt, y_pnt)**(0.5)}")
-        # print(f"this_val: {this_val}")
-        next_val = _newton_step(this_val, x_pnt, y_pnt)
-        while not isclose(this_val, next_val, rel_tol=1e-6, abs_tol=1e-6):
-            # print(f"newton step distance: {_f(next_val, x_pnt, y_pnt)**(0.5)}")
-            # print(f"next_val: {next_val}")
-            this_val = next_val
-            next_val = _newton_step(this_val, x_pnt, y_pnt)
-        x_pnt = next_val
-        return self.add_cuts(x_pnt, tolerance,  persistent_solver)
+        res = least_squares(_f_ls, x_pnt, args=(x_pnt, y_pnt), jac=_df_ls, method="lm", x_scale="jac")
+        if not res.success:
+            raise RuntimeError(f"Error in projecting {(x_pnt, y_pnt)} onto parabola for "
+                               f"proximal approximation. Message: {res.message}")
+        return self.add_cuts(res.x[0], tolerance,  persistent_solver)
 
 class ProxApproxManagerContinuous(_ProxApproxManager):
 
@@ -266,16 +303,18 @@ if __name__ == '__main__':
     bounds = (-100, 100)
     m.x = pyo.Var(bounds = bounds)
     #m.x = pyo.Var(within=pyo.Integers, bounds = bounds)
-    m.xsqrd = pyo.Var(within=pyo.NonNegativeReals)
+    m.xsqvar = pyo.Var(within=pyo.NonNegativeReals)
 
-    m.zero = pyo.Param(initialize=-73.2, mutable=True)
+    m.xbars = pyo.Param(initialize=-73.2, mutable=True)
+    m.W = pyo.Param(initialize=0, mutable=True)
+    m.rho = pyo.Param(initialize=1, mutable=True)
     ## ( x - zero )^2 = x^2 - 2 x zero + zero^2
-    m.obj = pyo.Objective( expr = m.xsqrd - 2*m.zero*m.x + m.zero**2 )
+    m.obj = pyo.Objective( expr =m.rho*(m.xsqvar - 2*m.xbars*m.x + m.xbars**2 ))
 
-    m.xsqrdobj = pyo.Constraint([0], pyo.Integers)
+    m.xsqvar_cuts = pyo.Constraint(pyo.Any, pyo.Integers)
 
     s = pyo.SolverFactory('xpress_persistent')
-    prox_manager = ProxApproxManager(m.x, m.xsqrd, m.zero, m.xsqrdobj, 0)
+    prox_manager = ProxApproxManager(m, m.x, None)
     s.set_instance(m)
     m.pprint()
     new_cuts = True
@@ -287,4 +326,4 @@ if __name__ == '__main__':
         #m.pprint()
         iter_cnt += 1
 
-    print(f"cuts: {len(m.xsqrdobj)}, iters: {iter_cnt}")
+    print(f"cuts: {len(m.xsqvar_cuts)}, iters: {iter_cnt}")
