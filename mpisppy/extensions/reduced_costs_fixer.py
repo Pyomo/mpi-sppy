@@ -10,8 +10,10 @@ import numpy as np
 
 
 from mpisppy.extensions.extension import Extension
-from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
+from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.utils.sputils import is_persistent
+
+from mpisppy.cylinders.spwindow import Field
 
 class ReducedCostsFixer(Extension):
 
@@ -50,7 +52,6 @@ class ReducedCostsFixer(Extension):
             self.opt.cylinder_rank == 0:
             print("Warning: ReducedCostsFixer will be idle. Enable use_rc_bt or use_rc_fixer in options.")
 
-        self._last_serial_number = -1
         self._heuristic_fixed_vars = 0
         if spobj.is_minimizing:
             self._best_outer_bound = -float("inf")
@@ -58,9 +59,6 @@ class ReducedCostsFixer(Extension):
         else:
             self._best_outer_bound = float("inf")
             self._outer_bound_update = lambda new, old : (new < old)
-
-    def _get_serial_number(self):
-        return int(round(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index][-1]))
 
     def _update_best_outer_bound(self, new_outer_bound):
         if self._outer_bound_update(new_outer_bound, self._best_outer_bound):
@@ -86,11 +84,10 @@ class ReducedCostsFixer(Extension):
             # wait for the reduced costs
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("Fixing based on reduced costs prior to iteration 0!")
-            if self._get_serial_number() == 0:
+            if self.reduced_cost_buf.id() == 0:
                 while not self.opt.spcomm.hub_from_spoke(self.opt.spcomm.outerbound_receive_buffers[self.reduced_costs_spoke_index], self.reduced_costs_spoke_index):
                     continue
             self.sync_with_spokes(pre_iter0 = True)
-            self.opt.spcomm.use_trivial_bound = False
         self.fix_fraction_target = self._fix_fraction_target_iter0
 
     def post_iter0_after_sync(self):
@@ -100,24 +97,52 @@ class ReducedCostsFixer(Extension):
         for (i, spoke) in enumerate(self.opt.spcomm.spokes):
             if spoke["spoke_class"] == ReducedCostsSpoke:
                 self.reduced_costs_spoke_index = i + 1
+            ## End if
+        ## End for
+
+        if hasattr(self, "reduced_costs_spoke_index"):
+            spcomm = self.opt.spcomm
+            self.reduced_cost_buf = spcomm.register_extension_recv_field(
+                Field.EXPECTED_REDUCED_COST,
+                self.reduced_costs_spoke_index,
+                self.opt.nonant_length,
+            )
+            self.outer_bound_buf = spcomm.register_extension_recv_field(
+                Field.OBJECTIVE_OUTER_BOUND,
+                self.reduced_costs_spoke_index,
+                1,
+            )
+        ## End if
+
+        return
 
     def sync_with_spokes(self, pre_iter0 = False):
-        serial_number = self._get_serial_number()
-        if serial_number > self._last_serial_number:
-            spcomm = self.opt.spcomm
-            idx = self.reduced_costs_spoke_index
-            self._last_serial_number = serial_number
-            reduced_costs = spcomm.outerbound_receive_buffers[idx][1:1+self.nonant_length]
-            this_outer_bound = spcomm.outerbound_receive_buffers[idx][0]
-            new_outer_bound = self._update_best_outer_bound(this_outer_bound)
+        # TODO: Not sure the second part of this if clause is necessary...
+        if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
+            reduced_costs = self.reduced_cost_buf.value_array()
+            this_outer_bound = self.outer_bound_buf.value_array()[0]
+            is_new_outer_bound = self._update_best_outer_bound(this_outer_bound)
+            if pre_iter0:
+                # make sure we set the bound we compute prior to iteration 0
+                self.opt.spcomm.BestOuterBound = self.opt.spcomm.OuterBoundUpdate(
+                    self._best_outer_bound,
+                    idx=self.reduced_costs_spoke_index,
+                )
             if not pre_iter0 and self._use_rc_bt:
                 self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
+            ## End if
             if self._use_rc_fixer and self.fix_fraction_target > 0.0:
-                if new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
+                if is_new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
                     self.reduced_costs_fixing(reduced_costs)
+                ## End if
+            ## End if
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
+            ## End if
+        ## End if
+
+        return
 
 
     def reduced_costs_bounds_tightening(self, reduced_costs, this_outer_bound):
@@ -227,7 +252,7 @@ class ReducedCostsFixer(Extension):
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("All reduced costs are nan, heuristic fixing will not be applied")
             return
-  
+
         # compute the quantile target
         abs_reduced_costs = np.abs(reduced_costs)
 
@@ -249,13 +274,15 @@ class ReducedCostsFixer(Extension):
             print(f"Heuristic fixing reduced cost cutoff: {target}")
 
         raw_fixed_this_iter = 0
-        
+
         for sub in self.opt.local_subproblems.values():
             persistent_solver = is_persistent(sub._solver_plugin)
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     if ndn_i in self._modeler_fixed_nonants:
+                        continue
+                    if xvar in s._mpisppy_data.all_surrogate_nonants:
                         continue
                     this_expected_rc = abs_reduced_costs[ci]
                     update_var = False
@@ -293,7 +320,7 @@ class ReducedCostsFixer(Extension):
                                         update_var = True
                                         raw_fixed_this_iter += 1
                                     else:
-                                        # rc is near 0 or 
+                                        # rc is near 0 or
                                         # xbar from MIP might differ from rc from relaxation
                                         pass
                                 else:
@@ -310,10 +337,10 @@ class ReducedCostsFixer(Extension):
                                         update_var = True
                                         raw_fixed_this_iter += 1
                                     else:
-                                        # rc is near 0 or 
+                                        # rc is near 0 or
                                         # xbar from MIP might differ from rc from relaxation
                                         pass
-                    
+
                     if update_var and persistent_solver:
                         sub._solver_plugin.update_var(xvar)
 

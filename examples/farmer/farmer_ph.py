@@ -75,11 +75,15 @@ def main():
     )
     ph.ph_main()
     variables = ph.gather_var_values_to_rank0()
+
+    if variables is None:
+        variables = []
+
     for (scenario_name, variable_name) in variables:
         variable_value = variables[scenario_name, variable_name]
         print(scenario_name, variable_name, variable_value)
-    
-    # Use the closest per scenario solution to xbar for evaluating objective 
+
+    # Use the closest per scenario solution to xbar for evaluating objective
     if ph.tree_solution_available:
         print(f"Final objective from XhatClosest: {ph.extobject._final_xhat_closest_obj}")
 

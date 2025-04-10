@@ -33,7 +33,7 @@ setup(
     author='David Woodruff',
     author_email='dlwoodruff@ucdavis.edu',
     packages=packages,
-    python_requires='>=3.8',
+    python_requires='>=3.9',
     install_requires=[
         'sortedcollections',
         'numpy<2',

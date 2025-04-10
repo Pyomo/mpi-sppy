@@ -23,14 +23,18 @@ def _parse_args():
                          domain=str,
                          default=None,
                          argparse_args = {"required": True})
-
+    cfg.add_to_config("surrogate_nonant",
+                      description="use a surrogate nonant summing the total number of servers",
+                      domain=bool,
+                      default=False,
+                     )
     cfg.two_sided_args()
     cfg.fixer_args()
     cfg.xhatlooper_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.xhatshuffle_args()
-    cfg.subgradient_args()
+    cfg.subgradient_bounder_args()
     cfg.reduced_costs_args()
     cfg.coeff_rho_args()
     cfg.integer_relax_then_enforce_args()
@@ -60,7 +64,7 @@ def main():
     if cfg.default_rho is None:
         raise RuntimeError("The --default-rho option must be specified")
 
-    scenario_creator_kwargs = {"data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata"}
+    scenario_creator_kwargs = {"data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata", "surrogate":cfg.surrogate_nonant}
     scenario_creator = sslp.scenario_creator
     scenario_denouement = sslp.scenario_denouement    
     all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]

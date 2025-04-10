@@ -41,6 +41,7 @@
 import os
 import numpy as np
 import pyomo.environ as pyo
+from pyomo.common.collections import ComponentSet
 
 ''' W utilities '''
 
@@ -90,7 +91,7 @@ def write_W_to_file(PHB, fname, sep_files=False):
 
 
 def set_W_from_file(fname, PHB, rank, sep_files=False, disable_check=False):
-    ''' 
+    r'''
     Args:
         fname (str) -- if sep_files=False, file containing the dual weights.
             Otherwise, path of the directory containing the dual weight files
@@ -268,7 +269,7 @@ def _check_W(w_val_dict, PHB, rank):
             dual = sum(c[vname] for c in checks)
             if (abs(dual) > 1e-7):
                 raise RuntimeError('Provided weights do not satisfy '
-                    'dual feasibility: \sum_{scenarios} prob(s) * w(s) != 0. '
+                    r'dual feasibility: \sum_{scenarios} prob(s) * w(s) != 0. '
                     'Error on variable ' + vname)
 
 ''' X-bar utilities '''
@@ -394,9 +395,27 @@ def fix_ef_ROOT_nonants(ef, root_nonants):
         ef (Pyomo ConcreteModel for an EF): the extensive form to modify
         root_nonants(list): the nonant values for the root node nonants
     """
-    varlist = [var for (ndn,i), var in ef.ref_vars.items() if ndn == "ROOT"]
+    if hasattr(ef, "_C_EF_"):
+        # real EF
+        varlist = [var for (ndn,i), var in ef.ref_vars.items() if ndn == "ROOT"]
+        all_root_surrogate_nonant_vardatas = ComponentSet()
+        for sname in ef._ef_scenario_names:
+            scenario = getattr(ef, sname)
+            for node in scenario._mpisppy_node_list:
+                if node.name == "ROOT":
+                    break
+            all_root_surrogate_nonant_vardatas.update(node.surrogate_vardatas)
+    else:
+        # scenario acting as EF
+        for node in ef._mpisppy_node_list:
+            if node.name == "ROOT":
+                break
+        varlist = node.nonant_vardata_list
+        all_root_surrogate_nonant_vardatas = ComponentSet(node.surrogate_vardatas)
     assert len(varlist) == len(root_nonants)
     for var, vval in zip(varlist, root_nonants):
+        if var in all_root_surrogate_nonant_vardatas:
+            continue
         if var.is_binary() or var.is_integer():
             vval = round(vval)
         var.fix(vval)
