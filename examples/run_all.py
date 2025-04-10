@@ -284,6 +284,7 @@ do_one("sslp",
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
+       "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
        "--solver-name={}".format(solver_name))
 
 do_one("hydro", "hydro_cylinders.py", 3,
