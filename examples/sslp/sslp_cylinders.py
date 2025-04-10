@@ -10,6 +10,7 @@ import sslp
 
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.primal_dual_rho import PrimalDualRho
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 
@@ -36,6 +37,8 @@ def _parse_args():
     cfg.xhatshuffle_args()
     cfg.subgradient_bounder_args()
     cfg.reduced_costs_args()
+    cfg.reduced_costs_rho_args()
+    cfg.primal_dual_rho_args()
     cfg.coeff_rho_args()
     cfg.integer_relax_then_enforce_args()
     cfg.parse_command_line("sslp_cylinders")
@@ -95,6 +98,16 @@ def main():
 
     if cfg.coeff_rho:
         vanilla.add_coeff_rho(hub_dict, cfg)
+
+    if cfg.reduced_costs_rho:
+        vanilla.add_reduced_costs_rho(hub_dict, cfg)
+
+    if cfg.use_primal_dual_rho_updater:
+        vanilla.extension_adder(hub_dict, PrimalDualRho)
+        hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {
+                'verbose': cfg.verbose,
+                'rho_update_threshold': cfg.primal_dual_rho_update_threshold,
+            }
 
     if cfg.integer_relax_then_enforce:
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
