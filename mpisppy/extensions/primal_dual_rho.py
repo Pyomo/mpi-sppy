@@ -107,6 +107,7 @@ class PrimalDualRho(mpisppy.extensions.extension.Extension):
             self._ph._swap_nonant_vars()
         primal_gap = self._compute_primal_convergence()
         dual_gap = self._compute_dual_residual()
+        self.prev_xbars = self._get_xbars()
         if self._verbose:
             global_toc(f"{primal_gap=}, {dual_gap=}", self._ph.cylinder_rank==0)
 
