@@ -113,7 +113,7 @@ def _rho_setter(scenario_instance):
 
     return scenario_rhos(scenario_instance)
 
-def scenario_rhos(scenario_instance, rho_scale_factor=0.1):
+def scenario_rhos(scenario_instance, rho_scale_factor=0.01):
     computed_rhos = []
     for t in scenario_instance.TimePeriods:
         for g in scenario_instance.ThermalGenerators:
