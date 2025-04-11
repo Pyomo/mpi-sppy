@@ -153,7 +153,7 @@ class WheelSpinner:
         spcomm.free_windows()
 
         fullcomm.Barrier()
-        global_toc("Finalize Complete")
+        global_toc("Cylinder finalization complete")
 
 
         self.spcomm = spcomm
