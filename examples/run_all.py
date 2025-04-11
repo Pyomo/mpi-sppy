@@ -280,13 +280,12 @@ do_one("sslp",
        "--integer-relax-then-enforce "
        "--integer-relax-then-enforce-ratio=0.95 "
        "--lagrangian "
-       "--max-iterations=100 --default-rho=1 "
+       "--max-iterations=100 --default-rho=1e-6 "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
        "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
        "--solver-name={}".format(solver_name))
-
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
