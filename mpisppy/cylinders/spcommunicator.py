@@ -371,8 +371,7 @@ class SPCommunicator:
             self.cylinder_comm.Allreduce((local_val, MPI.INT),
                                          (sum_ids, MPI.INT),
                                          op=MPI.SUM)
-            if new_id != sum_ids[0] / self.cylinder_comm.size:
-                buf._is_new = False
+            if new_id != sum_ids[0] // self.cylinder_comm.size:
                 return False
 
         if new_id > last_id:
