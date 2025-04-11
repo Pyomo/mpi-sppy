@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 
+from mpisppy import global_toc
 import mpisppy.extensions.extension
 
 from mpisppy.utils.sputils import nonant_cost_coeffs
@@ -36,5 +37,4 @@ class CoeffRho(mpisppy.extensions.extension.Extension):
                 #     nv = s._mpisppy_data.nonant_indices[ndn_i] # var_data object
                 #     print(ndn_i,nv.getname(),cc[ndn_i],rho._value)
 
-        if self.ph.cylinder_rank == 0:
-            print("Rho values updated by CoeffRho Extension")
+        global_toc("Rho values updated by CoeffRho Extension", self.ph.cylinder_rank == 0)

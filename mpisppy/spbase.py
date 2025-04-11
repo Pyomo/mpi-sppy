@@ -320,6 +320,9 @@ class SPBase:
             scenario._mpisppy_data.nonant_indices = _nonant_indices
             scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
         self.nonant_length = len(_nonant_indices)
+        # sanity check the nonant length
+        for s in self.local_scenarios.values():
+            assert self.nonant_length == len(s._mpisppy_data.nonant_indices)
 
 
     def _attach_nlens(self):

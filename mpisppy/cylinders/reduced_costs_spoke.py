@@ -15,6 +15,9 @@ from mpisppy import MPI
 
 class ReducedCostsSpoke(LagrangianOuterBound):
 
+    send_fields = (*LagrangianOuterBound.send_fields, Field.EXPECTED_REDUCED_COST, Field.SCENARIO_REDUCED_COST,)
+    receive_fields = (*LagrangianOuterBound.receive_fields,)
+
     converger_spoke_char = 'R'
 
     def __init__(self, *args, **kwargs):
@@ -54,28 +57,25 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             scenario_buffer_len += len(s._mpisppy_data.nonant_indices)
         self._scenario_rc_buffer = np.zeros(scenario_buffer_len)
 
-        self.register_send_field(Field.EXPECTED_REDUCED_COST, self.nonant_length)
-        self.register_send_field(Field.SCENARIO_REDUCED_COST, scenario_buffer_len)
-
         return
 
     @property
     def rc_global(self):
-        return self._sends[Field.EXPECTED_REDUCED_COST].value_array()
+        return self.send_buffers[Field.EXPECTED_REDUCED_COST].value_array()
 
     @rc_global.setter
     def rc_global(self, vals):
-        arr = self._sends[Field.EXPECTED_REDUCED_COST].value_array()
+        arr = self.send_buffers[Field.EXPECTED_REDUCED_COST].value_array()
         arr[:] = vals
         return
 
     @property
     def rc_scenario(self):
-        return self._sends[Field.SCENARIO_REDUCED_COST].value_array()
+        return self.send_buffers[Field.SCENARIO_REDUCED_COST].value_array()
 
     @rc_scenario.setter
     def rc_scenario(self, vals):
-        arr = self._sends[Field.SCENARIO_REDUCED_COST].value_array()
+        arr = self.send_buffers[Field.SCENARIO_REDUCED_COST].value_array()
         arr[:] = vals
         return
 
@@ -166,6 +166,15 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         rcg = np.zeros(self.nonant_length)
         self.cylinder_comm.Allreduce(rc, rcg, op=MPI.SUM)
         self.rc_global = rcg
+
+        self.put_send_buffer(
+            self.send_buffers[Field.EXPECTED_REDUCED_COST],
+            Field.EXPECTED_REDUCED_COST,
+        )
+        self.put_send_buffer(
+            self.send_buffers[Field.SCENARIO_REDUCED_COST],
+            Field.SCENARIO_REDUCED_COST,
+        )
 
     def main(self):
         # need the solution for ReducedCostsSpoke
