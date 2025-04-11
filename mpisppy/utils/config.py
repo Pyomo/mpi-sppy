@@ -911,6 +911,22 @@ class Config(pyofig.ConfigDict):
                            domain=float,
                            default=0.1)        
 
+    def primal_dual_rho_args(self):
+        self.add_to_config("use_primal_dual_rho_updater",
+                         description="Use the primal dual rho updater",
+                         domain=bool,
+                         default=False)
+        self.add_to_config("primal_dual_rho_update_threshold",
+                         description="Update threshold for when primal and dual residuals are imbalanced (default=2.0)",
+                         domain=float,
+                         default=2.0)
+
+    def norm_rho_args(self):
+        self.add_to_config("use_norm_rho_updater",
+                         description="Use the norm rho updater",
+                         domain=bool,
+                         default=False)
+
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",
                          description="Use the norm rho converger",
