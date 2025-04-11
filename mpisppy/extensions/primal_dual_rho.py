@@ -27,7 +27,7 @@ class PrimalDualRho(mpisppy.extensions.extension.Extension):
         self.options = ph.options.get('primal_dual_rho_options', {})
         self._verbose = self.options.get('verbose', False)
         self._ph = ph
-        self.update_threshold = self.options.get('rho_update_threshold', 2)
+        self.update_threshold = self.options.get('rho_update_threshold', 2.0)
         self.prev_xbars = None
         self._rank = self._ph.cylinder_rank
 
