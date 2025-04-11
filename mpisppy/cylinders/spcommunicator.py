@@ -356,7 +356,7 @@ class SPCommunicator:
             is_new (bool): Indicates whether the "gotten" values are new,
                 based on the write_id.
         """
-        if not synchronize:
+        if synchronize:
             self.cylinder_comm.Barrier()
 
         last_id = buf.id()
