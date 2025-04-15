@@ -23,6 +23,7 @@ import pyomo.environ as pyo
 import time
 import re # For manipulating scenario names
 import random
+import math
 
 from mpisppy import MPI
 from mpisppy import global_toc
@@ -110,7 +111,56 @@ class FWPH(mpisppy.phbase.PHBase):
         self._reenable_W()
 
         if (self.ph_converger):
-            self.convobject = self.ph_converger(self, self.cylinder_rank, self.n_proc)
+            self.convobject = self.ph_converger(self)
+
+        if self.options.get("FW_LP_start_iterations", 1000) > 0:
+            global_toc("Starting LP PH...")
+            lp_iterations = self.options.get("FW_LP_start_iterations", 1000)
+            total_iterations = self.options["PHIterLimit"]
+            self.options["PHIterLimit"] = lp_iterations
+            integer_relaxer = pyo.TransformationFactory('core.relax_integer_vars')
+            for s in self.local_subproblems.values():
+                integer_relaxer.apply_to(s)
+                if sputils.is_persistent(s._solver_plugin):
+                    for v,_ in s._relaxed_integer_vars[None].values():
+                        s._solver_plugin.update_var(v)
+            self.attach_PH_to_objective(add_duals=False, add_prox=True)
+            self._reenable_prox()
+            super().iterk_loop()
+            self._disable_prox()
+            for s in self.local_subproblems.values():
+                for v, d in s._relaxed_integer_vars[None].values():
+                    v.domain = d
+                    if sputils.is_persistent(s._solver_plugin):
+                        s._solver_plugin.update_var(v)
+                        # s._solver_plugin.update_var(v)
+                s.del_component("_relaxed_integer_vars")
+            self.options["PHIterLimit"] = total_iterations
+            self._PHIter -= 1
+
+            global_toc("Finished LP PH; Starting FW PH crossover")
+            teeme = (
+                self.options.get("tee-rank0-solves", False)
+                and self.cylinder_rank == 0
+            )
+            # teeme = True
+            self.fwph_solve_loop(
+                mip_solver_options=self.current_solver_options,
+                dtiming=self.options["display_timing"],
+                tee=teeme,
+                verbose=self.options["verbose"],
+                # sdm_iter_limit=20,
+                # FW_conv_thresh=-1,
+            )
+            global_toc("Starting FW PH")
+
+        else:
+            # FWPH can take some time to initialize
+            # If run as a spoke, check for convergence here
+            if self.spcomm and self.spcomm.is_converged():
+                if finalize:
+                    return 0, None, None
+                return 0
 
         self.iterk_loop()
 
@@ -131,20 +181,17 @@ class FWPH(mpisppy.phbase.PHBase):
              and self.options["tee-rank0-solves"]
             and self.cylinder_rank == 0
         )
+        # teeme = True
 
         self.conv = None
 
         max_iterations = int(self.options["PHIterLimit"])
-        # FWPH can take some time to initialize
-        # If run as a spoke, check for convergence here
-        if self.spcomm and self.spcomm.is_converged():
-            return
 
         # The body of the algorithm
-        for self._PHIter in range(1, max_iterations+1):
+        while (self._PHIter < max_iterations):
             iteration_start_time = time.perf_counter()
             if dprogress:
-                global_toc(f"Initiating FWPH Iteration {self._PHIter}\n", self.cylinder_rank == 0)
+                global_toc(f"Initiating FWPH Major Iteration {self._PHIter+1}\n", self.cylinder_rank == 0)
 
             # tbphloop = time.perf_counter()
             # TODO: should implement our own Xbar / W computation
@@ -157,18 +204,20 @@ class FWPH(mpisppy.phbase.PHBase):
             if hasattr(self.spcomm, "sync_Ws"):
                 self.spcomm.sync_Ws()
 
-            self.conv = self.convergence_diff()
+            self.conv = self.fwph_convergence_diff()
 
             if (self.extensions): 
                 self.extobject.miditer()
 
             if (self.ph_converger):
-                diff = self.convobject.convergence_value()
+                self._swap_nonant_vars()
                 if (self.convobject.is_converged()):
                     secs = time.perf_counter() - self.start_time
-                    self._output(self._local_bound, self._fwph_best_bound, diff, secs)
+                    self._output(self._local_bound, self._fwph_best_bound, self.conv, secs)
                     global_toc('FWPH converged to user-specified criteria', self.cylinder_rank == 0)
+                    self._swap_nonant_vars_back()
                     break
+                self._swap_nonant_vars_back()
             if self.conv is not None: # Convergence check from Boland
                 if (self.conv < self.options['convthresh']):
                     secs = time.perf_counter() - self.start_time
@@ -197,12 +246,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self._output(self._local_bound, self._fwph_best_bound, self.conv, secs)
 
             ## Hubs/spokes take precedence over convergers
-            if hasattr(self.spcomm, "sync_bounds"):
-                self.spcomm.sync_bounds()
-                self.spcomm.sync_extensions()
-            elif hasattr(self.spcomm, "sync"):
-                self.spcomm.sync()
-            if self.spcomm and self.spcomm.is_converged():
+            if self.spcomm and self.spcomm.is_converged(screen_trace=False):
                 secs = time.perf_counter() - self.start_time
                 self._output(self._local_bound, self._fwph_best_bound, np.nan, secs)
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
@@ -238,22 +282,82 @@ class FWPH(mpisppy.phbase.PHBase):
             dtiming=False,
             tee=False,
             verbose=False,
+            sdm_iter_limit=None,
+            FW_conv_thresh=None,
         ):
+            if sdm_iter_limit is None:
+                sdm_iter_limit = self.FW_options["FW_iter_limit"]
+            if FW_conv_thresh is None:
+                FW_conv_thresh = self.FW_options["FW_conv_thresh"]
+            max_iterations = int(self.options["PHIterLimit"])
+            # print(f"{sdm_iter_limit=}")
             self._swap_nonant_vars()
             self._local_bound = 0
             # tbsdm = time.perf_counter()
+            _sdm_generators = {}
+            stop = False
             for name in self.local_subproblems:
-                dual_bound = self.SDM(name, mip_solver_options, dtiming, tee, verbose)
-                if dual_bound is None:
-                    dual_bound = np.nan
+                _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh)
+                try:
+                    dual_bound = next(_sdm_generators[name])
+                except StopIteration as e:
+                    dual_bound = e.value
+                    stop = True
                 self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
                                      dual_bound
+            self._update_dual_bounds()
+            self._PHIter += 1
+            if self._PHIter == max_iterations:
+                stop = True
+            if self._sync_after_mip_solve():
+                stop = True
+            stop = self.allreduce_or(stop)
+            while not stop:
+                stop = False
+                for col_generator in _sdm_generators.values():
+                    try:
+                        next(col_generator)
+                    except StopIteration:
+                       stop = True
+                self._PHIter += 1
+                if self._PHIter == max_iterations:
+                    stop = True
+                if self._sync_after_mip_solve():
+                    stop = True
+                stop = self.allreduce_or(stop)
             # tsdm = time.perf_counter() - tbsdm
             # print(f"PH iter {self._PHIter}, total SDM time: {tsdm}")
-            self._update_dual_bounds()
+
+            # Re-set the mip._mpisppy_model.W so that the QP objective
+            # is correct in the next major iteration
+            for model_name, mip in self.local_subproblems.items():
+                qp  = self.local_QP_subproblems[model_name]
+                mip_source = mip.scen_list if self.bundling else [model_name]
+                for scenario_name in mip_source:
+                    scen_mip = self.local_scenarios[scenario_name]
+                    for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
+                        scen_mip._mpisppy_model.W[node_name, ix]._value = \
+                            qp._mpisppy_model.W[node_name, ix]._value
+
             self._swap_nonant_vars_back()
 
-    def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose):
+    def _sync_after_mip_solve(self):
+        # add columns from cylinder(s)
+        self._swap_nonant_vars_back()
+        if hasattr(self.spcomm, "add_cylinder_columns"):
+            self.spcomm.sync_nonants()
+            self.spcomm.add_cylinder_columns()
+        if hasattr(self.spcomm, "sync_bounds"):
+            self.spcomm.sync_bounds()
+            self.spcomm.sync_extensions()
+        elif hasattr(self.spcomm, "sync"):
+            self.spcomm.sync()
+        self._swap_nonant_vars()
+        if self.spcomm and self.spcomm.is_converged():
+            return True
+        return False
+
+    def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
         '''
         mip = self.local_subproblems[model_name]
@@ -280,7 +384,7 @@ class FWPH(mpisppy.phbase.PHBase):
             for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()
             }
 
-        for itr in range(self.FW_options['FW_iter_limit']):
+        for itr in range(sdm_iter_limit):
             # loop_start = time.perf_counter()
             # Algorithm 2 line 4
             for scenario_name in mip_source:
@@ -292,7 +396,9 @@ class FWPH(mpisppy.phbase.PHBase):
                         * (xt[ndn_i]
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
+            self._fix_fixings(model_name, mip, qp)
             cutoff = self._add_objective_cutoff(mip, qp)
+            # print(f"{model_name=}, {cutoff=}")
             # Algorithm 2 line 5
             self.solve_one(
                 mip_solver_options,
@@ -304,15 +410,14 @@ class FWPH(mpisppy.phbase.PHBase):
             )
             self._remove_objective_cutoff(mip)
             # tmipsolve = time.perf_counter() - tbmipsolve
-            if mip._mpisppy_data.scenario_feasible:
 
-                # Algorithm 2 lines 6--8
-                if (itr == 0):
-                    dual_bound = mip._mpisppy_data.outer_bound
+            if mip._mpisppy_data.scenario_feasible:
 
                 # Algorithm 2 line 9 (compute \Gamma^t)
                 inner_bound = mip._mpisppy_data.inner_bound
+                # print(f"{model_name=}, {inner_bound=}")
                 gamma_t = self._compute_gamma_t(cutoff, inner_bound)
+                # print(f"{itr=}, {model_name=}, {gamma_t=}")
 
                 # tbcol = time.perf_counter()
                 self._add_QP_column(model_name)
@@ -328,12 +433,6 @@ class FWPH(mpisppy.phbase.PHBase):
             if shared_columns > 0:
                 self._swap_nonant_vars_back()
                 self._add_shared_columns(shared_columns)
-                self._swap_nonant_vars()
-            # add columns from cylinder(s)
-            if hasattr(self.spcomm, "add_cylinder_columns"):
-                self._swap_nonant_vars_back()
-                self.spcomm.sync_nonants()
-                self.spcomm.add_cylinder_columns()
                 self._swap_nonant_vars()
 
             # tbqpsol = time.perf_counter()
@@ -353,23 +452,25 @@ class FWPH(mpisppy.phbase.PHBase):
             # print(f"{model_name}, solve + add_col time: {tmipsolve + tcol + tqpsol}")
             # fwloop = time.perf_counter() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
+            # Algorithm 2 lines 6--8
+            # Stopping after the MIP solve will give a point
+            # to synchronize with spokes
+            dual_bound = None
+            if (itr == 0):
+                if mip._mpisppy_data.scenario_feasible:
+                    dual_bound = mip._mpisppy_data.outer_bound
+                else:
+                    dual_bound = np.nan
 
-            if not mip._mpisppy_data.scenario_feasible or (gamma_t < self.FW_options['FW_conv_thresh']):
-                break
+            if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.scenario_feasible or gamma_t < FW_conv_thresh:
+                return dual_bound
+            else:
+                yield dual_bound
 
             # reset for next loop
             for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items():
                 xt[ndn_i] = xvar._value
 
-        # Re-set the mip._mpisppy_model.W so that the QP objective 
-        # is correct in the next major iteration
-        for scenario_name in mip_source:
-            scen_mip = self.local_scenarios[scenario_name]
-            for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
-                scen_mip._mpisppy_model.W[node_name, ix]._value = \
-                    qp._mpisppy_model.W[node_name, ix]._value
-
-        return dual_bound
 
     def _add_shared_columns(self, shared_columns):
         self.mpicomm.Barrier()
@@ -381,6 +482,28 @@ class FWPH(mpisppy.phbase.PHBase):
                 s._solver_plugin.set_objective(active_objective_datas[0])
         self._generate_shared_column(shared_columns)
         self._reenable_W()
+
+    def _fix_fixings(self, model_name, mip, qp):
+        """ If some variable is fixed in the mip, but its value in the QP does
+            not agree with that fixed value, we will have a bad time. This method
+            removes such fixings.
+        """
+        for var in qp.x.values():
+            if var.fixed:
+                raise RuntimeError(f"var {var.name} is fixed in QP!!")
+        solver = mip._solver_plugin
+        unfixed = 0
+        target = mip.ref_vars if self.bundling else mip._mpisppy_data.nonant_vars
+        mip_to_qp = mip._mpisppy_data.mip_to_qp
+        for ndn_i, var in target.items():
+            if var.fixed:
+                if not math.isclose(mip_to_qp[id(var)].value, var.value, abs_tol=1e-5):
+                    var.unfix()
+                    if sputils.is_persistent(solver):
+                        solver.update_var(var)
+                    unfixed += 1
+        if unfixed > 0:
+            global_toc(f"{self.__class__.__name__}: unfixed {unfixed} nonant variables in {model_name}", True)
 
     def _add_QP_column(self, model_name, disable_W=False):
         ''' Add a column to the QP, with values taken from the most recent MIP
@@ -458,8 +581,10 @@ class FWPH(mpisppy.phbase.PHBase):
             an improving direction in the QP subproblem is generated
         """
         assert not hasattr(mip._mpisppy_model, "obj_cutoff_constraint")
+        # print(f"\tnonants part: {pyo.value(qp._mpisppy_model.mip_obj_in_qp)}")
+        # print(f"\trecoursepart: {pyo.value(qp.recourse_cost)}")
         cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-        epsilon = 0 #1e-6
+        epsilon = 0 #1e-4
         rel_epsilon = abs(cutoff)*epsilon
         epsilon = max(epsilon, rel_epsilon)
         # tbmipsolve = time.perf_counter()
@@ -559,8 +684,10 @@ class FWPH(mpisppy.phbase.PHBase):
             self._fwph_best_bound = np.fmin(self._fwph_best_bound, self._local_bound)
         if self._can_update_best_bound():
             self.best_bound_obj_val = self._fwph_best_bound
+        # if self.cylinder_rank == 0:
+        #     print(f"{self._local_bound=}")
 
-    def convergence_diff(self):
+    def fwph_convergence_diff(self):
         ''' Perform the convergence check of Algorithm 3 in Boland et al. '''
         diff = 0.
         for name in self.local_subproblems.keys():
