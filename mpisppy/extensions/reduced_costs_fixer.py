@@ -25,11 +25,9 @@ class ReducedCostsFixer(Extension):
         self.verbose = ph_options['verbose'] or rc_options['verbose']
         self.debug = rc_options['debug']
 
-        self._use_rc_bt = rc_options['use_rc_bt']
         # reduced costs less than this in absolute value
         # will be considered 0
         self.zero_rc_tol = rc_options['zero_rc_tol']
-        self._use_rc_fixer = rc_options['use_rc_fixer']
         self._rc_fixer_require_improving_lagrangian = rc_options.get('rc_fixer_require_improving_lagrangian', True)
         # Percentage of variables which are at the bound we will target
         # to fix. We never fix varibles with reduced costs less than
@@ -48,10 +46,6 @@ class ReducedCostsFixer(Extension):
         # TODO: This should be same as in rc spoke?
         self.bound_tol = rc_options['rc_bound_tol']
 
-        if not (self._use_rc_bt or self._use_rc_fixer) and \
-            self.opt.cylinder_rank == 0:
-            print("Warning: ReducedCostsFixer will be idle. Enable use_rc_bt or use_rc_fixer in options.")
-
         self._heuristic_fixed_vars = 0
         if spobj.is_minimizing:
             self._best_outer_bound = -float("inf")
@@ -59,6 +53,8 @@ class ReducedCostsFixer(Extension):
         else:
             self._best_outer_bound = float("inf")
             self._outer_bound_update = lambda new, old : (new < old)
+
+        self._current_reduced_costs = None
 
     def _update_best_outer_bound(self, new_outer_bound):
         if self._outer_bound_update(new_outer_bound, self._best_outer_bound):
@@ -80,7 +76,7 @@ class ReducedCostsFixer(Extension):
 
     def iter0_post_solver_creation(self):
         self.fix_fraction_target = self._fix_fraction_target_pre_iter0
-        if self._use_rc_fixer and self.fix_fraction_target > 0:
+        if self.fix_fraction_target > 0:
             # wait for the reduced costs
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("Fixing based on reduced costs prior to iteration 0!")
@@ -139,120 +135,19 @@ class ReducedCostsFixer(Extension):
                     cls=ReducedCostsSpoke,
                     idx=self.reduced_costs_spoke_index,
                 )
-            if not pre_iter0 and self._use_rc_bt:
-                self.reduced_costs_bounds_tightening(reduced_costs, this_outer_bound)
-            ## End if
-            if self._use_rc_fixer and self.fix_fraction_target > 0.0:
-                if is_new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
-                    self.reduced_costs_fixing(reduced_costs)
-                ## End if
-            ## End if
+            if is_new_outer_bound or not self._rc_fixer_require_improving_lagrangian:
+                self._current_reduced_costs = np.array(reduced_costs[:])
         else:
             if self.opt.cylinder_rank == 0 and self.verbose:
                 print("No new reduced costs!")
             ## End if
         ## End if
+        if self.fix_fraction_target > 0.0 and self._current_reduced_costs is not None:
+            # makes sense to run this every iteration becuase xbar can change!!
+            self.reduced_costs_fixing(self._current_reduced_costs)
+        ## End if
 
         return
-
-
-    def reduced_costs_bounds_tightening(self, reduced_costs, this_outer_bound):
-
-        bounds_reduced_this_iter = 0
-        inner_bound = self.opt.spcomm.BestInnerBound
-        outer_bound = this_outer_bound
-        is_minimizing = self.opt.is_minimizing
-        if np.isinf(inner_bound) or np.isinf(outer_bound):
-            if self.opt.cylinder_rank == 0 and self.verbose:
-                print("Bounds tightened by reduced cost: 0 (inner or outer bound not available)")
-            return
-
-        for sub in self.opt.local_subproblems.values():
-            persistent_solver = is_persistent(sub._solver_plugin)
-            for sn in sub.scen_list:
-                tightened_this_scenario = 0
-                s = self.opt.local_scenarios[sn]
-                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
-                    if ndn_i in self._modeler_fixed_nonants:
-                        continue
-                    this_expected_rc = reduced_costs[ci]
-                    update_var = False
-                    if np.isnan(this_expected_rc) or np.isinf(this_expected_rc):
-                        continue
-
-                    if np.isclose(xvar.lb, xvar.ub):
-                        continue
-
-                    # TODO: could simplify if/else blocks using sign variable - might reduce readability?
-                    # alternatively, could move some blocks into functions
-                    if is_minimizing:
-                        # var at lb
-                        if this_expected_rc > 0 + self.zero_rc_tol:
-                            new_ub = xvar.lb + (inner_bound - outer_bound)/ this_expected_rc
-                            old_ub = xvar.ub
-                            if new_ub < old_ub:
-                                if ndn_i in self._integer_nonants:
-                                    new_ub = np.floor(new_ub)
-                                    xvar.setub(new_ub)
-                                else:
-                                    xvar.setub(new_ub)
-                                if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"tightening ub of var {xvar.name} to {new_ub} from {old_ub}; reduced cost is {this_expected_rc}")
-                                update_var = True
-                                bounds_reduced_this_iter += 1
-                                tightened_this_scenario += 1
-                        # var at ub
-                        elif this_expected_rc < 0 - self.zero_rc_tol:
-                            new_lb = xvar.ub + (inner_bound - outer_bound)/ this_expected_rc
-                            old_lb = xvar.lb
-                            if new_lb > old_lb:
-                                if ndn_i in self._integer_nonants:
-                                    new_lb = np.ceil(new_lb)
-                                    xvar.setlb(new_lb)
-                                else:
-                                    xvar.setlb(new_lb)
-                                if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"tightening lb of var {xvar.name} to {new_lb} from {old_lb}; reduced cost is {this_expected_rc}")
-                                update_var = True
-                                bounds_reduced_this_iter += 1
-                                tightened_this_scenario += 1
-                    # maximization
-                    else:
-                        # var at lb
-                        if this_expected_rc < 0 - self.zero_rc_tol:
-                            new_ub = xvar.lb - (outer_bound - inner_bound)/ this_expected_rc
-                            old_ub = xvar.ub
-                            if new_ub < old_ub:
-                                if ndn_i in self._integer_nonants:
-                                    new_ub = np.floor(new_ub)
-                                    xvar.setub(new_ub)
-                                else:
-                                    xvar.setub(new_ub)
-                                if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"tightening ub of var {xvar.name} to {new_ub} from {old_ub}; reduced cost is {this_expected_rc}")
-                                update_var = True
-                                bounds_reduced_this_iter += 1
-                        # var at ub
-                        elif this_expected_rc > 0 + self.zero_rc_tol:
-                            new_lb = xvar.ub - (outer_bound - inner_bound)/ this_expected_rc
-                            old_lb = xvar.lb
-                            if new_lb > old_lb:
-                                if ndn_i in self._integer_nonants:
-                                    new_lb = np.ceil(new_lb)
-                                    xvar.setlb(new_lb)
-                                else:
-                                    xvar.setlb(new_lb)
-                                if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"tightening lb of var {xvar.name} to {new_lb} from {old_lb}; reduced cost is {this_expected_rc}")
-                                update_var = True
-                                bounds_reduced_this_iter += 1
-
-                    if update_var and persistent_solver:
-                        sub._solver_plugin.update_var(xvar)
-
-        total_bounds_tightened = bounds_reduced_this_iter / len(self.opt.local_scenarios)
-        if self.opt.cylinder_rank == 0 and self.verbose:
-            print(f"Bounds tightened by reduced cost: {int(round(total_bounds_tightened))}/{self.nonant_length}")
 
 
     def reduced_costs_fixing(self, reduced_costs, pre_iter0 = False):
@@ -307,12 +202,20 @@ class ReducedCostsFixer(Extension):
                                 print(f"unfixing var {xvar.name}; not converged in LP-LR")
                     else: # not nan, variable is converged in LP-LR
                         if xvar.fixed:
+                            xb = s._mpisppy_model.xbars[ndn_i].value
                             if (this_expected_rc <= target):
                                 xvar.unfix()
                                 update_var = True
                                 raw_fixed_this_iter -= 1
                                 if self.debug and self.opt.cylinder_rank == 0:
                                     print(f"unfixing var {xvar.name}; reduced cost is zero/below target in LP-LR")
+                            # in case somebody else unfixs a variable in another rank...
+                            if abs(xb - xvar.value) > self.bound_tol:
+                                xvar.unfix()
+                                update_var = True
+                                raw_fixed_this_iter -= 1
+                                if self.debug and self.opt.cylinder_rank == 0:
+                                    print(f"unfixing var {xvar.name}; xbar is differs from the fixed value")
                         else:
                             xb = s._mpisppy_model.xbars[ndn_i].value
                             if (this_expected_rc >= target):
