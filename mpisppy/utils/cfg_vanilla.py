@@ -517,6 +517,7 @@ def _fwph_options(cfg):
         "FW_verbose": cfg.verbose,
         "mip_solver_options": mip_solver_options,
         "qp_solver_options": qp_solver_options,
+        "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
     }
 
     return fw_options

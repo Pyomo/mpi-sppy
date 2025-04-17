@@ -113,9 +113,9 @@ class FWPH(mpisppy.phbase.PHBase):
         if (self.ph_converger):
             self.convobject = self.ph_converger(self)
 
-        if self.options.get("FW_LP_start_iterations", 1000) > 0:
+        if self.options.get("FW_LP_start_iterations", 0) > 0:
             global_toc("Starting LP PH...")
-            lp_iterations = self.options.get("FW_LP_start_iterations", 1000)
+            lp_iterations = self.options["FW_LP_start_iterations"]
             total_iterations = self.options["PHIterLimit"]
             self.options["PHIterLimit"] = lp_iterations
             integer_relaxer = pyo.TransformationFactory('core.relax_integer_vars')
@@ -150,7 +150,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 tee=teeme,
                 verbose=self.options["verbose"],
                 # sdm_iter_limit=20,
-                # FW_conv_thresh=-1,
+                # FW_conv_thresh=1e-8,
             )
             global_toc("Starting FW PH")
 
@@ -407,6 +407,10 @@ class FWPH(mpisppy.phbase.PHBase):
                 dtiming=dtiming,
                 tee=tee,
                 verbose=verbose,
+                # if the problem isn't feasible,
+                # becuase of the cutoff, we should
+                # probably keep going ??
+                need_solution=False,
             )
             self._remove_objective_cutoff(mip)
             # tmipsolve = time.perf_counter() - tbmipsolve

@@ -124,6 +124,8 @@ class ReducedCostsFixer(Extension):
             Field.OBJECTIVE_OUTER_BOUND,
             self.reduced_costs_spoke_index,
         )
+        if self.opt.cylinder_rank == 0:
+            print(f"RCFixer, reduced costs bound: {self.outer_bound_buf.value_array()[0]}")
         if self.reduced_cost_buf.is_new() and self.reduced_cost_buf.id() == self.outer_bound_buf.id():
             reduced_costs = self.reduced_cost_buf.value_array()
             this_outer_bound = self.outer_bound_buf.value_array()[0]
