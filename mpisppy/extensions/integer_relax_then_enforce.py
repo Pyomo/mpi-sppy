@@ -31,6 +31,7 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         for s in self.opt.local_scenarios.values():
             self.integer_relaxer.apply_to(s) 
         self._integers_relaxed = True
+        self._reenable_prox = False
 
     def _unrelax_integers(self):
         for sub in self.opt.local_subproblems.values():
@@ -45,8 +46,14 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
                     for v in vlist:
                         subproblem_solver.update_var(v)
         self._integers_relaxed = False
+        if not self.opt.prox_disabled:
+            self.opt._disable_prox()
+            self._reenable_prox = True
 
     def miditer(self):
+        if self._reenable_prox:
+            self.opt._reenable_prox()
+            self._reenable_prox = False
         if not self._integers_relaxed:
             return
         # time is running out
