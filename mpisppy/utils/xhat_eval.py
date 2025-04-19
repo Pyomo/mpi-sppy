@@ -300,6 +300,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             You probably want to call _save_nonants right before calling this
         """
         self._lazy_create_solvers()
+        rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -323,7 +324,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                         if this_vardata in node.surrogate_vardatas:
                             continue
                         if this_vardata.is_binary() or this_vardata.is_integer():
-                            this_vardata._value = round(cache[ndn][i])
+                            this_vardata._value = round(cache[ndn][i] + rounding_bias)
                         else:
                             this_vardata._value = cache[ndn][i]
                         this_vardata.fix()
@@ -339,6 +340,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             Loop over the scenarios to restore, but loop over subproblems
             to alert persistent solvers.
         """
+        rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -350,7 +352,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 if var in s._mpisppy_data.all_surrogate_nonants:
                     continue
                 if var.is_binary() or var.is_integer():
-                    var._value = round(var._value)
+                    var._value = round(var._value + rounding_bias)
                 var.fix()
                 if not self.bundling and persistent_solver is not None:
                     persistent_solver.update_var(var)

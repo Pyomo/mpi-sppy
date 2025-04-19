@@ -39,6 +39,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
             You probably want to call _save_nonants right before calling this
             copy/pasted from phabse _fix_nonants
         """
+        rounding_bias = self.opt.options.get("rounding_bias", 0.0)
         for k,s in self.opt.local_scenarios.items():
             persistent_solver = None
             if (sputils.is_persistent(s._solver_plugin)):
@@ -52,7 +53,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                     if this_vardata in node.surrogate_vardatas:
                         continue
                     if this_vardata.is_integer() or this_vardata.is_binary():
-                        this_vardata._value = round(s._mpisppy_model.xbars[(ndn,i)]._value)
+                        this_vardata._value = round(s._mpisppy_model.xbars[(ndn,i)]._value + rounding_bias)
                     else:
                         this_vardata._value = s._mpisppy_model.xbars[(ndn,i)]._value
 

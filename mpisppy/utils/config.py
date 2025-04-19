@@ -247,6 +247,12 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("rounding_bias",
+                           description="When rounding variables to integers, "
+                           "add the given value first. (default = 0.0)",
+                           domain=float,
+                           default=0.0)
+
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
                               description="For PH, linearize the proximal terms for "
