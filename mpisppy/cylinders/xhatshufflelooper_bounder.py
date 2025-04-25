@@ -13,7 +13,6 @@ import mpisppy.log
 from mpisppy.extensions.xhatbase import XhatBase
 from mpisppy.cylinders.xhatbase import XhatInnerBoundBase
 
-from mpisppy.cylinders.spwindow import Field
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.xhatshufflelooper_bounder",
@@ -98,21 +97,20 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
 
         xh_iter = 1
         while not self.got_kill_signal():
-            # When there is no iter0, the serial number must be checked.
             # (unrelated: uncomment the next line to see the source of delay getting an xhat)
-            # if self.get_serial_number() == 0:
-            #     continue
-
-            if self._locals[self._make_key(Field.NONANT, 0)].id() == 0:
-                continue
-
             if (xh_iter-1) % 100 == 0:
                 logger.debug(f'   Xhatshuffle loop iter={xh_iter} on rank {self.global_rank}')
                 logger.debug(f'   Xhatshuffle got from opt on rank {self.global_rank}')
 
-            if self.new_nonants:
+            new_nonants = self.update_nonants()
+
+            # When there is no iter0, the serial number must be checked.
+            if self._nonant_len_receive_buffer.id() == 0:
+                continue
+
+            if new_nonants:
                 # similar to above, not all ranks will agree on
-                # when there are new_nonants (in the same loop)
+                # when there are new nonants (in the same loop)
                 logger.debug(f'   *Xhatshuffle loop iter={xh_iter}')
                 logger.debug(f'   *got a new one! on rank {self.global_rank}')
                 logger.debug(f'   *localnonants={str(self.localnonants)}')
@@ -137,6 +135,10 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
                     if update:
                         _vb(f"   Updating best to {next_scendict}")
                         scenario_cycler.best = next_scendict["ROOT"]
+
+                if self.got_kill_signal():
+                    # time to go; don't solve next
+                    return
 
             next_scendict = scenario_cycler.get_next()
             if next_scendict is not None:
