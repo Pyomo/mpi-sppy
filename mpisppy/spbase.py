@@ -105,7 +105,8 @@ class SPBase:
             global_toc("Initializing SPBase")
 
         if self.n_proc > len(self.all_scenario_names):
-            raise RuntimeError("More ranks than scenarios")
+            raise RuntimeError(f"More ranks ({self.n_proc}) than scenarios"
+                               f" ({len(self.all_scenario_names)})")
 
         self._calculate_scenario_ranks()
         # Put the deprecation message in the init so they should only see it once per rank

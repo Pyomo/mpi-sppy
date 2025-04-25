@@ -28,8 +28,10 @@ from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+from mpisppy.extensions.primal_dual_rho import PrimalDualRho
 from mpisppy.extensions.gradient_extension import Gradient_extension
-from mpisppy.extensions.scenario_lpfiles import Scenario_lpfiles
+from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.utils.wxbarreader import WXBarReader
@@ -55,8 +57,8 @@ def _parse_args(m):
                       description="The string used for a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
                       domain=str,
                       default=None)
-    cfg.add_to_config(name="scenario_lpfiles",
-                      description="Invokes an extension that writes an model lp file and a nonants json file for each scenario before iteration 0",
+    cfg.add_to_config(name="write_scenario_lp_mps_files",
+                      description="Invokes an extension that writes an model lp file, mps file and a nonants json file for each scenario before iteration 0",
                       domain=bool,
                       default=False)
 
@@ -64,6 +66,8 @@ def _parse_args(m):
     # many models, e.g., farmer, need num_scens_required
     #  in which case, it should go in the inparser_adder function
     # cfg.num_scens_required()
+    # On the other hand, this program really wants cfg.num_scens somehow so
+    # maybe it should just require it.
 
     cfg.EF_base()  # If EF is slected, most other options will be moot
     # There are some arguments here that will not make sense for all models
@@ -81,6 +85,8 @@ def _parse_args(m):
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.norm_rho_args()
+    cfg.primal_dual_rho_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
@@ -120,7 +126,7 @@ def _name_lists(module, cfg, bundle_wrapper=None):
             "For now, stage2EFsolvern is required for multistage xhat"
     else:
         all_nodenames = None
-        num_scens = cfg.num_scens
+        num_scens = cfg.get("num_scens")  # maybe None is OK
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
@@ -230,8 +236,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         ext_classes.append(Gradient_extension)
         hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
 
-    if cfg.scenario_lpfiles:
-        ext_classes.append(Scenario_lpfiles)
+    if cfg.write_scenario_lp_mps_files:
+        ext_classes.append(Scenario_lp_mps_files)
 
     if cfg.W_and_xbar_reader:
         ext_classes.append(WXBarReader)
@@ -276,10 +282,17 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                 'tol': cfg.primal_dual_converger_tol,
                 'tracking': True}
 
-    ## norm rho adaptive rho (not the gradient version)
-    #if cfg.use_norm_rho_updater:
-    #    extension_adder(hub_dict, NormRhoUpdater)
-    #    hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
+    # norm rho adaptive rho (not the gradient version)
+    if cfg.use_norm_rho_updater:
+        vanilla.extension_adder(hub_dict, NormRhoUpdater)
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': cfg.verbose}
+
+    if cfg.use_primal_dual_rho_updater:
+        vanilla.extension_adder(hub_dict, PrimalDualRho)
+        hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {
+                'verbose': cfg.verbose,
+                'rho_update_threshold': cfg.primal_dual_rho_update_threshold,
+            }
 
     # FWPH spoke
     if cfg.fwph:
@@ -385,10 +398,18 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     wheel.spin()
 
     if cfg.solution_base_name is not None:
+        root_writer = getattr(module, "first_stage_solution_writer",
+                                     sputils.first_stage_nonant_npy_serializer)
+        tree_writer = getattr(module, "tree_solution_writer", None)
+    
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         wheel.write_first_stage_solution(f'{cfg.solution_base_name}.npy',
-                first_stage_solution_writer=sputils.first_stage_nonant_npy_serializer)
-        wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')    
+                first_stage_solution_writer=root_writer)
+        if tree_writer is not None:
+            wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir',
+                                      scenario_tree_solution_writer=tree_writer)
+        else:
+            wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote solution data.")
 
 
@@ -498,11 +519,25 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         print("Warning: non-optimal solver termination")
 
     global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
+
     if cfg.solution_base_name is not None:
+        root_writer = getattr(module, "ef_root_nonants_solution_writer", None)
+        tree_writer = getattr(module, "ef_tree_solution_writer", None)
+        
         sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
         sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
-        sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
+        if root_writer is not None:
+            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv',   # might overwite
+                                                  first_stage_solution_writer=root_writer)
+        else:
+            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv')            
+        if tree_writer is not None:
+            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
+                                          scenario_tree_solution_writer=tree_writer)
+        else:
+            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
+        
 
 def _model_fname():
     def _bad_news():
@@ -554,9 +589,13 @@ if __name__ == "__main__":
         fname = os.path.basename(model_fname)
         sys.path.append(dpath)
         module = importlib.import_module(fname)
-    
+
     cfg = _parse_args(module)
 
+    # Perhaps use an object as the so-called module.
+    if hasattr(module, "get_mpisppy_helper_object"):
+        module = module.get_mpisppy_helper_object(cfg)
+    
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
         # TBD: remove the need for dill if you are not reading or writing

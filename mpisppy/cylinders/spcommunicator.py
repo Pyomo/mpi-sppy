@@ -368,7 +368,7 @@ class SPCommunicator:
             is_new (bool): Indicates whether the "gotten" values are new,
                 based on the write_id.
         """
-        if not synchronize:
+        if synchronize:
             self.cylinder_comm.Barrier()
 
         last_id = buf.id()
@@ -383,7 +383,7 @@ class SPCommunicator:
             self.cylinder_comm.Allreduce((local_val, MPI.INT),
                                          (sum_ids, MPI.INT),
                                          op=MPI.SUM)
-            if new_id != sum_ids[0] / self.cylinder_comm.size:
+            if new_id * self.cylinder_comm.size != sum_ids[0]:
                 buf._is_new = False
                 return False
 
