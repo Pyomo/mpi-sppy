@@ -221,7 +221,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         """ This method attempts to update the best function we've found
         so far to prove given bounds. Because it's difficult in general
         to know if one linear function dominates another within a range
-        (and the answer maybe in conclusive), we'll settle for evaluting
+        (and the answer maybe inconclusive), we'll settle for evaluting
         the function at the current inner bound. If that point does not
         exist we will go some distance from the current lr_outer_bound.
         """

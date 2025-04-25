@@ -440,7 +440,7 @@ class SPCommunicator:
             is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_INNER_BOUND, idx)
             if is_new:
                 bound = recv_buf[0]
-                logger.debug("!! new InnerBound to opt {}".format(bound))
+                logger.debug(f"new InnerBound from {cls.__name__} in {self.__class__.__name__}, {bound=}")
                 self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
         logger.debug(f"{self.__class__.__name__} back from InnerBounds")
 
@@ -452,7 +452,7 @@ class SPCommunicator:
             is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_OUTER_BOUND, idx) 
             if is_new:
                 bound = recv_buf[0]
-                logger.debug("!! new OuterBound to opt {}".format(bound))
+                logger.debug(f"new OuterBound from {cls.__name__} in {self.__class__.__name__}, {bound=}")
                 self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
         logger.debug(f"{self.__class__.__name__} back from OuterBounds")
 
