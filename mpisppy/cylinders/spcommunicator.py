@@ -405,7 +405,7 @@ class SPCommunicator:
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
             is_new = self.get_receive_buffer(recv_buf, Field.NONANT_LOWER_BOUNDS, idx)
             if not is_new:
-                break
+                continue
             for s in self.opt.local_scenarios.values():
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     xvarlb = xvar.lb
@@ -418,7 +418,7 @@ class SPCommunicator:
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
             is_new = self.get_receive_buffer(recv_buf, Field.NONANT_UPPER_BOUNDS, idx)
             if not is_new:
-                break
+                continue
             for s in self.opt.local_scenarios.values():
                 for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
                     xvarub = xvar.ub
