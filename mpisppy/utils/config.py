@@ -247,6 +247,12 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("rounding_bias",
+                           description="When rounding variables to integers, "
+                           "add the given value first. (default = 0.0)",
+                           domain=float,
+                           default=0.0)
+
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
                               description="For PH, linearize the proximal terms for "
@@ -509,10 +515,15 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
-        self.add_to_config("fwph_iter_limit",
-                            description="maximum fwph iterations (default 10)",
+        self.add_to_config(name="fwph_hub",
+                           description="Use FWPH hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("fwph_sdm_iter_limit",
+                            description="maximum fwph SDM iterations (default 1)",
                             domain=int,
-                            default=10)
+                            default=1)
 
         self.add_to_config("fwph_weight",
                             description="fwph weight (default 0)",
@@ -528,12 +539,6 @@ class Config(pyofig.ConfigDict):
                             description="fwph tolerance for Gamma^t (default 1e-4)",
                             domain=float,
                             default=1e-4)
-
-        self.add_to_config("fwph_mipgap",
-                            description="mip gap option FW subproblems iterations (default None)",
-                            domain=float,
-                            default=None)
-
 
 
     def lagrangian_args(self):
@@ -578,9 +583,9 @@ class Config(pyofig.ConfigDict):
         
         self.add_to_config('rc_fixer_require_improving_lagrangian',
                             description="Only consider fixing / unfixing variables after the lagrangian "
-                                        "bound computed by the reduced cost spoke has improved. (default True)",
+                                        "bound computed by the reduced cost spoke has improved. (default False)",
                             domain=bool,
-                            default=True)
+                            default=False)
 
         self.add_to_config('rc_zero_tol',
                             description="vars with rc below tol will never be fixed",
@@ -911,6 +916,22 @@ class Config(pyofig.ConfigDict):
                            description="dual threshold for dirr during dynamic rho calcs",
                            domain=float,
                            default=0.1)        
+
+    def primal_dual_rho_args(self):
+        self.add_to_config("use_primal_dual_rho_updater",
+                         description="Use the primal dual rho updater",
+                         domain=bool,
+                         default=False)
+        self.add_to_config("primal_dual_rho_update_threshold",
+                         description="Update threshold for when primal and dual residuals are imbalanced (default=2.0)",
+                         domain=float,
+                         default=2.0)
+
+    def norm_rho_args(self):
+        self.add_to_config("use_norm_rho_updater",
+                         description="Use the norm rho updater",
+                         domain=bool,
+                         default=False)
 
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",

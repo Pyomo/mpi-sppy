@@ -15,7 +15,7 @@ import numpy as np
 import os
 import pandas as pd
 from mpisppy.extensions.extension import Extension
-from mpisppy.cylinders.spoke import ConvergerSpokeType
+from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke 
 
@@ -286,6 +286,7 @@ class PHTracker(Extension):
     def _get_bounds(self):
         spoke_bound = None
         if isinstance(self.spcomm, Spoke):
+            self.spcomm.update_hub_bounds()
             hub_inner_bound = self.spcomm.hub_inner_bound
             hub_outer_bound = self.spcomm.hub_outer_bound
             spoke_bound = self.spcomm.bound
@@ -365,11 +366,11 @@ class PHTracker(Extension):
             # compute spoke gap relative to hub bound so that negative gap means
             # the spoke is worse than the hub
 
-            if ConvergerSpokeType.OUTER_BOUND in self.spcomm.converger_spoke_types:
+            if Field.OBJECTIVE_OUTER_BOUND in self.spcomm.send_fields:
                 spoke_abs_gap = spoke_bound - hub_outer_bound  \
                     if self.opt.is_minimizing else hub_outer_bound - spoke_bound
                 spoke_rel_gap = self._compute_rel_gap(spoke_abs_gap, hub_outer_bound)
-            elif ConvergerSpokeType.INNER_BOUND in self.spcomm.converger_spoke_types:
+            elif Field.OBJECTIVE_INNER_BOUND in self.spcomm.send_fields:
                 spoke_abs_gap = hub_inner_bound - spoke_bound \
                     if self.opt.is_minimizing else spoke_bound - hub_inner_bound
                 spoke_rel_gap = self._compute_rel_gap(spoke_abs_gap, hub_inner_bound)

@@ -152,18 +152,9 @@ class SPOpt(SPBase):
         # high variance in set objective time (Feb 2023)?
         if update_objective and (sputils.is_persistent(s._solver_plugin)):
             set_objective_start_time = time.time()
-
-            active_objective_datas = list(s.component_data_objects(
-                pyo.Objective, active=True, descend_into=True))
-            if len(active_objective_datas) > 1:
-                raise RuntimeError('Multiple active objectives identified '
-                                   'for scenario {sn}'.format(sn=s._name))
-            elif len(active_objective_datas) < 1:
-                raise RuntimeError('Could not find any active objectives '
-                                   'for scenario {sn}'.format(sn=s._name))
-            else:
-                s._solver_plugin.set_objective(active_objective_datas[0])
-                set_objective_time = time.time() - set_objective_start_time
+            active_objective = sputils.find_active_objective(s)
+            s._solver_plugin.set_objective(active_objective)
+            set_objective_time = time.time() - set_objective_start_time
         else:
             set_objective_time = 0
 
@@ -622,6 +613,7 @@ class SPOpt(SPBase):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
+        rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -644,7 +636,7 @@ class SPOpt(SPBase):
                     if this_vardata in node.surrogate_vardatas:
                         continue
                     if this_vardata.is_binary() or this_vardata.is_integer():
-                        this_vardata._value = round(cache[ndn][i])
+                        this_vardata._value = round(cache[ndn][i] + rounding_bias)
                     else:
                         this_vardata._value = cache[ndn][i]
                     this_vardata.fix()
@@ -668,6 +660,7 @@ class SPOpt(SPBase):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
+        rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -696,7 +689,7 @@ class SPOpt(SPBase):
                 if this_vardata in node.surrogate_vardatas:
                     continue
                 if this_vardata.is_binary() or this_vardata.is_integer():
-                    this_vardata._value = round(root_cache[i])
+                    this_vardata._value = round(root_cache[i] + rounding_bias)
                 else:
                     this_vardata._value = root_cache[i]
                 this_vardata.fix()

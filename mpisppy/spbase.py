@@ -105,7 +105,8 @@ class SPBase:
             global_toc("Initializing SPBase")
 
         if self.n_proc > len(self.all_scenario_names):
-            raise RuntimeError("More ranks than scenarios")
+            raise RuntimeError(f"More ranks ({self.n_proc}) than scenarios"
+                               f" ({len(self.all_scenario_names)})")
 
         self._calculate_scenario_ranks()
         # Put the deprecation message in the init so they should only see it once per rank
@@ -319,6 +320,9 @@ class SPBase:
             scenario._mpisppy_data.nonant_indices = _nonant_indices
             scenario._mpisppy_data.all_surrogate_nonants = _all_surrogate_nonants
         self.nonant_length = len(_nonant_indices)
+        # sanity check the nonant length
+        for s in self.local_scenarios.values():
+            assert self.nonant_length == len(s._mpisppy_data.nonant_indices)
 
 
     def _attach_nlens(self):
