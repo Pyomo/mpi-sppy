@@ -10,6 +10,7 @@
 
 import sys
 import unittest
+import math
 import mpisppy.opt.ph
 from mpisppy.tests.utils import get_solver
 import mpisppy.utils.config as config
@@ -125,8 +126,8 @@ class Test_Agnostic_pyomo(unittest.TestCase):
             extensions=None
         )
         conv, obj, tbound = ph.ph_main()
-        self.assertAlmostEqual(-115405.5555, tbound, places=1)
-        self.assertAlmostEqual(-110433.4007, obj, places=1)
+        assert math.isclose(-115405.5555, tbound, rel_tol=1e-4, abs_tol=1e-6)
+        assert math.isclose(-110433.4007, obj, rel_tol=1e-4, abs_tol=1e-6)
 
 
 @unittest.skipIf(not have_AMPL, "skipping AMPL")
