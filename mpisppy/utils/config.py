@@ -280,6 +280,12 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.e-1)
 
+        self.add_to_config('warm_start_prox_approx',
+                           description="Manually warm-start solution from previous iteration "
+                                       "after adding proximal linearization cut.",
+                           domain=bool,
+                           default=False)        
+
         self.add_to_config("smoothing",
                            description="For PH, add a smoothing term to the objective",
                            domain=bool,

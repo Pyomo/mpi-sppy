@@ -592,6 +592,29 @@ class PHBase(mpisppy.spopt.SPOpt):
         elif dis_prox:
             self._disable_prox()
 
+        if self._prox_approx and (not self.prox_disabled) and self._PHIter>0 and self._warm_start_prox_approx:
+            for sn, s in self.local_scenarios.items():
+                if sputils.is_persistent(s._solver_plugin) and hasattr(s._solver_plugin,'set_var_attr'):
+                    # Set current value as start value for next iteration
+                    for var in s.component_data_objects(
+                            ctype=pyo.Var,
+                            descend_into=True,
+                            active=True,
+                            sort=False):
+                        try:
+                            if var.value is not None:
+                                s._solver_plugin.set_var_attr(var,'Start',var.value)
+                            elif 'xsqvar' in var.name and self._PHIter==1:
+                                # During Iter 1, xvarsqrd vars will have None value, set to 0
+                                s._solver_plugin.set_var_attr(var,'Start',0)
+                            else:
+                                # Unexpected, let an error be thrown
+                                pass
+                        except AttributeError as e:
+                            # If var value is None, gurobipy throws an AttributeError
+                            print(var.name, var.value, type(var.value))
+                            raise e
+
         if self._prox_approx and (not self.prox_disabled):
             self._update_prox_approx()
 
@@ -626,7 +649,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
             #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
-                prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
+                new_cut_added = prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
+                if new_cut_added and self._warm_start_prox_approx and persistent_solver:
+                    persistent_solver.set_var_attr(prox_approx_manager.xvarsqrd,
+                                                   'Start',
+                                                   prox_approx_manager.xvar.value**2)
 
 
     def attach_Ws_and_prox(self):
@@ -703,6 +730,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
+
+            if 'warm_start_prox_approx' in self.options:
+                self._warm_start_prox_approx = self.options['warm_start_prox_approx']
+            else:
+                self._warm_start_prox_approx = False
+                
             # The proximal approximation code now checks the tolerance based on the x-coordinates
             # as opposed to the y-coordinates. Therefore, we will use the square root of the
             # y-coordinate tolerance.
