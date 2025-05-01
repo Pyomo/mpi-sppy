@@ -461,7 +461,7 @@ class SPCommunicator:
         if self._outer_bound_update(new_bound, current_bound):
             if cls is None:
                 self.latest_ob_char = char
-                self.last_ob_idx = 0
+                self.last_ob_idx = self.strata_rank
             else:
                 self.latest_ob_char = cls.converger_spoke_char
                 self.last_ob_idx = idx
@@ -474,7 +474,7 @@ class SPCommunicator:
         if self._inner_bound_update(new_bound, current_bound):
             if cls is None:
                 self.latest_ib_char = char
-                self.last_ib_idx = 0
+                self.last_ib_idx = self.strata_rank
             else:
                 self.latest_ib_char = cls.converger_spoke_char
                 self.last_ib_idx = idx
