@@ -1069,11 +1069,11 @@ class Config(pyofig.ConfigDict):
         '''
         read_config_dict = dict()
         with open(path_to_configfile,'r') as f:
-            l = f.readline()
-            while l:
-                l = l.split('#',1)[0] # Ignore anything that may come after an '#'
-                if len(l)>0:
-                    l_args = l.split(':') # File lines are arg_name: arg_value. There could be ':' in arg_value
+            line = f.readline()
+            while line:
+                line = line.split('#',1)[0] # Ignore anything that may come after an '#'
+                if len(line)>0:
+                    l_args = line.split(':') # File lines are arg_name: arg_value. There could be ':' in arg_value
                     arg_name = 'CONFIGBLOCK.'+l_args[0].strip()
                     if len(l_args)>2:
                         arg_val = ':'.join(l_args[1:]).strip()
@@ -1083,7 +1083,7 @@ class Config(pyofig.ConfigDict):
                     if arg_val.lower() not in ('none', 'false'):
                         # None values are defaults, do not read
                         read_config_dict[arg_name]=arg_val
-                l = f.readline()
+                line = f.readline()
         return read_config_dict
 
     def _import_read_config_dict(self, read_config_dict):
