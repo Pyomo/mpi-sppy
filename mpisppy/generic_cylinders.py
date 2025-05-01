@@ -387,7 +387,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     # if the user dares, let them mess with the hubdict prior to solve
     if hasattr(module,'hub_and_spoke_dict_callback'):
-        module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict)
+        module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict, cfg)
 
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)

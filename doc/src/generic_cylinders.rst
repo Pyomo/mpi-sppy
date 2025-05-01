@@ -34,8 +34,9 @@ Advanced manipulation of the hub and spokes dicts
 Advanced users might want to directly manipulate the hub and spoke dicts
 immediately before ``spin_the_wheel()`` is called. If the module (or class)
 contains a function called ``hub_and_spoke_dict_callback()``, it will be called
-immediately before the ``WheelSpinner`` object is created, and the ``hub_dict`` and
-``list_of_spoke_dict`` will be passed to it. See ``generic_cylinders.py`` for details.
+immediately before the ``WheelSpinner`` object is created. The ``hub_dict``,
+``list_of_spoke_dict``, and ``cfg`` object will be passed to it.
+See ``generic_cylinders.py`` for details.
 
     
 Pickled Scenarios
