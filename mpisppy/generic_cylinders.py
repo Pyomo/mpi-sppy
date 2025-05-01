@@ -247,13 +247,16 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.user_defined_extensions is not None:
         for ext_name in cfg.user_defined_extensions:
             module = sputils.module_name_to_module(ext_name)
+            ext_classes = []
+            # Collect all valid Extension instances in the module to ensure no valid extensions are missed.
             for name in dir(module):
                 if isinstance(getattr(module, name), Extension):
-                    ext_class = getattr(module, name)
-                    break
-            else: # no break
+                    ext_classes.append(getattr(module, name))
+            if not ext_classes:
                 raise RuntimeError(f"Could not find an mpisppy extension in module {ext_name}")
-            vanilla.extension_adder(hub_dict, ext_class)
+            # Add all found extensions to the hub_dict
+            for ext_class in ext_classes:
+                vanilla.extension_adder(hub_dict, ext_class)
             # grab JSON for this module's option dictionary
             json_filename = ext_name+".json"
             if os.path.exists(json_filename):
