@@ -85,3 +85,10 @@ example function in ``examples.netdes.netdes_with_class.py''.
 
 .. Warning::
    Misspelled function names will not result in an error message, nor will they be called, of course.
+
+config-file
+-----------
+
+This specifies a text file that may contain any command line options.
+Options on the command line take precedence over values set in the file.
+
