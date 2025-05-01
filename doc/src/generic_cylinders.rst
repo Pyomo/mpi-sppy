@@ -91,4 +91,6 @@ config-file
 
 This specifies a text file that may contain any command line options.
 Options on the command line take precedence over values set in the file.
-
+There is an example text file in ``examples.sizes.sizes_config.txt``.
+This option gets pulled in with with ``cfg.popular_args`` and processed by ``cfg.parse_command_line``.
+Note that required arguments such as ``num_scens`` *must* be on the command line.
