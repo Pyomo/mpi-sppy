@@ -243,7 +243,7 @@ def attach_PH_to_objective(Ag, sname, scenario, add_duals, add_prox):
 
     _copy_Ws_xbars_rho_from_host(scenario)
 
-def solve_one(Ag, s, solve_keyword_args, gripe, tee):
+def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     _copy_Ws_xbars_rho_from_host(s)
     gd = s._agnostic_dict
     gs = gd["scenario"]  # guest scenario handle
