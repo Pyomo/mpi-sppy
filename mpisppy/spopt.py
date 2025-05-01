@@ -8,11 +8,13 @@
 ###############################################################################
 # base class for hub and for spoke strata
 
+import os
 import logging
 import time
 import math
 import inspect
 import random
+import pathlib
 
 import numpy as np
 from mpisppy import MPI
@@ -70,6 +72,17 @@ class SPOpt(SPBase):
         self.current_solver_options = None
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
+
+        self._subproblem_solve_index = {}
+
+        if self.options.get("solver_log_dir", None):
+            if self.global_rank == 0:
+                # create the directory if not there
+                directory = self.options["solver_log_dir"]
+                try:
+                    pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
+                except FileExistsError:
+                    raise FileExistsError(f"solver-log-dir={directory} already exists!")
 
         if (self.extensions is not None):
             if self.extension_kwargs is None:
@@ -178,6 +191,14 @@ class SPOpt(SPBase):
             # solve_keyword_args["use_signal_handling"] = False
             pass
 
+        if self.options.get("solver_log_dir", None):
+            if k not in self._subproblem_solve_index:
+                self._subproblem_solve_index[k] = 0
+            dir_name = self.options["solver_log_dir"]
+            file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
+            solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            self._subproblem_solve_index[k] += 1
+
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
             assert not disable_pyomo_signal_handling, "Not thinking about agnostic APH yet"
@@ -198,10 +219,7 @@ class SPOpt(SPBase):
                 s._mpisppy_data.scenario_feasible = False
 
                 if gripe:
-                    name = self.__class__.__name__
-                    if self.spcomm:
-                        name = self.spcomm.__class__.__name__
-                    print (f"[{name}] Solve failed for scenario {s.name}")
+                    print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
                     if results is not None:
                         print ("status=", results.solver.status)
                         print ("TerminationCondition=",

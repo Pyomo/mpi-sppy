@@ -78,6 +78,8 @@ def shared_options(cfg):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
     if _hasit(cfg, "reduced_costs"):
         shoptions["rc_bound_tol"] = cfg.rc_bound_tol
+    if _hasit(cfg, "solver_log_dir"):
+        shoptions["solver_log_dir"] = cfg.solver_log_dir
 
     return shoptions
 
