@@ -1,4 +1,5 @@
-import os, json
+import os
+import json
 import mpisppy.extensions.extension
 
 class DatahashCollector(mpisppy.extensions.extension.Extension):
