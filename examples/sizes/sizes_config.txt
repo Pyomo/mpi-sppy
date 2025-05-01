@@ -1,0 +1,8 @@
+linearize_proximal_terms:true
+bundles_per_rank:0
+max_iterations:5
+default_rho:1
+lagrangian:true
+xhatshuffle:true
+iter0_mipgap:0.01
+iterk_mipgap:0.001

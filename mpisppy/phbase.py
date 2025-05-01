@@ -627,6 +627,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
+                prox_approx_manager.xvarsqrd._value = prox_approx_manager.xvar.value**2
 
 
     def attach_Ws_and_prox(self):
@@ -703,6 +704,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.prox_approx_tol = self.options['proximal_linearization_tolerance']
             else:
                 self.prox_approx_tol = 1.e-1
+
             # The proximal approximation code now checks the tolerance based on the x-coordinates
             # as opposed to the y-coordinates. Therefore, we will use the square root of the
             # y-coordinate tolerance.
@@ -724,7 +726,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 # set-up pyomo IndexVar, but keep it sparse
                 # since some nonants might be binary
                 # Define the first cut to be _xsqvar >= 0
-                scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False, bounds=(0, None))
+                scenario._mpisppy_model.xsqvar = pyo.Var(scenario._mpisppy_data.nonant_indices, dense=False, bounds=(0, None), initialize=0.0)
                 scenario._mpisppy_model.xsqvar_cuts = pyo.Constraint(scenario._mpisppy_data.nonant_indices, pyo.Integers)
                 scenario._mpisppy_data.xsqvar_prox_approx = {}
                 try:
