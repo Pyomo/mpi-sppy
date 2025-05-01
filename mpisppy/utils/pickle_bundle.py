@@ -16,7 +16,8 @@
 # BTW: ssn (not in this repo) uses this as of March 2022
 
 import os
-import dill  
+from pyomo.common.dependencies import attempt_import
+dill, dill_available = attempt_import("dill")
 
 def dill_pickle(model, fname):
     """ serialize model using dill to file name"""
