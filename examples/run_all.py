@@ -158,7 +158,6 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
 
         os.remove(npyfile)
     os.chdir("..")
-
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
@@ -257,10 +256,8 @@ do_one("netdes", "netdes_cylinders.py", 4,
 do_one("sizes",
        "sizes_cylinders.py",
        3,
-       "--linearize-proximal-terms "
-       "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
-       "--default-rho=1 --lagrangian --xhatshuffle "
-       "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
+       "--config-file=sizes_config.txt "
+       "--num-scens=10 "
        "--solver-name={}".format(solver_name))
 
 do_one("sizes",
