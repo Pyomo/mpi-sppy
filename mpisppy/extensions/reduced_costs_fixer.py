@@ -215,7 +215,7 @@ class ReducedCostsFixer(Extension):
                                 update_var = True
                                 raw_fixed_this_iter -= 1
                                 if self.debug and self.opt.cylinder_rank == 0:
-                                    print(f"unfixing var {xvar.name}; xbar is differs from the fixed value")
+                                    print(f"unfixing var {xvar.name}; xbar differs from the fixed value")
                         else:
                             xb = s._mpisppy_model.xbars[ndn_i].value
                             if (this_expected_rc >= target):
