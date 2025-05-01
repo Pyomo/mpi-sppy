@@ -26,7 +26,7 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
         if extensions:
             self.opt.extobject.post_iter0()
 
-        self.bound = self.trivial_bound
+        self.send_bound(self.trivial_bound)
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
@@ -49,6 +49,6 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
             if extensions:
                 self.opt.extobject.enditer()
             if bound is not None:
-                self.bound = bound
+                self.send_bound(bound)
             if extensions:
                 self.opt.extobject.enditer_after_sync()

@@ -28,6 +28,8 @@ from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
+from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
+from mpisppy.extensions.primal_dual_rho import PrimalDualRho
 from mpisppy.extensions.gradient_extension import Gradient_extension
 from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
@@ -83,6 +85,8 @@ def _parse_args(m):
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
+    cfg.norm_rho_args()
+    cfg.primal_dual_rho_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
     cfg.tracking_args()
@@ -278,10 +282,17 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                 'tol': cfg.primal_dual_converger_tol,
                 'tracking': True}
 
-    ## norm rho adaptive rho (not the gradient version)
-    #if cfg.use_norm_rho_updater:
-    #    extension_adder(hub_dict, NormRhoUpdater)
-    #    hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': True}
+    # norm rho adaptive rho (not the gradient version)
+    if cfg.use_norm_rho_updater:
+        vanilla.extension_adder(hub_dict, NormRhoUpdater)
+        hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': cfg.verbose}
+
+    if cfg.use_primal_dual_rho_updater:
+        vanilla.extension_adder(hub_dict, PrimalDualRho)
+        hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {
+                'verbose': cfg.verbose,
+                'rho_update_threshold': cfg.primal_dual_rho_update_threshold,
+            }
 
     # FWPH spoke
     if cfg.fwph:
