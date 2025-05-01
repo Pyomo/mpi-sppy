@@ -143,7 +143,7 @@ class ReducedCostsFixer(Extension):
             ## End if
         ## End if
         if self.fix_fraction_target > 0.0 and self._current_reduced_costs is not None:
-            # makes sense to run this every iteration becuase xbar can change!!
+            # makes sense to run this every iteration because xbar can change!!
             self.reduced_costs_fixing(self._current_reduced_costs)
         ## End if
 
