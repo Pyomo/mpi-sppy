@@ -618,6 +618,7 @@ class SPOpt(SPBase):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
+        rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -640,7 +641,7 @@ class SPOpt(SPBase):
                     if this_vardata in node.surrogate_vardatas:
                         continue
                     if this_vardata.is_binary() or this_vardata.is_integer():
-                        this_vardata._value = round(cache[ndn][i])
+                        this_vardata._value = round(cache[ndn][i] + rounding_bias)
                     else:
                         this_vardata._value = cache[ndn][i]
                     this_vardata.fix()
@@ -664,6 +665,7 @@ class SPOpt(SPBase):
         NOTE:
             You probably want to call _save_nonants right before calling this
         """
+        rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
@@ -692,7 +694,7 @@ class SPOpt(SPBase):
                 if this_vardata in node.surrogate_vardatas:
                     continue
                 if this_vardata.is_binary() or this_vardata.is_integer():
-                    this_vardata._value = round(root_cache[i])
+                    this_vardata._value = round(root_cache[i] + rounding_bias)
                 else:
                     this_vardata._value = root_cache[i]
                 this_vardata.fix()

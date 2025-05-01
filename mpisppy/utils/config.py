@@ -247,10 +247,16 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("rounding_bias",
+                           description="When rounding variables to integers, "
+                           "add the given value first. (default = 0.0)",
+                           domain=float,
+                           default=0.0)
+
         self.add_to_config("config_file",
                             description="Path to file containing config options",
                             domain=str,
-                            default='')
+                            default='')        
 
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
@@ -933,6 +939,22 @@ class Config(pyofig.ConfigDict):
                            description="dual threshold for dirr during dynamic rho calcs",
                            domain=float,
                            default=0.1)        
+
+    def primal_dual_rho_args(self):
+        self.add_to_config("use_primal_dual_rho_updater",
+                         description="Use the primal dual rho updater",
+                         domain=bool,
+                         default=False)
+        self.add_to_config("primal_dual_rho_update_threshold",
+                         description="Update threshold for when primal and dual residuals are imbalanced (default=2.0)",
+                         domain=float,
+                         default=2.0)
+
+    def norm_rho_args(self):
+        self.add_to_config("use_norm_rho_updater",
+                         description="Use the norm rho updater",
+                         domain=bool,
+                         default=False)
 
     def converger_args(self):
         self.add_to_config("use_norm_rho_converger",

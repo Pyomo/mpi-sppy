@@ -73,19 +73,19 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
-        self.bound = self.trivial_bound
+        self.send_bound(self.trivial_bound)
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
         while not self.got_kill_signal():
-            if self.new_Ws:
+            if self.update_Ws():
                 if extensions:
                     self.opt.extobject.miditer()
                 bound = self._set_weights_and_solve(need_solution=need_solution)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
-                    self.bound = bound
+                    self.send_bound(bound)
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
@@ -95,4 +95,4 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 self.opt.Update_W(verbose)
                 bound = self.lagrangian(need_solution=need_solution)
                 if bound is not None:
-                    self.bound = bound
+                    self.send_bound(bound)

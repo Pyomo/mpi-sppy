@@ -76,7 +76,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}')
                 logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
 
-            if self.new_nonants:
+            if self.update_nonants():
 
                 local_candidate = self.extract_local_candidate_soln()
 
@@ -89,6 +89,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 candidate = global_candidate.round()
                 '''
 
+                rounding_bias = self.opt.options.get("rounding_bias", 0.0)
                 # Everyone has the candidate solution at this point
                 for s in self.opt.local_scenarios.values():
                     is_pers = sputils.is_persistent(s._solver_plugin)
@@ -99,7 +100,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                             continue
                         val = global_candidate[ix]
                         if var.is_binary() or var.is_integer():
-                            val = round(val)
+                            val = round(val + rounding_bias)
                         var.fix(val)
                         if (is_pers):
                             solver.update_var(var)
