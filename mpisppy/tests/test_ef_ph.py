@@ -16,6 +16,7 @@ version matter a lot, so we often just do smoke tests.
 import os
 import glob
 import json
+import math
 import unittest
 import pandas as pd
 import pyomo.environ as pyo
@@ -32,7 +33,7 @@ from mpisppy.extensions.xhatspecific import XhatSpecific
 from mpisppy.extensions.xhatxbar import XhatXbar
 from mpisppy.tests.utils import get_solver,round_pos_sig
 
-__version__ = 0.55
+__version__ = 0.56
 
 solver_available,solver_name, persistent_available, persistent_solver_name= get_solver()
 
@@ -215,6 +216,22 @@ class Test_sizes(unittest.TestCase):
         )
         conv, obj, tbound = ph.ph_main()
 
+    @unittest.skipIf(not solver_available,
+                     "no solver is available")
+    def test_ph_basic_warmstart(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 2
+        options["warmstart_subproblems"] = True
+        ph = mpisppy.opt.ph.PH(
+            options,
+            self.all3_scenario_names,
+            scenario_creator,
+            scenario_denouement,
+            scenario_creator_kwargs={"scenario_count": 3},
+        )
+        conv, obj, tbound = ph.ph_main()
+        print(f"warmstart_subproblems ph {obj=}")
+        assert(math.isclose(obj, -16418049.260124115, rel_tol=0.001))
 
     @unittest.skipIf(not solver_available,
                      "no solver is available")
@@ -385,7 +402,7 @@ class Test_sizes(unittest.TestCase):
                      "glpk is not available")
     def test_scenario_lpwriter_extension(self):
         print("test scenarip_lpwriter")
-        from mpisppy.extensions.scenario_lpfiles import Scenario_lpfiles
+        from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
         options = self._copy_of_base_options()
         options["iter0_solver_options"] = {"mipgap": 0.1}    
         options["PHIterLimit"] = 0
@@ -398,13 +415,14 @@ class Test_sizes(unittest.TestCase):
             scenario_creator,
             scenario_denouement,
             scenario_creator_kwargs={"scenario_count": 3},
-            extensions=Scenario_lpfiles,
+            extensions=Scenario_lp_mps_files,
         )
         conv, basic_obj, tbound = ph.ph_main()
         # The idea is to detect a change in Pyomo's writing of lp files
         with open("Scenario1_nonants.json", "r") as jfile:
             nonants_by_node = json.load(jfile)
-        vname = nonants_by_node["ROOT"][0]  # first name in the file
+        # vname is first name in the file            
+        vname = nonants_by_node["treeData"]["ROOT"]["nonAnts"][0]
         gotit = False
         with open("Scenario1.lp", 'r') as lpfile:
             for line in lpfile:
