@@ -1083,7 +1083,7 @@ class Config(pyofig.ConfigDict):
         with open(path_to_configfile,'r') as f:
             line = f.readline()
             while line:
-                line = line.split('#',1)[0] # Ignore anything that may come after an '#'
+                line = line.split('#',1)[0].strip() # Ignore anything that may come after an '#'
                 if len(line)>0:
                     l_args = line.split(':') # File lines are arg_name: arg_value. There could be ':' in arg_value
                     arg_name = 'CONFIGBLOCK.'+l_args[0].strip()
