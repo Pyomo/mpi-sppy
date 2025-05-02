@@ -27,6 +27,9 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         # Tell the hub about the most recent bound
         self.send_bound(self.opt._local_bound)
 
+        # Update the nonant bounds, if possible
+        self.receive_nonant_bounds()
+
     def finalize(self):
         # The FWPH spoke can call "finalize" before it
         # even starts doing anything, so its possible
