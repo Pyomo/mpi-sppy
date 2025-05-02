@@ -22,6 +22,7 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 from pyomo.common.collections import ComponentSet
+from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
@@ -206,6 +207,8 @@ class SPOpt(SPBase):
             dir_name = self.options["solver_log_dir"]
             file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
             solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            if isinstance(s._solver_plugin, GurobiDirect):
+                solve_keyword_args["keepfiles"] = True
             self._subproblem_solve_index[k] += 1
 
         Ag = getattr(self, "Ag", None)  # agnostic
