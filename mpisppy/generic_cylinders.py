@@ -417,6 +417,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote solution data.")
 
+    if hasattr(module, "custom_writer"):
+        module.custom_writer(wheel, cfg)
+
 
 #==========
 def _write_scenarios(module,
@@ -542,6 +545,9 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         else:
             sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
+
+    if hasattr(module, "custom_writer"):
+        module.custom_writer(ef, cfg)
         
 
 def _model_fname():
