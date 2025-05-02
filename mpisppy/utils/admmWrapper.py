@@ -137,7 +137,7 @@ class AdmmWrapper():
                         s.del_component(v2str)
                         s.add_component(v2str, v)
 
-                        v.fix(0)
+                        v.fix(0)  # pylint: disable=no-member
                         self.varprob_dict[s].append((id(v),0))
                     else:
                         error_list2.append((sname,vstr))

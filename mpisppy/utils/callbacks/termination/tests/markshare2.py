@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# pylint: skip-file
 '''
 markshare2 instance from MIPLIB 2017:
     https://miplib.zib.de/instance_details_markshare2.html
