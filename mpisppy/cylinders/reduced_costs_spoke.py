@@ -345,8 +345,9 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         if bounds_modified > 0:
             global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
 
-    def do_while_waiting_for_new_Ws(self, need_solution):
-        super().do_while_waiting_for_new_Ws(need_solution=need_solution)
+    def do_while_waiting_for_new_Ws(self, need_solution, warmstart=False):
+        # RC is an LP, should not need a warmstart with _value
+        super().do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=False)
         # might as well see if a tighter upper bound has come along
         self.extract_and_store_updated_nonant_bounds(new_dual=False)
         self.update_nonant_bounds()
