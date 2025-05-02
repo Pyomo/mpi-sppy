@@ -207,6 +207,8 @@ class SPOpt(SPBase):
             dir_name = self.options["solver_log_dir"]
             file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
             solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
+            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
             if isinstance(s._solver_plugin, GurobiDirect):
                 solve_keyword_args["keepfiles"] = True
             self._subproblem_solve_index[k] += 1
