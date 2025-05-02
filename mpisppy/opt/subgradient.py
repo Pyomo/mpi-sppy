@@ -53,6 +53,7 @@ class Subgradient(mpisppy.opt.ph.PH):
                    tee=False,
                    verbose=False,
                    need_solution=True,
+                   warmstart=False,
                    ):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
@@ -87,6 +88,8 @@ class Subgradient(mpisppy.opt.ph.PH):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
         """
         super().solve_loop(
             solver_options=solver_options,
@@ -99,6 +102,7 @@ class Subgradient(mpisppy.opt.ph.PH):
             tee=tee,
             verbose=verbose,
             need_solution=need_solution,
+            warmstart=warmstart,
         )
 
         # set self.best_bound_obj_val if we don't have any additional fixed variables

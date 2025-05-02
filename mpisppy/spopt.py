@@ -8,11 +8,13 @@
 ###############################################################################
 # base class for hub and for spoke strata
 
+import os
 import logging
 import time
 import math
 import inspect
 import random
+import pathlib
 
 import numpy as np
 from mpisppy import MPI
@@ -28,6 +30,7 @@ from mpisppy.opt.presolve import SPPresolve
 
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
+
 
 class SPOpt(SPBase):
     """ Defines optimization methods for hubs and spokes """
@@ -71,6 +74,17 @@ class SPOpt(SPBase):
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
 
+        self._subproblem_solve_index = {}
+
+        if self.options.get("solver_log_dir", None):
+            if self.global_rank == 0:
+                # create the directory if not there
+                directory = self.options["solver_log_dir"]
+                try:
+                    pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
+                except FileExistsError:
+                    raise FileExistsError(f"solver-log-dir={directory} already exists!")
+
         if (self.extensions is not None):
             if self.extension_kwargs is None:
                 self.extobject = self.extensions(self)
@@ -109,7 +123,9 @@ class SPOpt(SPBase):
                   verbose=False,
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
-                  need_solution=True):
+                  need_solution=True,
+                  warmstart=sputils.WarmstartStatus.FALSE,
+                  ):
         """ Solve one subproblem.
 
         Args:
@@ -136,6 +152,8 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
 
         Returns:
             float:
@@ -174,9 +192,21 @@ class SPOpt(SPBase):
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
-        elif disable_pyomo_signal_handling:
+        if warmstart and self.options.get("warmstart_subproblems", False):
+            if warmstart == sputils.WarmstartStatus.CHECK:
+                warmstart = self._check_if_user_provided_solution(k, s)
+            solve_keyword_args["warmstart"] = warmstart
+        if disable_pyomo_signal_handling:
             # solve_keyword_args["use_signal_handling"] = False
             pass
+
+        if self.options.get("solver_log_dir", None):
+            if k not in self._subproblem_solve_index:
+                self._subproblem_solve_index[k] = 0
+            dir_name = self.options["solver_log_dir"]
+            file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
+            solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            self._subproblem_solve_index[k] += 1
 
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
@@ -198,10 +228,7 @@ class SPOpt(SPBase):
                 s._mpisppy_data.scenario_feasible = False
 
                 if gripe:
-                    name = self.__class__.__name__
-                    if self.spcomm:
-                        name = self.spcomm.__class__.__name__
-                    print (f"[{name}] Solve failed for scenario {s.name}")
+                    print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
                     if results is not None:
                         print ("status=", results.solver.status)
                         print ("TerminationCondition=",
@@ -262,7 +289,9 @@ class SPOpt(SPBase):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False,
-                   need_solution=True):
+                   need_solution=True,
+                   warmstart=sputils.WarmstartStatus.FALSE,
+                   ):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -290,6 +319,8 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
         """
 
         """ Developer notes:
@@ -332,6 +363,7 @@ class SPOpt(SPBase):
                     gripe=gripe,
                     disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                     need_solution=need_solution,
+                    warmstart=warmstart,
                 )
             )
 
@@ -962,6 +994,31 @@ class SPOpt(SPBase):
         for sub_name, sub in self.local_subproblems.items():
             for s_name in sub.scen_list:
                 yield sub_name, sub, s_name, self.local_scenarios[s_name]
+
+    def _check_if_user_provided_solution(self, k, sub):
+        found_one_set = False
+        found_one_not_set = False
+        for s_name in sub.scen_list:
+            s = self.local_scenarios[s_name]
+            for xvar in s._mpisppy_data.nonant_indices.values():
+                if xvar.fixed:
+                    continue
+                if xvar._value is None:
+                    found_one_not_set = True
+                    if found_one_set:
+                        break
+                else:
+                    found_one_set = True
+                    if found_one_not_set:
+                        break
+            else: # no break
+                assert found_one_set != found_one_not_set
+                if found_one_set:
+                    return True
+                else:
+                    return False
+        print(f"WARNING from {self._get_cylinder_name()}: Subproblem {k}: found partial warmstart!")
+        return True
 
 
 # these parameters should eventually be promoted to a non-PH
