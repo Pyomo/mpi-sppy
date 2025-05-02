@@ -31,6 +31,7 @@ from mpisppy.opt.presolve import SPPresolve
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
 
+
 class SPOpt(SPBase):
     """ Defines optimization methods for hubs and spokes """
 
@@ -122,7 +123,9 @@ class SPOpt(SPBase):
                   verbose=False,
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
-                  need_solution=True):
+                  need_solution=True,
+                  warmstart=sputils.WarmstartStatus.FALSE,
+                  ):
         """ Solve one subproblem.
 
         Args:
@@ -149,6 +152,8 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
 
         Returns:
             float:
@@ -187,7 +192,11 @@ class SPOpt(SPBase):
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
-        elif disable_pyomo_signal_handling:
+        if warmstart and self.options.get("warmstart_subproblems", False):
+            if warmstart == sputils.WarmstartStatus.CHECK:
+                warmstart = self._check_if_user_provided_solution(k, s)
+            solve_keyword_args["warmstart"] = warmstart
+        if disable_pyomo_signal_handling:
             # solve_keyword_args["use_signal_handling"] = False
             pass
 
@@ -280,7 +289,9 @@ class SPOpt(SPBase):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False,
-                   need_solution=True):
+                   need_solution=True,
+                   warmstart=sputils.WarmstartStatus.FALSE,
+                   ):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -308,6 +319,8 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
         """
 
         """ Developer notes:
@@ -350,6 +363,7 @@ class SPOpt(SPBase):
                     gripe=gripe,
                     disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                     need_solution=need_solution,
+                    warmstart=warmstart,
                 )
             )
 
@@ -982,6 +996,31 @@ class SPOpt(SPBase):
         for sub_name, sub in self.local_subproblems.items():
             for s_name in sub.scen_list:
                 yield sub_name, sub, s_name, self.local_scenarios[s_name]
+
+    def _check_if_user_provided_solution(self, k, sub):
+        found_one_set = False
+        found_one_not_set = False
+        for s_name in sub.scen_list:
+            s = self.local_scenarios[s_name]
+            for xvar in s._mpisppy_data.nonant_indices.values():
+                if xvar.fixed:
+                    continue
+                if xvar._value is None:
+                    found_one_not_set = True
+                    if found_one_set:
+                        break
+                else:
+                    found_one_set = True
+                    if found_one_not_set:
+                        break
+            else: # no break
+                assert found_one_set != found_one_not_set
+                if found_one_set:
+                    return True
+                else:
+                    return False
+        print(f"WARNING from {self._get_cylinder_name()}: Subproblem {k}: found partial warmstart!")
+        return True
 
 
 # these parameters should eventually be promoted to a non-PH

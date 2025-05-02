@@ -188,6 +188,11 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
+        self.add_to_config("warmstart_subproblems",
+                           description="Warmstart subproblems from prior solution.",
+                           domain=bool,
+                           default=False)
+
         self.add_solver_specs(prefix="")
 
         self.add_to_config("seed",
