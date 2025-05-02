@@ -131,10 +131,10 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             s.rc = pyo.Suffix(direction=pyo.Suffix.IMPORT)
         super().lagrangian_prep()
 
-    def lagrangian(self, need_solution=True):
+    def lagrangian(self, need_solution=True, warmstart=False):
         if not need_solution:
             raise RuntimeError("ReducedCostsSpoke always needs a solution to work")
-        bound = super().lagrangian(need_solution=need_solution)
+        bound = super().lagrangian(need_solution=need_solution, warmstart=False)
         if bound is not None:
             self.extract_and_store_reduced_costs()
             self.update_bounding_functions(bound)

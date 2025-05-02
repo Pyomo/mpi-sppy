@@ -26,7 +26,7 @@ import numpy as np
 import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
-farmerstream = np.random.RandomState()
+farmerstream = np.random.RandomState()  # pylint: disable=no-member
 
 def scenario_creator(
     scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1,

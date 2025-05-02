@@ -518,7 +518,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                         dis_prox=False, # Important
                         gripe=True,
                         tee=False,
-                        verbose=verbose)
+                        verbose=verbose,
+                        warmstart=True,
+                        )
 
         bound = self.Ebound(verbose)
 
@@ -539,7 +541,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False,
-                   need_solution=True):
+                   need_solution=True,
+                   warmstart=sputils.WarmstartStatus.FALSE):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -573,6 +576,8 @@ class PHBase(mpisppy.spopt.SPOpt):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
         """
 
         """ Developer notes:
@@ -604,6 +609,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             tee,
             verbose,
             need_solution,
+            warmstart,
         )
 
         if dis_W and dis_prox:
@@ -612,7 +618,6 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._reenable_W()
         elif dis_prox:
             self._reenable_prox()
-
 
     def _update_prox_approx(self):
         """
@@ -908,7 +913,9 @@ class PHBase(mpisppy.spopt.SPOpt):
                         dtiming=dtiming,
                         gripe=True,
                         tee=teeme,
-                        verbose=verbose)
+                        verbose=verbose,
+                        warmstart=sputils.WarmstartStatus.CHECK,
+                        )
 
         if self.options["verbose"]:
             print ("PH Iter0 solve loop complete on rank={}".format(self.cylinder_rank))
@@ -1067,7 +1074,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                 gripe=True,
                 disable_pyomo_signal_handling=False,
                 tee=teeme,
-                verbose=verbose
+                verbose=verbose,
+                warmstart=True,
             )
 
             if have_extensions:
