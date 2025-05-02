@@ -68,6 +68,9 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             verbose=verbose,
             warmstart=True,
         )
+        if iternum == 0:
+            return self.opt.Ebound(verbose)
+        return None
 
     def _phboundsolve(self, iternum):
         self.opt._disable_prox()
