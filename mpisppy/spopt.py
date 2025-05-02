@@ -829,9 +829,7 @@ class SPOpt(SPBase):
                 if (sputils.is_persistent(s._solver_plugin)):
                     persistent_solver = s._solver_plugin
             else:
-                print("restore_original_nonants called for a bundle")
-                raise
-
+                raise RuntimeError("restore_original_nonants called for a bundle")
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
                 vardata._value = s._mpisppy_data.original_nonants[ci]
                 vardata.fixed = s._mpisppy_data.original_fixedness[ci]

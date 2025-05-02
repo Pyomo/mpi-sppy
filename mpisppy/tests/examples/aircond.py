@@ -21,7 +21,7 @@ from mpisppy.utils import config
 import pyomo.common.config as pyofig
 
 # Use this random stream:
-aircondstream = np.random.RandomState()
+aircondstream = np.random.RandomState()  # pylint: disable=no-member
 # Do not edit these defaults!
 parms = {"mu_dev": (float, 0.),
          "sigma_dev": (float, 40.),
