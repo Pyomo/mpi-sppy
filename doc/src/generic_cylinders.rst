@@ -111,3 +111,10 @@ solver-log-dir
 
 This specifies a directory where solver log files for *every* subproblem solve.
 This directory will be created for the user and must *not* exist in advance.
+
+warmstart-subproblems
+---------------------
+
+Loosely speaking, this option causes subproblem solves to be given the
+previous iteration solution as a warm-start. This is particularly important
+when using an option to lineraize proximal terms.
