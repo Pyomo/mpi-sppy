@@ -521,7 +521,7 @@ def write_ef_first_stage_solution(ef,
         representative_scenario = getattr(ef,ef._ef_scenario_names[0])
         first_stage_solution_writer(solution_file_name, 
                                     representative_scenario,
-                                    bundling=False)
+                                    bundling=True)
 
 def write_ef_tree_solution(ef, solution_directory_name,
         scenario_tree_solution_writer=scenario_tree_solution_writer):
@@ -541,7 +541,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
             scenario_tree_solution_writer(solution_directory_name,
                                           scenario_name, 
                                           scenario,
-                                          bundling=False)
+                                          bundling=True)
     
 
 def extract_num(string):
