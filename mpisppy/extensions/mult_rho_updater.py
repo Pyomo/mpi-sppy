@@ -6,6 +6,8 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# too many setattr calls for pylint
+# pylint: disable-all
 
 # DLW March 2023 A simple rho updater. Hold rho as a constant multple of the convergence metric
 # but only update when convergence improves
