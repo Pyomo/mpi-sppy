@@ -19,7 +19,7 @@ fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 # If you need random numbers, use this random stream:
-steelstream = np.random.RandomState()
+steelstream = np.random.RandomState()  # pylint: disable=no-member
 
 # the first two args are in every scenario_creator for an AMPL model
 ampl = AMPL()

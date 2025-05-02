@@ -18,7 +18,7 @@ from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
-farmerstream = np.random.RandomState()
+farmerstream = np.random.RandomState()  # pylint: disable=no-member
 
 
 def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops_multiplier=1, num_scens=None, seedoffset=0):
