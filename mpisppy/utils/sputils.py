@@ -1053,12 +1053,24 @@ def nonant_cost_coeffs(s):
     """
     objective = find_objective(s)
 
+    # deal with proper bundles
+    if hasattr(s, "_ef_scenario_names"):
+        nonant_varids = {}
+        for scenario_name in s._ef_scenario_names:
+            scenario = s.component(scenario_name)
+            for node in scenario._mpisppy_node_list:
+                ndn = node.name
+                for i, v in enumerate(node.nonant_vardata_list):
+                    nonant_varids[id(v)] = (ndn, i)
+    else:
+        nonant_varids = s._mpisppy_data.varid_to_nonant_index
+
     # initialize to 0
     cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
     repn = generate_standard_repn(objective.expr, quadratic=False)
     for coef, var in zip(repn.linear_coefs, repn.linear_vars):
-        if id(var) in s._mpisppy_data.varid_to_nonant_index:
-            cost_coefs[s._mpisppy_data.varid_to_nonant_index[id(var)]] = coef
+        if id(var) in nonant_varids:
+            cost_coefs[nonant_varids[id(var)]] += coef
 
     for var in repn.nonlinear_vars:
         if id(var) in s._mpisppy_data.varid_to_nonant_index:
@@ -1067,6 +1079,7 @@ def nonant_cost_coeffs(s):
                 f"Variable {var} has nonlinear interactions in the objective funtion. "
                 "Consider using gradient-based rho."
             )
+
     return cost_coefs
 
 
