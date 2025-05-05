@@ -130,6 +130,8 @@ class ProperBundler():
             nonant_ef_suppl_list = []
             surrogate_nonant_list = []
             for idx, v in bundle.ref_vars.items():
+                # surrogate nonants are added back to the nonant_list by attach_root_node,
+                # after they have been noted in surrogate_vardatas
                 if idx[0] == "ROOT" and idx not in bundle.ref_surrogate_vars:
                     nonantlist.append(v)
             for idx, v in bundle.ref_suppl_vars.items():
