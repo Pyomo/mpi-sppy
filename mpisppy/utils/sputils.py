@@ -189,7 +189,7 @@ def reactivate_objs(scenario_instance):
     
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
-              nonant_for_fixed_vars=True):
+              nonant_for_fixed_vars=True, total_number_of_scenarios=None):
     """ Create a ConcreteModel of the extensive form.
 
         Args:
@@ -208,6 +208,8 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             nonant_for_fixed_vars (bool--optional): If True, enforces
                 non-anticipativity constraints for all variables, including
                 those which have been fixed. Default is True.
+            total_number_of_scenarios (int, optional):
+                For calculating uniform probabilities, the total number of scenarios.
 
         Returns:
             EF_instance (ConcreteModel):
@@ -235,6 +237,8 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             print("WARNING: passed single scenario to create_EF()")
         # special code to patch in ref_vars
         scenario_instance.ref_vars = dict()
+        scenario_instance.ref_suppl_vars = dict()
+        scenario_instance.ref_surrogate_vars = dict()
         scenario_instance._nlens = {node.name: len(node.nonant_vardata_list) 
                                 for node in scenario_instance._mpisppy_node_list}
         for node in scenario_instance._mpisppy_node_list:
@@ -244,6 +248,11 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
                 v = node.nonant_vardata_list[i]
                 if (ndn, i) not in scenario_instance.ref_vars:
                     scenario_instance.ref_vars[(ndn, i)] = v
+                    if v in node.surrogate_vardatas:
+                        scenario_instance.ref_surrogate_vars[(ndn, i)] = v
+            for i, v in enumerate(node.nonant_ef_suppl_vardata_list):
+                if (ndn, i) not in scenario_instance.ref_suppl_vars:
+                    scenario_instance.ref_suppl_vars[(ndn, i)] = v
         # patch in EF_Obj        
         scenario_objs = deact_objs(scenario_instance)        
         obj = scenario_objs[0]            
@@ -257,9 +266,11 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         all(hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values())
     uniform_specified = \
         probs_specified and all(scen._mpisppy_probability == "uniform" for scen in scen_dict.values())
+    if total_number_of_scenarios is None:
+        total_number_of_scenarios = len(scen_dict)
     if not probs_specified or uniform_specified:
         for scen in scen_dict.values():
-            scen._mpisppy_probability = 1 / len(scen_dict)
+            scen._mpisppy_probability = 1 / total_number_of_scenarios
         if not suppress_warnings and not uniform_specified:
             print('WARNING: At least one scenario is missing _mpisppy_probability attribute.',
                   'Assuming equally-likely scenarios...')
@@ -344,6 +355,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                       # variable number)
 
     ref_suppl_vars = dict()
+    ref_surrogate_vars = dict()
 
     EF_instance._nlens = dict() 
 
@@ -376,6 +388,8 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                     # grab the reference variable
                     if (nonant_for_fixed_vars) or (not v.is_fixed()):
                         ref_vars[(ndn, i)] = v
+                        if v in node.surrogate_vardatas:
+                            ref_surrogate_vars[(ndn, i)] = v
                 # Add a non-anticipativity constraint, except in the case when
                 # the variable is fixed and nonant_for_fixed_vars=False.
                 # or we're in the surrogate nonants
@@ -403,7 +417,8 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     EF_instance.ref_vars = ref_vars
     EF_instance.ref_suppl_vars = ref_suppl_vars
-                        
+    EF_instance.ref_surrogate_vars = ref_surrogate_vars
+
     return EF_instance
 
 def _models_have_same_sense(models):
