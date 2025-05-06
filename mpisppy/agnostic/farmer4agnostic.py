@@ -25,7 +25,7 @@ import numpy as np
 import mpisppy.utils.sputils as sputils
 
 # Use this random stream:
-farmerstream = np.random.RandomState()
+farmerstream = np.random.RandomState()  # pylint: disable=no-member
 
 # to support a hack needed for bundles (ignore if you are not using bundles)
 numbuns = 0

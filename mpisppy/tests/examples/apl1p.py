@@ -17,7 +17,7 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.utils.amalgamator as amalgamator
 
 # Use this random stream:
-apl1pstream = np.random.RandomState()
+apl1pstream = np.random.RandomState()  # pylint: disable=no-member
 
 def APL1P_model_creator(seed):
     apl1pstream.seed(seed)

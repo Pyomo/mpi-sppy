@@ -17,6 +17,8 @@ import numpy as np
 import inspect
 import importlib
 import mpisppy.scenario_tree as scenario_tree
+
+from enum import IntEnum
 from pyomo.core import Objective
 from pyomo.repn import generate_standard_repn
 
@@ -28,6 +30,12 @@ from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 from mpisppy import tt_timer
 
 global_rank = MPI.COMM_WORLD.Get_rank()
+
+
+class WarmstartStatus(IntEnum):
+    FALSE = 0  # Falsy
+    TRUE = 1   # Truthy
+    CHECK = -1 # Truthy
 
 
 def build_vardatalist(model, varlist=None):
@@ -513,7 +521,7 @@ def write_ef_first_stage_solution(ef,
         representative_scenario = getattr(ef,ef._ef_scenario_names[0])
         first_stage_solution_writer(solution_file_name, 
                                     representative_scenario,
-                                    bundling=False)
+                                    bundling=True)
 
 def write_ef_tree_solution(ef, solution_directory_name,
         scenario_tree_solution_writer=scenario_tree_solution_writer):
@@ -533,7 +541,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
             scenario_tree_solution_writer(solution_directory_name,
                                           scenario_name, 
                                           scenario,
-                                          bundling=False)
+                                          bundling=True)
     
 
 def extract_num(string):

@@ -25,7 +25,7 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
-from mpisppy.extensions.extension import MultiExtension
+from mpisppy.extensions.extension import MultiExtension, Extension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
@@ -35,6 +35,9 @@ from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 from mpisppy.utils.wxbarwriter import WXBarWriter
 from mpisppy.utils.wxbarreader import WXBarReader
+
+import mpisppy.utils.pickle_bundle as pickle_bundle
+import mpisppy.utils.proper_bundler as proper_bundler
 
 import mpisppy.utils.solver_spec as solver_spec
 
@@ -104,10 +107,6 @@ def _parse_args(m):
                       default=None)
     # TBD - think about adding directory for json options files
 
-    cfg.add_to_config("hub_and_spoke_dict_callback",
-                      description="[FOR EXPERTS ONLY] Module that contains the function hub_and_spoke_dict_callback that will be passed the hubdict and list of spokedicts prior to spin-the-wheel (last chance for intervention)",
-                      domain=str,
-                      default=None)    
     
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
     
@@ -248,7 +247,16 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if cfg.user_defined_extensions is not None:
         for ext_name in cfg.user_defined_extensions:
             module = sputils.module_name_to_module(ext_name)
-            vanilla.extension_adder(module)
+            ext_classes = []
+            # Collect all valid Extension instances in the module to ensure no valid extensions are missed.
+            for name in dir(module):
+                if isinstance(getattr(module, name), Extension):
+                    ext_classes.append(getattr(module, name))
+            if not ext_classes:
+                raise RuntimeError(f"Could not find an mpisppy extension in module {ext_name}")
+            # Add all found extensions to the hub_dict
+            for ext_class in ext_classes:
+                vanilla.extension_adder(hub_dict, ext_class)
             # grab JSON for this module's option dictionary
             json_filename = ext_name+".json"
             if os.path.exists(json_filename):
@@ -349,6 +357,10 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans,
                                                       scenario_creator_kwargs=scenario_creator_kwargs,
                                                       all_nodenames=all_nodenames)
+        # special code for multi-stage (e.g., hydro)
+        if cfg.get("stage2EFsolvern") is not None:
+            xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
+            xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
     if cfg.xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
@@ -365,13 +377,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               all_nodenames=all_nodenames,
                                               rho_setter = None)
-
-                
-   # special code for multi-stage (e.g., hydro)
-    if cfg.get("stage2EFsolvern") is not None:
-        assert cfg.get("xhatshuffle"), "xhatshuffle is required for stage2EFsolvern"
-        xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
-        xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
 
     list_of_spoke_dict = list()
     if cfg.fwph:
@@ -390,9 +395,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(reduced_costs_spoke)
 
     # if the user dares, let them mess with the hubdict prior to solve
-    if cfg.hub_and_spoke_dict_callback is not None:
-        module = sputils.module_name_to_module(cfg.hub_and_spoke_dict_callback)
-        module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict)
+    if hasattr(module,'hub_and_spoke_dict_callback'):
+        module.hub_and_spoke_dict_callback(hub_dict, list_of_spoke_dict, cfg)
+
 
     wheel = WheelSpinner(hub_dict, list_of_spoke_dict)
     wheel.spin()
@@ -411,6 +416,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         else:
             wheel.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote solution data.")
+
+    if hasattr(module, "custom_writer"):
+        module.custom_writer(wheel, cfg)
 
 
 #==========
@@ -537,6 +545,9 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         else:
             sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
+
+    if hasattr(module, "custom_writer"):
+        module.custom_writer(ef, cfg)
         
 
 def _model_fname():
@@ -598,10 +609,6 @@ if __name__ == "__main__":
     
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
-        # TBD: remove the need for dill if you are not reading or writing
-        import mpisppy.utils.pickle_bundle as pickle_bundle
-        import mpisppy.utils.proper_bundler as proper_bundler
-    
         bundle_wrapper = proper_bundler.ProperBundler(module)
         scenario_creator = bundle_wrapper.scenario_creator
         # The scenario creator is wrapped, so these kw_args will not go the original
@@ -609,7 +616,6 @@ if __name__ == "__main__":
         scenario_creator_kwargs = bundle_wrapper.kw_creator(cfg)
     elif cfg.unpickle_scenarios_dir is not None:
         # So reading pickled scenarios cannot be composed with proper bundles
-        import mpisppy.utils.pickle_bundle as pickle_bundle
         scenario_creator = _read_pickled_scenario
         scenario_creator_kwargs = {"cfg": cfg}
     else:  # the most common case

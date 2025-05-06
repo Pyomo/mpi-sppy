@@ -584,6 +584,12 @@ class SPBase:
                 scenario_cache[var] = var.value
             s._mpisppy_data.best_solution_cache = scenario_cache
 
+    def _get_cylinder_name(self):
+        if self.spcomm:
+            return self.spcomm.__class__.__name__
+        else:
+            return self.__class__.__name__
+
     def load_best_solution(self):
         for k,s in self.local_scenarios.items():
             if s._mpisppy_data.best_solution_cache is None:
