@@ -35,7 +35,7 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.hub import PHHub, SubgradientHub, APHHub, FWPHHub
+from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
@@ -144,6 +144,35 @@ def ph_hub(
     add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
+def ph_nonant_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        ph_extensions=None,
+        extension_kwargs=None,
+        ph_converger=None,
+        rho_setter=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    hub_dict = ph_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+        ph_converger=ph_converger,
+        rho_setter=rho_setter,
+        variable_probability=variable_probability,
+        all_nodenames=all_nodenames,
+    )
+    # use PHNonantHub instead of PHHub
+    hub_dict["hub_class"] = PHNonantHub
+    return hub_dict
 
 def aph_hub(cfg,
     scenario_creator,

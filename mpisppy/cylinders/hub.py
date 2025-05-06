@@ -225,9 +225,9 @@ class Hub(SPCommunicator):
         self.send_boundsout()
 
 
-class PHHub(Hub):
+class PHNonantHub(Hub):
 
-    send_fields = (*Hub.send_fields, Field.NONANT, Field.DUALS)
+    send_fields = (*Hub.send_fields, Field.NONANT, )
     receive_fields = (*Hub.receive_fields,)
 
     def setup_hub(self):
@@ -312,6 +312,7 @@ class PHHub(Hub):
         Eobj = self.opt.post_loops(self.opt.extensions)
         return Eobj
 
+
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
         """
@@ -328,6 +329,16 @@ class PHHub(Hub):
         return
 
     def send_ws(self):
+        """ Nonant hub; do not send Ws
+        """
+        pass
+
+
+class PHHub(PHNonantHub):
+    send_fields = (*PHNonantHub.send_fields, Field.DUALS, )
+    receive_fields = (*PHNonantHub.receive_fields,)
+
+    def send_ws(self):
         """ Send dual weights to the appropriate spokes
         """
         # NOTE: my_ws.array() and self.w_send_buffer should be the same array.
@@ -338,6 +349,7 @@ class PHHub(Hub):
         self.put_send_buffer(my_ws, Field.DUALS)
 
         return
+
 
 class LShapedHub(Hub):
 

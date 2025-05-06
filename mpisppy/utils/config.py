@@ -461,6 +461,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+    def ph_nonant_args(self):
+
+        self.add_to_config(name="ph_nonant_hub",
+                           description="Use PH Hub which only supplies nonants (and not Ws) (default False)",
+                           domain=bool,
+                           default=False)
+
     def fixer_args(self):
 
         self.add_to_config('fixer',
