@@ -81,9 +81,6 @@ def main(model_fname, module, cfg):
     if hasattr(module, "bundle_hack"):
         module.bundle_hack(cfg)
         # num_scens is now really numbuns
-    if cfg.guest_language not in supported_guests:
-        raise ValueError(f"Not a supported guest language: {cfg.guest_language}\n"
-                         f"   supported guests: {supported_guests}")
     if cfg.guest_language == "Pyomo":
         # now I need the pyomo_guest wrapper, then feed that to agnostic
         from mpisppy.agnostic.pyomo_guest import Pyomo_guest
@@ -111,6 +108,9 @@ def main(model_fname, module, cfg):
 
         guest = gams_guest.GAMS_guest(model_fname, new_file_path, nonants_name_pairs, cfg)
         Ag = agnostic.Agnostic(guest, cfg)
+    else:
+        raise ValueError(f"Not a supported guest language: {cfg.guest_language}\n"
+                         f"   supported guests: {supported_guests}")
 
     scenario_creator = Ag.scenario_creator
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
@@ -157,7 +157,7 @@ def main(model_fname, module, cfg):
 if __name__ == "__main__":
     if len(sys.argv) == 1:
         print("need the python model file module name (no .py)")
-        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py --module-name farmer4agnostic" --help)
+        print("usage, e.g.: python -m mpi4py agnostic_cylinders.py --module-name farmer4agnostic --help")
         quit()
 
     model_fname = sys.argv[2]

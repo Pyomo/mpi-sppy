@@ -9,7 +9,7 @@
 
 from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy import MPI
-from mpisppy.utils.lshaped_cuts import LShapedCutGenerator
+from mpisppy.utils.lshaped_cuts import LShapedCutGenerator  # pylint: disable=E0611
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.spoke import Spoke
 

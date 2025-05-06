@@ -68,6 +68,7 @@ def shared_options(cfg):
         "trace_prefix" : cfg.trace_prefix,
         "presolve" : cfg.presolve,
         "rounding_bias" : cfg.rounding_bias,
+        "warmstart_subproblems" : cfg.warmstart_subproblems,
     }
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
@@ -78,6 +79,8 @@ def shared_options(cfg):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
     if _hasit(cfg, "reduced_costs"):
         shoptions["rc_bound_tol"] = cfg.rc_bound_tol
+    if _hasit(cfg, "solver_log_dir"):
+        shoptions["solver_log_dir"] = cfg.solver_log_dir
 
     return shoptions
 
@@ -112,7 +115,6 @@ def ph_hub(
     options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
-    options["warm_start_prox_approx"] = cfg.warm_start_prox_approx
     options["smoothed"] = 2 if cfg.smoothing else 0
     options["defaultPHp"] = cfg.smoothing_rho_ratio
     options["defaultPHbeta"] = cfg.smoothing_beta
@@ -334,12 +336,10 @@ def add_reduced_costs_fixer(hub_dict,
     hub_dict["opt_kwargs"]["options"]["rc_options"] = {
             "verbose": cfg.rc_verbose,
             "debug": cfg.rc_debug,
-            "use_rc_fixer": cfg.rc_fixer,
             "zero_rc_tol": cfg.rc_zero_tol,
             "fix_fraction_target_pre_iter0": cfg.rc_fix_fraction_pre_iter0,
             "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
-            "use_rc_bt": cfg.rc_bound_tightening,
             "rc_bound_tol": cfg.rc_bound_tol,
             "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
         }

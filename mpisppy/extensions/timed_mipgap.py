@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2025, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 '''
 This class is implemented as an extension to be used in mpi-sppy to add a callback to a persistent
 solver to implement a time-dependent target MIP gap.
@@ -39,7 +47,7 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
 
     def _set_options(self):
         ph = self.ph
-        if not ('timed_mipgap' in ph.options):
+        if 'timed_mipgap' not in ph.options:
             raise RuntimeError('Did not find "timed_mipgap" options')
         timecurve_str = ph.options['timed_mipgap']['timecurve']
         self.timecurve = {float(ent.split(':')[0]):float(ent.split(':')[1]) for ent in timecurve_str.split(' ')}
@@ -56,8 +64,11 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
             if not isinstance(s._solver_plugin,GurobiPersistent):
                 raise RuntimeError('Currently, only GurobiPersistent solver is supported.')
             
-            cb_fun = lambda cb_m,cb_opt,cb_wh: self._timecurve_cb(cb_m,cb_opt,cb_wh,
-                                                                  self.timecurve)
+            def cb_fun(cb_m,cb_opt,cb_wh):
+                '''
+                callback function
+                '''
+                return self._timecurve_cb(cb_m,cb_opt,cb_wh,self.timecurve)
             s._solver_plugin.set_callback(cb_fun)
 
     @staticmethod

@@ -20,7 +20,7 @@ import mpisppy.tests.examples.aircond as base_aircond
 from mpisppy.utils.sputils import attach_root_node
 
 # Use this random stream:
-aircondstream = np.random.RandomState()
+aircondstream = np.random.RandomState()  # pylint: disable=no-member
 # Do not edit these defaults!
 parms = {"mu_dev": (float, 0.),
          "sigma_dev": (float, 40.),

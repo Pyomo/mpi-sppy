@@ -27,6 +27,8 @@ class Field(enum.IntEnum):
     SCENARIO_REDUCED_COST=201
     CROSS_SCENARIO_CUT=300
     CROSS_SCENARIO_COST=400
+    NONANT_LOWER_BOUNDS=500
+    NONANT_UPPER_BOUNDS=501
     WHOLE=1_000_000
 
 
@@ -47,6 +49,8 @@ _field_lengths = {
         Field.SCENARIO_REDUCED_COST : _field_length_components.local_nonant_length,
         Field.CROSS_SCENARIO_CUT : _field_length_components.total_number_scenarios * (_field_length_components.total_number_nonants + 1 + 1),
         Field.CROSS_SCENARIO_COST : _field_length_components.total_number_scenarios * _field_length_components.total_number_scenarios,
+        Field.NONANT_LOWER_BOUNDS : _field_length_components.total_number_nonants,
+        Field.NONANT_UPPER_BOUNDS : _field_length_components.total_number_nonants,
 }
 
 
