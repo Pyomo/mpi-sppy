@@ -230,6 +230,10 @@ class PHNonantHub(Hub):
     send_fields = (*Hub.send_fields, Field.NONANT, )
     receive_fields = (*Hub.receive_fields,)
 
+    @property
+    def nonant_field(self):
+        return self.send_fields[-1]
+
     def setup_hub(self):
         ## Generate some warnings if nothing is giving bounds
         if not self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
@@ -312,19 +316,18 @@ class PHNonantHub(Hub):
         Eobj = self.opt.post_loops(self.opt.extensions)
         return Eobj
 
-
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
         """
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.send_buffers[Field.NONANT]
+        nonant_send_buffer = self.send_buffers[self.nonant_field]
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.put_send_buffer(nonant_send_buffer, Field.NONANT)
+        self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
         return
 

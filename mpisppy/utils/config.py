@@ -714,6 +714,18 @@ class Config(pyofig.ConfigDict):
                             default=False)
 
 
+    def relaxed_ph_args(self):
+
+        self.add_to_config("relaxed_ph",
+                            description="have a relaxed PH spoke",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("relaxed_ph_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=1.0)",
+                            domain=float,
+                            default=1.0)
+
+
     def xhatlooper_args(self):
 
         self.add_to_config('xhatlooper',

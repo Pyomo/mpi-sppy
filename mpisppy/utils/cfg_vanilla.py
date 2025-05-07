@@ -35,6 +35,7 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
+from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
 from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
@@ -713,6 +714,42 @@ def subgradient_spoke(
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
 
     return subgradient_spoke
+
+
+def relaxed_ph_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+):
+    relaxed_ph_spoke = _PHBase_spoke_foundation(
+        RelaxedPHSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+    )
+    if cfg.relaxed_ph_rescale_rho_factor is not None:
+        relaxed_ph_spoke["opt_kwargs"]["options"]["relaxed_ph_rho_factor"]\
+            = cfg.relaxed_ph_rescale_rho_factor
+
+    # make sure this spoke doesn't hit the time or iteration limit
+    relaxed_ph_spoke["opt_kwargs"]["options"]["time_limit"] = None
+    relaxed_ph_spoke["opt_kwargs"]["options"]["PHIterLimit"] = cfg.max_iterations * 1_000_000
+
+    add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
+
+    return relaxed_ph_spoke
 
 
 def xhatlooper_spoke(
