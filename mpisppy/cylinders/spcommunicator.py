@@ -412,7 +412,7 @@ class SPCommunicator:
                     if xvarlb is None:
                         xvarlb = -inf
                     if recv_buf[ci] > xvarlb:
-                        global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
+                        # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.lb = recv_buf[ci]
                         bounds_modified += 1
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
@@ -425,7 +425,7 @@ class SPCommunicator:
                     if xvarub is None:
                         xvarub = inf 
                     if recv_buf[ci] < xvarub:
-                        global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
+                        # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.ub = recv_buf[ci]
                         bounds_modified += 1
 
