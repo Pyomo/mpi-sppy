@@ -752,13 +752,15 @@ def relaxed_ph_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    options = relaxed_ph_spoke["opt_kwargs"]["options"]
     if cfg.relaxed_ph_rescale_rho_factor is not None:
-        relaxed_ph_spoke["opt_kwargs"]["options"]["relaxed_ph_rho_factor"]\
-            = cfg.relaxed_ph_rescale_rho_factor
+        options["relaxed_ph_rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
 
     # make sure this spoke doesn't hit the time or iteration limit
-    relaxed_ph_spoke["opt_kwargs"]["options"]["time_limit"] = None
-    relaxed_ph_spoke["opt_kwargs"]["options"]["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
 
     add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
 
