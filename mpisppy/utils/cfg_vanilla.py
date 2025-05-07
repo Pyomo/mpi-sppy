@@ -43,6 +43,7 @@ from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforc
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
 from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
+from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
 from mpisppy.extensions.sep_rho import SepRho
 from mpisppy.extensions.coeff_rho import CoeffRho
 from mpisppy.extensions.sensi_rho import SensiRho
@@ -372,6 +373,18 @@ def add_reduced_costs_fixer(hub_dict,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "rc_bound_tol": cfg.rc_bound_tol,
             "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
+        }
+
+    return hub_dict
+
+def add_relaxed_ph_fixer(hub_dict,
+                            cfg,
+                            ):
+    #WARNING: Do not use without a reduced_costs_spoke spoke
+    hub_dict = extension_adder(hub_dict, RelaxedPHFixer)
+
+    hub_dict["opt_kwargs"]["options"]["relaxed_ph_fixer_options"] = {
+            "bound_tol": cfg.relaxed_ph_fixer_tol,
         }
 
     return hub_dict

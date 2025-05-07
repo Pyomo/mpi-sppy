@@ -478,7 +478,19 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("fixer_tol",
                            description="fixer bounds tolerance  (default 1e-4)",
                            domain=float,
-                           default=1e-2)
+                           default=1e-4)
+
+    def relaxed_ph_fixer_args(self):
+
+        self.add_to_config('relaxed_ph_fixer',
+                           description="have a relaxed PH fixer extension ",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("relaxed_ph_fixer_tol",
+                           description="relaxed PH fixer bounds tolerance  (default 1e-4)",
+                           domain=float,
+                           default=1e-4)
 
     def integer_relax_then_enforce_args(self):
         self.add_to_config('integer_relax_then_enforce',
