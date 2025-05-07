@@ -232,7 +232,7 @@ class PHNonantHub(Hub):
 
     @property
     def nonant_field(self):
-        return self.send_fields[-1]
+        return Field.NONANT
 
     def setup_hub(self):
         ## Generate some warnings if nothing is giving bounds

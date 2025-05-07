@@ -18,6 +18,10 @@ class RelaxedPHSpoke(Spoke, PHHub):
     send_fields = (*Spoke.send_fields, Field.DUALS, Field.RELAXED_NONANT, )
     receive_fields = (*Spoke.receive_fields, )
 
+    @property
+    def nonant_field(self):
+        return Field.RELAXED_NONANT
+
     def send_boundsout(self):
         # overwrite PHHub.sned_boundsout (not a hub)
         return
