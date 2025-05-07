@@ -6,9 +6,6 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-import numpy as np
-
-
 from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import is_persistent
 
