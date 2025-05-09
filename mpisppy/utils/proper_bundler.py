@@ -122,21 +122,26 @@ class ProperBundler():
                                        scenario_creator_kwargs=kws,
                                        EF_name=sname,
                                        suppress_warnings=True,                                       
-                                       nonant_for_fixed_vars = False)
+                                       nonant_for_fixed_vars = False,
+                                       total_number_of_scenarios = cfg.num_scens,
+            )
 
-            nonantlist = [v for idx, v in bundle.ref_vars.items() if idx[0] =="ROOT"]
-            # if the original scenarios were uniform, this needs to be also
-            # (EF formation will recompute for the bundle if uniform)
+            nonantlist = []
+            nonant_ef_suppl_list = []
+            surrogate_nonant_list = []
+            for idx, v in bundle.ref_vars.items():
+                # surrogate nonants are added back to the nonant_list by attach_root_node,
+                # after they have been noted in surrogate_vardatas
+                if idx[0] == "ROOT" and idx not in bundle.ref_surrogate_vars:
+                    nonantlist.append(v)
+            for idx, v in bundle.ref_suppl_vars.items():
+                if idx[0] == "ROOT" and idx not in bundle.ref_surrogate_vars:
+                    nonant_ef_suppl_list.append(v)
+            surrogate_nonant_list = [v for idx, v in bundle.ref_surrogate_vars.items() if idx[0] =="ROOT"]
+            sputils.attach_root_node(bundle, 0, nonantlist, nonant_ef_suppl_list, surrogate_nonant_list)
+
             # Get an arbitrary scenario.
-            scen = self.module.scenario_creator(snames[0], **self.original_kwargs)
-            if scen._mpisppy_probability == "uniform":
-                bprob = "uniform"
-            else:
-                raise RuntimeError("Proper bundles created by proper_bundle.py require uniform probability (consider creating problem-specific bundles)")
-                bprob = bundle._mpisppy_probability
-            sputils.attach_root_node(bundle, 0, nonantlist)
-            bundle._mpisppy_probability = bprob
-
+            scen = bundle.component(snames[0])
             if len(scen._mpisppy_node_list) > 1 and self.bunBFs is None:
                 raise RuntimeError("You are creating proper bundles for a\n"
                       "multi-stage problem, but without cfg.branching_factors.\n"
