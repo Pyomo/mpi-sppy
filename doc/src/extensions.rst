@@ -74,7 +74,7 @@ is an example of its use in ``examples.sizes.sizes_demo.py``
 fixer.py
 ^^^^^^^^
 
-This extension provides methods for fixing variables (usually integers) for
+This extension provides methods for fixing nonanticipative variables (usually integers) for
 which all scenarios have agreed for some number of iterations. There
 is an example of its use in ``examples.sizes.sizes_demo.py`` also
 in ``examples.sizes.uc_ama.py``. The ``uc_ama`` example illustrates
@@ -88,6 +88,36 @@ to be on the ``Config`` object so the amalgamator can find it.
    variable will be fixed if it is within the tolerance of being converged.
    So if you don't want to fix a variable at iteration zero, provide a
    tolerance, but set all count values to ``None``.
+
+reduced_cost_fixer
+^^^^^^^^^^^^^^^^^^
+
+This extension provides methods for fixing nonanticipative variables based on their expected
+reduced cost as calculated by the ReducedCostSpoke. The aggressiveness of the
+fixing can be controled through the ``zero_rc_tol`` parameter (reduced costs
+with magnitude below this value will be considered 0 and not eligible for fixing)
+and the ``fix_fraction_target`` paramemters, which set a maximum fraction of
+nonanticipative variables to be fixed based on expected reduced costs. These two
+parameters iteract with each other -- the expected reduced costs are sorted by
+magnitude, and if the `fix_fraction_target`` percental is below ``zero_rc_tol``,
+then fewer than ``fix_fraction_target`` variables will be fixed. Further, to
+have a non-zero expected reduced cost, all nonant variable values *must be* at
+the same bound in the ReducedCostSpoke.
+
+Variables will be unfixed if they do not meet the expected reduced cost
+criterion for fixing, e.g., the variable's expected reduced cost became too
+low or the variable was not at its bound in every subproblem in the ReducedCostSpoke.
+
+relaxed_ph_fixer
+^^^^^^^^^^^^^^^^
+
+This extension will fix nonanticipative variables at their bound if they are at
+their bound in the RelaxedPHSpoke for that subproblem. It will similarily unfix
+nonanticipative variables which are not at their bounds in the RelaxedPHSpoke.
+Because different nonanticipative variables are fixed in different suproblems,
+it will also unfix nonanticipative variables if their value is at the the current
+consensus solution xbar (because the variable was not fixed in a different subproblem
+and therefore came off its bound).
 
 xhat
 ^^^^

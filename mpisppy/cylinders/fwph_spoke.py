@@ -15,9 +15,6 @@ class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
     def main(self):
         self.opt.fwph_main()
 
-    def is_converged(self):
-        return self.got_kill_signal()
-
     def sync(self):
         # The FWPH spoke can call "sync" before it
         # even starts doing anything, so its possible

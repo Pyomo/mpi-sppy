@@ -47,6 +47,13 @@ this value (default 1e-1).
 If only the binary terms should be 
 approximated, the option `linearize_binary_proximal_terms` can be used. 
 
+PHNonant
+--------
+This is exactly like the PH hub, except it does not send W values.
+It can be useful when some other cylinder is providing W values
+(e.g., RelaxedPHSpoke).
+
+
 lshaped
 -------
 
@@ -71,6 +78,15 @@ The Subgradient implemenation can be used with most spokes becuase it
 also supplies x and/or W values at every iteration, and is largely based
 on the PH implementation. It utilizes a constant step size rule based on
 `rho` unless modified by an extension.
+
+FWPH
+----
+
+The Frank-Wolfe progressive hedging hub can be used with most spokes
+because it supplies x and/or W values as part of its solution process.
+While FWPH is not known to converge to a primal solution for a SMIP, it
+often discovers excellent incumbent values along the way (when paired with
+a xhat spoke).
 
 Hub Convergers
 --------------

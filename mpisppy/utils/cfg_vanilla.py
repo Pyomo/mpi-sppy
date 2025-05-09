@@ -35,13 +35,15 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.hub import PHHub, SubgradientHub, APHHub, FWPHHub
+from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
+from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
 from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
+from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
 from mpisppy.extensions.sep_rho import SepRho
 from mpisppy.extensions.coeff_rho import CoeffRho
 from mpisppy.extensions.sensi_rho import SensiRho
@@ -144,6 +146,35 @@ def ph_hub(
     add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
+def ph_nonant_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        ph_extensions=None,
+        extension_kwargs=None,
+        ph_converger=None,
+        rho_setter=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    hub_dict = ph_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+        ph_converger=ph_converger,
+        rho_setter=rho_setter,
+        variable_probability=variable_probability,
+        all_nodenames=all_nodenames,
+    )
+    # use PHNonantHub instead of PHHub
+    hub_dict["hub_class"] = PHNonantHub
+    return hub_dict
 
 def aph_hub(cfg,
     scenario_creator,
@@ -342,6 +373,18 @@ def add_reduced_costs_fixer(hub_dict,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
             "rc_bound_tol": cfg.rc_bound_tol,
             "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
+        }
+
+    return hub_dict
+
+def add_relaxed_ph_fixer(hub_dict,
+                            cfg,
+                            ):
+    #WARNING: Do not use without a reduced_costs_spoke spoke
+    hub_dict = extension_adder(hub_dict, RelaxedPHFixer)
+
+    hub_dict["opt_kwargs"]["options"]["relaxed_ph_fixer_options"] = {
+            "bound_tol": cfg.relaxed_ph_fixer_tol,
         }
 
     return hub_dict
@@ -684,6 +727,44 @@ def subgradient_spoke(
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
 
     return subgradient_spoke
+
+
+def relaxed_ph_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+):
+    relaxed_ph_spoke = _PHBase_spoke_foundation(
+        RelaxedPHSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+    )
+    options = relaxed_ph_spoke["opt_kwargs"]["options"]
+    if cfg.relaxed_ph_rescale_rho_factor is not None:
+        options["relaxed_ph_rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
+
+    # make sure this spoke doesn't hit the time or iteration limit
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
+
+    add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
+
+    return relaxed_ph_spoke
 
 
 def xhatlooper_spoke(
