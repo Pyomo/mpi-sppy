@@ -92,8 +92,9 @@ Reduced Costs
 
 The reduced cost spoke is equivalent to the Lagrangian spoke, except that it relaxes all 
 integrality contraints in the subproblems. This enables the computation of reduced costs
-for the first stage variables, which can be used for bound tightening or heuristic fixing
-in the hub.
+for the nonanticipative variables, which can be used for provable bound tightening, which
+is shared to all cylinders. The reduced cost can also be used for heuristic fixing in the
+hub via the reduced_cost_fixer.
 
 
 Inner Bounds
@@ -171,4 +172,17 @@ General
 cross scenario
 ^^^^^^^^^^^^^^
 
-Passes cross scenario cuts.
+Computed and passes cross scenario cuts.
+
+relaxed_ph
+^^^^^^^^^^
+
+For S-MIPs, runs progressive hedging on the linear programming relaxation
+of the scenario subproblems. Provides Ws and "relaxed nonants", the former
+of which can be utilized for Lagrangian to compute lower bounds, and the later
+of which can be utilized to inform fixings for the hub via the relaxed_ph_fixer
+extention. This method is effective when the subproblem linear programming
+relaxation is "strong".
+
+The option ``relaxed_ph_rescale_rho_factor``, which defaults to 1, rescales
+rho for this spoke between iteration 0 and iteration 1.
