@@ -226,6 +226,12 @@ class Hub(SPCommunicator):
 
 
 class PHNonantHub(Hub):
+    """
+    Like PHHub, but only sends nonants and omits Ws. To be used
+    when another cylinder is supplying Ws (like RelaxedPHSpoke).
+    Could be removed when mpi-sppy supports pointing consuming
+    spokes like Lagrangian to a specific dual (W) buffer.
+    """
 
     send_fields = (*Hub.send_fields, Field.NONANT, )
     receive_fields = (*Hub.receive_fields,)

@@ -23,7 +23,7 @@ class RelaxedPHSpoke(Spoke, PHHub):
         return Field.RELAXED_NONANT
 
     def send_boundsout(self):
-        # overwrite PHHub.sned_boundsout (not a hub)
+        # overwrite PHHub.send_boundsout (not a hub)
         return
 
     def update_rho(self):
@@ -54,11 +54,4 @@ class RelaxedPHSpoke(Spoke, PHHub):
         # rest of PH
         self.opt.iterk_loop()
 
-        # ??
-        finalize = False
-        if finalize:
-            Eobj = self.opt.post_loops(self.extensions)
-        else:
-            Eobj = None
-
-        return self.opt.conv, Eobj, trivial_bound
+        return self.opt.conv, None, trivial_bound
