@@ -287,19 +287,23 @@ def extension_adder(hub_dict,ext_class):
         hub_dict["opt_kwargs"]["extensions"] = MultiExtension
     return hub_dict
 
-def add_gapper(hub_dict, cfg):
+def add_gapper(hub_dict, cfg, name=None):
     hub_dict = extension_adder(hub_dict, Gapper)
-    if cfg.mipgaps_json is not None:
+    if name is None and cfg.mipgaps_json is not None:
         with open(cfg.mipgaps_json) as fin:
             din = json.load(fin)
         mipgapdict = {int(i): din[i] for i in din}
     else:
         mipgapdict = None
+    if name is None:
+        name = ""
+    else:
+        name = name + "_"
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": cfg.verbose,
         "mipgapdict": mipgapdict,
-        "starting_mipgap": cfg.starting_mipgap,
-        "mipgap_ratio" : cfg.mipgap_ratio,
+        "starting_mipgap": getattr(cfg, f"{name}starting_mipgap"),
+        "mipgap_ratio" : getattr(cfg, f"{name}mipgap_ratio"),
     }
 
 def add_fixer(hub_dict,

@@ -30,15 +30,15 @@ class Gapper(mpisppy.extensions.extension.Extension):
 
     def _check_options(self):
         if self.mipgapdict is None and self.starting_mipgap is None:
-            raise RuntimeError("Need to either set a mipgapdict or a starting_mipgap for Gapper")
+            raise RuntimeError(f"{self.ph._get_cylinder_name()}: Need to either set a mipgapdict or a starting_mipgap for Gapper")
         if self.mipgapdict is not None and self.starting_mipgap is not None:
-            raise RuntimeError("Gapper: Either use a mipgapdict or automatic mode, not both.")
+            raise RuntimeError(f"{self.ph._get_cylinder_name()} Gapper: Either use a mipgapdict or automatic mode, not both.")
         # exactly one is not None
         return
 
     def _vb(self, msg):
         if self.verbose:
-            global_toc(f"{self.__class__.__name__}: {msg}", self.cylinder_rank == 0)
+            global_toc(f"{self.ph._get_cylinder_name()} {self.__class__.__name__}: {msg}", self.cylinder_rank == 0)
 
     def set_mipgap(self, mipgap):
         """ set the mipgap
@@ -68,8 +68,11 @@ class Gapper(mpisppy.extensions.extension.Extension):
         return
 
     def _autoset_mipgap(self):
+        self.ph.spcomm.receive_innerbounds()
+        self.ph.spcomm.receive_outerbounds()
         abs_gap, rel_gap = self.ph.spcomm.compute_gaps()
         cylinder_gap = rel_gap * self.mipgap_ratio
+        # global_toc(f"{self.ph._get_cylinder_name()}: {self.ph.spcomm.BestInnerBound=}, {self.ph.spcomm.BestOuterBound=}", self.ph.cylinder_rank == 0)
         if cylinder_gap < self.starting_mipgap:
             self.set_mipgap(cylinder_gap)
         # current_solver_options changes in iteration 1
