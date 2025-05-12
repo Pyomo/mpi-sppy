@@ -495,3 +495,23 @@ class SPCommunicator:
             self.BestOuterBound = inf
             self._inner_bound_update = lambda new, old : (new > old)
             self._outer_bound_update = lambda new, old : (new < old)
+
+    def compute_gaps(self):
+        """ Compute the current absolute and relative gaps,
+            using the current self.BestInnerBound and self.BestOuterBound
+        """
+        if self.opt.is_minimizing:
+            abs_gap = self.BestInnerBound - self.BestOuterBound
+        else:
+            abs_gap = self.BestOuterBound - self.BestInnerBound
+
+        if abs_gap != inf:
+            rel_gap = ( abs_gap /
+                        max(1e-10,
+                            abs(self.BestOuterBound),
+                            abs(self.BestInnerBound),
+                           )
+                      )
+        else:
+            rel_gap = inf
+        return abs_gap, rel_gap

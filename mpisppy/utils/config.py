@@ -535,6 +535,17 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
+        self.add_to_config('starting_mipgap',
+                           description="Sets automatic gapper mode and the starting and minimum mipgap",
+                           domain=float,
+                           default=None)
+
+        self.add_to_config('mipgap_ratio',
+                           description="The ratio of the overall relative optimality gap to the subproblem "
+                                       "mipgaps. This should be less than 1 for the algorithm to make progress. "
+                                       "(default = 0.1)",
+                           domain=float,
+                           default=0.1)
 
     def fwph_args(self):
 
