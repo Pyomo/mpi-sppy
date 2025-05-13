@@ -199,6 +199,7 @@ class SPOpt(SPBase):
             elif warmstart == sputils.WarmstartStatus.PRIOR_SOLUTION:
                 warmstart = getattr(s._mpisppy_data, "solution_available", False)
             else:
+                assert isinstance(warmstart, (sputils.WarmstartStatus, bool))
                 warmstart = bool(warmstart)
             solve_keyword_args["warmstart"] = warmstart
         if disable_pyomo_signal_handling:
