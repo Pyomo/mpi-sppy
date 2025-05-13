@@ -32,7 +32,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
             gripe=True,
             tee=teeme,
             verbose=verbose,
-            warmstart=sputils.WarmstartStatus.CHECK,
+            warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION,
         )
         self.opt._update_E1()  # Apologies for doing this after the solves...
         if abs(1 - self.opt.E1) > self.opt.E1_tolerance:

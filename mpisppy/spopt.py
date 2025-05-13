@@ -193,9 +193,13 @@ class SPOpt(SPBase):
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
-        if warmstart and self.options.get("warmstart_subproblems", False):
-            if warmstart == sputils.WarmstartStatus.CHECK:
-                warmstart = self._check_if_user_provided_solution(k, s)
+        if self.options.get("warmstart_subproblems", False):
+            if warmstart == sputils.WarmstartStatus.USER_SOLUTION:
+                warmstart = self.options.get("user_warmstart", False)
+            elif warmstart == sputils.WarmstartStatus.PRIOR_SOLUTION:
+                warmstart = getattr(s._mpisppy_data, "solution_available", False)
+            else:
+                warmstart = bool(warmstart)
             solve_keyword_args["warmstart"] = warmstart
         if disable_pyomo_signal_handling:
             # solve_keyword_args["use_signal_handling"] = False
@@ -258,6 +262,10 @@ class SPOpt(SPBase):
                 except Exception as e: # catch everything
                     if need_solution:
                         raise e
+                    else:
+                        s._mpisppy_data.solution_available = False
+                else:
+                    s._mpisppy_data.solution_available = True
                 if self.is_minimizing:
                     s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
                     s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
@@ -1000,31 +1008,6 @@ class SPOpt(SPBase):
         for sub_name, sub in self.local_subproblems.items():
             for s_name in sub.scen_list:
                 yield sub_name, sub, s_name, self.local_scenarios[s_name]
-
-    def _check_if_user_provided_solution(self, k, sub):
-        found_one_set = False
-        found_one_not_set = False
-        for s_name in sub.scen_list:
-            s = self.local_scenarios[s_name]
-            for xvar in s._mpisppy_data.nonant_indices.values():
-                if xvar.fixed:
-                    continue
-                if xvar._value is None:
-                    found_one_not_set = True
-                    if found_one_set:
-                        break
-                else:
-                    found_one_set = True
-                    if found_one_not_set:
-                        break
-            else: # no break
-                assert found_one_set != found_one_not_set
-                if found_one_set:
-                    return True
-                else:
-                    return False
-        print(f"WARNING from {self._get_cylinder_name()}: Subproblem {k}: found partial warmstart!")
-        return True
 
 
 # these parameters should eventually be promoted to a non-PH
