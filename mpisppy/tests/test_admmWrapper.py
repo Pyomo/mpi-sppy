@@ -9,7 +9,7 @@
 # TBD: make these tests less fragile
 import unittest
 import mpisppy.utils.admmWrapper as admmWrapper
-import examples.distr as distr
+import mpisppy.tests.examples.distr as distr
 from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
 from mpisppy import MPI

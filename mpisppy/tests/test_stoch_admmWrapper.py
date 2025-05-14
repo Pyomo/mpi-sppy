@@ -8,8 +8,8 @@
 ###############################################################################
 import unittest
 import subprocess
-import examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
-import examples.stoch_distr.stoch_distr as stoch_distr
+import mpisppy.tests.examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
+import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
 import os
