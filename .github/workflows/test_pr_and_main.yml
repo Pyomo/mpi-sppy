@@ -249,10 +249,9 @@ jobs:
       - name: run tests
         timeout-minutes: 10
         run: |
-          cd mpisppy/tests
           # envall does nothing
-          python test_admmWrapper.py
-          python test_stoch_admmWrapper.py
+          python mpisppy/tests/test_admmWrapper.py
+          python mpisppy/tests/test_stoch_admmWrapper.py
 
   aph:
     name: aph tests
