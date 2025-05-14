@@ -1,13 +1,15 @@
 Quick Start
 ===========
 
-If you installed from github, run `setup.py` from the mpi-sppy directory.
+If you installed from github, install from source using pip in editable mode from the mpi-sppy repo root directory.
 
 ::
    
-   python setup.py develop
+   pip install -e .
 
 This step is not needed if you installed using pip.
+You can also include the extras flags ``mpi`` to install a compliant version
+of mpi4py or ``docs`` to install documentation dependencies from pip.
 
 
 Verify installation
