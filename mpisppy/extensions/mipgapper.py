@@ -70,11 +70,11 @@ class Gapper(mpisppy.extensions.extension.Extension):
     def _autoset_mipgap(self):
         self.ph.spcomm.receive_innerbounds()
         self.ph.spcomm.receive_outerbounds()
-        abs_gap, rel_gap = self.ph.spcomm.compute_gaps()
-        cylinder_gap = rel_gap * self.mipgap_ratio
+        _, problem_rel_gap = self.ph.spcomm.compute_gaps()
+        subproblem_rel_gap = problem_rel_gap * self.mipgap_ratio
         # global_toc(f"{self.ph._get_cylinder_name()}: {self.ph.spcomm.BestInnerBound=}, {self.ph.spcomm.BestOuterBound=}", self.ph.cylinder_rank == 0)
-        if cylinder_gap < self.starting_mipgap:
-            self.set_mipgap(cylinder_gap)
+        if subproblem_rel_gap < self.starting_mipgap:
+            self.set_mipgap(subproblem_rel_gap)
         # current_solver_options changes in iteration 1
         elif self.ph._PHIter == 1:
             self.set_mipgap(self.starting_mipgap)
