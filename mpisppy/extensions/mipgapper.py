@@ -23,9 +23,6 @@ class Gapper(mpisppy.extensions.extension.Extension):
         self.mipgapdict = self.gapperoptions.get("mipgapdict", None)
         self.starting_mipgap = self.gapperoptions.get("starting_mipgap", None)
         self.mipgap_ratio = self.gapperoptions.get("mipgap_ratio", None)
-        self.verbose = self.ph.options["verbose"] \
-                       or self.gapperoptions.get("verbose", True)
-        self.verbose = True
         self._check_options()
 
     def _check_options(self):
@@ -36,9 +33,8 @@ class Gapper(mpisppy.extensions.extension.Extension):
         # exactly one is not None
         return
 
-    def _vb(self, msg):
-        if self.verbose:
-            global_toc(f"{self.ph._get_cylinder_name()} {self.__class__.__name__}: {msg}", self.cylinder_rank == 0)
+    def _print_msg(self, msg):
+        global_toc(f"{self.ph._get_cylinder_name()} {self.__class__.__name__}: {msg}", self.cylinder_rank == 0)
 
     def set_mipgap(self, mipgap):
         """ set the mipgap
@@ -51,7 +47,7 @@ class Gapper(mpisppy.extensions.extension.Extension):
             oldgap = self.ph.current_solver_options["mipgap"]
         if oldgap is None or oldgap != mipgap:
             oldgap_str = f"{oldgap}" if oldgap is None else f"{oldgap*100:.3f}%"
-            self._vb(f"Changing mipgap from {oldgap_str} to {mipgap*100:.3f}%")
+            self._print_msg(f"Changing mipgap from {oldgap_str} to {mipgap*100:.3f}%")
         # no harm in unconditionally setting this, and covers iteration 1
         self.ph.current_solver_options["mipgap"] = mipgap
         
