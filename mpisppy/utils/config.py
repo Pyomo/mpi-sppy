@@ -553,13 +553,29 @@ class Config(pyofig.ConfigDict):
                            default=1.0)
 
 
-    def gapper_args(self):
+    def gapper_args(self, name=None):
+        if name is None:
+            name = ""
+        else:
+            name = name+"_"
 
-        self.add_to_config('mipgaps_json',
-                           description="path to json file with a mipgap schedule for PH iterations",
-                           domain=str,
+        if name == "":
+            self.add_to_config('mipgaps_json',
+                               description="path to json file with a mipgap schedule for PH iterations",
+                               domain=str,
+                               default=None)
+
+        self.add_to_config(f'{name}starting_mipgap',
+                           description="Sets automatic gapper mode and the starting and minimum mipgap",
+                           domain=float,
                            default=None)
 
+        self.add_to_config(f'{name}mipgap_ratio',
+                           description="The ratio of the overall relative optimality gap to the subproblem "
+                                       "mipgaps. This should be less than 1 for the algorithm to make progress. "
+                                       "(default = 0.1)",
+                           domain=float,
+                           default=0.1)
 
     def fwph_args(self):
 

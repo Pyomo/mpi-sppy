@@ -26,8 +26,6 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 from mpisppy.extensions.extension import MultiExtension, Extension
-from mpisppy.extensions.fixer import Fixer
-from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
 from mpisppy.extensions.gradient_extension import Gradient_extension
@@ -83,6 +81,7 @@ def _parse_args(m):
     cfg.relaxed_ph_fixer_args()
     cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()    
+    cfg.gapper_args(name="lagrangian")
     cfg.ph_nonant_args()
     cfg.relaxed_ph_args()
     cfg.fwph_args()
@@ -218,24 +217,14 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
     # TBD: add cross_scenario_cuts, which also needs a cylinder
-    if cfg.mipgaps_json is not None:
-        ext_classes.append(Gapper)
-        with open(cfg.mipgaps_json) as fin:
-            din = json.load(fin)
-        mipgapdict = {int(i): din[i] for i in din}
-        hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
-            "verbose": cfg.verbose,
-            "mipgapdict": mipgapdict
-        }
+
+    if cfg.mipgaps_json is not None or cfg.starting_mipgap is not None:
+        vanilla.add_gapper(hub_dict, cfg)
         
     if cfg.fixer:  # cfg_vanilla takes care of the fixer_tol?
         assert hasattr(module, "id_fix_list_fct"), "id_fix_list_fct required for --fixer"
-        ext_classes.append(Fixer)
-        hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {
-            "verbose": cfg.verbose,
-            "boundtol": cfg.fixer_tol,
-            "id_fix_list_fct": module.id_fix_list_fct,
-        }
+        vanilla.add_fixer(hub_dict, cfg)
+
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
@@ -336,6 +325,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                                 rho_setter = rho_setter,
                                                 all_nodenames = all_nodenames,
                                                 )
+        if cfg.lagrangian_starting_mipgap is not None:
+            vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
 
     # ph outer bounder spoke
     if cfg.ph_ob:
