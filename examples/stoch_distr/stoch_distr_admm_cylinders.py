@@ -11,7 +11,7 @@
 # Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
-import examples.distr.distr_data as distr_data
+import mpisppy.tests.examples.distr.distr_data as distr_data
 import stoch_distr
 
 from mpisppy.spin_the_wheel import WheelSpinner

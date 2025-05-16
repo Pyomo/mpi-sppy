@@ -29,6 +29,12 @@ class Spoke(SPCommunicator):
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         return self.allreduce_or(shutdown_buf[0] == 1.0)
 
+    def is_converged(self):
+        """ Alias for got_kill_signal; useful for algorithms working as both
+            hub and spoke
+        """
+        return self.got_kill_signal()
+
     @abc.abstractmethod
     def main(self):
         """
