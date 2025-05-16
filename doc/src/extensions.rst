@@ -101,10 +101,10 @@ nonanticipative variables to be fixed based on expected reduced costs. These two
 parameters iteract with each other -- the expected reduced costs are sorted by
 magnitude, and if the `fix_fraction_target`` percental is below ``zero_rc_tol``,
 then fewer than ``fix_fraction_target`` variables will be fixed. Further, to
-have a non-zero expected reduced cost, all nonant variable values *must be* at
+have a defined expected reduced cost, all nonant variable values *must be* at
 the same bound in the ReducedCostSpoke.
 
-Variables will be unfixed if they do not meet the expected reduced cost
+Variables will be unfixed if they no longer meet the expected reduced cost
 criterion for fixing, e.g., the variable's expected reduced cost became too
 low or the variable was not at its bound in every subproblem in the ReducedCostSpoke.
 
@@ -115,7 +115,7 @@ This extension will fix nonanticipative variables at their bound if they are at
 their bound in the RelaxedPHSpoke for that subproblem. It will similarily unfix
 nonanticipative variables which are not at their bounds in the RelaxedPHSpoke.
 Because different nonanticipative variables are fixed in different suproblems,
-it will also unfix nonanticipative variables if their value is at the the current
+it will also unfix nonanticipative variables if their value is *not* at the the current
 consensus solution xbar (because the variable was not fixed in a different subproblem
 and therefore came off its bound).
 

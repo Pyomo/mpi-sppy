@@ -86,7 +86,7 @@ The Frank-Wolfe progressive hedging hub can be used with most spokes
 because it supplies x and/or W values as part of its solution process.
 While FWPH is not known to converge to a primal solution for a SMIP, it
 often discovers excellent incumbent values along the way (when paired with
-a xhat spoke).
+an xhat spoke).
 
 Hub Convergers
 --------------
