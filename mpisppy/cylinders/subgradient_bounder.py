@@ -21,6 +21,7 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
 
         if extensions:
             self.opt.extobject.pre_iter0()
+        # setting this for PH extensions used by this Spoke
         self.opt._PHIter = 0
         self.trivial_bound = self.lagrangian()
         if extensions:
