@@ -79,7 +79,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == 0:
             teeme = self.opt.options['tee-rank0-solves']
         if iternum == 0:
-            warmstart = sputils.WarmstartStatus.CHECK
+            warmstart = sputils.WarmstartStatus.USER_SOLUTION
         else:
             warmstart = True
         self.opt.solve_loop(

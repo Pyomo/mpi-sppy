@@ -914,7 +914,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                         gripe=True,
                         tee=teeme,
                         verbose=verbose,
-                        warmstart=sputils.WarmstartStatus.CHECK,
+                        warmstart=sputils.WarmstartStatus.USER_SOLUTION,
                         )
 
         if self.options["verbose"]:

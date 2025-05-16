@@ -193,6 +193,12 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("user_warmstart",
+                           description="Will pass the user provided solution as a warmstart for "
+                           "each initial subproblem solve.",
+                           domain=bool,
+                           default=False)
+
         self.add_solver_specs(prefix="")
 
         self.add_to_config("seed",

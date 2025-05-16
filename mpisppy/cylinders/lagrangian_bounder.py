@@ -19,7 +19,7 @@ class _LagrangianMixin:
         self.opt._reenable_W()
         self.opt._create_solvers()
 
-    def lagrangian(self, need_solution=True, warmstart=False):
+    def lagrangian(self, need_solution=True, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         # update the nonant bounds, if possible, for a tighter relaxation
         self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
@@ -29,9 +29,6 @@ class _LagrangianMixin:
         teeme = False
         if "tee-rank0-solves" in self.opt.options:
             teeme = self.opt.options['tee-rank0-solves']
-        if not need_solution:
-            # overwrite the warmstart if we're not getting a solution
-            warmstart = False
 
         self.opt.solve_loop(
             solver_options=self.opt.current_solver_options,
@@ -61,11 +58,11 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
     converger_spoke_char = 'L'
 
-    def _set_weights_and_solve(self, need_solution):
+    def _set_weights_and_solve(self, need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
-        return self.lagrangian(need_solution=need_solution)
+        return self.lagrangian(need_solution=need_solution, warmstart=warmstart)
 
-    def do_while_waiting_for_new_Ws(self, need_solution, warmstart=False):
+    def do_while_waiting_for_new_Ws(self, need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         if self.opt.options.get("subgradient_while_waiting", False):
             # compute a subgradient step
             self.opt.Compute_Xbar(self.verbose)
@@ -83,7 +80,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
         if extensions:
             self.opt.extobject.pre_iter0()
         self.dk_iter = 1
-        self.trivial_bound = self.lagrangian(need_solution=need_solution, warmstart=sputils.WarmstartStatus.CHECK)
+        self.trivial_bound = self.lagrangian(need_solution=need_solution, warmstart=sputils.WarmstartStatus.USER_SOLUTION)
         if extensions:
             self.opt.extobject.post_iter0()
 
@@ -97,7 +94,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
             if self.update_Ws():
                 if extensions:
                     self.opt.extobject.miditer()
-                bound = self._set_weights_and_solve(need_solution=need_solution)
+                bound = self._set_weights_and_solve(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
@@ -106,4 +103,4 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                     self.opt.extobject.enditer_after_sync()
                 self.dk_iter += 1
             else:
-                self.do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=True)
+                self.do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)

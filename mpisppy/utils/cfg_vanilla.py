@@ -71,6 +71,7 @@ def shared_options(cfg):
         "presolve" : cfg.presolve,
         "rounding_bias" : cfg.rounding_bias,
         "warmstart_subproblems" : cfg.warmstart_subproblems,
+        "user_warmstart" : cfg.user_warmstart,
     }
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
