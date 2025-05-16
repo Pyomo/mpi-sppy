@@ -14,7 +14,7 @@
 
 import pyomo.environ as pyo
 import stoch_distr
-import examples.distr.distr_data as distr_data
+import mpisppy.tests.examples.distr.distr_data as distr_data
 from mpisppy.utils import config
 
 def _parse_args():

@@ -28,6 +28,10 @@ Here are two methods that seem to work well for installation, at least when cons
 
    * ``pip install mpi4py``
 
+#. It is also possible to automate mpi4py installation through pip  as an optional dependency when installing mpi-sppy from pip or from source by adding the `[mpi]` extras flag.
+
+   * ``pip install -e .[mpi]`` (after cloning and moving to the repo root directory)
+
 To test
 your installation, cd to the directory where you installed mpi-sppy
 (it is called ``mpi-sppy``) and then give this command.

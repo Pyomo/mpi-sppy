@@ -193,6 +193,12 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("user_warmstart",
+                           description="Will pass the user provided solution as a warmstart for "
+                           "each initial subproblem solve.",
+                           domain=bool,
+                           default=False)
+
         self.add_solver_specs(prefix="")
 
         self.add_to_config("seed",
@@ -461,6 +467,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+    def ph_nonant_args(self):
+
+        self.add_to_config(name="ph_nonant_hub",
+                           description="Use PH Hub which only supplies nonants (and not Ws) (default False)",
+                           domain=bool,
+                           default=False)
+
     def fixer_args(self):
 
         self.add_to_config('fixer',
@@ -471,7 +484,19 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("fixer_tol",
                            description="fixer bounds tolerance  (default 1e-4)",
                            domain=float,
-                           default=1e-2)
+                           default=1e-4)
+
+    def relaxed_ph_fixer_args(self):
+
+        self.add_to_config('relaxed_ph_fixer',
+                           description="have a relaxed PH fixer extension ",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("relaxed_ph_fixer_tol",
+                           description="relaxed PH fixer bounds tolerance  (default 1e-4)",
+                           domain=float,
+                           default=1e-4)
 
     def integer_relax_then_enforce_args(self):
         self.add_to_config('integer_relax_then_enforce',
@@ -721,6 +746,18 @@ class Config(pyofig.ConfigDict):
                             description="use gradient-based rho in PH OB",
                             domain=bool,
                             default=False)
+
+
+    def relaxed_ph_args(self):
+
+        self.add_to_config("relaxed_ph",
+                            description="have a relaxed PH spoke",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("relaxed_ph_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=1.0)",
+                            domain=float,
+                            default=1.0)
 
 
     def xhatlooper_args(self):

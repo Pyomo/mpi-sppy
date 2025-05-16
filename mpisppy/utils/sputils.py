@@ -35,7 +35,8 @@ global_rank = MPI.COMM_WORLD.Get_rank()
 class WarmstartStatus(IntEnum):
     FALSE = 0  # Falsy
     TRUE = 1   # Truthy
-    CHECK = -1 # Truthy
+    USER_SOLUTION = 2  # Truthy
+    PRIOR_SOLUTION = 3 # Truthy
 
 
 def build_vardatalist(model, varlist=None):

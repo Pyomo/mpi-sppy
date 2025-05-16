@@ -78,9 +78,12 @@ def _parse_args(m):
     cfg.aph_args()
     cfg.subgradient_args()
     cfg.fixer_args()    
+    cfg.relaxed_ph_fixer_args()
     cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()    
     cfg.gapper_args(name="lagrangian")
+    cfg.ph_nonant_args()
+    cfg.relaxed_ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.ph_ob_args()
@@ -189,6 +192,14 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                        rho_setter = rho_setter,
                        all_nodenames = all_nodenames,
                    )
+    elif cfg.ph_nonant_hub:
+        hub_dict = vanilla.ph_nonant_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  ph_extensions=None,
+                                  ph_converger=ph_converger,
+                                  rho_setter = rho_setter,
+                                  all_nodenames = all_nodenames,
+                                  )
     else:
         # Vanilla PH hub
         hub_dict = vanilla.ph_hub(*beans,
@@ -216,6 +227,9 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
+
+    if cfg.relaxed_ph_fixer:
+        vanilla.add_relaxed_ph_fixer(hub_dict, cfg)
 
     if cfg.integer_relax_then_enforce:
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
@@ -327,7 +341,20 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             vanilla.add_coeff_rho(ph_ob_spoke, cfg)
         if cfg.sensi_rho:
             vanilla.add_sensi_rho(ph_ob_spoke, cfg)
- 
+
+    # relaxed ph spoke
+    if cfg.relaxed_ph:
+        relaxed_ph_spoke = vanilla.relaxed_ph_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(relaxed_ph_spoke, cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(relaxed_ph_spoke, cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(relaxed_ph_spoke, cfg)
 
     # subgradient outer bound spoke
     if cfg.subgradient:
@@ -376,6 +403,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_ob:
         list_of_spoke_dict.append(ph_ob_spoke)
+    if cfg.relaxed_ph:
+        list_of_spoke_dict.append(relaxed_ph_spoke)
     if cfg.subgradient:
         list_of_spoke_dict.append(subgradient_spoke)
     if cfg.xhatshuffle:
