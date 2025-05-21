@@ -8,7 +8,7 @@
 ###############################################################################
 
 # A dynamic rho base class that assumes a member function compute_and_update_rho
-# As of Nov 2024, it only mainly provides services
+# As of Nov 2024, it mainly provides services
 
 import numpy as np
 import mpisppy.MPI as MPI
