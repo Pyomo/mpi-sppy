@@ -19,12 +19,16 @@
     Separate hub and spoke classes for memory/window management?
 """
 
-import numpy as np
 import abc
 import time
+import logging
+import numpy as np
+from math import inf
 
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
+
+logger = logging.getLogger(__name__)
 
 def communicator_array(size):
     arr = np.empty(size+1, dtype='d')
@@ -116,7 +120,8 @@ class SPCommunicator:
         or expects to receive from another SPCommunicator object.
     """
     send_fields = ()
-    receive_fields = ()
+    receive_fields = (Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND,
+                      Field.NONANT_LOWER_BOUNDS, Field.NONANT_UPPER_BOUNDS,)
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, communicators, options=None):
         self.fullcomm = fullcomm
@@ -138,7 +143,7 @@ class SPCommunicator:
         # Common fields for spokes and hubs
         self.receive_buffers = {}
         self.send_buffers = {}
-        # key: Field, value: list of (strata_rank, SPComm) with that Field
+        # key: Field, value: list of (strata_rank, SPComm, buffer) with that Field
         self.receive_field_spcomms = {}
 
         # setup FieldLengths which calculates
@@ -151,6 +156,13 @@ class SPCommunicator:
         # attach the SPCommunicator to
         # the SPBase object
         self.opt.spcomm = self
+
+        # for communicating with bounders
+        self.latest_ib_char = None
+        self.latest_ob_char = None
+        self.last_ib_idx = None
+        self.last_ob_idx = None
+        self.initialize_bound_values()
 
         return
 
@@ -382,3 +394,124 @@ class SPCommunicator:
         else:
             buf._is_new = False
             return False
+
+    def receive_nonant_bounds(self):
+        """ receive the bounds on the nonanticipative variables based on
+        Field.NONANT_LOWER_BOUNDS and Field.NONANT_UPPER_BOUNDS. Updates the
+        NONANT_LOWER_BOUNDS and NONANT_UPPER_BOUNDS buffers, and if new,
+        updates the corresponding Pyomo nonant variables
+        """
+        bounds_modified = 0
+        for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_LOWER_BOUNDS]:
+            is_new = self.get_receive_buffer(recv_buf, Field.NONANT_LOWER_BOUNDS, idx)
+            if not is_new:
+                continue
+            for s in self.opt.local_scenarios.values():
+                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                    xvarlb = xvar.lb
+                    if xvarlb is None:
+                        xvarlb = -inf
+                    if recv_buf[ci] > xvarlb:
+                        # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
+                        xvar.lb = recv_buf[ci]
+                        bounds_modified += 1
+        for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
+            is_new = self.get_receive_buffer(recv_buf, Field.NONANT_UPPER_BOUNDS, idx)
+            if not is_new:
+                continue
+            for s in self.opt.local_scenarios.values():
+                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
+                    xvarub = xvar.ub
+                    if xvarub is None:
+                        xvarub = inf 
+                    if recv_buf[ci] < xvarub:
+                        # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
+                        xvar.ub = recv_buf[ci]
+                        bounds_modified += 1
+
+        bounds_modified /= len(self.opt.local_scenarios)
+
+        if bounds_modified > 0:
+            global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
+
+    def receive_innerbounds(self):
+        """ Get inner bounds from inner bound providers
+        """
+        logger.debug(f"{self.__class__.__name__} is trying to receive from InnerBounds")
+        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
+            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_INNER_BOUND, idx)
+            if is_new:
+                bound = recv_buf[0]
+                logger.debug(f"new InnerBound from {cls.__name__} in {self.__class__.__name__}, {bound=}")
+                self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
+        logger.debug(f"{self.__class__.__name__} back from InnerBounds")
+
+    def receive_outerbounds(self):
+        """ Get outer bounds from outer bound providers
+        """
+        logger.debug(f"{self.__class__.__name__} is trying to receive from OuterBounds")
+        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
+            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_OUTER_BOUND, idx) 
+            if is_new:
+                bound = recv_buf[0]
+                logger.debug(f"new OuterBound from {cls.__name__} in {self.__class__.__name__}, {bound=}")
+                self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
+        logger.debug(f"{self.__class__.__name__} back from OuterBounds")
+
+    def OuterBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
+        current_bound = self.BestOuterBound
+        if self._outer_bound_update(new_bound, current_bound):
+            if cls is None:
+                self.latest_ob_char = char
+                self.last_ob_idx = self.strata_rank
+            else:
+                self.latest_ob_char = cls.converger_spoke_char
+                self.last_ob_idx = idx
+            return new_bound
+        else:
+            return current_bound
+
+    def InnerBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
+        current_bound = self.BestInnerBound
+        if self._inner_bound_update(new_bound, current_bound):
+            if cls is None:
+                self.latest_ib_char = char
+                self.last_ib_idx = self.strata_rank
+            else:
+                self.latest_ib_char = cls.converger_spoke_char
+                self.last_ib_idx = idx
+            return new_bound
+        else:
+            return current_bound
+
+    def initialize_bound_values(self):
+        if self.opt.is_minimizing:
+            self.BestInnerBound = inf
+            self.BestOuterBound = -inf
+            self._inner_bound_update = lambda new, old : (new < old)
+            self._outer_bound_update = lambda new, old : (new > old)
+        else:
+            self.BestInnerBound = -inf
+            self.BestOuterBound = inf
+            self._inner_bound_update = lambda new, old : (new > old)
+            self._outer_bound_update = lambda new, old : (new < old)
+
+    def compute_gaps(self):
+        """ Compute the current absolute and relative gaps,
+            using the current self.BestInnerBound and self.BestOuterBound
+        """
+        if self.opt.is_minimizing:
+            abs_gap = self.BestInnerBound - self.BestOuterBound
+        else:
+            abs_gap = self.BestOuterBound - self.BestInnerBound
+
+        if abs_gap != inf:
+            rel_gap = ( abs_gap /
+                        max(1e-10,
+                            abs(self.BestOuterBound),
+                            abs(self.BestInnerBound),
+                           )
+                      )
+        else:
+            rel_gap = inf
+        return abs_gap, rel_gap

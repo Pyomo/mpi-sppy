@@ -16,6 +16,7 @@ import json
 import mpisppy.cylinders.spoke
 import mpisppy.utils.find_rho as find_rho
 import mpisppy.utils.gradient as grad
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.wtracker import WTracker
 
 class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
@@ -64,7 +65,8 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             dtiming=False,
             gripe=True,
             tee=teeme,
-            verbose=verbose
+            verbose=verbose,
+            warmstart=True,
         )
         if iternum == 0:
             return self.opt.Ebound(verbose)
@@ -76,12 +78,17 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         teeme = False
         if "tee-rank0-solves" in self.opt.options and self.opt.cylinder_rank == 0:
             teeme = self.opt.options['tee-rank0-solves']
+        if iternum == 0:
+            warmstart = sputils.WarmstartStatus.USER_SOLUTION
+        else:
+            warmstart = True
         self.opt.solve_loop(
             solver_options=self.opt.current_solver_options,
             dtiming=False,
             gripe=True,
             tee=teeme,
-            verbose=verbose
+            verbose=verbose,
+            warmstart=warmstart,
         )
         self.opt._reenable_prox()
         # Compute the resulting bound

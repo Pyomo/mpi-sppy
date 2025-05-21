@@ -8,11 +8,13 @@
 ###############################################################################
 # base class for hub and for spoke strata
 
+import os
 import logging
 import time
 import math
 import inspect
 import random
+import pathlib
 
 import numpy as np
 from mpisppy import MPI
@@ -20,6 +22,7 @@ from mpisppy import MPI
 import pyomo.environ as pyo
 from pyomo.opt import SolverFactory
 from pyomo.common.collections import ComponentSet
+from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 from mpisppy.spbase import SPBase
 import mpisppy.utils.sputils as sputils
@@ -28,6 +31,7 @@ from mpisppy.opt.presolve import SPPresolve
 
 logger = logging.getLogger("SPOpt")
 logger.setLevel(logging.WARN)
+
 
 class SPOpt(SPBase):
     """ Defines optimization methods for hubs and spokes """
@@ -71,6 +75,17 @@ class SPOpt(SPBase):
         self.extensions = extensions
         self.extension_kwargs = extension_kwargs
 
+        self._subproblem_solve_index = {}
+
+        if self.options.get("solver_log_dir", None):
+            if self.global_rank == 0:
+                # create the directory if not there
+                directory = self.options["solver_log_dir"]
+                try:
+                    pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
+                except FileExistsError:
+                    raise FileExistsError(f"solver-log-dir={directory} already exists!")
+
         if (self.extensions is not None):
             if self.extension_kwargs is None:
                 self.extobject = self.extensions(self)
@@ -109,7 +124,9 @@ class SPOpt(SPBase):
                   verbose=False,
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
-                  need_solution=True):
+                  need_solution=True,
+                  warmstart=sputils.WarmstartStatus.FALSE,
+                  ):
         """ Solve one subproblem.
 
         Args:
@@ -136,6 +153,8 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
 
         Returns:
             float:
@@ -174,9 +193,31 @@ class SPOpt(SPBase):
                 solve_keyword_args["tee"] = True
         if (sputils.is_persistent(s._solver_plugin)):
             solve_keyword_args["save_results"] = False
-        elif disable_pyomo_signal_handling:
+        if self.options.get("warmstart_subproblems", False):
+            if warmstart == sputils.WarmstartStatus.USER_SOLUTION:
+                warmstart = self.options.get("user_warmstart", False)
+            elif warmstart == sputils.WarmstartStatus.PRIOR_SOLUTION:
+                warmstart = getattr(s._mpisppy_data, "solution_available", False)
+            else:
+                assert isinstance(warmstart, (sputils.WarmstartStatus, bool))
+                warmstart = bool(warmstart)
+            solve_keyword_args["warmstart"] = warmstart
+        if disable_pyomo_signal_handling:
             # solve_keyword_args["use_signal_handling"] = False
             pass
+
+        if self.options.get("solver_log_dir", None):
+            if k not in self._subproblem_solve_index:
+                self._subproblem_solve_index[k] = 0
+            dir_name = self.options["solver_log_dir"]
+            file_name = f"{self._get_cylinder_name()}_{k}_{self._subproblem_solve_index[k]}.log"
+            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
+            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
+            if isinstance(s._solver_plugin, GurobiDirect):
+                s._solver_plugin.options["LogFile"] = os.path.join(dir_name, file_name)
+            else:
+                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            self._subproblem_solve_index[k] += 1
 
         Ag = getattr(self, "Ag", None)  # agnostic
         if Ag is not None:
@@ -198,10 +239,7 @@ class SPOpt(SPBase):
                 s._mpisppy_data.scenario_feasible = False
 
                 if gripe:
-                    name = self.__class__.__name__
-                    if self.spcomm:
-                        name = self.spcomm.__class__.__name__
-                    print (f"[{name}] Solve failed for scenario {s.name}")
+                    print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
                     if results is not None:
                         print ("status=", results.solver.status)
                         print ("TerminationCondition=",
@@ -225,6 +263,10 @@ class SPOpt(SPBase):
                 except Exception as e: # catch everything
                     if need_solution:
                         raise e
+                    else:
+                        s._mpisppy_data.solution_available = False
+                else:
+                    s._mpisppy_data.solution_available = True
                 if self.is_minimizing:
                     s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
                     s._mpisppy_data.inner_bound = results.Problem[0].Upper_bound
@@ -262,7 +304,9 @@ class SPOpt(SPBase):
                    disable_pyomo_signal_handling=False,
                    tee=False,
                    verbose=False,
-                   need_solution=True):
+                   need_solution=True,
+                   warmstart=sputils.WarmstartStatus.FALSE,
+                   ):
         """ Loop over `local_subproblems` and solve them in a manner
         dicated by the arguments.
 
@@ -290,6 +334,8 @@ class SPOpt(SPBase):
             need_solution (boolean, optional):
                 If True, raises an exception if a solution is not available.
                 Default True
+            warmstart (bool, optional):
+                If True, warmstart the subproblem solves. Default False.
         """
 
         """ Developer notes:
@@ -332,6 +378,7 @@ class SPOpt(SPBase):
                     gripe=gripe,
                     disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                     need_solution=need_solution,
+                    warmstart=warmstart,
                 )
             )
 

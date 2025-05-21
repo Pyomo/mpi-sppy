@@ -20,6 +20,7 @@ class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
     DUALS=2
+    RELAXED_NONANT=3
     BEST_OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
@@ -27,6 +28,8 @@ class Field(enum.IntEnum):
     SCENARIO_REDUCED_COST=201
     CROSS_SCENARIO_CUT=300
     CROSS_SCENARIO_COST=400
+    NONANT_LOWER_BOUNDS=500
+    NONANT_UPPER_BOUNDS=501
     WHOLE=1_000_000
 
 
@@ -40,6 +43,7 @@ _field_lengths = {
         Field.SHUTDOWN : 1,
         Field.NONANT : _field_length_components.local_nonant_length,
         Field.DUALS : _field_length_components.local_nonant_length,
+        Field.RELAXED_NONANT : _field_length_components.local_nonant_length,
         Field.BEST_OBJECTIVE_BOUNDS : 2,
         Field.OBJECTIVE_INNER_BOUND : 1,
         Field.OBJECTIVE_OUTER_BOUND : 1,
@@ -47,6 +51,8 @@ _field_lengths = {
         Field.SCENARIO_REDUCED_COST : _field_length_components.local_nonant_length,
         Field.CROSS_SCENARIO_CUT : _field_length_components.total_number_scenarios * (_field_length_components.total_number_nonants + 1 + 1),
         Field.CROSS_SCENARIO_COST : _field_length_components.total_number_scenarios * _field_length_components.total_number_scenarios,
+        Field.NONANT_LOWER_BOUNDS : _field_length_components.total_number_nonants,
+        Field.NONANT_UPPER_BOUNDS : _field_length_components.total_number_nonants,
 }
 
 

@@ -12,22 +12,21 @@ import logging
 import mpisppy.log
 
 from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
-from math import inf
 
 from mpisppy import global_toc
 
 from mpisppy.cylinders.spwindow import Field
 
 # Could also pass, e.g., sys.stdout instead of a filename
-mpisppy.log.setup_logger("mpisppy.cylinders.Hub",
+mpisppy.log.setup_logger(__name__,
                          "hub.log",
                          level=logging.CRITICAL)
-logger = logging.getLogger("mpisppy.cylinders.Hub")
+logger = logging.getLogger(__name__)
 
 class Hub(SPCommunicator):
 
     send_fields = (*SPCommunicator.send_fields, Field.SHUTDOWN, Field.BEST_OBJECTIVE_BOUNDS,)
-    receive_fields = (*SPCommunicator.receive_fields, Field.OBJECTIVE_INNER_BOUND, Field.OBJECTIVE_OUTER_BOUND, )
+    receive_fields = (*SPCommunicator.receive_fields,)
 
     _hub_algo_best_bound_provider = False
 
@@ -37,15 +36,9 @@ class Hub(SPCommunicator):
         logger.debug(f"Built the hub object on global rank {fullcomm.Get_rank()}")
         # for logging
         self.print_init = True
-        self.latest_ib_char = None
-        self.latest_ob_char = None
-        self.last_ib_idx = None
-        self.last_ob_idx = None
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
         self.last_gap = float('inf')  # abs_gap tracker
-
-        self.initialize_bound_values()
 
         return
 
@@ -80,29 +73,6 @@ class Hub(SPCommunicator):
     def clear_latest_chars(self):
         self.latest_ib_char = None
         self.latest_ob_char = None
-
-    def compute_gaps(self):
-        """ Compute the current absolute and relative gaps,
-            using the current self.BestInnerBound and self.BestOuterBound
-        """
-        if self.opt.is_minimizing:
-            abs_gap = self.BestInnerBound - self.BestOuterBound
-        else:
-            abs_gap = self.BestOuterBound - self.BestInnerBound
-
-        ## define by the best solution, as is common
-        nano = float("nan")  # typing aid
-        if (
-            abs_gap != nano
-            and abs_gap != float("inf")
-            and abs_gap != float("-inf")
-            and self.BestOuterBound != nano
-            and self.BestOuterBound != 0
-        ):
-            rel_gap = abs_gap / abs(self.BestOuterBound)
-        else:
-            rel_gap = float("inf")
-        return abs_gap, rel_gap
 
     def get_update_string(self):
         if self.latest_ib_char is None and \
@@ -175,72 +145,6 @@ class Hub(SPCommunicator):
             global_toc("Statistics at termination", True)
             self.screen_trace()
 
-    def receive_innerbounds(self):
-        """ Get inner bounds from inner bound spokes
-            NOTE: Does not check if there _are_ innerbound spokes
-            (but should be harmless to call if there are none)
-        """
-        logging.debug("Hub is trying to receive from InnerBounds")
-        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_INNER_BOUND]:
-            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_INNER_BOUND, idx)
-            if is_new:
-                bound = recv_buf[0]
-                logging.debug("!! new InnerBound to opt {}".format(bound))
-                self.BestInnerBound = self.InnerBoundUpdate(bound, cls, idx)
-        logging.debug("ph back from InnerBounds")
-
-    def receive_outerbounds(self):
-        """ Get outer bounds from outer bound spokes
-            NOTE: Does not check if there _are_ outerbound spokes
-            (but should be harmless to call if there are none)
-        """
-        logging.debug("Hub is trying to receive from OuterBounds")
-        for idx, cls, recv_buf in self.receive_field_spcomms[Field.OBJECTIVE_OUTER_BOUND]:
-            is_new = self.get_receive_buffer(recv_buf, Field.OBJECTIVE_OUTER_BOUND, idx)
-            if is_new:
-                bound = recv_buf[0]
-                logging.debug("!! new OuterBound to opt {}".format(bound))
-                self.BestOuterBound = self.OuterBoundUpdate(bound, cls, idx)
-        logging.debug("ph back from OuterBounds")
-
-    def OuterBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
-        current_bound = self.BestOuterBound
-        if self._outer_bound_update(new_bound, current_bound):
-            if cls is None:
-                self.latest_ob_char = char
-                self.last_ob_idx = 0
-            else:
-                self.latest_ob_char = cls.converger_spoke_char
-                self.last_ob_idx = idx
-            return new_bound
-        else:
-            return current_bound
-
-    def InnerBoundUpdate(self, new_bound, cls=None, idx=None, char='*'):
-        current_bound = self.BestInnerBound
-        if self._inner_bound_update(new_bound, current_bound):
-            if cls is None:
-                self.latest_ib_char = char
-                self.last_ib_idx = 0
-            else:
-                self.latest_ib_char = cls.converger_spoke_char
-                self.last_ib_idx = idx
-            return new_bound
-        else:
-            return current_bound
-
-    def initialize_bound_values(self):
-        if self.opt.is_minimizing:
-            self.BestInnerBound = inf
-            self.BestOuterBound = -inf
-            self._inner_bound_update = lambda new, old : (new < old)
-            self._outer_bound_update = lambda new, old : (new > old)
-        else:
-            self.BestInnerBound = -inf
-            self.BestOuterBound = inf
-            self._inner_bound_update = lambda new, old : (new > old)
-            self._outer_bound_update = lambda new, old : (new < old)
-
     def _populate_boundsout_cache(self, buf):
         """ Populate a given buffer with the current bounds
         """
@@ -292,15 +196,26 @@ class Hub(SPCommunicator):
         return
 
     def sync_bounds(self):
+        self.receive_nonant_bounds()
         self.receive_outerbounds()
         self.receive_innerbounds()
         self.send_boundsout()
 
 
-class PHHub(Hub):
+class PHNonantHub(Hub):
+    """
+    Like PHHub, but only sends nonants and omits Ws. To be used
+    when another cylinder is supplying Ws (like RelaxedPHSpoke).
+    Could be removed when mpi-sppy supports pointing consuming
+    spokes like Lagrangian to a specific dual (W) buffer.
+    """
 
-    send_fields = (*Hub.send_fields, Field.NONANT, Field.DUALS)
+    send_fields = (*Hub.send_fields, Field.NONANT, )
     receive_fields = (*Hub.receive_fields,)
+
+    @property
+    def nonant_field(self):
+        return Field.NONANT
 
     def setup_hub(self):
         ## Generate some warnings if nothing is giving bounds
@@ -388,16 +303,26 @@ class PHHub(Hub):
         """ Gather nonants and send them to the appropriate spokes
         """
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.send_buffers[Field.NONANT]
+        nonant_send_buffer = self.send_buffers[self.nonant_field]
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.put_send_buffer(nonant_send_buffer, Field.NONANT)
+        self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
         return
+
+    def send_ws(self):
+        """ Nonant hub; do not send Ws
+        """
+        pass
+
+
+class PHHub(PHNonantHub):
+    send_fields = (*PHNonantHub.send_fields, Field.DUALS, )
+    receive_fields = (*PHNonantHub.receive_fields,)
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
@@ -410,6 +335,7 @@ class PHHub(Hub):
         self.put_send_buffer(my_ws, Field.DUALS)
 
         return
+
 
 class LShapedHub(Hub):
 

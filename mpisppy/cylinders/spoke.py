@@ -29,6 +29,12 @@ class Spoke(SPCommunicator):
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         return self.allreduce_or(shutdown_buf[0] == 1.0)
 
+    def is_converged(self):
+        """ Alias for got_kill_signal; useful for algorithms working as both
+            hub and spoke
+        """
+        return self.got_kill_signal()
+
     @abc.abstractmethod
     def main(self):
         """
@@ -85,6 +91,12 @@ class _BoundSpoke(Spoke):
         return self._bound[0]
 
     def send_bound(self, value):
+        if self.bound_type() == Field.OBJECTIVE_INNER_BOUND:
+            self.BestInnerBound = self.InnerBoundUpdate(value)
+        elif self.bound_type() == Field.OBJECTIVE_OUTER_BOUND:
+            self.BestOuterBound = self.OuterBoundUpdate(value)
+        else:
+            raise RuntimeError(f"Unexpected bound_type {self.bound_type()}")
         self._append_trace(value)
         self._bound[0] = value
         self.put_send_buffer(self._bound, self.bound_type())

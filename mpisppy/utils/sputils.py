@@ -17,6 +17,8 @@ import numpy as np
 import inspect
 import importlib
 import mpisppy.scenario_tree as scenario_tree
+
+from enum import IntEnum
 from pyomo.core import Objective
 from pyomo.repn import generate_standard_repn
 
@@ -28,6 +30,13 @@ from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 from mpisppy import tt_timer
 
 global_rank = MPI.COMM_WORLD.Get_rank()
+
+
+class WarmstartStatus(IntEnum):
+    FALSE = 0  # Falsy
+    TRUE = 1   # Truthy
+    USER_SOLUTION = 2  # Truthy
+    PRIOR_SOLUTION = 3 # Truthy
 
 
 def build_vardatalist(model, varlist=None):
@@ -181,7 +190,7 @@ def reactivate_objs(scenario_instance):
     
 def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
               EF_name=None, suppress_warnings=False,
-              nonant_for_fixed_vars=True):
+              nonant_for_fixed_vars=True, total_number_of_scenarios=None):
     """ Create a ConcreteModel of the extensive form.
 
         Args:
@@ -200,6 +209,8 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             nonant_for_fixed_vars (bool--optional): If True, enforces
                 non-anticipativity constraints for all variables, including
                 those which have been fixed. Default is True.
+            total_number_of_scenarios (int, optional):
+                For calculating uniform probabilities, the total number of scenarios.
 
         Returns:
             EF_instance (ConcreteModel):
@@ -227,6 +238,8 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
             print("WARNING: passed single scenario to create_EF()")
         # special code to patch in ref_vars
         scenario_instance.ref_vars = dict()
+        scenario_instance.ref_suppl_vars = dict()
+        scenario_instance.ref_surrogate_vars = dict()
         scenario_instance._nlens = {node.name: len(node.nonant_vardata_list) 
                                 for node in scenario_instance._mpisppy_node_list}
         for node in scenario_instance._mpisppy_node_list:
@@ -236,6 +249,11 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
                 v = node.nonant_vardata_list[i]
                 if (ndn, i) not in scenario_instance.ref_vars:
                     scenario_instance.ref_vars[(ndn, i)] = v
+                    if v in node.surrogate_vardatas:
+                        scenario_instance.ref_surrogate_vars[(ndn, i)] = v
+            for i, v in enumerate(node.nonant_ef_suppl_vardata_list):
+                if (ndn, i) not in scenario_instance.ref_suppl_vars:
+                    scenario_instance.ref_suppl_vars[(ndn, i)] = v
         # patch in EF_Obj        
         scenario_objs = deact_objs(scenario_instance)        
         obj = scenario_objs[0]            
@@ -249,9 +267,11 @@ def create_EF(scenario_names, scenario_creator, scenario_creator_kwargs=None,
         all(hasattr(scen, '_mpisppy_probability') for scen in scen_dict.values())
     uniform_specified = \
         probs_specified and all(scen._mpisppy_probability == "uniform" for scen in scen_dict.values())
+    if total_number_of_scenarios is None:
+        total_number_of_scenarios = len(scen_dict)
     if not probs_specified or uniform_specified:
         for scen in scen_dict.values():
-            scen._mpisppy_probability = 1 / len(scen_dict)
+            scen._mpisppy_probability = 1 / total_number_of_scenarios
         if not suppress_warnings and not uniform_specified:
             print('WARNING: At least one scenario is missing _mpisppy_probability attribute.',
                   'Assuming equally-likely scenarios...')
@@ -336,6 +356,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                       # variable number)
 
     ref_suppl_vars = dict()
+    ref_surrogate_vars = dict()
 
     EF_instance._nlens = dict() 
 
@@ -368,6 +389,8 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
                     # grab the reference variable
                     if (nonant_for_fixed_vars) or (not v.is_fixed()):
                         ref_vars[(ndn, i)] = v
+                        if v in node.surrogate_vardatas:
+                            ref_surrogate_vars[(ndn, i)] = v
                 # Add a non-anticipativity constraint, except in the case when
                 # the variable is fixed and nonant_for_fixed_vars=False.
                 # or we're in the surrogate nonants
@@ -395,7 +418,8 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
 
     EF_instance.ref_vars = ref_vars
     EF_instance.ref_suppl_vars = ref_suppl_vars
-                        
+    EF_instance.ref_surrogate_vars = ref_surrogate_vars
+
     return EF_instance
 
 def _models_have_same_sense(models):
@@ -513,7 +537,7 @@ def write_ef_first_stage_solution(ef,
         representative_scenario = getattr(ef,ef._ef_scenario_names[0])
         first_stage_solution_writer(solution_file_name, 
                                     representative_scenario,
-                                    bundling=False)
+                                    bundling=True)
 
 def write_ef_tree_solution(ef, solution_directory_name,
         scenario_tree_solution_writer=scenario_tree_solution_writer):
@@ -533,7 +557,7 @@ def write_ef_tree_solution(ef, solution_directory_name,
             scenario_tree_solution_writer(solution_directory_name,
                                           scenario_name, 
                                           scenario,
-                                          bundling=False)
+                                          bundling=True)
     
 
 def extract_num(string):
@@ -1030,12 +1054,24 @@ def nonant_cost_coeffs(s):
     """
     objective = find_objective(s)
 
+    # deal with proper bundles
+    if hasattr(s, "_ef_scenario_names"):
+        nonant_varids = {}
+        for scenario_name in s._ef_scenario_names:
+            scenario = s.component(scenario_name)
+            for node in scenario._mpisppy_node_list:
+                ndn = node.name
+                for i, v in enumerate(node.nonant_vardata_list):
+                    nonant_varids[id(v)] = (ndn, i)
+    else:
+        nonant_varids = s._mpisppy_data.varid_to_nonant_index
+
     # initialize to 0
     cost_coefs = {ndn_i: 0 for ndn_i in s._mpisppy_data.nonant_indices}
     repn = generate_standard_repn(objective.expr, quadratic=False)
     for coef, var in zip(repn.linear_coefs, repn.linear_vars):
-        if id(var) in s._mpisppy_data.varid_to_nonant_index:
-            cost_coefs[s._mpisppy_data.varid_to_nonant_index[id(var)]] = coef
+        if id(var) in nonant_varids:
+            cost_coefs[nonant_varids[id(var)]] += coef
 
     for var in repn.nonlinear_vars:
         if id(var) in s._mpisppy_data.varid_to_nonant_index:
@@ -1044,6 +1080,7 @@ def nonant_cost_coeffs(s):
                 f"Variable {var} has nonlinear interactions in the objective funtion. "
                 "Consider using gradient-based rho."
             )
+
     return cost_coefs
 
 

@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 import mpisppy.cylinders.spoke
+import mpisppy.utils.sputils as sputils
 
 class _LagrangianMixin:
 
@@ -18,7 +19,9 @@ class _LagrangianMixin:
         self.opt._reenable_W()
         self.opt._create_solvers()
 
-    def lagrangian(self, need_solution=True):
+    def lagrangian(self, need_solution=True, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
+        # update the nonant bounds, if possible, for a tighter relaxation
+        self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
         if "ipopt" in self.opt.options["solver_name"]:
@@ -34,6 +37,7 @@ class _LagrangianMixin:
             tee=teeme,
             verbose=verbose,
             need_solution=need_solution,
+            warmstart=warmstart,
         )
         ''' DTM (dlw edits): This is where PHBase Iter0 checks for scenario
             probabilities that don't sum to one and infeasibility and
@@ -54,22 +58,35 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
     converger_spoke_char = 'L'
 
-    def _set_weights_and_solve(self, need_solution=True):
+    def _set_weights_and_solve(self, need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
         self.opt.W_from_flat_list(self.localWs) # Sets the weights
-        return self.lagrangian(need_solution=need_solution)
+        return self.lagrangian(need_solution=need_solution, warmstart=warmstart)
+
+    def do_while_waiting_for_new_Ws(self, need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
+        if self.opt.options.get("subgradient_while_waiting", False):
+            # compute a subgradient step
+            self.opt.Compute_Xbar(self.verbose)
+            self.opt.Update_W(self.verbose)
+            bound = self.lagrangian(need_solution=need_solution, warmstart=warmstart)
+            if bound is not None:
+                self.send_bound(bound)
 
     def main(self, need_solution=False):
-        verbose = self.opt.options['verbose']
+        self.verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
 
         if extensions:
             self.opt.extobject.pre_iter0()
-        self.dk_iter = 1
-        self.trivial_bound = self.lagrangian(need_solution=need_solution)
+
+        # setting this for PH extensions used by this Spoke
+        self.opt._PHIter = 0
+        self.trivial_bound = self.lagrangian(need_solution=need_solution, warmstart=sputils.WarmstartStatus.USER_SOLUTION)
+
         if extensions:
             self.opt.extobject.post_iter0()
+        self.opt._PHIter += 1
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
@@ -81,18 +98,13 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
             if self.update_Ws():
                 if extensions:
                     self.opt.extobject.miditer()
-                bound = self._set_weights_and_solve(need_solution=need_solution)
+                bound = self._set_weights_and_solve(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
                     self.send_bound(bound)
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
-                self.dk_iter += 1
-            elif self.opt.options.get("subgradient_while_waiting", False):
-                # compute a subgradient step
-                self.opt.Compute_Xbar(verbose)
-                self.opt.Update_W(verbose)
-                bound = self.lagrangian(need_solution=need_solution)
-                if bound is not None:
-                    self.send_bound(bound)
+                self.opt._PHIter += 1
+            else:
+                self.do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)

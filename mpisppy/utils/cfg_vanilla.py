@@ -12,6 +12,7 @@
     IDIOM: we feel free to have unused dictionary entries."""
 
 import copy
+import json
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
@@ -35,13 +36,16 @@ from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
 from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.hub import PHHub, SubgradientHub, APHHub, FWPHHub
+from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
+from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
+from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
 from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
+from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
 from mpisppy.extensions.sep_rho import SepRho
 from mpisppy.extensions.coeff_rho import CoeffRho
 from mpisppy.extensions.sensi_rho import SensiRho
@@ -68,6 +72,8 @@ def shared_options(cfg):
         "trace_prefix" : cfg.trace_prefix,
         "presolve" : cfg.presolve,
         "rounding_bias" : cfg.rounding_bias,
+        "warmstart_subproblems" : cfg.warmstart_subproblems,
+        "user_warmstart" : cfg.user_warmstart,
     }
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
@@ -78,6 +84,8 @@ def shared_options(cfg):
         shoptions["iterk_solver_options"]["mipgap"] = cfg.iterk_mipgap
     if _hasit(cfg, "reduced_costs"):
         shoptions["rc_bound_tol"] = cfg.rc_bound_tol
+    if _hasit(cfg, "solver_log_dir"):
+        shoptions["solver_log_dir"] = cfg.solver_log_dir
 
     return shoptions
 
@@ -141,6 +149,35 @@ def ph_hub(
     add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
+def ph_nonant_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=None,
+        ph_extensions=None,
+        extension_kwargs=None,
+        ph_converger=None,
+        rho_setter=None,
+        variable_probability=None,
+        all_nodenames=None,
+):
+    hub_dict = ph_hub(
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+        ph_converger=ph_converger,
+        rho_setter=rho_setter,
+        variable_probability=variable_probability,
+        all_nodenames=all_nodenames,
+    )
+    # use PHNonantHub instead of PHHub
+    hub_dict["hub_class"] = PHNonantHub
+    return hub_dict
 
 def aph_hub(cfg,
     scenario_creator,
@@ -282,12 +319,30 @@ def extension_adder(hub_dict,ext_class):
         hub_dict["opt_kwargs"]["extensions"] = MultiExtension
     return hub_dict
 
+def add_gapper(hub_dict, cfg, name=None):
+    hub_dict = extension_adder(hub_dict, Gapper)
+    if name is None and cfg.mipgaps_json is not None:
+        with open(cfg.mipgaps_json) as fin:
+            din = json.load(fin)
+        mipgapdict = {int(i): din[i] for i in din}
+    else:
+        mipgapdict = None
+    if name is None:
+        name = ""
+    else:
+        name = name + "_"
+    hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
+        "verbose": cfg.verbose,
+        "mipgapdict": mipgapdict,
+        "starting_mipgap": getattr(cfg, f"{name}starting_mipgap"),
+        "mipgap_ratio" : getattr(cfg, f"{name}mipgap_ratio"),
+    }
 
 def add_fixer(hub_dict,
               cfg,
               ):
     hub_dict = extension_adder(hub_dict,Fixer)
-    hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":False,
+    hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":cfg.verbose,
                                               "boundtol": cfg.fixer_tol,
                                               "id_fix_list_fct": cfg.id_fix_list_fct}
     return hub_dict
@@ -333,14 +388,24 @@ def add_reduced_costs_fixer(hub_dict,
     hub_dict["opt_kwargs"]["options"]["rc_options"] = {
             "verbose": cfg.rc_verbose,
             "debug": cfg.rc_debug,
-            "use_rc_fixer": cfg.rc_fixer,
             "zero_rc_tol": cfg.rc_zero_tol,
             "fix_fraction_target_pre_iter0": cfg.rc_fix_fraction_pre_iter0,
             "fix_fraction_target_iter0": cfg.rc_fix_fraction_iter0,
             "fix_fraction_target_iterK": cfg.rc_fix_fraction_iterk,
-            "use_rc_bt": cfg.rc_bound_tightening,
             "rc_bound_tol": cfg.rc_bound_tol,
             "rc_fixer_require_improving_lagrangian": cfg.rc_fixer_require_improving_lagrangian,
+        }
+
+    return hub_dict
+
+def add_relaxed_ph_fixer(hub_dict,
+                            cfg,
+                            ):
+    #WARNING: Do not use without a reduced_costs_spoke spoke
+    hub_dict = extension_adder(hub_dict, RelaxedPHFixer)
+
+    hub_dict["opt_kwargs"]["options"]["relaxed_ph_fixer_options"] = {
+            "bound_tol": cfg.relaxed_ph_fixer_tol,
         }
 
     return hub_dict
@@ -683,6 +748,44 @@ def subgradient_spoke(
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
 
     return subgradient_spoke
+
+
+def relaxed_ph_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+):
+    relaxed_ph_spoke = _PHBase_spoke_foundation(
+        RelaxedPHSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+    )
+    options = relaxed_ph_spoke["opt_kwargs"]["options"]
+    if cfg.relaxed_ph_rescale_rho_factor is not None:
+        options["relaxed_ph_rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
+
+    # make sure this spoke doesn't hit the time or iteration limit
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
+
+    add_ph_tracking(relaxed_ph_spoke, cfg, spoke=True)
+
+    return relaxed_ph_spoke
 
 
 def xhatlooper_spoke(

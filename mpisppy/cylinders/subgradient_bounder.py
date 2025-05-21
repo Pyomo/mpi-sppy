@@ -21,7 +21,8 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
 
         if extensions:
             self.opt.extobject.pre_iter0()
-        self.dk_iter = 1
+        # setting this for PH extensions used by this Spoke
+        self.opt._PHIter = 0
         self.trivial_bound = self.lagrangian()
         if extensions:
             self.opt.extobject.post_iter0()
@@ -30,6 +31,7 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
+        self.opt._PHIter += 1
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
         # update rho / alpha
@@ -52,3 +54,4 @@ class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBound
                 self.send_bound(bound)
             if extensions:
                 self.opt.extobject.enditer_after_sync()
+            self.opt._PHIter += 1
