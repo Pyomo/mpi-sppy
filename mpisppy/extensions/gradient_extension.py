@@ -27,8 +27,8 @@ class Gradient_extension(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base)
        grad_object (Find_Grad object): gradient object
     
     """
-    def __init__(self, opt, comm=None):
-        super().__init__(opt, comm=comm)
+    def __init__(self, opt):
+        super().__init__(opt)
 
         self.cfg = opt.options["gradient_extension_options"]["cfg"]
         # This is messy because we want to be able to use or give rhos as requested.

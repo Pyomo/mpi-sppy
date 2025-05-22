@@ -28,7 +28,7 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
        cfg (Config object): config object
     
     """
-    def __init__(self, opt, comm=None):
+    def __init__(self, opt):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
 
