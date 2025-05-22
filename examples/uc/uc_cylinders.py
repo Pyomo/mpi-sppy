@@ -73,6 +73,7 @@ def main():
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
+    gapper = cfg.ph_mipgaps_json != None
     fixer = cfg.fixer
     fixer_tol = cfg.fixer_tol
     cross_scenario_cuts = cfg.cross_scenario_cuts
@@ -108,7 +109,9 @@ def main():
                                   rho_setter = rho_setter)
 
     # Extend and/or correct the vanilla dictionary
-    ext_classes =  [Gapper]
+    ext_classes =  []
+    if gapper:
+        ext_classes.append(Gapper)
     if fixer:
         ext_classes.append(Fixer)
     if cross_scenario_cuts:
@@ -139,6 +142,7 @@ def main():
         mipgapdict = {int(i): din[i] for i in din}
     else:
         mipgapdict = None
+
     hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
         "verbose": cfg.verbose,
         "mipgapdict": mipgapdict
