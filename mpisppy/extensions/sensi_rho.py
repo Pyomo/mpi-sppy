@@ -13,8 +13,8 @@ from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 
 
 class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
-    def __init__(self, ph, comm=None):
-        super().__init__(ph, comm=comm)
+    def __init__(self, ph):
+        super().__init__(ph)
         # we'll set a minimum rho value to be the default rho
         self._minimum_rho = ph.options["defaultPHrho"]
 
@@ -76,8 +76,8 @@ class SensiRho(_SensiRhoBase):
     Rho determination algorithm using nonant sensitivities
     """
 
-    def __init__(self, ph, comm=None):
-        super().__init__(ph, comm=comm)
+    def __init__(self, ph):
+        super().__init__(ph)
         self.ph = ph
 
         self.multiplier = 1.0

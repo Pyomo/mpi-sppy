@@ -23,8 +23,8 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     DOI 10.1007/s10287-010-0125-4
     """
 
-    def __init__(self, ph, comm=None):
-        super().__init__(ph, comm=comm)
+    def __init__(self, ph):
+        super().__init__(ph)
         self.ph = ph
 
         self.multiplier = 1.0
