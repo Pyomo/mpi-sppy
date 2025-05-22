@@ -223,7 +223,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         
     if cfg.fixer:  # cfg_vanilla takes care of the fixer_tol?
         assert hasattr(module, "id_fix_list_fct"), "id_fix_list_fct required for --fixer"
-        vanilla.add_fixer(hub_dict, cfg)
+        vanilla.add_fixer(hub_dict, cfg, module)
 
     if cfg.rc_fixer:
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
