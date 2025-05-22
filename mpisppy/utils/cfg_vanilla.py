@@ -340,11 +340,12 @@ def add_gapper(hub_dict, cfg, name=None):
 
 def add_fixer(hub_dict,
               cfg,
+              module,
               ):
     hub_dict = extension_adder(hub_dict,Fixer)
     hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":cfg.verbose,
-                                              "boundtol": cfg.fixer_tol,
-                                              "id_fix_list_fct": cfg.id_fix_list_fct}
+                                                         "boundtol": cfg.fixer_tol,
+                                                         "id_fix_list_fct": module.id_fix_list_fct}
     return hub_dict
 
 def add_integer_relax_then_enforce(hub_dict,
