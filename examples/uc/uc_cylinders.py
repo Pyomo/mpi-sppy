@@ -73,7 +73,7 @@ def main():
     xhatlooper = cfg.xhatlooper
     xhatshuffle = cfg.xhatshuffle
     lagrangian = cfg.lagrangian
-    gapper = cfg.ph_mipgaps_json != None
+    gapper = cfg.ph_mipgaps_json is not None
     fixer = cfg.fixer
     fixer_tol = cfg.fixer_tol
     cross_scenario_cuts = cfg.cross_scenario_cuts
