@@ -24,32 +24,29 @@ to solve a stochastic problem by breaking them into subproblems.
 It is similar in many points to **admmWrapper**, but the key differences are the labelling of scenarios,
 the definition of consensus_vars and of scenario_creator.
 
-An example of usage is given below.
+An example of usage is given below. At the time of this writing, in order to use the system you
+should probably make your own copy of the driver file and the module file for this example
+and then modify them for this problem. Note: this particular example makes use a helper module
+to process data (`mpisppy.tests.examples.distr.distr_data`). There is no requirement to do that, it
+was just helpful for this example.
 
-Usage
------
+Example Driver file
+-------------------
 
-The driver (in the example ``stoch_distr_admm_cylinders.py``) calls ``stoch_admmWrapper.py``,
-using the model provided by the model file (in the example ``examples.stoch_distr.stoch_distr.py``).
-The file ``stoch_admmWrapper.py`` returns variable probabilities that can be used in the driver to create the PH (or APH) 
-object which will solve the subproblems in a parallel way, insuring that merging conditions are respected.
+The driver (in the example ``stoch_distr_admm_cylinders.py``) calls
+``stoch_admmWrapper.py``, using the model provided by the model file
+(in the example ``examples.stoch_distr.stoch_distr.py``).  Under the
+hood (so to speak), the file ``stoch_admmWrapper.py`` returns
+data structures (making use of so-called "variable probabilities")
+that can be used in the driver to create the PH
+(or APH) object which will solve the subproblems in the usal, parallel way,
+while insuring that consensus constraints are respected as well
+as non-anticipativity constraints.
 
-Labelling the scenarios
-+++++++++++++++++++++++
+Functions needed in the module by the driver
+++++++++++++++++++++++++++++++++++++++++++++
 
-In StochAdmmWrapper ``stochastic_scenarios`` precede the decomposition into subproblems.
-These scenarios are then decomposed in each ``admm_subproblem``
-to create an ``admm_stoch_subproblem_scenario``, also called extended scenario.
-
-For instance, in the stochastic distribution example, in a ``stochastic_scenario``: ``StochasticScenario1``,
-in the ``admm_subproblem``: ``Region2``, the ``admm_stoch_subproblem_scenario`` is ``ADMM_STOCH_Region2_StochasticScenario1``.
-
-All these names are required in the driver file ``stoch_distr_admm_cylinders.py`` to create the wrapper file ``stoch_admmWrapper.py``.
-The function ``split_admm_stoch_subproblem_scenario_name`` is also needed to obtain the ``admm_subproblem`` and ``stochastic_scenarios``
-from the ``admm_stoch_subproblem_scenario``.
-
-Functions needed in the driver
-++++++++++++++++++++++++++++++
+Various functions are supplied by the module file: `stoch_distr.py`, which is imported by the driver.
 
 The driver file requires the `scenario_creator function <scenario_creator>`_ which creates the model for each scenario.
 
@@ -57,8 +54,12 @@ The driver file requires the `scenario_creator function <scenario_creator>`_ whi
     :no-index:
 
     Creates the model, which should include the consensus variables.
-    However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in stoch_admmWrapper. 
-    Therefore, only the stochastic tree as it would be represented without the decomposition needs to be created.
+    However, the `scenario_creator` function shouldn't include the consensus variables in the list of stochastic variabes (e.g., for a
+    two-stage problem, they should not be in the list supplied to ``attach_root_node``. (The
+    consensus variables
+       are supplied to `admm_wrapper` in the driver in a list passed to the ``stoch_admmWrapper`` constructor).
+    Therefore, for multi-stage stochastics, only the stochastic tree as it would be represented without the admm decomposition needs to be created
+    by the `scenario_creator` function.
 
     Args:
         admm_stoch_subproblem_scenario_name (str): the name of the extended scenario that will be created.
@@ -68,7 +69,7 @@ The driver file requires the `scenario_creator function <scenario_creator>`_ whi
 
 The driver file also requires helper arguments that are used in mpi-sppy. They are detailed `in helper_functions <helper_functions>`_
 and in the example below.
-Here is a summary:
+Here is a summary of helper functions:
 
 * ``scenario_creator_kwargs`` (dict[str]): key words arguments needed in ``scenario_creator``
 
@@ -108,9 +109,26 @@ Using the config system
 In addition to the previously presented data, the driver also requires arguments to create the PH Model and solve it. 
 Some arguments may be passed to the user via config, but the cylinders need to be added.
 
+Labelling the scenarios
++++++++++++++++++++++++
 
-Direct solver of the extensive form
-+++++++++++++++++++++++++++++++++++
+Scenario labelling takes place "under the hood" but you need to be aware of it because error message
+and other output may refer to scenarios names as they are seen in mpi-sppy.
+In StochAdmmWrapper, ``stochastic_scenarios`` precedes the decomposition into subproblems.
+These scenarios are then decomposed in each ``admm_subproblem``
+to create an ``admm_stoch_subproblem_scenario``, also called extended scenario.
+
+For instance, in the stochastic distribution example, in a ``stochastic_scenario``: ``StochasticScenario1``,
+in the ``admm_subproblem``: ``Region2``, the ``admm_stoch_subproblem_scenario`` is ``ADMM_STOCH_Region2_StochasticScenario1``.
+
+All these names are required in the driver file ``stoch_distr_admm_cylinders.py`` to create the wrapper file ``stoch_admmWrapper.py``.
+The function ``split_admm_stoch_subproblem_scenario_name`` is also needed to obtain the ``admm_subproblem`` and ``stochastic_scenarios``
+from the ``admm_stoch_subproblem_scenario``.
+
+
+
+Direct solution of the extensive form
++++++++++++++++++++++++++++++++++++++
 ``stoch_distr_ef.py`` can be used as a verification or debugging tool for small instances.
 It directly solves the extensive form using the wrapper ``scenario_creator`` from ``stoch_admmWrapper``.
 It has the advantage of requiring the same arguments as ``stoch_distr_admm_cylinders`` because both solve the extensive form.
