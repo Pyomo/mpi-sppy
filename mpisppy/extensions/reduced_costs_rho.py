@@ -19,8 +19,8 @@ class ReducedCostsRho(_SensiRhoBase):
     calculated in a ReducedCostsSpoke
     """
 
-    def __init__(self, ph, comm=None):
-        super().__init__(ph, comm=comm)
+    def __init__(self, ph):
+        super().__init__(ph)
         self.ph = ph
 
         self.multiplier = 1.0
