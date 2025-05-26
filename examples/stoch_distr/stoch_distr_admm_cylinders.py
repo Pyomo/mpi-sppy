@@ -192,7 +192,7 @@ def main(cfg):
     n_cylinders = _count_cylinders(cfg)
     admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params)
     
-    scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
+    scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator used locally (i.e., in this file)
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
     variable_probability = admm.var_prob_list
     all_nodenames = admm.all_nodenames

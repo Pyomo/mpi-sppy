@@ -413,26 +413,26 @@ def MakeNodesforScen(model, BFs, scennum, local_dict):
     return retval
 
 
-def branching_factors_creator(num_stoch_scens, num_stage):
+def branching_factors_creator(num_stoch_scens, num_stages):
     # BFs is only used with multiple stages
-    if num_stage == 3:
+    if num_stages == 3:
         # There should always be a high demand and a low demand version
         assert num_stoch_scens % 2 == 0, "there should be an even number of stochastic scenarios for this 3 stage problem, but it is odd"
         BFs = [num_stoch_scens//2, 2]
-    elif num_stage == 2:
+    elif num_stages == 2:
         BFs = None # No need to use branching factors (or even to define them with two stage problems)
     else:
-        raise RuntimeError (f"the example is only made for 2 or 3-stage problems, but {num_stage} were given")
+        raise RuntimeError (f"the example is only made for 2 or 3-stage problems, but {num_stages} were given")
     return BFs
 
 
 ###Creates the scenario
 def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
-    """Creates the model, which should include the consensus variables. \n
+    """Creates the model, which should include the consensus variables.
     However, this function shouldn't attach the consensus variables for the admm subproblems as it is done in admmWrapper.
 
     Args:
-        admm_stoch_subproblem_scenario_name (str): the name given to the admm problem for the stochastic scenario. \n
+        admm_stoch_subproblem_scenario_name (str): the name given to the admm problem for the stochastic scenario.
         num_scens (int): number of scenarios (regions). Useful to create the corresponding inter-region dictionary
 
     Returns:
@@ -451,11 +451,11 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     local_dict = dummy_nodes_generator(region_dict, inter_region_dict)
 
     # Generating the model according to the number of stages and creatung the tree
-    if cfg.num_stage == 2:
+    if cfg.num_stages == 2:
         model = min_cost_distr_problem(local_dict, stoch_scenario_name, cfg)
         sputils.attach_root_node(model, model.FirstStageCost, [model.y[n] for n in  local_dict["factory nodes"]])
     else:
-        BFs = branching_factors_creator(cfg.num_stoch_scens, cfg.num_stage)
+        BFs = branching_factors_creator(cfg.num_stoch_scens, cfg.num_stages)
 
         if stoch_scenario_name.endswith('high'):
             demand = "high"
@@ -471,12 +471,12 @@ def scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs):
     return model
 
 
-def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, num_stage=2):
-    """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary. \n
+def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, num_stages=2):
+    """The following function creates the consensus_vars dictionary thanks to the inter-region dictionary.
     This dictionary has redundant information, but is useful for admmWrapper.
 
     Args:
-        admm_subproblem_names (list of str): name of the admm subproblems (regions) \n
+        admm_subproblem_names (list of str): name of the admm subproblems (regions)
         stoch_scenario_name (str): name of any stochastic_scenario, it is only used 
         in this example to access the non anticipative variables (which are common to 
         every stochastic scenario) and their stage.
@@ -498,15 +498,17 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
         #adds dummy_node in the source region
         if region_source not in consensus_vars: #initiates consensus_vars[region_source]
             consensus_vars[region_source] = list()
-        consensus_vars[region_source].append((vstr,num_stage))
+        consensus_vars[region_source].append((vstr,num_stages))
 
         #adds dummy_node in the target region
         if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
-        consensus_vars[region_target].append((vstr,num_stage))
+        consensus_vars[region_target].append((vstr,num_stages))
     # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
     # then we go through the models (created by scenario creator) for all the admm_stoch_subproblem_scenario 
     # which have this scenario as an ancestor (parent) in the tree
+    # Note: we are not really interested in the stochastic scenario tree per se,
+    #    we just want to get consensus vars at each stage and the tree nodes know about the stages.
     for admm_subproblem_name in admm_subproblem_names:
         admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
         model = scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs)
@@ -519,7 +521,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
     return consensus_vars
 
 
-def stoch_scenario_names_creator(num_stoch_scens, num_stage=2):
+def stoch_scenario_names_creator(num_stoch_scens, num_stages=2):
     """Creates the name of every stochastic scenario.
 
     Args:
@@ -528,7 +530,7 @@ def stoch_scenario_names_creator(num_stoch_scens, num_stage=2):
     Returns:
         list (str): the list of stochastic scenario names
     """
-    if num_stage == 3:
+    if num_stages == 3:
         return [f"StochasticScenario{i+1}_{demand}" for i in range(num_stoch_scens//2) for demand in ["high","low"]]
     else:
         return [f"StochasticScenario{i+1}" for i in range(num_stoch_scens)]
@@ -580,8 +582,8 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     """
     # Method specific to our example and because the admm_subproblem_name and stoch_scenario_name don't include "_"
     splitted = admm_stoch_subproblem_scenario_name.split('_')
-    # The next line would require adding the argument num_stage and transferring it to stoch_admmWrapper
-    #assert (len(splitted) == num_stage+2), f"appart from the 'ADMM_STOCH_' prefix, underscore should only separate stages"
+    # The next line would require adding the argument num_stages and transferring it to stoch_admmWrapper
+    #assert (len(splitted) == num_stages+2), f"appart from the 'ADMM_STOCH_' prefix, underscore should only separate stages"
     admm_subproblem_name = splitted[2]
     stoch_scenario_name = '_'.join(splitted[3:])
     return admm_subproblem_name, stoch_scenario_name
@@ -639,7 +641,7 @@ def inparser_adder(cfg):
                       domain=int,
                       default=0)
     
-    cfg.add_to_config("num_stage",
+    cfg.add_to_config("num_stages",
                       description="choice of the number of stages for the example, by default two-stage",
                       domain=int,
                       default=2)
