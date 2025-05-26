@@ -113,9 +113,7 @@ arguments need to be used by the driver.
 Labelling the scenarios
 +++++++++++++++++++++++
 
-Scenario labelling takes place "under the hood" but you need to be aware of it because error message
-and other output may refer to scenarios names as they are seen in mpi-sppy after mofification by
-`StochAdmmWrapper.' In `StochAdmmWrapper`, ``stochastic_scenarios`` precedes the decomposition into subproblems.
+In `StochAdmmWrapper`, ``stochastic_scenarios`` precedes the decomposition into subproblems.
 These scenarios are then decomposed in each ``admm_subproblem``
 to create an ``admm_stoch_subproblem_scenario``, also called extended scenario.
 
