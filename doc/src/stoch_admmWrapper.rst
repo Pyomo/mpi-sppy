@@ -33,7 +33,7 @@ was just helpful for this example.
 Example Driver file
 -------------------
 
-The driver (in the example ``stoch_distr_admm_cylinders.py``) calls
+The driver ``stoch_distr_admm_cylinders.py`` calls
 ``stoch_admmWrapper.py``, using the model provided by the model file
 (in the example ``examples.stoch_distr.stoch_distr.py``).  Under the
 hood (so to speak), the file ``stoch_admmWrapper.py`` returns
@@ -54,12 +54,12 @@ The driver file requires the `scenario_creator function <scenario_creator>`_ whi
     :no-index:
 
     Creates the model, which should include the consensus variables.
-    However, the `scenario_creator` function shouldn't include the consensus variables in the list of stochastic variabes (e.g., for a
-    two-stage problem, they should not be in the list supplied to ``attach_root_node``. (The
+    However, the `scenario_creator` function shouldn't include the consensus variables in the list of stochastic
+    variables. (E.g., for a
+    two-stage problem, they should not be in the list supplied to ``attach_root_node``. The
     consensus variables
-       are supplied to `admm_wrapper` in the driver in a list passed to the ``stoch_admmWrapper`` constructor).
-    Therefore, for multi-stage stochastics, only the stochastic tree as it would be represented without the admm decomposition needs to be created
-    by the `scenario_creator` function.
+       are supplied to `admm_wrapper` in the driver in a list passed to the ``stoch_admmWrapper`` constructor.)
+    Therefore, for multi-stage stochastics, only the stochastic tree as it would be represented without the admm decomposition needs to be created by the `scenario_creator` function.
 
     Args:
         admm_stoch_subproblem_scenario_name (str): the name of the extended scenario that will be created.
@@ -107,14 +107,15 @@ Using the config system
 +++++++++++++++++++++++
 
 In addition to the previously presented data, the driver also requires arguments to create the PH Model and solve it. 
-Some arguments may be passed to the user via config, but the cylinders need to be added.
+Some arguments may be passed by the user via config, but the cylinders need to be added by the driver and cfg
+arguments need to be used by the driver.
 
 Labelling the scenarios
 +++++++++++++++++++++++
 
 Scenario labelling takes place "under the hood" but you need to be aware of it because error message
-and other output may refer to scenarios names as they are seen in mpi-sppy.
-In StochAdmmWrapper, ``stochastic_scenarios`` precedes the decomposition into subproblems.
+and other output may refer to scenarios names as they are seen in mpi-sppy after mofification by
+`StochAdmmWrapper.' In `StochAdmmWrapper`, ``stochastic_scenarios`` precedes the decomposition into subproblems.
 These scenarios are then decomposed in each ``admm_subproblem``
 to create an ``admm_stoch_subproblem_scenario``, also called extended scenario.
 
