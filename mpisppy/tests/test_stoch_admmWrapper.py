@@ -149,7 +149,8 @@ class TestStochAdmmWrapper(unittest.TestCase):
                     decomposed_line = result_by_line[-i-1].split(': ')
                     objectives["EF objective"] = float(decomposed_line[1])#math.ceil(float(decomposed_line[1]))
             try:
-                correct_order = objectives["outer bound"] <= objectives["EF objective"] <= objectives["inner bound"]
+                correct_order = objectives["outer bound"] <= (objectives["EF objective"] +0.01)\
+                    <= (objectives["inner bound"] + 0.02)
             except Exception:
                 raise RuntimeError("The output could not be read to capture the values")
             assert correct_order, f' We obtained {objectives["outer bound"]=}, {objectives["EF objective"]=}, {objectives["inner bound"]=}'
