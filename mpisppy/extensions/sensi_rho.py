@@ -13,8 +13,8 @@ from mpisppy.utils.nonant_sensitivities import nonant_sensitivies
 
 
 class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
-    def __init__(self, ph):
-        super().__init__(ph)
+    def __init__(self, ph, cfg):
+        super().__init__(ph, cfg)
         # we'll set a minimum rho value to be the default rho
         self._minimum_rho = ph.options["defaultPHrho"]
 
@@ -77,7 +77,8 @@ class SensiRho(_SensiRhoBase):
     """
 
     def __init__(self, ph):
-        super().__init__(ph)
+        self.cfg = ph.options["sensi_rho_options"]["cfg"]
+        super().__init__(ph, cfg)
         self.ph = ph
 
         self.multiplier = 1.0
@@ -87,7 +88,6 @@ class SensiRho(_SensiRhoBase):
             and "multiplier" in ph.options["sensi_rho_options"]
         ):
             self.multiplier = ph.options["sensi_rho_options"]["multiplier"]
-        self.cfg = ph.options["sensi_rho_options"]["cfg"]
 
     def get_nonant_sensitivites(self):
         # dict of dicts [s][ndn_i]

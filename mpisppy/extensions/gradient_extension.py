@@ -21,16 +21,16 @@ class Gradient_extension(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base)
     
     Args:
        opt (PHBase object): gives the problem
-       cfg (Config object): config object
+       cfg (Config object): config object must be in options
     
     Attributes:
        grad_object (Find_Grad object): gradient object
     
     """
     def __init__(self, opt):
-        super().__init__(opt)
+        cfg = opt.options["gradient_extension_options"]["cfg"]        
+        super().__init__(opt, cfg)
 
-        self.cfg = opt.options["gradient_extension_options"]["cfg"]
         # This is messy because we want to be able to use or give rhos as requested.
         # (e.g., if the user gave us an input file, use that)
         # TBD: stop using files
