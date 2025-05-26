@@ -124,7 +124,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
             if result.stdout:
                 result_by_line = result.stdout.strip().split('\n')
             else:
-                raise RuntimeError(f"No results in stdout for {command=}.")
+                raise RuntimeError(f"No results in stdout for {command=} \n {result.returncode=}.")
             target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
             precedent_line_target = False
             i = 0

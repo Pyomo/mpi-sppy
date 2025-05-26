@@ -9,6 +9,7 @@
 # This file is used in the tests and should not be modified!
 
 # Network Flow - various formulations
+# DLW, May 2025: I am suspicious about the three-stage consensus variables. 
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import numpy as np
@@ -405,7 +406,7 @@ def MakeNodesforScen(model, BFs, scennum, local_dict):
               scenario_tree.ScenarioNode(ndn,
                                          1.0/BFs[0],
                                          2,
-                                         model.FirstStageCost, 
+                                         model.FirstStageCost,  # TBD, May 2025: this is incorrect
                                          [model.export[n] for n in  local_dict["buyer nodes"]], # No consensus_variable for now to simplify the model
                                          model,
                                          parent_name="ROOT")
@@ -504,11 +505,18 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
         if region_target not in consensus_vars: #initiates consensus_vars[region_target]
             consensus_vars[region_target] = list()
         consensus_vars[region_target].append((vstr,num_stages))
-    # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
+    # We just did that last stage, which corresponds to leaf "node" of the stochastic scenario tree
+    #  (but mpisppy does not consider the leaves to be nodes).
+    # It is an artifact of the way we handle data that we didn't neeed
+    #   to load a scenario to get the last stage var names.
+    # Now do the other time stages. It doesn't depend on the stochastic scenario so we chose one and
     # then we go through the models (created by scenario creator) for all the admm_stoch_subproblem_scenario 
     # which have this scenario as an ancestor (parent) in the tree
     # Note: we are not really interested in the stochastic scenario tree per se,
     #    we just want to get consensus vars at each stage and the tree nodes know about the stages.
+    # For this particular problem, the nonant vars happen to be consensus vars?
+    # DLW, May 2025: This doesn't make sense to me. For this problem, the only consensus variables are in the last stage.
+    """
     for admm_subproblem_name in admm_subproblem_names:
         admm_stoch_subproblem_scenario_name = combining_names(admm_subproblem_name,stoch_scenario_name)
         model = scenario_creator(admm_stoch_subproblem_scenario_name, **kwargs)
@@ -518,6 +526,7 @@ def consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, kwargs, n
                 #print(f"{var.name=}")
                 if var.name not in consensus_vars[admm_subproblem_name]:
                     consensus_vars[admm_subproblem_name].append((var.name, node.stage))
+    """
     return consensus_vars
 
 
