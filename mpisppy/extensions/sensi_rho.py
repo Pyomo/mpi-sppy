@@ -77,7 +77,7 @@ class SensiRho(_SensiRhoBase):
     """
 
     def __init__(self, ph):
-        self.cfg = ph.options["sensi_rho_options"]["cfg"]
+        cfg = ph.options["sensi_rho_options"]["cfg"]
         super().__init__(ph, cfg)
         self.ph = ph
 
