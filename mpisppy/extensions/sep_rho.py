@@ -23,7 +23,8 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     DOI 10.1007/s10287-010-0125-4
     """
 
-    def __init__(self, ph, cfg):
+    def __init__(self, ph):
+        cfg = ph.options["sep_rho_options"]["cfg"]
         super().__init__(ph, cfg)
         self.ph = ph
 
@@ -34,7 +35,6 @@ class SepRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             and "multiplier" in ph.options["sep_rho_options"]
         ):
             self.multiplier = ph.options["sep_rho_options"]["multiplier"]
-        ##self.cfg = ph.options["sep_rho_options"]["cfg"]
 
         self._nonant_cost_coeffs = {}
 
