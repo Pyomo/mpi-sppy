@@ -20,7 +20,7 @@ class ReducedCostsRho(_SensiRhoBase):
     """
 
     def __init__(self, ph):
-        self.cfg = ph.options["reduced_costs_rho_options"]["cfg"]
+        cfg = ph.options["reduced_costs_rho_options"]["cfg"]
         super().__init__(ph, cfg)
         self.ph = ph
 
