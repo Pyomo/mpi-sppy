@@ -40,7 +40,7 @@ hood (so to speak), the file ``stoch_admmWrapper.py`` returns
 data structures (making use of so-called "variable probabilities")
 that can be used in the driver to create the PH
 (or APH) object which will solve the subproblems in the usual, parallel way,
-while insuring that consensus constraints are respected as well
+while ensuring that consensus constraints are respected as well
 as non-anticipativity constraints.
 
 Functions needed in the module by the driver
