@@ -103,12 +103,6 @@ ADMM subproblems with a stage n if the stochastic problem is orginally a n-stage
 
     Every variable in ``consensus_vars[subproblem]`` should also appear as a variable in the pyomo model of the subproblem.
 
-Using the config system
-+++++++++++++++++++++++
-
-In addition to the previously presented data, the driver also requires arguments to create the PH Model and solve it. 
-Some arguments may be passed by the user via config, but the cylinders need to be added by the driver and cfg
-arguments need to be used by the driver.
 
 Labelling the scenarios
 +++++++++++++++++++++++
