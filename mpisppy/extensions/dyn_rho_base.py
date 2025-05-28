@@ -8,7 +8,7 @@
 ###############################################################################
 
 # A dynamic rho base class that assumes a member function compute_and_update_rho
-# As of Nov 2024, it only mainly provides services
+# As of Nov 2024, it mainly provides services
 
 import numpy as np
 import mpisppy.MPI as MPI
@@ -28,13 +28,14 @@ class Dyn_Rho_extension_base(mpisppy.extensions.extension.Extension):
        cfg (Config object): config object
     
     """
-    def __init__(self, opt, comm=None):
+    def __init__(self, opt, cfg):
         super().__init__(opt)
         self.cylinder_rank = self.opt.cylinder_rank
 
         self.primal_conv_cache = []
         self.dual_conv_cache = []
         self.wt = WTracker(self.opt)
+        self.cfg = cfg
 
     def _display_rho_values(self):
         for sname, scenario in self.opt.local_scenarios.items():

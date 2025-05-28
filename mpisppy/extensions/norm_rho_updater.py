@@ -6,7 +6,8 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-
+# too many setattr calls for pylint
+# pylint: disable-all
 # Adapted from the PySP extension adaptive_rho_converger, authored by Gabriel Hackebeil
 
 import math
@@ -15,14 +16,14 @@ import mpisppy.extensions.extension
 import numpy as np
 import mpisppy.MPI as MPI
 
-_norm_rho_defaults = { 'convergence_tolerance' : 1e-4,
-                           'rho_decrease_multiplier' : 2.0,
-                           'rho_increase_multiplier' : 2.0,
-                           'primal_dual_difference_factor' : 100.,
-                           'iterations_converged_before_decrease' : 0,
-                           'rho_converged_decrease_multiplier' : 1.1,
-                           'rho_update_stop_iterations' : None,
-                           'verbose' : False,
+_norm_rho_defaults = {'convergence_tolerance' : 1e-4,
+                      'rho_decrease_multiplier' : 2.0,
+                      'rho_increase_multiplier' : 2.0,
+                      'primal_dual_difference_factor' : 100.,
+                      'iterations_converged_before_decrease' : 0,
+                      'rho_converged_decrease_multiplier' : 1.1,
+                      'rho_update_stop_iterations' : None,
+                      'verbose' : False,
 }
 
 _attr_to_option_name_map = {
