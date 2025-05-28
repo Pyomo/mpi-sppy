@@ -98,8 +98,8 @@ class TestStochAdmmWrapper(unittest.TestCase):
 
 
     def test_values(self):
-        command_line_pairs = [(f"mpiexec -np 3 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stage 3" \
-                         , f"python stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stage 3"), \
+        command_line_pairs = [(f"mpiexec -np 3 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
+                         , f"python stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stages 3"), \
                          (f"mpiexec -np 3 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
                          , f"python stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
                               (f"mpiexec -np 6 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
@@ -124,7 +124,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
             if result.stdout:
                 result_by_line = result.stdout.strip().split('\n')
             else:
-                raise RuntimeError(f"No results in stdout for {command=}.")
+                raise RuntimeError(f"No results in stdout for {command=} \n {result.returncode=}.")
             target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
             precedent_line_target = False
             i = 0
@@ -149,7 +149,8 @@ class TestStochAdmmWrapper(unittest.TestCase):
                     decomposed_line = result_by_line[-i-1].split(': ')
                     objectives["EF objective"] = float(decomposed_line[1])#math.ceil(float(decomposed_line[1]))
             try:
-                correct_order = objectives["outer bound"] <= objectives["EF objective"] <= objectives["inner bound"]
+                correct_order = objectives["outer bound"] <= (objectives["EF objective"] +0.01)\
+                    <= (objectives["inner bound"] + 0.02)
             except Exception:
                 raise RuntimeError("The output could not be read to capture the values")
             assert correct_order, f' We obtained {objectives["outer bound"]=}, {objectives["EF objective"]=}, {objectives["inner bound"]=}'

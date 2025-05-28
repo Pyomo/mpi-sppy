@@ -1,6 +1,7 @@
 #!/bin/bash
+set -e
 
-SOLVERNAME=xpress
+SOLVERNAME=gurobi_persistent
 
 # This runs a hard wired example on 3 spokes
 #mpiexec -np 3 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 4 --default-rho 10 --solver-name $SOLVERNAME --max-iterations 100 --xhatxbar --lagrangian --ensure-xhat-feas --rel-gap 0.001
