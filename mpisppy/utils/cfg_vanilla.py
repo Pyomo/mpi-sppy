@@ -75,6 +75,11 @@ def shared_options(cfg):
         "warmstart_subproblems" : cfg.warmstart_subproblems,
         "user_warmstart" : cfg.user_warmstart,
     }
+    if _hasit(cfg, "solver_options"):
+        odict = sputils.option_string_to_dict(cfg.solver_options)
+        shoptions["iter0_solver_options"] = odict
+        shoptions["iterk_solver_options"] = odict
+    # note that specific options usch as mipgap will override        
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
         shoptions["iterk_solver_options"]["threads"] = cfg.max_solver_threads
