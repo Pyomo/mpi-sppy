@@ -133,3 +133,23 @@ the name of the mpigap json file for the PH hub algorithm, while
 ``--lagrangian-mipgap-json`` gives it for the ``lagrangian`` spoke
 (if present).  See the ``mipgapper`` section of :ref:`Extensions`
 for a little more information.
+
+Here is an example json file:
+
+.. code-block:: json
+
+  {
+    "0": 0.02,
+    "1": 0.02,
+    "2": 0.01,
+    "10": 0.001,
+    "20": 0.0001
+  }
+
+The ``starting-mipgap`` (e.g., ``lagrangian-starting-mipgap``)
+and ``mipgap-ratio`` options taken together operate based on the overall
+gap (the so-called `cylinder` gap) to set the mipgap.
+As the cylinders close the relative optimality gap the extension will set the subproblem
+mipgaps as the ``min(starting_mipgap, mipgap_ratio * problem_ratio)``, where
+the ``problem_ratio`` is the relative optimality gap on the overall problem
+as computed by the cylinders.
