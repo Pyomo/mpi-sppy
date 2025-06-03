@@ -560,7 +560,7 @@ class Config(pyofig.ConfigDict):
             name = name+"_"
 
         if name == "":
-            self.add_to_config('{name}mipgaps_json',
+            self.add_to_config(f'{name}mipgaps_json',
                                description="path to json file with a mipgap schedule for PH iterations",
                                domain=str,
                                default=None)
