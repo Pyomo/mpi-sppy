@@ -118,3 +118,18 @@ warmstart-subproblems
 Loosely speaking, this option causes subproblem solves to be given the
 previous iteration solution as a warm-start. This is particularly important
 when using an option to lineraize proximal terms.
+
+
+mipgap extensions
+-----------------
+
+Extensions can be seen using the ``--help`` argument (the ``--module``
+argement is still required for ``--help``).  We provide a little
+background here. If the mipgap command does not have a prefix, then
+it refers to the hub algorithm, otherwise the prefix refers
+to the cylinder named in the prefix (if the cylinder is not
+present, no error message is given). So ``--mapgap-json`` gives
+the name of the mpigap json file for the PH hub algorithm, while
+``--lagrangian-mipgap-json`` gives it for the ``lagrangian`` spoke
+(if present).  See the ``mipgapper`` section of :ref:`Extensions`
+for a little more information.

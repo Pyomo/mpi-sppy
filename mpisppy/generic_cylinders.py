@@ -82,6 +82,8 @@ def _parse_args(m):
     cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()    
     cfg.gapper_args(name="lagrangian")
+    cfg.gapper_args(name="xhatshuffle")
+    cfg.gapper_args(name="xhatxbar")
     cfg.ph_nonant_args()
     cfg.relaxed_ph_args()
     cfg.fwph_args()
@@ -379,11 +381,15 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         if cfg.get("stage2EFsolvern") is not None:
             xhatshuffle_spoke["opt_kwargs"]["options"]["stage2EFsolvern"] = cfg["stage2EFsolvern"]
             xhatshuffle_spoke["opt_kwargs"]["options"]["branching_factors"] = cfg["branching_factors"]
+        if cfg.lagrangian_starting_mipgap is not None:
+            vanilla.add_gapper(lagrangian_spoke, cfg, "xhatshuffle")            
 
     if cfg.xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
                                                    all_nodenames=all_nodenames)
+        if cfg.lagrangian_starting_mipgap is not None:
+            vanilla.add_gapper(xhatxbar_spoke, cfg, "xhatshuffle")
 
     # reduced cost fixer options setup
     if cfg.reduced_costs:
