@@ -84,7 +84,7 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent --oversubscribe
+          python afew.py xpress_persistent
 
       - name: Test docs
         run: |
@@ -124,7 +124,7 @@ jobs:
       - name: Test run_all nouc
         run: |
           cd examples
-          python run_all.py xpress_persistent --oversubscribe nouc
+          python run_all.py xpress_persistent "" nouc
 
   runall:
     name: run_all.py direct solver
@@ -159,7 +159,7 @@ jobs:
       - name: Test run_all nouc
         run: |
           cd examples
-          python run_all.py xpress_direct --oversubscribe nouc
+          python run_all.py xpress_direct "" nouc
 
   schur-complement:
     name: schur-complement
@@ -196,7 +196,7 @@ jobs:
     - name: Test with nose
       run: |
         nosetests -v mpisppy/tests/test_sc.py
-        mpirun -np 3 -oversubscribe nosetests mpisppy/tests/test_sc.py
+        mpirun -np 3 nosetests mpisppy/tests/test_sc.py
 
   straight-tests:
     name: straight_tests.py
@@ -401,7 +401,7 @@ jobs:
       - name: Test test_generic nouc
         run: |
           cd examples
-          python generic_tester.py cplex_direct --oversubscribe nouc
+          python generic_tester.py cplex_direct "" nouc
 
   test-gradient-rho:
     name: gradient and rho tests
@@ -560,4 +560,4 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/agnostic/examples
-          python afew_agnostic.py --oversubscribe
+          python afew_agnostic.py
