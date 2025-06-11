@@ -217,7 +217,9 @@ class XhatBase(mpisppy.extensions.extension.Extension):
         self.opt.solve_loop(solver_options=sopt,
                            #dis_W=True, dis_prox=True,
                            verbose=verbose,
-                           tee=Tee)
+                           tee=Tee,
+                           need_solution=False,
+                           )
 
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
