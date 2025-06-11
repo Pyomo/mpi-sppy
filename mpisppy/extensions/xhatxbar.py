@@ -91,9 +91,11 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
 
         # NOTE: for APH we may need disable_pyomo_signal_handling
         self.opt.solve_loop(solver_options=self.solver_options,
-                           #dis_W=True, dis_prox=True,
-                           verbose=verbose,
-                            tee=False)
+                            #dis_W=True, dis_prox=True,
+                            verbose=verbose,
+                            tee=False,
+                            need_solution=False,
+                            )
 
         infeasP = self.opt.infeas_prob()
         if infeasP != 0.:
