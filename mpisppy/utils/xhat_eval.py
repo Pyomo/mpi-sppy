@@ -91,7 +91,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              verbose=verbose,
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective,
-                                             warmstart=warmstart)
+                                             warmstart=warmstart,
+                                             need_solution=compute_val_at_nonant,)
 
         if compute_val_at_nonant:
             objfct = self.saved_objectives[k]
@@ -134,7 +135,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                             be created and computed.
                                             
             warmstart (boolean): indicates a warmstart
-            need_solution (boolean): if True, terminate if a solution is not available
 
         NOTE: I am not sure what happens with solver_options None for
               a persistent solver. Do options persist?
@@ -169,7 +169,6 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                 compute_val_at_nonant=compute_val_at_nonant,
                                               warmstart=warmstart,
-                                              need_solution=need_solution,
                                               )
 
         if dtiming:
