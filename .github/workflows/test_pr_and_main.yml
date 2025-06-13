@@ -196,7 +196,7 @@ jobs:
     - name: Test with nose
       run: |
         nosetests -v mpisppy/tests/test_sc.py
-        mpirun -np 3 nosetests mpisppy/tests/test_sc.py
+        mpirun -np 3 -oversubscribe nosetests mpisppy/tests/test_sc.py
 
   straight-tests:
     name: straight_tests.py
