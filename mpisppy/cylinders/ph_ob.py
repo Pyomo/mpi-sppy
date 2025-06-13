@@ -67,6 +67,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             tee=teeme,
             verbose=verbose,
             warmstart=True,
+            need_solution=True,
         )
         if iternum == 0:
             return self.opt.Ebound(verbose)
@@ -89,6 +90,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             tee=teeme,
             verbose=verbose,
             warmstart=warmstart,
+            need_solution=False,
         )
         self.opt._reenable_prox()
         # Compute the resulting bound
