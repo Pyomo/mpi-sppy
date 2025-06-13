@@ -7,51 +7,53 @@
 # full copyright and license information.
 ###############################################################################
 import mpisppy.cylinders.spoke
-from mpisppy.cylinders.lagrangian_bounder import _LagrangianMixin
 
-class SubgradientOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundSpoke):
+class SubgradientOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
 
     converger_spoke_char = 'G'
 
+    def update_rho(self):
+        rho_factor = self.opt.options.get("subgradient_rho_multiplier", 1.0)
+        if rho_factor == 1.0:
+            return
+        for s in self.opt.local_scenarios.values():
+            for rho in s._mpisppy_model.rho.values():
+                rho._value = rho_factor * rho._value
+
     def main(self):
-        extensions = self.opt.extensions is not None
-        verbose = self.opt.options['verbose']
+        # setup, PH Iter0
+        if self.opt.options.get("smoothed", 0) != 0:
+            raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
+        attach_prox = False
+        self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = 0)
+        trivial_bound = self.opt.Iter0()
+        if self.opt._can_update_best_bound():
+            self.opt.best_bound_obj_val = trivial_bound
 
-        self.lagrangian_prep()
+        # update the rho
+        self.update_rho()
 
-        if extensions:
-            self.opt.extobject.pre_iter0()
-        # setting this for PH extensions used by this Spoke
-        self.opt._PHIter = 0
-        self.trivial_bound = self.lagrangian()
-        if extensions:
-            self.opt.extobject.post_iter0()
+        # rest of PH
+        self.opt.iterk_loop()
 
-        self.send_bound(self.trivial_bound)
-        if extensions:
-            self.opt.extobject.post_iter0_after_sync()
+        return self.opt.conv, None, trivial_bound
 
-        self.opt._PHIter += 1
-        self.opt.current_solver_options = self.opt.iterk_solver_options
+    def sync(self):
+        if self.opt.best_bound_obj_val is None:
+            return
 
-        # update rho / alpha
-        if self.opt.options.get('subgradient_rho_multiplier') is not None:
-            rf = self.opt.options['subgradient_rho_multiplier']
-            for scenario in self.opt.local_scenarios.values():
-                for ndn_i in scenario._mpisppy_model.rho:
-                    scenario._mpisppy_model.rho[ndn_i] *= rf
+        # Tell the hub about the most recent bound
+        self.send_bound(self.opt.best_bound_obj_val)
 
-        while not self.got_kill_signal():
-            # compute a subgradient step
-            self.opt.Compute_Xbar(verbose)
-            self.opt.Update_W(verbose)
-            if extensions:
-                self.opt.extobject.miditer()
-            bound = self.lagrangian()
-            if extensions:
-                self.opt.extobject.enditer()
-            if bound is not None:
-                self.send_bound(bound)
-            if extensions:
-                self.opt.extobject.enditer_after_sync()
-            self.opt._PHIter += 1
+        # Update the nonant bounds, if possible
+        self.receive_nonant_bounds()
+
+    def finalize(self):
+        if self.opt.best_bound_obj_val is None:
+            return
+
+        # Tell the hub about the most recent bound
+        self.send_bound(self.opt.best_bound_obj_val)
+        self.final_bound = self.opt.best_bound_obj_val
+
+        return self.final_bound

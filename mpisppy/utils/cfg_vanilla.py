@@ -742,6 +742,7 @@ def subgradient_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
+    subgradient_spoke["opt_class"] = Subgradient
     if cfg.subgradient_iter0_mipgap is not None:
         subgradient_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
             ["mipgap"] = cfg.subgradient_iter0_mipgap
@@ -751,6 +752,14 @@ def subgradient_spoke(
     if cfg.subgradient_rho_multiplier is not None:
         subgradient_spoke["opt_kwargs"]["options"]["subgradient_rho_multiplier"]\
             = cfg.subgradient_rho_multiplier
+
+    options = subgradient_spoke["opt_kwargs"]["options"]
+    # make sure this spoke doesn't hit the time or iteration limit
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
+
     add_ph_tracking(subgradient_spoke, cfg, spoke=True)
 
     return subgradient_spoke
