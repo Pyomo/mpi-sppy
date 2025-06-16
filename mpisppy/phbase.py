@@ -1088,9 +1088,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.spcomm.sync_extensions()
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
-            if self.spcomm and self.spcomm.is_converged():
-                global_toc("Cylinder convergence", self.cylinder_rank == 0)
-                break
 
             if self.spcomm and self.spcomm.is_converged():
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
