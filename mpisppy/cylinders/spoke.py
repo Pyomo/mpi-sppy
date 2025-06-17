@@ -193,7 +193,7 @@ class InnerBoundSpoke(_BoundSpoke):
         ci = 0
         for s in self.opt.local_scenarios.values():
             for ndn_var in s._mpisppy_data.nonant_indices.values():
-                best_xhat_buf[ci] = s._mpisppy_data.best_solution_cache[ndn_var]
+                best_xhat_buf[ci] = ndn_var.value
                 ci += 1
             best_xhat_buf[ci] = s._mpisppy_data.inner_bound
             ci += 1
@@ -205,7 +205,7 @@ class InnerBoundSpoke(_BoundSpoke):
         ci = 0
         for s in self.opt.local_scenarios.values():
             for ndn_var in s._mpisppy_data.nonant_indices.values():
-                recent_xhat_buf[ci] = s._mpisppy_data.latest_solution_cache[ndn_var]
+                recent_xhat_buf[ci] = ndn_var.value
                 ci += 1
             recent_xhat_buf[ci] = s._mpisppy_data.inner_bound
             ci += 1
