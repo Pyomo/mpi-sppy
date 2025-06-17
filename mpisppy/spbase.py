@@ -586,8 +586,7 @@ class SPBase:
     def _cache_latest_solution(self):
         for k,s in self.local_scenarios.items():
             scenario_cache = pyo.ComponentMap()
-            for var in s.component_data_objects(pyo.Var):
-                scenario_cache[var] = var.value
+            _put_var_vals_in_component_map_dict(scenario_cache._dict, s)
             s._mpisppy_data.latest_solution_cache = scenario_cache
 
     def _get_cylinder_name(self):
@@ -747,3 +746,8 @@ class SPBase:
         self.mpicomm.Barrier()
         for scenario_name, scenario in self.local_scenarios.items():
             scenario_tree_solution_writer(directory_name, scenario_name, scenario, self.bundling)
+
+
+def _put_var_vals_in_component_map_dict(sn_cache_dict, model):
+    for var in model.component_data_objects(pyo.Var):
+        sn_cache_dict[id(var)] = (var, var.value)
