@@ -270,7 +270,7 @@ class AMPL_guest():
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.solve_result =}")
-            s._mpisppy_data._obj_from_agnostic = None
+            s._mpisppy_data.inner_bound = None
             return
 
         else:
@@ -289,7 +289,7 @@ class AMPL_guest():
         if gd["sense"] == pyo.minimize:
             s._mpisppy_data.outer_bound = objval - mipgap
         else:
-            s._mpisppy_data.inner_bound = objval + mipgap
+            s._mpisppy_data.outer_bound = objval + mipgap
 
         # copy the nonant x values from gs to s so mpisppy can use them in s
         # in general, we need more checks (see the pyomo agnostic guest example)
@@ -311,7 +311,7 @@ class AMPL_guest():
 
             s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
-        s._mpisppy_data._obj_from_agnostic = objval
+        s._mpisppy_data.inner_bound = objval
 
 
     # local helper
