@@ -344,12 +344,15 @@ class FWPH(mpisppy.phbase.PHBase):
     def _sync_after_mip_solve(self):
         # add columns from cylinder(s)
         self._swap_nonant_vars_back()
+        # spoke or hub (FWPH_Cylinder)
         if hasattr(self.spcomm, "add_cylinder_columns"):
             self.spcomm.add_cylinder_columns()
-        elif hasattr(self.spcomm, "sync_bounds"):
+        # hub
+        if hasattr(self.spcomm, "sync_bounds"):
             self.spcomm.sync_nonants()
             self.spcomm.sync_bounds()
             self.spcomm.sync_extensions()
+        # spoke
         elif hasattr(self.spcomm, "sync"):
             self.spcomm.sync()
         self._swap_nonant_vars()
