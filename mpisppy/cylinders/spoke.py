@@ -12,7 +12,7 @@ import time
 import os
 import math
 
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
 
 
@@ -162,6 +162,14 @@ class InnerBoundSpoke(_BoundSpoke):
         self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
         self.solver_options = None # can be overwritten by derived classes
 
+    def register_send_fields(self):
+        super().register_send_fields()
+        self._recent_xhat_send_circular_buffer = SendCircularBuffer(
+            self.send_buffers[Field.RECENT_XHATS],
+            self._field_lengths[Field.BEST_XHAT],
+            self._field_lengths[Field.RECENT_XHATS] // self._field_lengths[Field.BEST_XHAT],
+        )
+
     def update_if_improving(self, candidate_inner_bound, update_best_solution_cache=True):
         if update_best_solution_cache:
             update = self.opt.update_best_solution_if_improving(candidate_inner_bound)
@@ -170,6 +178,7 @@ class InnerBoundSpoke(_BoundSpoke):
                 if self.is_minimizing else
                 (self.best_inner_bound < candidate_inner_bound)
                 )
+        self.send_latest_xhat()
         if update:
             self.best_inner_bound = candidate_inner_bound
             # send to hub
@@ -190,6 +199,18 @@ class InnerBoundSpoke(_BoundSpoke):
             ci += 1
         # print(f"{self.cylinder_rank=} sending {best_xhat_buf.value_array()=}")
         self.put_send_buffer(best_xhat_buf, Field.BEST_XHAT)
+
+    def send_latest_xhat(self):
+        recent_xhat_buf = self._recent_xhat_send_circular_buffer.next_value_array()
+        ci = 0
+        for s in self.opt.local_scenarios.values():
+            for ndn_var in s._mpisppy_data.nonant_indices.values():
+                recent_xhat_buf[ci] = s._mpisppy_data.latest_solution_cache[ndn_var]
+                ci += 1
+            recent_xhat_buf[ci] = s._mpisppy_data.inner_bound
+            ci += 1
+        # print(f"{self.cylinder_rank=} sending {recent_xhat_buf=}")
+        self.put_send_buffer(self._recent_xhat_send_circular_buffer.data, Field.RECENT_XHATS)
 
     def finalize(self):
         if self.opt.load_best_solution():

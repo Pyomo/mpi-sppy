@@ -114,6 +114,46 @@ class RecvArray(FieldArray):
         return self._id
 
 
+class _CircularBuffer:
+
+    def __init__(self, data: FieldArray, field_length: int, buffer_size: int):
+        # last byte is the "write pointer"
+        assert len(data.value_array()) == field_length * buffer_size
+        self.data = data
+        self._field_length = field_length
+        self._buffer_size = buffer_size
+
+    def _get_value_array(self, read_write_index):
+        position = read_write_index % self._buffer_size
+        return self.data._array[(position*self._field_length):((position+1)*self._field_length)]
+
+
+class SendCircularBuffer(_CircularBuffer):
+
+    def __init__(self, data: SendArray, field_length: int, buffer_size: int):
+        super().__init__(data, field_length, buffer_size)
+
+    def next_value_array(self):
+        return self._get_value_array(self.data.id())
+
+
+class RecvCircularBuffer(_CircularBuffer):
+
+    def __init__(self, data: RecvArray, field_length: int, buffer_size: int):
+        super().__init__(data, field_length, buffer_size)
+        self._read_id = 0
+
+    def next_value_arrays(self):
+        # if the writes have already "wrapped around" the buffer,
+        # we need to fast-forward the read index so we don't read
+        # the same data multiple times
+        while self.data.id() > self._read_id + self._buffer_size:
+            self._read_id += 1
+        while self._read_id < self.data.id():
+            yield self._get_value_array(self._read_id)
+            self._read_id += 1
+
+
 class SPCommunicator:
     """ Base class for communicator objects. Each communicator object should register
         as a class attribute what Field attributes it provides in its buffer

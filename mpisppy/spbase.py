@@ -571,6 +571,8 @@ class SPBase:
             update = (obj_val < self.best_solution_obj_val)
         else:
             update = (self.best_solution_obj_val < obj_val)
+        if obj_val is not None:
+            self._cache_latest_solution()
         if update:
             self.best_solution_obj_val = obj_val
             self._cache_best_solution()
@@ -579,10 +581,14 @@ class SPBase:
 
     def _cache_best_solution(self):
         for k,s in self.local_scenarios.items():
+            s._mpisppy_data.best_solution_cache = s._mpisppy_data.latest_solution_cache
+
+    def _cache_latest_solution(self):
+        for k,s in self.local_scenarios.items():
             scenario_cache = pyo.ComponentMap()
             for var in s.component_data_objects(pyo.Var):
                 scenario_cache[var] = var.value
-            s._mpisppy_data.best_solution_cache = scenario_cache
+            s._mpisppy_data.latest_solution_cache = scenario_cache
 
     def _get_cylinder_name(self):
         if self.spcomm:
