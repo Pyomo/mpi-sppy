@@ -88,7 +88,7 @@ jobs:
 
       - name: Test ComponentMap
         run: |
-          python mpisppy/tests/test_component_map_usage.py
+          pytest mpisppy/tests/test_component_map_usage.py
 
       - name: Test docs
         run: |
