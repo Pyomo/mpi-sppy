@@ -345,9 +345,9 @@ class FWPH(mpisppy.phbase.PHBase):
         # add columns from cylinder(s)
         self._swap_nonant_vars_back()
         if hasattr(self.spcomm, "add_cylinder_columns"):
-            self.spcomm.sync_nonants()
             self.spcomm.add_cylinder_columns()
-        if hasattr(self.spcomm, "sync_bounds"):
+        elif hasattr(self.spcomm, "sync_bounds"):
+            self.spcomm.sync_nonants()
             self.spcomm.sync_bounds()
             self.spcomm.sync_extensions()
         elif hasattr(self.spcomm, "sync"):
