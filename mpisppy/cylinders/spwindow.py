@@ -81,7 +81,10 @@ class FieldLengths:
 
         # reset the field_length_components
         for p in field_length_components.component_data_objects():
-            p.clear()
+            # leave user-set parameter alone, just clear the
+            # "private" parameters
+            if p.name[0] == "_":
+                p.clear()
 
     def __getitem__(self, field: Field):
         return self._field_lengths[field]
