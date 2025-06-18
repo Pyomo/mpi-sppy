@@ -303,6 +303,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {
                 'verbose': cfg.verbose,
                 'rho_update_threshold': cfg.primal_dual_rho_update_threshold,
+                'primal_bias': cfg.primal_dual_rho_primal_bias,
             }
 
     # FWPH spoke
