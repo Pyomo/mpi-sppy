@@ -184,14 +184,14 @@ class AMPL_guest():
 
         def _vname(i):
             vtuple = gd['nonant_names'][('ROOT',i)]
-            return f"{vtuple[0]}" if vtuple[1] == "" else f"{vtuple[0]}['{vtuple[1]}']"
+            return f"{vtuple[0]}" if vtuple[1] == "" else f"{vtuple[0]}['{vtuple[1][0]}']"
         
         gd = scenario._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
         gs.eval("param xbars{nonant_indices};")
         obj_fct = gd["obj_fct"]
         objstr = str(obj_fct)
-        assert objstr.split (' ')[0] == "minimize", "We currently assume minimization"
+        assert objstr.split(' ')[0] == "minimize", "We currently assume minimization"
 
         # Dual term (weights W) (This is where indexes are an issue)
         phobjstr = ""
