@@ -131,7 +131,6 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         return GradRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
 
     def _nonant_grad_cost(self, s):
-        ## TO DO: returns the gradient of obj with respect to nonants
         grads = np.array([-differentiate(list(s.component_data_objects(
                     ctype=pyo.Objective, active=True, descend_into=True
                 ))[0], wrt=var) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
@@ -141,14 +140,12 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def _compute_and_update_rho(self):
         ph = self.ph
         primal_resid = self._compute_primal_residual_norm(ph)
-        print(f"primal_resid={primal_resid}")
         xmax = self._compute_xmax(ph)
         xmin = self._compute_xmin(ph)
         prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
                      for s in self.ph.local_scenarios.values()]
 
         costs = {s: self._nonant_grad_cost(s) for s in ph.local_scenarios.values()}
-        print(f"costs={costs}")
 
         w = dict()
         for s in self.ph.local_scenarios.values():
