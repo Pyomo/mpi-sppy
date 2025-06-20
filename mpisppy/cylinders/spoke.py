@@ -205,10 +205,10 @@ class InnerBoundSpoke(_BoundSpoke):
         recent_xhat_buf = self._recent_xhat_send_circular_buffer.next_value_array_reference()
         ci = 0
         for s in self.opt.local_scenarios.values():
-            solution_cache = s._mpisppy_data.latest_solution_cache._dict
-            for ndn_varid in s._mpisppy_data.varid_to_nonant_index:
-                recent_xhat_buf[ci] = solution_cache[ndn_varid][1]
-                ci += 1
+            solution_cache = s._mpisppy_data.latest_nonant_solution_cache
+            len_nonants = len(s._mpisppy_data.nonant_indices)
+            recent_xhat_buf[ci:ci+len_nonants] = solution_cache[:]
+            ci += len_nonants
             recent_xhat_buf[ci] = s._mpisppy_data.inner_bound
             ci += 1
         # print(f"{self.cylinder_rank=} sending {recent_xhat_buf=}")
