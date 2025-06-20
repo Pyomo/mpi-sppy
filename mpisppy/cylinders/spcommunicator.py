@@ -115,6 +115,19 @@ class RecvArray(FieldArray):
 
 
 class _CircularBuffer:
+    """
+    The circular buffer is meant for holding several versions of a Field
+    (defined by the `buffer_size`). The `data` object is an instance of
+    `FieldArray`.
+
+    To know where in the buffer we are, we use the FieldArray._id. The layout
+    looks like this for a `buffer_size` of 4:
+
+    |--0--|--1--|--2--|--3--|id|
+
+    The id % buffer_size tells us which data point is the most recent, such
+    that individual ids are not needed for each instance.
+    """
 
     def __init__(self, data: FieldArray, field_length: int, buffer_size: int):
         # last byte is the "write pointer"
@@ -130,14 +143,20 @@ class _CircularBuffer:
 
 class SendCircularBuffer(_CircularBuffer):
 
-    def __init__(self, data: SendArray, field_length: int, buffer_size: int):
-        super().__init__(data, field_length, buffer_size)
-
     def next_value_array_reference(self):
+        # NOTE: The id gets incremented in the call
+        #       to `put_send_buffer`, which is necessarily
+        #       called *after* this method. Therefore
+        #       we start at 0 and go up, and when sent
+        #       will be the id of the next *open* position
         return self._get_value_array(self.data.id())
 
 
 class RecvCircularBuffer(_CircularBuffer):
+    # The _read_id tells us where we last read from, and the
+    # (data.id % buffer_size) - 1
+    # has the last place written to. Therefore, we know which
+    # items in the buffer are new based on their difference.
 
     def __init__(self, data: RecvArray, field_length: int, buffer_size: int):
         super().__init__(data, field_length, buffer_size)
