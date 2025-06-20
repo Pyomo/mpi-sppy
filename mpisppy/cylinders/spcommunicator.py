@@ -133,7 +133,7 @@ class SendCircularBuffer(_CircularBuffer):
     def __init__(self, data: SendArray, field_length: int, buffer_size: int):
         super().__init__(data, field_length, buffer_size)
 
-    def next_value_array(self):
+    def next_value_array_reference(self):
         return self._get_value_array(self.data.id())
 
 

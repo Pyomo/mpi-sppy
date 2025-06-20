@@ -202,7 +202,7 @@ class InnerBoundSpoke(_BoundSpoke):
         self.put_send_buffer(best_xhat_buf, Field.BEST_XHAT)
 
     def send_latest_xhat(self):
-        recent_xhat_buf = self._recent_xhat_send_circular_buffer.next_value_array()
+        recent_xhat_buf = self._recent_xhat_send_circular_buffer.next_value_array_reference()
         ci = 0
         for s in self.opt.local_scenarios.values():
             solution_cache = s._mpisppy_data.latest_solution_cache._dict
