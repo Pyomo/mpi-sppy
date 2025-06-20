@@ -183,15 +183,22 @@ class AMPL_guest():
         # The host has xbars and computes without involving the guest language
 
         def _vname(i):
-            vtuple = gd['nonant_names'][('ROOT',i)]
-            return f"{vtuple[0]}" if vtuple[1] == "" else f"{vtuple[0]}['{vtuple[1]}']"
-        
+            vname, varidx = gd['nonant_names'][('ROOT',i)]
+            if bool(varidx):
+                if isinstance(varidx, str):
+                    varidx = f"'{varidx}'"
+                else:
+                    varidx = ",".join(f"'{idx}'" for idx in varidx)
+                return f"{vname}[{varidx}]"
+            else:
+                return vname
+
         gd = scenario._agnostic_dict
         gs = gd["scenario"]  # guest scenario handle
         gs.eval("param xbars{nonant_indices};")
         obj_fct = gd["obj_fct"]
         objstr = str(obj_fct)
-        assert objstr.split (' ')[0] == "minimize", "We currently assume minimization"
+        assert objstr.split(' ')[0] == "minimize", "We currently assume minimization"
 
         # Dual term (weights W) (This is where indexes are an issue)
         phobjstr = ""
@@ -270,7 +277,7 @@ class AMPL_guest():
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.solve_result =}")
-            s._mpisppy_data._obj_from_agnostic = None
+            s._mpisppy_data.inner_bound = None
             return
 
         else:
@@ -289,7 +296,7 @@ class AMPL_guest():
         if gd["sense"] == pyo.minimize:
             s._mpisppy_data.outer_bound = objval - mipgap
         else:
-            s._mpisppy_data.inner_bound = objval + mipgap
+            s._mpisppy_data.outer_bound = objval + mipgap
 
         # copy the nonant x values from gs to s so mpisppy can use them in s
         # in general, we need more checks (see the pyomo agnostic guest example)
@@ -311,7 +318,7 @@ class AMPL_guest():
 
             s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
-        s._mpisppy_data._obj_from_agnostic = objval
+        s._mpisppy_data.inner_bound = objval
 
 
     # local helper

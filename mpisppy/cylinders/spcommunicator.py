@@ -114,6 +114,65 @@ class RecvArray(FieldArray):
         return self._id
 
 
+class _CircularBuffer:
+    """
+    The circular buffer is meant for holding several versions of a Field
+    (defined by the `buffer_size`). The `data` object is an instance of
+    `FieldArray`.
+
+    To know where in the buffer we are, we use the FieldArray._id. The layout
+    looks like this for a `buffer_size` of 4:
+
+    |--0--|--1--|--2--|--3--|id|
+
+    The id % buffer_size tells us which data point is the most recent, such
+    that individual ids are not needed for each instance.
+    """
+
+    def __init__(self, data: FieldArray, field_length: int, buffer_size: int):
+        # last byte is the "write pointer"
+        assert len(data.value_array()) == field_length * buffer_size
+        self.data = data
+        self._field_length = field_length
+        self._buffer_size = buffer_size
+
+    def _get_value_array(self, read_write_index):
+        position = read_write_index % self._buffer_size
+        return self.data._array[(position*self._field_length):((position+1)*self._field_length)]
+
+
+class SendCircularBuffer(_CircularBuffer):
+
+    def next_value_array_reference(self):
+        # NOTE: The id gets incremented in the call
+        #       to `put_send_buffer`, which is necessarily
+        #       called *after* this method. Therefore
+        #       we start at 0 and go up, and when sent
+        #       will be the id of the next *open* position
+        return self._get_value_array(self.data.id())
+
+
+class RecvCircularBuffer(_CircularBuffer):
+    # The _read_id tells us where we last read from, and the
+    # (data.id % buffer_size) - 1
+    # has the last place written to. Therefore, we know which
+    # items in the buffer are new based on their difference.
+
+    def __init__(self, data: RecvArray, field_length: int, buffer_size: int):
+        super().__init__(data, field_length, buffer_size)
+        self._read_id = 0
+
+    def most_recent_value_arrays(self):
+        # if the writes have already "wrapped around" the buffer,
+        # we need to fast-forward the read index so we don't read
+        # the same data multiple times
+        while self.data.id() > self._read_id + self._buffer_size:
+            self._read_id += 1
+        while self._read_id < self.data.id():
+            yield self._get_value_array(self._read_id)
+            self._read_id += 1
+
+
 class SPCommunicator:
     """ Base class for communicator objects. Each communicator object should register
         as a class attribute what Field attributes it provides in its buffer
