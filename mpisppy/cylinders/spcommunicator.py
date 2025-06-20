@@ -162,7 +162,7 @@ class RecvCircularBuffer(_CircularBuffer):
         super().__init__(data, field_length, buffer_size)
         self._read_id = 0
 
-    def next_value_arrays(self):
+    def most_recent_value_arrays(self):
         # if the writes have already "wrapped around" the buffer,
         # we need to fast-forward the read index so we don't read
         # the same data multiple times
