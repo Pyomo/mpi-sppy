@@ -130,7 +130,7 @@ class SPBase:
         self._verify_nonant_lengths()
         self._set_sense()
         self._use_variable_probability_setter()
-        self._set_best_solution_cache()
+        self._set_solution_cache()
 
         ## SPCommunicator object
         self._spcomm = None
@@ -553,10 +553,11 @@ class SPBase:
         if missing:
             raise ValueError(f"Missing the following required options: {', '.join(missing)}")
 
-    def _set_best_solution_cache(self):
+    def _set_solution_cache(self):
         # set up best solution cache
         for k,s in self.local_scenarios.items():
             s._mpisppy_data.best_solution_cache = None
+            s._mpisppy_data.latest_nonant_solution_cache = np.full(len(s._mpisppy_data.nonant_indices), np.nan)
 
     def update_best_solution_if_improving(self, obj_val):
         """ Call if the variable values have a nonanticipative solution
@@ -572,7 +573,7 @@ class SPBase:
         else:
             update = (self.best_solution_obj_val < obj_val)
         if obj_val is not None:
-            self._cache_latest_solution()
+            self._cache_latest_solution_nonants()
         if update:
             self.best_solution_obj_val = obj_val
             self._cache_best_solution()
@@ -586,9 +587,16 @@ class SPBase:
     def _cache_latest_solution(self):
         for k,s in self.local_scenarios.items():
             scenario_cache = pyo.ComponentMap()
-            for var in s.component_data_objects(pyo.Var):
-                scenario_cache[var] = var.value
-            s._mpisppy_data.latest_solution_cache = scenario_cache
+            _put_var_vals_in_component_map_dict(
+                scenario_cache._dict,
+                s.component_data_objects(pyo.Var)
+            )
+            s._mpisppy_data.best_solution_cache = scenario_cache
+
+    def _cache_latest_solution_nonants(self):
+        for k,s in self.local_scenarios.items():
+            for idx, v in enumerate(s._mpisppy_data.nonant_indices.values()):
+                s._mpisppy_data.latest_nonant_solution_cache[idx] = v.value
 
     def _get_cylinder_name(self):
         if self.spcomm:
@@ -747,3 +755,8 @@ class SPBase:
         self.mpicomm.Barrier()
         for scenario_name, scenario in self.local_scenarios.items():
             scenario_tree_solution_writer(directory_name, scenario_name, scenario, self.bundling)
+
+
+def _put_var_vals_in_component_map_dict(sn_cache_dict, var_iter):
+    for var in var_iter:
+        sn_cache_dict[id(var)] = (var, var.value)

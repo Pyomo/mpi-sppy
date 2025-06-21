@@ -326,7 +326,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar.value()
 
     # the next line ignores bundling
-    s._mpisppy_data._obj_from_agnostic = objval
+    s._mpisppy_data.inner_bound = objval
 
     # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
 
