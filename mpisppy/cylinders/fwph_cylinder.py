@@ -41,7 +41,7 @@ class FWPH_Cylinder(SPCommunicator):
         for idx, cls, recv_buf_circular in self._recent_xhat_recv_circular_buffers:
             is_new = self.get_receive_buffer(recv_buf_circular.data, Field.RECENT_XHATS, idx)
             if is_new:
-                for value_array in recv_buf_circular.next_value_arrays():
+                for value_array in recv_buf_circular.most_recent_value_arrays():
                     self._add_QP_columns_from_buf(value_array)
 
     def _add_QP_columns_from_buf(self, xhat_array):
