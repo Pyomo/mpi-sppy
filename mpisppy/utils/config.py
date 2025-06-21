@@ -1007,6 +1007,11 @@ class Config(pyofig.ConfigDict):
                          description="Update threshold for when primal and dual residuals are imbalanced (default=2.0)",
                          domain=float,
                          default=2.0)
+        self.add_to_config("primal_dual_rho_primal_bias",
+                         description="Bias to add towards primal convergence when computing updates. "
+                         "Values >1 are biased toward primal and values <1 are biased towards dual (default=1.0).",
+                         domain=float,
+                         default=1.0)
 
     def norm_rho_args(self):
         self.add_to_config("use_norm_rho_updater",
