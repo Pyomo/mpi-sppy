@@ -582,10 +582,6 @@ class SPBase:
 
     def _cache_best_solution(self):
         for k,s in self.local_scenarios.items():
-            s._mpisppy_data.best_solution_cache = s._mpisppy_data.latest_solution_cache
-
-    def _cache_latest_solution(self):
-        for k,s in self.local_scenarios.items():
             scenario_cache = pyo.ComponentMap()
             _put_var_vals_in_component_map_dict(
                 scenario_cache._dict,
