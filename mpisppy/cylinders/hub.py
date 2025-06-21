@@ -16,6 +16,7 @@ from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
 from mpisppy import global_toc
 
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger(__name__,
@@ -255,7 +256,7 @@ class PHNonantHub(Hub):
     def sync_Ws(self):
         self.send_ws()
 
-    def is_converged(self):
+    def is_converged(self, screen_trace=True):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
         if self.opt.best_solution_obj_val is not None:
@@ -269,7 +270,7 @@ class PHNonantHub(Hub):
                 )
 
             ## you still want to output status, even without inner bounders configured
-            if self.global_rank == 0:
+            if self.global_rank == 0 and screen_trace:
                 self.screen_trace()
 
             return False
@@ -281,7 +282,7 @@ class PHNonantHub(Hub):
                     "will be made on the Best Bound")
 
         ## log some output
-        if self.global_rank == 0:
+        if self.global_rank == 0 and screen_trace:
             self.screen_trace()
 
         return self.determine_termination()
@@ -440,7 +441,10 @@ class APHHub(PHHub):
         Eobj = self.opt.post_loops()
         return Eobj
 
-class FWPHHub(PHHub):
+class FWPHHub(PHHub, FWPH_Cylinder):
+
+    send_fields = (*PHHub.send_fields, *FWPH_Cylinder.send_fields)
+    receive_fields = (*PHHub.receive_fields, *FWPH_Cylinder.receive_fields)
 
     _hub_algo_best_bound_provider = True
 
