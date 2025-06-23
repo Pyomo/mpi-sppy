@@ -28,6 +28,7 @@ class PrimalDualRho(mpisppy.extensions.extension.Extension):
         self._verbose = self.options.get('verbose', False)
         self._ph = ph
         self.update_threshold = self.options.get('rho_update_threshold', 2.0)
+        self.primal_bias = self.options.get('primal_bias', 1.0)
         self.prev_xbars = None
         self._rank = self._ph.cylinder_rank
 
@@ -111,8 +112,8 @@ class PrimalDualRho(mpisppy.extensions.extension.Extension):
         if self._verbose:
             global_toc(f"{primal_gap=}, {dual_gap=}", self._ph.cylinder_rank==0)
 
-        increase_rho = primal_gap > self.update_threshold * dual_gap
-        decrease_rho = dual_gap > self.update_threshold * primal_gap
+        increase_rho = primal_gap * self.primal_bias > self.update_threshold * dual_gap
+        decrease_rho = dual_gap > self.update_threshold * primal_gap * self.primal_bias
 
         if increase_rho:
             global_toc(f"{primal_gap=:.4e}, {dual_gap=:.4e}, increasing all rhos by factor {self.update_threshold}", self._ph.cylinder_rank==0)

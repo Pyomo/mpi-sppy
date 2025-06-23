@@ -196,6 +196,21 @@ CoeffRho
 Set per variable rho values proportional to the cost coefficient on each non-anticipative variable,
 with an optional multiplier (default = 1.0). If the coefficient is 0, the default rho value is used instead.
 
+primal_dual_rho
+^^^^^^^^^^^^^^^
+
+Increase or decrease rho for every variable to keep primal and dual convergence balance. If
+the primal residual is greater than ``update_threshold`` times the dual residual, then all
+rhos are increased by the ``update_threshold``, and conversely all rhos are decreased if
+the dual residual is greater than ``update_threshold`` time the primal residual. The user
+can also specify a ``primal_bias`` (default 1.0) which will emphasize primal convergence
+when greater than 1 and emphasize dual convergence if less than 1.
+
+This extension is especially useful if the rhos provided by the user (or some other extension)
+are believed to be "in balance", such that per-variable updates are not needed (and can sometimes
+hinder algorithmic progress when different nonanticipative variables play similar roles in
+the subproblem optimization problems).
+
 wtracker_extension
 ^^^^^^^^^^^^^^^^^^
 
