@@ -10,21 +10,22 @@
 from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.hub import PHHub
+import mpisppy.cylinders.spoke
 
 import pyomo.environ as pyo
 
-class RelaxedPHSpoke(Spoke, PHHub):
+class RelaxedPHSpoke(mpisppy.cylinders.spoke.OuterBoundSpoke):
 
-    send_fields = (*Spoke.send_fields, Field.DUALS, Field.RELAXED_NONANT, )
-    receive_fields = (*Spoke.receive_fields, )
+    # send_fields = (*Spoke.send_fields, Field.DUALS, Field.RELAXED_NONANT, )
+    # receive_fields = (*Spoke.receive_fields, )
 
     @property
     def nonant_field(self):
         return Field.RELAXED_NONANT
 
-    def send_boundsout(self):
-        # overwrite PHHub.send_boundsout (not a hub)
-        return
+    # def send_boundsout(self):
+    #     # overwrite PHHub.send_boundsout (not a hub)
+    #     return
 
     def update_rho(self):
         rho_factor = self.opt.options.get("relaxed_ph_rho_factor", 1.0)
@@ -36,6 +37,7 @@ class RelaxedPHSpoke(Spoke, PHHub):
 
     def main(self):
         # relax the integers
+        print("in rleaxed main")
         integer_relaxer = pyo.TransformationFactory("core.relax_integer_vars")
         for s in self.opt.local_scenarios.values():
             integer_relaxer.apply_to(s)
@@ -55,3 +57,23 @@ class RelaxedPHSpoke(Spoke, PHHub):
         self.opt.iterk_loop()
 
         return self.opt.conv, None, trivial_bound
+    
+    def sync(self):
+        if self.opt.best_bound_obj_val is None:
+            return
+
+        # Tell the hub about the most recent bound
+        self.send_bound(self.opt.best_bound_obj_val)
+
+        # Update the nonant bounds, if possible
+        self.receive_nonant_bounds()
+
+    def finalize(self):
+        if self.opt.best_bound_obj_val is None:
+            return
+
+        # Tell the hub about the most recent bound
+        self.send_bound(self.opt.best_bound_obj_val)
+        self.final_bound = self.opt.best_bound_obj_val
+
+        return self.final_bound

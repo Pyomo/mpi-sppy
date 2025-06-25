@@ -79,6 +79,9 @@ class _BoundSpoke(Spoke):
         super().register_receive_fields()
         self._hub_bounds = self.register_recv_field(Field.BEST_OBJECTIVE_BOUNDS, 0, 2)
 
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.register_receive_fields()
+
     @abc.abstractmethod
     def bound_type(self) -> Field:
         pass

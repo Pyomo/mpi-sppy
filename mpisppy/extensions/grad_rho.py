@@ -10,10 +10,12 @@
 import mpisppy.extensions.dyn_rho_base
 import numpy as np
 from pyomo.core.expr.calculus.derivatives import differentiate
+from pyomo.core.expr.calculus.derivatives import Modes
 import pyomo.environ as pyo
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
 from mpisppy.utils.sputils import nonant_cost_coeffs
+from mpisppy.cylinders.spwindow import Field
 
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -23,19 +25,49 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     U. Naepels, David L. Woodruff, 2023
     """
 
-    def __init__(self, ph):
-        cfg = ph.options["grad_rho_options"]["cfg"]
-        super().__init__(ph, cfg)
-        self.ph = ph
+    def __init__(self, opt):
+        cfg = opt.options["grad_rho_options"]["cfg"]
+        super().__init__(opt, cfg)
+        self.opt = opt
         self.alpha = cfg.grad_order_stat
         assert (self.alpha >= 0 and self.alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {alpha=} is invalid."
-        
-    def _compute_primal_residual_norm(self, ph):
-        local_nodenames = []
-        local_primal_residuals = {}
-        global_primal_residuals = {}
+    
+    def _scen_dep_denom(self, s, node):
+        """ Computes scenario dependent denominator for grad rho calculation.
 
-        for k, s in ph.local_scenarios.items():
+        Args:
+           s (Pyomo Concrete Model): scenario
+           node: only ROOT for now
+
+        Returns:
+           scen_dep_denom (numpy array): denominator
+
+        """
+        assert node.name == "ROOT", "gradient-based compute rho only works for two stage for now"
+        nlen = s._mpisppy_data.nlens[node.name]
+        xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
+        nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
+                                    dtype='d', count=nlen)
+        scen_dep_denom = np.abs(nonants_array - xbar_array)
+        denom_max = np.max(scen_dep_denom)
+        for i in range(len(scen_dep_denom)):
+            if scen_dep_denom[i] <= self.opt.E1_tolerance:
+                scen_dep_denom[i] = max(denom_max, self.opt.E1_tolerance)
+        return scen_dep_denom
+
+    def _scen_indep_denom(self):
+        """ Computes scenario independent denominator for grad rho calculation.
+
+        Returns:
+           scen_indep_denom (numpy array): denominator
+
+        """
+        opt = self.opt
+        local_nodenames = []
+        local_denoms = {}
+        global_denoms = {}
+
+        for k, s in opt.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
             for node in s._mpisppy_node_list:
                 if node.name not in local_nodenames:
@@ -43,17 +75,17 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     local_nodenames.append(ndn)
                     nlen = nlens[ndn]
 
-                    local_primal_residuals[ndn] = np.zeros(nlen, dtype="d")
-                    global_primal_residuals[ndn] = np.zeros(nlen, dtype="d")
+                    local_denoms[ndn] = np.zeros(nlen, dtype="d")
+                    global_denoms[ndn] = np.zeros(nlen, dtype="d")
 
-        for k, s in ph.local_scenarios.items():
+        for k, s in opt.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
             xbars = s._mpisppy_model.xbars
             for node in s._mpisppy_node_list:
                 ndn = node.name
-                primal_residuals = local_primal_residuals[ndn]
+                denoms = local_denoms[ndn]
 
-                unweighted_primal_residuals = np.fromiter(
+                unweighted_denoms = np.fromiter(
                     (
                         abs(v._value - xbars[ndn, i]._value)
                         for i, v in enumerate(node.nonant_vardata_list)
@@ -61,74 +93,41 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     dtype="d",
                     count=nlens[ndn],
                 )
-                primal_residuals += s._mpisppy_probability * unweighted_primal_residuals
+                denoms += s._mpisppy_probability * unweighted_denoms
 
         for nodename in local_nodenames:
-            ph.comms[nodename].Allreduce(
-                [local_primal_residuals[nodename], MPI.DOUBLE],
-                [global_primal_residuals[nodename], MPI.DOUBLE],
+            opt.comms[nodename].Allreduce(
+                [local_denoms[nodename], MPI.DOUBLE],
+                [global_denoms[nodename], MPI.DOUBLE],
                 op=MPI.SUM,
             )
 
-        primal_resid = {}
-        for ndn, global_primal_resid in global_primal_residuals.items():
-            for i, v in enumerate(global_primal_resid):
-                primal_resid[ndn, i] = v
+        scen_indep_denom = {}
+        for ndn, global_denom in global_denoms.items():
+            for i, v in enumerate(global_denom):
+                scen_indep_denom[ndn, i] = v
 
-        return primal_resid
+        return scen_indep_denom
 
-    @staticmethod
-    def _compute_min_max(ph, npop, mpiop, start):
-        local_nodenames = []
-        local_xmaxmin = {}
-        global_xmaxmin = {}
+    def _get_grad_expr(self):
+        self.grad_expr = dict()
+        for s in self.opt.local_scenarios.values():
+            self.grad_expr[s] = np.array([differentiate(list(s.component_data_objects(
+                    ctype=pyo.Objective, active=True, descend_into=True
+                ))[0], wrt=var, mode=Modes.reverse_symbolic) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
+            #print(list([exp for exp in self.grad_expr[s]]))
+        return  
 
-        for k, s in ph.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                if node.name not in local_nodenames:
-                    ndn = node.name
-                    local_nodenames.append(ndn)
-                    nlen = nlens[ndn]
-
-                    local_xmaxmin[ndn] = start * np.ones(nlen, dtype="d")
-                    global_xmaxmin[ndn] = np.zeros(nlen, dtype="d")
-
-        for k, s in ph.local_scenarios.items():
-            nlens = s._mpisppy_data.nlens
-            for node in s._mpisppy_node_list:
-                ndn = node.name
-                xmaxmin = local_xmaxmin[ndn]
-
-                xmaxmin_partial = np.fromiter(
-                    (v._value for v in node.nonant_vardata_list),
-                    dtype="d",
-                    count=nlens[ndn],
-                )
-                xmaxmin = npop(xmaxmin, xmaxmin_partial)
-                local_xmaxmin[ndn] = xmaxmin
-
-        for nodename in local_nodenames:
-            ph.comms[nodename].Allreduce(
-                [local_xmaxmin[nodename], MPI.DOUBLE],
-                [global_xmaxmin[nodename], MPI.DOUBLE],
-                op=mpiop,
-            )
-
-        xmaxmin_dict = {}
-        for ndn, global_xmaxmin_dict in global_xmaxmin.items():
-            for i, v in enumerate(global_xmaxmin_dict):
-                xmaxmin_dict[ndn, i] = v
-
-        return xmaxmin_dict
-
-    @staticmethod
-    def _compute_xmax(ph):
-        return GradRho._compute_min_max(ph, np.maximum, MPI.MAX, -np.inf)
-
-    @staticmethod
-    def _compute_xmin(ph):
-        return GradRho._compute_min_max(ph, np.minimum, MPI.MIN, np.inf)
+    def _eval_grad_expr(self, s, xhat):
+        ci = 0
+        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+            var.value = xhat[ci]
+            ci += 1
+        grads = np.array([-differentiate(list(s.component_data_objects(
+                    ctype=pyo.Objective, active=True, descend_into=True
+                ))[0], wrt=var) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
+        
+        return grads
 
     def _nonant_grad_cost(self, s):
         grads = np.array([-differentiate(list(s.component_data_objects(
@@ -137,70 +136,85 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         
         return grads
 
-    def _compute_and_update_rho(self):
-        ph = self.ph
-        primal_resid = self._compute_primal_residual_norm(ph)
-        xmax = self._compute_xmax(ph)
-        xmin = self._compute_xmin(ph)
-        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
-                     for s in self.ph.local_scenarios.values()]
+    def _compute_and_update_rho(self, indep_denom=False):
+        """ Computes and sets rhos for each scenario and each variable based on scenario dependence of
+        the denominator in rho calculation.
+        """
 
-        costs = {s: self._nonant_grad_cost(s) for s in ph.local_scenarios.values()}
+        opt = self.opt
+        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
+                     for s in self.opt.local_scenarios.values()]
+        local_scens = opt.local_scenarios.values()
+
+        if indep_denom:
+            grad_denom = self._scen_indep_denom()
+            loc_denom = {s: grad_denom for k in local_scens}
+        else:
+            # two-stage only for now
+            loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
+                           for s in opt.local_scenarios.values()}
+
+        if True: # in np.isnan(self.best_xhat_buf.value_array()):
+            costs = {s: self._nonant_grad_cost(s) for s in opt.local_scenarios.values()}
+        else:
+            costs = {s: self._eval_grad_expr(s, self.best_xhat_buf.value_array())
+                     for s in opt.local_scenarios.values()}
 
         w = dict()
-        for s in self.ph.local_scenarios.values():
+        for s in self.opt.local_scenarios.values():
             w[s] = np.array([s._mpisppy_model.W[ndn_i]._value
                              for ndn_i in s._mpisppy_data.nonant_indices])
 
-        ccs = {s: costs[s]  for s in ph.local_scenarios.values()}
-        k0, s0 = list(self.ph.local_scenarios.items())[0]
-        local_cc = {ndn_i: [cc_list[ndn_i[1]] for _, cc_list in ccs.items()]
+        loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
+                           for s in opt.local_scenarios.values()}
+
+        rho = {s: np.abs(np.divide(costs[s], loc_denom[s]))  for s in opt.local_scenarios.values()}
+        k0, s0 = list(self.opt.local_scenarios.items())[0]
+        local_rhos = {ndn_i: [rho_list[ndn_i[1]] for _, rho_list in rho.items()]
                         for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
 
 
-        vcnt = len(local_cc)  # variable count
-        cc_mins = np.empty(vcnt, dtype='d')  # global
-        cc_maxes = np.empty(vcnt, dtype='d')
-        cc_means = np.empty(vcnt, dtype='d')
+        vcnt = len(local_rhos)  # variable count
+        rho_mins = np.empty(vcnt, dtype='d')  # global
+        rho_maxes = np.empty(vcnt, dtype='d')
+        rho_means = np.empty(vcnt, dtype='d')
 
-        local_cc_mins = np.fromiter((min(cc_vals) for cc_vals in local_cc.values()), dtype='d')
-        local_cc_maxes = np.fromiter((max(cc_vals) for cc_vals in local_cc.values()), dtype='d')
+        local_rho_mins = np.fromiter((min(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
+        local_rho_maxes = np.fromiter((max(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
         local_prob = np.sum(prob_list)
-        local_wgted_means = np.fromiter((np.dot(cc_vals, prob_list) * local_prob for cc_vals in local_cc.values()), dtype='d')
+        local_wgted_means = np.fromiter((np.dot(rho_vals, prob_list) * local_prob for rho_vals in local_rhos.values()), dtype='d')
 
-        self.ph.comms["ROOT"].Allreduce([local_cc_mins, MPI.DOUBLE],
-                                               [cc_mins, MPI.DOUBLE],
+        self.opt.comms["ROOT"].Allreduce([local_rho_mins, MPI.DOUBLE],
+                                               [rho_mins, MPI.DOUBLE],
                                                op=MPI.MIN)
-        self.ph.comms["ROOT"].Allreduce([local_cc_maxes, MPI.DOUBLE],
-                                               [cc_maxes, MPI.DOUBLE],
+        self.opt.comms["ROOT"].Allreduce([local_rho_maxes, MPI.DOUBLE],
+                                               [rho_maxes, MPI.DOUBLE],
                                                op=MPI.MAX)
 
-        self.ph.comms["ROOT"].Allreduce([local_wgted_means, MPI.DOUBLE],
-                                               [cc_means, MPI.DOUBLE],
+        self.opt.comms["ROOT"].Allreduce([local_wgted_means, MPI.DOUBLE],
+                                               [rho_means, MPI.DOUBLE],
                                                op=MPI.SUM)
         if self.alpha == 0.5:
-            cc = {ndn_i: float(cc_mean) for ndn_i, cc_mean in zip(local_cc.keys(), cc_means)}
+            rhos = {ndn_i: float(rho_mean) for ndn_i, rho_mean in zip(local_rhos.keys(), rho_means)}
         elif self.alpha == 0.0:
-            cc = {ndn_i: float(cc_min) for ndn_i, cc_min in zip(local_cc.keys(), cc_mins)}
+            rhos = {ndn_i: float(rho_min) for ndn_i, rho_min in zip(local_rhos.keys(), rho_mins)}
         elif self.alpha == 1.0:
-            cc = {ndn_i: float(cc_max) for ndn_i, cc_max in zip(local_cc.keys(), cc_maxes)}
+            rhos = {ndn_i: float(rho_max) for ndn_i, rho_max in zip(local_rhos.keys(), rho_maxes)}
         elif self.alpha < 0.5:
-            cc = {ndn_i: float(cc_min + alpha * 2 * (cc_mean - cc_min))\
-                    for ndn_i, cc_min, cc_mean in zip(local_cc.keys(), cc_mins, cc_means)}
+            rhos= {ndn_i: float(rho_min + alpha * 2 * (rho_mean - rho_min))\
+                    for ndn_i, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)}
         elif self.alpha > 0.5:
-            cc = {ndn_i: float(2 * cc_mean - cc_max) + alpha * 2 * (cc_max - cc_mean)\
-                    for ndn_i, cc_mean, cc_max in zip(local_cc.keys(), cc_means, cc_maxes)}
+            rhos = {ndn_i: float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)\
+                    for ndn_i, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)}
         else:
             raise RuntimeError("Coding error.")
 
-        for s in ph.local_scenarios.values():    
+        print(rhos)
+
+        for s in opt.local_scenarios.values():    
             for ndn_i, rho in s._mpisppy_model.rho.items():
-                if cc[ndn_i] != 0:
-                    nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
-                    if nv.is_integer():
-                        rho._value = abs(cc[ndn_i]) / (xmax[ndn_i] - xmin[ndn_i] + 1)
-                    else:
-                        rho._value = abs(cc[ndn_i]) / max(1e-6, primal_resid[ndn_i])
+                if rhos[ndn_i] != 0:
+                        rho._value = rhos[ndn_i]
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()
@@ -216,13 +230,28 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def pre_iter0(self):
         pass
 
+    def iter0_post_solver_creation(self):
+        #wait for xhats iter0:
+        # if self.best_xhat_buf.id() == 0:
+        #     while not self.opt.spcomm.get_receive_buffer(self.best_xhat_buf, 
+        #     Field.BEST_XHAT, self.best_xhat_spoke_index):
+        #         continue
+        # print(self.best_xhat_buf.value_array())
+        pass
+
     def post_iter0(self):
         global_toc("Using grad-rho rho setter")
         self.update_caches()
+        self._get_grad_expr()
         self.compute_and_update_rho()
 
     def miditer(self):
         self.update_caches()
+        self.opt.spcomm.get_receive_buffer(
+            self.best_xhat_buf,
+            Field.BEST_XHAT,
+            self.best_xhat_spoke_index,
+        )
         if self._update_recommended():
             self.compute_and_update_rho()
 
@@ -231,3 +260,18 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
     def post_everything(self):
         pass
+    
+    def register_receive_fields(self):
+        spcomm = self.opt.spcomm
+        best_xhat_ranks = spcomm.fields_to_ranks[Field.BEST_XHAT]
+        assert len(best_xhat_ranks) == 1
+        index = best_xhat_ranks[0]
+
+        self.best_xhat_spoke_index = index
+
+        self.best_xhat_buf = spcomm.register_recv_field(
+            Field.BEST_XHAT,
+            self.best_xhat_spoke_index,
+        )
+
+        return

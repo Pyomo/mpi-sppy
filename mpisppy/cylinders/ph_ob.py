@@ -38,7 +38,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             self.rho_rescale_factors = None
 
         # use gradient rho
-        self.use_gradient_rho = False
+        self.use_gradient_rho = True
         if "ph_ob_gradient_rho" in self.opt.options:
             assert self.opt.options["ph_ob_gradient_rho"]["cfg"] is not None, "You need to give a cfg to use gradient rho."
             self.use_gradient_rho = True
@@ -125,15 +125,18 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
             break
 
     def _set_gradient_rho(self):
-        self.grad_object.write_grad_rho()
-        rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
-                            if 'rho_setter_kwargs' in self.opt.options \
-                            else dict()
-        for sname, scenario in self.opt.local_scenarios.items():
-            rholist = self.rho_setter(scenario, **rho_setter_kwargs)
-            for (vid, rho) in rholist:
-                (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
-                scenario._mpisppy_model.rho[(ndn, i)] = rho
+        # self.grad_object.write_grad_rho()
+        # rho_setter_kwargs = self.opt.options['rho_setter_kwargs'] \
+        #                     if 'rho_setter_kwargs' in self.opt.options \
+        #                     else dict()
+        # for sname, scenario in self.opt.local_scenarios.items():
+        #     rholist = self.rho_setter(scenario, **rho_setter_kwargs)
+        #     for (vid, rho) in rholist:
+        #         (ndn, i) = scenario._mpisppy_data.varid_to_nonant_index[vid]
+        #         scenario._mpisppy_model.rho[(ndn, i)] = rho
+        for s in self.opt.local_scenarios.values():
+            for rho in s._mpisppy_model.rho.values():
+                rho._value = rho._value
 
     def _hack_set_rho(self):
         # HACK to set specific rho values
@@ -147,7 +150,7 @@ class PhOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         self.opt.Compute_Xbar(verbose=verbose)
         self.opt.Update_W(verbose=verbose)
         # see if rho should be rescaled
-        if self.use_gradient_rho and iternum == 0:
+        if self.use_gradient_rho and True: #iternum == 0:
             self._set_gradient_rho()
             self._display_rho_values()
         if self.rho_rescale_factors is not None\
