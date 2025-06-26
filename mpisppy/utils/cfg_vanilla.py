@@ -37,6 +37,7 @@ from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
+from mpisppy.cylinders.dual_ph_spoke import DualPHSpoke
 from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
@@ -765,6 +766,44 @@ def subgradient_spoke(
     return subgradient_spoke
 
 
+def dual_ph_spoke(
+    cfg,
+    scenario_creator,
+    scenario_denouement,
+    all_scenario_names,
+    scenario_creator_kwargs=None,
+    rho_setter=None,
+    all_nodenames=None,
+    ph_extensions=None,
+    extension_kwargs=None,
+):
+    dual_ph_spoke = _PHBase_spoke_foundation(
+        DualPHSpoke,
+        cfg,
+        scenario_creator,
+        scenario_denouement,
+        all_scenario_names,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+        rho_setter=rho_setter,
+        all_nodenames=all_nodenames,
+        ph_extensions=ph_extensions,
+        extension_kwargs=extension_kwargs,
+    )
+    options = dual_ph_spoke["opt_kwargs"]["options"]
+    if cfg.dual_ph_rescale_rho_factor is not None:
+        options["rho_factor"] = cfg.dual_ph_rescale_rho_factor
+
+    # make sure this spoke doesn't hit the time or iteration limit
+    options["time_limit"] = None
+    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
+    options["display_progress"] = False
+    options["display_convergence_detail"] = False
+
+    add_ph_tracking(dual_ph_spoke, cfg, spoke=True)
+
+    return dual_ph_spoke
+
+
 def relaxed_ph_spoke(
     cfg,
     scenario_creator,
@@ -790,7 +829,7 @@ def relaxed_ph_spoke(
     )
     options = relaxed_ph_spoke["opt_kwargs"]["options"]
     if cfg.relaxed_ph_rescale_rho_factor is not None:
-        options["relaxed_ph_rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
+        options["rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None

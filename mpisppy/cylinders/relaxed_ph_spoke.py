@@ -8,31 +8,18 @@
 ###############################################################################
 
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spoke import Spoke
-from mpisppy.cylinders.hub import PHHub
+from mpisppy.cylinders.dual_ph_spoke import DualPHSpoke
 
 import pyomo.environ as pyo
 
-class RelaxedPHSpoke(Spoke, PHHub):
+class RelaxedPHSpoke(DualPHSpoke):
 
-    send_fields = (*Spoke.send_fields, Field.DUALS, Field.RELAXED_NONANT, )
-    receive_fields = (*Spoke.receive_fields, )
+    send_fields = (*DualPHSpoke.send_fields, Field.RELAXED_NONANT, )
+    receive_fields = (*DualPHSpoke.receive_fields, )
 
     @property
     def nonant_field(self):
         return Field.RELAXED_NONANT
-
-    def send_boundsout(self):
-        # overwrite PHHub.send_boundsout (not a hub)
-        return
-
-    def update_rho(self):
-        rho_factor = self.opt.options.get("relaxed_ph_rho_factor", 1.0)
-        if rho_factor == 1.0:
-            return
-        for s in self.opt.local_scenarios.values():
-            for rho in s._mpisppy_model.rho.values():
-                rho._value = rho_factor * rho._value
 
     def main(self):
         # relax the integers
@@ -40,18 +27,4 @@ class RelaxedPHSpoke(Spoke, PHHub):
         for s in self.opt.local_scenarios.values():
             integer_relaxer.apply_to(s)
 
-        # setup, PH Iter0
-        smoothed = self.options.get('smoothed', 0)
-        attach_prox = True
-        self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = smoothed)
-        trivial_bound = self.opt.Iter0()
-        if self.opt._can_update_best_bound():
-            self.opt.best_bound_obj_val = trivial_bound
-
-        # update the rho
-        self.update_rho()
-
-        # rest of PH
-        self.opt.iterk_loop()
-
-        return self.opt.conv, None, trivial_bound
+        return super().main()

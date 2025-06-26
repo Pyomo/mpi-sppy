@@ -760,6 +760,18 @@ class Config(pyofig.ConfigDict):
                             default=1.0)
 
 
+    def dual_ph_args(self):
+
+        self.add_to_config("dual_ph",
+                            description="have a dual PH spoke",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("dual_ph_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=1.0)",
+                            domain=float,
+                            default=1.0)
+
+
     def xhatlooper_args(self):
 
         self.add_to_config('xhatlooper',
