@@ -8,14 +8,14 @@
 ###############################################################################
 
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.dual_ph_spoke import DualPHSpoke
+from mpisppy.cylinders.dual_ph_spoke import _DualPHSpokeBase
 
 import pyomo.environ as pyo
 
-class RelaxedPHSpoke(DualPHSpoke):
+class RelaxedPHSpoke(_DualPHSpokeBase):
 
-    send_fields = (*DualPHSpoke.send_fields, Field.RELAXED_NONANT, )
-    receive_fields = (*DualPHSpoke.receive_fields, )
+    send_fields = (*_DualPHSpokeBase.send_fields, Field.RELAXED_NONANT, )
+    receive_fields = (*_DualPHSpokeBase.receive_fields, )
 
     @property
     def nonant_field(self):

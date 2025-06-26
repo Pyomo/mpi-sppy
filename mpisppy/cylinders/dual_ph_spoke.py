@@ -11,14 +11,11 @@ from mpisppy.cylinders.spwindow import Field
 from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.hub import PHHub
 
-class DualPHSpoke(Spoke, PHHub):
+
+class _DualPHSpokeBase(Spoke, PHHub):
 
     send_fields = (*Spoke.send_fields, Field.DUALS,) 
     receive_fields = (*Spoke.receive_fields, )
-
-    @property
-    def nonant_field(self):
-        return None
 
     def send_boundsout(self):
         # overwrite PHHub.send_boundsout (not a hub)
@@ -48,3 +45,14 @@ class DualPHSpoke(Spoke, PHHub):
         self.opt.iterk_loop()
 
         return self.opt.conv, None, trivial_bound
+
+
+class DualPHSpoke(_DualPHSpokeBase):
+
+    @property
+    def nonant_field(self):
+        return None
+
+    def send_nonants(self):
+        # overwrite PHHub.send_nonants (don't send anything)
+        return
