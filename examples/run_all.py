@@ -191,6 +191,10 @@ do_one("farmer", "farmer_cylinders.py", 4,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--fwph-stop-check-tol 0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
+do_one("farmer", "farmer_cylinders.py", 4,
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
+       "--primal-ph-hub --dual-ph --dual-ph-rescale-rho-factor=0.1 "
+       "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 2,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
@@ -278,11 +282,22 @@ do_one("sslp",
        "--integer-relax-then-enforce-ratio=0.95 "
        "--lagrangian "
        "--reduced-costs-rho "
-       "--max-iterations=100 --default-rho=1e-6 "
+       "--max-iterations=50 --default-rho=1e-6 "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
        "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
+       "--solver-name={}".format(solver_name))
+do_one("sslp",
+       "sslp_cylinders.py",
+       4,
+       "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
+       "--lagrangian "
+       "--max-iterations=10 --default-rho=10 "
+       "--relaxed-ph-rescale-rho-factor=100 "
+       "--relaxed-ph --relaxed-ph-fixer --xhatshuffle "
+       "--linearize-proximal-terms "
+       "--rel-gap=0.0 --surrogate-nonant "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
