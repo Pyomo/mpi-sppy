@@ -467,9 +467,9 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
-    def ph_nonant_args(self):
+    def primal_ph_args(self):
 
-        self.add_to_config(name="ph_nonant_hub",
+        self.add_to_config(name="primal_ph_hub",
                            description="Use PH Hub which only supplies nonants (and not Ws) (default False)",
                            domain=bool,
                            default=False)

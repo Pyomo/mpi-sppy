@@ -38,7 +38,7 @@ from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
 from mpisppy.cylinders.dual_ph_spoke import DualPHSpoke
-from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
+from mpisppy.cylinders.hub import PrimalPHHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
@@ -155,7 +155,7 @@ def ph_hub(
     add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
-def ph_nonant_hub(
+def primal_ph_hub(
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -182,7 +182,7 @@ def ph_nonant_hub(
         all_nodenames=all_nodenames,
     )
     # use PHNonantHub instead of PHHub
-    hub_dict["hub_class"] = PHNonantHub
+    hub_dict["hub_class"] = PrimalPHHub
     return hub_dict
 
 def aph_hub(cfg,

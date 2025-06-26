@@ -82,7 +82,7 @@ def _parse_args(m):
     cfg.integer_relax_then_enforce_args()
     cfg.gapper_args()    
     cfg.gapper_args(name="lagrangian")
-    cfg.ph_nonant_args()
+    cfg.primal_ph_args()
     cfg.dual_ph_args()
     cfg.relaxed_ph_args()
     cfg.fwph_args()
@@ -193,8 +193,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                        rho_setter = rho_setter,
                        all_nodenames = all_nodenames,
                    )
-    elif cfg.ph_nonant_hub:
-        hub_dict = vanilla.ph_nonant_hub(*beans,
+    elif cfg.primal_ph_hub:
+        hub_dict = vanilla.primal_ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
