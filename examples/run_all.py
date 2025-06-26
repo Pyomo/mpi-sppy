@@ -279,10 +279,10 @@ do_one("sslp",
        4,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
        "--integer-relax-then-enforce "
-       "--integer-relax-then-enforce-ratio=0.95 "
+       "--integer-relax-then-enforce-ratio=0.8 "
        "--lagrangian "
        "--reduced-costs-rho "
-       "--max-iterations=50 --default-rho=1e-6 "
+       "--max-iterations=20 --default-rho=1e-6 "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
