@@ -83,6 +83,7 @@ def _parse_args(m):
     cfg.gapper_args()    
     cfg.gapper_args(name="lagrangian")
     cfg.ph_nonant_args()
+    cfg.dual_ph_args()
     cfg.relaxed_ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
@@ -343,6 +344,20 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         if cfg.sensi_rho:
             vanilla.add_sensi_rho(ph_ob_spoke, cfg)
 
+    # dual ph spoke
+    if cfg.dual_ph:
+        dual_ph_spoke = vanilla.dual_ph_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(dual_ph_spoke, cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(dual_ph_spoke, cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(dual_ph_spoke, cfg)
+
     # relaxed ph spoke
     if cfg.relaxed_ph:
         relaxed_ph_spoke = vanilla.relaxed_ph_spoke(*beans,
@@ -404,6 +419,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_ob:
         list_of_spoke_dict.append(ph_ob_spoke)
+    if cfg.dual_ph:
+        list_of_spoke_dict.append(dual_ph_spoke)
     if cfg.relaxed_ph:
         list_of_spoke_dict.append(relaxed_ph_spoke)
     if cfg.subgradient:
