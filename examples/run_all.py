@@ -158,6 +158,7 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
 
         os.remove(npyfile)
     os.chdir("..")
+
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
@@ -191,6 +192,11 @@ do_one("farmer", "farmer_cylinders.py", 4,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--fwph-stop-check-tol 0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
+do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
+       "--module-name farmer "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
+       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
+       "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 2,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
@@ -229,6 +235,18 @@ do_one("farmer",
        "farmer_cylinders.py",
        2,
        f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
+do_one("farmer",
+       "../../mpisppy/generic_cylinders.py",
+       4,
+       "--module-name farmer --farmer-with-integer "
+       "--num-scens=3 "
+       "--lagrangian --ph-primal-hub "
+       "--max-iterations=10 --default-rho=0.1 "
+       "--relaxed-ph-rescale-rho-factor=10 "
+       "--relaxed-ph --relaxed-ph-fixer --xhatshuffle "
+       "--linearize-proximal-terms "
+       "--rel-gap=0.0 "
+       "--solver-name={}".format(solver_name))
 
 do_one("farmer",
        "farmer_ama.py",
@@ -275,10 +293,10 @@ do_one("sslp",
        4,
        "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
        "--integer-relax-then-enforce "
-       "--integer-relax-then-enforce-ratio=0.95 "
+       "--integer-relax-then-enforce-ratio=0.8 "
        "--lagrangian "
        "--reduced-costs-rho "
-       "--max-iterations=100 --default-rho=1e-6 "
+       "--max-iterations=20 --default-rho=1e-6 "
        "--reduced-costs --rc-fixer --xhatshuffle "
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
