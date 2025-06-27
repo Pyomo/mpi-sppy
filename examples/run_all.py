@@ -158,6 +158,7 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
 
         os.remove(npyfile)
     os.chdir("..")
+
 do_one("farmer", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
@@ -234,6 +235,18 @@ do_one("farmer",
        "farmer_cylinders.py",
        2,
        f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
+do_one("farmer",
+       "../../mpisppy/generic_cylinders.py",
+       4,
+       "--module-name farmer --farmer-with-integer "
+       "--num-scens=3 "
+       "--lagrangian --primal-ph-hub "
+       "--max-iterations=10 --default-rho=0.1 "
+       "--relaxed-ph-rescale-rho-factor=10 "
+       "--relaxed-ph --relaxed-ph-fixer --xhatshuffle "
+       "--linearize-proximal-terms "
+       "--rel-gap=0.0 "
+       "--solver-name={}".format(solver_name))
 
 do_one("farmer",
        "farmer_ama.py",
@@ -288,18 +301,6 @@ do_one("sslp",
        "--linearize-proximal-terms "
        "--rel-gap=0.0 --surrogate-nonant "
        "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
-       "--solver-name={}".format(solver_name))
-do_one("sslp",
-       "../../mpisppy/generic_cylinders.py",
-       4,
-       "--module-name sslp --sslp-data-path ./data "
-       "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
-       "--lagrangian --primal-ph-hub "
-       "--max-iterations=10 --default-rho=10 "
-       "--relaxed-ph-rescale-rho-factor=100 "
-       "--relaxed-ph --relaxed-ph-fixer --xhatshuffle "
-       "--linearize-proximal-terms "
-       "--rel-gap=0.0 --surrogate-nonant "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
