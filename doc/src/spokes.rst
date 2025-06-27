@@ -192,5 +192,5 @@ Dual PH
 Executes another copy of PH, providing W values to the Lagrangian and/or Reduceds Costs
 spokes. This spoke can be useful, along with the Primal PH Hub, for problems which need
 different rho strategies for primal and dual convergence. The option ``dual_ph_rescale_rho_factor``
-allows the user to adjust provided rho values by a constant multiplier across all variable,
-which occures between PH iteration 0 and PH iteration 1.
+allows the user to adjust provided rho values by a constant multiplier across all variables,
+which occurs between PH iteration 0 and PH iteration 1.
