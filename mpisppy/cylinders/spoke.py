@@ -171,6 +171,8 @@ class InnerBoundSpoke(_BoundSpoke):
         )
 
     def update_if_improving(self, candidate_inner_bound, update_best_solution_cache=True):
+        if candidate_inner_bound is None:
+            return False
         if update_best_solution_cache:
             update = self.opt.update_best_solution_if_improving(candidate_inner_bound)
         else:
