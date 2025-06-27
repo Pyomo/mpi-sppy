@@ -195,7 +195,7 @@ do_one("farmer", "farmer_cylinders.py", 4,
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--module-name farmer "
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
-       "--primal-ph-hub --dual-ph --dual-ph-rescale-rho-factor=0.1 "
+       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "farmer_cylinders.py", 2,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
@@ -240,7 +240,7 @@ do_one("farmer",
        4,
        "--module-name farmer --farmer-with-integer "
        "--num-scens=3 "
-       "--lagrangian --primal-ph-hub "
+       "--lagrangian --ph-primal-hub "
        "--max-iterations=10 --default-rho=0.1 "
        "--relaxed-ph-rescale-rho-factor=10 "
        "--relaxed-ph --relaxed-ph-fixer --xhatshuffle "

@@ -12,7 +12,7 @@ from mpisppy.cylinders.spoke import Spoke
 from mpisppy.cylinders.hub import PHHub
 
 
-class _DualPHSpokeBase(Spoke, PHHub):
+class _PHDualSpokeBase(Spoke, PHHub):
 
     send_fields = (*Spoke.send_fields, Field.DUALS,) 
     receive_fields = (*Spoke.receive_fields, )
@@ -47,7 +47,7 @@ class _DualPHSpokeBase(Spoke, PHHub):
         return self.opt.conv, None, trivial_bound
 
 
-class DualPHSpoke(_DualPHSpokeBase):
+class PHDualSpoke(_PHDualSpokeBase):
 
     @property
     def nonant_field(self):

@@ -467,9 +467,9 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
-    def primal_ph_args(self):
+    def ph_primal_args(self):
 
-        self.add_to_config(name="primal_ph_hub",
+        self.add_to_config(name="ph_primal_hub",
                            description="Use PH Hub which only supplies nonants (and not Ws) (default False)",
                            domain=bool,
                            default=False)
@@ -760,13 +760,13 @@ class Config(pyofig.ConfigDict):
                             default=1.0)
 
 
-    def dual_ph_args(self):
+    def ph_dual_args(self):
 
-        self.add_to_config("dual_ph",
+        self.add_to_config("ph_dual",
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
-        self.add_to_config("dual_ph_rescale_rho_factor",
+        self.add_to_config("ph_dual_rescale_rho_factor",
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
                             default=1.0)

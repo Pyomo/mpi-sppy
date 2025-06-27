@@ -37,8 +37,8 @@ from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
-from mpisppy.cylinders.dual_ph_spoke import DualPHSpoke
-from mpisppy.cylinders.hub import PrimalPHHub, PHHub, SubgradientHub, APHHub, FWPHHub
+from mpisppy.cylinders.ph_dual_spoke import PHDualSpoke
+from mpisppy.cylinders.hub import PHPrimalHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
@@ -155,7 +155,7 @@ def ph_hub(
     add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
-def primal_ph_hub(
+def ph_primal_hub(
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -182,7 +182,7 @@ def primal_ph_hub(
         all_nodenames=all_nodenames,
     )
     # use PHNonantHub instead of PHHub
-    hub_dict["hub_class"] = PrimalPHHub
+    hub_dict["hub_class"] = PHPrimalHub
     return hub_dict
 
 def aph_hub(cfg,
@@ -766,7 +766,7 @@ def subgradient_spoke(
     return subgradient_spoke
 
 
-def dual_ph_spoke(
+def ph_dual_spoke(
     cfg,
     scenario_creator,
     scenario_denouement,
@@ -777,8 +777,8 @@ def dual_ph_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
-    dual_ph_spoke = _PHBase_spoke_foundation(
-        DualPHSpoke,
+    ph_dual_spoke = _PHBase_spoke_foundation(
+        PHDualSpoke,
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -789,9 +789,9 @@ def dual_ph_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    options = dual_ph_spoke["opt_kwargs"]["options"]
-    if cfg.dual_ph_rescale_rho_factor is not None:
-        options["rho_factor"] = cfg.dual_ph_rescale_rho_factor
+    options = ph_dual_spoke["opt_kwargs"]["options"]
+    if cfg.ph_dual_rescale_rho_factor is not None:
+        options["rho_factor"] = cfg.ph_dual_rescale_rho_factor
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
@@ -799,9 +799,9 @@ def dual_ph_spoke(
     options["display_progress"] = False
     options["display_convergence_detail"] = False
 
-    add_ph_tracking(dual_ph_spoke, cfg, spoke=True)
+    add_ph_tracking(ph_dual_spoke, cfg, spoke=True)
 
-    return dual_ph_spoke
+    return ph_dual_spoke
 
 
 def relaxed_ph_spoke(
