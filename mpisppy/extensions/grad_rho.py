@@ -201,10 +201,10 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         elif self.alpha == 1.0:
             rhos = {ndn_i: float(rho_max) for ndn_i, rho_max in zip(local_rhos.keys(), rho_maxes)}
         elif self.alpha < 0.5:
-            rhos= {ndn_i: float(rho_min + alpha * 2 * (rho_mean - rho_min))\
+            rhos= {ndn_i: float(rho_min + self.alpha * 2 * (rho_mean - rho_min))\
                     for ndn_i, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)}
         elif self.alpha > 0.5:
-            rhos = {ndn_i: float(2 * rho_mean - rho_max) + alpha * 2 * (rho_max - rho_mean)\
+            rhos = {ndn_i: float(2 * rho_mean - rho_max) + self.alpha * 2 * (rho_max - rho_mean)\
                     for ndn_i, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)}
         else:
             raise RuntimeError("Coding error.")
