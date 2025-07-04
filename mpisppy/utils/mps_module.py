@@ -56,11 +56,11 @@ def scenario_creator(sname, cfg=None):
         scenProb = nonantDict["scenarioData"]["scenProb"]
     except Exception as e:
         raise RuntimeError(f'Error getting scenProb from {jsonPath}: {e}')
-    assert "ROOT" in nonantDict, f'"ROOT" must be top node in {jsonPath}'
     treeNodes = list()
     parent_ndn = None   # counting on the json file to have ordered nodes
     stage = 1
     treeDict = nonantDict["treeData"]
+    assert "ROOT" in treeDict, f'"ROOT" must be top node in {jsonPath}'
     for ndn in treeDict:
         cp = treeDict[ndn]["condProb"]
         nonants = [model.\

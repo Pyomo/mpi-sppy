@@ -15,7 +15,7 @@ import mip  # pip install mip (from coin-or)
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver(persistent_OK=False)
 
-class TestStochAdmmWrapper(unittest.TestCase):
+class TestMPSReader(unittest.TestCase):
     def setUp(self):
         pass
 

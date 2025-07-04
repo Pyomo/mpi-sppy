@@ -329,8 +329,8 @@ If some variables have zero probability in all scenarios, then you will need to 
 all variable probabilities! So you might want to set this to False to verify that the probabilities sum to one
 only for the Vars you expect before setting it to True.
 
-Scenario_lp_mps_writer
-----------------------
+Scenario_lp_mps_writer_dir
+--------------------------
 
 This extension writes an lp file and an mps file with the model as well as a
 json file with (a) list(s) of scenario tree node names and
@@ -338,8 +338,9 @@ nonanticaptive variables for each scenario before the iteration zero
 solve of PH or APH. Note that for two-stage problems, all json files
 will be the same. See ``mpisppy.generic_cylinders.py`` for an example
 of use. In that program it is activated with the
-``--scenario-lp-mps-writer`` option. Note that it
-writes the files to the current working directory and for each scenario
+``--scenario-lp-mps-writerdir`` option that specifies a directory that
+does not exist. The extension
+writes the files to this directory and for each scenario
 the base name of the three files written is the scenario name.
 
 Unless you know exactly why you need this, you probably don't.
