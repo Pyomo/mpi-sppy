@@ -14,6 +14,7 @@ from pyomo.core.expr.calculus.derivatives import Modes
 import pyomo.environ as pyo
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
+import mpisppy.utils.sputils as sputils
 from mpisppy.utils.sputils import nonant_cost_coeffs
 from mpisppy.cylinders.spwindow import Field
 
@@ -32,27 +33,37 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.alpha = cfg.grad_order_stat
         assert (self.alpha >= 0 and self.alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {alpha=} is invalid."
     
-    def _scen_dep_denom(self, s, node):
+    def _scen_dep_denom(self, s):
         """ Computes scenario dependent denominator for grad rho calculation.
 
         Args:
            s (Pyomo Concrete Model): scenario
-           node: only ROOT for now
 
         Returns:
            scen_dep_denom (numpy array): denominator
 
         """
-        assert node.name == "ROOT", "gradient-based compute rho only works for two stage for now"
-        nlen = s._mpisppy_data.nlens[node.name]
-        xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
-        nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
-                                    dtype='d', count=nlen)
-        scen_dep_denom = np.abs(nonants_array - xbar_array)
-        denom_max = np.max(scen_dep_denom)
-        for i in range(len(scen_dep_denom)):
-            if scen_dep_denom[i] <= self.opt.E1_tolerance:
-                scen_dep_denom[i] = max(denom_max, self.opt.E1_tolerance)
+        # assert node.name == "ROOT", "gradient-based compute rho only works for two stage for now"
+        # nlen = s._mpisppy_data.nlens[node.name]
+        # xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
+        # nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
+        #                             dtype='d', count=nlen)
+        # scen_dep_denom = np.abs(nonants_array - xbar_array)
+        # denom_max = np.max(scen_dep_denom)
+        # for i in range(len(scen_dep_denom)):
+        #     if scen_dep_denom[i] <= self.opt.E1_tolerance:
+        #         scen_dep_denom[i] = max(denom_max, self.opt.E1_tolerance)
+        scen_dep_denom = {}
+        xbars = s._mpisppy_model.xbars
+        for ndn_i, v in s._mpisppy_data.nonant_indices.items():
+            scen_dep_denom[ndn_i] = abs(v._value - xbars[ndn_i]._value)
+            # scen_dep_denom[ndn_i] = max(abs(v._value - xbars[ndn_i]._value), self.opt.E1_tolerance)
+        denom_max = max(scen_dep_denom.values())
+        for ndn_i, v in s._mpisppy_data.nonant_indices.items():
+            if scen_dep_denom[ndn_i] <= self.opt.E1_tolerance:
+                scen_dep_denom[ndn_i] = max(denom_max, self.opt.E1_tolerance)
+        
+        print(scen_dep_denom)
         return scen_dep_denom
 
     def _scen_indep_denom(self):
@@ -109,31 +120,34 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         return scen_indep_denom
 
-    def _get_grad_expr(self):
-        self.grad_expr = dict()
+    def _get_grad_exprs(self):
+        self.grad_exprs = dict()
         for s in self.opt.local_scenarios.values():
-            self.grad_expr[s] = np.array([differentiate(list(s.component_data_objects(
-                    ctype=pyo.Objective, active=True, descend_into=True
-                ))[0], wrt=var, mode=Modes.reverse_symbolic) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
-            #print(list([exp for exp in self.grad_expr[s]]))
+            self.grad_exprs[s] = differentiate(sputils.find_active_objective(s),
+                                wrt_list=s._mpisppy_data.nonant_indices.values(),
+                                mode=Modes.reverse_symbolic,
+                                )
+            self.grad_exprs[s] = {ndn_i : self.grad_exprs[s][i] for i, ndn_i in enumerate(s._mpisppy_data.nonant_indices)}
+            # self.grad_exprs[s] = np.array([differentiate(list(s.component_data_objects(
+            #         ctype=pyo.Objective, active=True, descend_into=True
+            #     ))[0], wrt=var, mode=Modes.reverse_symbolic) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
+            #print(list([exp for exp in self.grad_exprs[s]]))
         return  
 
-    def _eval_grad_expr(self, s, xhat):
+    def _eval_grad_exprs(self, s, xhat):
         ci = 0
-        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-            var.value = xhat[ci]
-            ci += 1
-        grads = np.array([-differentiate(list(s.component_data_objects(
-                    ctype=pyo.Objective, active=True, descend_into=True
-                ))[0], wrt=var) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
-        
-        return grads
+        grads = {}
+        print(self.best_xhat_buf.value_array())
 
-    def _nonant_grad_cost(self, s):
-        grads = np.array([-differentiate(list(s.component_data_objects(
-                    ctype=pyo.Objective, active=True, descend_into=True
-                ))[0], wrt=var) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
-        
+        if True not in np.isnan(self.best_xhat_buf.value_array()):
+            
+            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                var.value = xhat[ci]
+                ci += 1
+            
+        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+            grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
+        print(grads)
         return grads
 
     def _compute_and_update_rho(self, indep_denom=False):
@@ -148,16 +162,13 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         if indep_denom:
             grad_denom = self._scen_indep_denom()
-            loc_denom = {s: grad_denom for k in local_scens}
+            loc_denom = {s: grad_denom for s in local_scens}
         else:
             # two-stage only for now
-            loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
+            loc_denom = {s: self._scen_dep_denom(s)
                            for s in opt.local_scenarios.values()}
 
-        if True: # in np.isnan(self.best_xhat_buf.value_array()):
-            costs = {s: self._nonant_grad_cost(s) for s in opt.local_scenarios.values()}
-        else:
-            costs = {s: self._eval_grad_expr(s, self.best_xhat_buf.value_array())
+        costs = {s: self._eval_grad_exprs(s, self.best_xhat_buf.value_array())
                      for s in opt.local_scenarios.values()}
 
         w = dict()
@@ -165,10 +176,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             w[s] = np.array([s._mpisppy_model.W[ndn_i]._value
                              for ndn_i in s._mpisppy_data.nonant_indices])
 
-        loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
-                           for s in opt.local_scenarios.values()}
-
-        rho = {s: np.abs(np.divide(costs[s], loc_denom[s]))  for s in opt.local_scenarios.values()}
+        rho = {s: np.abs([costs[s][ndn_i]/loc_denom[s][ndn_i] for ndn_i, var in s._mpisppy_data.nonant_indices.items()])  
+                                                for s in opt.local_scenarios.values()}
         k0, s0 = list(self.opt.local_scenarios.items())[0]
         local_rhos = {ndn_i: [rho_list[ndn_i[1]] for _, rho_list in rho.items()]
                         for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
@@ -209,7 +218,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         else:
             raise RuntimeError("Coding error.")
 
-        print(rhos)
+        #print(rhos)
 
         for s in opt.local_scenarios.values():    
             for ndn_i, rho in s._mpisppy_model.rho.items():
@@ -242,7 +251,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     def post_iter0(self):
         global_toc("Using grad-rho rho setter")
         self.update_caches()
-        self._get_grad_expr()
+        self._get_grad_exprs()
         self.compute_and_update_rho()
 
     def miditer(self):
