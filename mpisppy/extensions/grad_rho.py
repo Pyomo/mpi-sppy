@@ -61,6 +61,58 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         
         return scen_dep_denom
 
+    def _scen_indep_denom(self):
+        """ Computes scenario independent denominator for grad rho calculation.
+
+        Returns:
+           scen_indep_denom (numpy array): denominator
+
+        """
+        opt = self.opt
+        local_nodenames = []
+        local_denoms = {}
+        global_denoms = {}
+
+        for k, s in opt.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                if node.name not in local_nodenames:
+                    ndn = node.name
+                    local_nodenames.append(ndn)
+                    nlen = nlens[ndn]
+
+                    local_denoms[ndn] = np.zeros(nlen, dtype="d")
+                    global_denoms[ndn] = np.zeros(nlen, dtype="d")
+
+        for k, s in opt.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            xbars = s._mpisppy_model.xbars
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                denoms = local_denoms[ndn]
+
+                unweighted_denoms = np.fromiter(
+                    (
+                        abs(v._value - xbars[ndn, i]._value)
+                        for i, v in enumerate(node.nonant_vardata_list)
+                    ),
+                    dtype="d",
+                    count=nlens[ndn],
+                )
+                denoms += s._mpisppy_probability * unweighted_denoms
+
+        for nodename in local_nodenames:
+            opt.comms[nodename].Allreduce(
+                [local_denoms[nodename], MPI.DOUBLE],
+                [global_denoms[nodename], MPI.DOUBLE],
+                op=MPI.SUM,
+            )
+
+        scen_indep_denom = np.array([v for i, v in enumerate(global_denom) 
+                                            for ndn, global_denom in global_denoms.items()])
+
+        return scen_indep_denom
+
     def _get_grad_exprs(self):
         """ Grabs and caches the gradient expressions for each scenario's objective (without proximal term). """ 
 
@@ -101,9 +153,13 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                      for s in self.opt.local_scenarios.values()]
         local_scens = opt.local_scenarios.values()
 
-        # two-stage only for now
-        loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
-                        for s in opt.local_scenarios.values()}
+        if indep_denom:
+            grad_denom = self._scen_indep_denom()
+            loc_denom = {s: grad_denom for s in local_scens}
+        else:
+            # two-stage only for now
+            loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
+                           for s in opt.local_scenarios.values()}
 
         costs = {s: self._eval_grad_exprs(s, self.best_xhat_buf.value_array())
                      for s in opt.local_scenarios.values()}
