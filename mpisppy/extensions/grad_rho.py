@@ -32,32 +32,29 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.alpha = cfg.grad_order_stat
         assert (self.alpha >= 0 and self.alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {self.alpha=} is invalid."
     
-    def _scen_dep_denom(self, s, node):
-        """ Computes scenario dependent denominator for grad rho calculation.(Only works for two-stage problems for now)
+    def _scen_dep_denom(self, s):
+        """ Computes scenario dependent denominator for grad rho calculation.
 
         Args:
            s (Pyomo Concrete Model): scenario
-           node: only ROOT for now
 
         Returns:
            scen_dep_denom (numpy array): denominator
 
         """
 
-        assert node.name == "ROOT", "gradient-based compute rho only works for two stage for now"
+        scen_dep_denom = {}
 
-        nlen = s._mpisppy_data.nlens[node.name]
+        xbars = s._mpisppy_model.xbars
 
-        xbar_array = np.array([s._mpisppy_model.xbars[(node.name,j)]._value for j in range(nlen)])
-        nonants_array = np.fromiter((v._value for v in node.nonant_vardata_list),
-                                    dtype='d', count=nlen)
+        for ndn_i, v in s._mpisppy_data.nonant_indices.items():
+            scen_dep_denom[ndn_i] = abs(v._value - xbars[ndn_i]._value)
+            
+        denom_max = max(scen_dep_denom.values())
 
-        scen_dep_denom = np.abs(nonants_array - xbar_array)
-        denom_max = np.max(scen_dep_denom)
-
-        for i in range(len(scen_dep_denom)):
-            if scen_dep_denom[i] <= self.opt.E1_tolerance:
-                scen_dep_denom[i] = max(denom_max, self.opt.E1_tolerance)
+        for ndn_i, v in s._mpisppy_data.nonant_indices.items():
+            if scen_dep_denom[ndn_i] <= self.opt.E1_tolerance:
+                scen_dep_denom[ndn_i] = max(denom_max, self.opt.E1_tolerance)
         
         return scen_dep_denom
 
@@ -108,8 +105,10 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 op=MPI.SUM,
             )
 
-        scen_indep_denom = np.array([v for i, v in enumerate(global_denom) 
-                                            for ndn, global_denom in global_denoms.items()])
+        scen_indep_denom = {}
+        for ndn, global_denom in global_denoms.items():
+            for i, v in enumerate(global_denom):
+                scen_indep_denom[ndn, i] = v
 
         return scen_indep_denom
 
@@ -139,7 +138,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 var.value = xhat[ci]
                 ci += 1
 
-        grads = np.array([pyo.value(self.grad_exprs[s][ndn_i]) for ndn_i, var in s._mpisppy_data.nonant_indices.items()])
+        for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+            grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])
 
         return grads
 
@@ -157,14 +157,14 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             grad_denom = self._scen_indep_denom()
             loc_denom = {s: grad_denom for s in local_scens}
         else:
-            # two-stage only for now
-            loc_denom = {s: self._scen_dep_denom(s, s._mpisppy_node_list[0])
+            loc_denom = {s: self._scen_dep_denom(s)
                            for s in opt.local_scenarios.values()}
 
         costs = {s: self._eval_grad_exprs(s, self.best_xhat_buf.value_array())
                      for s in opt.local_scenarios.values()}
 
-        rho = {s: np.abs(np.divide(costs[s], loc_denom[s]))  for s in opt.local_scenarios.values()}
+        rho = {s: np.abs([costs[s][ndn_i]/loc_denom[s][ndn_i] for ndn_i, var in s._mpisppy_data.nonant_indices.items()])  
+                                                for s in opt.local_scenarios.values()}
         k0, s0 = list(self.opt.local_scenarios.items())[0]
         local_rhos = {ndn_i: [rho_list[ndn_i[1]] for _, rho_list in rho.items()]
                         for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
