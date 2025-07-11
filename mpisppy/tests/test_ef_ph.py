@@ -16,7 +16,7 @@ version matter a lot, so we often just do smoke tests.
 import os
 import glob
 import json
-#import math
+import shutil
 import unittest
 import pandas as pd
 import pyomo.environ as pyo
@@ -402,13 +402,16 @@ class Test_sizes(unittest.TestCase):
     @unittest.skipIf(not pyo.SolverFactory('glpk').available(),
                      "glpk is not available")
     def test_scenario_lpwriter_extension(self):
-        print("test scenarip_lpwriter")
         from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
+        tdir = "_delme_test_write_mp_mps_dir"
+        if os.path.exists(tdir):
+            shutil.rmtree(tdir)
         options = self._copy_of_base_options()
         options["iter0_solver_options"] = {"mipgap": 0.1}    
         options["PHIterLimit"] = 0
         options["solver_name"] = "glpk"
-        options["tee_rank0_solves"] = True
+        options["write_lp_mps_extension_options"]\
+            = {"write_scenario_lp_mps_files_dir": tdir}
 
         ph = mpisppy.opt.ph.PH(
             options,
@@ -420,22 +423,18 @@ class Test_sizes(unittest.TestCase):
         )
         conv, basic_obj, tbound = ph.ph_main()
         # The idea is to detect a change in Pyomo's writing of lp files
-        with open("Scenario1_nonants.json", "r") as jfile:
+        with open(os.path.join(tdir, "Scenario1_nonants.json"), "r") as jfile:
             nonants_by_node = json.load(jfile)
         # vname is first name in the file            
         vname = nonants_by_node["treeData"]["ROOT"]["nonAnts"][0]
         gotit = False
-        with open("Scenario1.lp", 'r') as lpfile:
+        with open(os.path.join(tdir, "Scenario1.lp"), 'r') as lpfile:
             for line in lpfile:
                 if vname in line:
                     gotit = True
                     break
         assert gotit, f"The first nonant in Scenario1_nonants.json ({vname}) not found in Scenario1.lp"
-        print("   deleting Scenario*.p and Scenario*_nonants.json")        
-        for fn in glob.glob("Scenario*.lp"):
-            os.remove(fn)
-        for fn in glob.glob("Scenario*_nonants.json"):
-            os.remove(fn)
+        print(f"   deleting f{tdir}")
         
         
     @unittest.skipIf(not solver_available,
