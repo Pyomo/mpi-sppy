@@ -1,14 +1,15 @@
 #!/bin/bash
 # This runs a few command lines to illustrate the use of generic_cylinders.py
+set -e
 
 SOLVER="cplex"
 SPB=1
 
 echo "^^^ hub only with w-writer (smoke) ^^^"
-python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-writer --W-fname w_values.csv 
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-and-xbar-writer --W-fname w_values.csv 
 
 echo "^^^ hub only with w-reader (smoke) ^^^"
-python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-reader --init-W-fname w_values.csv
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-and-xbar-reader --init-W-fname w_values.csv
 
 echo "^^^ Multi-stage AirCond ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
@@ -27,7 +28,7 @@ mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpi
 
 echo "^^^ write scenario lp and nonant json files ^^^"
 cd sizes
-python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles
+python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --write-scenario-lp-mps-files
 cd ..
 
 echo "^^^ pickle sizes bundles ^^^"
@@ -39,7 +40,7 @@ echo "^^^ unpickle the sizes bundles and write the lp and nonant files ^^^"
 # note that numscens need to match the number before pickling...
 # so does scenarios per bundle
 cd sizes
-python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
+python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --write-scenario-lp-mps-files --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
 cd ..
 
 echo "^^^ pickle the scenarios ^^^"

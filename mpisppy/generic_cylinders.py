@@ -527,7 +527,7 @@ def _write_bundles(module,
     inum = sputils.extract_num(module.scenario_names_creator(1)[0])
     
     local_bundle_names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in local_slice]
-
+    
     if my_rank == 0:
         if os.path.exists(cfg.pickle_bundles_dir):
             shutil.rmtree(cfg.pickle_bundles_dir)
@@ -648,6 +648,7 @@ if __name__ == "__main__":
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
         bundle_wrapper = proper_bundler.ProperBundler(module)
+        bundle_wrapper.set_bunBFs(cfg)
         scenario_creator = bundle_wrapper.scenario_creator
         # The scenario creator is wrapped, so these kw_args will not go the original
         # creator (the kw_creator will keep the original args)

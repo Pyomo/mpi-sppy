@@ -30,7 +30,6 @@ import mpisppy.utils.pickle_bundle as pickle_bundle
 #        the caller needs to worry about what is in what rank
 #        (local_scenarios might have bundle names, e.g.)
 
-
 class ProperBundler():
     """ Wrap model file functions so as to create proper bundles 
     it might pickle them or read them from a pickle file
@@ -54,29 +53,32 @@ class ProperBundler():
         assert cfg is not None, "ProperBundler needs cfg for scenario names"
         return cfg.model.scenario_names_creator(num_scens, start=start)
 
-    def bundle_names_creator(self, num_buns, start=None, cfg=None):
-
-        def _multistage_check(bunsize):
-            # returns bunBFs as a side-effect
+    def set_bunBFs(self, cfg):
+        # utility for bundle objects. Might throw if it doesn't like the branching factors.
+        if cfg.get("branching_factors") is None:
+            self.bunBFs = None
+        else:
             BFs = cfg.branching_factors
             beyond2size = np.prod(BFs[1:])
+            bunsize = cfg.scenarios_per_bundle
             if bunsize % beyond2size!= 0:
                 raise RuntimeError(f"Bundles must consume the same number of entire second stage nodes: {beyond2size=} {bunsize=}")
             # we need bunBFs for EF formulation
             self.bunBFs = [bunsize // beyond2size] + BFs[1:]
-        
+    
+
+    def bundle_names_creator(self, num_buns, start=None, cfg=None):
+        # Sets self.bunBFs, which is needed by scenario_creator, as a side effect.
+
         # start refers to the bundle number; bundles are always zero-based
         if start is None:
             start = 0
         assert cfg is not None, "ProperBundler needs cfg for bundle names"
         assert cfg.get("num_scens") is not None
         assert cfg.get("scenarios_per_bundle") is not None
-        assert cfg.num_scens % cfg.scenarios_per_bundle == 0, "Bundles must consume the same number of entire second stage nodes: {cfg.num_scens=} {bunsize=}"
+        assert cfg.num_scens % cfg.scenarios_per_bundle == 0, "Bundles must consume the same number of entire second stage nodes: {cfg.num_scens=} {cfg.scenarios_per_bundle=}"
         bsize = cfg.scenarios_per_bundle  # typing aid
-        if cfg.get("branching_factors") is not None:
-            _multistage_check(bsize)
-        else:
-            self.bunBFs = None
+        self.set_bunBFs(cfg)
         # We need to know if scenarios (not bundles) are one-based.
         inum = sputils.extract_num(self.module.scenario_names_creator(1)[0])
         names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in range(start+num_buns)]
