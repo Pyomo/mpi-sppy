@@ -31,6 +31,12 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.opt = opt
         self.alpha = cfg.grad_order_stat
         assert (self.alpha >= 0 and self.alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {self.alpha=} is invalid."
+        self.multiplier = 1.0
+
+        if (
+            cfg.grad_rho_multiplier
+        ):
+            self.multiplier = cfg.grad_rho_multiplier
     
     def _scen_dep_denom(self, s):
         """ Computes scenario dependent denominator for grad rho calculation.
@@ -207,7 +213,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         for s in opt.local_scenarios.values():    
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 if rhos[ndn_i] != 0:
-                        rho._value = rhos[ndn_i]
+                        rho._value = self.multiplier*rhos[ndn_i]
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()

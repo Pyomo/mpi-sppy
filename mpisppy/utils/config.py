@@ -955,6 +955,10 @@ class Config(pyofig.ConfigDict):
                            description="display rho during gradient calcs (default True)",
                            domain=bool,
                            default=True)
+        self.add_to_config("grad_rho_multiplier",
+                           description="multiplier for GradRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
         # likely unused presently
 #        self.add_to_config("grad_pd_thresh",
 #                           description="threshold for dual/primal during gradient calcs",
