@@ -37,6 +37,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             cfg.grad_rho_multiplier
         ):
             self.multiplier = cfg.grad_rho_multiplier
+
+        self.eval_at_xhat = cfg.eval_at_xhat
     
     def _scen_dep_denom(self, s):
         """ Computes scenario dependent denominator for grad rho calculation.
@@ -139,10 +141,11 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         ci = 0
         grads = {}
 
-        if True not in np.isnan(self.best_xhat_buf.value_array()):
-            for ndn_i, var in s._mpisppy_data.nonant_indices.items():
-                var.value = xhat[ci]
-                ci += 1
+        if self.eval_at_xhat:
+            if True not in np.isnan(self.best_xhat_buf.value_array()):
+                for ndn_i, var in s._mpisppy_data.nonant_indices.items():
+                    var.value = xhat[ci]
+                    ci += 1
 
         for ndn_i, var in s._mpisppy_data.nonant_indices.items():
             grads[ndn_i] = pyo.value(self.grad_exprs[s][ndn_i])

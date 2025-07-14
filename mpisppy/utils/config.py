@@ -959,6 +959,10 @@ class Config(pyofig.ConfigDict):
                            description="multiplier for GradRho (default 1.0)",
                            domain=float,
                            default=1.0)
+        self.add_to_config("eval_at_xhat",
+                           description="evaluate the gradient at xhat whenever available (default False)",
+                           domain=bool,
+                           default=False)
         # likely unused presently
 #        self.add_to_config("grad_pd_thresh",
 #                           description="threshold for dual/primal during gradient calcs",
