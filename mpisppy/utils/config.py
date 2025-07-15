@@ -963,6 +963,11 @@ class Config(pyofig.ConfigDict):
                            description="evaluate the gradient at xhat whenever available (default False)",
                            domain=bool,
                            default=False)
+
+        self.add_to_config("indep_denom",
+                           description="evaluate rho using scenario independent denominator (default False)",
+                           domain=bool,
+                           default=False)
         # likely unused presently
 #        self.add_to_config("grad_pd_thresh",
 #                           description="threshold for dual/primal during gradient calcs",

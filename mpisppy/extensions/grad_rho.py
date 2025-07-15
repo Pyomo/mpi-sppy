@@ -39,6 +39,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             self.multiplier = cfg.grad_rho_multiplier
 
         self.eval_at_xhat = cfg.eval_at_xhat
+        self.indep_denom = cfg.indep_denom
     
     def _scen_dep_denom(self, s):
         """ Computes scenario dependent denominator for grad rho calculation.
@@ -152,7 +153,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         return grads
 
-    def _compute_and_update_rho(self, indep_denom=False):
+    def _compute_and_update_rho(self):
         """ Computes and sets rhos for each scenario and each variable based on scenario dependence of
         the denominator in rho calculation.
         """
@@ -162,7 +163,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                      for s in self.opt.local_scenarios.values()]
         local_scens = opt.local_scenarios.values()
 
-        if indep_denom:
+        if self.indep_denom:
             grad_denom = self._scen_indep_denom()
             loc_denom = {s: grad_denom for s in local_scens}
         else:
