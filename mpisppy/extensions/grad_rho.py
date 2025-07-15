@@ -104,7 +104,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     dtype="d",
                     count=nlens[ndn],
                 )
-                denoms += s._mpisppy_probability * unweighted_denoms
+                denoms += s._mpisppy_data.prob_coeff[ndn] * unweighted_denoms
 
         for nodename in local_nodenames:
             opt.comms[nodename].Allreduce(
@@ -172,44 +172,86 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         costs = {s: self._eval_grad_exprs(s, self.best_xhat_buf.value_array())
                      for s in opt.local_scenarios.values()}
 
-        rho = {s: np.abs([costs[s][ndn_i]/loc_denom[s][ndn_i] for ndn_i, var in s._mpisppy_data.nonant_indices.items()])  
-                                                for s in opt.local_scenarios.values()}
-        k0, s0 = list(self.opt.local_scenarios.items())[0]
-        local_rhos = {ndn_i: [rho_list[ndn_i[1]] for _, rho_list in rho.items()]
-                        for ndn_i, var in s0._mpisppy_data.nonant_indices.items()}
+        local_nodenames = []
+        local_rhos = {}
+        local_rho_mins = {}
+        local_rho_maxes = {}
+        local_rho_wgted_means = {}
+        global_rho_mins = {}
+        global_rho_maxes = {}
+        global_rho_wgted_means = {}
 
-        vcnt = len(local_rhos)  # variable count
-        rho_mins = np.empty(vcnt, dtype='d')  # global
-        rho_maxes = np.empty(vcnt, dtype='d')
-        rho_means = np.empty(vcnt, dtype='d')
+        for k, s in opt.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                if node.name not in local_nodenames:
+                    ndn = node.name
+                    local_nodenames.append(ndn)
+                    nlen = nlens[ndn]
+                    
+                    local_rhos[ndn] = np.zeros(nlen, dtype="d")
+                    local_rho_mins[ndn] = np.zeros(nlen, dtype="d")
+                    local_rho_maxes[ndn] = np.zeros(nlen, dtype="d")
+                    local_rho_wgted_means[ndn] = np.zeros(nlen, dtype="d")
+                    global_rho_mins[ndn] = np.zeros(nlen, dtype="d")
+                    global_rho_maxes[ndn] = np.zeros(nlen, dtype="d")
+                    global_rho_wgted_means[ndn] = np.zeros(nlen, dtype="d")
 
-        local_rho_mins = np.fromiter((min(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
-        local_rho_maxes = np.fromiter((max(rho_vals) for rho_vals in local_rhos.values()), dtype='d')
-        local_prob = np.sum(prob_list)
-        local_wgted_means = np.fromiter((np.dot(rho_vals, prob_list) * local_prob for rho_vals in local_rhos.values()), dtype='d')
+        for k, s in opt.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                rhos = local_rhos[ndn]
+                rho_mins = local_rho_mins[ndn]
+                rho_maxes = local_rho_maxes[ndn]
+                rho_wgted_means = local_rho_wgted_means[ndn]
 
-        self.opt.comms["ROOT"].Allreduce([local_rho_mins, MPI.DOUBLE],
-                                               [rho_mins, MPI.DOUBLE],
-                                               op=MPI.MIN)
-        self.opt.comms["ROOT"].Allreduce([local_rho_maxes, MPI.DOUBLE],
-                                               [rho_maxes, MPI.DOUBLE],
-                                               op=MPI.MAX)
+                rhos = np.fromiter(
+                    (
+                        abs(costs[s][ndn, i]/loc_denom[s][ndn, i])
+                        for i, v in enumerate(node.nonant_vardata_list)
+                    ),
+                    dtype="d",
+                    count=nlens[ndn],
+                )
 
-        self.opt.comms["ROOT"].Allreduce([local_wgted_means, MPI.DOUBLE],
-                                               [rho_means, MPI.DOUBLE],
-                                               op=MPI.SUM)
+                np.minimum(rho_mins, rhos, out=rho_mins, where=(s._mpisppy_data.prob_coeff[ndn] > 0))
+                np.maximum(rho_maxes, rhos, out=rho_maxes, where=(s._mpisppy_data.prob_coeff[ndn] > 0))
+                rho_wgted_means += s._mpisppy_data.prob_coeff[ndn] * rhos
+
+        for nodename in local_nodenames:
+            opt.comms[nodename].Allreduce(
+                [local_rho_mins[nodename], MPI.DOUBLE],
+                [global_rho_mins[nodename], MPI.DOUBLE],
+                op=MPI.MIN,
+            )
+
+            opt.comms[nodename].Allreduce(
+                [local_rho_maxes[nodename], MPI.DOUBLE],
+                [global_rho_maxes[nodename], MPI.DOUBLE],
+                op=MPI.MAX,
+            )
+
+            opt.comms[nodename].Allreduce(
+                [local_rho_wgted_means[nodename], MPI.DOUBLE],
+                [global_rho_wgted_means[nodename], MPI.DOUBLE],
+                op=MPI.SUM,
+            )
+
         if self.alpha == 0.5:
-            rhos = {ndn_i: float(rho_mean) for ndn_i, rho_mean in zip(local_rhos.keys(), rho_means)}
+            rhos = {(ndn, i): float(v) for ndn, rho_mean in global_rho_wgted_means.items() for i, v in enumerate(rho_mean)}
         elif self.alpha == 0.0:
-            rhos = {ndn_i: float(rho_min) for ndn_i, rho_min in zip(local_rhos.keys(), rho_mins)}
+            rhos = {(ndn, i): float(v) for ndn, rho_min in global_rho_mins.items() for i, v in enumerate(rho_min)}
         elif self.alpha == 1.0:
-            rhos = {ndn_i: float(rho_max) for ndn_i, rho_max in zip(local_rhos.keys(), rho_maxes)}
+            rhos = {(ndn, i): float(v) for ndn, rho_max in global_rho_maxes.items() for i, v in enumerate(rho_max)}
         elif self.alpha < 0.5:
-            rhos= {ndn_i: float(rho_min + self.alpha * 2 * (rho_mean - rho_min))\
-                    for ndn_i, rho_min, rho_mean in zip(local_rhos.keys(), rho_mins, rho_means)}
+            rhos = {(ndn, i): float(min_v + self.alpha * 2 * (mean_v - min_v))
+                    for ndn in global_rho_mins.keys()
+                    for i, (min_v, mean_v) in enumerate(zip(global_rho_mins[ndn], global_rho_wgted_means[ndn]))}
         elif self.alpha > 0.5:
-            rhos = {ndn_i: float(2 * rho_mean - rho_max) + self.alpha * 2 * (rho_max - rho_mean)\
-                    for ndn_i, rho_mean, rho_max in zip(local_rhos.keys(), rho_means, rho_maxes)}
+            rhos = {(ndn, i): float(2 * mean_v - max_v + self.alpha * 2 * (max_v - mean_v))
+                    for ndn in global_rho_maxes.keys()
+                    for i, (max_v, mean_v) in enumerate(zip(global_rho_maxes[ndn], global_rho_wgted_means[ndn]))}
         else:
             raise RuntimeError("Coding error.")
 
