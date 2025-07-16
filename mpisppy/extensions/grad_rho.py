@@ -15,7 +15,6 @@ import pyomo.environ as pyo
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
 import mpisppy.utils.sputils as sputils
-from mpisppy.utils.sputils import nonant_cost_coeffs
 from mpisppy.cylinders.spwindow import Field
 
 class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
@@ -159,8 +158,6 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         """
 
         opt = self.opt
-        prob_list = [s._mpisppy_data.prob_coeff["ROOT"]
-                     for s in self.opt.local_scenarios.values()]
         local_scens = opt.local_scenarios.values()
 
         if self.indep_denom:
