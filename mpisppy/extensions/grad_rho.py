@@ -256,7 +256,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         for s in opt.local_scenarios.values():    
             for ndn_i, rho in s._mpisppy_model.rho.items():
                 if rhos[ndn_i] != 0:
-                        rho._value = self.multiplier*rhos[ndn_i]
+                    rho._value = self.multiplier*rhos[ndn_i]
 
     def compute_and_update_rho(self):
         self._compute_and_update_rho()
