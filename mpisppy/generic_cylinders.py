@@ -143,6 +143,8 @@ def _name_lists(module, cfg, bundle_wrapper=None):
 
 #==========
 def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+    if cfg.get("scenarios_per_bundle") is not None and cfg.scenarios_per_bundle == 1:
+        raise RuntimeError("To get one scenarios-per-bundle=1, you need to write then read the 'bundles'")
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
