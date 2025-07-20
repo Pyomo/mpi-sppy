@@ -38,7 +38,8 @@ class Hub(SPCommunicator):
         self.print_init = True
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
-        self.last_gap = float('inf')  # abs_gap tracker
+        self.last_outer_bound = self.BestOuterBound
+        self.last_inner_bound = self.BestInnerBound
 
         return
 
@@ -119,8 +120,9 @@ class Hub(SPCommunicator):
             abs_gap_satisfied = True
 
         if "max_stalled_iters" in self.options:
-            if abs_gap < self.last_gap:  # liberal test (we could use an epsilon)
-                self.last_gap = abs_gap
+            if self.last_outer_bound != self.BestOuterBound or self.last_inner_bound != self.BestInnerBound:
+                self.last_outer_bound = self.BestOuterBound
+                self.last_inner_bound = self.BestInnerBound
                 self.stalled_iter_cnt = 0
             else:
                 self.stalled_iter_cnt += 1
