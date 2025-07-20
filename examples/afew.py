@@ -41,7 +41,10 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname] = [runstring]
         else:
             badguys[dirname].append(runstring)
-    os.chdir("..")
+    if '/' not in dirname:
+        os.chdir("..")
+    else:
+        os.chdir("../..")   # hack for one level of subdirectories
 
 
 # for farmer, the first arg is num_scens and is required
