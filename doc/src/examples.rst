@@ -209,7 +209,7 @@ Solving the Extensive Form
 The simplest approach is to solve the extensive form of the model directly. Assuming you are in the directory
 ``examples/farmer`` the following unix command will work.
 
-.. testcode::
+.. code-block:: bash
 
     python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
 
@@ -220,7 +220,7 @@ The simplest approach is to solve the extensive form of the model directly. Assu
 
 We can extract the optimal solution itself using the ``--solution-base-name`` option:
 
-.. testcode::
+.. code-block:: bash
 
     python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi --solution-base-name farmersol
 
@@ -238,7 +238,10 @@ Here is a simple command that uses PH as the hub algorithm and
 computes lower bounds using a Lagrangian spoke (``--lagrangian``) with
 upper bounds computed by randomly trying scenario solutions to fix the nonanticipative variables (``--xhatshuffle``).
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name gurobi_persistent --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 
+
+.. code-block:: bash
+		
+    mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name gurobi_persistent --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 
 
 
 
