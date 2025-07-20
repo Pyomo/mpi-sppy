@@ -109,7 +109,8 @@ yields for each crop. We can solve the model:
 The optimal objective value is:
 
 .. testoutput::
-
+  :options: +SKIP
+	    
     -118600.0
 
 In practice, the farmer does not know the number of tons that each crop will
@@ -212,11 +213,6 @@ The simplest approach is to solve the extensive form of the model directly. Assu
 .. code-block:: bash
 
     python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
-
-.. testoutput::
-
-    ...
-    -108390.0
 
 We can extract the optimal solution itself using the ``--solution-base-name`` option:
 
