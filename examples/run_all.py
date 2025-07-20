@@ -14,7 +14,7 @@
 #      python run_all.py cplex
 #      python run_all.py gurobi_persistent --oversubscribe
 #      python run_all.py gurobi_persistent -envall nouc
-#      (envall does nothing; it is just a place-holder)
+#      (envall does nothing; it is just a place-holder; might not work with your mpiexec)
 
 import os
 import sys
@@ -133,7 +133,7 @@ def time_one(ID, dirname, progname, np, argstring):
     timelistdf.to_csv(listfname, index=False)
 time_one.ID_check = list()
 
-def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
+def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
     # assume that the dirname matches the module name
 
     os.chdir(dirname)
@@ -148,7 +148,7 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
     # run mmw, remove .npy file
     else:
         runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} {}".\
-                    format(dirname, npyfile, mmwargstring)
+                    format(modname, npyfile, mmwargstring)
         code = os.system("echo {} && {}".format(runstring, runstring))
         if code != 0:
             if dirname not in badguys:
@@ -159,20 +159,20 @@ def do_one_mmw(dirname, runefstring, npyfile, mmwargstring):
         os.remove(npyfile)
     os.chdir("..")
 
-do_one("farmer", "farmer_ef.py", 1,
+do_one("farmer/CI", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
-do_one("farmer", "farmer_cylinders.py",  3,
+do_one("farmer/archive", "farmer_cylinders.py",  3,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
        "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
-do_one("farmer", "farmer_cylinders.py",  5,
+do_one("farmer/archive", "farmer_cylinders.py",  5,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
        "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
        "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
        "--track-duals=4".format(solver_name))
-do_one("farmer", "farmer_cylinders.py",  5,
+do_one("farmer/archive", "farmer_cylinders.py",  5,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
        "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
@@ -180,15 +180,15 @@ do_one("farmer", "farmer_lshapedhub.py", 2,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        "--xhatlshaped --max-solver-threads=1".format(solver_name))
-do_one("farmer", "farmer_cylinders.py", 3,
+do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --lagranger --xhatlooper".format(solver_name))
-do_one("farmer", "farmer_cylinders.py", 3,
+do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
-do_one("farmer", "farmer_cylinders.py", 4,
+do_one("farmer/archive", "farmer_cylinders.py", 4,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--fwph-stop-check-tol 0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
@@ -197,15 +197,15 @@ do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-do_one("farmer", "farmer_cylinders.py", 2,
+do_one("farmer/archive", "farmer_cylinders.py", 2,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --xhatshuffle".format(solver_name))
-do_one("farmer", "farmer_cylinders.py", 3,
+do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--num-scens 3 --bundles-per-rank=0 --max-iterations=1 "
        "--default-rho=1 --tee-rank0-solves "
        "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-time_one("FarmerLinProx", "farmer", "farmer_cylinders.py", 3,
+time_one("FarmerLinProx", "farmer/archive", "farmer_cylinders.py", 3,
        "--num-scens 3 --default-rho=1.0 --max-iterations=50 "
        "--display-progress --rel-gap=0.0 --abs-gap=0.0 "
        "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
@@ -214,29 +214,29 @@ time_one("FarmerLinProx", "farmer", "farmer_cylinders.py", 3,
 do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
 do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 
-do_one("farmer",
+do_one("farmer/archive",
        "farmer_cylinders.py",
        2,
        f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
-do_one("farmer",
+do_one("farmer/archive",
        "farmer_cylinders.py",
        2,
        f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
-do_one("farmer",
+do_one("farmer/archive",
        "farmer_cylinders.py",
        2,
        f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
 
-do_one("farmer",
+do_one("farmer/archive",
        "farmer_cylinders.py", 4,
        f"--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
 
-do_one("farmer",
+do_one("farmer/archive",
        "farmer_cylinders.py",
        2,
        f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
-do_one("farmer",
-       "../../mpisppy/generic_cylinders.py",
+do_one("farmer/archive",
+       "../../../mpisppy/generic_cylinders.py",
        4,
        "--module-name farmer --farmer-with-integer "
        "--num-scens=3 "
@@ -248,18 +248,13 @@ do_one("farmer",
        "--rel-gap=0.0 "
        "--solver-name={}".format(solver_name))
 
-do_one("farmer",
-       "farmer_ama.py",
-       3,
-       f"--num-scens=10 --crops-multiplier=3 --farmer-with-integer --EF-solver-name={solver_name}")
-
-do_one("farmer",
+do_one("farmer/CI",
        "farmer_seqsampling.py",
        1,
        f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
 
-do_one("farmer",
+do_one("farmer/CI",
        "farmer_seqsampling.py",
        1,
        f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
@@ -345,7 +340,7 @@ do_one("aircond",
 
 #=========MMW TESTS==========
 # do_one_mmw is special
-do_one_mmw("farmer", f"python farmer_ef.py 3 3 {solver_name}", "farmer_cyl_nonants.npy", f"--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --start-scen 4 --EF-solver-name={solver_name}")
+do_one_mmw("farmer/CI", "farmer", f"python farmer_ef.py 1 3 0 {solver_name}", "farmer_root_nonants.npy", f"--MMW-num-batches=5 --confidence-level 0.95 --MMW-batch-size=10 --start-scen 4 --EF-solver-name={solver_name}")
 
 
 #============================
