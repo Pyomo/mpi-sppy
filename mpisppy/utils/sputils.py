@@ -76,6 +76,7 @@ def build_vardatalist(model, varlist=None):
 def not_good_enough_results(results):
     return (results is None) or (len(results.solution) == 0) or \
         (results.solution(0).status == SolutionStatus.infeasible) or \
+        (results.solution(0).status == SolutionStatus.unknown) or \
         (results.solver.termination_condition == TerminationCondition.infeasible) or \
         (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
         (results.solver.termination_condition == TerminationCondition.unbounded)
