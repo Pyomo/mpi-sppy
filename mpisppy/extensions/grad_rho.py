@@ -22,7 +22,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     Gradient-based rho from
     Gradient-based rho Parameter for Progressive Hedging
     U. Naepels, David L. Woodruff, 2023
-    
+
     Includes modifications to extend scenario based denominators
     to multi-stage problems and calculation of gradients from objective
     expressions on the fly. 
@@ -179,10 +179,10 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         local_rhos = {}
         local_rho_mins = {}
         local_rho_maxes = {}
-        local_rho_wgted_means = {}
+        local_rho_means = {}
         global_rho_mins = {}
         global_rho_maxes = {}
-        global_rho_wgted_means = {}
+        global_rho_means = {}
 
         for k, s in opt.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
@@ -195,10 +195,10 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                     local_rhos[ndn] = np.zeros(nlen, dtype="d")
                     local_rho_mins[ndn] = np.zeros(nlen, dtype="d")
                     local_rho_maxes[ndn] = np.zeros(nlen, dtype="d")
-                    local_rho_wgted_means[ndn] = np.zeros(nlen, dtype="d")
+                    local_rho_means[ndn] = np.zeros(nlen, dtype="d")
                     global_rho_mins[ndn] = np.zeros(nlen, dtype="d")
                     global_rho_maxes[ndn] = np.zeros(nlen, dtype="d")
-                    global_rho_wgted_means[ndn] = np.zeros(nlen, dtype="d")
+                    global_rho_means[ndn] = np.zeros(nlen, dtype="d")
 
         for k, s in opt.local_scenarios.items():
             nlens = s._mpisppy_data.nlens
@@ -207,7 +207,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 rhos = local_rhos[ndn]
                 rho_mins = local_rho_mins[ndn]
                 rho_maxes = local_rho_maxes[ndn]
-                rho_wgted_means = local_rho_wgted_means[ndn]
+                rho_means = local_rho_means[ndn]
 
                 rhos = np.fromiter(
                     (
@@ -220,7 +220,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
                 np.minimum(rho_mins, rhos, out=rho_mins, where=(s._mpisppy_data.prob_coeff[ndn] > 0))
                 np.maximum(rho_maxes, rhos, out=rho_maxes, where=(s._mpisppy_data.prob_coeff[ndn] > 0))
-                rho_wgted_means += s._mpisppy_data.prob_coeff[ndn] * rhos
+                rho_means += s._mpisppy_data.prob_coeff[ndn] * rhos
 
         for nodename in local_nodenames:
             opt.comms[nodename].Allreduce(
@@ -236,13 +236,13 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
             )
 
             opt.comms[nodename].Allreduce(
-                [local_rho_wgted_means[nodename], MPI.DOUBLE],
-                [global_rho_wgted_means[nodename], MPI.DOUBLE],
+                [local_rho_means[nodename], MPI.DOUBLE],
+                [global_rho_means[nodename], MPI.DOUBLE],
                 op=MPI.SUM,
             )
 
         if self.alpha == 0.5:
-            rhos = {(ndn, i): float(v) for ndn, rho_mean in global_rho_wgted_means.items() for i, v in enumerate(rho_mean)}
+            rhos = {(ndn, i): float(v) for ndn, rho_mean in global_rho_means.items() for i, v in enumerate(rho_mean)}
         elif self.alpha == 0.0:
             rhos = {(ndn, i): float(v) for ndn, rho_min in global_rho_mins.items() for i, v in enumerate(rho_min)}
         elif self.alpha == 1.0:
@@ -250,11 +250,11 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         elif self.alpha < 0.5:
             rhos = {(ndn, i): float(min_v + self.alpha * 2 * (mean_v - min_v))
                     for ndn in global_rho_mins.keys()
-                    for i, (min_v, mean_v) in enumerate(zip(global_rho_mins[ndn], global_rho_wgted_means[ndn]))}
+                    for i, (min_v, mean_v) in enumerate(zip(global_rho_mins[ndn], global_rho_means[ndn]))}
         elif self.alpha > 0.5:
             rhos = {(ndn, i): float(2 * mean_v - max_v + self.alpha * 2 * (max_v - mean_v))
                     for ndn in global_rho_maxes.keys()
-                    for i, (max_v, mean_v) in enumerate(zip(global_rho_maxes[ndn], global_rho_wgted_means[ndn]))}
+                    for i, (max_v, mean_v) in enumerate(zip(global_rho_maxes[ndn], global_rho_means[ndn]))}
         else:
             raise RuntimeError("Coding error.")
 
