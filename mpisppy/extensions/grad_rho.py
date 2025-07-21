@@ -23,7 +23,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
     Gradient-based rho Parameter for Progressive Hedging
     U. Naepels, David L. Woodruff, 2023
 
-    Includes modifications to extend scenario based denominators
+    Includes modifications to extend scenario-based denominators
     to multi-stage problems and calculation of gradients from objective
     expressions on the fly. 
     A. Asger, B. Knueven, 2025
