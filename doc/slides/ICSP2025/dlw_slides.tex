@@ -56,7 +56,7 @@
 
 \newcommand{\themename}{\textbf{\textsc{metropolis}}\xspace}
 
-\title{Waht's new in MPI-SPPY}
+\title{(Some of) What's new in MPI-SPPY}
 % \subtitle{A Bootstrap Approach}
 \date{}
 \author{David L Woodruff \inst{1}\\
@@ -77,6 +77,12 @@
 
 
 \metroset{sectionpage=none}
+
+\begin{frame}{Special issue of CMS}
+Checkout the special issue of CMS from the last ICSP!
+
+\url{https://link.springer.com/collections/ijeejjabgb}
+\end{frame}
 
 \begin{frame}{Optimization Under Uncertainty}
 
@@ -103,6 +109,7 @@ where the distribution $F$ is unknown and, of course, almost always unknowable.
 \end{frame}
 
 \begin{frame}{Outline}
+  \subtitle{(This is not a tutorial)}
   \begin{itemize}
 \item What is MPI-SPPY?
 \item New communication paradigm
@@ -118,22 +125,9 @@ where the distribution $F$ is unknown and, of course, almost always unknowable.
 \begin{itemize}
 \item B. Knueven, D Mildebrath, C. Muir, JD Siirola, J-P Watson, DL Woodruff, ``A parallel hub-and-spoke system for large-scale scenario-based optimization under uncertainty,'' {\em MPC}
 \item Find $\hat{x}$ with bounds and/or confidence intervals on the objective function for a scenario-based $T$-stage expected value problem with scenario set $\Xi$.
-\end{itemize}
-  
-\end{frame}
-
-\begin{frame}{MPI-sppy: The paper and the software}
-\begin{itemize}
-\item Find $\hat{x}$ with bounds on the objective function (and confidence intervals) for the problem solved to do that; generally scenario-based, e.g.:
-  $$
-   \min_x \frac{1}{N} \sum_{i=1}^N h(x, D_i).
-   $$
-   for some sample $D$ of size $N$.
-  \begin{itemize}
   \item Software is available at \url{https://github.com/Pyomo/mpi-sppy}
   \item It is a library, but we also have a generic program (coming back toward PySP)
-    \item It is designed for HPC, but does run on a laptop.
-    \end{itemize}
+  \item It is designed for HPC, but does run on a laptop.
 \end{itemize}
 \end{frame}
 
@@ -151,16 +145,17 @@ But the connections have changed
 
 \end{frame}
 
-\begin{frame}{Changes to the Concept of a ``Hub''}
+\begin{frame}{Changes}}
   \begin{itemize}
     \item The cylinder functioning as the hub is no longer the center of communication. Every cylinder can see the asynchronous buffers.
     \item The hub cylinder now
       \begin{itemize}
       \item keeps track of bounds,
       \item does some output, and
-        \item decides when to shut down and signals all other cylinders.
+        \item decides when to shut down and signals all other cylinders to do so.
         \end{itemize}
   \end{itemize}
+  \item This allows more flexibility to have spokes that tighten variable bounds, find and adjust parameter values (e.g. $\rho$), and compute upper/lower objective function bounds.
 \end{frame}
 
 \section{New User Interface}
@@ -169,7 +164,8 @@ But the connections have changed
   \item Provides access to many cylinders and extensions without needing a user-written driver.
   \item Allows developers to provide driver maintenance instead of users.
   \item Gives users easy access to the latest features.
-    \item xxxx
+    \item Has too many command line options to be any fun.
+    \item Supports problems from other AMLs.
     \end{itemize}
 \end{frame}
 
@@ -181,12 +177,12 @@ But the connections have changed
   \item Loose:
     \begin{itemize}
     \item You code your AML to write an MPS (or maybe lp) file for each scenario along with a json file for each scenario that lists the nonanticipative variabes for each node in the scenario tree traversed by the scenario and a little other data.
-    \item You do this once and let mpi-sppy take over.
+    \item You do this once and point mpi-sppy to the files.
       \item No Python programming required (unless, of course, that's how you interact with your AML)
       \end{itemize}
     \item[]
     \item Tight: If your ``AML'' is callable in the sense that an outside caller
-      can modify the objective, then
+      can modify the objective at runtime, then
       \begin{itemize}
       \item You hope we already have added support for your ``AML'' (we now have support for AMPL, GAMS, and GurobiPy)
         \item You need to write a thin wrapper in Python for your model
@@ -195,10 +191,12 @@ But the connections have changed
 \end{frame}
 
 \begin{frame}{More about loose coupling}
-xxx
+  You (or your LLM) are probably going to want/need to write a script to use meaningful variable names in the MPS file
+  and then use the same names in the JSON file.
 \end{frame}
 
-\begin{frame}{Example of json file}
+\begin{frame}[fragile]
+  \frametitle{Example of json file}
 \begin{verbatim}
 {
   "scenarioData": {
@@ -235,7 +233,8 @@ xxx
     \item We combine the two. Under the hood, the trick is the tree.
       \item But the interface is that you tell the software about your scenario tree for stochastics and about your consensus variables and subproblems for ADMM using wrappers for your model.
       \end{itemize}
-    \item The software is available on github as part of MPI-SPPY.
+  \item The software is available on github as part of MPI-SPPY.
+    \item Currently, you need to write a driver (not supported by generic\_cyinders).
   \end{itemize}
 \end{frame}
 
