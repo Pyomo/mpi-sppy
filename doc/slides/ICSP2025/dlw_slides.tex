@@ -99,7 +99,7 @@ requiring a form of robustness or perhaps...
         \min_x E_{\xi\sim F}h(x,\xi)  \label{eq:TheProblem}
 \end{equation}
 }
-Where the distribution $F$ is unknown and, of course, almost always unknowable. 
+where the distribution $F$ is unknown and, of course, almost always unknowable. 
 \end{frame}
 
 \begin{frame}{Outline}
@@ -151,20 +151,38 @@ But the connections have changed
 
 \end{frame}
 
-\begin{frame}{Changes}
-xxxx the hub now just does some output and decides to shut down
+\begin{frame}{Changes to the Concept of a ``Hub''}
+  \begin{itemize}
+    \item The cylinder functioning as the hub is no longer the center of communication. Every cylinder can see the asynchronous buffers.
+    \item The hub cylinder now
+      \begin{itemize}
+      \item keeps track of bounds,
+      \item does some output, and
+        \item decides when to shut down and signals all other cylinders.
+        \end{itemize}
+  \end{itemize}
 \end{frame}
 
+\section{New User Interface}
+\begin{frame}{generic\_cylinders.py}
+  \begin{itemize}
+  \item Provides access to many cylinders and extensions without needing a user-written driver.
+  \item Allows developers to provide driver maintenance instead of users.
+  \item Gives users easy access to the latest features.
+    \item xxxx
+    \end{itemize}
+\end{frame}
 
-
+\section{Agnostic}
 \begin{frame}{Agnostic to the AML}
+  \subtitle{(or, really, ecumenical)}
   For scenario based decomposition...
   \begin{itemize}
   \item Loose:
     \begin{itemize}
-    \item You code your AML to write an MPS (or maybe lp) file for each scenario along with a json file for each scenario that lists the nonanticipative variabes for each node in the scenario tree traversed by the scenario.
+    \item You code your AML to write an MPS (or maybe lp) file for each scenario along with a json file for each scenario that lists the nonanticipative variabes for each node in the scenario tree traversed by the scenario and a little other data.
     \item You do this once and let mpi-sppy take over.
-      \item No Python programming required (unless, of course, thats how interact with your AML)
+      \item No Python programming required (unless, of course, that's how you interact with your AML)
       \end{itemize}
     \item[]
     \item Tight: If your ``AML'' is callable in the sense that an outside caller
@@ -179,6 +197,32 @@ xxxx the hub now just does some output and decides to shut down
 \begin{frame}{More about loose coupling}
 xxx
 \end{frame}
+
+\begin{frame}{Example of json file}
+\begin{verbatim}
+{
+  "scenarioData": {
+    "name": "Scenario1",
+    "scenProb": 0.3333333333333333
+  },
+  "treeData": {
+    "ROOT": {
+      "condProb": 1.0,
+      "nonAnts": [
+        "NumProducedFirstStage(1)",
+        "NumProducedFirstStage(2)",
+        "NumProducedFirstStage(3)",
+        "NumProducedFirstStage(4)",
+        ...
+        "NumUnitsCutFirstStage(10_10)"
+      ]
+    }
+  }
+}  
+\end{verbatim}
+  \end{frame}
+
+
 
 \section{If time... Consensus ADMM Under Uncertainty}
 
