@@ -13,7 +13,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mpi-sppy"
-version = "0.13.1.dev0"
+version = "0.13.1"
 authors = [
     {name = "David Woodruff", email = "dlwoodruff@ucdavis.edu" },
 ]
