@@ -41,11 +41,14 @@ def do_one(dirname, progname, np, argstring):
             badguys[dirname] = [runstring]
         else:
             badguys[dirname].append(runstring)
-    os.chdir("..")
+    if '/' not in dirname:
+        os.chdir("..")
+    else:
+        os.chdir("../..")   # hack for one level of subdirectories
 
 
 # for farmer, the first arg is num_scens and is required
-do_one("farmer", "farmer_cylinders.py", 3,
+do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
        "--default-rho=1 --sep-rho --display-convergence-detail "
        "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
