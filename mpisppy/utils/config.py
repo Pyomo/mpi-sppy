@@ -955,6 +955,19 @@ class Config(pyofig.ConfigDict):
                            description="display rho during gradient calcs (default True)",
                            domain=bool,
                            default=True)
+        self.add_to_config("grad_rho_multiplier",
+                           description="multiplier for GradRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
+        self.add_to_config("eval_at_xhat",
+                           description="evaluate the gradient at xhat whenever available (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("indep_denom",
+                           description="evaluate rho using scenario independent denominator (default False)",
+                           domain=bool,
+                           default=False)
         # likely unused presently
 #        self.add_to_config("grad_pd_thresh",
 #                           description="threshold for dual/primal during gradient calcs",
