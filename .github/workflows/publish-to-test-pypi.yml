@@ -1,9 +1,6 @@
 name: Publish Python distributions to PyPI and TestPyPI
 
-on:
-  push:
-    tags:
-      - '*'
+on: push
 
 jobs:
   build-n-publish:
