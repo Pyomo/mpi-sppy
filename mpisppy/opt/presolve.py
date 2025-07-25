@@ -23,6 +23,7 @@ import numpy as np
 
 from pyomo.common.errors import InfeasibleConstraintException, DeferredImportError
 from pyomo.contrib.appsi.fbbt import IntervalTightener
+import pyomo.environ as pyo
 
 from mpisppy import MPI
 
@@ -150,6 +151,7 @@ class SPIntervalTightener(_SPPresolver):
             big_iters = 0.0
             for k, it in self.subproblem_tighteners.items():
                 n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
+                self._check_bounds(self.opt.local_subproblems[k])
                 # get the number of constraints after we do
                 # FBBT so we get any updates on the subproblem
                 big_iters = max(big_iters, n_iters / len(it._cmodel.constraints))
@@ -260,6 +262,21 @@ class SPIntervalTightener(_SPPresolver):
         same_nonant_bounds = not self.opt.allreduce_or(not same_nonant_bounds)
 
         return same_nonant_bounds, global_lower_bounds, global_upper_bounds
+
+    def _check_bounds(self, model):
+        for var in model.component_data_objects(pyo.Var, active=True):
+                lb = var.lb
+                ub = var.ub
+
+                if lb is not None and ub is not None:
+                    if lb > ub:
+                        delta = lb - ub
+                        lb = lb - 5*delta
+                        ub = ub + 5*delta
+
+                        # update revised bounds
+                        var.lb = lb
+                        var.ub = ub
 
     def _print_bound_movement(self):
         lower_bound_movement = {}
