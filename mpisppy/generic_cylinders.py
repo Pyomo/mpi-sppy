@@ -143,6 +143,8 @@ def _name_lists(module, cfg, bundle_wrapper=None):
 
 #==========
 def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+    if cfg.get("scenarios_per_bundle") is not None and cfg.scenarios_per_bundle == 1:
+        raise RuntimeError("To get one scenarios-per-bundle=1, you need to write then read the 'bundles'")
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
     if cfg.default_rho is None and rho_setter is None:
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
@@ -529,7 +531,7 @@ def _write_bundles(module,
     inum = sputils.extract_num(module.scenario_names_creator(1)[0])
     
     local_bundle_names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in local_slice]
-
+    
     if my_rank == 0:
         if os.path.exists(cfg.pickle_bundles_dir):
             shutil.rmtree(cfg.pickle_bundles_dir)
@@ -650,6 +652,7 @@ if __name__ == "__main__":
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
         bundle_wrapper = proper_bundler.ProperBundler(module)
+        bundle_wrapper.set_bunBFs(cfg)
         scenario_creator = bundle_wrapper.scenario_creator
         # The scenario creator is wrapped, so these kw_args will not go the original
         # creator (the kw_creator will keep the original args)

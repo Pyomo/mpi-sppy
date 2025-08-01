@@ -23,7 +23,7 @@ def _doone(cmdstr):
 
 #####################################################
 # farmer
-example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer')
+example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer', 'archive')
 fpath = os.path.join(example_dir, 'farmer_cylinders.py')
 
 cmdstr = f"python {fpath} --help"
