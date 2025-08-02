@@ -82,28 +82,36 @@ class RelaxedPHFixer(Extension):
                     relaxed_val = relaxed_solution[ci]
                     xvar_value = xvar._value
                     update_var = False
+                    xb = s._mpisppy_model.xbars[ndn_i]._value
                     if not pre_iter0 and xvar.fixed:
-                        if (relaxed_val - xvar.lb) > self.bound_tol and (xvar.ub - relaxed_val) > self.bound_tol:
+                        if ( (relaxed_val - xvar.lb) > self.bound_tol
+                             and (xvar.ub - relaxed_val) > self.bound_tol
+                            ):
                             xvar.unfix()
                             update_var = True
                             raw_fixed_this_iter -= 1
                             if self.debug and self.opt.cylinder_rank == 0:
                                 print(f"{k}: unfixing var {xvar.name}; {relaxed_val=} is off bounds {(xvar.lb, xvar.ub)}")
                         # in case somebody else unfixs a variable in another rank...
-                        xb = s._mpisppy_model.xbars[ndn_i]._value
                         if abs(xb - xvar_value) > self.bound_tol:
                             xvar.unfix()
                             update_var = True
                             raw_fixed_this_iter -= 1
                             if self.debug and self.opt.cylinder_rank == 0:
                                 print(f"{k}: unfixing var {xvar.name}; xbar {xb} differs from the fixed value {xvar_value}")
-                    elif (relaxed_val - xvar.lb <= self.bound_tol) and (pre_iter0 or (xvar_value - xvar.lb <= self.bound_tol)):
+                    elif ((xb - xvar.lb <= self.bound_tol)
+                          and (relaxed_val - xvar.lb <= self.bound_tol)
+                          and (pre_iter0 or (xvar_value - xvar.lb <= self.bound_tol))
+                        ):
                         xvar.fix(xvar.lb)
                         if self.debug and self.opt.cylinder_rank == 0:
                             print(f"{k}: fixing var {xvar.name} to lb {xvar.lb}; {relaxed_val=}, var value is {xvar_value}")
                         update_var = True
                         raw_fixed_this_iter += 1
-                    elif (xvar.ub - relaxed_val <= self.bound_tol) and (pre_iter0 or (xvar.ub - xvar_value <= self.bound_tol)):
+                    elif ((xvar.ub - xb <= self.bound_tol)
+                          and (xvar.ub - relaxed_val <= self.bound_tol)
+                          and (pre_iter0 or (xvar.ub - xvar_value <= self.bound_tol))
+                        ):
                         xvar.fix(xvar.ub)
                         if self.debug and self.opt.cylinder_rank == 0:
                             print(f"{k}: fixing var {xvar.name} to ub {xvar.ub}; {relaxed_val=}, var value is {xvar_value}")
