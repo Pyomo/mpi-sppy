@@ -97,7 +97,6 @@ class RelaxedPHFixer(Extension):
                             raw_fixed_this_iter -= 1
                             if self.debug and self.opt.cylinder_rank == 0:
                                 print(f"{k}: unfixing var {xvar.name}; xbar {xb} differs from the fixed value {xvar_value}")
-                    # TODO: revisit this logic -- need xb - xvar.lb <= self.bound_tol IN pre_iter0 ...
                     elif pre_iter0:
                         if (relaxed_val - xvar.lb) <= self.bound_tol:
                             xvar.fix(xvar.lb)
@@ -126,7 +125,12 @@ class RelaxedPHFixer(Extension):
                             update_var = True
                             raw_fixed_this_iter += 1
                         else:
-                            # TODO: should we fix in this case? To xbar? What about integers? Maybe option-drive??
+                            # # TODO: should we fix in this case? To xbar? What about integers? Maybe option-drive??
+                            # xvar.fix(xb)
+                            # if self.debug and self.opt.cylinder_rank == 0:
+                            #     print(f"{k}: fixing var {xvar.name} to xbar {xb}; {relaxed_val=}, var value is {xvar_value}")
+                            # update_var = True
+                            # raw_fixed_this_iter += 1
                             pass
 
                     if update_var and persistent_solver:
