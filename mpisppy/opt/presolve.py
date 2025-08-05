@@ -23,6 +23,7 @@ import numpy as np
 
 from pyomo.common.errors import InfeasibleConstraintException, DeferredImportError
 from pyomo.contrib.appsi.fbbt import IntervalTightener
+from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
 import pyomo.environ as pyo
 
 from mpisppy import MPI
@@ -61,12 +62,15 @@ class _SPPresolver(abc.ABC):
 
 
 class SPIntervalTightener(_SPPresolver):
-    """Interval Tightener (feasibility-based bounds tightening)
+    """Interval Tightener (feasibility-based bounds tightening OR optimization-based bounds tightening)
     TODO: enable options
     """
 
-    def __init__(self, spbase, verbose=False):
+    def __init__(self, spbase, verbose=False, method="fbbt"):
         super().__init__(spbase, verbose)
+
+        self.fbbt = False
+        self.obbt = False
 
         self.subproblem_tighteners = {}
         for k, s in self.opt.local_subproblems.items():
@@ -90,18 +94,40 @@ class SPIntervalTightener(_SPPresolver):
                     f"Issue with IntervalTightener; cannot apply presolve to this problem. Error: {e}"
                 )
 
+        if method == "fbbt":
+            self.fbbt = True
+            
+        elif method == "obbt":
+            self.obbt = True
+            self.solver = "gams:gurobi" # TODO: make this an option
+            self.solver_options = {"add_options": ['$onecho > gurobi.opt', 
+                                                'Threads 8',
+                                                'NodeLimit 1',
+                                                '$offecho',
+                                                'GAMS_MODEL.optfile=1']} # TODO: make this an option
+
+            self.nonant_variables = True  # TODO: make this an option
+            
+        else:
+            raise ValueError(f"Unknown method for interval tightener: {method}")
+
         self._lower_bound_cache = {}
         self._upper_bound_cache = {}
 
     def presolve(self):
-        """Run the interval tightener (FBBT):
-        1. FBBT on each subproblem
+        """Run the interval tightener (FBBT/OBBT):
+        1. FBBT/OBBT on each subproblem
         2. Narrow bounds on the nonants across all subproblems
         3. If the bounds are updated, go to (1)
         """
 
         printed_warning = False
         update = False
+
+        # first pass FBBT 
+        for k, it in self.subproblem_tighteners.items():
+            n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
+            self._check_bounds(self.opt.local_subproblems[k])
 
         same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
             self._compare_nonant_bounds()
@@ -113,7 +139,7 @@ class SPIntervalTightener(_SPPresolver):
 
                 # update the bounds if changed
                 for sub_n, _, k, s in self.opt.subproblem_scenario_generator():
-                    feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
+                    feas_tol = 1e-8 #self.subproblem_tighteners[sub_n].config.feasibility_tol
                     for node in s._mpisppy_node_list:
                         node_comm = self.opt.comms[node.name]
                         for var, lb, ub in zip(
@@ -147,31 +173,63 @@ class SPIntervalTightener(_SPPresolver):
                                 ub = None
                             var.bounds = (lb, ub)
 
-            # Now do FBBT
-            big_iters = 0.0
-            for k, it in self.subproblem_tighteners.items():
-                n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
-                self._check_bounds(self.opt.local_subproblems[k])
-                # get the number of constraints after we do
-                # FBBT so we get any updates on the subproblem
-                big_iters = max(big_iters, n_iters / len(it._cmodel.constraints))
+            # Now do FBBT/OBBT 
 
-            update_this_pass = big_iters > 1.0
-            update_this_pass = self.opt.allreduce_or(update_this_pass)
+            if self.fbbt:
+                big_iters = 0.0
+                for k, it in self.subproblem_tighteners.items():
+                    n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
+                    self._check_bounds(self.opt.local_subproblems[k])
+                    # get the number of constraints after we do
+                    # FBBT so we get any updates on the subproblem
+                    big_iters = max(big_iters, n_iters / len(it._cmodel.constraints))
+                update_this_pass = big_iters > 1.0
+                update_this_pass = self.opt.allreduce_or(update_this_pass)
+                
+                if not update_this_pass:
+                    break
 
-            if not update_this_pass:
-                break
+            elif self.obbt:
+                for k, it in self.subproblem_tighteners.items():
+                    s = self.opt.local_subproblems[k]
 
-            update = True
+                    try:
+                        if self.nonant_variables:
+                            bounds = obbt_analysis(s, variables=s._mpisppy_data.nonant_indices.values(), solver=self.solver, 
+                                                        solver_options=self.solver_options, warmstart=False, local_best_bounds=True)
 
+                            for var in s.component_data_objects(pyo.Var, active=True):
+                                if var in bounds.keys():
+                                    lb, ub = bounds[var]
+                                    var.bounds = (lb, ub)
+                            
+                            n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
+                            self._check_bounds(self.opt.local_subproblems[k])
+                            
+
+                        else:
+                            bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options, local_best_bounds=True)
+
+                            for var in s.component_data_objects(pyo.Var, active=True):
+                                if var.name in bounds.keys():
+                                    lb, ub = bounds[var.name]
+                                    var.bounds = (lb, ub)
+                                
+                    except Exception as e:
+                        raise RuntimeError(
+                            f"OBBT failed for subproblem {k} with error: {e}"
+                        )
+           
             same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
                 self._compare_nonant_bounds()
             )
 
             if same_nonant_bounds:
                 # The nonant bounds did not change, so it is unlikely
-                # that further rounds of FBBT will do any good.
+                # that further rounds of FBBT/OBBT will do any good.
                 break
+
+            update = True
 
         if update:
             self._print_bound_movement()
@@ -417,10 +475,10 @@ class SPPresolve(_SPPresolver):
         spbase (SPBase): an SPBase object
     """
 
-    def __init__(self, spbase, verbose=False):
+    def __init__(self, spbase, verbose=True):
         super().__init__(spbase, verbose)
 
-        self.interval_tightener = SPIntervalTightener(spbase, verbose)
+        self.interval_tightener = SPIntervalTightener(spbase, verbose, method="obbt")
 
     def presolve(self):
         return self.interval_tightener.presolve()
