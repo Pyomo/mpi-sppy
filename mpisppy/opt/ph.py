@@ -64,8 +64,6 @@ class PH(mpisppy.phbase.PHBase):
         if (verbose):
             print(f'Calling {self.__class__.__name__} Iter0 on global rank {global_rank}')
         trivial_bound = self.Iter0()
-        if self._can_update_best_bound():
-            self.best_bound_obj_val = trivial_bound
         if (verbose):
             print(f'Completed {self.__class__.__name__} Iter0 on global rank {global_rank}')
         if ('asynchronousPH' in self.options) and (self.options['asynchronousPH']):
