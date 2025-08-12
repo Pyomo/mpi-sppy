@@ -99,7 +99,7 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
         os.remove(self.temp_xbar_file_name)
 
     def test_wreader(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader, max_iter=1)
+        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader, max_iter=0)
         for sname, scenario in self.ph_object.local_scenarios.items():
             if sname == 'scen0':
                 self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 1)]._value, 70.84705093609978)
@@ -107,12 +107,15 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
                 self.assertAlmostEqual(scenario._mpisppy_model.W[("ROOT", 0)]._value, -41.104251445950844)
 
     def test_xbarreader(self):
-        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader, max_iter=1)
+        self.ph_object = self._create_ph_farmer(ph_extensions=wxbarreader.WXBarReader, max_iter=0)
         for sname, scenario in self.ph_object.local_scenarios.items():
             if sname == 'scen0':
                 self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 1)]._value, 274.2239371483933)
             if sname == 'scen1':
                 self.assertAlmostEqual(scenario._mpisppy_model.xbars[("ROOT", 0)]._value, 96.88717449844287)
+
+
+
 
 if __name__ == '__main__':
     unittest.main()
