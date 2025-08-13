@@ -29,7 +29,78 @@ is probably no reason to write them and then read them again!). This
 functionality is intended to be used by users of other AMLs or other
 scenario-based stochastic programming applications.
 
+JSON file format
+----------------
 
+The directory named in the ``--mps-files-directory`` needs to have
+two files for each scenario: and mps file and a json file. The json
+file need to have certain literal strings as well as scenario-specific
+data. In this specification, scenario specific data is named with underscores.
+
+.. code-block:: json
+		
+{
+  "scenarioData": {
+    "name": scenario_name,
+    "scenProb": scenario_probability
+  },
+  "treeData": {
+    "ROOT": {
+      "condProb": 1.0,
+      "nonAnts": [
+        "first_root_node_nonant_name",
+        "second_root_node_nonant_name",
+        ...
+      ]
+    }
+    "ROOT_i": {
+      "condProb": conditional_probability_of_second_stage_node_i,
+      "nonAnts": [
+        first_nonant_name_at_node,
+        second_node_nonant_name_at_node,
+        ...
+      ]
+    }
+  }
+}  
+
+Two-stage JSON example
+~~~~~~~~~~~~~~~~~~~~~~
+
+Two-stage problems are simple because there is only one node in the scenario tree and its name
+must be ROOT. Here is an example
+
+.. code-block:: json
+  {
+    "scenarioData": {
+      "name": "Scenario1",
+      "scenProb": 0.3333333333333333
+    },
+    "treeData": {
+      "ROOT": {
+        "condProb": 1.0,
+        "nonAnts": [
+          "NumProducedFirstStage(1)",
+          "NumProducedFirstStage(2)",
+          "NumProducedFirstStage(3)",
+          "NumProducedFirstStage(4)",
+          ...
+          "NumUnitsCutFirstStage(10_10)"
+        ]
+      }
+    }
+  }  
+
+Naming Conventions
+~~~~~~~~~~~~~~~~~~
+
+- Scenario names should end in a serial number. Zero-based numbering is best, but one-based is supported.
+- The root node of the scenario tree must be named ROOT.
+- Other nodes must begin with the name of the parent node and end with an underscore followed by a zero-based serial
+  number for the node at its stage.
+- The names of the nonanticaptive variables at the node are given in the `nonAnts` list and the names must match column names in the mps file.
+
+  
 Tight integration
 ^^^^^^^^^^^^^^^^^
 
