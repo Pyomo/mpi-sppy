@@ -35,12 +35,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.opt = opt
         self.alpha = cfg.grad_order_stat
         assert (self.alpha >= 0 and self.alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {self.alpha=} is invalid."
-        self.multiplier = 1.0
-
-        if (
-            cfg.grad_rho_multiplier
-        ):
-            self.multiplier = cfg.grad_rho_multiplier
+        self.multiplier = cfg.grad_rho_multiplier
+        self.denom_bound = 1/cfg.grad_rho_relative_bound
 
         self.eval_at_xhat = cfg.eval_at_xhat
         self.indep_denom = cfg.indep_denom
@@ -66,9 +62,9 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         denom_max = max(scen_dep_denom.values())
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
-            if scen_dep_denom[ndn_i] <= self.opt.E1_tolerance:
-                scen_dep_denom[ndn_i] = max(denom_max, self.opt.E1_tolerance)
-        
+            if (scen_dep_denom[ndn_i]) <= self.denom_bound * v._value:
+                scen_dep_denom[ndn_i] = max(denom_max, self.denom_bound * v._value)
+
         return scen_dep_denom
 
     def _scen_indep_denom(self):

@@ -966,7 +966,6 @@ class Config(pyofig.ConfigDict):
                            description="evaluate the gradient at xhat whenever available (default False)",
                            domain=bool,
                            default=False)
-
         self.add_to_config("indep_denom",
                            description="evaluate rho using scenario independent denominator (default False)",
                            domain=bool,
@@ -995,7 +994,7 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
-                           default=1e3)
+                           default=1e2)
 
     def dynamic_rho_args(self): # AKA adaptive
 
