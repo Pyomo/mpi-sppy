@@ -22,7 +22,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.grad_rho import GradRho
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
@@ -40,8 +40,9 @@ def _parse_args():
     cfg.xhatlooper_args()
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
-    cfg.dynamic_gradient_args() # gets you gradient_args for free
+    cfg.dynamic_rho_args() # gets gradient args for free
     cfg.ph_ob_args()
+    cfg.integer_relax_then_enforce_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
@@ -124,7 +125,8 @@ def main():
         ext_classes.append(XhatClosest)
     
     if cfg.grad_rho:
-        ext_classes.append(Gradient_extension)
+        ext_classes.append(GradRho)
+        hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
         
     hub_dict["opt_kwargs"]["extension_kwargs"] = {"ext_classes" : ext_classes}
     if cross_scenario_cuts:
@@ -143,9 +145,6 @@ def main():
             "keep_solution" : True
         }
 
-    if cfg.grad_rho:
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
-
     if cfg.ph_mipgaps_json is not None:
         with open(cfg.ph_mipgaps_json) as fin:
             din = json.load(fin)
@@ -160,6 +159,9 @@ def main():
     if cfg.default_rho is None:
         # since we are using a rho_setter anyway
         hub_dict.opt_kwcfg.options["defaultPHrho"] = 1  
+
+    if cfg.integer_relax_then_enforce:
+        vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
     ### end ph spoke ###
     
     # FWPH spoke
@@ -181,6 +183,7 @@ def main():
         ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
                                           scenario_creator_kwargs=scenario_creator_kwargs,
                                           rho_setter = rho_setter)        
+
 
     # xhat shuffle bound spoke
     if xhatshuffle:
