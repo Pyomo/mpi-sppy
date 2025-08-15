@@ -63,6 +63,7 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
             if (scen_dep_denom[ndn_i]) <= self.denom_bound * v._value:
+                # denom_max is over all nonants, so if not >0 we will stop
                 scen_dep_denom[ndn_i] = max(denom_max, self.denom_bound * v._value)
 
         return scen_dep_denom
