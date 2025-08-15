@@ -35,8 +35,6 @@ class _PHDualSpokeBase(Spoke, PHHub):
         attach_prox = True
         self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = smoothed)
         trivial_bound = self.opt.Iter0()
-        if self.opt._can_update_best_bound():
-            self.opt.best_bound_obj_val = trivial_bound
 
         # update the rho
         self.update_rho()

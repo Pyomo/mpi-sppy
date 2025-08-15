@@ -859,6 +859,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         if "time_limit" not in self.options:
             self.options["time_limit"] = None
 
+    def _can_update_best_bound(self):
+        if not self.prox_disabled:
+            return False
+        return super()._can_update_best_bound()
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
