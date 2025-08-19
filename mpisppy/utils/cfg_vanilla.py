@@ -27,7 +27,6 @@ from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
 from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
-from mpisppy.cylinders.ph_ob import PhOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
@@ -682,7 +681,7 @@ def reduced_costs_spoke(
 
 
 # special lagrangian: computes its own xhat and W (does not seem to work well)
-# ph_ob_spoke is probably better
+# ph_dual is probably better
 def lagranger_spoke(
     cfg,
     scenario_creator,
@@ -1074,43 +1073,4 @@ def cross_scenario_cuts_spoke(
     return cut_spoke
 
 # run PH with smaller rho to compute LB
-def ph_ob_spoke(
-    cfg,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    rho_setter=None,
-    all_nodenames=None,
-    variable_probability=None,
-):
-    shoptions = shared_options(cfg)
-    ph_ob_spoke = {
-        "spoke_class": PhOuterBound,
-        "opt_class": PHBase,
-        "opt_kwargs": {
-            "options": shoptions,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            'scenario_denouement': scenario_denouement,
-            "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames,
-            "variable_probability": variable_probability,
-        }
-    }
-    if cfg.ph_ob_rho_rescale_factors_json is not None:
-        ph_ob_spoke["opt_kwargs"]["options"]\
-            ["ph_ob_rho_rescale_factors_json"]\
-            = cfg.ph_ob_rho_rescale_factors_json
-    ph_ob_spoke["opt_kwargs"]["options"]["ph_ob_initial_rho_rescale_factor"]\
-        = cfg.ph_ob_initial_rho_rescale_factor
-    if cfg.ph_ob_gradient_rho:
-        ph_ob_spoke["opt_kwargs"]["options"]\
-            ["ph_ob_gradient_rho"]\
-            = dict()
-        ph_ob_spoke["opt_kwargs"]["options"]\
-            ["ph_ob_gradient_rho"]["cfg"]\
-            = cfg
-
-    return ph_ob_spoke
+##def ph_ob_spoke( deprecated and replaced with ph_dual
