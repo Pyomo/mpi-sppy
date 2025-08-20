@@ -423,7 +423,9 @@ class SPOBBT(_SPIntervalTightenerBase):
         # TODO: this will create the solver twice, once here and again
         #       before the first solve ... need to resolve this issue
         self.solver = obbt_options.get("solver_name", self.opt.options["solver_name"])
-        self.solver_options = obbt_options.get("solver_options", {})
+        self.solver_options = obbt_options.get("solver_options")
+        if self.solver_options is None:
+            self.solver_options = {}
         self.nonant_variables = obbt_options.get("nonant_variables_only", True)
 
 
@@ -434,31 +436,25 @@ class SPOBBT(_SPIntervalTightenerBase):
             it.perform_fbbt(self.opt.local_subproblems[k])
             self._check_bounds(self.opt.local_subproblems[k])
 
-            try:
-                if self.nonant_variables:
-                    bounds = obbt_analysis(s, variables=s._mpisppy_data.nonant_indices.values(), solver=self.solver, 
-                                                solver_options=self.solver_options, warmstart=False)
+            if self.nonant_variables:
+                bounds = obbt_analysis(s, variables=s._mpisppy_data.nonant_indices.values(), solver=self.solver,
+                                            solver_options=self.solver_options, warmstart=False)
 
-                    for var in s.component_data_objects(pyo.Var, active=True):
-                        if var in bounds.keys():
-                            lb, ub = bounds[var]
-                            var.bounds = (lb, ub)
-                    
-                    it.perform_fbbt(self.opt.local_subproblems[k])
-                    self._check_bounds(self.opt.local_subproblems[k])
+                for var in s.component_data_objects(pyo.Var, active=True):
+                    if var in bounds.keys():
+                        lb, ub = bounds[var]
+                        var.bounds = (lb, ub)
 
-                else:
-                    bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options)
+                it.perform_fbbt(self.opt.local_subproblems[k])
+                self._check_bounds(self.opt.local_subproblems[k])
 
-                    for var in s.component_data_objects(pyo.Var, active=True):
-                        if var.name in bounds.keys():
-                            lb, ub = bounds[var.name]
-                            var.bounds = (lb, ub)
-                        
-            except Exception as e:
-                raise RuntimeError(
-                    f"OBBT failed for subproblem {k} with error: {e}"
-                )
+            else:
+                bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options)
+
+                for var in s.component_data_objects(pyo.Var, active=True):
+                    if var.name in bounds.keys():
+                        lb, ub = bounds[var.name]
+                        var.bounds = (lb, ub)
 
         return False
 

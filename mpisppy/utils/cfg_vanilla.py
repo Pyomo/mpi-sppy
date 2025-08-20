@@ -97,8 +97,8 @@ def shared_options(cfg):
             "obbt" : cfg.obbt,
             "obbt_options" : {
                 "nonant_variables_only" : not cfg.full_obbt,
-                "obbt_solver": cfg.solver_name if cfg.obbt_solver is None else cfg.obbt_solver,
-                "obbt_solver_options" : sputils.option_string_to_dict(cfg.obbt_solver_options)
+                "solver_name": cfg.solver_name if cfg.obbt_solver is None else cfg.obbt_solver,
+                "solver_options" : sputils.option_string_to_dict(cfg.obbt_solver_options)
             },
         }
 
