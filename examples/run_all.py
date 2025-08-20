@@ -384,7 +384,7 @@ if not nouc:
         # 3-scenario UC
         do_one("uc", "uc_ef.py", 1, solver_name+" 3")
 
-         do_one("uc", "gradient_uc_cylinders.py", 15,
+        do_one("uc", "gradient_uc_cylinders.py", 15,
                "--bundles-per-rank=0 --max-iterations=100 --default-rho=1 "
                "--xhatshuffle --lagrangian --num-scens=5 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
