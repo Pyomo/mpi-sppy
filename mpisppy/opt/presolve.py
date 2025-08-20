@@ -26,7 +26,7 @@ from pyomo.contrib.appsi.fbbt import IntervalTightener
 from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
 import pyomo.environ as pyo
 
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 
 _INF = 1e100
 
@@ -71,6 +71,8 @@ class _SPIntervalTightenerBase(_SPPresolver):
         self._lower_bound_cache = {}
         self._upper_bound_cache = {}
 
+        self.printed_warning = False
+
     @abc.abstractmethod
     def _tighten_intervals(self) -> bool:
         """ return True if we should stop, otherwise return False """
@@ -82,8 +84,8 @@ class _SPIntervalTightenerBase(_SPPresolver):
         2. Narrow bounds on the nonants across all subproblems
         3. If the bounds are updated, go to (1)
         """
+        global_toc(f"Start {self.__class__.__name__}")
 
-        printed_warning = False
         update = False
 
         same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
@@ -109,17 +111,17 @@ class _SPIntervalTightenerBase(_SPPresolver):
                                 msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
                                 raise InfeasibleConstraintException(msg)
                             if (
-                                (not printed_warning or self.verbose)
+                                (not self.printed_warning or self.verbose)
                                 and (lb, ub) != var.bounds
                                 and (node_comm.Get_rank() == 0)
                             ):
-                                if not printed_warning:
+                                if not self.printed_warning:
                                     msg = f"WARNING: {self.__class__.__name__} found different bounds on nonanticipative variables from different scenarios."
                                     if self.verbose:
                                         print(msg + " See below.")
                                     else:
                                         print(msg + " Use verbose=True to see details.")
-                                    printed_warning = True
+                                    self.printed_warning = True
                                 if self.verbose:
                                     print(
                                         f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
@@ -147,8 +149,10 @@ class _SPIntervalTightenerBase(_SPPresolver):
 
             update = True
 
+        bounds_tightened = 0
         if update:
-            self._print_bound_movement()
+            bounds_tightened = self._print_bound_movement()
+        global_toc(f"{self.__class__.__name__} tightend {bounds_tightened} nonanticipative variable bound(s).")
 
         return update
 
@@ -360,12 +364,7 @@ class _SPIntervalTightenerBase(_SPPresolver):
                             )
 
                 printed_nodes.add(ndn)
-
-        if (
-            bounds_tightened > 0
-            and self.opt.cylinder_rank == 0
-        ):
-            print(f"{self.__class__.__name__} tightend {bounds_tightened} bounds.")
+        return bounds_tightened
 
 
 class SPFBBT(_SPIntervalTightenerBase):
@@ -416,6 +415,8 @@ class SPOBBT(_SPIntervalTightenerBase):
         super().__init__(spbase, verbose)
 
         self.fbbt = weakref.ref(fbbt)
+        # we expect this in OBBT, so don't warn
+        self.printed_warning = True
 
         if obbt_options is None:
             obbt_options = {}
