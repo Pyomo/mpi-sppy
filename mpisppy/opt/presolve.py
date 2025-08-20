@@ -437,7 +437,7 @@ class SPOBBT(_SPIntervalTightenerBase):
             try:
                 if self.nonant_variables:
                     bounds = obbt_analysis(s, variables=s._mpisppy_data.nonant_indices.values(), solver=self.solver, 
-                                                solver_options=self.solver_options, warmstart=False, local_best_bounds=True)
+                                                solver_options=self.solver_options, warmstart=False)
 
                     for var in s.component_data_objects(pyo.Var, active=True):
                         if var in bounds.keys():
@@ -448,7 +448,7 @@ class SPOBBT(_SPIntervalTightenerBase):
                     self._check_bounds(self.opt.local_subproblems[k])
 
                 else:
-                    bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options, local_best_bounds=True)
+                    bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options)
 
                     for var in s.component_data_objects(pyo.Var, active=True):
                         if var.name in bounds.keys():
@@ -486,7 +486,7 @@ class SPPresolve(_SPPresolver):
         spbase (SPBase): an SPBase object
     """
 
-    def __init__(self, spbase, presolve_options=None, verbose=False):
+    def __init__(self, spbase, presolve_options=None, verbose=True):
         super().__init__(spbase, verbose)
         if presolve_options is None:
             presolve_options = {}
