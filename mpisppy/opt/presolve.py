@@ -114,7 +114,7 @@ class _SPIntervalTightenerBase(_SPPresolver):
                                 and (node_comm.Get_rank() == 0)
                             ):
                                 if not printed_warning:
-                                    msg = "WARNING: {self.__class__.__name__} found different bounds on nonanticipative variables from different scenarios."
+                                    msg = f"WARNING: {self.__class__.__name__} found different bounds on nonanticipative variables from different scenarios."
                                     if self.verbose:
                                         print(msg + " See below.")
                                     else:
@@ -432,6 +432,7 @@ class SPOBBT(_SPIntervalTightenerBase):
         for k, it in self.fbbt().subproblem_tighteners.items():
             s = self.opt.local_subproblems[k]
             it.perform_fbbt(self.opt.local_subproblems[k])
+            self._check_bounds(self.opt.local_subproblems[k])
 
             try:
                 if self.nonant_variables:
