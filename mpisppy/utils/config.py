@@ -731,7 +731,8 @@ class Config(pyofig.ConfigDict):
                            default=None)
 
 
-    #def ph_ob_args(self):  deprecated and replaced with ph_dual August 2025
+    def ph_ob_args(self):
+        raise RuntimeError("ph_ob (the --ph-ob option) and ph_ob_args were deprecated and replaced with ph_dual August 2025")
 
     def relaxed_ph_args(self):
 
