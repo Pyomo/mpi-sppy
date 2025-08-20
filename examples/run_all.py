@@ -393,7 +393,7 @@ if not nouc:
                "--grad-rho-setter --grad-order-stat 0.5 "
                "--grad-dynamic-primal-crit")
 
-       do_one("uc", "uc_cylinders.py", 4,
+        do_one("uc", "uc_cylinders.py", 4,
                "--bundles-per-rank=0 --max-iterations=2 "
                "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --fwph "
@@ -412,7 +412,7 @@ if not nouc:
                "--solver-name={}".format(solver_name))
         # as of May 2022, this one works well, but outputs some crazy messages
         do_one("uc", "uc_ama.py", 3,
-               "--bundles-per-rank=0 --max-iterations=2 "
+              "--bundles-per-rank=0 --max-iterations=2 "
                "--default-rho=1 --num-scens=3 "
                "--fixer-tol=1e-2 --lagranger --xhatshuffle "
                "--solver-name={}".format(solver_name))
