@@ -486,7 +486,7 @@ class SPPresolve(_SPPresolver):
         spbase (SPBase): an SPBase object
     """
 
-    def __init__(self, spbase, presolve_options=None, verbose=True):
+    def __init__(self, spbase, presolve_options=None, verbose=False):
         super().__init__(spbase, verbose)
         if presolve_options is None:
             presolve_options = {}
