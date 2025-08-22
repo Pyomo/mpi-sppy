@@ -41,7 +41,6 @@ def _parse_args():
     cfg.xhatshuffle_args()
     cfg.cross_scenario_cuts_args()
     cfg.dynamic_gradient_args() # gets you gradient_args for free
-    cfg.ph_ob_args()
     cfg.add_to_config("ph_mipgaps_json",
                          description="json file with mipgap schedule (default None)",
                          domain=str,
@@ -176,11 +175,7 @@ def main():
     if xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
-    # ph outer bounder spoke
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = rho_setter)        
+    # ph outer bounder spoke removed August 2025
 
     # xhat shuffle bound spoke
     if xhatshuffle:
@@ -195,8 +190,6 @@ def main():
         list_of_spoke_dict.append(fw_spoke)
     if lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)        
     if xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:

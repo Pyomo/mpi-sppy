@@ -732,24 +732,7 @@ class Config(pyofig.ConfigDict):
 
 
     def ph_ob_args(self):
-
-        self.add_to_config("ph_ob",
-                            description="use PH to compute outer bound",
-                            domain=bool,
-                            default=False)
-        self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file with {iternum: rho rescale factor} (default None)",
-                            domain=str,
-                            default=None)
-        self.add_to_config("ph_ob_initial_rho_rescale_factor",
-                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
-                            domain=float,
-                            default=0.1)
-        self.add_to_config("ph_ob_gradient_rho",
-                            description="use gradient-based rho in PH OB",
-                            domain=bool,
-                            default=False)
-
+        raise RuntimeError("ph_ob (the --ph-ob option) and ph_ob_args were deprecated and replaced with ph_dual August 2025")
 
     def relaxed_ph_args(self):
 
