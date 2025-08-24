@@ -28,7 +28,7 @@ from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension, Extension
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.grad_rho import GradRho
 from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 from mpisppy.utils.wxbarwriter import WXBarWriter
@@ -237,8 +237,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
     if cfg.grad_rho:
-        ext_classes.append(Gradient_extension)
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
+        ext_classes.append(GradRho)
+        hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
 
     if cfg.write_scenario_lp_mps_files_dir is not None:
         ext_classes.append(Scenario_lp_mps_files)

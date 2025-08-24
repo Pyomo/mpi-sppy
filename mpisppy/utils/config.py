@@ -917,34 +917,11 @@ class Config(pyofig.ConfigDict):
 
     def gradient_args(self):
 
-        self.add_to_config("xhatpath",
-                           description="path to npy file with xhat",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_cost_file_out",
-                           description="name of the gradient cost file for output (will be csv)",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_cost_file_in",
-                           description="path to csv file with (grad based?) costs",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_rho_file_out",
-                           description="name of the gradient rho output file (must be csv)",
-                           domain=str,
-                           default='')
-        self.add_to_config("rho_file_in",
-                           description="name of the (gradient) rho input file (must be csv)",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_display_rho",
-                           description="display rho during gradient calcs (default True)",
-                           domain=bool,
-                           default=True)
         self.add_to_config("grad_rho_multiplier",
                            description="multiplier for GradRho (default 1.0)",
                            domain=float,
                            default=1.0)
+
         self.add_to_config("eval_at_xhat",
                            description="evaluate the gradient at xhat whenever available (default False)",
                            domain=bool,
@@ -953,27 +930,17 @@ class Config(pyofig.ConfigDict):
                            description="evaluate rho using scenario independent denominator (default False)",
                            domain=bool,
                            default=False)
-        # likely unused presently
-#        self.add_to_config("grad_pd_thresh",
-#                           description="threshold for dual/primal during gradient calcs",
-#                           domain=float,
-#                           default=0.1)
 
         self.add_to_config('grad_rho',
-                           description="use a gradient-based rho setter (if your problem is linear, use coeff-rho instead)",
+                           description="use a gradient-based rho setter",
                            domain=bool,
                            default=False)
-        """
-        all occurances of rho_path converted to grad_rho_file July 2024
-        self.add_to_config("rho_path",
-                           description="csv file for the rho setter",
-                           domain=str,
-                           default='')
-        """
+
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
                            domain=float,
                            default=-1.0)
+
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
