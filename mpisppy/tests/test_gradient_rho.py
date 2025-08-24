@@ -13,9 +13,7 @@ IMPORTANT:
 version matter a lot, so we often just do smoke tests.
 """
 
-import os
 import unittest
-import csv
 from mpisppy.utils import config
 
 import mpisppy.utils.cfg_vanilla as vanilla
