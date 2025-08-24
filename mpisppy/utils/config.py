@@ -937,7 +937,7 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
                            domain=float,
                            default=-1.0)
 
