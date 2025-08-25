@@ -194,7 +194,7 @@ CoeffRho
 ^^^^^^^^
 
 Set per variable rho values proportional to the cost coefficient on each non-anticipative variable,
-with an optional multiplier (default = 1.0). If the coefficient is 0, the default rho value is used instead.
+with an optional multiplier (default = 1.0) that is applied to the computed value. If the coefficient is 0, the default rho value is used instead.
 
 primal_dual_rho
 ^^^^^^^^^^^^^^^
@@ -228,7 +228,7 @@ There are options in ``cfg`` to control dynamic updates.
 mult_rho_updater
 ^^^^^^^^^^^^^^^^
 
-This extension does a simple multiplicative update of rho.
+This extension does a simple multiplicative update of rho; consequently, the udate is cummulative.
 
 cross-scenario cuts
 ^^^^^^^^^^^^^^^^^^^

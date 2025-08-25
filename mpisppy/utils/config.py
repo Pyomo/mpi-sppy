@@ -144,17 +144,18 @@ class Config(pyofig.ConfigDict):
         """Verify that options *selected* make sense with respect to each other
         """
         def _bad_rho_setters(msg):
-            raise ValueError("Rho setter options do not make sense together:\n"
+            raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
-        
-        if self.get("grad_rho") and self.get("sensi_rho"):
+
+        # remember that True is 1 and False is 0
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sensi_rho")) > 1:
             _bad_rho_setters("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
                 or self.get("sep_rho")
                 or self.get("reduced_costs_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
-                _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
+                _bad_rho_setters("dynamic rho only works with an automated rho setter")
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_rho_setters("--rc-fixer requires --reduced-costs")
                                                                           
@@ -732,7 +733,8 @@ class Config(pyofig.ConfigDict):
 
 
     def ph_ob_args(self):
-        raise RuntimeError("ph_ob (the --ph-ob option) and ph_ob_args were deprecated and replaced with ph_dual August 2025")
+        raise RuntimeError("ph_ob (the --ph-ob option) and ph_ob_args were deprecated and replaced with ph_dual August 2025\n"
+                           "To get the same effect as ph_ob, use --ph-dual with --ph-dual-grad-rho")
 
     def relaxed_ph_args(self):
 
@@ -753,9 +755,19 @@ class Config(pyofig.ConfigDict):
                             domain=bool,
                             default=False)
         self.add_to_config("ph_dual_rescale_rho_factor",
-                            description="Used to rescale rho initially (default=1.0)",
+                            description="Used to rescale rho initially (default=0.1)",
                             domain=float,
-                            default=1.0)
+                            default=0.1)
+        self.add_to_config("ph_dual_rho_multiplier",
+                            description="Rescale factor for dynamic updates in ph_dual if ph_dual and a rho setter are chosen;"
+                            " note that it is not cummulative (default=0.1)",
+                            domain=float,
+                            default=0.1)
+        self.add_to_config("ph_dual_grad_order_stat",
+                            description="Order stat for selection rho if ph_dual and ph_dual_grad_rho are chosen;"
+                            " note that this is impacted by the multiplier (default=0.5)",
+                            domain=float,
+                            default=0.5)
 
 
     def xhatlooper_args(self):
