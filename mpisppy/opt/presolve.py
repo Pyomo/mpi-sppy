@@ -78,6 +78,11 @@ class _SPIntervalTightenerBase(_SPPresolver):
         """ return True if we should stop, otherwise return False """
         raise NotImplementedError
 
+    @property
+    def subproblem_tighteners(self):
+        """ return the dictionary of subproblem tighteners """
+        raise NotImplementedError
+
     def presolve(self):
         """Run the interval tightener (FBBT/OBBT):
         1. FBBT/OBBT on each subproblem
@@ -98,7 +103,7 @@ class _SPIntervalTightenerBase(_SPPresolver):
 
                 # update the bounds if changed
                 for sub_n, _, k, s in self.opt.subproblem_scenario_generator():
-                    feas_tol = 1e-8 #self.subproblem_tighteners[sub_n].config.feasibility_tol
+                    feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
                     for node in s._mpisppy_node_list:
                         node_comm = self.opt.comms[node.name]
                         for var, lb, ub in zip(
@@ -373,10 +378,10 @@ class SPFBBT(_SPIntervalTightenerBase):
 
         super().__init__(spbase, verbose)
 
-        self.subproblem_tighteners = {}
+        self._subproblem_tighteners = {}
         for k, s in self.opt.local_subproblems.items():
             try:
-                self.subproblem_tighteners[k] = it = IntervalTightener()
+                self._subproblem_tighteners[k] = it = IntervalTightener()
             except DeferredImportError as e:
                 # User may not have extension built
                 raise ImportError(f"presolve needs the APPSI extensions for pyomo: {e}")
@@ -394,6 +399,10 @@ class SPFBBT(_SPIntervalTightenerBase):
                 raise Exception(
                     f"Issue with IntervalTightener; cannot apply presolve to this problem. Error: {e}"
                 )
+
+    @property
+    def subproblem_tighteners(self):
+        return self._subproblem_tighteners
 
     def _tighten_intervals(self):
         big_iters = 0.0
@@ -429,6 +438,9 @@ class SPOBBT(_SPIntervalTightenerBase):
             self.solver_options = {}
         self.nonant_variables = obbt_options.get("nonant_variables_only", True)
 
+    @property
+    def subproblem_tighteners(self):
+        return self.fbbt().subproblem_tighteners
 
     def _tighten_intervals(self):
 
