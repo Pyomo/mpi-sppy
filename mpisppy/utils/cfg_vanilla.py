@@ -92,6 +92,15 @@ def shared_options(cfg):
         shoptions["rc_bound_tol"] = cfg.rc_bound_tol
     if _hasit(cfg, "solver_log_dir"):
         shoptions["solver_log_dir"] = cfg.solver_log_dir
+    if _hasit(cfg, "obbt"):
+        shoptions["presolve_options"] = {
+            "obbt" : cfg.obbt,
+            "obbt_options" : {
+                "nonant_variables_only" : not cfg.full_obbt,
+                "solver_name": cfg.solver_name if cfg.obbt_solver is None else cfg.obbt_solver,
+                "solver_options" : sputils.option_string_to_dict(cfg.obbt_solver_options)
+            },
+        }
 
     return shoptions
 

@@ -69,7 +69,7 @@ class SPOpt(SPBase):
             #       models, it is imperative we allow this
             #       object to get garbage collected to
             #       free the memory the C++ model uses.
-            SPPresolve(self).presolve()
+            SPPresolve(self, options.get("presolve_options",None)).presolve()
         self._create_fixed_nonant_cache()
         self.current_solver_options = None
         self.extensions = extensions
