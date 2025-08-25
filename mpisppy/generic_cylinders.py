@@ -28,7 +28,7 @@ from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.extension import MultiExtension, Extension
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.grad_rho import GradRho
 from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
 from mpisppy.utils.wxbarwriter import WXBarWriter
@@ -87,7 +87,6 @@ def _parse_args(m):
     cfg.relaxed_ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
-    cfg.ph_ob_args()
     cfg.subgradient_bounder_args()
     cfg.xhatshuffle_args()
     cfg.xhatxbar_args()
@@ -238,8 +237,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
     if cfg.grad_rho:
-        ext_classes.append(Gradient_extension)
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}        
+        ext_classes.append(GradRho)
+        hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
 
     if cfg.write_scenario_lp_mps_files_dir is not None:
         ext_classes.append(Scenario_lp_mps_files)
@@ -334,20 +333,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         if cfg.lagrangian_starting_mipgap is not None:
             vanilla.add_gapper(lagrangian_spoke, cfg, "lagrangian")
 
-    # ph outer bounder spoke
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = rho_setter,
-                                          all_nodenames = all_nodenames,
-                                          )
-        if cfg.sep_rho:
-            vanilla.add_sep_rho(ph_ob_spoke, cfg)
-        if cfg.coeff_rho:
-            vanilla.add_coeff_rho(ph_ob_spoke, cfg)
-        if cfg.sensi_rho:
-            vanilla.add_sensi_rho(ph_ob_spoke, cfg)
-
     # dual ph spoke
     if cfg.ph_dual:
         ph_dual_spoke = vanilla.ph_dual_spoke(*beans,
@@ -361,6 +346,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             vanilla.add_coeff_rho(ph_dual_spoke, cfg)
         if cfg.sensi_rho:
             vanilla.add_sensi_rho(ph_dual_spoke, cfg)
+        # TBD xxxxx add grad rho asap after PR#559 is merged
+        # Note: according to DLW, it is non-trivial to deal with the cfg args
 
     # relaxed ph spoke
     if cfg.relaxed_ph:
@@ -421,8 +408,6 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)
     if cfg.ph_dual:
         list_of_spoke_dict.append(ph_dual_spoke)
     if cfg.relaxed_ph:

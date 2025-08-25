@@ -26,7 +26,7 @@ from mpisppy.extensions.extension import MultiExtension
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.extensions.gradient_extension import Gradient_extension
+from mpisppy.extensions.grad_rho import GradRho
 
 write_solution = False
 
@@ -43,9 +43,8 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.lagranger_args()
-    cfg.ph_ob_args()
     cfg.xhatshuffle_args()
-    cfg.dynamic_gradient_args() # gets gradient args for free
+    cfg.dynamic_rho_args() # gets gradient args for free
     cfg.add_to_config("crops_mult",
                          description="There will be 3x this many crops (default 1)",
                          domain=int,
@@ -103,8 +102,6 @@ def main():
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
     ext_classes = []
-    if cfg.grad_rho:
-        ext_classes.append(Gradient_extension)
 
     if cfg.run_async:
         raise RuntimeError("APH not supported in this example.")
@@ -120,8 +117,8 @@ def main():
 
     #gradient extension kwargs
     if cfg.grad_rho:
-        ext_classes.append(Gradient_extension)        
-        hub_dict['opt_kwargs']['options']['gradient_extension_options'] = {'cfg': cfg}
+        ext_classes.append(GradRho)
+        hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
     
     ## Gabe's (way pre-pandemic) adaptive rho
     if cfg.use_norm_rho_updater:
@@ -144,11 +141,7 @@ def main():
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
 
-    # ph outer bounder spoke
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = rho_setter)        
+    # ph outer bounder spoke was removed August 2025
 
     # xhat looper bound spoke
     if cfg.xhatlooper:
@@ -165,8 +158,6 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.lagranger:
         list_of_spoke_dict.append(lagranger_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)        
     if cfg.xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:
