@@ -194,12 +194,12 @@ do_one("farmer/archive", "farmer_cylinders.py", 4,
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
        "--module-name farmer --num-scens 6 "
-       "--rel-gap 0.001 --bundles-per-rank=2 --max-iterations=50 "
+       "--rel-gap 0.001 --max-iterations=50 "
        "--ph-primal-hub --grad-rho --grad-order-stat 0.5 "
        "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--module-name farmer --num-scens 6 "
-       "--rel-gap 0.001 --bundles-per-rank=2 --max-iterations=50 "
+       "--rel-gap 0.001 --max-iterations=50 "
        "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
        "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 print("\nquitting early!!!")

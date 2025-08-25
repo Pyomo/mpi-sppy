@@ -143,22 +143,25 @@ class Config(pyofig.ConfigDict):
     def checker(self):
         """Verify that options *selected* make sense with respect to each other
         """
-        def _bad_rho_setters(msg):
+        def _bad_options(msg):
             raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
 
         # remember that True is 1 and False is 0
         if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("sensi_rho")) > 1:
-            _bad_rho_setters("Only one rho setter can be active.")
+            _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
                 or self.get("sep_rho")
                 or self.get("reduced_costs_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
-                _bad_rho_setters("dynamic rho only works with an automated rho setter")
+                _bad_options("dynamic rho only works with an automated rho setter")
+        if self.get("grad_rho") and self.get("bundles_per_rank") != 0:
+            _bad_options("Grad rho does not work with loose bundling (--bundles-per-rank).\n "
+                         "Also note that loose bundling is being deprecated in favor of proper bundles.")
+
         if self.get("rc_fixer") and not self.get("reduced_costs"):
-            _bad_rho_setters("--rc-fixer requires --reduced-costs")
-                                                                          
+            _bad_options("--rc-fixer requires --reduced-costs")
 
     def add_solver_specs(self, prefix=""):
         sstr = f"{prefix}_solver" if prefix != "" else "solver"
