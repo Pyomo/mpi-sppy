@@ -249,8 +249,8 @@ class _SPIntervalTightenerBase(_SPPresolver):
                 if lb is not None and ub is not None:
                     if lb > ub:
                         delta = lb - ub
-                        lb = lb - 5*delta
-                        ub = ub + 5*delta
+                        lb = lb - delta
+                        ub = ub + delta
 
                         # update revised bounds
                         var.lb = lb
