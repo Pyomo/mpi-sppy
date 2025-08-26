@@ -160,6 +160,11 @@ class Config(pyofig.ConfigDict):
             _bad_options("Grad rho does not work with loose bundling (--bundles-per-rank).\n "
                          "Also note that loose bundling is being deprecated in favor of proper bundles.")
 
+        if self.get("ph_primal_hub")\
+           and not (self.get("ph_dual") or self.get("relaxed_ph")):
+            _bad_options("--ph-primal-hub is used only when there is a cylinder that provideds Ws "
+                         "such as --ph-dual or --relaxed-ph")
+        
         if self.get("rc_fixer") and not self.get("reduced_costs"):
             _bad_options("--rc-fixer requires --reduced-costs")
 
