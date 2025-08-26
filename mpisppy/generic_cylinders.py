@@ -344,7 +344,7 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or cfg.grad_rho:
             # Note that this deepcopy might be expensive if certain wrappers were used.
             # (Could we do the modification to cfg in ph_dual to obviate the need?)
-            modified_cfg = copy.deepcopy(cfg);
+            modified_cfg = copy.deepcopy(cfg)
             modified_cfg["grad_rho_multiplier"] = cfg.ph_dual_rho_multiplier            
         if cfg.sep_rho:
             vanilla.add_sep_rho(ph_dual_spoke, modified_cfg)
