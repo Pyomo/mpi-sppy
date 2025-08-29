@@ -10,9 +10,7 @@
 
 import sys
 import os
-import json
 import copy
-import shutil
 import numpy as np
 import pyomo.environ as pyo
 import pyomo.common.config as pyofig
@@ -23,25 +21,13 @@ import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
 
-from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
-
 from mpisppy.extensions.extension import MultiExtension, Extension
-from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
-from mpisppy.extensions.primal_dual_rho import PrimalDualRho
-from mpisppy.extensions.grad_rho import GradRho
-from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
-
-from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.utils.wxbarreader import WXBarReader
-
-import mpisppy.utils.pickle_bundle as pickle_bundle
-import mpisppy.utils.proper_bundler as proper_bundler
 
 import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy import global_toc
 from mpisppy import MPI
+
 
 def _parse_args(m):
     # m is the model file module
@@ -153,11 +139,13 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
     if cfg.use_norm_rho_converger:
+        from mpisppy.convergers.norm_rho_converger import NormRhoConverger
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
     elif cfg.primal_dual_converger:
+        from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
@@ -238,21 +226,26 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
     if cfg.grad_rho:
+        from mpisppy.extensions.grad_rho import GradRho
         ext_classes.append(GradRho)
         hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
 
     if cfg.write_scenario_lp_mps_files_dir is not None:
+        from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
         ext_classes.append(Scenario_lp_mps_files)
         hub_dict['opt_kwargs']['options']["write_lp_mps_extension_options"]\
             = {"write_scenario_lp_mps_files_dir": cfg.write_scenario_lp_mps_files_dir}
 
     if cfg.W_and_xbar_reader:
+        from mpisppy.utils.wxbarreader import WXBarReader
         ext_classes.append(WXBarReader)
 
     if cfg.W_and_xbar_writer:
+        from mpisppy.utils.wxbarwriter import WXBarWriter
         ext_classes.append(WXBarWriter)
 
     if cfg.user_defined_extensions is not None:
+        import json
         for ext_name in cfg.user_defined_extensions:
             module = sputils.module_name_to_module(ext_name)
             ext_classes = []
@@ -300,10 +293,12 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     # norm rho adaptive rho (not the gradient version)
     if cfg.use_norm_rho_updater:
+        from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
         vanilla.extension_adder(hub_dict, NormRhoUpdater)
         hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': cfg.verbose}
 
     if cfg.use_primal_dual_rho_updater:
+        from mpisppy.extensions.primal_dual_rho import PrimalDualRho
         vanilla.extension_adder(hub_dict, PrimalDualRho)
         hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {
                 'verbose': cfg.verbose,
@@ -463,6 +458,8 @@ def _write_scenarios(module,
                      scenario_creator_kwargs,
                      scenario_denouement,
                      comm):
+    import mpisppy.utils.pickle_bundle as pickle_bundle
+    import shutil
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
     
@@ -492,6 +489,7 @@ def _write_scenarios(module,
 
 #==========
 def _read_pickled_scenario(sname, cfg):
+    import mpisppy.utils.pickle_bundle as pickle_bundle
     fname = os.path.join(cfg.unpickle_scenarios_dir, sname+".pkl")
     scen = pickle_bundle.dill_unpickle(fname)
     return scen
@@ -503,6 +501,8 @@ def _write_bundles(module,
                    scenario_creator,
                    scenario_creator_kwargs,
                    comm):
+    import mpisppy.utils.pickle_bundle as pickle_bundle
+    import shutil
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
     bsize = int(cfg.scenarios_per_bundle)
@@ -644,6 +644,7 @@ if __name__ == "__main__":
     
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
+        import mpisppy.utils.proper_bundler as proper_bundler
         bundle_wrapper = proper_bundler.ProperBundler(module)
         bundle_wrapper.set_bunBFs(cfg)
         scenario_creator = bundle_wrapper.scenario_creator
@@ -669,7 +670,6 @@ if __name__ == "__main__":
                        scenario_creator_kwargs,
                        global_comm)
     elif cfg.pickle_scenarios_dir is not None:
-        import mpisppy.utils.pickle_bundle as pickle_bundle
         global_comm = MPI.COMM_WORLD
         _write_scenarios(module,
                          cfg,
