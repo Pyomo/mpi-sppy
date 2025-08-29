@@ -228,7 +228,7 @@ There are options in ``cfg`` to control dynamic updates.
 mult_rho_updater
 ^^^^^^^^^^^^^^^^
 
-This extension does a simple multiplicative update of rho; consequently, the udate is cummulative.
+This extension does a simple multiplicative update of rho; consequently, the update is cumulative.
 
 cross-scenario cuts
 ^^^^^^^^^^^^^^^^^^^
