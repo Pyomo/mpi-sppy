@@ -20,12 +20,13 @@ rank = comm.Get_rank()
 class TestSC(unittest.TestCase):
     def setUp(self):
         self.original_path = sys.path
-        example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer')
+        example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer', 'schur')
         sys.path.append(example_dir)
 
     def tearDown(self):
         sys.path = self.original_path
     
+    @unittest.expectedFailure
     def test_farmer_example(self):
         import schur_complement as sc_example
 

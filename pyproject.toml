@@ -1,0 +1,46 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
+
+[build-system]
+requires = ["setuptools >= 68.0.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mpi-sppy"
+version = "0.13.2.dev0"
+authors = [
+    {name = "David Woodruff", email = "dlwoodruff@ucdavis.edu" },
+]
+description = "mpi-sppy"
+readme = "README.md"
+license = { file = "LICENSE.md" }
+requires-python = ">=3.9"
+dependencies = [
+    "numpy<2",
+    "scipy",
+    "pandas",
+    "sortedcollections",
+    "pyomo>=6.4",
+]
+
+[project.urls]
+homepage = "https://github.com/Pyomo/mpi-sppy"
+source = "https://github.com/Pyomo/mpi-sppy"
+download = "https://github.com/Pyomo/mpi-sppy"
+documentation = "https://mpi-sppy.readthedocs.io"
+tracker = "https://github.com/Pyomo/mpi-sppy/issues"
+
+[project.optional-dependencies]
+doc = [
+    "sphinx_rtd_theme",
+    "sphinx",
+]
+mpi = [
+    "mpi4py>=3.0.3"
+]

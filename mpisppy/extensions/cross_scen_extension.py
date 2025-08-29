@@ -99,6 +99,7 @@ class CrossScenarioExtension(Extension):
                 disable_pyomo_signal_handling=False,
                 tee=teeme,
                 verbose=opt.options["verbose"],
+                need_solution=False,
         )
 
         local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_subproblems.values()),

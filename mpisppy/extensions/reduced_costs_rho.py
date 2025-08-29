@@ -19,8 +19,9 @@ class ReducedCostsRho(_SensiRhoBase):
     calculated in a ReducedCostsSpoke
     """
 
-    def __init__(self, ph, comm=None):
-        super().__init__(ph, comm=comm)
+    def __init__(self, ph):
+        cfg = ph.options["reduced_costs_rho_options"]["cfg"]
+        super().__init__(ph, cfg)
         self.ph = ph
 
         self.multiplier = 1.0
@@ -31,7 +32,6 @@ class ReducedCostsRho(_SensiRhoBase):
             and "multiplier" in ph.options["reduced_costs_rho_options"]
         ):
             self.multiplier = ph.options["reduced_costs_rho_options"]["multiplier"]
-        self.cfg = ph.options["reduced_costs_rho_options"]["cfg"]
 
         scenario_buffer_len = 0
         for s in ph.local_scenarios.values():

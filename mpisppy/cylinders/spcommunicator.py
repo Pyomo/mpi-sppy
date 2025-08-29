@@ -114,6 +114,65 @@ class RecvArray(FieldArray):
         return self._id
 
 
+class _CircularBuffer:
+    """
+    The circular buffer is meant for holding several versions of a Field
+    (defined by the `buffer_size`). The `data` object is an instance of
+    `FieldArray`.
+
+    To know where in the buffer we are, we use the FieldArray._id. The layout
+    looks like this for a `buffer_size` of 4:
+
+    |--0--|--1--|--2--|--3--|id|
+
+    The id % buffer_size tells us which data point is the most recent, such
+    that individual ids are not needed for each instance.
+    """
+
+    def __init__(self, data: FieldArray, field_length: int, buffer_size: int):
+        # last byte is the "write pointer"
+        assert len(data.value_array()) == field_length * buffer_size
+        self.data = data
+        self._field_length = field_length
+        self._buffer_size = buffer_size
+
+    def _get_value_array(self, read_write_index):
+        position = read_write_index % self._buffer_size
+        return self.data._array[(position*self._field_length):((position+1)*self._field_length)]
+
+
+class SendCircularBuffer(_CircularBuffer):
+
+    def next_value_array_reference(self):
+        # NOTE: The id gets incremented in the call
+        #       to `put_send_buffer`, which is necessarily
+        #       called *after* this method. Therefore
+        #       we start at 0 and go up, and when sent
+        #       will be the id of the next *open* position
+        return self._get_value_array(self.data.id())
+
+
+class RecvCircularBuffer(_CircularBuffer):
+    # The _read_id tells us where we last read from, and the
+    # (data.id % buffer_size) - 1
+    # has the last place written to. Therefore, we know which
+    # items in the buffer are new based on their difference.
+
+    def __init__(self, data: RecvArray, field_length: int, buffer_size: int):
+        super().__init__(data, field_length, buffer_size)
+        self._read_id = 0
+
+    def most_recent_value_arrays(self):
+        # if the writes have already "wrapped around" the buffer,
+        # we need to fast-forward the read index so we don't read
+        # the same data multiple times
+        while self.data.id() > self._read_id + self._buffer_size:
+            self._read_id += 1
+        while self._read_id < self.data.id():
+            yield self._get_value_array(self._read_id)
+            self._read_id += 1
+
+
 class SPCommunicator:
     """ Base class for communicator objects. Each communicator object should register
         as a class attribute what Field attributes it provides in its buffer
@@ -412,7 +471,7 @@ class SPCommunicator:
                     if xvarlb is None:
                         xvarlb = -inf
                     if recv_buf[ci] > xvarlb:
-                        global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
+                        # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} lower bound from {xvar.lb} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.lb = recv_buf[ci]
                         bounds_modified += 1
         for idx, _, recv_buf in self.receive_field_spcomms[Field.NONANT_UPPER_BOUNDS]:
@@ -425,7 +484,7 @@ class SPCommunicator:
                     if xvarub is None:
                         xvarub = inf 
                     if recv_buf[ci] < xvarub:
-                        global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
+                        # global_toc(f"{self.__class__.__name__}: tightened {xvar.name} upper bound from {xvar.ub} to {recv_buf[ci]}, value: {xvar.value}", self.cylinder_rank == 0)
                         xvar.ub = recv_buf[ci]
                         bounds_modified += 1
 
@@ -495,3 +554,23 @@ class SPCommunicator:
             self.BestOuterBound = inf
             self._inner_bound_update = lambda new, old : (new > old)
             self._outer_bound_update = lambda new, old : (new < old)
+
+    def compute_gaps(self):
+        """ Compute the current absolute and relative gaps,
+            using the current self.BestInnerBound and self.BestOuterBound
+        """
+        if self.opt.is_minimizing:
+            abs_gap = self.BestInnerBound - self.BestOuterBound
+        else:
+            abs_gap = self.BestOuterBound - self.BestInnerBound
+
+        if abs_gap != inf:
+            rel_gap = ( abs_gap /
+                        max(1e-10,
+                            abs(self.BestOuterBound),
+                            abs(self.BestInnerBound),
+                           )
+                      )
+        else:
+            rel_gap = inf
+        return abs_gap, rel_gap

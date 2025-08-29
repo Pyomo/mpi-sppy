@@ -84,7 +84,11 @@ jobs:
       - name: Test afew
         run: |
           cd examples
-          python afew.py xpress_persistent --oversubscribe
+          python afew.py xpress_persistent
+
+      - name: Test ComponentMap
+        run: |
+          pytest mpisppy/tests/test_component_map_usage.py
 
       - name: Test docs
         run: |
@@ -124,7 +128,7 @@ jobs:
       - name: Test run_all nouc
         run: |
           cd examples
-          python run_all.py xpress_persistent --oversubscribe nouc
+          python run_all.py xpress_persistent "" nouc
 
   runall:
     name: run_all.py direct solver
@@ -159,7 +163,7 @@ jobs:
       - name: Test run_all nouc
         run: |
           cd examples
-          python run_all.py xpress_direct --oversubscribe nouc
+          python run_all.py xpress_direct "" nouc
 
   schur-complement:
     name: schur-complement
@@ -240,7 +244,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo xpress cplex
-          pip install numpy
+          pip install numpy packaging
 
       - name: setup the program
         run: |
@@ -297,7 +301,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy<2" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas
+          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas packaging
 
       - name: setup the program
         run: |
@@ -353,7 +357,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy<2" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill
+          pip install pyomo pandas xpress cplex scipy sympy dill packaging
 
       - name: setup the program
         run: |
@@ -401,7 +405,7 @@ jobs:
       - name: Test test_generic nouc
         run: |
           cd examples
-          python generic_tester.py cplex_direct --oversubscribe nouc
+          python generic_tester.py cplex_direct "" nouc
 
   test-gradient-rho:
     name: gradient and rho tests
@@ -419,16 +423,11 @@ jobs:
         run: |
           conda install conda-forge::libstdcxx-ng
           conda install mpi4py "numpy<2" setuptools cmake
-          pip install pyomo pandas xpress cplex scipy sympy dill
+          pip install pyomo pandas xpress cplex scipy sympy dill packaging
 
       - name: setup the program
         run: |
           pip install -e .
-
-      - name: Build Pyomo extensions
-        run: |
-          # some failures are expected, but this should succeed as long as pynumero is built correctly
-          pyomo build-extensions || python -c "from pyomo.contrib.pynumero.asl import AmplInterface; exit(0) if AmplInterface.available() else exit(1)"
 
       - name: run farmer tests
         timeout-minutes: 10
@@ -512,7 +511,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy<2" setuptools
-          pip install pyomo pandas xpress cplex scipy
+          pip install pyomo pandas xpress cplex scipy packaging
 
       - name: setup the program
         run: |
@@ -540,7 +539,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo xpress cplex
-          pip install numpy
+          pip install numpy packaging
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
           python -m pip install gamspy
@@ -560,4 +559,4 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/agnostic/examples
-          python afew_agnostic.py --oversubscribe
+          python afew_agnostic.py

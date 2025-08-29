@@ -859,6 +859,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         if "time_limit" not in self.options:
             self.options["time_limit"] = None
 
+    def _can_update_best_bound(self):
+        if not self.prox_disabled:
+            return False
+        return super()._can_update_best_bound()
 
     def Iter0(self):
         """ Create solvers and perform the initial PH solve (with no dual
@@ -914,7 +918,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                         gripe=True,
                         tee=teeme,
                         verbose=verbose,
-                        warmstart=sputils.WarmstartStatus.CHECK,
+                        warmstart=sputils.WarmstartStatus.USER_SOLUTION,
                         )
 
         if self.options["verbose"]:
@@ -1017,6 +1021,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             # print a screen trace for iteration 0
             if self.spcomm.is_converged():
                 global_toc("Cylinder convergence", self.cylinder_rank == 0)
+                return
 
         for self._PHIter in range(1, max_iterations+1):
             iteration_start_time = time.time()
@@ -1085,11 +1090,12 @@ class PHBase(mpisppy.spopt.SPOpt):
                 self.spcomm.sync_nonants()
                 self.spcomm.sync_bounds()
                 self.spcomm.sync_extensions()
-                if self.spcomm.is_converged():
-                    global_toc("Cylinder convergence", self.cylinder_rank == 0)
-                    break
             elif hasattr(self.spcomm, "sync"):
                 self.spcomm.sync()
+
+            if self.spcomm and self.spcomm.is_converged():
+                global_toc("Cylinder convergence", self.cylinder_rank == 0)
+                break
 
             if have_extensions:
                 self.extobject.enditer_after_sync()

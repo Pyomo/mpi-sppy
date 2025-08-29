@@ -77,8 +77,7 @@ file ``aircond_cylinders.py`` in the aircond example directory
 provides an example.  The latter part of the ``allways.bash`` script
 demonstrates how to run it.
 
-There is support for multi-stage bundles in mpi-sppy, but the scenario
-probabilities must be uniform and the bundles must span the same number
+There is support for multi-stage bundles in mpi-sppy, but the bundles must span the same number
 of entire second stage nodes.
 
 Notes

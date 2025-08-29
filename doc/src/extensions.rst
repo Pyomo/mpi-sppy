@@ -69,12 +69,22 @@ This is a good extension to look at as a first example. It takes a
 dictionary with iteration numbers and mipgaps as input and changes the
 mipgap at the corresponding iterations. The dictionary is provided in
 the options dictionary in ``["gapperoptions"]["mipgapdict"]``.  There
-is an example of its use in ``examples.sizes.sizes_demo.py``
+is an example of its use in ``examples.sizes.sizes_demo.py``.
+
+Instead of an options dictionary, when run with cylinders the options
+``["gapperoptions"]["starting_mipgap"]`` and ``["gapperoptions"]["mipgap_ratio"]``
+can be set. The ``starting_mipgap`` will be the initial value used,
+and as the cylinders close the relative optimality gap the extension will set the subproblem
+mipgaps as the ``min(starting_mipgap, mipgap_ratio * problem_ratio)``, where
+the ``problem_ratio`` is the relative optimality gap on the overall problem
+as computed by the cylinders.
+
+This extension can also be used with the Lagrangian and subgradient spokes.
 
 fixer.py
 ^^^^^^^^
 
-This extension provides methods for fixing variables (usually integers) for
+This extension provides methods for fixing nonanticipative variables (usually integers) for
 which all scenarios have agreed for some number of iterations. There
 is an example of its use in ``examples.sizes.sizes_demo.py`` also
 in ``examples.sizes.uc_ama.py``. The ``uc_ama`` example illustrates
@@ -88,6 +98,36 @@ to be on the ``Config`` object so the amalgamator can find it.
    variable will be fixed if it is within the tolerance of being converged.
    So if you don't want to fix a variable at iteration zero, provide a
    tolerance, but set all count values to ``None``.
+
+reduced_cost_fixer
+^^^^^^^^^^^^^^^^^^
+
+This extension provides methods for fixing nonanticipative variables based on their expected
+reduced cost as calculated by the ReducedCostSpoke. The aggressiveness of the
+fixing can be controled through the ``zero_rc_tol`` parameter (reduced costs
+with magnitude below this value will be considered 0 and not eligible for fixing)
+and the ``fix_fraction_target`` paramemters, which set a maximum fraction of
+nonanticipative variables to be fixed based on expected reduced costs. These two
+parameters iteract with each other -- the expected reduced costs are sorted by
+magnitude, and if the `fix_fraction_target`` percental is below ``zero_rc_tol``,
+then fewer than ``fix_fraction_target`` variables will be fixed. Further, to
+have a defined expected reduced cost, all nonant variable values *must be* at
+the same bound in the ReducedCostSpoke.
+
+Variables will be unfixed if they no longer meet the expected reduced cost
+criterion for fixing, e.g., the variable's expected reduced cost became too
+low or the variable was not at its bound in every subproblem in the ReducedCostSpoke.
+
+relaxed_ph_fixer
+^^^^^^^^^^^^^^^^
+
+This extension will fix nonanticipative variables at their bound if they are at
+their bound in the RelaxedPHSpoke for that subproblem. It will similarily unfix
+nonanticipative variables which are not at their bounds in the RelaxedPHSpoke.
+Because different nonanticipative variables are fixed in different suproblems,
+it will also unfix nonanticipative variables if their value is *not* at the the current
+consensus solution xbar (because the variable was not fixed in a different subproblem
+and therefore came off its bound).
 
 xhat
 ^^^^
@@ -155,6 +195,21 @@ CoeffRho
 
 Set per variable rho values proportional to the cost coefficient on each non-anticipative variable,
 with an optional multiplier (default = 1.0). If the coefficient is 0, the default rho value is used instead.
+
+primal_dual_rho
+^^^^^^^^^^^^^^^
+
+Increase or decrease rho for every variable to keep primal and dual convergence balance. If
+the primal residual is greater than ``update_threshold`` times the dual residual, then all
+rhos are increased by the ``update_threshold``, and conversely all rhos are decreased if
+the dual residual is greater than ``update_threshold`` time the primal residual. The user
+can also specify a ``primal_bias`` (default 1.0) which will emphasize primal convergence
+when greater than 1 and emphasize dual convergence if less than 1.
+
+This extension is especially useful if the rhos provided by the user (or some other extension)
+are believed to be "in balance", such that per-variable updates are not needed (and can sometimes
+hinder algorithmic progress when different nonanticipative variables play similar roles in
+the subproblem optimization problems).
 
 wtracker_extension
 ^^^^^^^^^^^^^^^^^^
@@ -274,8 +329,8 @@ If some variables have zero probability in all scenarios, then you will need to 
 all variable probabilities! So you might want to set this to False to verify that the probabilities sum to one
 only for the Vars you expect before setting it to True.
 
-Scenario_lp_mps_writer
-----------------------
+Scenario_lp_mps_writer_dir
+--------------------------
 
 This extension writes an lp file and an mps file with the model as well as a
 json file with (a) list(s) of scenario tree node names and
@@ -283,8 +338,9 @@ nonanticaptive variables for each scenario before the iteration zero
 solve of PH or APH. Note that for two-stage problems, all json files
 will be the same. See ``mpisppy.generic_cylinders.py`` for an example
 of use. In that program it is activated with the
-``--scenario-lp-mps-writer`` option. Note that it
-writes the files to the current working directory and for each scenario
+``--scenario-lp-mps-writerdir`` option that specifies a directory that
+does not exist. The extension
+writes the files to this directory and for each scenario
 the base name of the three files written is the scenario name.
 
 Unless you know exactly why you need this, you probably don't.

@@ -1,13 +1,15 @@
 Quick Start
 ===========
 
-If you installed from github, run `setup.py` from the mpi-sppy directory.
+If you installed from github, install from source using pip in editable mode from the mpi-sppy repo root directory.
 
 ::
    
-   python setup.py develop
+   pip install -e .
 
-This step is not needed if you installed using pip.
+This step is not needed if you installed using pip, but we recommend against installing using pip because
+the software is under active development and the pip version is almost always out of date.
+You can also include the extras flag ``docs`` to install documentation dependencies from pip.
 
 
 Verify installation
@@ -23,13 +25,8 @@ terminal commands:
 
    cd examples
    cd farmer
-   python farmer_ef 1 3 solver_name
+   python ../../mpisppy/generic_cylinders.py --module-name farmer --help
 
-but replace `solver_name` with the name of the solver you have installed, e.g., if you have installed glpk, use
-
-::
-   
-   python farmer_ef 1 3 glpk
 
 If you intend to use any parallel features, you should verify that you
 have a *proper* installation of MPI and ``mpi4py``; see the section
@@ -48,15 +45,10 @@ first thing is to code a scenario creation function. See
 If you create a few more helper functions
 (see :ref:`helper_functions`),
 you can make use of the ``generic_cylinders`` program (see :ref:`generic_cylinders`) to use the hub and spoke system or to solve the the EF directly.
+
+You might want to start with the farmer example. See the `farmer` directory in the `examples` directory for the
+files `farmer.py` and `farmer_generic.bash`. For more information see :ref:`Examples`.
      
-Alternatively, once you have the scenario creation function,
-you can mimic the code in ``examples.farmer.farmer_ef`` to
-solve the extensive form directly. If you want to use the hub
-and spoke system to solve your problem via decomposition, you
-should proceed to the section on writing :ref:`Drivers`, or to
-the :ref:`Examples` section, or to the :ref:`generic_cylinders` section.
-
-
 PySP Users
 ----------
 
@@ -71,12 +63,6 @@ how you represented your model in ``PySP``.
 Here are the general steps:
 
 # Construct a ``PySPModel`` object giving its constructor information about your PySP model.
-
-# Create an options dictionary.
-
-# Create a PH or EF ``mpi-sppy`` object.
-
-# Call its main function.
 
 These steps alone will not result in use of the hub-spoke features of
 `mpi-sppy`, but they will get your PySP model running in
@@ -93,4 +79,4 @@ The quickest thing to do is to run one of the canned examples that
 comes with ``mpi-sppy``. They are in subdirectories of
 ``examples`` and sample commands can be obtained by looking at
 the code in ``examples.runall.py``. There is a table in the
-mpi-sppy paper that gives references for some of the examples.
+mpi-sppy paper in MPC that gives references for some of the examples.
