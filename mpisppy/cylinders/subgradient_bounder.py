@@ -27,8 +27,6 @@ class SubgradientOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
         attach_prox = False
         self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = 0)
         trivial_bound = self.opt.Iter0()
-        if self.opt._can_update_best_bound():
-            self.opt.best_bound_obj_val = trivial_bound
 
         # update the rho
         self.update_rho()

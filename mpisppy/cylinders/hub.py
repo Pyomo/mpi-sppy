@@ -39,7 +39,8 @@ class Hub(SPCommunicator):
         self.print_init = True
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
-        self.last_gap = float('inf')  # abs_gap tracker
+        self.last_outer_bound = self.BestOuterBound
+        self.last_inner_bound = self.BestInnerBound
 
         return
 
@@ -120,8 +121,9 @@ class Hub(SPCommunicator):
             abs_gap_satisfied = True
 
         if "max_stalled_iters" in self.options:
-            if abs_gap < self.last_gap:  # liberal test (we could use an epsilon)
-                self.last_gap = abs_gap
+            if self.last_outer_bound != self.BestOuterBound or self.last_inner_bound != self.BestInnerBound:
+                self.last_outer_bound = self.BestOuterBound
+                self.last_inner_bound = self.BestInnerBound
                 self.stalled_iter_cnt = 0
             else:
                 self.stalled_iter_cnt += 1
@@ -203,7 +205,7 @@ class Hub(SPCommunicator):
         self.send_boundsout()
 
 
-class PHNonantHub(Hub):
+class PHPrimalHub(Hub):
     """
     Like PHHub, but only sends nonants and omits Ws. To be used
     when another cylinder is supplying Ws (like RelaxedPHSpoke).
@@ -321,9 +323,9 @@ class PHNonantHub(Hub):
         pass
 
 
-class PHHub(PHNonantHub):
-    send_fields = (*PHNonantHub.send_fields, Field.DUALS, )
-    receive_fields = (*PHNonantHub.receive_fields,)
+class PHHub(PHPrimalHub):
+    send_fields = (*PHPrimalHub.send_fields, Field.DUALS, )
+    receive_fields = (*PHPrimalHub.receive_fields,)
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
