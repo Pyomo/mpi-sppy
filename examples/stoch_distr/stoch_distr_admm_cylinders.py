@@ -11,7 +11,7 @@
 # Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
-import examples.distr.distr_data as distr_data
+import mpisppy.tests.examples.distr.distr_data as distr_data
 import stoch_distr
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -35,7 +35,6 @@ def _parse_args():
     cfg.xhatxbar_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
-    cfg.ph_ob_args()
     cfg.tracking_args()
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
@@ -52,7 +51,7 @@ def _parse_args():
 
 def _count_cylinders(cfg):
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] # All the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian"] # All the cfg arguments that create a new cylinders
     # Add to this list any cfg attribute that would create a spoke
     for cylname in cfglist:
         if cfg[cylname]:
@@ -127,13 +126,7 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
     if cfg.fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
-    # ph outer bounder spoke
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = None,
-                                          all_nodenames=all_nodenames,
-                                          variable_probability=variable_probability)
+    # ph outer bounder spoke removed August 2025 (replace with ph_dual)
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
@@ -148,8 +141,6 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
         list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)
     if cfg.xhatxbar:
         list_of_spoke_dict.append(xhatxbar_spoke)
 
@@ -192,7 +183,7 @@ def main(cfg):
     n_cylinders = _count_cylinders(cfg)
     admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params)
     
-    scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator on a local scale
+    scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator used locally (i.e., in this file)
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments
     variable_probability = admm.var_prob_list
     all_nodenames = admm.all_nodenames

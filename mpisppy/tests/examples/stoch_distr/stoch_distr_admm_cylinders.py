@@ -39,7 +39,6 @@ def _parse_args():
     cfg.xhatxbar_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
-    cfg.ph_ob_args()
     cfg.tracking_args()
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
@@ -52,7 +51,7 @@ def _parse_args():
 
 def _count_cylinders(cfg):
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob", "fwph"] #all the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian", "fwph"] #all the cfg arguments that create a new cylinders
     for cylname in cfglist:
         if cfg[cylname]:
             count += 1
@@ -62,17 +61,17 @@ def _count_cylinders(cfg):
 def _make_admm(cfg, n_cylinders,verbose=None):
     options = {}
     
-    BFs = stoch_distr.branching_factors_creator(cfg.num_stoch_scens, cfg.num_stage)
+    BFs = stoch_distr.branching_factors_creator(cfg.num_stoch_scens, cfg.num_stages)
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens, num_stage=cfg.num_stage)
+    stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens, num_stages=cfg.num_stages)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
     
     scenario_creator = stoch_distr.scenario_creator
     scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario to create consensus_vars
-    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs, num_stage=cfg.num_stage)
+    consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, scenario_creator_kwargs, num_stages=cfg.num_stages)
     admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,
                            all_admm_stoch_subproblem_scenario_names,
                            split_admm_stoch_subproblem_scenario_name,
@@ -127,13 +126,7 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
     if cfg.fwph:
         fw_spoke = vanilla.fwph_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
-    # ph outer bounder spoke
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = None,
-                                          all_nodenames=all_nodenames,
-                                          variable_probability=variable_probability)
+    # ph outer bounder spoke removed August 2025
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
@@ -148,8 +141,6 @@ def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all
         list_of_spoke_dict.append(fw_spoke)
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)
     if cfg.xhatxbar:
         list_of_spoke_dict.append(xhatxbar_spoke)
 

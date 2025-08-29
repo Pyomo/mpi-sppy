@@ -91,7 +91,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                              verbose=verbose,
                                              disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                                              update_objective=update_objective,
-                                             warmstart=warmstart)
+                                             warmstart=warmstart,
+                                             need_solution=compute_val_at_nonant,)
 
         if compute_val_at_nonant:
             objfct = self.saved_objectives[k]
@@ -112,7 +113,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    compute_val_at_nonant=False,
-                   warmstart=False):
+                   warmstart=False,
+                   need_solution=False,):
         """ Loop over self.local_subproblems and solve them in a manner 
             dicated by the arguments. In addition to changing the Var
             values in the scenarios, update _PySP_feas_indictor for each.
@@ -132,6 +134,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
             compute_val_at_nonant (boolean): indicate that self.objs_dict should
                                             be created and computed.
                                             
+            warmstart (boolean): indicates a warmstart
 
         NOTE: I am not sure what happens with solver_options None for
               a persistent solver. Do options persist?
@@ -165,7 +168,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                                               gripe=gripe,
                 disable_pyomo_signal_handling=disable_pyomo_signal_handling,
                 compute_val_at_nonant=compute_val_at_nonant,
-                                              warmstart=warmstart,)
+                                              warmstart=warmstart,
+                                              )
 
         if dtiming:
             all_pyomo_solve_times = self.mpicomm.gather(pyomo_solve_time, root=0)

@@ -12,14 +12,14 @@ import time
 import os
 import math
 
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy.cylinders.spcommunicator import SPCommunicator, SendCircularBuffer
 from mpisppy.cylinders.spwindow import Field
 
 
 class Spoke(SPCommunicator):
 
     send_fields = (*SPCommunicator.send_fields, )
-    receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, )
+    receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, Field.BEST_OBJECTIVE_BOUNDS, )
 
     def got_kill_signal(self):
         """ Spoke should call this method at least every iteration
@@ -28,6 +28,12 @@ class Spoke(SPCommunicator):
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         return self.allreduce_or(shutdown_buf[0] == 1.0)
+
+    def is_converged(self):
+        """ Alias for got_kill_signal; useful for algorithms working as both
+            hub and spoke
+        """
+        return self.got_kill_signal()
 
     @abc.abstractmethod
     def main(self):
@@ -43,9 +49,6 @@ class Spoke(SPCommunicator):
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
-
-    send_fields = (*Spoke.send_fields, )
-    receive_fields = (*Spoke.receive_fields, Field.BEST_OBJECTIVE_BOUNDS)
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
@@ -85,6 +88,12 @@ class _BoundSpoke(Spoke):
         return self._bound[0]
 
     def send_bound(self, value):
+        if self.bound_type() == Field.OBJECTIVE_INNER_BOUND:
+            self.BestInnerBound = self.InnerBoundUpdate(value)
+        elif self.bound_type() == Field.OBJECTIVE_OUTER_BOUND:
+            self.BestOuterBound = self.OuterBoundUpdate(value)
+        else:
+            raise RuntimeError(f"Unexpected bound_type {self.bound_type()}")
         self._append_trace(value)
         self._bound[0] = value
         self.put_send_buffer(self._bound, self.bound_type())
@@ -142,10 +151,76 @@ class InnerBoundSpoke(_BoundSpoke):
         Hub, and do not need information from the main PH OPT hub.
     """
 
-    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
+    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, Field.BEST_XHAT, Field.RECENT_XHATS, )
     receive_fields = (*_BoundSpoke.receive_fields, )
 
     converger_spoke_char = 'I'
+
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
+        self.is_minimizing = self.opt.is_minimizing
+        self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
+        self.solver_options = None # can be overwritten by derived classes
+
+    def register_send_fields(self):
+        super().register_send_fields()
+        self._recent_xhat_send_circular_buffer = SendCircularBuffer(
+            self.send_buffers[Field.RECENT_XHATS],
+            self._field_lengths[Field.BEST_XHAT],
+            self._field_lengths[Field.RECENT_XHATS] // self._field_lengths[Field.BEST_XHAT],
+        )
+
+    def update_if_improving(self, candidate_inner_bound, update_best_solution_cache=True):
+        if candidate_inner_bound is None:
+            return False
+        if update_best_solution_cache:
+            update = self.opt.update_best_solution_if_improving(candidate_inner_bound)
+        else:
+            update = ( (candidate_inner_bound < self.best_inner_bound)
+                if self.is_minimizing else
+                (self.best_inner_bound < candidate_inner_bound)
+                )
+        self.send_latest_xhat()
+        if update:
+            self.best_inner_bound = candidate_inner_bound
+            # send to hub
+            self.send_bound(candidate_inner_bound)
+            self.send_best_xhat()
+            return True
+        return False
+
+    def send_best_xhat(self):
+        best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
+        # NOTE: this does not work with "loose" bundles
+        ci = 0
+        for s in self.opt.local_scenarios.values():
+            solution_cache = s._mpisppy_data.best_solution_cache._dict
+            for ndn_varid in s._mpisppy_data.varid_to_nonant_index:
+                best_xhat_buf[ci] = solution_cache[ndn_varid][1]
+                ci += 1
+            best_xhat_buf[ci] = s._mpisppy_data.inner_bound
+            ci += 1
+        # print(f"{self.cylinder_rank=} sending {best_xhat_buf.value_array()=}")
+        self.put_send_buffer(best_xhat_buf, Field.BEST_XHAT)
+
+    def send_latest_xhat(self):
+        recent_xhat_buf = self._recent_xhat_send_circular_buffer.next_value_array_reference()
+        ci = 0
+        for s in self.opt.local_scenarios.values():
+            solution_cache = s._mpisppy_data.latest_nonant_solution_cache
+            len_nonants = len(s._mpisppy_data.nonant_indices)
+            recent_xhat_buf[ci:ci+len_nonants] = solution_cache[:]
+            ci += len_nonants
+            recent_xhat_buf[ci] = s._mpisppy_data.inner_bound
+            ci += 1
+        # print(f"{self.cylinder_rank=} sending {recent_xhat_buf=}")
+        self.put_send_buffer(self._recent_xhat_send_circular_buffer.data, Field.RECENT_XHATS)
+
+    def finalize(self):
+        if self.opt.load_best_solution():
+            self.final_bound = self.bound
+            return self.final_bound
+        return None
 
     def bound_type(self) -> Field:
         return Field.OBJECTIVE_INNER_BOUND
@@ -224,7 +299,7 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
         return self._update_nonant_len_buffer()
 
 
-class InnerBoundNonantSpoke(_BoundNonantSpoke):
+class InnerBoundNonantSpoke(_BoundNonantSpoke, InnerBoundSpoke):
     """ For Spokes that provide an inner (incumbent)
         bound through self.send_bound to the Hub,
         and receive the nonants from
@@ -234,41 +309,10 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         and restoring results
     """
 
-    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
-    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
+    send_fields = (*InnerBoundSpoke.send_fields, )
+    receive_fields = (*InnerBoundSpoke.receive_fields, Field.NONANT)
 
     converger_spoke_char = 'I'
-
-    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
-        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
-        self.is_minimizing = self.opt.is_minimizing
-        self.best_inner_bound = math.inf if self.is_minimizing else -math.inf
-        self.solver_options = None # can be overwritten by derived classes
-
-    def update_if_improving(self, candidate_inner_bound, update_best_solution_cache=True):
-        if update_best_solution_cache:
-            update = self.opt.update_best_solution_if_improving(candidate_inner_bound)
-        else:
-            update = ( (candidate_inner_bound < self.best_inner_bound)
-                if self.is_minimizing else
-                (self.best_inner_bound < candidate_inner_bound)
-                )
-        if update:
-            self.best_inner_bound = candidate_inner_bound
-            # send to hub
-            self.send_bound(candidate_inner_bound)
-            return True
-        return False
-
-    def finalize(self):
-        if self.opt.load_best_solution():
-            self.final_bound = self.bound
-            return self.final_bound
-        return None
-
-    def bound_type(self) -> Field:
-        return Field.OBJECTIVE_INNER_BOUND
-
 
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):

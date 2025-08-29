@@ -62,38 +62,16 @@ is a sample json file:
 ph_ob
 ^^^^^
 
-This bounder is similar to the Lagrangian bounder, except that it executes a PH
-algorithm to obtain its own W values. The idea is that it can use lower rho values
-so as to obtain better outer (lower when minimizing) bounds. It can also provide
-a Lagrangian bound even if the hub does not provide lagrangian multipliers.
-
-The easiest way to use ``ph_ob`` is via the vanilla ``ph_ob_spoke`` method
-as illustrated in ``examples.farmer_cylinders.py``. This method takes values
-from the config object (assuming the config object's ``ph_ob`` method
-was called as shown in the function ``examples.farmer_cylinders._parse_args``)
-and sets up the options for the spoke.
-
-The option ``ph-ob-initial-rho-rescale-factor`` defaults to 0.1, so if nothing
-other than ``--ph-ob`` is given on the command line, the ph_ob spoke will use
-one tenth the default rho (it might use one tenth of rho from
-a rho setter if one is configured in the cylinders program and passed to the ph_ob
-constructor). Additional control over rho values
-is provided by the ``phob-rho-rescale-factors-json`` option which is a json
-file that provides a dictionary with keys that are iteration numbers and values
-that are rescale factors. Note that all rescaling is cummulative.
-
-See ``examples.uc.gradient_uc_cylinders.py`` for an example that uses a cost-based
-rho setter for the uc problem in the ph_ob cylinder.
-
-As of August, 2024 use of a gradient based rho with ph_ob is untested.
+This cylinder was deprecated in August of 2025 in favor of ph_dual.
 
 Reduced Costs
 ^^^^^^^^^^^^^
 
 The reduced cost spoke is equivalent to the Lagrangian spoke, except that it relaxes all 
 integrality contraints in the subproblems. This enables the computation of reduced costs
-for the first stage variables, which can be used for bound tightening or heuristic fixing
-in the hub.
+for the nonanticipative variables, which can be used for provable bound tightening, which
+is shared to all cylinders. The reduced cost can also be used for heuristic fixing in the
+hub via the reduced_cost_fixer extension.
 
 
 Inner Bounds
@@ -171,4 +149,25 @@ General
 cross scenario
 ^^^^^^^^^^^^^^
 
-Passes cross scenario cuts.
+Computes and passes cross scenario cuts.
+
+Relaxed PH
+^^^^^^^^^^
+
+For S-MIPs, executes PH on the continuous relaxation of the problem. Provides W values
+to the Lagrangian or Reduced Costs spokes, as well as relaxed
+nonants which can be used with the relaxed PH fixer for the PH Primal Hub. This spoke
+can be useful, along with the PH Primal Hub, when the continuous relaxation allows for
+good dual (but not primal) convergence of the original problem. This typically happens
+for problems with a "strong" continuous relaxation. The option ``relaxed_ph_rescale_rho_factor``
+allows the user to adjust provided rho values by a constant multiplier across all variables,
+which occurs between PH iteration 0 and PH iteration 1.
+
+PH Dual
+^^^^^^^
+
+Executes another copy of PH, providing W values to the Lagrangian and/or Reduceds Costs
+spokes. This spoke can be useful, along with the PH Primal Hub, for problems which need
+different rho strategies for primal and dual convergence. The option ``ph_dual_rescale_rho_factor``
+allows the user to adjust provided rho values by a constant multiplier across all variables,
+which occurs between PH iteration 0 and PH iteration 1.

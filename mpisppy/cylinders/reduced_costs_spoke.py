@@ -139,6 +139,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             self.extract_and_store_reduced_costs()
             self.update_bounding_functions(bound)
             self.extract_and_store_updated_nonant_bounds(new_dual=True)
+        else:
+            self.extract_and_store_updated_nonant_bounds(new_dual=False)
         return bound
 
     def extract_and_store_reduced_costs(self):
@@ -317,6 +319,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
             Field.NONANT_UPPER_BOUNDS,
         )
 
+        self.update_nonant_bounds()
+
     def update_nonant_bounds(self):
         bounds_modified = 0
         send_buf = self.send_buffers[Field.NONANT_LOWER_BOUNDS]
@@ -350,7 +354,6 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         super().do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=False)
         # might as well see if a tighter upper bound has come along
         self.extract_and_store_updated_nonant_bounds(new_dual=False)
-        self.update_nonant_bounds()
 
     def main(self):
         # need the solution for ReducedCostsSpoke

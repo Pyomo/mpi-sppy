@@ -83,6 +83,11 @@ def inparser_adder(cfg):
                         description="path to sslp data (e.g., ./data)",
                         domain=str,
                         default=None)                
+    cfg.add_to_config("surrogate_nonant",
+                      description="use a surrogate nonant summing the total number of servers",
+                      domain=bool,
+                      default=False,
+                     )
 
 
 #=========
@@ -99,7 +104,7 @@ def kw_creator(cfg):
     else:
         cfg.add_and_assign("num_scens","number of scenarios", int, None, ns)
     data_dir = os.path.join(cfg.sslp_data_path, inst, "scenariodata")
-    kwargs = {"data_dir": data_dir}
+    kwargs = {"data_dir": data_dir, "surrogate": cfg.surrogate_nonant}
     return kwargs
 
 

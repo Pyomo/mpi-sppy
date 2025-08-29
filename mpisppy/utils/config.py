@@ -149,7 +149,10 @@ class Config(pyofig.ConfigDict):
         
         if self.get("grad_rho") and self.get("sensi_rho"):
             _bad_rho_setters("Only one rho setter can be active.")
-        if not self.get("grad_rho") or self.get("sensi_rho") or self.get("sep_rho") or self.get("reduced_costs_rho"):
+        if not (self.get("grad_rho")
+                or self.get("sensi_rho")
+                or self.get("sep_rho")
+                or self.get("reduced_costs_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
         if self.get("rc_fixer") and not self.get("reduced_costs"):
@@ -190,6 +193,12 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("warmstart_subproblems",
                            description="Warmstart subproblems from prior solution.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("user_warmstart",
+                           description="Will pass the user provided solution as a warmstart for "
+                           "each initial subproblem solve.",
                            domain=bool,
                            default=False)
 
@@ -461,6 +470,13 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+    def ph_primal_args(self):
+
+        self.add_to_config(name="ph_primal_hub",
+                           description="Use PH Hub which only supplies nonants (and not Ws) (default False)",
+                           domain=bool,
+                           default=False)
+
     def fixer_args(self):
 
         self.add_to_config('fixer',
@@ -471,7 +487,19 @@ class Config(pyofig.ConfigDict):
         self.add_to_config("fixer_tol",
                            description="fixer bounds tolerance  (default 1e-4)",
                            domain=float,
-                           default=1e-2)
+                           default=1e-4)
+
+    def relaxed_ph_fixer_args(self):
+
+        self.add_to_config('relaxed_ph_fixer',
+                           description="have a relaxed PH fixer extension ",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config("relaxed_ph_fixer_tol",
+                           description="relaxed PH fixer bounds tolerance  (default 1e-4)",
+                           domain=float,
+                           default=1e-4)
 
     def integer_relax_then_enforce_args(self):
         self.add_to_config('integer_relax_then_enforce',
@@ -528,13 +556,29 @@ class Config(pyofig.ConfigDict):
                            default=1.0)
 
 
-    def gapper_args(self):
+    def gapper_args(self, name=None):
+        if name is None:
+            name = ""
+        else:
+            name = name+"_"
 
-        self.add_to_config('mipgaps_json',
-                           description="path to json file with a mipgap schedule for PH iterations",
-                           domain=str,
+        if name == "":
+            self.add_to_config('mipgaps_json',
+                               description="path to json file with a mipgap schedule for PH iterations",
+                               domain=str,
+                               default=None)
+
+        self.add_to_config(f'{name}starting_mipgap',
+                           description="Sets automatic gapper mode and the starting and minimum mipgap",
+                           domain=float,
                            default=None)
 
+        self.add_to_config(f'{name}mipgap_ratio',
+                           description="The ratio of the overall relative optimality gap to the subproblem "
+                                       "mipgaps. This should be less than 1 for the algorithm to make progress. "
+                                       "(default = 0.1)",
+                           domain=float,
+                           default=0.1)
 
     def fwph_args(self):
 
@@ -688,23 +732,30 @@ class Config(pyofig.ConfigDict):
 
 
     def ph_ob_args(self):
+        raise RuntimeError("ph_ob (the --ph-ob option) and ph_ob_args were deprecated and replaced with ph_dual August 2025")
 
-        self.add_to_config("ph_ob",
-                            description="use PH to compute outer bound",
+    def relaxed_ph_args(self):
+
+        self.add_to_config("relaxed_ph",
+                            description="have a relaxed PH spoke",
                             domain=bool,
                             default=False)
-        self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file with {iternum: rho rescale factor} (default None)",
-                            domain=str,
-                            default=None)
-        self.add_to_config("ph_ob_initial_rho_rescale_factor",
-                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
+        self.add_to_config("relaxed_ph_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=1.0)",
                             domain=float,
-                            default=0.1)
-        self.add_to_config("ph_ob_gradient_rho",
-                            description="use gradient-based rho in PH OB",
+                            default=1.0)
+
+
+    def ph_dual_args(self):
+
+        self.add_to_config("ph_dual",
+                            description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+        self.add_to_config("ph_dual_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=1.0)",
+                            domain=float,
+                            default=1.0)
 
 
     def xhatlooper_args(self):
@@ -866,55 +917,34 @@ class Config(pyofig.ConfigDict):
 
     def gradient_args(self):
 
-        self.add_to_config("xhatpath",
-                           description="path to npy file with xhat",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_cost_file_out",
-                           description="name of the gradient cost file for output (will be csv)",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_cost_file_in",
-                           description="path to csv file with (grad based?) costs",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_rho_file_out",
-                           description="name of the gradient rho output file (must be csv)",
-                           domain=str,
-                           default='')
-        self.add_to_config("rho_file_in",
-                           description="name of the (gradient) rho input file (must be csv)",
-                           domain=str,
-                           default='')
-        self.add_to_config("grad_display_rho",
-                           description="display rho during gradient calcs (default True)",
-                           domain=bool,
-                           default=True)
-        # likely unused presently
-#        self.add_to_config("grad_pd_thresh",
-#                           description="threshold for dual/primal during gradient calcs",
-#                           domain=float,
-#                           default=0.1)
+        self.add_to_config("grad_rho_multiplier",
+                           description="multiplier for GradRho (default 1.0)",
+                           domain=float,
+                           default=1.0)
 
-        self.add_to_config('grad_rho',
-                           description="use a gradient-based rho setter (if your problem is linear, use coeff-rho instead)",
+        self.add_to_config("eval_at_xhat",
+                           description="evaluate the gradient at xhat whenever available (default False)",
                            domain=bool,
                            default=False)
-        """
-        all occurances of rho_path converted to grad_rho_file July 2024
-        self.add_to_config("rho_path",
-                           description="csv file for the rho setter",
-                           domain=str,
-                           default='')
-        """
+        self.add_to_config("indep_denom",
+                           description="evaluate rho using scenario independent denominator (default False)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config('grad_rho',
+                           description="use a gradient-based rho setter",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
                            domain=float,
                            default=-1.0)
+
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
-                           default=1e3)
+                           default=1e2)
 
     def dynamic_rho_args(self): # AKA adaptive
 
@@ -949,6 +979,11 @@ class Config(pyofig.ConfigDict):
                          description="Update threshold for when primal and dual residuals are imbalanced (default=2.0)",
                          domain=float,
                          default=2.0)
+        self.add_to_config("primal_dual_rho_primal_bias",
+                         description="Bias to add towards primal convergence when computing updates. "
+                         "Values >1 are biased toward primal and values <1 are biased towards dual (default=1.0).",
+                         domain=float,
+                         default=1.0)
 
     def norm_rho_args(self):
         self.add_to_config("use_norm_rho_updater",

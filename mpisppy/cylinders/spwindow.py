@@ -20,6 +20,7 @@ class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
     DUALS=2
+    RELAXED_NONANT=3
     BEST_OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
@@ -29,28 +30,36 @@ class Field(enum.IntEnum):
     CROSS_SCENARIO_COST=400
     NONANT_LOWER_BOUNDS=500
     NONANT_UPPER_BOUNDS=501
+    BEST_XHAT=600 # buffer having the best xhat and its total cost per scenario
+    RECENT_XHATS=601 # buffer having some recent xhats and their total cost per scenario
     WHOLE=1_000_000
 
 
-_field_length_components = pyo.ConcreteModel()
-_field_length_components.local_nonant_length = pyo.Param(mutable=True)
-_field_length_components.local_scenario_length = pyo.Param(mutable=True)
-_field_length_components.total_number_nonants = pyo.Param(mutable=True)
-_field_length_components.total_number_scenarios = pyo.Param(mutable=True)
+field_length_components = pyo.ConcreteModel()
+field_length_components._local_nonant_length = pyo.Param(mutable=True)
+field_length_components._local_scenario_length = pyo.Param(mutable=True)
+field_length_components._total_number_nonants = pyo.Param(mutable=True)
+field_length_components._total_number_scenarios = pyo.Param(mutable=True)
+
+# these could be modified by the user...
+field_length_components.total_number_recent_xhats = pyo.Param(mutable=True, initialize=10, within=pyo.NonNegativeIntegers)
 
 _field_lengths = {
         Field.SHUTDOWN : 1,
-        Field.NONANT : _field_length_components.local_nonant_length,
-        Field.DUALS : _field_length_components.local_nonant_length,
+        Field.NONANT : field_length_components._local_nonant_length,
+        Field.DUALS : field_length_components._local_nonant_length,
+        Field.RELAXED_NONANT : field_length_components._local_nonant_length,
         Field.BEST_OBJECTIVE_BOUNDS : 2,
         Field.OBJECTIVE_INNER_BOUND : 1,
         Field.OBJECTIVE_OUTER_BOUND : 1,
-        Field.EXPECTED_REDUCED_COST : _field_length_components.total_number_nonants,
-        Field.SCENARIO_REDUCED_COST : _field_length_components.local_nonant_length,
-        Field.CROSS_SCENARIO_CUT : _field_length_components.total_number_scenarios * (_field_length_components.total_number_nonants + 1 + 1),
-        Field.CROSS_SCENARIO_COST : _field_length_components.total_number_scenarios * _field_length_components.total_number_scenarios,
-        Field.NONANT_LOWER_BOUNDS : _field_length_components.total_number_nonants,
-        Field.NONANT_UPPER_BOUNDS : _field_length_components.total_number_nonants,
+        Field.EXPECTED_REDUCED_COST : field_length_components._total_number_nonants,
+        Field.SCENARIO_REDUCED_COST : field_length_components._local_nonant_length,
+        Field.CROSS_SCENARIO_CUT : field_length_components._total_number_scenarios * (field_length_components._total_number_nonants + 1 + 1),
+        Field.CROSS_SCENARIO_COST : field_length_components._total_number_scenarios * field_length_components._total_number_scenarios,
+        Field.NONANT_LOWER_BOUNDS : field_length_components._total_number_nonants,
+        Field.NONANT_UPPER_BOUNDS : field_length_components._total_number_nonants,
+        Field.BEST_XHAT : field_length_components._local_nonant_length + field_length_components._local_scenario_length,
+        Field.RECENT_XHATS : field_length_components.total_number_recent_xhats * (field_length_components._local_nonant_length + field_length_components._local_scenario_length),
 }
 
 
@@ -63,16 +72,19 @@ class FieldLengths:
                )
         )
 
-        _field_length_components.local_nonant_length.value = number_nonants
-        _field_length_components.local_scenario_length.value = len(opt.local_scenarios)
-        _field_length_components.total_number_nonants.value = opt.nonant_length
-        _field_length_components.total_number_scenarios.value = len(opt.local_scenarios)
+        field_length_components._local_nonant_length.value = number_nonants
+        field_length_components._local_scenario_length.value = len(opt.local_scenarios)
+        field_length_components._total_number_nonants.value = opt.nonant_length
+        field_length_components._total_number_scenarios.value = len(opt.local_scenarios)
 
         self._field_lengths = {k : pyo.value(v) for k, v in _field_lengths.items()}
 
-        # reset the _field_length_components
-        for p in _field_length_components.component_data_objects():
-            p.clear()
+        # reset the field_length_components
+        for p in field_length_components.component_data_objects():
+            # leave user-set parameter alone, just clear the
+            # "private" parameters
+            if p.name.startswith("_"):
+                p.clear()
 
     def __getitem__(self, field: Field):
         return self._field_lengths[field]

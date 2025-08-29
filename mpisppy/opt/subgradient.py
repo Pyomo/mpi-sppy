@@ -9,6 +9,7 @@
 
 import mpisppy.opt.ph
 import mpisppy.MPI as _mpi
+import mpisppy.spopt
 
 _global_rank = _mpi.COMM_WORLD.Get_rank()
 
@@ -109,4 +110,7 @@ class Subgradient(mpisppy.opt.ph.PH):
         if self._can_update_best_bound():
             self.best_bound_obj_val = self.Ebound(verbose)
 
+    def _can_update_best_bound(self):
+        # TODO: is our class hierarchy wrong?
+        return mpisppy.spopt.SPOpt._can_update_best_bound(self)
 

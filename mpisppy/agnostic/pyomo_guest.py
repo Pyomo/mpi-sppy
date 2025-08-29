@@ -262,7 +262,7 @@ class Pyomo_guest():
                 s._mpisppy_data.nonant_indices[ndn_i]._value = gxvar._value
 
             # the next line ignore bundles (other than proper bundles)
-            s._mpisppy_data._obj_from_agnostic = pyo.value(sputils.get_objs(gs)[0])
+            s._mpisppy_data.inner_bound = pyo.value(sputils.get_objs(gs)[0])
 
 
     # local helper

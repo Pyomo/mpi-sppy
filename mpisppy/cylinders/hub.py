@@ -38,7 +38,8 @@ class Hub(SPCommunicator):
         self.print_init = True
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
-        self.last_gap = float('inf')  # abs_gap tracker
+        self.last_outer_bound = self.BestOuterBound
+        self.last_inner_bound = self.BestInnerBound
 
         return
 
@@ -73,29 +74,6 @@ class Hub(SPCommunicator):
     def clear_latest_chars(self):
         self.latest_ib_char = None
         self.latest_ob_char = None
-
-    def compute_gaps(self):
-        """ Compute the current absolute and relative gaps,
-            using the current self.BestInnerBound and self.BestOuterBound
-        """
-        if self.opt.is_minimizing:
-            abs_gap = self.BestInnerBound - self.BestOuterBound
-        else:
-            abs_gap = self.BestOuterBound - self.BestInnerBound
-
-        ## define by the best solution, as is common
-        nano = float("nan")  # typing aid
-        if (
-            abs_gap != nano
-            and abs_gap != float("inf")
-            and abs_gap != float("-inf")
-            and self.BestOuterBound != nano
-            and self.BestOuterBound != 0
-        ):
-            rel_gap = abs_gap / abs(self.BestOuterBound)
-        else:
-            rel_gap = float("inf")
-        return abs_gap, rel_gap
 
     def get_update_string(self):
         if self.latest_ib_char is None and \
@@ -142,8 +120,9 @@ class Hub(SPCommunicator):
             abs_gap_satisfied = True
 
         if "max_stalled_iters" in self.options:
-            if abs_gap < self.last_gap:  # liberal test (we could use an epsilon)
-                self.last_gap = abs_gap
+            if self.last_outer_bound != self.BestOuterBound or self.last_inner_bound != self.BestInnerBound:
+                self.last_outer_bound = self.BestOuterBound
+                self.last_inner_bound = self.BestInnerBound
                 self.stalled_iter_cnt = 0
             else:
                 self.stalled_iter_cnt += 1
@@ -225,10 +204,20 @@ class Hub(SPCommunicator):
         self.send_boundsout()
 
 
-class PHHub(Hub):
+class PHPrimalHub(Hub):
+    """
+    Like PHHub, but only sends nonants and omits Ws. To be used
+    when another cylinder is supplying Ws (like RelaxedPHSpoke).
+    Could be removed when mpi-sppy supports pointing consuming
+    spokes like Lagrangian to a specific dual (W) buffer.
+    """
 
-    send_fields = (*Hub.send_fields, Field.NONANT, Field.DUALS)
+    send_fields = (*Hub.send_fields, Field.NONANT, )
     receive_fields = (*Hub.receive_fields,)
+
+    @property
+    def nonant_field(self):
+        return Field.NONANT
 
     def setup_hub(self):
         ## Generate some warnings if nothing is giving bounds
@@ -316,16 +305,26 @@ class PHHub(Hub):
         """ Gather nonants and send them to the appropriate spokes
         """
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.send_buffers[Field.NONANT]
+        nonant_send_buffer = self.send_buffers[self.nonant_field]
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.put_send_buffer(nonant_send_buffer, Field.NONANT)
+        self.put_send_buffer(nonant_send_buffer, self.nonant_field)
 
         return
+
+    def send_ws(self):
+        """ Nonant hub; do not send Ws
+        """
+        pass
+
+
+class PHHub(PHPrimalHub):
+    send_fields = (*PHPrimalHub.send_fields, Field.DUALS, )
+    receive_fields = (*PHPrimalHub.receive_fields,)
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
@@ -338,6 +337,7 @@ class PHHub(Hub):
         self.put_send_buffer(my_ws, Field.DUALS)
 
         return
+
 
 class LShapedHub(Hub):
 
