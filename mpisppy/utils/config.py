@@ -772,7 +772,7 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.0)
         self.add_to_config("ph_dual_grad_order_stat",
-                            description="Order stat for selection rho if ph_dual and ph_dual_grad_rho are chosen;"
+                            description="Order stat for selecting rho if ph_dual and ph_dual_grad_rho are chosen;"
                             " note that this is impacted by the multiplier (default=0.0)",
                             domain=float,
                             default=0.0)
