@@ -11,6 +11,7 @@
 import sys
 import os
 import json
+import copy
 import shutil
 import numpy as np
 import pyomo.environ as pyo
@@ -340,14 +341,21 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                           rho_setter = rho_setter,
                                           all_nodenames = all_nodenames,
                                           )
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or cfg.grad_rho:
+            # Note that this deepcopy might be expensive if certain wrappers were used.
+            # (Could we do the modification to cfg in ph_dual to obviate the need?)
+            modified_cfg = copy.deepcopy(cfg)
+            modified_cfg["grad_rho_multiplier"] = cfg.ph_dual_rho_multiplier            
         if cfg.sep_rho:
-            vanilla.add_sep_rho(ph_dual_spoke, cfg)
+            vanilla.add_sep_rho(ph_dual_spoke, modified_cfg)
         if cfg.coeff_rho:
-            vanilla.add_coeff_rho(ph_dual_spoke, cfg)
+            vanilla.add_coeff_rho(ph_dual_spoke, modified_cfg)
         if cfg.sensi_rho:
-            vanilla.add_sensi_rho(ph_dual_spoke, cfg)
-        # TBD xxxxx add grad rho asap after PR#559 is merged
-        # Note: according to DLW, it is non-trivial to deal with the cfg args
+            vanilla.add_sensi_rho(ph_dual_spoke, modified_cfg)
+        if cfg.grad_rho:
+            modified_cfg["grad_order_stat"] = cfg.ph_dual_grad_order_stat
+            vanilla.add_grad_rho(ph_dual_spoke, modified_cfg)
+        
 
     # relaxed ph spoke
     if cfg.relaxed_ph:
