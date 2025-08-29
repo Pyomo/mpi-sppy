@@ -643,6 +643,11 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-4)
 
+        self.add_to_config("fwph_lp_start_iterations",
+                            description="Number of iterations to operate on LP relaxation to warmstart fwph duals",
+                            domain=int,
+                            default=0)
+
 
     def lagrangian_args(self):
 
