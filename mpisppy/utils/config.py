@@ -272,7 +272,7 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("presolve",
                            description="Run the distributed presolver. "
-                           "Currently only does distributed feasibility-based bounds tightening.",
+                           "Performs distributed feasibility-based bounds tightening and optimization-based bounds tightening.",
                            domain=bool,
                            default=False)
 
@@ -286,6 +286,28 @@ class Config(pyofig.ConfigDict):
                            description="Path to file containing config options",
                            domain=str,
                            default='')
+
+    def presolve_args(self):
+        self.add_to_config("obbt",
+                           description="Use the optimization-based bounds tightening as part of the presolver",
+                           domain=bool,
+                           default=False,
+                           )
+        self.add_to_config("full_obbt",
+                           description="Run OBBT on *all* variables, not just the nonanticipative variables",
+                           domain=bool,
+                           default=False,
+                          )
+        self.add_to_config("obbt_solver",
+                           description="OBBT solver",
+                           domain=str,
+                           default=None,
+                           )
+        self.add_to_config("obbt_solver_options",
+                           description="OBBT solver options",
+                           domain=str,
+                           default=None,
+                           )
 
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",

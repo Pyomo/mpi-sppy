@@ -273,10 +273,12 @@ do_one("farmer/CI",
        f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
+# NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
+direct_solver_name = solver_name.replace("_persistent", "_direct") if "_persistent" in solver_name else solver_name
 do_one("netdes", "netdes_cylinders.py", 4,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
-       "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve "
-       "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
+       "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve --obbt --obbt-solver={} "
+       "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name, direct_solver_name))
 
 # sizes is slow for xpress so try linearizing the proximal term.
 do_one("sizes",
