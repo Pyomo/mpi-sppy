@@ -81,7 +81,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                   disable_pyomo_signal_handling=False,
                   update_objective=True,
                   compute_val_at_nonant=False,
-                  warmstart=False):
+                  warmstart==sputils.WarmstartStatus.USER_SOLUTION):  # 1 Sep 2025
 
         self._lazy_create_solvers()
         pyomo_solve_time = super().solve_one(solver_options, k, s,
@@ -113,7 +113,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    compute_val_at_nonant=False,
-                   warmstart=warmstart=sputils.WarmstartStatus.USER_SOLUTION,  # 1 Sep 2025
+                   warmstart=warmstart,
                    need_solution=False,):
         """ Loop over self.local_subproblems and solve them in a manner 
             dicated by the arguments. In addition to changing the Var
