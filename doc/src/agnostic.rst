@@ -36,6 +36,8 @@ The directory named in the ``--mps-files-directory`` needs to have
 two files for each scenario: and mps file and a json file. The json
 file need to have certain literal strings as well as scenario-specific
 data. In this specification, scenario specific data is named with underscores.
+Note that the total number of tree nodes is given as an integer, but the file
+only contains the data for nodes for the single scenario.
 
 .. code-block:: json
 		
@@ -45,21 +47,24 @@ data. In this specification, scenario specific data is named with underscores.
     "scenProb": scenario_probability
   },
   "treeData": {
-    "ROOT": {
-      "condProb": 1.0,
-      "nonAnts": [
-        "first_root_node_nonant_name",
-        "second_root_node_nonant_name",
-        ...
-      ]
-    }
-    "ROOT_i": {
-      "condProb": conditional_probability_of_second_stage_node_i,
-      "nonAnts": [
-        first_nonant_name_at_node,
-        second_node_nonant_name_at_node,
-        ...
-      ]
+    "globalNodeCount": number_of_nodes_in_entire_tree,
+    "nodes: {
+      "ROOT": {
+        "condProb": 1.0,
+        "nonAnts": [
+          "first_root_node_nonant_name",
+          "second_root_node_nonant_name",
+          ...
+        ]
+      }
+      "ROOT_i": {
+        "condProb": conditional_probability_of_second_stage_node_i,
+        "nonAnts": [
+          first_nonant_name_at_node,
+          second_node_nonant_name_at_node,
+          ...
+        ]
+      }
     }
   }
 }  
@@ -71,25 +76,29 @@ Two-stage problems are simple because there is only one node in the scenario tre
 must be ROOT. Here is an example
 
 .. code-block:: json
-  {
-    "scenarioData": {
-      "name": "Scenario1",
-      "scenProb": 0.3333333333333333
-    },
-    "treeData": {
+{
+  "scenarioData": {
+    "name": "unknown",
+    "scenProb": 0.3333333333333333
+  },
+  "treeData": {
+    "globalNodeCount": 1,
+    "nodes": {
       "ROOT": {
+        "serialNumber": 0,
         "condProb": 1.0,
         "nonAnts": [
           "NumProducedFirstStage(1)",
           "NumProducedFirstStage(2)",
           "NumProducedFirstStage(3)",
-          "NumProducedFirstStage(4)",
-          ...
+	  ...
           "NumUnitsCutFirstStage(10_10)"
         ]
       }
     }
-  }  
+  }
+}
+
 
 Naming Conventions
 ~~~~~~~~~~~~~~~~~~

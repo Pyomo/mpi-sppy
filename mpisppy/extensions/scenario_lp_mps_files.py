@@ -40,11 +40,13 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
             s.write(os.path.join(dn, f"{k}.mps"), io_options={'symbolic_solver_labels': True})
             scenData = {"name": s.name, "scenProb": s._mpisppy_probability} 
             scenDict = {"scenarioData": scenData}
-            treeData = dict()
+            treeData = {"globalNodeCount": len(self.ph.all_nodenames)}
+            treeData["nodes"] = dict()
             rhoList = list()
             for nd in s._mpisppy_node_list:
-                treeData[nd.name] = {"condProb": nd.cond_prob}
-                treeData[nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
+                treeData["nodes"][nd.name] = {"serialNumber": self.ph.all_nodenames.index(nd.name),
+                                              "condProb": nd.cond_prob}
+                treeData["nodes"][nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
                 rhoList.extend((lpize(var.name), s._mpisppy_model.rho[(nd.name, i)]._value)\
                             for i,var in enumerate(nd.nonant_vardata_list))
 
