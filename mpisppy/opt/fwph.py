@@ -296,8 +296,9 @@ class FWPH(mpisppy.phbase.PHBase):
             # tbsdm = time.perf_counter()
             _sdm_generators = {}
             stop = False
+            best_bound_update = self._can_update_best_bound()
             for name in self.local_subproblems:
-                _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh)
+                _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
                     dual_bound = next(_sdm_generators[name])
                 except StopIteration as e:
@@ -360,7 +361,7 @@ class FWPH(mpisppy.phbase.PHBase):
             return True
         return False
 
-    def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh):
+    def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
         '''
         mip = self.local_subproblems[model_name]
@@ -400,7 +401,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
             self._fix_fixings(model_name, mip, qp)
-            cutoff = self._add_objective_cutoff(mip, qp)
+            cutoff = self._add_objective_cutoff(mip, qp, model_name, best_bound_update)
             # print(f"{model_name=}, {cutoff=}")
             # Algorithm 2 line 5
             self.solve_one(
@@ -414,6 +415,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 # becuase of the cutoff, we should
                 # probably keep going ??
                 need_solution=False,
+                warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION,
             )
             self._remove_objective_cutoff(mip)
             # tmipsolve = time.perf_counter() - tbmipsolve
@@ -464,10 +466,7 @@ class FWPH(mpisppy.phbase.PHBase):
             # to synchronize with spokes
             dual_bound = None
             if (itr == 0):
-                if mip._mpisppy_data.scenario_feasible:
-                    dual_bound = mip._mpisppy_data.outer_bound
-                else:
-                    dual_bound = np.nan
+                dual_bound = mip._mpisppy_data.outer_bound
 
             if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.scenario_feasible or gamma_t < FW_conv_thresh:
                 return dual_bound
@@ -566,13 +565,12 @@ class FWPH(mpisppy.phbase.PHBase):
             solver.add_constraint(qp.eq_recourse_cost)
 
     def _compute_gamma_t(self, cutoff, inner_bound):
-        if abs(inner_bound) > 1e-9:
-            stop_check = (cutoff - inner_bound) / abs(inner_bound) # \Gamma^t in Boland, but normalized
+        if abs(cutoff) > 1e-9:
+            stop_check = (cutoff - inner_bound) / abs(cutoff) # \Gamma^t in Boland, but normalized
         else:
             stop_check = cutoff - inner_bound # \Gamma^t in Boland
         # print(f"{model_name}, Gamma^t = {stop_check}")
-        stop_check_tol = self.FW_options["stop_check_tol"]\
-                         if "stop_check_tol" in self.FW_options else 1e-4
+        stop_check_tol = self.FW_options.get("stop_check_tol", 1e-4)
         if (self.is_minimizing and stop_check < -stop_check_tol):
             print('Warning (fwph): convergence quantity Gamma^t = '
                  '{sc:.2e} (should be non-negative)'.format(sc=stop_check))
@@ -583,7 +581,7 @@ class FWPH(mpisppy.phbase.PHBase):
             print('Try decreasing the MIP gap tolerance and re-solving')
         return stop_check
 
-    def _add_objective_cutoff(self, mip, qp):
+    def _add_objective_cutoff(self, mip, qp, model_name, best_bound_update):
         """ Add a constraint to the MIP objective ensuring
             an improving direction in the QP subproblem is generated
         """
@@ -591,11 +589,20 @@ class FWPH(mpisppy.phbase.PHBase):
         # print(f"\tnonants part: {pyo.value(qp._mpisppy_model.mip_obj_in_qp)}")
         # print(f"\trecoursepart: {pyo.value(qp.recourse_cost)}")
         cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-        epsilon = 0 #1e-4
-        rel_epsilon = abs(cutoff)*epsilon
-        epsilon = max(epsilon, rel_epsilon)
+        epsilon = self.FW_options.get("stop_check_tol", 1e-4)
+        # normalized Gamma^t
+        epsilon = max(epsilon, abs(epsilon*cutoff))
         # tbmipsolve = time.perf_counter()
         active_objective = sputils.find_active_objective(mip)
+        if best_bound_update:
+            # If we're providing the best bound, we better make sure the current solution
+            # is feasible. Otherwise we can't prove its the best.
+            current_obj_value = pyo.value(active_objective)
+            # global_toc(f"{model_name}, {current_obj_value=}, {cutoff=}", True)
+            if self.is_minimizing:
+                cutoff = max(current_obj_value, cutoff)
+            else:
+                cutoff = min(current_obj_value, cutoff)
         if self.is_minimizing:
             # obj <= cutoff
             obj_cutoff_constraint = (None, active_objective.expr, cutoff+epsilon)
