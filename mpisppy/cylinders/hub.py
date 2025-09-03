@@ -100,7 +100,7 @@ class Hub(SPCommunicator):
         global_toc(row, True)
         self.clear_latest_chars()
 
-    def determine_termination(self):
+    def determine_termination(self, screen_trace=True):
         # return True if termination is indicated, otherwise return False
 
         if not hasattr(self,"options") or self.options is None\
@@ -130,12 +130,13 @@ class Hub(SPCommunicator):
                 if self.stalled_iter_cnt >= self.options["max_stalled_iters"]:
                     max_stalled_satisfied = True
 
-        if abs_gap_satisfied:
-            global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
-        if rel_gap_satisfied:
-            global_toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%")
-        if max_stalled_satisfied:
-            global_toc(f"Terminating based on max-stalled-iters {self.stalled_iter_cnt}")
+        if screen_trace:
+            if abs_gap_satisfied:
+                global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
+            if rel_gap_satisfied:
+                global_toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%")
+            if max_stalled_satisfied:
+                global_toc(f"Terminating based on max-stalled-iters {self.stalled_iter_cnt}")
 
         return abs_gap_satisfied or rel_gap_satisfied or max_stalled_satisfied
 
@@ -287,7 +288,7 @@ class PHPrimalHub(Hub):
         if self.global_rank == 0 and screen_trace:
             self.screen_trace()
 
-        return self.determine_termination()
+        return self.determine_termination(screen_trace)
 
     def current_iteration(self):
         """ Return the current PH iteration."""
