@@ -113,7 +113,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    compute_val_at_nonant=False,
-                   warmstart=False,
+                   warmstart=sputils.WarmstartStatus.USER_SOLUTION,  # 1 Sep 2025,
                    need_solution=False,):
         """ Loop over self.local_subproblems and solve them in a manner 
             dicated by the arguments. In addition to changing the Var
