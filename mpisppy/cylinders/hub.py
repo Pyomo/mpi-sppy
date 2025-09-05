@@ -16,6 +16,7 @@ from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
 from mpisppy import global_toc
 
 from mpisppy.cylinders.spwindow import Field
+from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
 
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger(__name__,
@@ -99,7 +100,7 @@ class Hub(SPCommunicator):
         global_toc(row, True)
         self.clear_latest_chars()
 
-    def determine_termination(self):
+    def determine_termination(self, screen_trace=True):
         # return True if termination is indicated, otherwise return False
 
         if not hasattr(self,"options") or self.options is None\
@@ -129,12 +130,13 @@ class Hub(SPCommunicator):
                 if self.stalled_iter_cnt >= self.options["max_stalled_iters"]:
                     max_stalled_satisfied = True
 
-        if abs_gap_satisfied:
-            global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
-        if rel_gap_satisfied:
-            global_toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%")
-        if max_stalled_satisfied:
-            global_toc(f"Terminating based on max-stalled-iters {self.stalled_iter_cnt}")
+        if screen_trace:
+            if abs_gap_satisfied:
+                global_toc(f"Terminating based on inter-cylinder absolute gap {abs_gap:12.4f}")
+            if rel_gap_satisfied:
+                global_toc(f"Terminating based on inter-cylinder relative gap {rel_gap*100:12.3f}%")
+            if max_stalled_satisfied:
+                global_toc(f"Terminating based on max-stalled-iters {self.stalled_iter_cnt}")
 
         return abs_gap_satisfied or rel_gap_satisfied or max_stalled_satisfied
 
@@ -257,7 +259,7 @@ class PHPrimalHub(Hub):
     def sync_Ws(self):
         self.send_ws()
 
-    def is_converged(self):
+    def is_converged(self, screen_trace=True):
         if self.opt.best_bound_obj_val is not None:
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
         if self.opt.best_solution_obj_val is not None:
@@ -271,7 +273,7 @@ class PHPrimalHub(Hub):
                 )
 
             ## you still want to output status, even without inner bounders configured
-            if self.global_rank == 0:
+            if self.global_rank == 0 and screen_trace:
                 self.screen_trace()
 
             return False
@@ -283,10 +285,10 @@ class PHPrimalHub(Hub):
                     "will be made on the Best Bound")
 
         ## log some output
-        if self.global_rank == 0:
+        if self.global_rank == 0 and screen_trace:
             self.screen_trace()
 
-        return self.determine_termination()
+        return self.determine_termination(screen_trace)
 
     def current_iteration(self):
         """ Return the current PH iteration."""
@@ -442,7 +444,10 @@ class APHHub(PHHub):
         Eobj = self.opt.post_loops()
         return Eobj
 
-class FWPHHub(PHHub):
+class FWPHHub(PHHub, FWPH_Cylinder):
+
+    send_fields = (*PHHub.send_fields, *FWPH_Cylinder.send_fields)
+    receive_fields = (*PHHub.receive_fields, *FWPH_Cylinder.receive_fields)
 
     _hub_algo_best_bound_provider = True
 
