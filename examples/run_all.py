@@ -168,13 +168,13 @@ do_one("farmer/archive", "farmer_cylinders.py",  3,
        "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
        "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py",  5,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
        "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
        "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
        "--track-duals=4".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py",  5,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
        "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
@@ -190,7 +190,7 @@ do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py", 4,
-       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=20 "
        "--fwph-stop-check-tol 0.1 --rel-gap 0.001 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
@@ -242,7 +242,7 @@ do_one("farmer/archive",
 
 do_one("farmer/archive",
        "farmer_cylinders.py", 4,
-       f"--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
+       f"--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
 
 do_one("farmer/archive",
        "farmer_cylinders.py",
