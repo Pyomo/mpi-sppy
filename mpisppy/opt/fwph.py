@@ -150,17 +150,22 @@ class FWPH(mpisppy.phbase.PHBase):
                 tee=teeme,
                 verbose=self.options["verbose"],
                 # sdm_iter_limit=20,
-                # FW_conv_thresh=1e-8,
+                # don't cut off integer solutions
+                # for this pass
+                FW_conv_thresh=1e+10,
             )
-            global_toc("Starting FW PH")
 
-        else:
-            # FWPH can take some time to initialize
-            # If run as a spoke, check for convergence here
-            if self.spcomm and self.spcomm.is_converged():
-                if finalize:
-                    return 0, None, None
-                return 0
+        # sometimes we take a while to initialize,
+        # sometimes LP may prove optimizality
+        # check before entering the main loop
+        if self.spcomm and self.spcomm.is_converged():
+            if finalize:
+                weight_dict = self._gather_weight_dict() # None if rank != 0
+                xbars_dict  = self._get_xbars() # None if rank != 0
+                return 0, weight_dict, xbars_dict
+            return 0
+
+        global_toc("Starting FW PH")
 
         self.iterk_loop()
 
@@ -401,7 +406,7 @@ class FWPH(mpisppy.phbase.PHBase):
                         -  scen_mip._mpisppy_model.xbars[ndn_i]._value))
 
             self._fix_fixings(model_name, mip, qp)
-            cutoff = self._add_objective_cutoff(mip, qp, model_name, best_bound_update)
+            cutoff = self._add_objective_cutoff(mip, qp, model_name, best_bound_update, FW_conv_thresh)
             # print(f"{model_name=}, {cutoff=}")
             # Algorithm 2 line 5
             self.solve_one(
@@ -581,7 +586,7 @@ class FWPH(mpisppy.phbase.PHBase):
             print('Try decreasing the MIP gap tolerance and re-solving')
         return stop_check
 
-    def _add_objective_cutoff(self, mip, qp, model_name, best_bound_update):
+    def _add_objective_cutoff(self, mip, qp, model_name, best_bound_update, FW_conv_thresh):
         """ Add a constraint to the MIP objective ensuring
             an improving direction in the QP subproblem is generated
         """
@@ -589,7 +594,7 @@ class FWPH(mpisppy.phbase.PHBase):
         # print(f"\tnonants part: {pyo.value(qp._mpisppy_model.mip_obj_in_qp)}")
         # print(f"\trecoursepart: {pyo.value(qp.recourse_cost)}")
         cutoff = pyo.value(qp._mpisppy_model.mip_obj_in_qp) + pyo.value(qp.recourse_cost)
-        epsilon = self.FW_options.get("stop_check_tol", 1e-4)
+        epsilon = FW_conv_thresh
         # normalized Gamma^t
         epsilon = max(epsilon, abs(epsilon*cutoff))
         # tbmipsolve = time.perf_counter()
