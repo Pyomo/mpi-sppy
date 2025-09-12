@@ -42,6 +42,8 @@ class ProperBundler():
     def __init__(self, module, comm=None):
         self.module = module
         self.comm = comm
+        # default to None so 2-stage problems don't need to call set_bunBFs
+        self.bunBFs = None
 
     def inparser_adder(self, cfg):
         # no need to wrap?
@@ -121,7 +123,7 @@ class ProperBundler():
 
             # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
-                                       scenario_creator_kwargs=kws,
+                                       scenario_creator_kwargs={**kwargs, **kws},
                                        EF_name=sname,
                                        suppress_warnings=True,                                       
                                        nonant_for_fixed_vars = False,
