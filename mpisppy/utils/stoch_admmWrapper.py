@@ -82,10 +82,31 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         self.local_admm_stoch_subproblem_scenarios_names = [
             all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
         ]
+        print(self.local_admm_stoch_subproblem_scenarios_names)
+
+        check_admm_subproblems=[]
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
             self.local_admm_stoch_subproblem_scenarios[sname] = s
-        # we are not collecting instantiation time
+            # we are not collecting instantiation time
+
+            admm_subproblem_name, _ = split_admm_stoch_subproblem_scenario_name(sname)
+
+            # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
+            # then we go through the models (created by scenario creator) for all the admm_stoch_subproblem_scenario 
+            # which have this scenario as an ancestor (parent) in the tree
+            if admm_subproblem_name not in check_admm_subproblems:
+                for node in s._mpisppy_node_list:
+                    for var in node.nonant_list:
+                        if var.is_indexed():
+                            for v in var:
+                                if var[v].name not in consensus_vars[admm_subproblem_name]:
+                                    consensus_vars[admm_subproblem_name].append((var[v].name, node.stage))
+                        else:
+                            if var.name not in consensus_vars[admm_subproblem_name]:
+                                consensus_vars[admm_subproblem_name].append((var.name, node.stage))
+                    check_admm_subproblems.append(admm_subproblem_name)
+            # TODO should be removed!!
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
         self.consensus_vars = consensus_vars
@@ -152,6 +173,12 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 v = s.find_component(vstr)
                 var_stage_tuple = vstr, stage
                 if var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
+                    if v is None:
+                        # try quote wrap around variable name
+                        vvstr = vstr[:vstr.find('[')]
+                        tvstr = vstr[vstr.find('[')+1:vstr.find(']')]
+                        v = s.find_component(vvstr+'["'+tvstr+'"]')
+
                     if v is not None:
                         # variables that should be on the model
                         if stage == depth: 
@@ -178,15 +205,19 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                         s.add_component(v2str, v) 
                         #is the consensus variable should be earlier, then its not added in the good place, or is it?
 
-                        v.fix(0)
+                        v.fix(0) # they should have 0 probability so it shouldn't matter
                         self.varprob_dict[s].append((id(v),0))
+                        # continue
                     else:
                         error_list2.append((sname,vstr))
                 varlist[stage-1].append(v)
-
+            
+            # print('Error list 1: ',error_list1)
+            # print('Error list 2: ',error_list2)
+            
             # Create the new scenario tree node for admm_consensus
             assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
-            parent = s._mpisppy_node_list[-1]
+            parent = s._mpisppy_node_list[-1] # investment vars
             admm_subproblem_name, stoch_scenario_name = self.split_admm_stoch_subproblem_scenario_name(sname)
             num_scen = self.stoch_scenario_names.index(stoch_scenario_name)
             if self.BFs is not None:
@@ -205,6 +236,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 s)
             )
             s._mpisppy_probability /= self.number_admm_subproblems
+            print(s._mpisppy_probability)
 
             # underscores have a special signification in the tree
             for stage in range(1, depth):
@@ -233,6 +265,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         # Although every stage is already multiplied earlier, we must still multiply the overall objective function
         # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
         obj = sputils.find_active_objective(scenario)
-        obj.expr = obj.expr * self.number_admm_subproblems
+
+        # obj.expr = obj.expr * self.number_admm_subproblems
 
         return scenario

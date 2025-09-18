@@ -27,7 +27,7 @@ from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
 from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
 from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
 from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
-from mpisppy.cylinders.ph_ob import PhOuterBound
+# from mpisppy.cylinders.ph_ob import PhOuterBound
 from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
 from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
