@@ -200,7 +200,7 @@ class GAMS_guest():
 
         #print(f"{gs.model_status=}, {gs.solver_status=}")
         if gs.model_status not in solve_ok:
-            s._mpisppy_data.scenario_feasible = False
+            s._mpisppy_data.solution_available = False
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.model_status =}")
@@ -210,7 +210,7 @@ class GAMS_guest():
         if solver_exception is not None and need_solution:
             raise solver_exception
         
-        s._mpisppy_data.scenario_feasible = True
+        s._mpisppy_data.solution_available = True
 
         # For debugging, thisprints the weights of the PH model
         """W_dict = {}

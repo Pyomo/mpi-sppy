@@ -41,7 +41,7 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
                 print("Total probability of scenarios was ", self.opt.E1)
                 print("E1_tolerance = ", self.opt.E1_tolerance)
             quit()
-        infeasP = self.opt.infeas_prob()
+        infeasP = self.opt.no_incumbent_prob()
         if infeasP != 0.:
             if self.opt.cylinder_rank == 0:
                 print("ERROR")

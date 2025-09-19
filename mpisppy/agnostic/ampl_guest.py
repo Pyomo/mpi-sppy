@@ -273,7 +273,7 @@ class AMPL_guest():
             solver_exception = e
 
         if gs.solve_result != "solved":
-            s._mpisppy_data.scenario_feasible = False
+            s._mpisppy_data.solution_available = False
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.solve_result =}")
@@ -281,7 +281,7 @@ class AMPL_guest():
             return
 
         else:
-            s._mpisppy_data.scenario_feasible = True
+            s._mpisppy_data.solution_available = True
 
         if solver_exception is not None and need_solution:
             raise solver_exception
