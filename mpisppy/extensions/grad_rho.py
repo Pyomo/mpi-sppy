@@ -115,10 +115,15 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 op=MPI.SUM,
             )
 
+        # max over *all* nodes
+        denom_max = max(max(denom) for denom in global_denoms.values())
         scen_indep_denom = {}
         for ndn, global_denom in global_denoms.items():
             for i, v in enumerate(global_denom):
-                scen_indep_denom[ndn, i] = v
+                if (scen_indep_denom[ndn, i]) <= self.denom_bound * v:
+                    scen_indep_denom[ndn, i] = max(denom_max, self.denom_bound * v)
+                else:
+                    scen_indep_denom[ndn, i] = v
 
         return scen_indep_denom
 
