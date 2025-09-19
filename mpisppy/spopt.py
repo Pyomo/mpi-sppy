@@ -236,7 +236,7 @@ class SPOpt(SPBase):
                 solver_exception = e
 
             if sputils.not_good_enough_results(results):
-                s._mpisppy_data.scenario_feasible = False
+                s._mpisppy_data.solution_available = False
 
                 if gripe:
                     print (f"[{self._get_cylinder_name()}] Solve failed for scenario {s.name}")
@@ -273,17 +273,16 @@ class SPOpt(SPBase):
                 else:
                     s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
                     s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
-                s._mpisppy_data.scenario_feasible = True
-            # TBD: get this ready for IPopt (e.g., check feas_prob every time)
+            # TBD: get this ready for IPopt (e.g., check incumbent_prob every time)
             # propogate down
             if self.bundling: # must be a bundle
                 for sname in s._ef_scenario_names:
-                     self.local_scenarios[sname]._mpisppy_data.scenario_feasible\
-                         = s._mpisppy_data.scenario_feasible
-                     if s._mpisppy_data.scenario_feasible:
+                     self.local_scenarios[sname]._mpisppy_data.solution_available\
+                         = s._mpisppy_data.solution_available
+                     if s._mpisppy_data.solution_available:
                          self._check_staleness(self.local_scenarios[sname])
             else:  # not a bundle
-                if s._mpisppy_data.scenario_feasible:
+                if s._mpisppy_data.solution_available:
                     self._check_staleness(s)
 
         # end of Agnostic bypass
@@ -499,62 +498,62 @@ class SPOpt(SPBase):
         self.E1 = float(globalP[0])
 
 
-    def feas_prob(self):
-        """ Compute the total probability of all feasible scenarios.
+    def incumbent_prob(self):
+        """ Compute the total probability of all scenarios with a solution available.
 
-        This function can be used to check whether all scenarios are feasible
+        This function can be used to check whether all scenarios have a solution available
         by comparing the return value to one.
 
         Note:
             This function assumes the scenarios have a boolean
-            `_mpisppy_data.scenario_feasible` attribute.
+            `_mpisppy_data.solution_available` attribute.
 
         Returns:
             float:
-                Sum of the scenario probabilities over all feasible scenarios.
-                This value equals E1 if all scenarios are feasible.
+                Sum of the scenario probabilities over all scenarios with an available solution.
+                This value equals E1 if all scenarios have a solution available.
         """
 
         # locals[0] is E_feas and locals[1] is E_1
-        locals = np.zeros(1, dtype='d')
-        globals = np.zeros(1, dtype='d')
+        localP = np.zeros(1, dtype='d')
+        globalP = np.zeros(1, dtype='d')
 
         for k,s in self.local_scenarios.items():
-            if s._mpisppy_data.scenario_feasible:
-                locals[0] += s._mpisppy_probability
+            if s._mpisppy_data.solution_available:
+                localP[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([locals, MPI.DOUBLE],
-                           [globals, MPI.DOUBLE],
+        self.mpicomm.Allreduce([localP, MPI.DOUBLE],
+                           [globalP, MPI.DOUBLE],
                            op=MPI.SUM)
 
-        return float(globals[0])
+        return float(globalP[0])
 
 
-    def infeas_prob(self):
-        """ Sum the total probability for all infeasible scenarios.
+    def no_incumbent_prob(self):
+        """ Sum the total probability for all scenarios with no solution available.
 
         Note:
             This function assumes the scenarios have a boolean
-            `_mpisppy_data.scenario_feasible` attribute.
+            `_mpisppy_data.solution_available` attribute.
 
         Returns:
             float:
-                Sum of the scenario probabilities over all infeasible scenarios.
-                This value equals 0 if all scenarios are feasible.
+                Sum of the scenario probabilities over all scenarios with no solution available.
+                This value equals 0 if all scenarios are feasible and have a solution available.
         """
 
-        locals = np.zeros(1, dtype='d')
-        globals = np.zeros(1, dtype='d')
+        localP = np.zeros(1, dtype='d')
+        globalP = np.zeros(1, dtype='d')
 
         for k,s in self.local_scenarios.items():
-            if not s._mpisppy_data.scenario_feasible:
-                locals[0] += s._mpisppy_probability
+            if not s._mpisppy_data.solution_available:
+                localP[0] += s._mpisppy_probability
 
-        self.mpicomm.Allreduce([locals, MPI.DOUBLE],
-                           [globals, MPI.DOUBLE],
+        self.mpicomm.Allreduce([localP, MPI.DOUBLE],
+                           [globalP, MPI.DOUBLE],
                            op=MPI.SUM)
 
-        return float(globals[0])
+        return float(globalP[0])
 
 
     def avg_min_max(self, compstr):

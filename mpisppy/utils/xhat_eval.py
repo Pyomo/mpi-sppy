@@ -403,7 +403,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self.solve_loop(solver_options=self.current_solver_options, 
                         verbose=verbose)
 
-        infeasP = self.infeas_prob()
+        infeasP = self.no_incumbent_prob()
         if infeasP != 0.:
             return None
         else:
