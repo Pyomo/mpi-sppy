@@ -425,7 +425,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self._remove_objective_cutoff(mip)
             # tmipsolve = time.perf_counter() - tbmipsolve
 
-            if mip._mpisppy_data.scenario_feasible:
+            if mip._mpisppy_data.solution_available:
 
                 # Algorithm 2 line 9 (compute \Gamma^t)
                 inner_bound = mip._mpisppy_data.inner_bound
@@ -473,7 +473,7 @@ class FWPH(mpisppy.phbase.PHBase):
             if (itr == 0):
                 dual_bound = mip._mpisppy_data.outer_bound
 
-            if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.scenario_feasible or gamma_t < FW_conv_thresh:
+            if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.solution_available or gamma_t < FW_conv_thresh:
                 return dual_bound
             else:
                 yield dual_bound
