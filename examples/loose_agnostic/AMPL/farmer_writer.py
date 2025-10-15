@@ -1,20 +1,13 @@
-###############################################################################
-# mpi-sppy: MPI-based Stochastic Programming in PYthon
-#
-# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
-# Sustainable Energy, LLC, The Regents of the University of California, et al.
-# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
-# full copyright and license information.
-###############################################################################
-# In this example, AMPL is the guest language.
-# This is the python model file for AMPL farmer.
-# It will work with farmer.mod and slight deviations.
+# example to write files from AMPL that allow loose coupling with mpi-sppy
 
+import os
+import sys
 import re
 import shutil
 import json
 from pathlib import Path
 
+from mpisppy.utils import config
 from amplpy import AMPL, add_to_path
 add_to_path(r"full path to the AMPL installation directory")
 import pyomo.environ as pyo
@@ -22,11 +15,13 @@ import mpisppy.utils.sputils as sputils
 import mpisppy.agnostic.examples.farmer as farmer
 import numpy as np
 from mpisppy import MPI  # for debugging
+
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
 # If you need random numbers, use this random stream:
 farmerstream = np.random.RandomState()  # pylint: disable=no-member
+
 
 def _sanitize_name(name: str, limit: int = 8):
     """
@@ -79,6 +74,7 @@ def _make_unique(names):
                     break
     return out
 
+
 def _read_name_list(path: Path):
     """Read a one-name-per-line file; strip whitespace; ignore blank lines."""
     names = []
@@ -88,6 +84,7 @@ def _read_name_list(path: Path):
             if s != "":
                 names.append(s)
     return names
+
 
 def rewrite_mps_with_meaningful_names(
     mps_path: str,
@@ -130,8 +127,8 @@ def rewrite_mps_with_meaningful_names(
     col_names = _make_unique(col_names_san)
 
     # Build R000i/C000j -> meaningful name maps
-    row_map = {f"R{i:04d}": row_names[i-1] for i in range(1, len(row_names)+1)}
-    col_map = {f"C{i:04d}": col_names[i-1] for i in range(1, len(col_names)+1)}
+    row_map = {f"R{i:04d}": row_names[i - 1] for i in range(1, len(row_names) + 1)}
+    col_map = {f"C{i:04d}": col_names[i - 1] for i in range(1, len(col_names) + 1)}
 
     # Parse and rewrite the MPS
     lines_out = []
@@ -197,11 +194,8 @@ def rewrite_mps_with_meaningful_names(
                 toks[0] = col_map.get(col, col)
                 # Remaining tokens come in pairs: row value [row value]
                 for i in range(1, len(toks), 2):
-                    # Guard in case of odd token count
                     if i < len(toks):
                         name_or_value = toks[i]
-                        # If it's a row token, replace; values will be numbers and left alone
-                        # We can safely check if starts with 'R' digit; otherwise look up map
                         toks[i] = row_map.get(name_or_value, name_or_value)
                 lines_out.append("  ".join(toks))
 
@@ -210,7 +204,6 @@ def rewrite_mps_with_meaningful_names(
                 # tokens: rhs_name row_name value [row_name value]
                 toks = line.split()
                 if len(toks) >= 3:
-                    # Replace row names at positions 1,3,...
                     for i in range(1, len(toks), 2):
                         toks[i] = row_map.get(toks[i], toks[i])
                     lines_out.append("  ".join(toks))
@@ -222,7 +215,6 @@ def rewrite_mps_with_meaningful_names(
                 # tokens: btype bnd_name col_name [value]
                 toks = line.split()
                 if len(toks) >= 3:
-                    # Column name is at index 2
                     toks[2] = col_map.get(toks[2], toks[2])
                     lines_out.append("  ".join(toks))
                 else:
@@ -249,17 +241,18 @@ def rewrite_mps_with_meaningful_names(
 
     return out_path
 
-# --- Example usage for your files ---
-# rewrite_mps_with_meaningful_names("scen0.mps", "scen0.row", "scen0.col", out_path="scen0_named.mps", free_names=True)
-# If you truly need classic 8-char names, set free_names=False and it will truncate safely.
 
-
-def scenario_creator(scenario_name, ampl_file_name,
-                     use_integer=False, sense=pyo.minimize, crops_multiplier=1,
-                     num_scens=None, seedoffset=0
-                     ):
+def scenario_creator(
+    scenario_name,
+    ampl_file_name,
+    use_integer=False,
+    sense=pyo.minimize,
+    crops_multiplier=1,
+    num_scens=None,
+    seedoffset=0,
+):
     """ Create a scenario for the (scalable) farmer example
-    
+
     Args:
         scenario_name (str):
             Name of the scenario to construct.
@@ -275,23 +268,21 @@ def scenario_creator(scenario_name, ampl_file_name,
             Factor to control scaling. There will be three times this many
             crops. Default is 1.
         num_scens (int, optional):
-            Number of scenarios. We use it to compute _mpisppy_probability. 
+            Number of scenarios. We use it to compute _mpisppy_probability.
             Default is None.
         seedoffset (int): used by confidence interval code
 
     NOTE: for ampl, the names will be tuples name, index
-    
+
     Returns:
         ampl_model (AMPL object): the AMPL model
         prob (float or "uniform"): the scenario probability
         nonant_var_data_list (list of AMPL variables): the nonants
         obj_fct (AMPL Objective function): the objective function
     """
-
     assert crops_multiplier == 1, "for AMPL, just getting started with 3 crops"
 
     ampl = AMPL()
-
     ampl.read(ampl_file_name)
 
     # scenario specific data applied
@@ -300,25 +291,26 @@ def scenario_creator(scenario_name, ampl_file_name,
     y = ampl.get_parameter("RandomYield")
     if scennum == 0:  # below
         y.set_values({"wheat": 2.0, "corn": 2.4, "beets": 16.0})
-    elif scennum == 2: # above
+    elif scennum == 2:  # above
         y.set_values({"wheat": 3.0, "corn": 3.6, "beets": 24.0})
 
     areaVarDatas = list(ampl.get_variable("area").instances())
 
     try:
         obj_fct = ampl.get_objective("minus_profit")
-    except:
+    except Exception:
         print("big troubles!!; we can't find the objective function")
         raise
     return ampl, "uniform", areaVarDatas, obj_fct
-    
 
-def write_mps_file(ampl, s, name_maps=True):
-    """Write scen{s}.mps using AMPL's 'write m<stub>' syntax.
-       If name_maps=True, also writes scen{s}.row/.col mapping files."""
-    ampl.eval(f'option auxfiles {"rc" if name_maps else ""};')
-    ampl.eval(f'write mscen{s};')   # produces scen{s}.mps (and .row/.col if auxfiles rc)
-    return f"scen{s}.mps"
+
+def write_mps_file(ampl: AMPL, stub: str, name_maps: bool = True):
+    """Write <stub>.mps (and <stub>.row/.col if name_maps)."""
+    if name_maps:
+        ampl.eval('option auxfiles rc;')
+    # AMPL requires: write m<stub>;  (no space, no quotes)
+    ampl.eval(f'write m{stub};')
+
 
 def _nonant_names_from_mps(mps_path, nonant_var_base="area"):
     """
@@ -347,35 +339,77 @@ def _nonant_names_from_mps(mps_path, nonant_var_base="area"):
                         names.append(var)
     return names
 
+
+def check_empty_dir(dirname: str) -> bool:
+    """Require that dirname exists and is an empty directory."""
+    if not os.path.isdir(dirname):
+        print(f"Error: '{dirname}' is not a valid directory path.", file=sys.stderr)
+        return False
+    if os.listdir(dirname):
+        print(f"Error: Directory '{dirname}' is not empty.", file=sys.stderr)
+        return False
+    return True
+
+
 if __name__ == "__main__":
     num_scens = 3
     ampl_file_name = "farmer.mod"
+
+    cfg = config.Config()
+    cfg.add_to_config(
+        "output_directory",
+        description="The directory where scenario files will be written",
+        domain=str,
+        default=None,
+        argparse_args={"required": True},
+    )
+    cfg.parse_command_line("farmer_writer.py")
+
+    dirname = cfg.output_directory
+    if not check_empty_dir(dirname):
+        raise RuntimeError(f"{dirname} must exist and be empty")
+
+    namebase = os.path.join(dirname, "scen")
+
     for s in range(num_scens):
+        # scenario_name should contain the scenario number for extract_num();
+        # we keep the simple "scen{s}" (digits at the end are what matters).
+        scenario_name = f"scen{s}"
         ampl, prob, nonants, obj_fct = scenario_creator(
-            f"scen{s}", ampl_file_name, num_scens=num_scens
+            scenario_name, ampl_file_name, num_scens=num_scens
         )
         print(f"we have the ampl model for scenario {s}")
 
-        mps_file = write_mps_file(ampl, s, name_maps=True)
-        assert mps_file == f"scen{s}.mps"
-        print(f"wrote {mps_file}, but now re-writing with better names")
-        rewrite_mps_with_meaningful_names(f"scen{s}.mps",
-                                          f"scen{s}.row",
-                                          f"scen{s}.col",
-                                          out_path=f"scen{s}_named.mps",
-                                          free_names=True)
-        shutil.copyfile(f"scen{s}.mps", f"scen{s}_densenames.mps")
-        shutil.copyfile(f"scen{s}_named.mps", f"scen{s}.mps")
-        print(f"  wrote {mps_file}, with better names.")
+        # Use a path STUB (no extension) so AMPL writes .mps/.row/.col correctly
+        stub = f"{namebase}{s}"
+        write_mps_file(ampl, stub, name_maps=True)
 
-        # --- Write scen{s}_nonants.json ---
+        mps = f"{stub}.mps"
+        row = f"{stub}.row"
+        col = f"{stub}.col"
+
+        print(f"wrote {mps}, but now re-writing with better names")
+        rewrite_mps_with_meaningful_names(
+            mps,
+            row,
+            col,
+            out_path=f"{stub}_named.mps",
+            free_names=True,
+        )
+
+        # Keep a copy of the dense-name original and then replace .mps with the named one
+        shutil.copyfile(mps, f"{stub}_densenames.mps")
+        shutil.copyfile(f"{stub}_named.mps", mps)
+        print(f"  wrote {mps}, with better names.")
+
+        # --- Write {stub}_nonants.json ---
         # Scenario probability
         if prob == "uniform":
             scenProb = 1.0 / num_scens
         else:
             scenProb = float(prob)
 
-        nonant_names = _nonant_names_from_mps(f"scen{s}.mps", nonant_var_base="area")
+        nonant_names = _nonant_names_from_mps(mps, nonant_var_base="area")
 
         data = {
             "scenarioData": {
@@ -394,17 +428,15 @@ if __name__ == "__main__":
             },
         }
 
-        with open(f"scen{s}_nonants.json", "w", encoding="utf-8") as jf:
+        with open(f"{stub}_nonants.json", "w", encoding="utf-8") as jf:
             json.dump(data, jf, indent=2)
-        print(f"  wrote scen{s}_nonants.json")
-        
-        # --- Write scen{s}_rho.csv ---
-        default_rho = 1.0  # or whatever value you want to use globally
-        rho_filename = f"scen{s}_rho.csv"
+        print(f"  wrote {stub}_nonants.json")
 
+        # --- Write {stub}_rho.csv ---
+        default_rho = 1.0  # or whatever value you want to use globally
+        rho_filename = f"{stub}_rho.csv"
         with open(rho_filename, "w", encoding="utf-8") as csvf:
             csvf.write("varname,rho\n")
             for name in nonant_names:
                 csvf.write(f"{name},{default_rho}\n")
-
         print(f"  wrote {rho_filename}")
