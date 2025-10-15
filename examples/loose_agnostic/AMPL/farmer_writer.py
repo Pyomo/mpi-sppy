@@ -398,4 +398,13 @@ if __name__ == "__main__":
             json.dump(data, jf, indent=2)
         print(f"  wrote scen{s}_nonants.json")
         
-        
+        # --- Write scen{s}_rho.csv ---
+        default_rho = 1.0  # or whatever value you want to use globally
+        rho_filename = f"scen{s}_rho.csv"
+
+        with open(rho_filename, "w", encoding="utf-8") as csvf:
+            csvf.write("varname,rho\n")
+            for name in nonant_names:
+                csvf.write(f"{name},{default_rho}\n")
+
+        print(f"  wrote {rho_filename}")
