@@ -12,6 +12,7 @@
 
 import re
 import shutil
+import json
 from pathlib import Path
 
 from amplpy import AMPL, add_to_path
@@ -319,6 +320,33 @@ def write_mps_file(ampl, s, name_maps=True):
     ampl.eval(f'write mscen{s};')   # produces scen{s}.mps (and .row/.col if auxfiles rc)
     return f"scen{s}.mps"
 
+def _nonant_names_from_mps(mps_path, nonant_var_base="area"):
+    """
+    Parse the MPS file and extract the nonant variable names
+    (e.g., area(_wheat_), area(_corn_), area(_beets_)).
+    Only keeps names starting with `nonant_var_base`.
+    """
+    names = []
+    with open(mps_path, "r", encoding="utf-8") as f:
+        in_columns = False
+        for line in f:
+            u = line.strip().upper()
+            if u == "COLUMNS":
+                in_columns = True
+                continue
+            if u in {"RHS", "BOUNDS", "RANGES", "ENDATA"}:
+                in_columns = False
+            if not in_columns:
+                continue
+
+            tokens = line.split()
+            if tokens:
+                var = tokens[0]
+                if var.startswith(nonant_var_base):
+                    if var not in names:
+                        names.append(var)
+    return names
+
 if __name__ == "__main__":
     num_scens = 3
     ampl_file_name = "farmer.mod"
@@ -339,4 +367,35 @@ if __name__ == "__main__":
         shutil.copyfile(f"scen{s}.mps", f"scen{s}_densenames.mps")
         shutil.copyfile(f"scen{s}_named.mps", f"scen{s}.mps")
         print(f"  wrote {mps_file}, with better names.")
+
+        # --- Write scen{s}_nonants.json ---
+        # Scenario probability
+        if prob == "uniform":
+            scenProb = 1.0 / num_scens
+        else:
+            scenProb = float(prob)
+
+        nonant_names = _nonant_names_from_mps(f"scen{s}.mps", nonant_var_base="area")
+
+        data = {
+            "scenarioData": {
+                "name": f"scen{s}",
+                "scenProb": scenProb,
+            },
+            "treeData": {
+                "globalNodeCount": 1,
+                "nodes": {
+                    "ROOT": {
+                        "serialNumber": 0,
+                        "condProb": 1.0,
+                        "nonAnts": nonant_names,
+                    }
+                },
+            },
+        }
+
+        with open(f"scen{s}_nonants.json", "w", encoding="utf-8") as jf:
+            json.dump(data, jf, indent=2)
+        print(f"  wrote scen{s}_nonants.json")
+        
         

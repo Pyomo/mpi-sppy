@@ -3,7 +3,7 @@
 # Reference:
 #  John R. Birge and Francois Louveaux. Introduction to Stochastic Programming.
 #
-# AMPL coding by Victor Zverovich; ## modifed by dlw; now *minization* 
+# AMPL coding by Victor Zverovich; ## modifed by dlw; now *minimization* 
 
 ##function expectation;
 ##function random;
