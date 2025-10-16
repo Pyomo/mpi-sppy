@@ -198,6 +198,11 @@ do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
        "--rel-gap 0.001 --max-iterations=50 "
        "--grad-rho --grad-order-stat 0.5 "
        "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
+       "--module-name farmer --num-scens 6 "
+       "--rel-gap 0.001 --max-iterations=50 "
+       "--grad-rho --indep-denom "
+       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--module-name farmer --num-scens 6 "
        "--rel-gap 0.001 --max-iterations=50 "

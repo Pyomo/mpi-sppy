@@ -128,7 +128,20 @@ def _name_lists(module, cfg, bundle_wrapper=None):
 
 
 #==========
-def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+    """Essentially, the main program for decomposition
+
+    Args:
+       module (Python module or class): the model file with required functions or a class with the required methods.
+       cfg (Pyomo config object): parsed arguments with perhaps a few attachments    
+       scenario_creator (function): note: this might be a wrapper and therefore not in the module
+       scenario_creator_kwargs (dict): args for the scenario creator function
+       scenario_denouement (function): some things (e.g. PH) call this for each scenario at the end
+       bundle_wrapper (ProperBundler): wraps the module for proper bundle creation
+
+    Returns:
+        wheel (WheelSpinner): the container used for the spokes (so callers can query results)
+    """
     if cfg.get("scenarios_per_bundle") is not None and cfg.scenarios_per_bundle == 1:
         raise RuntimeError("To get one scenarios-per-bundle=1, you need to write then read the 'bundles'")
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
@@ -450,6 +463,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if hasattr(module, "custom_writer"):
         module.custom_writer(wheel, cfg)
 
+    return wheel
+
 
 #==========
 def _write_scenarios(module,
@@ -680,4 +695,4 @@ if __name__ == "__main__":
     elif cfg.EF:
         _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
     else:
-        _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
+        do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
