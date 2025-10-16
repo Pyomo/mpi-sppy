@@ -133,6 +133,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
 
     Args:
        module (Python module): the model file with required functions
+       cfg (Pyomo config object): parsed arguments with perhaps a few attachments    
        scenario_creator (function): note: this might be a wrapper and therefore not in the module
        scenario_creator_kwargs (dict): args for the scenario creator function
        scenario_denouement (function): some things (e.g. PH) call this for each scenario at the end
