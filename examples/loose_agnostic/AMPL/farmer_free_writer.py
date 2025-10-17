@@ -1,7 +1,7 @@
 # example to write files from AMPL that allow loose coupling with mpi-sppy
-# This is a fixed-format MPS file example
-# Note that AMPL provides col and row files to get back to nice names.
-#  (See farmer_free_writer for a free format writer that can't be read as of Oct 2025)
+# NOTE: There is a lot of code here to create a nice free-format MPS file,
+#   but as of October 2025, the software we are using read mps cannot
+#   really handle it. Use lp files or use fixed format as in farmer_writer.py.
 
 import os
 import sys
@@ -94,7 +94,7 @@ def rewrite_mps_with_meaningful_names(
     row_map_path: str,
     col_map_path: str,
     out_path: str | None = None,
-    free_names: bool = False,
+    free_names: bool = True,
 ):
     """
     Replace R000i / C000j names in an AMPL-written MPS using .row / .col.
@@ -307,6 +307,14 @@ def scenario_creator(
     return ampl, "uniform", areaVarDatas, obj_fct
 
 
+def write_mps_file(ampl: AMPL, stub: str, name_maps: bool = True):
+    """Write <stub>.mps (and <stub>.row/.col if name_maps)."""
+    if name_maps:
+        ampl.eval('option auxfiles rc;')
+    # AMPL requires: write m<stub>;  (no space, no quotes)
+    ampl.eval(f'write m{stub};')
+
+
 def _nonant_names_from_mps(mps_path, nonant_var_base="area"):
     """
     Parse the MPS file and extract the nonant variable names
@@ -333,14 +341,6 @@ def _nonant_names_from_mps(mps_path, nonant_var_base="area"):
                     if var not in names:
                         names.append(var)
     return names
-
-
-def write_mps_file(ampl: AMPL, stub: str, name_maps: bool = True):
-    """Write <stub>.mps (and <stub>.row/.col if name_maps)."""
-    if name_maps:
-        ampl.eval('option auxfiles rc;')
-    # AMPL requires: write m<stub>;  (no space, no quotes)
-    ampl.eval(f'write m{stub};')
 
 
 def check_empty_dir(dirname: str) -> bool:
@@ -391,7 +391,19 @@ if __name__ == "__main__":
         row = f"{stub}.row"
         col = f"{stub}.col"
 
-        print(f"  wrote {mps}, {row}, and {col}.")
+        print(f"wrote {mps}, but now re-writing with better names")
+        rewrite_mps_with_meaningful_names(
+            mps,
+            row,
+            col,
+            out_path=f"{stub}_named.mps",
+            free_names=True,
+        )
+
+        # Keep a copy of the dense-name original and then replace .mps with the named one
+        shutil.copyfile(mps, f"{stub}_densenames.mps")
+        shutil.copyfile(f"{stub}_named.mps", mps)
+        print(f"  wrote {mps}, with better names.")
 
         # --- Write {stub}_nonants.json ---
         # Scenario probability

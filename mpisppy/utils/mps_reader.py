@@ -8,7 +8,64 @@
 ###############################################################################
 # IMPORTANT: parens in variable names will become underscore (_)
 import mip   # from coin-or (pip install mip)
+from mip.exceptions import ParameterNotAvailable
 import pyomo.environ as pyo
+
+# the following giant function is provided because CBC seems to have
+#  trouble parsing free format MPS files.
+def _read_obj_terms_from_mps(mps_path: str):
+    """Return list of (var_name, coeff) tuples by parsing the MPS file directly."""
+    obj_row = None
+    obj_terms = []
+    section = None
+
+    with open(mps_path, "r") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("*"):
+                continue
+            tok0 = line.split()[0]
+
+            if tok0 in ("NAME",):
+                continue
+            if tok0 == "ROWS":
+                section = "ROWS"; continue
+            if tok0 == "COLUMNS":
+                section = "COLUMNS"; continue
+            if tok0 in ("RHS", "RANGES", "BOUNDS", "ENDATA"):
+                section = None
+                if tok0 != "COLUMNS":
+                    # Once we reach RHS, we’re done collecting objective terms
+                    if tok0 in ("RHS", "ENDATA"):
+                        break
+                continue
+
+            if section == "ROWS":
+                parts = line.split()
+                # Row type N marks the objective row
+                if parts[0] == "N":
+                    obj_row = parts[1]
+            elif section == "COLUMNS":
+                parts = line.split()
+                # Skip integer markers if they appear
+                if parts[0] == "'MARKER'":
+                    continue
+                col = parts[0]
+                rest = parts[1:]
+                # Free MPS permits one or two (row, val) pairs per line
+                # i.e., col row1 val1 [row2 val2]
+                if len(rest) < 2:
+                    continue
+                # Walk pairs
+                for i in range(0, len(rest), 2):
+                    if i + 1 >= len(rest):
+                        break
+                    row, val = rest[i], rest[i + 1]
+                    if obj_row is not None and row == obj_row:
+                        obj_terms.append((col, float(val)))
+    return obj_terms
+
+
 
 def read_mps_and_create_pyomo_model(mps_path):
     """
@@ -71,7 +128,15 @@ def read_mps_and_create_pyomo_model(mps_path):
         setattr(model, c.name, pyomoC)
 
     # objective function
-    obj_expr = sum(coeff * varDict[v] for v, coeff in m.objective.expr.items())
+    try:
+        obj_items = list(m.objective.expr.items())  # usual path
+        obj_expr = sum(coeff * varDict[vname] for vname, coeff in obj_items if vname in varDict)
+    except ParameterNotAvailable:
+        # CBC didn’t expose objective coefficients — fall back to parsing the file
+        obj_items = _read_obj_terms_from_mps(mps_path)
+        if not obj_items:
+            raise RuntimeError("Could not retrieve objective coefficients from CBC or MPS file.")
+        obj_expr = sum(coeff * varDict[vname] for vname, coeff in obj_items if vname in varDict)    
     if m.sense == mip.MINIMIZE:
         model.objective = pyo.Objective(expr=obj_expr, sense=pyo.minimize)
     else:
