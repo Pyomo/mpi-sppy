@@ -560,3 +560,9 @@ jobs:
         run: |
           cd mpisppy/agnostic/examples
           python afew_agnostic.py
+	  
+      - name: run loose AMPL
+        timeout-minutes: 10
+        run: |
+          cd examples/loose_agnostic/AMPL
+          bash farmer_example.bash
