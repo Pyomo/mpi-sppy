@@ -9,6 +9,7 @@ import re
 import shutil
 import json
 from pathlib import Path
+from typing import Iterable
 
 from mpisppy.utils import config
 from amplpy import AMPL, add_to_path
@@ -24,226 +25,6 @@ global_rank = fullcomm.Get_rank()
 
 # If you need random numbers, use this random stream:
 farmerstream = np.random.RandomState()  # pylint: disable=no-member
-
-
-def _sanitize_name(name: str, limit: int = 8):
-    """
-    Sanitize a symbolic name for MPS:
-      - Replace '[' with '(' and ']' with ')'
-      - Allow letters, digits, underscore, and parentheses
-      - Replace any other char with '_', collapse repeats
-      - If first char isn't a letter, prefix with 'N'
-      - Truncate to 'limit' chars (0 = no truncation)
-    """
-    # 1) Brackets to parentheses
-    s = name.replace("[", "(").replace("]", ")")
-
-    # 2) Keep only A-Z a-z 0-9 _ ( )
-    s = re.sub(r"[^A-Za-z0-9_()]", "_", s)
-    s = re.sub(r"_+", "_", s).strip("_")
-
-    # 3) Ensure first char is a letter
-    if not s:
-        s = "N"
-    if not re.match(r"[A-Za-z]", s[0]):
-        s = "N" + s
-
-    # 4) Truncate (classic MPS = 8 chars; free MPS = 0 for unlimited)
-    return s[:limit] if limit else s
-
-
-def _make_unique(names):
-    """
-    Ensure list of names are unique by appending _1, _2, ... when needed.
-    Returns a new list with unique names.
-    """
-    seen = {}
-    out = []
-    for n in names:
-        base = n
-        k = seen.get(base, 0)
-        if k == 0 and base not in seen:
-            out.append(base)
-            seen[base] = 1
-        else:
-            # bump until unique
-            while True:
-                k += 1
-                cand = f"{base}_{k}"
-                if cand not in seen:
-                    out.append(cand)
-                    seen[base] = k
-                    seen[cand] = 1
-                    break
-    return out
-
-
-def _read_name_list(path: Path):
-    """Read a one-name-per-line file; strip whitespace; ignore blank lines."""
-    names = []
-    with path.open("r", encoding="utf-8") as f:
-        for line in f:
-            s = line.strip()
-            if s != "":
-                names.append(s)
-    return names
-
-
-def rewrite_mps_with_meaningful_names(
-    mps_path: str,
-    row_map_path: str,
-    col_map_path: str,
-    out_path: str | None = None,
-    free_names: bool = False,
-):
-    """
-    Replace R000i / C000j names in an AMPL-written MPS using .row / .col.
-
-    Parameters
-    ----------
-    mps_path : str
-        Path to original MPS (e.g., 'scen0.mps').
-    row_map_path : str
-        Path to .row file (e.g., 'scen0.row') listing row names in R0001..order.
-    col_map_path : str
-        Path to .col file (e.g., 'scen0.col') listing col names in C0001..order.
-    out_path : str | None
-        Output path. If None, overwrite the input MPS.
-    free_names : bool
-        If True, allow longer names (typical “free” MPS parsers like Gurobi/CPLEX accept).
-        If False, enforce 8-char classic MPS names.
-    """
-    mps_path = Path(mps_path)
-    row_path = Path(row_map_path)
-    col_path = Path(col_map_path)
-    out_path = Path(out_path) if out_path else mps_path
-
-    # Read mapping lists
-    row_names_raw = _read_name_list(row_path)
-    col_names_raw = _read_name_list(col_path)
-
-    # Sanitize + enforce uniqueness
-    limit = 0 if free_names else 8
-    row_names_san = [_sanitize_name(n, limit=limit) for n in row_names_raw]
-    col_names_san = [_sanitize_name(n, limit=limit) for n in col_names_raw]
-    row_names = _make_unique(row_names_san)
-    col_names = _make_unique(col_names_san)
-
-    # Build R000i/C000j -> meaningful name maps
-    row_map = {f"R{i:04d}": row_names[i - 1] for i in range(1, len(row_names) + 1)}
-    col_map = {f"C{i:04d}": col_names[i - 1] for i in range(1, len(col_names) + 1)}
-
-    # Parse and rewrite the MPS
-    lines_out = []
-    section = None  # None | 'ROWS' | 'COLUMNS' | 'RHS' | 'BOUNDS' | 'RANGES'
-    with mps_path.open("r", encoding="utf-8") as f:
-        for raw in f:
-            line = raw.rstrip("\n")
-
-            # Section tracking
-            u = line.strip().upper()
-            if u == "ROWS":
-                section = "ROWS"
-                lines_out.append(line)
-                continue
-            elif u == "COLUMNS":
-                section = "COLUMNS"
-                lines_out.append(line)
-                continue
-            elif u == "RHS":
-                section = "RHS"
-                lines_out.append(line)
-                continue
-            elif u == "BOUNDS":
-                section = "BOUNDS"
-                lines_out.append(line)
-                continue
-            elif u == "RANGES":
-                section = "RANGES"
-                lines_out.append(line)
-                continue
-            elif u == "ENDATA":
-                section = None
-                lines_out.append(line)
-                continue
-            elif u == "NAME" or u.startswith("NAME "):
-                # Keep the NAME line as-is
-                lines_out.append(line)
-                continue
-
-            # Rewrite based on section
-            if section == "ROWS":
-                # Example: " L  R0001"
-                toks = line.split()
-                if len(toks) >= 2:
-                    # toks[0] is row type (N, L, G, E)
-                    # toks[1] is row name
-                    rname = toks[1]
-                    toks[1] = row_map.get(rname, rname)
-                    lines_out.append("  ".join(toks))
-                else:
-                    lines_out.append(line)
-
-            elif section == "COLUMNS":
-                # Examples:
-                # "    C0001     R0001     1"
-                # "    C0001     R0002     2    R0006     150"
-                toks = line.split()
-                if not toks:
-                    lines_out.append(line)
-                    continue
-                # First token is column name
-                col = toks[0]
-                toks[0] = col_map.get(col, col)
-                # Remaining tokens come in pairs: row value [row value]
-                for i in range(1, len(toks), 2):
-                    if i < len(toks):
-                        name_or_value = toks[i]
-                        toks[i] = row_map.get(name_or_value, name_or_value)
-                lines_out.append("  ".join(toks))
-
-            elif section == "RHS":
-                # Example: "    B         R0001     500"
-                # tokens: rhs_name row_name value [row_name value]
-                toks = line.split()
-                if len(toks) >= 3:
-                    for i in range(1, len(toks), 2):
-                        toks[i] = row_map.get(toks[i], toks[i])
-                    lines_out.append("  ".join(toks))
-                else:
-                    lines_out.append(line)
-
-            elif section == "BOUNDS":
-                # Example: " UP BOUND     C0006     6000"
-                # tokens: btype bnd_name col_name [value]
-                toks = line.split()
-                if len(toks) >= 3:
-                    toks[2] = col_map.get(toks[2], toks[2])
-                    lines_out.append("  ".join(toks))
-                else:
-                    lines_out.append(line)
-
-            elif section == "RANGES":
-                # Similar structure to RHS: name, row, value pairs
-                toks = line.split()
-                if len(toks) >= 3:
-                    for i in range(1, len(toks), 2):
-                        toks[i] = row_map.get(toks[i], toks[i])
-                    lines_out.append("  ".join(toks))
-                else:
-                    lines_out.append(line)
-
-            else:
-                # Outside sections, copy through
-                lines_out.append(line)
-
-    # Write result
-    with out_path.open("w", encoding="utf-8") as g:
-        for l in lines_out:
-            g.write(l + "\n")
-
-    return out_path
-
 
 def scenario_creator(
     scenario_name,
@@ -306,33 +87,133 @@ def scenario_creator(
         raise
     return ampl, "uniform", areaVarDatas, obj_fct
 
-
-def _nonant_names_from_mps(mps_path, nonant_var_base="area"):
+# this function is fairly general
+def _nonant_names_from_mps(
+    mps_path: str,
+    nonants: Iterable,
+    col_map_path: str | None = None,
+):
     """
-    Parse the MPS file and extract the nonant variable names
-    (e.g., area(_wheat_), area(_corn_), area(_beets_)).
-    Only keeps names starting with `nonant_var_base`.
-    """
-    names = []
-    with open(mps_path, "r", encoding="utf-8") as f:
-        in_columns = False
-        for line in f:
-            u = line.strip().upper()
-            if u == "COLUMNS":
-                in_columns = True
-                continue
-            if u in {"RHS", "BOUNDS", "RANGES", "ENDATA"}:
-                in_columns = False
-            if not in_columns:
-                continue
+    Given an MPS path and a list of nonants (AMPL var instances or strings),
+    return the list of MPS column ids (C0001, C0002, ...) corresponding to them,
+    by matching each nonant's *index tuple* to the AMPL-generated .col lines.
 
-            tokens = line.split()
-            if tokens:
-                var = tokens[0]
-                if var.startswith(nonant_var_base):
-                    if var not in names:
-                        names.append(var)
-    return names
+    We do NOT require knowing the base variable name; we match by the bracketed
+    index (e.g., ['wheat'] or ['a','b']) that appears in the .col file.
+    """
+
+    def _read_name_list(path: Path):
+        out = []
+        with path.open("r", encoding="utf-8") as f:
+            for line in f:
+                s = line.strip()
+                if s:
+                    out.append(s)
+        return out
+
+    # Normalize a bracketed index string like:
+    #   "['wheat']"  -> "'wheat'"
+    #   "[ 'a' , 'b' ]" -> "'a','b'"
+    # We compare *only* the inner content (without the surrounding []), with:
+    #   - single quotes
+    #   - no spaces
+    def _normalize_bracket_inner(bracket_str: str) -> str:
+        s = bracket_str.replace('"', "'")
+        # extract inside [...]
+        m = re.search(r"\[([^\]]+)\]", s)
+        if not m:
+            return ""
+        inner = m.group(1)
+        # remove spaces around commas
+        inner = re.sub(r"\s*,\s*", ",", inner)
+        # remove stray spaces
+        inner = re.sub(r"\s+", "", inner)
+        return inner
+
+    # Try to get "area['wheat']" etc. from an amplpy instance; fall back to str(x)
+    def _extract_index_key_from_nonant(x) -> str | None:
+        # 1) If the object has a name() or name attribute with brackets, use it
+        try:
+            nm = getattr(x, "name", None)
+            if callable(nm):
+                nm = nm()
+            if isinstance(nm, str) and "[" in nm and "]" in nm:
+                key = _normalize_bracket_inner(nm)
+                if key:
+                    return key
+        except Exception:
+            pass
+
+        # 2) Parse from str(x). For amplpy VariableInstance, str(x) often looks like:
+        #    "(('wheat',), <amplpy.ampl.Variable object at 0x...>)"
+        sx = str(x).replace('"', "'")
+        # Grab the first parenthesized tuple of indices inside the leading "( ... , <amplpy..."
+        m = re.search(r"^\(\((.*?)\),\s*<amplpy\.ampl\.Variable", sx)
+        if m:
+            inner = m.group(1)         # e.g., "'wheat',"   or   "'a','b'"
+            # normalize commas/spaces and ensure single quotes, no spaces
+            inner = re.sub(r"\s*,\s*", ",", inner)
+            inner = re.sub(r"\s+", "", inner)
+            # strip trailing comma for singleton tuples like "'wheat',"
+            inner = inner.rstrip(",")
+            return inner
+
+        # 3) As a last resort, if there is any [...] in str(x), use it
+        m2 = re.search(r"\[([^\]]+)\]", sx)
+        if m2:
+            inner = re.sub(r"\s*,\s*", ",", m2.group(1))
+            inner = re.sub(r"\s+", "", inner.replace('"', "'"))
+            return inner
+
+        return None
+
+    # Build normalized index keys for the requested nonants
+    target_keys = []
+    for n in nonants:
+        key = _extract_index_key_from_nonant(n)
+        if key:
+            target_keys.append(key)
+    if not target_keys:
+        raise ValueError(
+            "Could not extract index tuples from the provided nonants. "
+            f"Examples seen: {[str(n) for n in list(nonants)[:3]]}"
+        )
+
+    # Read .col and map each line's index to Cxxxx
+    mps_p = Path(mps_path)
+    col_p = Path(col_map_path) if col_map_path else mps_p.with_suffix(".col")
+    if not col_p.exists():
+        raise FileNotFoundError(f"Column map file not found: {col_p}")
+
+    col_lines = _read_name_list(col_p)
+
+    index_to_cid: dict[str, str] = {}
+    for idx, raw in enumerate(col_lines, start=1):  # 1-based -> C0001
+        key = _normalize_bracket_inner(raw)
+        if key:  # only store lines that actually have brackets
+            # If duplicates existed (rare), keep the first occurrence
+            index_to_cid.setdefault(key, f"C{idx:04d}")
+
+    # Map requested index keys to Cxxxx
+    mps_ids: list[str] = []
+    missing = []
+    for key in target_keys:
+        cid = index_to_cid.get(key)
+        if cid:
+            mps_ids.append(cid)
+        else:
+            missing.append(key)
+
+    if missing:
+        # Helpful debug: show a preview of what we saw
+        preview = [l for l in col_lines[:10]]
+        raise ValueError(
+            "Some nonants were not found in .col. "
+            f"Missing keys (normalized inside []): {missing}. "
+            f"First .col lines: {preview}"
+        )
+
+    return mps_ids
 
 
 def write_mps_file(ampl: AMPL, stub: str, name_maps: bool = True):
@@ -400,7 +281,7 @@ if __name__ == "__main__":
         else:
             scenProb = float(prob)
 
-        nonant_names = _nonant_names_from_mps(mps, nonant_var_base="area")
+        nonant_names = _nonant_names_from_mps(mps, nonants, col)
 
         data = {
             "scenarioData": {

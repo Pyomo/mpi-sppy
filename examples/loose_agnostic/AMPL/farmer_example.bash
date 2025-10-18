@@ -38,4 +38,4 @@ echo "Use the files (with only one cylinder... so this is just a demo"
 # This is perhaps too clever by about half: the module is the mps_module and its scenario_creator
 #  function assumes that mps-files-directory has been set on the command line.
 # You can have any generic cylinders commands you like.
-python -m mpi4py ../../../mpisppy/generic_cylinders.py --module-name ../../../mpisppy/utils/mps_module --mps-files-directory $ODIR --solver-name ${SOLVER} --max-iterations 1 --default-rho 1 
+python -m mpi4py ../../../mpisppy/generic_cylinders.py --module-name ../../../mpisppy/utils/mps_module --mps-files-directory $ODIR --solver-name ${SOLVER} --max-iterations 2 --default-rho 1 
