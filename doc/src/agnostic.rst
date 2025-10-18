@@ -16,18 +16,31 @@ Code for creating a
 Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
 but you can also just use ``generic_cylinders.py`` and give
 it the module ``mpisppy.utils.mps_module`` (you will need to specify
-that path to this module) and the ``--mps-files-directory``
+the path to this module) and the ``--mps-files-directory``
 option.  Note
 that at the time of this writing, the number of scenarios is obtained
 by counting the mps files in the directory given.
 
-The file ``examples.sizes.mps_demo.bash`` has two commands. The second illustrates
-how to instruction ``MPI-SPPY`` to read mps/json file pairs for each scenario from a
-directory. The first command illustrates how to use ``MPI-SPPY`` to write
-them in the first place (but if ``MPI-SPPY`` can get your scenarios, there
-is probably no reason to write them and then read them again!). This
-functionality is intended to be used by users of other AMLs or other
-scenario-based stochastic programming applications.
+The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has two
+commands.  The second illustrates how to instruct ``MPI-SPPY`` to read
+mps/json file pairs for each scenario from a directory. The first runs
+an `AMPLpy` program that creates the scenario files.  This program is
+in ``examples.loose_agnostic.AMPL.farmer_writer.py`` and, apart from
+the `scenario_creator` function, is pretty general for two-stage
+problems.  You be able to copy the program and
+write a `scenario_creator` function for your two-stage problem.
+
+A somewhat strange example is in the file
+``examples.sizes.mps_demo.bash`` has two commands. The second
+illustrates how to instruct ``MPI-SPPY`` to read mps/json file pairs
+for each scenario from a directory. The first command illustrates how
+to use ``MPI-SPPY`` to write them in the first place (but if
+``MPI-SPPY`` can get your scenarios, there is probably no reason to
+write them and then read them again!). This functionality is intended
+to be used by users of other AMLs or other scenario-based stochastic
+programming applications.
+
+There is low-level support for `.lp` files instead of `.mps` files.
 
 JSON file format
 ----------------
