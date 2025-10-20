@@ -42,4 +42,4 @@ echo "Use the files (just an interface demo)"
 mpiexec -np 2 python -m mpi4py ../../../mpisppy/generic_cylinders.py --module-name ../../../mpisppy/utils/mps_module --mps-files-directory $ODIR --solver-name ${SOLVER} --max-iterations 2 --default-rho 1 --solution-base-name $SOLBASE --xhatshuffle
 
 echo "write the nonant values with AMPL names to nonant_output.csv"
-python colmap.py scen0.col ${SOLBASE}.csv nonant_output.csv --strict
+python colmap.py ${ODIR}/scen0.col ${SOLBASE}.csv nonant_output.csv --strict
