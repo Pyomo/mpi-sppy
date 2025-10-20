@@ -4,7 +4,7 @@
 set -e
 
 ODIR="_fromAMPL"
-SOLVER="cplex"
+SOLVER="cplex_direct"
 SOLBASE="farmer_solution_output"
 
 empty_or_create_dir() {
