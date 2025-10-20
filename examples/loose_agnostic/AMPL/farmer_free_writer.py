@@ -1,3 +1,11 @@
+###############################################################################
+# mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2025, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
+###############################################################################
 # example to write files from AMPL that allow loose coupling with mpi-sppy
 # NOTE: There is a lot of code here to create a nice free-format MPS file,
 #   but as of October 2025, the software we are using read mps cannot

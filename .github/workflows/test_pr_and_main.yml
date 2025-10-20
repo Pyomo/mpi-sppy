@@ -543,6 +543,7 @@ jobs:
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
           python -m pip install gamspy
+          python -m pip install mip
           # license?
 
       - name: setup the program
