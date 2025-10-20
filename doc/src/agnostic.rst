@@ -21,7 +21,7 @@ option.  Note
 that at the time of this writing, the number of scenarios is obtained
 by counting the mps files in the directory given.
 
-The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has two
+The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has three
 commands.  The second illustrates how to instruct ``MPI-SPPY`` to read
 mps/json file pairs for each scenario from a directory. The first runs
 an `AMPLpy` program that creates the scenario files.  This program is
@@ -29,6 +29,8 @@ in ``examples.loose_agnostic.AMPL.farmer_writer.py`` and, apart from
 the `scenario_creator` function, is pretty general for two-stage
 problems.  You be able to copy the program and
 write a `scenario_creator` function for your two-stage problem.
+The third command runs a script that illustrates how to map column
+names created by the MPS writer back to AMPL variable names.
 
 A somewhat strange example is in the file
 ``examples.sizes.mps_demo.bash`` has two commands. The second
