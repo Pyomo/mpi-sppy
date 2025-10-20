@@ -11,13 +11,12 @@ import json
 from pathlib import Path
 
 from mpisppy.utils import config
-from amplpy import AMPL, add_to_path
-add_to_path(r"full path to the AMPL installation directory")
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.agnostic.examples.farmer as farmer
 import numpy as np
 from mpisppy import MPI  # for debugging
+from amplpy import AMPL, add_to_path
+add_to_path(r"full path to the AMPL installation directory")
 
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -239,8 +238,8 @@ def rewrite_mps_with_meaningful_names(
 
     # Write result
     with out_path.open("w", encoding="utf-8") as g:
-        for l in lines_out:
-            g.write(l + "\n")
+        for ell in lines_out:
+            g.write(ell + "\n")
 
     return out_path
 

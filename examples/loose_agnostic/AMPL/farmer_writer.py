@@ -6,19 +6,19 @@
 import os
 import sys
 import re
-import shutil
 import json
 from pathlib import Path
 from typing import Iterable
 
 from mpisppy.utils import config
-from amplpy import AMPL, add_to_path
-add_to_path(r"full path to the AMPL installation directory")
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
-import mpisppy.agnostic.examples.farmer as farmer
 import numpy as np
 from mpisppy import MPI  # for debugging
+
+from amplpy import AMPL, add_to_path
+add_to_path(r"full path to the AMPL installation directory")
+
 
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
@@ -206,7 +206,7 @@ def _nonant_names_from_mps(
 
     if missing:
         # Helpful debug: show a preview of what we saw
-        preview = [l for l in col_lines[:10]]
+        preview = [ell for ell in col_lines[:10]]
         raise ValueError(
             "Some nonants were not found in .col. "
             f"Missing keys (normalized inside []): {missing}. "

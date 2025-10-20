@@ -29,9 +29,11 @@ def _read_obj_terms_from_mps(mps_path: str):
             if tok0 in ("NAME",):
                 continue
             if tok0 == "ROWS":
-                section = "ROWS"; continue
+                section = "ROWS"
+                continue
             if tok0 == "COLUMNS":
-                section = "COLUMNS"; continue
+                section = "COLUMNS"
+                continue
             if tok0 in ("RHS", "RANGES", "BOUNDS", "ENDATA"):
                 section = None
                 if tok0 != "COLUMNS":
