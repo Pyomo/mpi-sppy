@@ -33,7 +33,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -226,7 +226,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -252,7 +252,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -282,7 +282,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -310,7 +310,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -366,7 +366,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -459,7 +459,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -486,7 +486,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -520,7 +520,7 @@ straight-tests:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
