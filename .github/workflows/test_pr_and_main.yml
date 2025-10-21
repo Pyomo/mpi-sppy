@@ -96,6 +96,7 @@ jobs:
   runall_persistent:
     name: run_all.py persistent solver
     runs-on: ubuntu-latest
+    needs: [ruff]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v3
