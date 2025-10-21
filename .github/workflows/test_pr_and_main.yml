@@ -242,7 +242,7 @@ straight-tests:
           cd mpisppy/tests
           python straight_tests.py
 
-  admm-wrapper:
+admm-wrapper:
     name: admm wrapper tests
     runs-on: ubuntu-latest
     needs: [ruff]
