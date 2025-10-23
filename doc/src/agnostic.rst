@@ -32,6 +32,9 @@ write a `scenario_creator` function for your two-stage problem.
 The third command runs a script that illustrates how to map column
 names created by the MPS writer back to AMPL variable names.
 
+The file ``examples.loose_agnostic.GAMS.farmer_example.bash`` has three
+commands that mimic the commands for AMPL.
+
 A somewhat strange example is in the file
 ``examples.sizes.mps_demo.bash`` has two commands. The second
 illustrates how to instruct ``MPI-SPPY`` to read mps/json file pairs
