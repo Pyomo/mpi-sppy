@@ -558,4 +558,4 @@ jobs:
           cd examples/loose_agnostic/AMPL
           bash farmer_example.bash
           cd ../GAMS
-             bash farmer_example.bash
+          bash farmer_example.bash
