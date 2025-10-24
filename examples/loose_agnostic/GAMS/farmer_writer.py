@@ -11,8 +11,6 @@ import subprocess
 from pathlib import Path
 from shutil import which
 
-import numpy as np  # optional
-import mpisppy.utils.sputils as sputils  # optional
 from mpisppy.utils import config
 
 # ---------------- Helpers ----------------
