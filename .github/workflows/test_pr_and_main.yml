@@ -433,7 +433,6 @@ jobs:
   test-headers:
     name: header test
     runs-on: ubuntu-latest
-    needs: [ruff]
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -559,4 +558,4 @@ jobs:
           cd examples/loose_agnostic/AMPL
           bash farmer_example.bash
           cd ../GAMS
-	  bash farmer_example.bash
+             bash farmer_example.bash
