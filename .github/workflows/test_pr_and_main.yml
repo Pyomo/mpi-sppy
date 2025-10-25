@@ -557,5 +557,6 @@ jobs:
         run: |
           cd examples/loose_agnostic/AMPL
           bash farmer_example.bash
-          cd ../GAMS
-          bash farmer_example.bash
+	  # GAMS is not tested because I don't want to deal with the license
+          #cd ../GAMS
+          #bash farmer_example.bash

@@ -32,8 +32,10 @@ write a `scenario_creator` function for your two-stage problem.
 The third command runs a script that illustrates how to map column
 names created by the MPS writer back to AMPL variable names.
 
-The file ``examples.loose_agnostic.GAMS.farmer_example.bash`` has three
-commands that mimic the commands for AMPL.
+The file ``examples.loose_agnostic.GAMS.farmer_example.bash`` has
+three commands that mimic the commands for AMPL. The GAMS bash script
+is not part of the automated tests because I don't want to deal with
+the license.
 
 A somewhat strange example is in the file
 ``examples.sizes.mps_demo.bash`` has two commands. The second
