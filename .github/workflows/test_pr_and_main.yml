@@ -13,8 +13,8 @@ concurrency:
   cancel-in-progress: true
 
 defaults:
-    run:
-        shell: bash -l {0}
+  run:
+    shell: bash -l {0}
 
 jobs:
   ruff:
@@ -33,7 +33,7 @@ jobs:
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -49,12 +49,10 @@ jobs:
           cd mpisppy/tests
           python test_ef_ph.py
 
-
   regression:
     name: Basic regression tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -98,11 +96,8 @@ jobs:
   runall_persistent:
     name: run_all.py persistent solver
     runs-on: ubuntu-latest
+    needs: [ruff]
     timeout-minutes: 15
-    # this takes the most time, so we'll start it
-    # without waiting on the linting and other checks
-    # needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -134,10 +129,6 @@ jobs:
     name: run_all.py direct solver
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # this takes the most time, so we'll start it
-    # without waiting on the linting and other checks
-    # needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -168,51 +159,63 @@ jobs:
   schur-complement:
     name: schur-complement
     runs-on: ubuntu-latest
-    needs: [ruff]
     strategy:
       matrix:
-        python-version: [3.9]
+        python-version: [3.11]
     steps:
-    - uses: actions/checkout@v3
-    - name: setup conda
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        python-version: ${{ matrix.python-version }}
-        channels: anaconda, conda-forge
-        activate-environment: test_env
-        auto-activate-base: false
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install nose pybind11
-        conda install conda-forge::libstdcxx-ng
-        conda install openmpi pymumps --no-update-deps
-        pip install mpi4py pandas
-        pip install git+https://github.com/pyutilib/pyutilib.git
-        git clone https://github.com/pyomo/pyomo.git
-        cd pyomo/
-        pip install -e .
-        pyomo download-extensions
-        pyomo build-extensions
-        cd ../
-        pip install git+https://github.com/parapint/parapint.git
-        pip install -e .
-    - name: Test with nose
-      run: |
-        nosetests -v mpisppy/tests/test_sc.py
-        mpirun -np 3 -oversubscribe nosetests mpisppy/tests/test_sc.py
+      - uses: actions/checkout@v3
+
+      - name: setup conda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          python-version: ${{ matrix.python-version }}
+          channels: anaconda, conda-forge
+          activate-environment: test_env
+          auto-activate-base: false
+
+      - name: Install dependencies
+        shell: bash -l {0}
+        run: |
+          python -m pip install --upgrade pip
+          # Test tooling
+          pip install pytest pytest-cov
+          # Core build/test deps
+          pip install pybind11
+          conda install -y conda-forge::libstdcxx-ng
+          conda install -y openmpi pymumps --no-update-deps
+          pip install mpi4py pandas
+          # pyutilib / pyomo / parapint
+          pip install git+https://github.com/pyutilib/pyutilib.git
+          git clone https://github.com/pyomo/pyomo.git
+          cd pyomo/
+          pip install -e .
+          pyomo download-extensions
+          pyomo build-extensions
+          cd ../
+          pip install git+https://github.com/parapint/parapint.git
+          # Install this repo (editable)
+          pip install -e .
+
+      - name: Test with pytest (serial)
+        shell: bash -l {0}
+        run: |
+          pytest -q -vv mpisppy/tests/test_sc.py
+
+      - name: Test with pytest under MPI
+        shell: bash -l {0}
+        run: |
+          mpirun -np 3 -oversubscribe python -m pytest -q -vv mpisppy/tests/test_sc.py
 
   straight-tests:
     name: straight_tests.py
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -232,13 +235,12 @@ jobs:
     name: admm wrapper tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -262,13 +264,12 @@ jobs:
     name: aph tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -290,13 +291,12 @@ jobs:
     name: pickled bundles tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -313,12 +313,10 @@ jobs:
           cd mpisppy/tests
           python test_pickle_bundle.py
 
-
   mps:
     name: MPS tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -341,18 +339,16 @@ jobs:
           cd mpisppy/tests
           python test_mps.py
 
-
   confidence-intervals:
     name: confidence intervals tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -380,7 +376,6 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     timeout-minutes: 15
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -411,7 +406,6 @@ jobs:
     name: gradient and rho tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v3
@@ -439,13 +433,12 @@ jobs:
   test-headers:
     name: header test
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -466,13 +459,12 @@ jobs:
     name: pysp tests
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -500,13 +492,12 @@ jobs:
     name: tests on some cylinders
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |
@@ -527,7 +518,6 @@ jobs:
     name: tests on agnostic
     runs-on: ubuntu-latest
     needs: [ruff]
-
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
@@ -543,6 +533,7 @@ jobs:
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
           python -m pip install gamspy
+          python -m pip install mip
           # license?
 
       - name: setup the program
@@ -560,3 +551,12 @@ jobs:
         run: |
           cd mpisppy/agnostic/examples
           python afew_agnostic.py
+
+      - name: run loose AMPL
+        timeout-minutes: 10
+        run: |
+          cd examples/loose_agnostic/AMPL
+          bash farmer_example.bash
+          # GAMS is not tested because I don't want to deal with the license
+          #cd ../GAMS
+          #bash farmer_example.bash

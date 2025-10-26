@@ -104,9 +104,9 @@ def scenario_names_creator(num_scens, start=None):
     except Exception as e:
         raise RuntimeError(f'mps files in {mps_files_directory} must end with an integer'
                            f'found file {mps_files[0]} (error was: {e})')
-    
-    print("WARNING: one-based senario names might cause trouble"
-          f" found {first} for dir {mps_files_directory}")
+    if first != 0:
+        print("WARNING: non-zero-based senario names might cause trouble"
+              f" found {first=} for dir {mps_files_directory}")
     assert start+num_scens <= len(mps_files),\
         f"Trying to create scenarios names with {start=}, {num_scens=} but {len(mps_files)=}"
     retval = [fn[:-4] for fn in mps_files[start:start+num_scens]]
