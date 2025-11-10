@@ -26,8 +26,8 @@ class Spoke(SPCommunicator):
             to see if the Hub terminated
         """
         shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
-        self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
-        return self.allreduce_or(shutdown_buf[0] == 1.0)
+        self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0)
+        return shutdown_buf[0] == 1.0
 
     def is_converged(self, screen_trace=False):
         """ Alias for got_kill_signal; useful for algorithms working as both
