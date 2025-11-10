@@ -42,16 +42,23 @@ sys.path.insert(0, os.path.abspath('../../examples/stoch_distr'))
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc',
-              'sphinx.ext.coverage',
-              'sphinx.ext.mathjax',
-              'sphinx.ext.viewcode',
-              'sphinx.ext.napoleon',
-              'sphinx.ext.ifconfig',
-              'sphinx.ext.inheritance_diagram',
-              'sphinx.ext.autosummary',
-              'sphinx.ext.doctest']
-    #'sphinx.ext.githubpages']
+extensions = [
+    "sphinx.ext.autodoc",
+    "sphinx.ext.coverage",
+    "sphinx.ext.mathjax",
+    "sphinx.ext.viewcode",
+    "sphinx.ext.napoleon",
+    "sphinx.ext.ifconfig",
+    "sphinx.ext.inheritance_diagram",
+    "sphinx.ext.autosummary",
+    "sphinx.ext.doctest",
+    #'sphinx.ext.githubpages',
+    "sphinx_copybutton",
+]
+
+# allow the sphinx-copybutton to remove prompt text
+copybutton_prompt_text = r">>> |\.\.\. |\$ |In \[\d*\]: | {2,5}\.\.\.: | {5,8}: "
+copybutton_prompt_is_regexp = True
 
 viewcode_import = True
 #napoleon_include_private_with_doc = True
