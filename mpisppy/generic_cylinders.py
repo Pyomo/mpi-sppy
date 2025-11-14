@@ -10,8 +10,7 @@
 
 import sys
 import os
-import json
-import shutil
+import copy
 import numpy as np
 import pyomo.environ as pyo
 import pyomo.common.config as pyofig
@@ -22,25 +21,13 @@ import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
 
-from mpisppy.convergers.norm_rho_converger import NormRhoConverger
-from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
-
 from mpisppy.extensions.extension import MultiExtension, Extension
-from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
-from mpisppy.extensions.primal_dual_rho import PrimalDualRho
-from mpisppy.extensions.grad_rho import GradRho
-from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
-
-from mpisppy.utils.wxbarwriter import WXBarWriter
-from mpisppy.utils.wxbarreader import WXBarReader
-
-import mpisppy.utils.pickle_bundle as pickle_bundle
-import mpisppy.utils.proper_bundler as proper_bundler
 
 import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy import global_toc
 from mpisppy import MPI
+
 
 def _parse_args(m):
     # m is the model file module
@@ -141,7 +128,20 @@ def _name_lists(module, cfg, bundle_wrapper=None):
 
 
 #==========
-def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+    """Essentially, the main program for decomposition
+
+    Args:
+       module (Python module or class): the model file with required functions or a class with the required methods.
+       cfg (Pyomo config object): parsed arguments with perhaps a few attachments    
+       scenario_creator (function): note: this might be a wrapper and therefore not in the module
+       scenario_creator_kwargs (dict): args for the scenario creator function
+       scenario_denouement (function): some things (e.g. PH) call this for each scenario at the end
+       bundle_wrapper (ProperBundler): wraps the module for proper bundle creation
+
+    Returns:
+        wheel (WheelSpinner): the container used for the spokes (so callers can query results)
+    """
     if cfg.get("scenarios_per_bundle") is not None and cfg.scenarios_per_bundle == 1:
         raise RuntimeError("To get one scenarios-per-bundle=1, you need to write then read the 'bundles'")
     rho_setter = module._rho_setter if hasattr(module, '_rho_setter') else None
@@ -152,11 +152,13 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
             raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
     if cfg.use_norm_rho_converger:
+        from mpisppy.convergers.norm_rho_converger import NormRhoConverger
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
     elif cfg.primal_dual_converger:
+        from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
         ph_converger = PrimalDualConverger
     else:
         ph_converger = None
@@ -237,21 +239,26 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
         vanilla.add_integer_relax_then_enforce(hub_dict, cfg)
 
     if cfg.grad_rho:
+        from mpisppy.extensions.grad_rho import GradRho
         ext_classes.append(GradRho)
         hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
 
     if cfg.write_scenario_lp_mps_files_dir is not None:
+        from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
         ext_classes.append(Scenario_lp_mps_files)
         hub_dict['opt_kwargs']['options']["write_lp_mps_extension_options"]\
             = {"write_scenario_lp_mps_files_dir": cfg.write_scenario_lp_mps_files_dir}
 
     if cfg.W_and_xbar_reader:
+        from mpisppy.utils.wxbarreader import WXBarReader
         ext_classes.append(WXBarReader)
 
     if cfg.W_and_xbar_writer:
+        from mpisppy.utils.wxbarwriter import WXBarWriter
         ext_classes.append(WXBarWriter)
 
     if cfg.user_defined_extensions is not None:
+        import json
         for ext_name in cfg.user_defined_extensions:
             module = sputils.module_name_to_module(ext_name)
             ext_classes = []
@@ -299,10 +306,12 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
 
     # norm rho adaptive rho (not the gradient version)
     if cfg.use_norm_rho_updater:
+        from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
         vanilla.extension_adder(hub_dict, NormRhoUpdater)
         hub_dict['opt_kwargs']['options']['norm_rho_options'] = {'verbose': cfg.verbose}
 
     if cfg.use_primal_dual_rho_updater:
+        from mpisppy.extensions.primal_dual_rho import PrimalDualRho
         vanilla.extension_adder(hub_dict, PrimalDualRho)
         hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {
                 'verbose': cfg.verbose,
@@ -340,14 +349,21 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
                                           rho_setter = rho_setter,
                                           all_nodenames = all_nodenames,
                                           )
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or cfg.grad_rho:
+            # Note that this deepcopy might be expensive if certain wrappers were used.
+            # (Could we do the modification to cfg in ph_dual to obviate the need?)
+            modified_cfg = copy.deepcopy(cfg)
+            modified_cfg["grad_rho_multiplier"] = cfg.ph_dual_rho_multiplier            
         if cfg.sep_rho:
-            vanilla.add_sep_rho(ph_dual_spoke, cfg)
+            vanilla.add_sep_rho(ph_dual_spoke, modified_cfg)
         if cfg.coeff_rho:
-            vanilla.add_coeff_rho(ph_dual_spoke, cfg)
+            vanilla.add_coeff_rho(ph_dual_spoke, modified_cfg)
         if cfg.sensi_rho:
-            vanilla.add_sensi_rho(ph_dual_spoke, cfg)
-        # TBD xxxxx add grad rho asap after PR#559 is merged
-        # Note: according to DLW, it is non-trivial to deal with the cfg args
+            vanilla.add_sensi_rho(ph_dual_spoke, modified_cfg)
+        if cfg.grad_rho:
+            modified_cfg["grad_order_stat"] = cfg.ph_dual_grad_order_stat
+            vanilla.add_grad_rho(ph_dual_spoke, modified_cfg)
+        
 
     # relaxed ph spoke
     if cfg.relaxed_ph:
@@ -447,6 +463,8 @@ def _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_
     if hasattr(module, "custom_writer"):
         module.custom_writer(wheel, cfg)
 
+    return wheel
+
 
 #==========
 def _write_scenarios(module,
@@ -455,6 +473,8 @@ def _write_scenarios(module,
                      scenario_creator_kwargs,
                      scenario_denouement,
                      comm):
+    import mpisppy.utils.pickle_bundle as pickle_bundle
+    import shutil
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
     
@@ -484,6 +504,7 @@ def _write_scenarios(module,
 
 #==========
 def _read_pickled_scenario(sname, cfg):
+    import mpisppy.utils.pickle_bundle as pickle_bundle
     fname = os.path.join(cfg.unpickle_scenarios_dir, sname+".pkl")
     scen = pickle_bundle.dill_unpickle(fname)
     return scen
@@ -495,6 +516,8 @@ def _write_bundles(module,
                    scenario_creator,
                    scenario_creator_kwargs,
                    comm):
+    import mpisppy.utils.pickle_bundle as pickle_bundle
+    import shutil
     assert hasattr(cfg, "num_scens")
     ScenCount = cfg.num_scens
     bsize = int(cfg.scenarios_per_bundle)
@@ -636,6 +659,7 @@ if __name__ == "__main__":
     
     bundle_wrapper = None  # the default
     if _proper_bundles(cfg):
+        import mpisppy.utils.proper_bundler as proper_bundler
         bundle_wrapper = proper_bundler.ProperBundler(module)
         bundle_wrapper.set_bunBFs(cfg)
         scenario_creator = bundle_wrapper.scenario_creator
@@ -661,7 +685,6 @@ if __name__ == "__main__":
                        scenario_creator_kwargs,
                        global_comm)
     elif cfg.pickle_scenarios_dir is not None:
-        import mpisppy.utils.pickle_bundle as pickle_bundle
         global_comm = MPI.COMM_WORLD
         _write_scenarios(module,
                          cfg,
@@ -672,4 +695,4 @@ if __name__ == "__main__":
     elif cfg.EF:
         _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
     else:
-        _do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
+        do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)

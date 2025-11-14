@@ -158,6 +158,7 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
 
         os.remove(npyfile)
     os.chdir("..")
+    os.chdir("..")  # moved to CI directory
 
 do_one("farmer/CI", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
@@ -167,13 +168,13 @@ do_one("farmer/archive", "farmer_cylinders.py",  3,
        "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
        "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py",  5,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
        "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
        "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
        "--track-duals=4".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py",  5,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
        "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
@@ -189,14 +190,31 @@ do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py", 4,
-       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
-       "--fwph-stop-check-tol 0.1 "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=20 "
+       "--fwph-stop-check-tol 0.1 --rel-gap 0.001 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
+do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
+       "--module-name farmer --num-scens 6 "
+       "--rel-gap 0.001 --max-iterations=50 "
+       "--grad-rho --grad-order-stat 0.5 "
+       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
+       "--module-name farmer --num-scens 6 "
+       "--rel-gap 0.001 --max-iterations=50 "
+       "--grad-rho --indep-denom "
+       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
+       "--module-name farmer --num-scens 6 "
+       "--rel-gap 0.001 --max-iterations=50 "
+       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
+       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--module-name farmer "
-       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
-       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
+       "--num-scens 6 --max-iterations=50 --grad-rho --grad-order-stat 0.5 "
+       "--ph-dual-grad-order-stat 0.3 "
+       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
+
 do_one("farmer/archive", "farmer_cylinders.py", 2,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
@@ -229,7 +247,7 @@ do_one("farmer/archive",
 
 do_one("farmer/archive",
        "farmer_cylinders.py", 4,
-       f"--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
+       f"--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
 
 do_one("farmer/archive",
        "farmer_cylinders.py",
@@ -260,10 +278,12 @@ do_one("farmer/CI",
        f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
        "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
+# NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
+direct_solver_name = solver_name.replace("_persistent", "_direct") if "_persistent" in solver_name else solver_name
 do_one("netdes", "netdes_cylinders.py", 4,
        "--max-iterations=3 --instance-name=network-10-20-L-01 "
-       "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve "
-       "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name))
+       "--solver-name={} --rel-gap=0.0 --default-rho=10000 --presolve --obbt --obbt-solver={} "
+       "--slammax --subgradient-hub --xhatshuffle --cross-scenario-cuts --max-solver-threads=2".format(solver_name, direct_solver_name))
 
 # sizes is slow for xpress so try linearizing the proximal term.
 do_one("sizes",

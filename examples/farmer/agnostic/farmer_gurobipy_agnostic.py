@@ -253,18 +253,18 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         gs.optimize()
     except gp.GurobiError as e:
         print(f"Error occurred: {str(e)}")
-        s._mpisppy_data.scenario_feasible = False
+        s._mpisppy_data.solution_available = False
         if gripe:
             print(f"Solve failed for scenario {s.name}")
         return
 
     if gs.status != gp.GRB.Status.OPTIMAL:
-        s._mpisppy_data.scenario_feasible = False
+        s._mpisppy_data.solution_available = False
         if gripe:
             print(f"Solve failed for scenario {s.name}")
         return
 
-    s._mpisppy_data.scenario_feasible = True
+    s._mpisppy_data.solution_available = True
     
     # Objective value extraction
     objval = gs.getObjective().getValue()

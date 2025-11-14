@@ -286,7 +286,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     #gs.export_data(f"{fname}.dat")
     
     if gs.solve_result != "solved":
-        s._mpisppy_data.scenario_feasible = False
+        s._mpisppy_data.solution_available = False
         if gripe:
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
             print(f"{gs.solve_result =}")
@@ -295,7 +295,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         raise solver_exception
 
 
-    s._mpisppy_data.scenario_feasible = True
+    s._mpisppy_data.solution_available = True
     # For AMPL mips, we need to use the gap option to compute bounds
     # https://amplmp.readthedocs.io/rst/features-guide.html
     objobj = gs.get_current_objective()  # different for xhatters

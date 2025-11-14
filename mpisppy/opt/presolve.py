@@ -23,8 +23,10 @@ import numpy as np
 
 from pyomo.common.errors import InfeasibleConstraintException, DeferredImportError
 from pyomo.contrib.appsi.fbbt import IntervalTightener
+from pyomo.contrib.alternative_solutions.obbt import obbt_analysis
+import pyomo.environ as pyo
 
-from mpisppy import MPI
+from mpisppy import MPI, global_toc
 
 _INF = 1e100
 
@@ -59,47 +61,36 @@ class _SPPresolver(abc.ABC):
             raise RuntimeError("SPPresolve.opt should only be set once")
 
 
-class SPIntervalTightener(_SPPresolver):
-    """Interval Tightener (feasibility-based bounds tightening)
-    TODO: enable options
+class _SPIntervalTightenerBase(_SPPresolver):
+    """Interval Tightener Base Class (feasibility-based bounds tightening OR optimization-based bounds tightening)
     """
 
     def __init__(self, spbase, verbose=False):
         super().__init__(spbase, verbose)
 
-        self.subproblem_tighteners = {}
-        for k, s in self.opt.local_subproblems.items():
-            try:
-                self.subproblem_tighteners[k] = it = IntervalTightener()
-            except DeferredImportError as e:
-                # User may not have extension built
-                raise ImportError(f"presolve needs the APPSI extensions for pyomo: {e}")
-
-            # ideally, we'd be able to share the `_cmodel`
-            # here between interfaces, etc.
-            try:
-                it.set_instance(s)
-            except Exception as e:
-                # TODO: IntervalTightener won't handle
-                # every Pyomo model smoothly, see:
-                # https://github.com/Pyomo/pyomo/issues/3002
-                # https://github.com/Pyomo/pyomo/issues/3184
-                # https://github.com/Pyomo/pyomo/issues/1864#issuecomment-1989164335
-                raise Exception(
-                    f"Issue with IntervalTightener; cannot apply presolve to this problem. Error: {e}"
-                )
-
         self._lower_bound_cache = {}
         self._upper_bound_cache = {}
 
+        self.printed_warning = False
+
+    @abc.abstractmethod
+    def _tighten_intervals(self) -> bool:
+        """ return True if we should stop, otherwise return False """
+        raise NotImplementedError
+
+    @property
+    def subproblem_tighteners(self):
+        """ return the dictionary of subproblem tighteners """
+        raise NotImplementedError
+
     def presolve(self):
-        """Run the interval tightener (FBBT):
-        1. FBBT on each subproblem
+        """Run the interval tightener (FBBT/OBBT):
+        1. FBBT/OBBT on each subproblem
         2. Narrow bounds on the nonants across all subproblems
         3. If the bounds are updated, go to (1)
         """
+        global_toc(f"Start {self.__class__.__name__}")
 
-        printed_warning = False
         update = False
 
         same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
@@ -125,17 +116,17 @@ class SPIntervalTightener(_SPPresolver):
                                 msg = f"Nonant {var.name} has lower bound greater than upper bound; lb: {lb}, ub: {ub}"
                                 raise InfeasibleConstraintException(msg)
                             if (
-                                (not printed_warning or self.verbose)
+                                (not self.printed_warning or self.verbose)
                                 and (lb, ub) != var.bounds
                                 and (node_comm.Get_rank() == 0)
                             ):
-                                if not printed_warning:
-                                    msg = "WARNING: SPIntervalTightener found different bounds on nonanticipative variables from different scenarios."
+                                if not self.printed_warning:
+                                    msg = f"WARNING: {self.__class__.__name__} found different bounds on nonanticipative variables from different scenarios."
                                     if self.verbose:
                                         print(msg + " See below.")
                                     else:
                                         print(msg + " Use verbose=True to see details.")
-                                    printed_warning = True
+                                    self.printed_warning = True
                                 if self.verbose:
                                     print(
                                         f"Tightening bounds on nonant {var.name} in scenario {k} from {var.bounds} to {(lb, ub)} based on global bound information."
@@ -146,33 +137,27 @@ class SPIntervalTightener(_SPPresolver):
                                 ub = None
                             var.bounds = (lb, ub)
 
-            # Now do FBBT
-            big_iters = 0.0
-            for k, it in self.subproblem_tighteners.items():
-                n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
-                # get the number of constraints after we do
-                # FBBT so we get any updates on the subproblem
-                big_iters = max(big_iters, n_iters / len(it._cmodel.constraints))
+            # Now do FBBT/OBBT 
+            stop = self._tighten_intervals()
 
-            update_this_pass = big_iters > 1.0
-            update_this_pass = self.opt.allreduce_or(update_this_pass)
-
-            if not update_this_pass:
+            if stop:
                 break
-
-            update = True
-
+           
             same_nonant_bounds, global_lower_bounds, global_upper_bounds = (
                 self._compare_nonant_bounds()
             )
 
             if same_nonant_bounds:
                 # The nonant bounds did not change, so it is unlikely
-                # that further rounds of FBBT will do any good.
+                # that further rounds of FBBT/OBBT will do any good.
                 break
 
+            update = True
+
+        bounds_tightened = 0
         if update:
-            self._print_bound_movement()
+            bounds_tightened = self._print_bound_movement()
+        global_toc(f"{self.__class__.__name__} tightend {bounds_tightened} nonanticipative variable bound(s).")
 
         return update
 
@@ -260,6 +245,21 @@ class SPIntervalTightener(_SPPresolver):
         same_nonant_bounds = not self.opt.allreduce_or(not same_nonant_bounds)
 
         return same_nonant_bounds, global_lower_bounds, global_upper_bounds
+
+    def _check_bounds(self, model):
+        for var in model.component_data_objects(pyo.Var, active=True):
+                lb = var.lb
+                ub = var.ub
+
+                if lb is not None and ub is not None:
+                    if lb > ub:
+                        delta = lb - ub
+                        lb = lb - delta
+                        ub = ub + delta
+
+                        # update revised bounds
+                        var.lb = lb
+                        var.ub = ub
 
     def _print_bound_movement(self):
         lower_bound_movement = {}
@@ -369,12 +369,107 @@ class SPIntervalTightener(_SPPresolver):
                             )
 
                 printed_nodes.add(ndn)
+        return bounds_tightened
 
-        if (
-            bounds_tightened > 0
-            and self.opt.cylinder_rank == 0
-        ):
-            print(f"SPIntervalTightener tightend {bounds_tightened} bounds.")
+
+class SPFBBT(_SPIntervalTightenerBase):
+
+    def __init__(self, spbase, verbose=False):
+
+        super().__init__(spbase, verbose)
+
+        self._subproblem_tighteners = {}
+        for k, s in self.opt.local_subproblems.items():
+            try:
+                self._subproblem_tighteners[k] = it = IntervalTightener()
+            except DeferredImportError as e:
+                # User may not have extension built
+                raise ImportError(f"presolve needs the APPSI extensions for pyomo: {e}")
+
+            # ideally, we'd be able to share the `_cmodel`
+            # here between interfaces, etc.
+            try:
+                it.set_instance(s)
+            except Exception as e:
+                # TODO: IntervalTightener won't handle
+                # every Pyomo model smoothly, see:
+                # https://github.com/Pyomo/pyomo/issues/3002
+                # https://github.com/Pyomo/pyomo/issues/3184
+                # https://github.com/Pyomo/pyomo/issues/1864#issuecomment-1989164335
+                raise Exception(
+                    f"Issue with IntervalTightener; cannot apply presolve to this problem. Error: {e}"
+                )
+
+    @property
+    def subproblem_tighteners(self):
+        return self._subproblem_tighteners
+
+    def _tighten_intervals(self):
+        big_iters = 0.0
+        for k, it in self.subproblem_tighteners.items():
+            n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
+            self._check_bounds(self.opt.local_subproblems[k])
+            # get the number of constraints after we do
+            # FBBT so we get any updates on the subproblem
+            big_iters = max(big_iters, n_iters / len(it._cmodel.constraints))
+        update_this_pass = big_iters > 1.0
+        update_this_pass = self.opt.allreduce_or(update_this_pass)
+
+        return not update_this_pass
+
+
+class SPOBBT(_SPIntervalTightenerBase):
+
+    def __init__(self, spbase, fbbt, verbose=False, obbt_options=None):
+        super().__init__(spbase, verbose)
+
+        self.fbbt = weakref.ref(fbbt)
+        # we expect this in OBBT, so don't warn
+        self.printed_warning = True
+
+        if obbt_options is None:
+            obbt_options = {}
+
+        # TODO: this will create the solver twice, once here and again
+        #       before the first solve ... need to resolve this issue
+        self.solver = obbt_options.get("solver_name", self.opt.options["solver_name"])
+        self.solver_options = obbt_options.get("solver_options")
+        if self.solver_options is None:
+            self.solver_options = {}
+        self.nonant_variables = obbt_options.get("nonant_variables_only", True)
+
+    @property
+    def subproblem_tighteners(self):
+        return self.fbbt().subproblem_tighteners
+
+    def _tighten_intervals(self):
+
+        for k, it in self.fbbt().subproblem_tighteners.items():
+            s = self.opt.local_subproblems[k]
+            it.perform_fbbt(self.opt.local_subproblems[k])
+            self._check_bounds(self.opt.local_subproblems[k])
+
+            if self.nonant_variables:
+                bounds = obbt_analysis(s, variables=s._mpisppy_data.nonant_indices.values(), solver=self.solver,
+                                            solver_options=self.solver_options, warmstart=False)
+
+                for var in s.component_data_objects(pyo.Var, active=True):
+                    if var in bounds.keys():
+                        lb, ub = bounds[var]
+                        var.bounds = (lb, ub)
+
+                it.perform_fbbt(self.opt.local_subproblems[k])
+                self._check_bounds(self.opt.local_subproblems[k])
+
+            else:
+                bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options)
+
+                for var in s.component_data_objects(pyo.Var, active=True):
+                    if var.name in bounds.keys():
+                        lb, ub = bounds[var.name]
+                        var.bounds = (lb, ub)
+
+        return False
 
 
 def _lb_generator(var_iterable):
@@ -400,10 +495,19 @@ class SPPresolve(_SPPresolver):
         spbase (SPBase): an SPBase object
     """
 
-    def __init__(self, spbase, verbose=False):
+    def __init__(self, spbase, presolve_options=None, verbose=False):
         super().__init__(spbase, verbose)
+        if presolve_options is None:
+            presolve_options = {}
 
-        self.interval_tightener = SPIntervalTightener(spbase, verbose)
+        self.fbbt = SPFBBT(spbase, verbose)
+        if presolve_options.get("obbt", False):
+            self.obbt = SPOBBT(spbase, self.fbbt, verbose, presolve_options.get("obbt_options", None))
+        else:
+            self.obbt = None
 
     def presolve(self):
-        return self.interval_tightener.presolve()
+        changes_made = self.fbbt.presolve()
+        if self.obbt is not None:
+            changes_made = self.obbt.presolve() or changes_made
+        return changes_made
