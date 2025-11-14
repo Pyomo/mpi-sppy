@@ -17,13 +17,13 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        pyomo-version: [6.7.1, main]
+        pyomo-version: [6.9.5, main]
     steps:
       - uses: actions/checkout@v3
       - uses: conda-incubator/setup-miniconda@v2
         with:
           activate-environment: test_env
-          python-version: 3.9
+          python-version: 3.11
           auto-activate-base: false
       - name: Install dependencies
         run: |

@@ -329,7 +329,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     # of single scenarios and bundles when convenient
     EF_instance._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
     EF_instance._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
-    EF_instance._mpisppy_data.scenario_feasible = None
+    EF_instance._mpisppy_data.solution_available = None
 
     EF_instance._ef_scenario_names = []
     EF_instance._mpisppy_probability = 0

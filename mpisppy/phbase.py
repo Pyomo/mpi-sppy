@@ -927,7 +927,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._update_E1()  # Apologies for doing this after the solves...
         if (abs(1 - self.E1) > self.E1_tolerance):
             raise RuntimeError(f"Total probability of scenarios was {self.E1};  E1_tolerance = ", self.E1_tolerance)
-        feasP = self.feas_prob()
+        feasP = self.incumbent_prob()
         if feasP != self.E1:
             raise RuntimeError(f"Infeasibility detected; E_feas={feasP}, E1={self.E1}")
 

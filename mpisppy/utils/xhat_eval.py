@@ -113,7 +113,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                    tee=False,
                    verbose=False,
                    compute_val_at_nonant=False,
-                   warmstart=False,
+                   warmstart=sputils.WarmstartStatus.USER_SOLUTION,  # 1 Sep 2025,
                    need_solution=False,):
         """ Loop over self.local_subproblems and solve them in a manner 
             dicated by the arguments. In addition to changing the Var
@@ -403,7 +403,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
         self.solve_loop(solver_options=self.current_solver_options, 
                         verbose=verbose)
 
-        infeasP = self.infeas_prob()
+        infeasP = self.no_incumbent_prob()
         if infeasP != 0.:
             return None
         else:

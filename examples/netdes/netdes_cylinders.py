@@ -30,6 +30,7 @@ def _parse_args():
     cfg.slammax_args()
     cfg.cross_scenario_cuts_args()
     cfg.reduced_costs_args()
+    cfg.presolve_args()
     cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
                         domain=str,

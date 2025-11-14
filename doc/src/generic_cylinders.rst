@@ -118,3 +118,40 @@ warmstart-subproblems
 Loosely speaking, this option causes subproblem solves to be given the
 previous iteration solution as a warm-start. This is particularly important
 when using an option to lineraize proximal terms.
+
+presolve (FBBT and OBBT)
+-------------------------
+
+The ``presolve`` option enables variable bounds tightening steps before solving,
+which can improve solver performance and numerical stability. The presolve process
+includes two main techniques:
+
+**Feasibility-Based Bounds Tightening (FBBT)**: Uses constraint propagation to
+tighten variable bounds based on the feasible region defined by the constraints.
+This is a fast, lightweight technique that is always applied when presolve is enabled.
+
+**Optimization-Based Bounds Tightening (OBBT)**: Uses optimization to 
+find the tightest possible bounds by solving auxiliary min and max optimization
+problems. This is more computationally expensive but can achieve significantly
+tighter bounds.
+
+To enable basic presolve with FBBT only:
+
+.. code-block:: bash
+
+   python -m mpisppy.generic_cylinders farmer.farmer --num-scens 3 --presolve
+
+
+To enable OBBT in addition to FBBT:
+
+.. code-block:: bash
+
+   python -m mpisppy.generic_cylinders farmer.farmer --num-scens 3 --presolve --obbt
+
+.. Warning::
+   OBBT may not be compatible with all solver interfaces, particularly persistent
+   solvers. If you encounter issues, try using a different solver for OBBT operations.
+
+The OBBT implementation uses Pyomo's ``obbt_analysis`` function and supports
+various configuration options through the ``obbt_options`` dictionary. For
+more details on the implementation, see ``mpisppy.opt.presolve.py``.

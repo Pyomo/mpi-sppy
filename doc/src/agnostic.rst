@@ -16,18 +16,38 @@ Code for creating a
 Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
 but you can also just use ``generic_cylinders.py`` and give
 it the module ``mpisppy.utils.mps_module`` (you will need to specify
-that path to this module) and the ``--mps-files-directory``
+the path to this module) and the ``--mps-files-directory``
 option.  Note
 that at the time of this writing, the number of scenarios is obtained
 by counting the mps files in the directory given.
 
-The file ``examples.sizes.mps_demo.bash`` has two commands. The second illustrates
-how to instruction ``MPI-SPPY`` to read mps/json file pairs for each scenario from a
-directory. The first command illustrates how to use ``MPI-SPPY`` to write
-them in the first place (but if ``MPI-SPPY`` can get your scenarios, there
-is probably no reason to write them and then read them again!). This
-functionality is intended to be used by users of other AMLs or other
-scenario-based stochastic programming applications.
+The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has three
+commands.  The second illustrates how to instruct ``MPI-SPPY`` to read
+mps/json file pairs for each scenario from a directory. The first runs
+an `AMPLpy` program that creates the scenario files.  This program is
+in ``examples.loose_agnostic.AMPL.farmer_writer.py`` and, apart from
+the `scenario_creator` function, is pretty general for two-stage
+problems.  You be able to copy the program and
+write a `scenario_creator` function for your two-stage problem.
+The third command runs a script that illustrates how to map column
+names created by the MPS writer back to AMPL variable names.
+
+The file ``examples.loose_agnostic.GAMS.farmer_example.bash`` has
+three commands that mimic the commands for AMPL. The GAMS bash script
+is not part of the automated tests because I don't want to deal with
+the license.
+
+A somewhat strange example is in the file
+``examples.sizes.mps_demo.bash`` has two commands. The second
+illustrates how to instruct ``MPI-SPPY`` to read mps/json file pairs
+for each scenario from a directory. The first command illustrates how
+to use ``MPI-SPPY`` to write them in the first place (but if
+``MPI-SPPY`` can get your scenarios, there is probably no reason to
+write them and then read them again!). This functionality is intended
+to be used by users of other AMLs or other scenario-based stochastic
+programming applications.
+
+There is low-level support for `.lp` files instead of `.mps` files.
 
 JSON file format
 ----------------
@@ -36,6 +56,8 @@ The directory named in the ``--mps-files-directory`` needs to have
 two files for each scenario: and mps file and a json file. The json
 file need to have certain literal strings as well as scenario-specific
 data. In this specification, scenario specific data is named with underscores.
+Note that the total number of tree nodes is given as an integer, but the file
+only contains the data for nodes for the single scenario.
 
 .. code-block:: json
 		
@@ -45,21 +67,24 @@ data. In this specification, scenario specific data is named with underscores.
     "scenProb": scenario_probability
   },
   "treeData": {
-    "ROOT": {
-      "condProb": 1.0,
-      "nonAnts": [
-        "first_root_node_nonant_name",
-        "second_root_node_nonant_name",
-        ...
-      ]
-    }
-    "ROOT_i": {
-      "condProb": conditional_probability_of_second_stage_node_i,
-      "nonAnts": [
-        first_nonant_name_at_node,
-        second_node_nonant_name_at_node,
-        ...
-      ]
+    "globalNodeCount": number_of_nodes_in_entire_tree,
+    "nodes: {
+      "ROOT": {
+        "condProb": 1.0,
+        "nonAnts": [
+          "first_root_node_nonant_name",
+          "second_root_node_nonant_name",
+          ...
+        ]
+      }
+      "ROOT_i": {
+        "condProb": conditional_probability_of_second_stage_node_i,
+        "nonAnts": [
+          first_nonant_name_at_node,
+          second_node_nonant_name_at_node,
+          ...
+        ]
+      }
     }
   }
 }  
@@ -71,25 +96,29 @@ Two-stage problems are simple because there is only one node in the scenario tre
 must be ROOT. Here is an example
 
 .. code-block:: json
-  {
-    "scenarioData": {
-      "name": "Scenario1",
-      "scenProb": 0.3333333333333333
-    },
-    "treeData": {
+{
+  "scenarioData": {
+    "name": "unknown",
+    "scenProb": 0.3333333333333333
+  },
+  "treeData": {
+    "globalNodeCount": 1,
+    "nodes": {
       "ROOT": {
+        "serialNumber": 0,
         "condProb": 1.0,
         "nonAnts": [
           "NumProducedFirstStage(1)",
           "NumProducedFirstStage(2)",
           "NumProducedFirstStage(3)",
-          "NumProducedFirstStage(4)",
-          ...
+	  ...
           "NumUnitsCutFirstStage(10_10)"
         ]
       }
     }
-  }  
+  }
+}
+
 
 Naming Conventions
 ~~~~~~~~~~~~~~~~~~
