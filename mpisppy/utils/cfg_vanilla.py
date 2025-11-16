@@ -20,7 +20,7 @@ import mpisppy.utils.sputils as sputils
 def _hasit(cfg, argname):
     # aside: Config objects act like a dict or an object TBD: so why the and?
     return cfg.get(argname) is not None and cfg[argname] is not None and \
-        cfg[argname] != False
+        cfg[argname]
 
 def shared_options(cfg):
     shoptions = {
