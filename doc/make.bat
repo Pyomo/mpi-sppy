@@ -20,7 +20,6 @@ if "%1" == "help" (
 
 	goto end
 ) else (
-    echo. %SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS%
 	%SPHINXBUILD% -M %1 %SOURCEDIR% %BUILDDIR% %SPHINXOPTS% %O%
 
 	goto end
