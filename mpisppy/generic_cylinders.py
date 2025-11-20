@@ -574,7 +574,7 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
     if solver_log_dir and len(solver_log_dir)>0:
         os.makedirs(solver_log_dir, exist_ok=True)
         solve_kw_args['keepfiles'] = True
-        log_fn = f"EFsolverlog.log"
+        log_fn = "EFsolverlog.log"
         solve_kw_args['logfile'] = os.path.join(solver_log_dir, log_fn)
             
     if 'persistent' in solver_name:
