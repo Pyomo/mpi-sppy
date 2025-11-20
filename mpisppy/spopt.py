@@ -214,7 +214,9 @@ class SPOpt(SPBase):
             # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
             # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
             if isinstance(s._solver_plugin, GurobiDirect):
+                s._solver_plugin.options["LogToConsole"] = tee
                 s._solver_plugin.options["LogFile"] = os.path.join(dir_name, file_name)
+                s._solver_plugin.options["OutputFlag"] = 1
             else:
                 solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
             self._subproblem_solve_index[k] += 1
