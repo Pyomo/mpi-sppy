@@ -24,7 +24,6 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.extensions.extension import MultiExtension, Extension
 
 import mpisppy.utils.solver_spec as solver_spec
-from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 from mpisppy import global_toc
 from mpisppy import MPI
@@ -577,9 +576,6 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         solve_kw_args['keepfiles'] = True
         log_fn = f"EFsolverlog.log"
         solve_kw_args['logfile'] = os.path.join(solver_log_dir, log_fn)
-        if isinstance(solver, GurobiDirect):
-            solver.options['LogToConsole'] = cfg.tee_EF            
-            solver.options['OutputFlag'] = True
             
     if 'persistent' in solver_name:
         solver.set_instance(ef, symbolic_solver_labels=True)
