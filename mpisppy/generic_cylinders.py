@@ -568,11 +568,20 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         # We probably could just assign the dictionary in one line...
         for option_key,option_value in solver_options.items():
             solver.options[option_key] = option_value
+
+    solver_log_dir = cfg.get("solver_log_dir","")
+    solve_kw_args = dict()
+    if solver_log_dir and len(solver_log_dir)>0:
+        os.makedirs(solver_log_dir, exist_ok=True)
+        solve_kw_args['keepfiles'] = True
+        log_fn = "EFsolverlog.log"
+        solve_kw_args['logfile'] = os.path.join(solver_log_dir, log_fn)
+            
     if 'persistent' in solver_name:
         solver.set_instance(ef, symbolic_solver_labels=True)
-        results = solver.solve(tee=cfg.tee_EF)
+        results = solver.solve(tee=cfg.tee_EF, **solve_kw_args)
     else:
-        results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True,)
+        results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True, **solve_kw_args)
     if not pyo.check_optimal_termination(results):
         print("Warning: non-optimal solver termination")
 
