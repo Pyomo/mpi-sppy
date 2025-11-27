@@ -53,13 +53,13 @@ The driver file requires the `scenario_creator function <scenario_creator>`_ whi
 .. py:function:: scenario_creator(admm_stoch_subproblem_scenario_name)
     :no-index:
 
-    Creates the model, which should include the consensus variables.
-    However, the `scenario_creator` function shouldn't include the consensus variables in the list of stochastic
-    variables. (E.g., for a
-    two-stage problem, they should not be in the list supplied to ``attach_root_node``. The
-    consensus variables
-       are supplied to `admm_wrapper` in the driver in a list passed to the ``stoch_admmWrapper`` constructor.)
-    Therefore, for multi-stage stochastics, only the stochastic tree as it would be represented without the admm decomposition needs to be created by the `scenario_creator` function.
+    Creates the model, which should include the consensus variables. However, the `scenario_creator`
+    function shouldn't include the consensus variables in the list of stochastic variables. (E.g.,
+    for a two-stage problem, they should not be in the list supplied to ``attach_root_node``. The
+    consensus variables are supplied to `admm_wrapper` in the driver in a list passed to the 
+    ``stoch_admmWrapper`` constructor.) Therefore, for multi-stage stochastics, only the stochastic
+    tree as it would be represented without the admm decomposition needs to be created by the
+    `scenario_creator` function.
 
     Args:
         admm_stoch_subproblem_scenario_name (str): the name of the extended scenario that will be created.
@@ -74,15 +74,14 @@ Here is a summary of helper functions:
 * ``scenario_creator_kwargs`` (dict[str]): key words arguments needed in ``scenario_creator``
 
 * A function that is called at termination in some modules (e.g. PH)
-    .. py:function:: scenario_denouement
-        :no-index:
 
-        Args:
-            rank (int): rank in the cylinder 
+.. py:function:: scenario_denouement
+    :no-index:
 
-            admm_stoch_subproblem_scenario_name (str): name of the extended scenario
-
-            scenario (Pyomo ConcreteModel): the instantiated model
+    Args:
+        rank (int): rank in the cylinder 
+        admm_stoch_subproblem_scenario_name (str): name of the extended scenario
+        scenario (Pyomo ConcreteModel): the instantiated model
 
 * ``stoch_scenario_names``, ``admm_subproblem_names`` and ``all_admm_stoch_subproblem_scenario_names`` (lists of str)
 

@@ -41,7 +41,7 @@ Standard Construction
 
 If you are going to use the ``vardatalist`` you don't really need to know how it is constructed, but
 we will illustrate one common way here.
-Many modelers/users have a call to ``attach_root_node`` in their scenario creator function (e.g., see the scenario scenario
+Many modelers/users have a call to ``attach_root_node`` in their scenario creator function (e.g., see the scenario
 creator in the farmer example), which is a utility
 for two-stage problems only. Here is the function signature:
 
@@ -63,9 +63,9 @@ creates the ``nonant_vardata_list`` with this call
 
 .. code-block:: python
 
-   self.nonant_vardata_list = build_vardatalist(self,
-                                                scen_model,
-                                                self.nonant_list)
+    import mpisppy.utils.sputils as sputils
+
+    self.nonant_vardata_list = sputils.build_vardatalist(scen_model, self.nonant_list)
 
 where ``build_vardatalist`` function converts strings to vardata objects and expands indexed Vars.
 

@@ -61,11 +61,11 @@ Modules
 -------
 
 In addition to command line options specified in ``mpisppy.utils.config.py``
-and supported in ``mpisppy.generic_cylinders.py'',
+and supported in ``mpisppy.generic_cylinders.py``,
 there are two modules that have most of the support for proper bundles:
 
-  - ``mpisppy.utils.pickle_bundle.py`` has miscellaneous utilities related to picking and other data processing
-  - ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
+- ``mpisppy.utils.pickle_bundle.py`` has miscellaneous utilities related to picking and other data processing
+- ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
 
 
 Multistage

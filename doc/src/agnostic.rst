@@ -53,41 +53,41 @@ JSON file format
 ----------------
 
 The directory named in the ``--mps-files-directory`` needs to have
-two files for each scenario: and mps file and a json file. The json
+two files for each scenario: a mps file and a json file. The json
 file need to have certain literal strings as well as scenario-specific
 data. In this specification, scenario specific data is named with underscores.
 Note that the total number of tree nodes is given as an integer, but the file
 only contains the data for nodes for the single scenario.
 
-.. code-block:: json
-		
-{
-  "scenarioData": {
-    "name": scenario_name,
-    "scenProb": scenario_probability
-  },
-  "treeData": {
-    "globalNodeCount": number_of_nodes_in_entire_tree,
-    "nodes: {
-      "ROOT": {
-        "condProb": 1.0,
-        "nonAnts": [
-          "first_root_node_nonant_name",
-          "second_root_node_nonant_name",
-          ...
-        ]
-      }
-      "ROOT_i": {
-        "condProb": conditional_probability_of_second_stage_node_i,
-        "nonAnts": [
-          first_nonant_name_at_node,
-          second_node_nonant_name_at_node,
-          ...
-        ]
+.. code-block:: python
+
+  {
+    "scenarioData": {
+      "name": scenario_name,
+      "scenProb": scenario_probability,
+    },
+    "treeData": {
+      "globalNodeCount": number_of_nodes_in_entire_tree,
+      "nodes: {
+        "ROOT": {
+          "condProb": 1.0,
+          "nonAnts": [
+            "first_root_node_nonant_name",
+            "second_root_node_nonant_name",
+            #...
+          ]
+        }
+        "ROOT_i": {
+          "condProb": conditional_probability_of_second_stage_node_i,
+          "nonAnts": [
+            first_nonant_name_at_node,
+            second_node_nonant_name_at_node,
+            #...
+          ]
+        }
       }
     }
   }
-}  
 
 Two-stage JSON example
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -95,29 +95,30 @@ Two-stage JSON example
 Two-stage problems are simple because there is only one node in the scenario tree and its name
 must be ROOT. Here is an example
 
-.. code-block:: json
-{
-  "scenarioData": {
-    "name": "unknown",
-    "scenProb": 0.3333333333333333
-  },
-  "treeData": {
-    "globalNodeCount": 1,
-    "nodes": {
-      "ROOT": {
-        "serialNumber": 0,
-        "condProb": 1.0,
-        "nonAnts": [
-          "NumProducedFirstStage(1)",
-          "NumProducedFirstStage(2)",
-          "NumProducedFirstStage(3)",
-	  ...
-          "NumUnitsCutFirstStage(10_10)"
-        ]
+.. code-block:: python
+
+  {
+    "scenarioData": {
+      "name": "unknown",
+      "scenProb": 0.3333333333333333
+    },
+    "treeData": {
+      "globalNodeCount": 1,
+      "nodes": {
+        "ROOT": {
+          "serialNumber": 0,
+          "condProb": 1.0,
+          "nonAnts": [
+            "NumProducedFirstStage(1)",
+            "NumProducedFirstStage(2)",
+            "NumProducedFirstStage(3)",
+            # ...
+            "NumUnitsCutFirstStage(10_10)",
+          ]
+        }
       }
     }
   }
-}
 
 
 Naming Conventions
@@ -150,7 +151,8 @@ Assuming support has been added for the desired AML, the modeler supplies
 two files:
 
 - a model file with the model written in the guest AML (AMPL example: ``mpisppy.agnostic.examples.farmer.mod``)
-- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``). This thin python wrapper is model specific.
+- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``).
+  This thin python wrapper is model specific.
 
 There can be a little confusion if there are error messages because
 both files are sometimes refered to as the `model file.`
@@ -187,11 +189,11 @@ original model when updating the objective function. If this is an issue,
 you might want to write a problem-specific module to replace the guest
 interface and the model wrapper with a single module. For an example, see
 ``examples.farmer.agnostic.farmer_xxxx_agnostic``, where xxxx is replaced,
-e.g., by ampl. 
+e.g., by ampl.
 
 Architecture
 ^^^^^^^^^^^^
-The following picture presents the architecture of the files. 
+The following picture presents the architecture of the files.
 
 .. image:: images/agnostic_architecture.png
    :alt: Architecture of the agnostic files
@@ -221,7 +223,7 @@ The use of scenario bundles can dramatically improve the performance
 of scenario decomposition algorithms such as PH and APH. Although mpi-sppy
 has facitilites for forming bundles, the mpi-sppy
 ``agnostic`` package assumes that bundles will be completely handled
-by the guest.  Bundles will be returned by the scenario creator function
+by the guest. Bundles will be returned by the scenario creator function
 as if they are a scenario. Although it seems sort of like a trick, it is
 really the way bundles are intended to operate so we sometimes refer to 
 `true` bundles, which are used in non-agnostic way as briefly
@@ -252,18 +254,19 @@ Some notes
 ^^^^^^^^^^
 
 - The helper function called ``scenario_names_creator`` needs to be co-opted
-to instead create bundle names and the code in the scenario_creator function
-then needs to create its own scenario names for bundles. At the time
-of this writing this results in a major hack being needed in order to
-get bundle information to the names creator in the Pyomo example described
-below. You need to supply a function called ``bundle_hack`` in your python model file that
-does whatever needs to be done to alert the names creator that there
-bundles. The function takes the config object as an argument.
-See ``mpisppy.agnostic.farmer4agnostic.py``
+  to instead create bundle names and the code in the scenario_creator function
+  then needs to create its own scenario names for bundles. At the time
+  of this writing this results in a major hack being needed in order to
+  get bundle information to the names creator in the Pyomo example described
+  below. You need to supply a function called ``bundle_hack`` in your python model file that
+  does whatever needs to be done to alert the names creator that there
+  bundles. The function takes the config object as an argument.
+  See ``mpisppy.agnostic.farmer4agnostic.py``
 - There is a heavy bias toward uniform probabilities in the examples and in
   the mpi-sppy utilities. Scenario probabilities are attached to the scenario
   as ``_mpisppy_probability`` so if your probabilities are not uniform, you will
-  need to calculate them for each bundle (your EF maker code can do that for you).  Note that even if probabilities are uniform for the scenarios, they won't
+  need to calculate them for each bundle (your EF maker code can do that for you).
+  Note that even if probabilities are uniform for the scenarios, they won't
   be uniform for the bundles unless you require that the bundle size divides
   the number of scenarios.
 - There is a similar bias toward two stage problems, which is
