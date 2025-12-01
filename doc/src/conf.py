@@ -67,10 +67,8 @@ viewcode_import = True
 templates_path = ['_templates']
 
 # The suffix(es) of source filenames.
-# You can specify multiple suffix as a list of string:
-#
-# source_suffix = ['.rst', '.md']
-source_suffix = '.rst'
+# You can specify multiple suffix as a dict:
+source_suffix = {".rst": "restructuredtext"}
 
 # The root toctree document.
 root_doc = 'index'

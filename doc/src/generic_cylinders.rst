@@ -17,7 +17,7 @@ The file name is given without the the ``.py`` extension as the
 needed even with the ``--help`` argument, e.g.,
 
 .. code-block:: bash
-   
+
     python ../mpisppy/generic_cylinders.py --module-name farmer/farmer --help
 
 .. Note::
@@ -69,27 +69,27 @@ The class definition needs to include all helper functions other than
 demonstrates how to implement a class in the module (although in this
 particular example, there is no advantage to doing that).
 
-        
+
 custom_writer
 -------------
 
-This is an advanced topic. 
+This is an advanced topic.
 Advanced users might want to write their own solution output function. If the
 module contains a function called ``custom_writer()``, it will be passed
 to the solution writer. Up to four functions can be specified in the module (or the
 class if you are using a class):
 
-   - ef_root_nonants_solution_writer(file_name, representative_scenario, bundling_indicator)
-   - ef_tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
-   - first_stage_solution_writer(file_name, scenario,bundling_indicator)
-   - tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
+- ef_root_nonants_solution_writer(file_name, representative_scenario, bundling_indicator)
+- ef_tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
+- first_stage_solution_writer(file_name, scenario,bundling_indicator)
+- tree_solution_writer(directory_name, scenario_name, scenario, bundling_indicator)
 
 The first two, if present, will be used for the EF if that is select
-and the second two for hub and spoke solutions.  For further
+and the second two for hub and spoke solutions. For further
 information, look at the code in ``mpisppy.generic_cylinders.py`` to
 see how these are used and in ``mpisppy.utils.sputils`` for example functions
-such as ``first_stage_nonant_npy_serializer``.  There is a very simple
-example function in ``examples.netdes.netdes_with_class.py''.
+such as ``first_stage_nonant_npy_serializer``. There is a very simple
+example function in ``examples.netdes.netdes_with_class.py``.
 
 .. Warning::
    These functions will only be used if cfg.solution_base_name has been given a value by the user.
