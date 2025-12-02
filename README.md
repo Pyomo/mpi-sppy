@@ -28,7 +28,7 @@ Here are two methods that seem to work well for installation, at least when cons
    ```
    pip install mpi4py
    ```
-4. It is also possible to automate mpi4py installation through pip as an optional dependency when
+3. It is also possible to automate mpi4py installation through pip as an optional dependency when
    installing mpi-sppy from pip or from source by adding the `[mpi]` extras flag.
    ```shell
    pip install -e .[mpi]
