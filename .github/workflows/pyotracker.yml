@@ -28,7 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools git
-          pip install sphinx sphinx_rtd_theme cplex
+          pip install sphinx sphinx_rtd_theme sphinx-copybutton cplex
           pip install xpress
           pip install matplotlib
 
@@ -51,5 +51,5 @@ jobs:
 
       - name: Test docs
         run: |
-          cd ./doc/src/
+          cd ./doc/
           make doctest
