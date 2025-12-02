@@ -27,9 +27,10 @@ def _consensus_vars_number_creator(consensus_vars):
     for subproblem in consensus_vars:
         for var_stage_tuple in consensus_vars[subproblem]:
             var = var_stage_tuple[0]
-            if var not in consensus_vars_number: # instanciates consensus_vars_number[var]
+            if var not in consensus_vars_number: # instantiates consensus_vars_number[var]
                 consensus_vars_number[var] = 0
             consensus_vars_number[var] += 1
+    # print(f'{consensus_vars_number=}')
     return consensus_vars_number
 
 class Stoch_AdmmWrapper(): #add scenario_tree
@@ -82,36 +83,22 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         self.local_admm_stoch_subproblem_scenarios_names = [
             all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
         ]
-        print(self.local_admm_stoch_subproblem_scenarios_names)
-
-        check_admm_subproblems=[]
+    
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
             self.local_admm_stoch_subproblem_scenarios[sname] = s
             # we are not collecting instantiation time
 
-            admm_subproblem_name, _ = split_admm_stoch_subproblem_scenario_name(sname)
-
-            # now add the parents. It doesn't depend on the stochastic scenario so we chose one and
-            # then we go through the models (created by scenario creator) for all the admm_stoch_subproblem_scenario 
-            # which have this scenario as an ancestor (parent) in the tree
-            if admm_subproblem_name not in check_admm_subproblems:
-                for node in s._mpisppy_node_list:
-                    for var in node.nonant_list:
-                        if var.is_indexed():
-                            for v in var:
-                                if var[v].name not in consensus_vars[admm_subproblem_name]:
-                                    consensus_vars[admm_subproblem_name].append((var[v].name, node.stage))
-                        else:
-                            if var.name not in consensus_vars[admm_subproblem_name]:
-                                consensus_vars[admm_subproblem_name].append((var.name, node.stage))
-                    check_admm_subproblems.append(admm_subproblem_name)
-            # TODO should be removed!!
+        # print(f'{self.local_admm_stoch_subproblem_scenarios_names=}')
+        # print(f'{consensus_vars=}')
+        # print(f'{check_admm_subproblems=}')
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
         self.consensus_vars = consensus_vars
         self.verbose = verbose
         self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
+
+        # print(f'{self.consensus_vars_number=}')
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
         self.BFs = BFs
@@ -151,7 +138,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
     def assign_variable_probs(self, verbose=False):
         self.varprob_dict = {}
 
-        #we collect the consensus variables
+        # we collect the consensus variables
         all_consensus_vars = {var_stage_tuple[0]: var_stage_tuple[1] for admm_subproblem_names in self.consensus_vars for var_stage_tuple in self.consensus_vars[admm_subproblem_names]}
         error_list1 = []
         error_list2 = []
@@ -161,6 +148,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
             # varlist[stage] will contain the variables at each stage
             depth = len(s._mpisppy_node_list)+1
+            # print(f'{s._mpisppy_node_list=}')
             varlist = [[] for _ in range(depth)]
 
             assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
@@ -172,7 +160,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 stage = all_consensus_vars[vstr]
                 v = s.find_component(vstr)
                 var_stage_tuple = vstr, stage
-                if var_stage_tuple in self.consensus_vars[admm_subproblem_name]:
+                if var_stage_tuple in self.consensus_vars[admm_subproblem_name]: # consensus variable appears in admm subproblem
                     if v is None:
                         # try quote wrap around variable name
                         vvstr = vstr[:vstr.find('[')]
@@ -193,6 +181,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                         # stochastic scenario
                     else:
                         error_list1.append((sname,vstr))
+
                 else:
                     if v is None:
                         # This var will not be indexed but that might not matter??
@@ -214,6 +203,9 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             
             # print('Error list 1: ',error_list1)
             # print('Error list 2: ',error_list2)
+            # print(f'{self.varprob_dict[s]=}')
+            # print('Stage 1:',str([v.name for v in varlist[0]]))
+            # print('Stage 2:', str([v.name for v in varlist[1]]))
             
             # Create the new scenario tree node for admm_consensus
             assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
@@ -236,7 +228,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 s)
             )
             s._mpisppy_probability /= self.number_admm_subproblems
-            print(s._mpisppy_probability)
+            # print(s._mpisppy_probability)
 
             # underscores have a special signification in the tree
             for stage in range(1, depth):
