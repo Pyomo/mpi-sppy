@@ -4,13 +4,12 @@ mpi-sppy
 Optimization under uncertainty for `Pyomo <https://pyomo.org>`_ models.
 
 `Documentation is available at readthedocs <https://mpi-sppy.readthedocs.io/en/latest/>`_ and
-a there is a `paper <https://link.springer.com/article/10.1007/s12532-023-00247-3>`_
+there is a `paper <https://link.springer.com/article/10.1007/s12532-023-00247-3>`_.
 
 Status for internal tests
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-.. image:: https://github.com/Pyomo/mpi-sppy/workflows/pyotracker/badge.svg
-   :target: https://github.com/Pyomo/mpi-sppy/actions/workflows/pyotracker.yml
+[![pyo tracker](https://github.com/Pyomo/mpi-sppy/actions/workflows/pyotracker.yml/badge.svg)](https://github.com/Pyomo/mpi-sppy/actions/workflows/pyotracker.yml)
 
 
 MPI
@@ -22,13 +21,13 @@ Here are two methods that seem to work well for installation, at least when cons
 
 #. Install OpenMPI and mpi4py using conda.
 
-   * ``conda install openmpi; conda install mpi4py``  (in that order)
-  
+   * ``conda install openmpi; conda install mpi4py`` (in that order)
+
 #. If you already have an existing version of MPI, it may be better compile mpi4py against it. This can be done by installing mpi4py though pip.
 
    * ``pip install mpi4py``
 
-#. It is also possible to automate mpi4py installation through pip  as an optional dependency when installing mpi-sppy from pip or from source by adding the `[mpi]` extras flag.
+#. It is also possible to automate mpi4py installation through pip as an optional dependency when installing mpi-sppy from pip or from source by adding the `[mpi]` extras flag.
 
    * ``pip install -e .[mpi]`` (after cloning and moving to the repo root directory)
 
@@ -48,7 +47,7 @@ Installing mpi-sppy
 ^^^^^^^^^^^^^^^^^^^
 
 It is possible to pip install mpi-sppy; however, most users are better off
-getting the software from github because it is under active development.
+getting the software from Github because it is under active development.
 
 Citing mpi-sppy
 ^^^^^^^^^^^^^^^
@@ -58,7 +57,7 @@ If you find mpi-sppy useful in your work, we kindly request that you cite the fo
 
    @article{mpi-sppy,
      title={A Parallel Hub-and-Spoke System for Large-Scale Scenario-Based Optimization Under Uncertainty},
-     author={Bernard Knueven  and David Mildebrath and Christopher Muir  and John D Siirola  and Jean-Paul Watson  and David L Woodruff},
+     author={Bernard Knueven and David Mildebrath and Christopher Muir and John D Siirola and Jean-Paul Watson and David L Woodruff},
      journal = {Math. Prog. Comp.},
      volume = {15}, 
      pages = {591-–619},
