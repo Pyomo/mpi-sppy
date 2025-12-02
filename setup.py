@@ -21,7 +21,7 @@ from pathlib import Path
 packages = find_packages()
 
 this_directory = Path(__file__).parent
-long_description = (this_directory / "README.rst").read_text()
+long_description = (this_directory / "README.md").read_text()
 
 # intentionally leaving out mpi4py to help readthedocs
 setup(
@@ -43,6 +43,7 @@ setup(
     extras_require={
         'doc': [
             'sphinx_rtd_theme',
+            'sphinx-copybutton',
             'sphinx',
         ]
     },
