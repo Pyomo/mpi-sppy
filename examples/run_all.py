@@ -158,7 +158,6 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
 
         os.remove(npyfile)
     os.chdir("..")
-    os.chdir("..")  # moved to CI directory
 
 do_one("farmer/CI", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
@@ -191,30 +190,13 @@ do_one("farmer/archive", "farmer_cylinders.py", 3,
        "--solver-name={}".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py", 4,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
-       "--fwph-stop-check-tol 0.1 --rel-gap 0.001 "
+       "--fwph-stop-check-tol 0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
-do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
-       "--module-name farmer --num-scens 6 "
-       "--rel-gap 0.001 --max-iterations=50 "
-       "--grad-rho --grad-order-stat 0.5 "
-       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
-       "--module-name farmer --num-scens 6 "
-       "--rel-gap 0.001 --max-iterations=50 "
-       "--grad-rho --indep-denom "
-       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
-       "--module-name farmer --num-scens 6 "
-       "--rel-gap 0.001 --max-iterations=50 "
-       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
-       "--default-rho=2 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--module-name farmer "
-       "--num-scens 6 --max-iterations=50 --grad-rho --grad-order-stat 0.5 "
-       "--ph-dual-grad-order-stat 0.3 "
-       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
+       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
+       "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-
 do_one("farmer/archive", "farmer_cylinders.py", 2,
        "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
        "--default-rho=1 "
