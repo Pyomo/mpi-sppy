@@ -419,6 +419,11 @@ jobs:
         run: |
           pip install -e .
 
+      - name: Build Pyomo extensions
+        run: |
+          # some failures are expected, but this should succeed as long as pynumero is built correctly
+          pyomo build-extensions || python -c "from pyomo.contrib.pynumero.asl import AmplInterface; exit(0) if AmplInterface.available() else exit(1)"
+
       - name: run farmer tests
         timeout-minutes: 10
         run: |

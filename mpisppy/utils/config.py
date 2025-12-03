@@ -930,15 +930,20 @@ class Config(pyofig.ConfigDict):
 #                           default=0.1)
 
         self.add_to_config('grad_rho',
-                           description="use a gradient-based rho setter",
+                           description="use a gradient-based rho setter (if your problem is linear, use coeff-rho instead)",
                            domain=bool,
                            default=False)
-
+        """
+        all occurances of rho_path converted to grad_rho_file July 2024
+        self.add_to_config("rho_path",
+                           description="csv file for the rho setter",
+                           domain=str,
+                           default='')
+        """
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
                            domain=float,
                            default=-1.0)
-
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
