@@ -25,7 +25,7 @@ class PH(mpisppy.phbase.PHBase):
     """ PH. See PHBase for list of args. """
 
     #======================================================================
-    # uncomment the line below to get per-rank profile outputs, which can
+    # uncomment the line below to get per-rank profile outputs, which can 
     # be examined with snakeviz (or your favorite profile output analyzer)
     #@profile(filename="profile_out")
     def ph_main(self, finalize=True, attach_prox=True):
