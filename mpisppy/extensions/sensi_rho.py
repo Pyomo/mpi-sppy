@@ -54,7 +54,8 @@ class _SensiRhoBase(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 #     nv = s._mpisppy_data.nonant_indices[ndn_i]  # var_data object
                 #     print(f"{s.name=}, {nv.name=}, {rho.value=}")
 
-        global_toc(f"Rho values updated by {self.__class__.__name__} Extension", ph.cylinder_rank == 0)
+        if ph.cylinder_rank == 0:
+            print(f"Rho values updated by {self.__class__.__name__} Extension")
 
     def miditer(self):
         self.update_caches()

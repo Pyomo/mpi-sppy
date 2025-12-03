@@ -11,15 +11,14 @@ from pyomo.repn.standard_repn import generate_standard_repn
 from mpisppy import MPI
 from mpisppy.utils.lshaped_cuts import LShapedCutGenerator  # pylint: disable=E0611
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.cylinders.spoke import Spoke
 
 import numpy as np
 import pyomo.environ as pyo
+import mpisppy.cylinders.spoke as spoke
 
-class CrossScenarioCutSpoke(Spoke):
-
-    send_fields = (*Spoke.send_fields, Field.CROSS_SCENARIO_CUT)
-    receive_fields = (*Spoke.receive_fields, Field.NONANT, Field.CROSS_SCENARIO_COST)
+class CrossScenarioCutSpoke(spoke.Spoke):
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options=options)
 
     def register_send_fields(self) -> None:
 
@@ -38,27 +37,17 @@ class CrossScenarioCutSpoke(Spoke):
         (self.nonant_per_scen, remainder) = divmod(vbuflen, local_scen_count)
         assert(remainder == 0)
 
+        ## the _locals will also have the kill signal
         self.all_nonant_len = vbuflen
         self.all_eta_len = nscen*local_scen_count
 
+        self.all_nonants = self.register_recv_field(Field.NONANT, 0, vbuflen)
+        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, 0, nscen * nscen)
 
-        self.all_coefs = self.send_buffers[Field.CROSS_SCENARIO_CUT]
+        self.all_coefs = self.register_send_field(Field.CROSS_SCENARIO_CUT,
+                                                  nscen*(self.nonant_per_scen + 1 + 1))
 
         return
-
-    def register_receive_fields(self):
-        super().register_receive_fields()
-
-        nonant_ranks = self.opt.spcomm.fields_to_ranks[Field.NONANT]
-        cs_cost_ranks = self.opt.spcomm.fields_to_ranks[Field.CROSS_SCENARIO_COST]
-
-        assert len(nonant_ranks) == 1
-        assert len(cs_cost_ranks) == 1
-        assert nonant_ranks[0] == cs_cost_ranks[0]
-        source_rank = nonant_ranks[0]
-
-        self.all_nonants = self.register_recv_field(Field.NONANT, source_rank)
-        self.all_etas = self.register_recv_field(Field.CROSS_SCENARIO_COST, source_rank)
 
     def prep_cs_cuts(self):
         # create a map scenario -> index, this index is used for various lists containing scenario dependent info.
@@ -146,7 +135,7 @@ class CrossScenarioCutSpoke(Spoke):
             ## this cut  -- [ LB, -1, *0s ], i.e., -1*\eta + LB <= 0
             all_coefs[row_len*idx] = self._eta_lb_array[idx]
             all_coefs[row_len*idx+1] = -1
-        self.put_send_buffer(all_coefs, Field.CROSS_SCENARIO_CUT)
+        self.spoke_to_hub(all_coefs, Field.CROSS_SCENARIO_CUT)
 
     def make_cut(self):
 
@@ -304,7 +293,7 @@ class CrossScenarioCutSpoke(Spoke):
                 all_coefs[row_len*idx:row_len*(idx+1)] = coef_dict[k]
             elif feas_cuts:
                 all_coefs[row_len*idx:row_len*(idx+1)] = feas_cuts.pop()
-        self.put_send_buffer(all_coefs, Field.CROSS_SCENARIO_CUT)
+        self.spoke_to_hub(all_coefs, Field.CROSS_SCENARIO_CUT)
 
     def main(self):
         # call main cut generation routine
@@ -314,6 +303,7 @@ class CrossScenarioCutSpoke(Spoke):
 
         # main loop
         while not (self.got_kill_signal()):
+            # if self._new_locals:
             if self.all_nonants.is_new() and self.all_etas.is_new():
                 self.make_cut()
             ## End if

@@ -69,7 +69,7 @@ class XhatXbarInnerBound(XhatInnerBoundBase):
 
             logging.debug('   IB got from opt on global rank {}'.\
                           format(global_rank))
-            if self.update_nonants():
+            if (self.new_nonants):
                 logging.debug('  and its new! on global rank {}'.\
                               format(global_rank))
                 logging.debug('  localnonants={}'.format(str(self.localnonants)))

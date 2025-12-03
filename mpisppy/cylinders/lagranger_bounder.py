@@ -91,7 +91,7 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
         if extensions:
             self.opt.extobject.post_iter0()
 
-        self.send_bound(self.trivial_bound)
+        self.bound = self.trivial_bound
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
@@ -103,7 +103,7 @@ class LagrangerOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundNo
             if extensions:
                 self.opt.extobject.enditer()
             if bound is not None:
-                self.send_bound(bound)
+                self.bound = bound
             if extensions:
                 self.opt.extobject.enditer_after_sync()
             self.A_iter += 1

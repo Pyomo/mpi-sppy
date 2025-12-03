@@ -7,27 +7,109 @@
 # full copyright and license information.
 ###############################################################################
 
+import numpy as np
 import abc
+import enum
 import time
 import os
 import math
 
-from mpisppy.cylinders.spcommunicator import SPCommunicator
+from mpisppy import MPI
+from mpisppy.cylinders.spcommunicator import RecvArray, SendArray, SPCommunicator
 from mpisppy.cylinders.spwindow import Field
 
 
-class Spoke(SPCommunicator):
+class ConvergerSpokeType(enum.Enum):
+    OUTER_BOUND = 1
+    INNER_BOUND = 2
+    W_GETTER = 3
+    NONANT_GETTER = 4
 
-    send_fields = (*SPCommunicator.send_fields, )
-    receive_fields = (*SPCommunicator.receive_fields, Field.SHUTDOWN, )
+class Spoke(SPCommunicator):
+    def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
+
+        super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
+
+        self.last_call_to_got_kill_signal = time.time()
+
+        # All spokes need the SHUTDOWN field to know when to terminate. Just
+        # register that here.
+        self.shutdown = self.register_recv_field(Field.SHUTDOWN, 0, 1)
+
+        return
+
+    def spoke_to_hub(self, buf: SendArray, field: Field):
+        """ Put the specified values into the locally-owned buffer for the hub
+            to pick up.
+
+            Notes:
+            Automatically handles write id updating and setting
+        """
+        return self._spoke_to_hub(buf.array(), field, buf._next_write_id())
+
+    def _spoke_to_hub(self, values: np.typing.NDArray, field: Field, write_id: int):
+        self.cylinder_comm.Barrier()
+        values[-1] = write_id
+        self.window.put(values, field)
+        return
+
+    def spoke_from_hub(self,
+                       buf: RecvArray,
+                       field: Field,
+                       ):
+        buf._is_new = self._spoke_from_hub(buf.array(), field, buf.id())
+        if buf.is_new():
+            buf._pull_id()
+        return buf.is_new()
+
+    def _spoke_from_hub(self,
+                        values: np.typing.NDArray,
+                        field: Field,
+                        last_write_id: int
+                        ):
+        """
+        """
+
+        self.cylinder_comm.Barrier()
+        self.window.get(values, 0, field)
+
+        # On rare occasions a NaN is seen...
+        new_id = int(values[-1]) if not math.isnan(values[-1]) else 0
+        local_val = np.array((new_id,-new_id), 'i')
+        max_min_ids = np.zeros(2, 'i')
+        self.cylinder_comm.Allreduce((local_val, MPI.INT),
+                                     (max_min_ids, MPI.INT),
+                                     op=MPI.MAX)
+
+        max_id = max_min_ids[0]
+        min_id = -max_min_ids[1]
+        # NOTE: we only proceed if all the ranks agree
+        #       on the ID
+        if max_id != min_id:
+            return False
+
+        assert max_id == min_id == new_id
+
+        if new_id > last_write_id or new_id < 0:
+            return True
+
+        return False
+
+    def _got_kill_signal(self):
+        shutdown_buf = self._locals[self._make_key(Field.SHUTDOWN, 0)]
+        if shutdown_buf.is_new():
+            shutdown = (self.shutdown[0] == 1.0)
+        else:
+            shutdown = False
+        ## End if
+        return shutdown
 
     def got_kill_signal(self):
         """ Spoke should call this method at least every iteration
             to see if the Hub terminated
         """
-        shutdown_buf = self.receive_buffers[self._make_key(Field.SHUTDOWN, 0)]
-        self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
-        return self.allreduce_or(shutdown_buf[0] == 1.0)
+        self.update_locals()
+        return self._got_kill_signal()
 
     @abc.abstractmethod
     def main(self):
@@ -39,14 +121,19 @@ class Spoke(SPCommunicator):
         """
         pass
 
+    def update_locals(self):
+        for (key, recv_buf) in self._locals.items():
+            field, rank = self._split_key(key)
+            # The below code will need to be updated for spoke to spoke communication
+            assert(rank == 0)
+            self.spoke_from_hub(recv_buf, field)
+        ## End for
+        return
+
 
 class _BoundSpoke(Spoke):
     """ A base class for bound spokes
     """
-
-    send_fields = (*Spoke.send_fields, )
-    receive_fields = (*Spoke.receive_fields, Field.BEST_OBJECTIVE_BOUNDS)
-
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
         super().__init__(spbase_object, fullcomm, strata_comm, cylinder_comm, options)
         if self.cylinder_rank == 0 and \
@@ -68,13 +155,9 @@ class _BoundSpoke(Spoke):
 
 
     def register_send_fields(self) -> None:
-        super().register_send_fields()
-        self._bound = self.send_buffers[self.bound_type()]
+        self._bound = self.register_send_field(self.bound_type(), 1)
+        self._hub_bounds = self.register_recv_field(Field.OBJECTIVE_BOUNDS, 0, 2)
         return
-
-    def register_receive_fields(self) -> None:
-        super().register_receive_fields()
-        self._hub_bounds = self.register_recv_field(Field.BEST_OBJECTIVE_BOUNDS, 0, 2)
 
     @abc.abstractmethod
     def bound_type(self) -> Field:
@@ -84,15 +167,12 @@ class _BoundSpoke(Spoke):
     def bound(self):
         return self._bound[0]
 
-    def send_bound(self, value):
+    @bound.setter
+    def bound(self, value):
         self._append_trace(value)
         self._bound[0] = value
-        self.put_send_buffer(self._bound, self.bound_type())
+        self.spoke_to_hub(self._bound, self.bound_type())
         return
-
-    def update_hub_bounds(self) -> None:
-        """ get new hub inner / outer bounds from the hub """
-        return self.get_receive_buffer(self._hub_bounds, Field.BEST_OBJECTIVE_BOUNDS, 0)
 
     @property
     def hub_inner_bound(self):
@@ -121,30 +201,25 @@ class _BoundNonantLenSpoke(_BoundSpoke):
         # TODO: Make this a static method?
         pass
 
-    def register_receive_fields(self) -> None:
-        super().register_receive_fields()
-        nonant_len_ranks = self.fields_to_ranks[self.nonant_len_type()]
-        if len(nonant_len_ranks) > 1:
-            raise RuntimeError(
-                f"More than one cylinder to select from for {self.nonant_len_type()}!"
-            )
-        key = self._make_key(self.nonant_len_type(), nonant_len_ranks[0])
-        self._nonant_len_receive_buffer = self.receive_buffers[key]
-        self._nonant_len_receive_rank = nonant_len_ranks[0]
+    def register_send_fields(self) -> None:
 
-    def _update_nonant_len_buffer(self) -> bool:
-        """ get new data from the hub """
-        return self.get_receive_buffer(self._nonant_len_receive_buffer, self.nonant_len_type(), self._nonant_len_receive_rank)
+        super().register_send_fields()
+
+        vbuflen = 0
+        for s in self.opt.local_scenarios.values():
+            vbuflen += len(s._mpisppy_data.nonant_indices)
+        ## End for
+
+        self.register_recv_field(self.nonant_len_type(), 0, vbuflen)
+
+        return
 
 
 class InnerBoundSpoke(_BoundSpoke):
-    """ For Spokes that provide an inner bound through self.send_bound to the
+    """ For Spokes that provide an inner bound through self.bound to the
         Hub, and do not need information from the main PH OPT hub.
     """
-
-    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
-    receive_fields = (*_BoundSpoke.receive_fields, )
-
+    converger_spoke_types = (ConvergerSpokeType.INNER_BOUND,)
     converger_spoke_char = 'I'
 
     def bound_type(self) -> Field:
@@ -152,13 +227,10 @@ class InnerBoundSpoke(_BoundSpoke):
 
 
 class OuterBoundSpoke(_BoundSpoke):
-    """ For Spokes that provide an outer bound through self.send_bound to the
+    """ For Spokes that provide an outer bound through self.bound to the
         Hub, and do not need information from the main PH OPT hub.
     """
-
-    send_fields = (*_BoundSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
-    receive_fields = (*_BoundSpoke.receive_fields, )
-
+    converger_spoke_types = (ConvergerSpokeType.OUTER_BOUND,)
     converger_spoke_char = 'O'
 
     def bound_type(self) -> Field:
@@ -176,27 +248,31 @@ class _BoundWSpoke(_BoundNonantLenSpoke):
     @property
     def localWs(self):
         """Returns the local copy of the weights"""
-        return self._nonant_len_receive_buffer.value_array()
+        key = self._make_key(Field.DUALS, 0)
+        return self._locals[key].value_array()
 
-    def update_Ws(self) -> bool:
-        """ Check for new Ws from the source.
-        Returns True if the Ws are new. False otherwise.
-        Puts the result in `localWs`.
+    @property
+    def new_Ws(self):
+        """ Returns True if the local copy of
+            the weights has been updated since
+            the last call to got_kill_signal
         """
-        return self._update_nonant_len_buffer()
+        key = self._make_key(Field.DUALS, 0)
+        return self._locals[key].is_new()
 
 
 class OuterBoundWSpoke(_BoundWSpoke):
     """
     For Spokes that provide an outer bound
-    through self.send_bound to the Hub,
+    through self.bound to the Hub,
     and receive the Ws (or weights) from
     the main PH OPT hub.
     """
 
-    send_fields = (*_BoundWSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
-    receive_fields = (*_BoundWSpoke.receive_fields, Field.DUALS)
-
+    converger_spoke_types = (
+        ConvergerSpokeType.OUTER_BOUND,
+        ConvergerSpokeType.W_GETTER,
+    )
     converger_spoke_char = 'O'
 
     def bound_type(self) -> Field:
@@ -214,29 +290,31 @@ class _BoundNonantSpoke(_BoundNonantLenSpoke):
     @property
     def localnonants(self):
         """Returns the local copy of the nonants"""
-        return self._nonant_len_receive_buffer.value_array()
+        key = self._make_key(Field.NONANT, 0)
+        return self._locals[key].value_array()
 
-    def update_nonants(self) -> bool:
-        """ Check for new nonants from the source.
-        Returns True if the nonants are new. False otherwise.
-        Puts the result in `localnonants`.
-        """
-        return self._update_nonant_len_buffer()
+    @property
+    def new_nonants(self):
+        """Returns True if the local copy of
+           the nonants has been updated since
+           the last call to got_kill_signal"""
+        key = self._make_key(Field.NONANT, 0)
+        return self._locals[key].is_new()
 
 
 class InnerBoundNonantSpoke(_BoundNonantSpoke):
     """ For Spokes that provide an inner (incumbent)
-        bound through self.send_bound to the Hub,
+        bound through self.bound to the Hub,
         and receive the nonants from
         the main SPOpt hub.
 
         Includes some helpful methods for saving
         and restoring results
     """
-
-    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_INNER_BOUND, )
-    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
-
+    converger_spoke_types = (
+        ConvergerSpokeType.INNER_BOUND,
+        ConvergerSpokeType.NONANT_GETTER,
+    )
     converger_spoke_char = 'I'
 
     def __init__(self, spbase_object, fullcomm, strata_comm, cylinder_comm, options=None):
@@ -256,7 +334,7 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
         if update:
             self.best_inner_bound = candidate_inner_bound
             # send to hub
-            self.send_bound(candidate_inner_bound)
+            self.bound = candidate_inner_bound
             return True
         return False
 
@@ -273,14 +351,14 @@ class InnerBoundNonantSpoke(_BoundNonantSpoke):
 
 class OuterBoundNonantSpoke(_BoundNonantSpoke):
     """ For Spokes that provide an outer
-        bound through self.send_bound to the Hub,
+        bound through self.bound to the Hub,
         and receive the nonants from
         the main OPT hub.
     """
-
-    send_fields = (*_BoundNonantSpoke.send_fields, Field.OBJECTIVE_OUTER_BOUND, )
-    receive_fields = (*_BoundNonantSpoke.receive_fields, Field.NONANT)
-
+    converger_spoke_types = (
+        ConvergerSpokeType.OUTER_BOUND,
+        ConvergerSpokeType.NONANT_GETTER,
+    )
     converger_spoke_char = 'A'  # probably Lagrangian
 
     def bound_type(self) -> Field:

@@ -10,6 +10,7 @@ from mpisppy.extensions.extension import Extension
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.repn.standard_repn import generate_standard_repn
 from pyomo.core.expr.numeric_expr import LinearExpression
+from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.spwindow import Field
 
 import pyomo.environ as pyo
@@ -127,11 +128,12 @@ class CrossScenarioExtension(Extension):
             cached_ph_obj[k].activate()
 
     def get_from_cross_cuts(self):
-        self.opt.spcomm.get_receive_buffer(
-            self.cuts,
-            Field.CROSS_SCENARIO_CUT,
-            self.cross_scenario_index,
-        )
+        # spcomm = self.opt.spcomm
+        # idx = self.cut_gen_spoke_index
+        # receive_buffer = np.empty(spcomm.remote_lengths[idx - 1] + 1, dtype="d") # Must be doubles
+        # is_new = spcomm.hub_from_spoke(receive_buffer, idx)
+        # if is_new:
+        #     self.make_cuts(receive_buffer)
         if self.cuts.is_new():
             self.make_cuts(self.cuts.array())
 
@@ -150,7 +152,7 @@ class CrossScenarioExtension(Extension):
                 ## End for
             ## End for
 
-            self.opt.spcomm.put_send_buffer(all_nonants, Field.NONANT)
+            self.opt.spcomm.extension_send_field(Field.NONANT, all_nonants)
 
         ## End if
 
@@ -162,7 +164,7 @@ class CrossScenarioExtension(Extension):
                 all_etas[ci] = s._mpisppy_model.eta[sn]._value
                 ci += 1
 
-        self.opt.spcomm.put_send_buffer(all_etas, Field.CROSS_SCENARIO_COST)
+        self.opt.spcomm.extension_send_field(Field.CROSS_SCENARIO_COST, all_etas)
 
         return
 
@@ -261,19 +263,21 @@ class CrossScenarioExtension(Extension):
         if spcomm.is_send_field_registered(Field.NONANT):
             self.send_nonants = False
         else:
-            self.all_nonants = spcomm.register_send_field(
+            self.all_nonants = spcomm.register_extension_send_field(
                 Field.NONANT,
                 local_scen_count * self.opt.nonant_length
             )
             self.send_nonants = True
         ## End if-else
-        self.all_etas = spcomm.register_send_field(
+        self.all_etas = spcomm.register_extension_send_field(
             Field.CROSS_SCENARIO_COST,
             nscen * nscen,
         )
         return
 
     def setup_hub(self):
+        # idx = self.cut_gen_spoke_index
+        # self.all_nonants_and_etas = np.zeros(self.opt.spcomm.local_lengths[idx - 1] + 1)
 
         self.nonant_len = self.opt.nonant_length
 
@@ -284,16 +288,22 @@ class CrossScenarioExtension(Extension):
         # helping the extension track cuts
         self.new_cuts = False
 
-    def register_receive_fields(self):
-        spcomm = self.opt.spcomm
-        cross_scenario_cut_ranks = spcomm.fields_to_ranks[Field.CROSS_SCENARIO_CUT]
-        assert len(cross_scenario_cut_ranks) == 1
-        self.cross_scenario_index = cross_scenario_cut_ranks[0]
+    def initialize_spoke_indices(self):
+        for (i, spoke) in enumerate(self.opt.spcomm.spokes):
+            if spoke["spoke_class"] == CrossScenarioCutSpoke:
+                self.cut_gen_spoke_index = i + 1
+            ## End if
+        ## End for
 
-        self.cuts = spcomm.register_recv_field(
-            Field.CROSS_SCENARIO_CUT,
-            self.cross_scenario_index,
-        )
+        if hasattr(self, "cut_gen_spoke_index"):
+            spcomm = self.opt.spcomm
+            nscen = len(self.opt.all_scenario_names)
+            self.cuts = spcomm.register_extension_recv_field(
+                Field.CROSS_SCENARIO_CUT,
+                self.cut_gen_spoke_index,
+                nscen*(self.opt.nonant_length + 1 + 1)
+            )
+        ## End if
 
     def sync_with_spokes(self):
         self.send_to_cross_cuts()
