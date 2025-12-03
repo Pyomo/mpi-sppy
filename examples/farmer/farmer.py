@@ -48,7 +48,7 @@ def scenario_creator(
         num_scens (int, optional):
             Number of scenarios. We use it to compute _mpisppy_probability. 
             Default is None.
-        seedoffset (int): used by confidence interval code to create replicates
+        seedoffset (int): used by confidence interval code
     """
     # scenario_name has the form <str><int> e.g. scen12, foobar7
     # The digits are scraped off the right of scenario_name using regex then
@@ -57,10 +57,12 @@ def scenario_creator(
     basenames = ['BelowAverageScenario', 'AverageScenario', 'AboveAverageScenario']
     basenum   = scennum  % 3
     groupnum  = scennum // 3
-    scenario_name  = basenames[basenum]+str(groupnum)
+    scenname  = basenames[basenum]+str(groupnum)
 
     # The RNG is seeded with the scenario number so that it is
     # reproducible when used with multiple threads.
+    # NOTE: if you want to do replicates, you will need to pass a seed
+    # as a kwarg to scenario_creator then use seed+scennum as the seed argument.
     farmerstream.seed(scennum+seedoffset)
 
     # Check for minimization vs. maximization
@@ -68,6 +70,35 @@ def scenario_creator(
         raise ValueError("Model sense Not recognized")
 
     # Create the concrete model object
+    model = pysp_instance_creation_callback(
+        scenname,
+        use_integer=use_integer,
+        sense=sense,
+        crops_multiplier=crops_multiplier,
+    )
+
+    # Create the list of nodes associated with the scenario (for two stage,
+    # there is only one node associated with the scenario--leaf nodes are
+    # ignored).
+    varlist = [model.DevotedAcreage]
+    sputils.attach_root_node(model, model.FirstStageCost, varlist)    
+    
+    #Add the probability of the scenario
+    if num_scens is not None :
+        model._mpisppy_probability = 1/num_scens
+    else:
+        model._mpisppy_probability = "uniform"
+    return model
+
+def pysp_instance_creation_callback(
+    scenario_name, use_integer=False, sense=pyo.minimize, crops_multiplier=1
+):
+    # long function to create the entire model
+    # scenario_name is a string (e.g. AboveAverageScenario0)
+    #
+    # Returns a concrete model for the specified scenario
+
+    # scenarios come in groups of three
     scengroupnum = sputils.extract_num(scenario_name)
     scenario_base_name = scenario_name.rstrip("0123456789")
     
@@ -198,20 +229,10 @@ def scenario_creator(
     model.Total_Cost_Objective = pyo.Objective(rule=total_cost_rule, 
                                                sense=sense)
 
-
-    # Create the list of nodes associated with the scenario.
-    varlist = [model.DevotedAcreage]
-    sputils.attach_root_node(model, model.FirstStageCost, varlist)    
-    
-    #Add the probability of the scenario
-    if num_scens is not None :
-        model._mpisppy_probability = 1/num_scens
-    else:
-        model._mpisppy_probability = "uniform"
     return model
 
-
-# begin helper functions
+# begin functions not needed by farmer_cylinders
+# (but needed by special codes such as confidence intervals)
 #=========
 def scenario_names_creator(num_scens,start=None):
     # (only for Amalgamator): return the full list of num_scens scenario names
@@ -220,6 +241,7 @@ def scenario_names_creator(num_scens,start=None):
         start=0
     return [f"scen{i}" for i in range(start,start+num_scens)]
         
+
 
 #=========
 def inparser_adder(cfg):

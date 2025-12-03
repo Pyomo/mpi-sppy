@@ -20,8 +20,6 @@ class _LagrangianMixin:
         self.opt._create_solvers()
 
     def lagrangian(self, need_solution=True, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
-        # update the nonant bounds, if possible, for a tighter relaxation
-        self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
         if "ipopt" in self.opt.options["solver_name"]:
@@ -72,39 +70,34 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 self.send_bound(bound)
 
     def main(self, need_solution=False):
-        self.verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()
 
         if extensions:
             self.opt.extobject.pre_iter0()
-
-        # setting this for PH extensions used by this Spoke
-        self.opt._PHIter = 0
+        self.dk_iter = 1
         self.trivial_bound = self.lagrangian(need_solution=need_solution, warmstart=sputils.WarmstartStatus.USER_SOLUTION)
-
         if extensions:
             self.opt.extobject.post_iter0()
-        self.opt._PHIter += 1
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
-        self.send_bound(self.trivial_bound)
+        self.bound = self.trivial_bound
         if extensions:
             self.opt.extobject.post_iter0_after_sync()
 
         while not self.got_kill_signal():
-            if self.update_Ws():
+            if self.new_Ws:
                 if extensions:
                     self.opt.extobject.miditer()
                 bound = self._set_weights_and_solve(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
                 if extensions:
                     self.opt.extobject.enditer()
                 if bound is not None:
-                    self.send_bound(bound)
+                    self.bound = bound
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
-                self.opt._PHIter += 1
+                self.dk_iter += 1
             else:
                 self.do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)

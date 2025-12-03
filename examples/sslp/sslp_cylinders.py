@@ -102,7 +102,6 @@ def main():
     if cfg.reduced_costs_rho:
         vanilla.add_reduced_costs_rho(hub_dict, cfg)
 
-
     if cfg.use_primal_dual_rho_updater:
         vanilla.extension_adder(hub_dict, PrimalDualRho)
         hub_dict['opt_kwargs']['options']['primal_dual_rho_options'] = {

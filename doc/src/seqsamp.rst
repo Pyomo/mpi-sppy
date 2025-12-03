@@ -27,8 +27,8 @@ For multi-stage, use `multi_seqsampling.py`.
 Examples
 --------
 
-There is sample code for two-stage, sequential sampling in ``examples.farmer.CI.farmer_seqsampling.py`` and
-a bash scrip to test drive it is ``examples.farmer.CI.farmer_sequential.bash``.
+There is sample code for two-stage, sequential sampling in ``examples.farmer.farmer_seqsampling.py`` and
+a bash scrip to test drive it is ``examples.farmer.farmer_sequential.bash``.
 
 There is sample code for multi-stage, sequential sampling in ``examples.aircond.aircond_seqsampling.py`` and
 a bash scrip to test drive it is ``examples.aircond.aircond_sequential.bash``.

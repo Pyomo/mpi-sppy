@@ -13,14 +13,14 @@ Unless you are directly using mid-level functionality, your
 code may need to write the root node nonanticipative variable values
 (called `xhat` or `xhat_one`) to a file for later processing. This is
 typically done using ``sputils.ef_ROOT_nonants_npy_serializer``, which
-is shown in various examples, e.g., ``examples.farmer.archive.farmer.py``
+is shown in various examples, e.g., ``examples.farmer.farmer.py``
 
 zhat4xhat
 ---------
 
 The program ``zhat4xhat`` estimates approximate confidence intervals
 for the objective function value, zhat, given an xhat. See
-``examples.farmer.CI.farmer_zhat.bash`` for a bash script that first
+``examples.farmer.farmer_zhat.bash`` for a bash script that first
 creates the xhat file, then computes an out-of-sample confidence
 interval for it. Note: this program does not compute a confidence
 interval for zstar, which is done using software documented in

@@ -22,13 +22,13 @@ class WheelSpinner:
         Args:
             hub_dict(dict): controls hub creation
             list_of_spoke_dict(list dict): controls creation of spokes
-
+    
         Returns:
             spcomm (Hub or Spoke object): the object that did the work (windowless)
-            spcomm_dict (dict): the dictionary that controlled creation for this rank
-
+            opt_dict (dict): the dictionary that controlled creation for this rank
+    
         NOTE: the return is after termination; the objects are provided for query.
-
+    
         """
         if not haveMPI:
             raise RuntimeError("spin_the_wheel called, but cannot import mpi4py")
@@ -81,55 +81,47 @@ class WheelSpinner:
                 spoke_dict["spoke_kwargs"] = dict()
             if "opt_kwargs" not in spoke_dict:
                 spoke_dict["opt_kwargs"] = dict()
-
+    
         if comm_world is None:
             comm_world = MPI.COMM_WORLD
-
-        _key_conversion = {
-            "hub_class" : "spcomm_class",
-            "hub_kwargs" : "spcomm_kwargs",
-            "spoke_class" : "spcomm_class",
-            "spoke_kwargs" : "spcomm_kwargs",
-        }
-
-        # Put the hub at the beginning so its strata_rank is 0
-        communicator_list = [hub_dict] + list_of_spoke_dict
-
-        # TODO: we should change the API upstream eventually
-        for d in communicator_list:
-            for oldk, newk in _key_conversion.items():
-                if oldk in d:
-                    d[newk] = d.pop(oldk)
-
-        n_spcomms = len(communicator_list)
-
+        n_spokes = len(list_of_spoke_dict)
+    
         # Create the necessary communicators
         fullcomm = comm_world
-        strata_comm, cylinder_comm = _make_comms(n_spcomms, fullcomm=fullcomm)
+        strata_comm, cylinder_comm = _make_comms(n_spokes, fullcomm=fullcomm)
         strata_rank = strata_comm.Get_rank()
         cylinder_rank = cylinder_comm.Get_rank()
         global_rank = fullcomm.Get_rank()
-
-        spcomm_dict = communicator_list[strata_rank]
-
+    
         # Assign hub/spokes to individual ranks
-        sp_class = spcomm_dict["spcomm_class"]
-        sp_kwargs = spcomm_dict["spcomm_kwargs"]
-        opt_class = spcomm_dict["opt_class"]
-        opt_kwargs = spcomm_dict["opt_kwargs"]
+        if strata_rank == 0: # This rank is a hub
+            sp_class = hub_dict["hub_class"]
+            sp_kwargs = hub_dict["hub_kwargs"]
+            opt_class = hub_dict["opt_class"]
+            opt_kwargs = hub_dict["opt_kwargs"]
+            opt_dict = hub_dict
+        else: # This rank is a spoke
+            spoke_dict = list_of_spoke_dict[strata_rank - 1]
+            sp_class = spoke_dict["spoke_class"]
+            sp_kwargs = spoke_dict["spoke_kwargs"]
+            opt_class = spoke_dict["opt_class"]
+            opt_kwargs = spoke_dict["opt_kwargs"]
+            opt_dict = spoke_dict
 
         # Create the appropriate opt object locally
         opt_kwargs["mpicomm"] = cylinder_comm
         opt = opt_class(**opt_kwargs)
-
+    
         # Create the SPCommunicator object (hub/spoke) with
         # the appropriate SPBase object attached
-        spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm,
-                          communicator_list, **sp_kwargs)
-
+        if strata_rank == 0: # Hub
+            spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm,
+                              list_of_spoke_dict, **sp_kwargs) 
+        else: # Spokes
+            spcomm = sp_class(opt, fullcomm, strata_comm, cylinder_comm, **sp_kwargs) 
+    
+        # Create the windows, run main(), destroy the windows
         spcomm.make_windows()
-
-        # Run main()
         if strata_rank == 0:
             spcomm.setup_hub()
 
@@ -137,27 +129,27 @@ class WheelSpinner:
         spcomm.main()
         if strata_rank == 0: # If this is the hub
             spcomm.send_terminate()
-
+    
         # Anything that's left to do
         spcomm.finalize()
-
+    
         # to ensure the messages below are True
         cylinder_comm.Barrier()
         global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
-        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
-
+        global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0)) 
+          
         fullcomm.Barrier()
-
+    
         ## give the hub the chance to catch new values
         spcomm.hub_finalize()
-        spcomm.free_windows()
-
+    
         fullcomm.Barrier()
-        global_toc("Cylinder finalization complete")
 
+        spcomm.free_windows()
+        global_toc("Windows freed")
 
         self.spcomm = spcomm
-        self.spcomm_dict = spcomm_dict
+        self.opt_dict = opt_dict
         self.global_rank = global_rank
         self.strata_rank = strata_rank
         self.cylinder_rank = cylinder_rank
@@ -174,7 +166,7 @@ class WheelSpinner:
     def on_hub(self):
         if not self._ran:
             raise RuntimeError("Need to call WheelSpinner.run() before finding out.")
-        return self.strata_rank == 0
+        return ("hub_class" in self.opt_dict)
 
     def write_first_stage_solution(self, solution_file_name,
             first_stage_solution_writer=first_stage_nonant_writer):
@@ -188,7 +180,7 @@ class WheelSpinner:
         winner = self._determine_innerbound_winner()
         if winner:
             self.spcomm.opt.write_first_stage_solution(solution_file_name,first_stage_solution_writer)
-
+    
     def write_tree_solution(self, solution_directory_name,
             scenario_tree_solution_writer=scenario_tree_solution_writer):
         """ Write a tree solution directory, if available, to the solution_directory_name provided
@@ -225,25 +217,26 @@ class WheelSpinner:
                 best_strata_rank = self.spcomm.last_ib_idx
         else:
             best_strata_rank = None
-
+    
         best_strata_rank = self.spcomm.fullcomm.bcast(best_strata_rank, root=0)
         return (self.spcomm.strata_rank == best_strata_rank)
 
-def _make_comms(n_spcomms, fullcomm=None):
+def _make_comms(n_spokes, fullcomm=None):
     """ Create the strata_comm and cylinder_comm for hub/spoke style runs
     """
     if not haveMPI:
         raise RuntimeError("make_comms called, but cannot import mpi4py")
     # Ensure that the proper number of processes have been invoked
+    nsp1 = n_spokes + 1 # Add 1 for the hub
     if fullcomm is None:
         fullcomm = MPI.COMM_WORLD
-    n_proc = fullcomm.Get_size()
-    if n_proc % n_spcomms != 0:
-        raise RuntimeError(f"Need a multiple of {n_spcomms} processes (got {n_proc})")
+    n_proc = fullcomm.Get_size() 
+    if n_proc % nsp1 != 0:
+        raise RuntimeError(f"Need a multiple of {nsp1} processes (got {n_proc})")
 
     # Create the strata_comm and cylinder_comm
     # Cryptic comment: intra is vertical, inter is around the hub
     global_rank = fullcomm.Get_rank()
-    strata_comm = fullcomm.Split(key=global_rank, color=global_rank // n_spcomms)
-    cylinder_comm = fullcomm.Split(key=global_rank, color=global_rank % n_spcomms)
+    strata_comm = fullcomm.Split(key=global_rank, color=global_rank // nsp1)
+    cylinder_comm = fullcomm.Split(key=global_rank, color=global_rank % nsp1)
     return strata_comm, cylinder_comm

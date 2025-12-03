@@ -19,7 +19,7 @@ from mpisppy.utils.xhat_eval import Xhat_Eval
 # Could also pass, e.g., sys.stdout instead of a filename
 mpisppy.log.setup_logger("mpisppy.cylinders.slam_heuristic",
                          "slamheur.log",
-                         level=logging.CRITICAL)
+                         level=logging.CRITICAL)                         
 logger = logging.getLogger("mpisppy.cylinders.slam_heuristic")
 
 class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
@@ -76,8 +76,8 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 logger.debug(f'   {self.__class__.__name__} loop iter={slam_iter} on rank {self.global_rank}')
                 logger.debug(f'   {self.__class__.__name__} got from opt on rank {self.global_rank}')
 
-            if self.update_nonants():
-
+            if self.new_nonants:
+                
                 local_candidate = self.extract_local_candidate_soln()
 
                 global_candidate = np.empty_like(local_candidate)
@@ -89,7 +89,6 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 candidate = global_candidate.round()
                 '''
 
-                rounding_bias = self.opt.options.get("rounding_bias", 0.0)
                 # Everyone has the candidate solution at this point
                 for s in self.opt.local_scenarios.values():
                     is_pers = sputils.is_persistent(s._solver_plugin)
@@ -100,7 +99,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                             continue
                         val = global_candidate[ix]
                         if var.is_binary() or var.is_integer():
-                            val = round(val + rounding_bias)
+                            val = round(val)
                         var.fix(val)
                         if (is_pers):
                             solver.update_var(var)
@@ -108,7 +107,7 @@ class _SlamHeuristic(spoke.InnerBoundNonantSpoke):
                 obj = self.opt.calculate_incumbent(fix_nonants=False)
 
                 self.update_if_improving(obj)
-
+                
             slam_iter += 1
 
 class SlamMaxHeuristic(_SlamHeuristic):

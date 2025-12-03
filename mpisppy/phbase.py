@@ -178,7 +178,7 @@ def _Compute_Wbar(opt, verbose=False, repair=True):
                     if repair:
                         print(f"   repairing in {k}")
                         s._mpisppy_model.W[(ndn,i)]._value -= Wbars[i]
-
+ 
 
 #======================
 
@@ -347,7 +347,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     print ("rank, node, scen, var, z", ndn_i[0], k,
                            self.cylinder_rank, nonant.name,
                            pyo.value(s._mpisppy_model.z[ndn_i]))
-
+    
 
     def convergence_diff(self):
         """ Compute the convergence metric ||x_s - \\bar{x}||_1 / num_scenarios.
@@ -653,11 +653,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.options["defaultPHrho"])
-
             if self.Ag is not None:
                 self.Ag.callout_agnostic({"sname":sname, "scenario":scenario})
-
-
+            
+    
     def attach_smoothing(self):
         """ Attach the smoothing terms to the models in `local_scenarios`.
         """
@@ -669,11 +668,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             scenario._mpisppy_model.p = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.options["defaultPHp"])
-
+            
             scenario._mpisppy_model.beta = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
                                         mutable=True,
                                         default=self.options["defaultPHbeta"])
-
+    
 
     @property
     def W_disabled(self):
@@ -685,7 +684,7 @@ class PHBase(mpisppy.spopt.SPOpt):
     def prox_disabled(self):
         assert hasattr(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model, 'prox_on')
         return not bool(self.local_scenarios[self.local_scenario_names[0]]._mpisppy_model.prox_on.value)
-
+    
 
     def attach_PH_to_objective(self, add_duals, add_prox, add_smooth=0):
         """ Attach dual weight and prox terms to the objective function of the
@@ -768,7 +767,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                         xvarsqrd = xvar**2
                     prox_expr += (scenario._mpisppy_model.rho[ndn_i] / 2.0) * \
                                  (xvarsqrd - 2.0 * xbars[ndn_i] * xvar + xbars[ndn_i]**2)
-
+                    
                     # Computing smoothing term (quadratic)
                     if (add_smooth):
                         smooth_expr += (scenario._mpisppy_model.p[ndn_i] / 2.0) * \
@@ -809,11 +808,11 @@ class PHBase(mpisppy.spopt.SPOpt):
             add_prox (boolean, optional):
                 If True, adds prox terms to the objective. Default True.
             attach_smooth (int, optional):
-                If 0, no smoothing; if 1, p_value is used; if 2, p_ratio is used.
+                If 0, no smoothing; if 1, p_value is used; if 2, p_ratio is used. 
 
         Note:
             This function constructs an Extension object if one was specified
-            at the time the PH object was created.
+            at the time the PH object was created. 
         """
 
         self.attach_Ws_and_prox()
@@ -821,7 +820,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             self.attach_smoothing()
         self.attach_PH_to_objective(attach_duals, attach_prox, attach_smooth)
 
-
+    
     def options_check(self):
         """ Check whether the options in the `options` attribute are
         acceptable.
@@ -882,7 +881,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         if (self.extensions is not None):
             self.extobject.pre_iter0()
-
+        
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
@@ -902,7 +901,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         self._create_solvers()
 
         if (self.extensions is not None):
-            self.extobject.iter0_post_solver_creation()
+            self.extobject.iter0_post_solver_creation()        
 
         teeme = ("tee-rank0-solves" in self.options
                  and self.options['tee-rank0-solves']
@@ -966,7 +965,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         if smooth_type == 2:
             for _, scenario in self.local_scenarios.items():
                 for ndn_i, _ in scenario._mpisppy_data.nonant_indices.items():
-                        scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i]
+                        scenario._mpisppy_model.p[ndn_i] *= scenario._mpisppy_model.rho[ndn_i] 
 
         if have_converger:
             # Call the constructor of the converger object
@@ -1043,7 +1042,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
             if smoothed:
                 self.Update_z(verbose)
-
+            
             self.conv = self.convergence_diff()
             #global_toc('Rank: {} - After convergence_diff'.format(self.cylinder_rank), True)
             if have_extensions:

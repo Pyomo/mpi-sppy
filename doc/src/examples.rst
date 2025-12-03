@@ -47,7 +47,7 @@ constraints are the number of tons per acre that each crop will yield (2.5 for
 wheat, 3 for corn, and 20 for sugar beets).
 
 
-The following code in ``examples/farmer/archive/farmer.py`` (with similar code in ``examples/farmer/farmer.py``) creates an instance of the farmer's model:
+The following code creates an instance of the farmer's model:
 
 .. testcode::
 
@@ -109,8 +109,7 @@ yields for each crop. We can solve the model:
 The optimal objective value is:
 
 .. testoutput::
-  :options: +SKIP
-	    
+
     -118600.0
 
 In practice, the farmer does not know the number of tons that each crop will
@@ -207,39 +206,136 @@ farmer's stochastic program.
 Solving the Extensive Form
 ^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-The simplest approach is to solve the extensive form of the model directly. Assuming you are in the directory
-``examples/farmer`` the following unix command will work.
+The simplest approach is to solve the extensive form of the model directly.
+MPI-SPPy makes this quite simple:
 
-.. code-block:: bash
+.. testcode::
 
-    python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi
+    from mpisppy.opt.ef import ExtensiveForm
 
-We can extract the optimal solution itself using the ``--solution-base-name`` option:
+    options = {"solver": "cplex_direct"}
+    all_scenario_names = ["good", "average", "bad"]
+    ef = ExtensiveForm(options, all_scenario_names, scenario_creator)
+    results = ef.solve_extensive_form()
 
-.. code-block:: bash
+    objval = ef.get_objective_value()
+    print(f"{objval:.1f}")
 
-    python ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --EF --EF-solver-name gurobi --solution-base-name farmersol
 
-This command writes solution data for nonanticipative variables to two files with the base name farmersol and full scenario solutions to a directory named farmersol_soldir.
+.. testoutput::
 
-.. note::
-   Most command line options relevant to the EF start with --EF. Most other command line options will be silently ignored
-   if ``--EF`` is specified (one exception is ``--solution-base-name``).
-   
+    ...
+    -108390.0
+
+We can extract the optimal solution itself using the ``get_root_solution``
+method of the ``ExtensiveForm`` object:
+
+.. testcode::
+
+    soln = ef.get_root_solution()
+    for (var_name, var_val) in soln.items():
+        print(var_name, var_val)
+
+.. testoutput::
+    
+    X[BEETS] 250.0
+    X[CORN] 80.0
+    X[WHEAT] 170.0
+
 
 Solving Using Progressive Hedging (PH)
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Here is a simple command that uses PH as the hub algorithm and
-computes lower bounds using a Lagrangian spoke (``--lagrangian``) with
-upper bounds computed by randomly trying scenario solutions to fix the nonanticipative variables (``--xhatshuffle``).
+We can also solve the model using the progressive hedging (PH) algorithm.
+First, we must construct a PH object:
+
+.. testcode::
+
+    from mpisppy.opt.ph import PH
+
+    options = {
+        "solver_name": "cplex_persistent",
+        "PHIterLimit": 5,
+        "defaultPHrho": 10,
+        "convthresh": 1e-7,
+        "verbose": False,
+        "display_progress": False,
+        "display_timing": False,
+        "iter0_solver_options": dict(),
+        "iterk_solver_options": dict(),
+    }
+    all_scenario_names = ["good", "average", "bad"]
+    ph = PH(
+        options,
+        all_scenario_names,
+        scenario_creator,
+    )
 
 
-.. code-block:: bash
-		
-    mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name gurobi_persistent --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 
+.. testoutput::
+    :hide:
+
+    ...
+
+Note that all of the options in the ``options`` dict must be specified in order
+to construct the PH object. Once the PH object is constructed, we can execute
+the algorithm with a call to the ``ph_main`` method:
+
+.. testcode::
+
+    ph.ph_main()
+
+.. testoutput::
+    :hide:
+
+    ...
 
 
+.. testoutput::
+    :options: +SKIP
+
+
+    [    0.00] Start SPBase.__init__
+    [    0.01] Start PHBase.__init__
+    [    0.01] Creating solvers
+    [    0.01] Entering solve loop in PHBase.Iter0
+    [    2.80] Reached user-specified limit=5 on number of PH iterations
+
+Note that precise timing results may differ.  In this toy example, we only
+execute 5 iterations of the algorithm. Although the algorithm does not converge
+completely, we can see that the first-stage variables already exhibit
+relatively good agreement:
+
+.. testcode::
+
+    variables = ph.gather_var_values_to_rank0()
+    for (scenario_name, variable_name) in variables:
+        variable_value = variables[scenario_name, variable_name]
+        print(scenario_name, variable_name, variable_value)
+
+.. testoutput::
+    :hide:
+
+    ...
+    average X[BEETS]
+    ...
+
+.. testoutput::
+    :options: +SKIP
+
+    good X[BEETS] 280.6489711937925
+    good X[CORN] 85.26131687116064
+    good X[WHEAT] 134.0897119350402
+    average X[BEETS] 283.2796296293019
+    average X[CORN] 80.00000000014425
+    average X[WHEAT] 136.72037037055298
+    bad X[BEETS] 280.64897119379475
+    bad X[CORN] 85.26131687116226
+    bad X[WHEAT] 134.08971193504266
+
+The function ``gather_var_values_to_rank0`` can be used in parallel to collect
+the values of all non-anticipative variables at the root. In this (serial)
+example, it simply returns the values of the first-stage variables.
 
 Solving Using Benders' Decomposition
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^

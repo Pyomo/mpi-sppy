@@ -63,8 +63,8 @@ class XhatLShapedInnerBound(spoke.InnerBoundNonantSpoke):
         #xh_iter = 1
         while not self.got_kill_signal():
 
-            if self.update_nonants():
-
+            if self.new_nonants:
+                
                 self.opt._put_nonant_cache(self.localnonants)
                 self.opt._restore_nonants()
                 obj = self.opt.calculate_incumbent(fix_nonants=True)

@@ -6,9 +6,6 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# NOTE: You probably don't want to look at this file. You probably should be
-#       using generic_cylinders.py. See the farmer_generic.bash for examples.
-# (This file is mainly of interest for confidence intervals)
 # This shows two ways to get parameters to the EF for solution; both are fairly short.
 
 import sys

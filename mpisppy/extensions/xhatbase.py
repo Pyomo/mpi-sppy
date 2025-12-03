@@ -202,10 +202,6 @@ class XhatBase(mpisppy.extensions.extension.Extension):
                 self.opt.local_scenarios[sname].pprint()
             # get the global obj
             obj = self.opt.Eobjective(verbose=verbose)
-            # set the scenario objective value for communication
-            for k,s in self.opt.local_scenarios.items():
-                objfct = self.opt.saved_objectives[k]
-                s._mpisppy_data.inner_bound = pyo.value(objfct)
             self.opt.update_best_solution_if_improving(obj)
             if restore_nonants:
                 self.opt._restore_nonants()

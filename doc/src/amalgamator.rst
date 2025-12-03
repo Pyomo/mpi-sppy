@@ -3,11 +3,7 @@
 Amalgamator
 ===========
 
-.. Note::
-   This is an advanced topic, probably of interest only to maintainers of
-   confidence interfal and related code.
-
-The file ``amalgamator.py``
+For simple problems that do not need extra specification, ``amalgamator.py``
 provides several drivers to solve a problem without writing a program
 that creates the cylinders one by one. ``amalgamator.from_module`` enables
 a high-level user to create a hub-and-spoke architecture using the command 
@@ -53,9 +49,7 @@ It must contains the following attributes for use with cylinders:
 
 
 Create Amalgamator from a module and command line
--------------------------------------------------
-
-Given an options
+------------------------------------------------- Given an options
 ``Config`` object (typically called `cfg`) as above,
 ``amalgamator.Amalgamator_parser`` creates calls the appropriate
 functions to add the necessary information for different modules.
@@ -94,7 +88,7 @@ Examples
 --------
 
 As intended, the examples of use of Amalgamator are quite short. The first
-example, ``examples.farmer.archive.farmer_ama.py``, solves directly the EF. The model can be specified,
+example, ``farmer_ama.py``, solves directly the EF. The model can be specified,
 e.g. by taking an integer version of it. This specification can be made via
 the command line, thanks to the ``inparser_adder`` method of ``farmer.py``.
 

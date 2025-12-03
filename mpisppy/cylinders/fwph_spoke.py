@@ -6,18 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-from mpisppy.cylinders.spoke import OuterBoundSpoke
-from mpisppy.cylinders.fwph_cylinder import FWPH_Cylinder
+import mpisppy.cylinders.spoke
 
-class FrankWolfeOuterBound(OuterBoundSpoke, FWPH_Cylinder):
-
-    send_fields = (*OuterBoundSpoke.send_fields, *FWPH_Cylinder.send_fields)
-    receive_fields = (*OuterBoundSpoke.receive_fields, *FWPH_Cylinder.receive_fields)
+class FrankWolfeOuterBound(mpisppy.cylinders.spoke.OuterBoundSpoke):
 
     converger_spoke_char = 'F'
 
     def main(self):
         self.opt.fwph_main()
+
+    def is_converged(self):
+        return self.got_kill_signal()
 
     def sync(self):
         # The FWPH spoke can call "sync" before it
@@ -26,10 +25,7 @@ class FrankWolfeOuterBound(OuterBoundSpoke, FWPH_Cylinder):
         if not hasattr(self.opt, '_local_bound'):
             return
         # Tell the hub about the most recent bound
-        self.send_bound(self.opt._local_bound)
-
-        # Update the nonant bounds, if possible
-        self.receive_nonant_bounds()
+        self.bound = self.opt._local_bound
 
     def finalize(self):
         # The FWPH spoke can call "finalize" before it
@@ -38,6 +34,6 @@ class FrankWolfeOuterBound(OuterBoundSpoke, FWPH_Cylinder):
         # if we terminated early
         if not hasattr(self.opt, '_local_bound'):
             return
-        self.send_bound(self.opt._local_bound)
+        self.bound = self.opt._local_bound
         self.final_bound = self.opt._local_bound
         return self.final_bound
