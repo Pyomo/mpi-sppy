@@ -47,8 +47,8 @@ class Hub(SPCommunicator):
         self.last_ob_idx = None
         # for termination based on stalling out
         self.stalled_iter_cnt = 0
-        self.last_outer_bound = self.BestOuterBound
-        self.last_inner_bound = self.BestInnerBound
+        self.last_outer_bound = None 
+        self.last_inner_bound = None 
 
     @abc.abstractmethod
     def setup_hub(self):
