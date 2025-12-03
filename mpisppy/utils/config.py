@@ -899,19 +899,35 @@ class Config(pyofig.ConfigDict):
 
     def gradient_args(self):
 
-        self.add_to_config("grad_rho_multiplier",
-                           description="multiplier for GradRho (default 1.0)",
-                           domain=float,
-                           default=1.0)
-
-        self.add_to_config("eval_at_xhat",
-                           description="evaluate the gradient at xhat whenever available (default False)",
+        self.add_to_config("xhatpath",
+                           description="path to npy file with xhat",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_cost_file_out",
+                           description="name of the gradient cost file for output (will be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_cost_file_in",
+                           description="path to csv file with (grad based?) costs",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_rho_file_out",
+                           description="name of the gradient rho output file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("rho_file_in",
+                           description="name of the (gradient) rho input file (must be csv)",
+                           domain=str,
+                           default='')
+        self.add_to_config("grad_display_rho",
+                           description="display rho during gradient calcs (default True)",
                            domain=bool,
-                           default=False)
-        self.add_to_config("indep_denom",
-                           description="evaluate rho using scenario independent denominator (default False)",
-                           domain=bool,
-                           default=False)
+                           default=True)
+        # likely unused presently
+#        self.add_to_config("grad_pd_thresh",
+#                           description="threshold for dual/primal during gradient calcs",
+#                           domain=float,
+#                           default=0.1)
 
         self.add_to_config('grad_rho',
                            description="use a gradient-based rho setter",
