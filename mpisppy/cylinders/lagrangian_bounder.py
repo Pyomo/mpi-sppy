@@ -70,7 +70,6 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 self.send_bound(bound)
 
     def main(self, need_solution=False):
-        verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()

@@ -353,15 +353,8 @@ class FWPH(mpisppy.phbase.PHBase):
             # fwloop = time.time() - loop_start
             # print(f"{model_name}, total loop time: {fwloop}")
 
-<<<<<<< HEAD
-            if itr + 1 == sdm_iter_limit or not mip._mpisppy_data.solution_available or gamma_t < FW_conv_thresh:
-                return dual_bound
-            else:
-                yield dual_bound
-=======
             if dual_bound is None or (stop_check < self.FW_options['FW_conv_thresh']):
                 break
->>>>>>> parent of 46b6c358 (Merge pull request #529 from bknueven/fwph_refactor)
 
             # reset for next loop
             xt = {ndn_i : xvar._value for ndn_i, xvar in arb_scen_mip._mpisppy_data.nonant_indices.items()}

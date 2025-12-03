@@ -26,7 +26,6 @@ from mpisppy.convergers.norm_rho_converger import NormRhoConverger
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 from mpisppy.extensions.extension import MultiExtension, Extension
-from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
