@@ -20,7 +20,6 @@ class Field(enum.IntEnum):
     SHUTDOWN=-1000
     NONANT=1
     DUALS=2
-    RELAXED_NONANT=3
     BEST_OBJECTIVE_BOUNDS=100 # Both inner and outer bounds from the hub. Layout: [OUTER INNER ID]
     OBJECTIVE_INNER_BOUND=101
     OBJECTIVE_OUTER_BOUND=102
@@ -46,9 +45,8 @@ field_length_components.total_number_recent_xhats = pyo.Param(mutable=True, init
 
 _field_lengths = {
         Field.SHUTDOWN : 1,
-        Field.NONANT : field_length_components._local_nonant_length,
-        Field.DUALS : field_length_components._local_nonant_length,
-        Field.RELAXED_NONANT : field_length_components._local_nonant_length,
+        Field.NONANT : _field_length_components.local_nonant_length,
+        Field.DUALS : _field_length_components.local_nonant_length,
         Field.BEST_OBJECTIVE_BOUNDS : 2,
         Field.OBJECTIVE_INNER_BOUND : 1,
         Field.OBJECTIVE_OUTER_BOUND : 1,

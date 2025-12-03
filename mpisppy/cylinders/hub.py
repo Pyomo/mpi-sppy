@@ -204,20 +204,10 @@ class Hub(SPCommunicator):
         self.send_boundsout()
 
 
-class PHNonantHub(Hub):
-    """
-    Like PHHub, but only sends nonants and omits Ws. To be used
-    when another cylinder is supplying Ws (like RelaxedPHSpoke).
-    Could be removed when mpi-sppy supports pointing consuming
-    spokes like Lagrangian to a specific dual (W) buffer.
-    """
+class PHHub(Hub):
 
-    send_fields = (*Hub.send_fields, Field.NONANT, )
+    send_fields = (*Hub.send_fields, Field.NONANT, Field.DUALS)
     receive_fields = (*Hub.receive_fields,)
-
-    @property
-    def nonant_field(self):
-        return Field.NONANT
 
     def setup_hub(self):
         ## Generate some warnings if nothing is giving bounds
@@ -305,26 +295,16 @@ class PHNonantHub(Hub):
         """ Gather nonants and send them to the appropriate spokes
         """
         ci = 0  ## index to self.nonant_send_buffer
-        nonant_send_buffer = self.send_buffers[self.nonant_field]
+        nonant_send_buffer = self.send_buffers[Field.NONANT]
         for k, s in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 nonant_send_buffer[ci] = xvar._value
                 ci += 1
         logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
 
-        self.put_send_buffer(nonant_send_buffer, self.nonant_field)
+        self.put_send_buffer(nonant_send_buffer, Field.NONANT)
 
         return
-
-    def send_ws(self):
-        """ Nonant hub; do not send Ws
-        """
-        pass
-
-
-class PHHub(PHNonantHub):
-    send_fields = (*PHNonantHub.send_fields, Field.DUALS, )
-    receive_fields = (*PHNonantHub.receive_fields,)
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes
@@ -337,7 +317,6 @@ class PHHub(PHNonantHub):
         self.put_send_buffer(my_ws, Field.DUALS)
 
         return
-
 
 class LShapedHub(Hub):
 
