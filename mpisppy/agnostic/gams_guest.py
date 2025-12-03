@@ -204,7 +204,7 @@ class GAMS_guest():
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.model_status =}")
-            s._mpisppy_data.inner_bound = None
+            s._mpisppy_data._obj_from_agnostic = None
             return
 
         if solver_exception is not None and need_solution:
@@ -248,7 +248,7 @@ class GAMS_guest():
             s._mpisppy_data.outer_bound = objval
 
         # the next line ignores bundling
-        s._mpisppy_data.inner_bound = objval
+        s._mpisppy_data._obj_from_agnostic = objval
 
         # TBD: deal with other aspects of bundling (see solve_one in spopt.py)
         #print(f"For {s.name} in {global_rank=}: {objval=}")

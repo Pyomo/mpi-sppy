@@ -420,7 +420,7 @@ class SPOpt(SPBase):
                 local_Eobjs.append(s._mpisppy_probability * pyo.value(objfct))
             else:
                 # Agnostic will have attached the objective (and doesn't bundle as of Aug 2023)
-                local_Eobjs.append(s._mpisppy_probability * s._mpisppy_data.inner_bound)
+                local_Eobjs.append(s._mpisppy_probability * s._mpisppy_data._obj_from_agnostic)              
             if verbose:
                 print ("caller", inspect.stack()[1][3])
                 print ("E_Obj Scenario {}, prob={}, Obj={}, ObjExpr={}"\

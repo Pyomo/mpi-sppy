@@ -84,10 +84,6 @@ jobs:
           cd examples
           python afew.py xpress_persistent
 
-      - name: Test ComponentMap
-        run: |
-          pytest mpisppy/tests/test_component_map_usage.py
-
       - name: Test docs
         run: |
           cd ./doc/

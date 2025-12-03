@@ -285,7 +285,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         s._mpisppy_data.nonant_indices[ndn_i]._value = grb_var.X
     
     # Store the objective function value in the host scenario
-    s._mpisppy_data.inner_bound = objval
+    s._mpisppy_data._obj_from_agnostic = objval
 
     # Additional checks and operations for bundling if needed (depending on the problem)
     # ...
