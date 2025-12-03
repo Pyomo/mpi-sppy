@@ -1,15 +1,14 @@
 #!/bin/bash
 # This runs a few command lines to illustrate the use of generic_cylinders.py
-##set -e
 
-SOLVER="gurobi"
-SPB=2
+SOLVER="cplex"
+SPB=1
 
 echo "^^^ hub only with w-writer (smoke) ^^^"
-python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-and-xbar-writer --W-fname w_values.csv 
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-writer --W-fname w_values.csv 
 
 echo "^^^ hub only with w-reader (smoke) ^^^"
-python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-and-xbar-reader --init-W-fname w_values.csv
+python -m mpi4py ../mpisppy/generic_cylinders.py --module-name farmer/farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --W-reader --init-W-fname w_values.csv
 
 echo "^^^ Multi-stage AirCond ^^^"
 mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpisppy.tests.examples.aircond --branching-factors "3 3 3" --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatxbar --rel-gap 0.01 --solution-base-name aircond_nonants
@@ -28,7 +27,7 @@ mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name mpi
 
 echo "^^^ write scenario lp and nonant json files ^^^"
 cd sizes
-python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --write-scenario-lp-mps-files
+python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles
 cd ..
 
 echo "^^^ pickle sizes bundles ^^^"
@@ -40,7 +39,7 @@ echo "^^^ unpickle the sizes bundles and write the lp and nonant files ^^^"
 # note that numscens need to match the number before pickling...
 # so does scenarios per bundle
 cd sizes
-python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --write-scenario-lp-mps-files --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
+python ../../mpisppy/generic_cylinders.py --module-name sizes --num-scens 10 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --scenario-lpfiles --unpickle-bundles-dir sizes_pickles --scenarios-per-bundle 5
 cd ..
 
 echo "^^^ pickle the scenarios ^^^"
@@ -58,6 +57,11 @@ echo "^^^ used pickled scenarios ^^^"
 cd farmer
 # note that crops-mult would be ignored
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 10 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --unpickle-scenarios-dir farmer_pickles
+cd ..
+
+echo "^^^ use proper bundles without writing ^^^"
+cd sslp
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --scenarios-per-bundle $SPB --default-rho 1 --solver-name ${SOLVER} --max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001
 cd ..
 
 echo "^^^ write pickle bundles ^^^"
@@ -87,11 +91,11 @@ mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name 
 echo "^^^ sep rho dynamic ^^^"
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sep-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001
 
 # now do it again, but this time using dynamic rho
 echo "^^^ grad rho dynamic ^^^"
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
 echo "^^^ sensi rho dynamic ^^^"
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sensi-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
@@ -169,10 +173,6 @@ mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name 
 cd ..
 
 
-echo "^^^ use proper bundles without writing (this sslp run will take some time)^^^"
-cd sslp
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --scenarios-per-bundle $SPB --default-rho 1 --solver-name ${SOLVER} --max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001
-cd ..
 
 exit
 
@@ -188,11 +188,11 @@ exit
 cd farmer
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --solution-base-name farmer_nonants
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001
 
 # now do it again, but this time using dynamic rho
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho-setter --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
 cd ..
 # end gradient based rho demo

@@ -20,7 +20,7 @@ rank = comm.Get_rank()
 class TestSC(unittest.TestCase):
     def setUp(self):
         self.original_path = sys.path
-        example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer', 'schur')
+        example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer')
         sys.path.append(example_dir)
 
     def tearDown(self):

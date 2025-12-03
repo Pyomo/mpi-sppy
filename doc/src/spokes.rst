@@ -68,9 +68,9 @@ so as to obtain better outer (lower when minimizing) bounds. It can also provide
 a Lagrangian bound even if the hub does not provide lagrangian multipliers.
 
 The easiest way to use ``ph_ob`` is via the vanilla ``ph_ob_spoke`` method
-as illustrated in ``examples.farmer.archive.farmer_cylinders.py``. This method takes values
+as illustrated in ``examples.farmer_cylinders.py``. This method takes values
 from the config object (assuming the config object's ``ph_ob`` method
-was called as shown in the function ``examples.farmer.archive.farmer_cylinders._parse_args``)
+was called as shown in the function ``examples.farmer_cylinders._parse_args``)
 and sets up the options for the spoke.
 
 The option ``ph-ob-initial-rho-rescale-factor`` defaults to 0.1, so if nothing

@@ -57,7 +57,7 @@ This object has a ``run`` method that returns a gap estimator and a confidence i
 Examples
 --------
 
-There are example scripts for sequential sampling in both ``farmer/CI`` and ``aircond``.
+There are example scripts for sequential sampling in both ``farmer`` and ``aircond``.
 
 Using stand-alone ``mmw_conf.py``
 ---------------------------------
@@ -79,7 +79,7 @@ to be able to pass problem-specific args down without knowing what they are.
 
 Once a model satisfies the requirement for amalgamator, next a ``.npy`` file should be constructed from the given model. This can be accomplished, for example, by adding the line 
 ``sputils.ef_ROOT_nonants_npy_serializer(instance, 'xhat.npy')`` after solving the ef ``instance``. When using ``Amalgamator`` to solve the program, this can be done by adding the line
-``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``examples/farmer/archive/farmer.py`` for an example of this).
+``sputils.ef_ROOT_nonants_npy_serializer(ama_object.ef, "xhat.npy")`` to your existing program (see the example in ``farmer.py`` for an example of this).
 
 Once this is accomplished, on the command line, run
 ``python -m mpisppy.confidence_intervals.mmw_conf my_model.py xhat.npy gurobi --num-scens n --alpha 0.95``. Note that ``xhat.npy`` is assumed to be in the same directory as ``my_model.py`` in this case. If the file is saved elsewhere then the corresponding path should be called on the command line.
