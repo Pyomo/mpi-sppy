@@ -69,17 +69,7 @@ This is a good extension to look at as a first example. It takes a
 dictionary with iteration numbers and mipgaps as input and changes the
 mipgap at the corresponding iterations. The dictionary is provided in
 the options dictionary in ``["gapperoptions"]["mipgapdict"]``.  There
-is an example of its use in ``examples.sizes.sizes_demo.py``.
-
-Instead of an options dictionary, when run with cylinders the options
-``["gapperoptions"]["starting_mipgap"]`` and ``["gapperoptions"]["mipgap_ratio"]``
-can be set. The ``starting_mipgap`` will be the initial value used,
-and as the cylinders close the relative optimality gap the extension will set the subproblem
-mipgaps as the ``min(starting_mipgap, mipgap_ratio * problem_ratio)``, where
-the ``problem_ratio`` is the relative optimality gap on the overall problem
-as computed by the cylinders.
-
-This extension can also be used with the Lagrangian and subgradient spokes.
+is an example of its use in ``examples.sizes.sizes_demo.py``
 
 fixer.py
 ^^^^^^^^

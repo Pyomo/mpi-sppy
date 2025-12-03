@@ -12,7 +12,6 @@
     IDIOM: we feel free to have unused dictionary entries."""
 
 import copy
-import json
 
 # Hub and spoke SPBase classes
 from mpisppy.phbase import PHBase
@@ -39,7 +38,6 @@ from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.hub import PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
-from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
@@ -304,24 +302,6 @@ def extension_adder(hub_dict,ext_class):
         hub_dict["opt_kwargs"]["extensions"] = MultiExtension
     return hub_dict
 
-def add_gapper(hub_dict, cfg, name=None):
-    hub_dict = extension_adder(hub_dict, Gapper)
-    if name is None and cfg.mipgaps_json is not None:
-        with open(cfg.mipgaps_json) as fin:
-            din = json.load(fin)
-        mipgapdict = {int(i): din[i] for i in din}
-    else:
-        mipgapdict = None
-    if name is None:
-        name = ""
-    else:
-        name = name + "_"
-    hub_dict["opt_kwargs"]["options"]["gapperoptions"] = {
-        "verbose": cfg.verbose,
-        "mipgapdict": mipgapdict,
-        "starting_mipgap": getattr(cfg, f"{name}starting_mipgap"),
-        "mipgap_ratio" : getattr(cfg, f"{name}mipgap_ratio"),
-    }
 
 def add_fixer(hub_dict,
               cfg,

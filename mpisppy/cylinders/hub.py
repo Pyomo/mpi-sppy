@@ -75,6 +75,29 @@ class Hub(SPCommunicator):
         self.latest_ib_char = None
         self.latest_ob_char = None
 
+    def compute_gaps(self):
+        """ Compute the current absolute and relative gaps,
+            using the current self.BestInnerBound and self.BestOuterBound
+        """
+        if self.opt.is_minimizing:
+            abs_gap = self.BestInnerBound - self.BestOuterBound
+        else:
+            abs_gap = self.BestOuterBound - self.BestInnerBound
+
+        ## define by the best solution, as is common
+        nano = float("nan")  # typing aid
+        if (
+            abs_gap != nano
+            and abs_gap != float("inf")
+            and abs_gap != float("-inf")
+            and self.BestOuterBound != nano
+            and self.BestOuterBound != 0
+        ):
+            rel_gap = abs_gap / abs(self.BestOuterBound)
+        else:
+            rel_gap = float("inf")
+        return abs_gap, rel_gap
+
     def get_update_string(self):
         if self.latest_ib_char is None and \
                 self.latest_ob_char is None:

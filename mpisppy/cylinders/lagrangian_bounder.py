@@ -79,14 +79,10 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
 
         if extensions:
             self.opt.extobject.pre_iter0()
-
-        # setting this for PH extensions used by this Spoke
-        self.opt._PHIter = 0
+        self.dk_iter = 1
         self.trivial_bound = self.lagrangian(need_solution=need_solution, warmstart=sputils.WarmstartStatus.USER_SOLUTION)
-
         if extensions:
             self.opt.extobject.post_iter0()
-        self.opt._PHIter += 1
 
         self.opt.current_solver_options = self.opt.iterk_solver_options
 
@@ -105,6 +101,6 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                     self.send_bound(bound)
                 if extensions:
                     self.opt.extobject.enditer_after_sync()
-                self.opt._PHIter += 1
+                self.dk_iter += 1
             else:
                 self.do_while_waiting_for_new_Ws(need_solution=need_solution, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION)
