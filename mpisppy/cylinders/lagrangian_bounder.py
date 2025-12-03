@@ -20,8 +20,6 @@ class _LagrangianMixin:
         self.opt._create_solvers()
 
     def lagrangian(self, need_solution=True, warmstart=sputils.WarmstartStatus.PRIOR_SOLUTION):
-        # update the nonant bounds, if possible, for a tighter relaxation
-        self.receive_nonant_bounds()
         verbose = self.opt.options['verbose']
         # This is sort of a hack, but might help folks:
         if "ipopt" in self.opt.options["solver_name"]:
@@ -72,7 +70,7 @@ class LagrangianOuterBound(_LagrangianMixin, mpisppy.cylinders.spoke.OuterBoundW
                 self.send_bound(bound)
 
     def main(self, need_solution=False):
-        self.verbose = self.opt.options['verbose']
+        verbose = self.opt.options['verbose']
         extensions = self.opt.extensions is not None
 
         self.lagrangian_prep()

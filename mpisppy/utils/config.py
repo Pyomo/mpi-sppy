@@ -663,6 +663,11 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=0.0)
         
+        self.add_to_config('rc_bound_tightening',
+                            description="use reduced cost bound tightening",
+                            domain=bool,
+                            default=True)
+
         self.add_to_config('rc_bound_tol',
                             description="tol to consider vars at bound",
                             domain=float,
