@@ -204,7 +204,7 @@ class Hub(SPCommunicator):
         self.send_boundsout()
 
 
-class PHPrimalHub(Hub):
+class PHNonantHub(Hub):
     """
     Like PHHub, but only sends nonants and omits Ws. To be used
     when another cylinder is supplying Ws (like RelaxedPHSpoke).
@@ -322,9 +322,9 @@ class PHPrimalHub(Hub):
         pass
 
 
-class PHHub(PHPrimalHub):
-    send_fields = (*PHPrimalHub.send_fields, Field.DUALS, )
-    receive_fields = (*PHPrimalHub.receive_fields,)
+class PHHub(PHNonantHub):
+    send_fields = (*PHNonantHub.send_fields, Field.DUALS, )
+    receive_fields = (*PHNonantHub.receive_fields,)
 
     def send_ws(self):
         """ Send dual weights to the appropriate spokes

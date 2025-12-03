@@ -47,11 +47,11 @@ this value (default 1e-1).
 If only the binary terms should be 
 approximated, the option `linearize_binary_proximal_terms` can be used. 
 
-PHPrimal
+PHNonant
 --------
 This is exactly like the PH hub, except it does not send W values.
 It can be useful when some other cylinder is providing W values
-(e.g., PHDualSpoke, RelaxedPHSpoke).
+(e.g., RelaxedPHSpoke).
 
 
 lshaped

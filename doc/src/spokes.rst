@@ -174,23 +174,15 @@ cross scenario
 
 Computes and passes cross scenario cuts.
 
-Relaxed PH
+relaxed_ph
 ^^^^^^^^^^
 
-For S-MIPs, executes PH on the continuous relaxation of the problem. Provides W values
-to the Lagrangian or Reduced Costs spokes, as well as relaxed
-nonants which can be used with the relaxed PH fixer for the PH Primal Hub. This spoke
-can be useful, along with the PH Primal Hub, when the continuous relaxation allows for
-good dual (but not primal) convergence of the original problem. This typically happens
-for problems with a "strong" continuous relaxation. The option ``relaxed_ph_rescale_rho_factor``
-allows the user to adjust provided rho values by a constant multiplier across all variables,
-which occurs between PH iteration 0 and PH iteration 1.
+For S-MIPs, runs progressive hedging on the linear programming relaxation
+of the scenario subproblems. Provides Ws and "relaxed nonants", the former
+of which can be utilized for Lagrangian to compute lower bounds, and the later
+of which can be utilized to inform fixings for the hub via the relaxed_ph_fixer
+extention. This method can be effective when the subproblem linear programming
+relaxation is "strong".
 
-PH Dual
-^^^^^^^
-
-Executes another copy of PH, providing W values to the Lagrangian and/or Reduceds Costs
-spokes. This spoke can be useful, along with the PH Primal Hub, for problems which need
-different rho strategies for primal and dual convergence. The option ``ph_dual_rescale_rho_factor``
-allows the user to adjust provided rho values by a constant multiplier across all variables,
-which occurs between PH iteration 0 and PH iteration 1.
+The option ``relaxed_ph_rescale_rho_factor``, which defaults to 1, rescales
+rho for this spoke between iteration 0 and iteration 1.

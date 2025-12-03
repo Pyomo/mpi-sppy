@@ -37,8 +37,7 @@ from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
-from mpisppy.cylinders.ph_dual_spoke import PHDualSpoke
-from mpisppy.cylinders.hub import PHPrimalHub, PHHub, SubgradientHub, APHHub, FWPHHub
+from mpisppy.cylinders.hub import PHNonantHub, PHHub, SubgradientHub, APHHub, FWPHHub
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
@@ -166,7 +165,7 @@ def ph_hub(
     add_timed_mipgap(hub_dict, cfg)
     return hub_dict
 
-def ph_primal_hub(
+def ph_nonant_hub(
         cfg,
         scenario_creator,
         scenario_denouement,
@@ -193,7 +192,7 @@ def ph_primal_hub(
         all_nodenames=all_nodenames,
     )
     # use PHNonantHub instead of PHHub
-    hub_dict["hub_class"] = PHPrimalHub
+    hub_dict["hub_class"] = PHNonantHub
     return hub_dict
 
 def aph_hub(cfg,
@@ -781,44 +780,6 @@ def subgradient_spoke(
     return subgradient_spoke
 
 
-def ph_dual_spoke(
-    cfg,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    rho_setter=None,
-    all_nodenames=None,
-    ph_extensions=None,
-    extension_kwargs=None,
-):
-    ph_dual_spoke = _PHBase_spoke_foundation(
-        PHDualSpoke,
-        cfg,
-        scenario_creator,
-        scenario_denouement,
-        all_scenario_names,
-        scenario_creator_kwargs=scenario_creator_kwargs,
-        rho_setter=rho_setter,
-        all_nodenames=all_nodenames,
-        ph_extensions=ph_extensions,
-        extension_kwargs=extension_kwargs,
-    )
-    options = ph_dual_spoke["opt_kwargs"]["options"]
-    if cfg.ph_dual_rescale_rho_factor is not None:
-        options["rho_factor"] = cfg.ph_dual_rescale_rho_factor
-
-    # make sure this spoke doesn't hit the time or iteration limit
-    options["time_limit"] = None
-    options["PHIterLimit"] = cfg.max_iterations * 1_000_000
-    options["display_progress"] = False
-    options["display_convergence_detail"] = False
-
-    add_ph_tracking(ph_dual_spoke, cfg, spoke=True)
-
-    return ph_dual_spoke
-
-
 def relaxed_ph_spoke(
     cfg,
     scenario_creator,
@@ -844,7 +805,7 @@ def relaxed_ph_spoke(
     )
     options = relaxed_ph_spoke["opt_kwargs"]["options"]
     if cfg.relaxed_ph_rescale_rho_factor is not None:
-        options["rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
+        options["relaxed_ph_rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
