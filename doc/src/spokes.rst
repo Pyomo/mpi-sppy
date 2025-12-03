@@ -62,7 +62,30 @@ is a sample json file:
 ph_ob
 ^^^^^
 
-This cylinder was deprecated in August of 2025 in favor of ph_dual.
+This bounder is similar to the Lagrangian bounder, except that it executes a PH
+algorithm to obtain its own W values. The idea is that it can use lower rho values
+so as to obtain better outer (lower when minimizing) bounds. It can also provide
+a Lagrangian bound even if the hub does not provide lagrangian multipliers.
+
+The easiest way to use ``ph_ob`` is via the vanilla ``ph_ob_spoke`` method
+as illustrated in ``examples.farmer.archive.farmer_cylinders.py``. This method takes values
+from the config object (assuming the config object's ``ph_ob`` method
+was called as shown in the function ``examples.farmer.archive.farmer_cylinders._parse_args``)
+and sets up the options for the spoke.
+
+The option ``ph-ob-initial-rho-rescale-factor`` defaults to 0.1, so if nothing
+other than ``--ph-ob`` is given on the command line, the ph_ob spoke will use
+one tenth the default rho (it might use one tenth of rho from
+a rho setter if one is configured in the cylinders program and passed to the ph_ob
+constructor). Additional control over rho values
+is provided by the ``phob-rho-rescale-factors-json`` option which is a json
+file that provides a dictionary with keys that are iteration numbers and values
+that are rescale factors. Note that all rescaling is cummulative.
+
+See ``examples.uc.gradient_uc_cylinders.py`` for an example that uses a cost-based
+rho setter for the uc problem in the ph_ob cylinder.
+
+As of August, 2024 use of a gradient based rho with ph_ob is untested.
 
 Reduced Costs
 ^^^^^^^^^^^^^

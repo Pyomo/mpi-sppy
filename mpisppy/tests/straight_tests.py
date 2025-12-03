@@ -22,6 +22,17 @@ def _doone(cmdstr):
         badguys.append(f"Test failed with code {ret}:\n{cmdstr}")
 
 #####################################################
+# farmer
+example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'farmer', 'archive')
+fpath = os.path.join(example_dir, 'farmer_cylinders.py')
+
+cmdstr = f"python {fpath} --help"
+_doone(cmdstr)
+
+cmdstr = f"mpiexec -np 1 python {fpath} --help"
+_doone(cmdstr)
+
+
 # aircond
 example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'aircond')
 fpath = os.path.join(example_dir, 'aircond_cylinders.py')

@@ -43,6 +43,7 @@ def _parse_args():
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.lagranger_args()
+    cfg.ph_ob_args()
     cfg.xhatshuffle_args()
     cfg.converger_args()
     cfg.wxbar_read_write_args()
@@ -153,7 +154,15 @@ def main():
         lagranger_spoke = vanilla.lagranger_spoke(*beans,
                                               scenario_creator_kwargs=scenario_creator_kwargs,
                                               rho_setter = rho_setter)
-    # ph outer bounder spoke removed August 2025
+    # ph outer bounder spoke
+    if cfg.ph_ob:
+        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter)
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(ph_ob_spoke, cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(ph_ob_spoke, cfg)
 
     # xhat looper bound spoke
     if cfg.xhatlooper:
@@ -175,6 +184,8 @@ def main():
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.lagranger:
         list_of_spoke_dict.append(lagranger_spoke)
+    if cfg.ph_ob:
+        list_of_spoke_dict.append(ph_ob_spoke)
     if cfg.xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if cfg.xhatshuffle:

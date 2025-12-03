@@ -178,7 +178,11 @@ def main():
     if xhatlooper:
         xhatlooper_spoke = vanilla.xhatlooper_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
 
-    # ph outer bounder spoke removed August 2025
+    # ph outer bounder spoke
+    if cfg.ph_ob:
+        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter)        
 
 
     # xhat shuffle bound spoke
@@ -194,6 +198,8 @@ def main():
         list_of_spoke_dict.append(fw_spoke)
     if lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
+    if cfg.ph_ob:
+        list_of_spoke_dict.append(ph_ob_spoke)        
     if xhatlooper:
         list_of_spoke_dict.append(xhatlooper_spoke)
     if xhatshuffle:

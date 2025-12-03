@@ -388,7 +388,7 @@ if not nouc:
 
         do_one("uc", "gradient_uc_cylinders.py", 15,
                "--bundles-per-rank=0 --max-iterations=100 --default-rho=1 "
-               "--xhatshuffle --lagrangian --num-scens=5 --max-solver-threads=2 "
+               "--xhatshuffle --ph-ob --num-scens=5 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
                f"--solver-name={solver_name} --xhatpath uc_cyl_nonants.npy "
                "--rel-gap 0.00001 --abs-gap=1 --intra-hub-conv-thresh=-1 "
@@ -414,7 +414,7 @@ if not nouc:
                "--solver-name={}".format(solver_name))
         # as of May 2022, this one works well, but outputs some crazy messages
         do_one("uc", "uc_ama.py", 3,
-              "--bundles-per-rank=0 --max-iterations=2 "
+               "--bundles-per-rank=0 --max-iterations=2 "
                "--default-rho=1 --num-scens=3 "
                "--fixer-tol=1e-2 --lagranger --xhatshuffle "
                "--solver-name={}".format(solver_name))
