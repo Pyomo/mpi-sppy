@@ -29,8 +29,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -54,8 +54,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -99,8 +99,8 @@ jobs:
     needs: [ruff]
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -130,8 +130,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -163,10 +163,10 @@ jobs:
       matrix:
         python-version: [3.11]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
 
       - name: setup conda
-        uses: conda-incubator/setup-miniconda@v2
+        uses: conda-incubator/setup-miniconda@v3
         with:
           python-version: ${{ matrix.python-version }}
           channels: anaconda, conda-forge
@@ -211,8 +211,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -236,8 +236,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -265,8 +265,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -292,8 +292,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -318,8 +318,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -344,8 +344,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -377,8 +377,8 @@ jobs:
     needs: [ruff]
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -407,7 +407,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
@@ -434,8 +434,8 @@ jobs:
     name: header test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -460,8 +460,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -493,8 +493,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -519,8 +519,8 @@ jobs:
     runs-on: ubuntu-latest
     needs: [ruff]
     steps:
-      - uses: actions/checkout@v3
-      - uses: conda-incubator/setup-miniconda@v2
+      - uses: actions/checkout@v6
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
