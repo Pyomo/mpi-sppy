@@ -20,7 +20,7 @@ jobs:
         pyomo-version: [6.9.5, main]
     steps:
       - uses: actions/checkout@v6
-      - uses: conda-incubator/setup-miniconda@v3.2
+      - uses: conda-incubator/setup-miniconda@v3
         with:
           activate-environment: test_env
           python-version: 3.11
