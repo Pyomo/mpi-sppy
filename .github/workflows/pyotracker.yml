@@ -20,7 +20,7 @@ jobs:
         pyomo-version: [6.9.5, main]
     steps:
       - uses: actions/checkout@v6
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: conda-incubator/setup-miniconda@v3.2
         with:
           activate-environment: test_env
           python-version: 3.11
@@ -32,7 +32,7 @@ jobs:
           pip install xpress
           pip install matplotlib
 
-      - name: set up pyomo
+      - name: setup pyomo
         run: |
           pip install git+https://github.com/Pyomo/pyomo.git@${{ matrix.pyomo-version }}
 
