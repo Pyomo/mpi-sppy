@@ -1,0 +1,72 @@
+\documentclass{article}
+
+% Language setting
+% Replace `english' with e.g. `spanish' to change the document language
+\usepackage[english]{babel}
+
+% Set page size and margins
+% Replace `letterpaper' with`a4paper' for UK/EU standard size
+\usepackage[letterpaper,top=2cm,bottom=2cm,left=3cm,right=3cm,marginparwidth=1.75cm]{geometry}
+
+% Useful packages
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{amsfonts}
+\usepackage{graphicx}
+\usepackage{algorithm2e}
+\usepackage{enumitem}
+\usepackage{comment}
+\usepackage{natbib}
+
+\usepackage[colorlinks=true, allcolors=blue]{hyperref}
+
+\newcommand{\sdag}[1]{{#1}^{\dag}}
+
+\title{Fraction of Time MPI-SPPY spends in Python}
+\author{ David L Woodruff\\
+  Graduate School of Management\\
+  \\
+  University of California Davis\\
+  Davis CA 95616 USA}
+\date{\today}
+
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
+\begin{document}
+\maketitle
+
+When considering applications in practice, or when comparing to other
+packages a question arises concerning the fraction of time that
+mpi-sppy spends ``in Python'' as opposed to compiled code written in
+other languages such as C and Fortran.  Since solvers, numpy, and MPI
+are all in the latter category, {\em a priori} one expects that the
+fraction spent in Python will be small for all but toy problems.
+
+
+\end{document}
+
+scalene is designed to attribute time to Python vs native (it can estimate time spent in compiled code called from Python). It’s often the most straightforward way to get exactly what you asked.
+
+Run:
+
+python -m pip install scalene
+python -m scalene your_script.py [args...]
+
+
+It reports per-file and per-line:
+
+Python time
+
+Native time (extensions, libraries like NumPy, solver bindings, etc.)
+
+MPI note: if you run under mpiexec, you’ll get output per rank (may need to direct to separate files):
+
+mpiexec -np 4 python -m scalene --outfile scalene_rank_%r.txt your_script.py ...
+
+
+If %r isn’t supported in your shell, just set unique outfile names using env vars per rank.
+
+This is usually the quickest route to “fraction spent in Python.”        
+
