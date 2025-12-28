@@ -23,12 +23,12 @@ python -m scalene run \
   --module-name ../farmer/farmer \
   --num-scens 3 \
   --solver-name "${SOLVER}" \
-  --max-iterations 10 \
+  --max-iterations 100 \
   --max-solver-threads 4 \
   --default-rho 1 \
   --lagrangian \
   --xhatshuffle \
-  --rel-gap 0.01
+  --rel-gap 0.0001
 
 exit
 
