@@ -20,5 +20,5 @@ echo "^^^ sslp_15_45_10 ^^^ rank=${RANK}"
 python -m scalene run \
   --outfile "scalene_rank_${RANK}.txt" \
   ../../mpisppy/generic_cylinders.py \
-  --module-name ../sslp/sslp --sslp-data-path ../sslp/data --instance-name sslp_15_45_10 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+  --module-name ../sslp/sslp --sslp-data-path ../sslp/data --instance-name sslp_15_45_10 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 2 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
 
