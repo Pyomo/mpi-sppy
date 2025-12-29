@@ -1,10 +1,17 @@
 ###############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
+#
+# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Sustainable Energy, LLC, The Regents of the University of California, et al.
+# All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
+# full copyright and license information.
 ###############################################################################
 # straight smoke tests (with no unittest, which is a bummer but we need mpiexec)
 
 import os
+import shlex
 import subprocess
+import sys
 
 from mpisppy.tests.utils import get_solver
 
@@ -12,39 +19,46 @@ solver_available, solver_name, persistent_available, persistent_solver_name = ge
 
 badguys = []
 
-
-# --- Open MPI debugging / robustness knobs ---
-# Make Open MPI print all error messages (don't aggregate/suppress)
-os.environ["OMPI_MCA_orte_base_help_aggregate"] = "0"
-# Reduce noise about unused components (optional)
-os.environ["OMPI_MCA_btl_base_warn_component_unused"] = "0"
-
-# Force Open MPI temp/session dirs to a known-writable location (often fixes -17 No permission)
 _tests_dir = os.path.dirname(os.path.abspath(__file__))
-_ompi_tmp = os.path.join(_tests_dir, ".ompi_tmp")
-os.makedirs(_ompi_tmp, exist_ok=True)
-os.environ["TMPDIR"] = _ompi_tmp
-os.environ["OMPI_MCA_tmpdir_base"] = _ompi_tmp
 
 
 def _doone(cmdstr: str) -> bool:
     """Run a shell command. Return True on success, False on failure.
-    Write stdout/stderr to a log file to help debug mpiexec failures.
+    Write stdout/stderr to mpisppy/tests/last_mpiexec.log for debugging.
     """
     print("testing:", cmdstr)
 
     log = os.path.join(_tests_dir, "last_mpiexec.log")
-    cmd_with_log = f"{cmdstr} > {log} 2>&1"
 
-    p = subprocess.run(cmd_with_log, shell=True)
+    # Use bash so the redirection and quoting behave predictably.
+    script = (
+        "set +e\n"
+        "echo '=== preflight ==='\n"
+        "echo 'pwd:' $(pwd)\n"
+        "echo 'python:' $(command -v python)\n"
+        "echo 'python -V:' $(python -V 2>&1)\n"
+        "echo 'sys.executable:' " + shlex.quote(sys.executable) + "\n"
+        "echo 'mpiexec:' $(command -v mpiexec || echo MISSING)\n"
+        "echo 'mpiexec --version:'\n"
+        "mpiexec --version 2>&1 || true\n"
+        "echo '=== command ==='\n"
+        f"echo {shlex.quote(cmdstr)}\n"
+        "echo '=== output ==='\n"
+        f"{cmdstr}\n"
+        "rc=$?\n"
+        "echo '=== done; rc='${rc}\n"
+        "exit ${rc}\n"
+    )
+
+    with open(log, "w", encoding="utf-8") as f:
+        p = subprocess.run(["bash", "-lc", script], stdout=f, stderr=subprocess.STDOUT)
 
     if p.returncode != 0:
         # include tail of log for convenience
-        tail = ""
         try:
             with open(log, "r", encoding="utf-8", errors="replace") as f:
                 lines = f.readlines()
-            tail = "".join(lines[-120:])  # last 120 lines
+            tail = "".join(lines[-200:])
         except Exception as e:
             tail = f"(Could not read log {log}: {e})\n"
 
@@ -66,16 +80,19 @@ jpath = os.path.join(example_dir, "lagranger_factors.json")
 # PH and lagranger rescale factors w/ FWPH
 fwphSaveFile = os.path.join(_tests_dir, "fwph_trace.txt")
 
+# Use the exact interpreter running this test (important for CI/conda/venv)
+pyexe = shlex.quote(sys.executable)
+
 cmdstr = (
-    f"mpiexec --tag-output -np 4 python -m mpi4py {fpath} "
+    f"mpiexec -np 4 {pyexe} -m mpi4py {shlex.quote(fpath)} "
     f"--bundles-per-rank=0 --max-iterations=5 --default-rho=1 "
-    f"--solver-name={solver_name} "
+    f"--solver-name={shlex.quote(solver_name)} "
     f'--branching-factors "4 3 2" '
     f"--Capacity 200 --QuadShortCoeff 0.3 --BeginInventory 50 "
     f"--rel-gap 0.01 --mu-dev 0 --sigma-dev 40 "
     f"--max-solver-threads 2 --start-seed 0 "
-    f"--lagranger --lagranger-rho-rescale-factors-json {jpath} "
-    f"--fwph --fwph-save-file {fwphSaveFile} --xhatshuffle"
+    f"--lagranger --lagranger-rho-rescale-factors-json {shlex.quote(jpath)} "
+    f"--fwph --fwph-save-file {shlex.quote(fwphSaveFile)} --xhatshuffle"
 )
 
 ok = _doone(cmdstr)
