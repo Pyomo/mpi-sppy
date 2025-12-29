@@ -1059,7 +1059,7 @@ class FWPH(mpisppy.phbase.PHBase):
             with open(fname, 'a') as f:
                 f.write('{itr:s},{bound:s},{bb:s},{diff:s},{secs:s}\n'.format(
                     itr="Iteration", bound="Bound", bb="Best bound",
-                    diff="Error", secs="Time(s)"))
+                    diff="conv diff", secs="Time(s)"))
 
     def save_weights(self, fname):
         ''' Save the computed weights to the specified file.
