@@ -986,7 +986,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._scenario_cycler.begin_epoch()
                 snamedict = self._scenario_cycler.get_next()
             obj = self._xhatter._try_one(snamedict,
-                                   solver_options = self.options["iterk_solver_options"],
+                                   solver_options = self.options["iter0_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
                                    stage2EFsolvern=stage2EFsolvern,
