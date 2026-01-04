@@ -46,7 +46,7 @@ def _parse_args(m):
                       domain=str,
                       default=None)
     cfg.add_to_config(name="write_scenario_lp_mps_files_dir",
-                      description="Invokes an extension that writes an model lp file, mps file and a nonants json file for each scenario before iteration 0",
+                      description="Writes a model lp file, mps file and a nonants json file for each scenario and does little else",
                       domain=str,
                       default=None)
 
@@ -216,7 +216,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
 
     # the intent of the following is to transition to strictly
     # cfg-based option passing, as opposed to dictionary-based processing.
-    hub_dict['opt_kwargs']['options']['cfg'] = cfg                
+    hub_dict['opt_kwargs']['options']['cfg'] = cfg
         
     # Extend and/or correct the vanilla dictionary
     ext_classes = list()
@@ -686,6 +686,7 @@ if __name__ == "__main__":
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
 
+    # if we just want to write scenario or bundle data, then don't do any other work.
     if cfg.pickle_bundles_dir is not None:
         global_comm = MPI.COMM_WORLD
         _write_bundles(module,
@@ -701,6 +702,28 @@ if __name__ == "__main__":
                          scenario_creator_kwargs,
                          scenario_denouement,
                          global_comm)
+    elif cfg.write_scenario_lp_mps_files_dir is not None:
+        # Write LP/MPS files using the Scenario_lp_mps_files extension,
+        # but do NOT perform Iter0 solves or any PH iterations.
+
+        # Tell PHBase.Iter0() to stop after pre_iter0 extension
+        cfg.quick_assign("just_pre_iter0", bool, True)
+
+        # We still need PH initialization
+        # so we call do_decomp, which will short-circuit in Iter0.
+        do_decomp(
+            module,
+            cfg,
+            scenario_creator,
+            scenario_creator_kwargs,
+            scenario_denouement,
+            bundle_wrapper=bundle_wrapper,
+        )
+
+        # Nothing else to do; extension has already written files
+        global_toc(
+            f"Scenario LP/MPS files written to {cfg.write_scenario_lp_mps_files_dir}"
+        )
     elif cfg.EF:
         _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
     else:

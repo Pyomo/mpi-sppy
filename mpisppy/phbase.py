@@ -880,9 +880,6 @@ class PHBase(mpisppy.spopt.SPOpt):
                 removed.
         """
 
-        if (self.extensions is not None):
-            self.extobject.pre_iter0()
-
         verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
         dtiming = self.options["display_timing"]
@@ -890,6 +887,21 @@ class PHBase(mpisppy.spopt.SPOpt):
         smooth_type = self.options["smoothed"]
         have_extensions = self.extensions is not None
         have_converger = self.ph_converger is not None
+
+        if (self.extensions is not None):
+            self.extobject.pre_iter0()
+
+        # dangerous option to allow low-cost writing lp files, etc.
+        # (this should not be a command line option)
+        # Allow either direct PH option or a cfg flag passed via options["cfg"]
+        just_pre_iter0 = self.options.get("just_pre_iter0", False)
+        if not just_pre_iter0:
+            cfg = self.options.get("cfg", None)
+            if cfg is not None:
+                just_pre_iter0 = bool(cfg.get("just_pre_iter0", False))
+                if just_pre_iter0:
+                    global_toc("WARNING: just_pre_iter0 selected: no iter0!!")
+                    return None
 
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
@@ -909,7 +921,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                  and self.cylinder_rank == 0
                  )
 
-        if self.options["verbose"]:
+        if verbose:
             print ("About to call PH Iter0 solve loop on rank={}".format(self.cylinder_rank))
         global_toc("Entering solve loop in PHBase.Iter0")
 
@@ -1110,7 +1122,7 @@ class PHBase(mpisppy.spopt.SPOpt):
             if dconvergence_detail:
                 self.report_var_values_at_rank0(header="Convergence detail:", fixed_vars=False)
 
-        else: # no break, (self._PHIter == max_iterations)
+        else: # no break, (self._PHIter >= max_iterations)
             # NOTE: If we return for any other reason things are reasonably in-sync.
             #       due to the convergence check. However, here we return we'll be
             #       out-of-sync because of the solve_loop could take vasty different
