@@ -986,7 +986,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._scenario_cycler.begin_epoch()
                 snamedict = self._scenario_cycler.get_next()
             obj = self._xhatter._try_one(snamedict,
-                                   solver_options = self.options["iterk_solver_options"],
+                                   solver_options = self.options["iter0_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
                                    stage2EFsolvern=stage2EFsolvern,
@@ -1059,7 +1059,7 @@ class FWPH(mpisppy.phbase.PHBase):
             with open(fname, 'a') as f:
                 f.write('{itr:s},{bound:s},{bb:s},{diff:s},{secs:s}\n'.format(
                     itr="Iteration", bound="Bound", bb="Best bound",
-                    diff="Error", secs="Time(s)"))
+                    diff="conv diff", secs="Time(s)"))
 
     def save_weights(self, fname):
         ''' Save the computed weights to the specified file.

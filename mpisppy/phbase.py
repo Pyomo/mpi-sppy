@@ -276,7 +276,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         # self.options (from super) will archive the original options.
         self.options = options
         self.Ag = options.get("Ag", None)  # The Agnostic Object
-        
+
         self.options_check()
         self.ph_converger = ph_converger
         self.rho_setter = rho_setter
@@ -285,10 +285,18 @@ class PHBase(mpisppy.spopt.SPOpt):
         self.iterk_solver_options = options["iterk_solver_options"]
         self.current_solver_options = self.iter0_solver_options
 
-        # flags to complete the invariant
         self.convobject = None  # PH converger
         self.attach_xbars()
 
+        # dangerous option to allow low-cost writing lp files, etc.
+        # (this should not be a command line option)
+        # Allow either direct PH option or a cfg flag
+        self.just_pre_iter0 = self.options.get("just_pre_iter0", False)
+        if not self.just_pre_iter0:
+            cfg = self.options.get("cfg", None)
+            if cfg is not None:
+                self.just_pre_iter0 = bool(cfg.get("just_pre_iter0", False))
+      
 
     def Compute_Xbar(self, verbose=False):
         """ Gather xbar and x squared bar for each node in the list and
@@ -891,17 +899,9 @@ class PHBase(mpisppy.spopt.SPOpt):
         if (self.extensions is not None):
             self.extobject.pre_iter0()
 
-        # dangerous option to allow low-cost writing lp files, etc.
-        # (this should not be a command line option)
-        # Allow either direct PH option or a cfg flag passed via options["cfg"]
-        just_pre_iter0 = self.options.get("just_pre_iter0", False)
-        if not just_pre_iter0:
-            cfg = self.options.get("cfg", None)
-            if cfg is not None:
-                just_pre_iter0 = bool(cfg.get("just_pre_iter0", False))
-                if just_pre_iter0:
-                    global_toc("WARNING: just_pre_iter0 selected: no iter0!!")
-                    return None
+        if self.just_pre_iter0:
+            global_toc("WARNING: just_pre_iter0 selected: no iter0!!")
+            return None
 
         def _vb(msg):
             if verbose and self.cylinder_rank == 0:
@@ -1143,6 +1143,10 @@ class PHBase(mpisppy.spopt.SPOpt):
             float:
                 Pretty useless weighted, proxed objective value.
         """
+        if self.just_pre_iter0:
+            global_toc("WARNING: just_pre_iter0 precludes bounds")
+            return None
+            
         verbose = self.options["verbose"]
         have_extensions = extensions is not None
         dprogress = self.options["display_progress"]
