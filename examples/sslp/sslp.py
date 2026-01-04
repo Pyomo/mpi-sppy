@@ -1,11 +1,12 @@
 ###############################################################################
 # mpi-sppy: MPI-based Stochastic Programming in PYthon
 #
-# Copyright (c) 2024, Lawrence Livermore National Security, LLC, Alliance for
+# Copyright (c) 2024 Lawrence Livermore National Security, LLC, Alliance for
 # Sustainable Energy, LLC, The Regents of the University of California, et al.
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# update January 2026 to tack on cfg as an unused scenario_creator arg
 # update April 2020: BUT this really needs upper and lower bound spokes
 # dlw February 2019: PySP 2 for the sslp example
 
@@ -24,7 +25,7 @@ import model.ReferenceModel as ref
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 
-def scenario_creator(scenario_name, data_dir=None, surrogate=False):
+def scenario_creator(scenario_name, data_dir=None, surrogate=False, cfg=None):
     """ The callback needs to create an instance and then attach
         the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho.
