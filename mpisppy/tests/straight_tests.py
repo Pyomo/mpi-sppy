@@ -9,34 +9,110 @@
 # straight smoke tests (with no unittest, which is a bummer but we need mpiexec)
 
 import os
+import shlex
+import subprocess
+import sys
 
 from mpisppy.tests.utils import get_solver
-solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
-badguys = list()
+solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
-def _doone(cmdstr):
+badguys = []
+
+_tests_dir = os.path.dirname(os.path.abspath(__file__))
+
+
+def _doone(cmdstr: str) -> bool:
+    """Run a shell command. Return True on success, False on failure.
+    Write stdout/stderr to mpisppy/tests/last_mpiexec.log for debugging.
+    """
     print("testing:", cmdstr)
-    ret = os.system(cmdstr)
-    if ret != 0:
-        badguys.append(f"Test failed with code {ret}:\n{cmdstr}")
+
+    log = os.path.join(_tests_dir, "last_mpiexec.log")
+
+    # Use bash so the redirection and quoting behave predictably.
+    script = (
+        "set +e\n"
+        "echo '=== preflight ==='\n"
+        "echo 'pwd:' $(pwd)\n"
+        "echo 'python:' $(command -v python)\n"
+        "echo 'python -V:' $(python -V 2>&1)\n"
+        "echo 'sys.executable:' " + shlex.quote(sys.executable) + "\n"
+        "echo 'mpiexec:' $(command -v mpiexec || echo MISSING)\n"
+        "echo 'mpiexec --version:'\n"
+        "mpiexec --version 2>&1 || true\n"
+        "echo '=== command ==='\n"
+        f"echo {shlex.quote(cmdstr)}\n"
+        "echo '=== output ==='\n"
+        f"{cmdstr}\n"
+        "rc=$?\n"
+        "echo '=== done; rc='${rc}\n"
+        "exit ${rc}\n"
+    )
+
+    with open(log, "w", encoding="utf-8") as f:
+        p = subprocess.run(["bash", "-lc", script], stdout=f, stderr=subprocess.STDOUT)
+
+    if p.returncode != 0:
+        # include tail of log for convenience
+        try:
+            with open(log, "r", encoding="utf-8", errors="replace") as f:
+                lines = f.readlines()
+            tail = "".join(lines[-200:])
+        except Exception as e:
+            tail = f"(Could not read log {log}: {e})\n"
+
+        badguys.append(
+            f"Test failed with code {p.returncode}:\n{cmdstr}\n"
+            f"--- log (tail) {log} ---\n{tail}\n"
+        )
+        return False
+
+    return True
+
 
 #####################################################
 # aircond
-example_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'examples', 'aircond')
-fpath = os.path.join(example_dir, 'aircond_cylinders.py')
-jpath = os.path.join(example_dir, 'lagranger_factors.json')
+example_dir = os.path.join(_tests_dir, "..", "..", "examples", "aircond")
+fpath = os.path.join(example_dir, "aircond_cylinders.py")
+jpath = os.path.join(example_dir, "lagranger_factors.json")
 
 # PH and lagranger rescale factors w/ FWPH
-cmdstr = f"mpiexec -np 4 python -m mpi4py {fpath} --bundles-per-rank=0 --max-iterations=5 --default-rho=1 --solver-name={solver_name} --branching-factors \"4 3 2\" --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory 50 --rel-gap 0.01 --mu-dev 0 --sigma-dev 40 --max-solver-threads 2 --start-seed 0  --lagranger --lagranger-rho-rescale-factors-json {jpath} --fwph --xhatshuffle"
-_doone(cmdstr)
+fwphSaveFile = os.path.join(_tests_dir, "fwph_trace.txt")
+
+# Use the exact interpreter running this test (important for CI/conda/venv)
+pyexe = shlex.quote(sys.executable)
+
+cmdstr = (
+    f"mpiexec -np 4 {pyexe} -m mpi4py {shlex.quote(fpath)} "
+    f"--bundles-per-rank=0 --max-iterations=5 --default-rho=1 "
+    f"--solver-name={shlex.quote(solver_name)} "
+    f'--branching-factors "4 3 2" '
+    f"--Capacity 200 --QuadShortCoeff 0.3 --BeginInventory 50 "
+    f"--rel-gap 0.01 --mu-dev 0 --sigma-dev 40 "
+    f"--max-solver-threads 2 --start-seed 0 "
+    f"--lagranger --lagranger-rho-rescale-factors-json {shlex.quote(jpath)} "
+    f"--fwph --fwph-save-file {shlex.quote(fwphSaveFile)} --xhatshuffle"
+)
+
+ok = _doone(cmdstr)
+
+# If the run succeeded, verify that FWPH wrote the file; then delete it.
+if ok:
+    if os.path.exists(fwphSaveFile):
+        try:
+            os.remove(fwphSaveFile)
+        except OSError as e:
+            badguys.append(f"Test wrote {fwphSaveFile} but could not delete it: {e}\n{cmdstr}")
+    else:
+        badguys.append(f"Test failed to write {fwphSaveFile}:\n{cmdstr}")
 
 
 #######################################################
-if len(badguys) > 0:
+if badguys:
     print("\nstraight_tests.py failed commands:")
-    for i in badguys:
-        print(i)
+    for msg in badguys:
+        print(msg)
     raise RuntimeError("straight_tests.py had failed commands")
 else:
     print("straight_test.py: all OK.")
