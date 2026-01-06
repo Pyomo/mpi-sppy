@@ -103,6 +103,19 @@ class WheelSpinner:
 
         n_spcomms = len(communicator_list)
 
+        msg = "Using cylinder"
+        if n_spcomms >= 2:
+            msg += "s"
+        msg += " "
+        msg += ", ".join(f"{_dict['spcomm_class'].__name__}" for _dict in communicator_list[:-1])
+        if n_spcomms >= 3:
+            msg += ","
+        if n_spcomms >= 2:
+            msg += " and "
+        msg += f"{communicator_list[-1]['spcomm_class'].__name__}"
+        msg += f" with {comm_world.size} MPI ranks"
+        global_toc(msg, comm_world.rank == 0)
+
         # Create the necessary communicators
         fullcomm = comm_world
         strata_comm, cylinder_comm = _make_comms(n_spcomms, fullcomm=fullcomm)
@@ -133,7 +146,7 @@ class WheelSpinner:
         if strata_rank == 0:
             spcomm.setup_hub()
 
-        global_toc("Starting spcomm.main()")
+        global_toc("Starting spcomm.main()", comm_world.rank == 0)
         spcomm.main()
         if strata_rank == 0: # If this is the hub
             spcomm.send_terminate()
@@ -143,7 +156,7 @@ class WheelSpinner:
 
         # to ensure the messages below are True
         cylinder_comm.Barrier()
-        global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
+        global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization", comm_world.rank == 0)
         global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
 
         fullcomm.Barrier()
@@ -153,7 +166,7 @@ class WheelSpinner:
         spcomm.free_windows()
 
         fullcomm.Barrier()
-        global_toc("Cylinder finalization complete")
+        global_toc("Cylinder finalization complete", comm_world.rank == 0)
 
 
         self.spcomm = spcomm
