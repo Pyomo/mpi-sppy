@@ -522,7 +522,12 @@ def _fwph_options(cfg):
         "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
     }
 
+    # optional save_file passthrough (only if user provided it)
+    if _hasit(cfg, "fwph_save_file") and cfg.fwph_save_file:
+        fw_options["save_file"] = cfg.fwph_save_file
+
     return fw_options
+
 
 def fwph_spoke(
     cfg,
