@@ -203,7 +203,7 @@ class ReducedCostsFixer(Extension):
                     else: # not nan, variable is converged in LP-LR
                         if xvar.fixed:
                             xb = s._mpisppy_model.xbars[ndn_i].value
-                            if (this_expected_rc <= target):
+                            if (this_expected_rc < target):
                                 xvar.unfix()
                                 update_var = True
                                 raw_fixed_this_iter -= 1
