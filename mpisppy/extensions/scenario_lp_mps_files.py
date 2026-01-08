@@ -25,12 +25,23 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
 
     def __init__(self, ph):
         self.ph = ph
-        self.dirname = self.ph.options["write_lp_mps_extension_options"].get("write_scenario_lp_mps_files_dir")
+        opts = self.ph.options["write_lp_mps_extension_options"]
+
+        self.dirname = opts.get("write_scenario_lp_mps_files_dir")
         if self.dirname is None:
             raise RuntimeError("Scenario_lp_mps_files extension"
                                " cannot be used without the"
                                " write_scenario_lp_mps_files_dir option")
-        os.makedirs(self.dirname, exist_ok=False)
+
+        # Keep cfg so we can use cfg.default_rho when scenario rhos are absent
+        self.cfg = opts.get("cfg", None)
+
+        # MPI-safe directory creation: only rank0 creates it, then barrier
+        # (dlw hopes that there is only one rank when this runs ...)
+        if getattr(self.ph, "cylinder_rank", 0) == 0:
+            os.makedirs(self.dirname, exist_ok=False)
+            if hasattr(self.ph, "mpicomm"):
+                self.ph.mpicomm.Barrier()
 
 
     def pre_iter0(self):
@@ -47,8 +58,24 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
                 treeData["nodes"][nd.name] = {"serialNumber": self.ph.all_nodenames.index(nd.name),
                                               "condProb": nd.cond_prob}
                 treeData["nodes"][nd.name].update({"nonAnts": [lpize(var.name) for var in nd.nonant_vardata_list]})
-                rhoList.extend((lpize(var.name), s._mpisppy_model.rho[(nd.name, i)]._value)\
-                            for i,var in enumerate(nd.nonant_vardata_list))
+                have_rho = hasattr(s, "_mpisppy_model") and hasattr(s._mpisppy_model, "rho")
+
+                # If no rhos exist on the scenarios, require cfg.default_rho
+                if (not have_rho) and (self.cfg is None or self.cfg.default_rho is None):
+                    raise RuntimeError(
+                        "Scenario_lp_mps_files: no rho values found on scenarios and "
+                        "--default-rho was not provided. Please specify --default-rho."
+                    )
+
+                default_rho = None if have_rho else self.cfg.default_rho
+
+                for i, var in enumerate(nd.nonant_vardata_list):
+                    if have_rho:
+                        rho_val = s._mpisppy_model.rho[(nd.name, i)]._value
+                    else:
+                        rho_val = default_rho
+                        rhoList.append((lpize(var.name), rho_val))
+
 
             scenDict["treeData"] = treeData
             with open(os.path.join(dn, f"{k}_nonants.json"), "w") as jfile:
