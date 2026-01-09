@@ -6,7 +6,6 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-from __future__ import annotations  # avoid potential troubles with mip4py
 from mpisppy import MPI
 
 import numpy as np

@@ -40,8 +40,8 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
         # (dlw hopes that there is only one rank when this runs ...)
         if getattr(self.ph, "cylinder_rank", 0) == 0:
             os.makedirs(self.dirname, exist_ok=False)
-            if hasattr(self.ph, "mpicomm"):
-                self.ph.mpicomm.Barrier()
+        if hasattr(self.ph, "mpicomm"):
+            self.ph.mpicomm.Barrier()
 
 
     def pre_iter0(self):
