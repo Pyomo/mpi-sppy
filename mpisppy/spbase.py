@@ -14,7 +14,7 @@ import logging
 import weakref
 import numpy as np
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import nice_join, sputils
 from mpisppy import global_toc
 
 from pyomo.common.collections import ComponentSet
@@ -551,7 +551,10 @@ class SPBase:
         """
         missing = [option for option in required_options if given_options.get(option) is None] 
         if missing:
-            raise ValueError(f"Missing the following required options: {', '.join(missing)}")
+            raise ValueError(
+                "Missing the following required options:"
+                f" {nice_join(missing, conjunction='and', warp_in_single_quote=True)}."
+            )
 
     def _set_solution_cache(self):
         # set up best solution cache
