@@ -300,7 +300,7 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py "numpy<2" setuptools
+          conda install mpi4py "numpy" setuptools
           pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas packaging
 
       - name: setup the program
@@ -352,7 +352,7 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py "numpy<2" setuptools
+          conda install mpi4py "numpy" setuptools
           pip install pyomo pandas xpress cplex scipy sympy dill packaging
 
       - name: setup the program
@@ -420,7 +420,7 @@ jobs:
         run: |
           # Core runtime + MPI stack (must match mpi4py)
           conda install -y conda-forge::libstdcxx-ng
-          conda install -y -c conda-forge openmpi mpi4py "numpy<2" setuptools cmake
+          conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake
 
           # Python deps needed by the tests
           pip install pyomo pandas xpress cplex scipy sympy dill packaging
@@ -448,7 +448,7 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py "numpy<2" setuptools
+          conda install mpi4py "numpy" setuptools
           pip install pyomo addheader pyyaml pytest
 
       - name: setup the program
@@ -507,7 +507,7 @@ jobs:
           auto-activate-base: false
       - name: Install dependencies
         run: |
-          conda install mpi4py "numpy<2" setuptools
+          conda install mpi4py "numpy" setuptools
           pip install pyomo pandas xpress cplex scipy packaging
 
       - name: setup the program

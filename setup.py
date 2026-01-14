@@ -36,7 +36,7 @@ setup(
     python_requires='>=3.9',
     install_requires=[
         'sortedcollections',
-        'numpy<2',
+        'numpy',
         'scipy',
         'pyomo>=6.4',
     ],
