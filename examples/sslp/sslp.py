@@ -24,10 +24,11 @@ import model.ReferenceModel as ref
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 
 
-def scenario_creator(scenario_name, data_dir=None, surrogate=False):
+def scenario_creator(scenario_name, data_dir=None, surrogate=False, cfg=None):
     """ The callback needs to create an instance and then attach
         the PySP nodes to it in a list _mpisppy_node_list ordered by stages.
         Optionally attach _PHrho.
+        cfg is just there to keep callers (e.g. bundler) happy.
     """
     if data_dir is None:
         raise ValueError("kwarg `data_dir` is required for SSLP scenario_creator")
