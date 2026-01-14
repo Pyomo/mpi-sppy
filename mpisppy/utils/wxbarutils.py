@@ -219,8 +219,8 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
     missing = [name for (name, is_seen) in seen.items() if is_seen is False]
     if missing:
         raise RuntimeError(
-            f'rank {rank} could not find the following scenarios in the provided weight file: '
-            f'{nice_join(missing, conjunction=None)}.'
+            f"rank {rank} could not find the following scenarios in the provided weight file: "
+            f"{nice_join(missing, conjunction=None)}."
         )
         
     return results
@@ -373,14 +373,14 @@ def _check_xbar(xbar_val_dict, PHB):
     set1 = var_names.difference(provided_vars)
     if set1:
         raise RuntimeError(
-            'Could not find the following required variable values in the provided input file:'
-            f' {nice_join(set1, conjunction='and', warp_in_single_quote=True)}.'
+            "Could not find the following required variable values in the provided input file:"
+            f" {nice_join(set1, conjunction='and', warp_in_single_quote=True)}."
         )
     set2 = provided_vars.difference(var_names)
     if set2:
         print(
-            'Ignoring the following variables values provided in the input file: '
-            f' {nice_join(set2, conjunction='and', warp_in_single_quote=True)}.'
+            "Ignoring the following variables values provided in the input file: "
+            f" {nice_join(set2, conjunction='and', warp_in_single_quote=True)}."
         )
 
 
