@@ -10,10 +10,8 @@
 from pyomo.environ import value
 from mpisppy import haveMPI, global_toc, MPI
 
-from mpisppy.utils.sputils import (
-        first_stage_nonant_writer,
-        scenario_tree_solution_writer,
-        )
+from mpisppy.utils import nice_join
+from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 
 class WheelSpinner:
 
@@ -119,18 +117,12 @@ class WheelSpinner:
         opt_kwargs = spcomm_dict["opt_kwargs"]
 
         # print a message for the user about the configuration
-        msg = "Using cylinder"
-        if n_spcomms >= 2:
-            msg += "s"
-        msg += " "
-        msg += ", ".join(f"{_dict['spcomm_class'].__name__}" for _dict in communicator_list[:-1])
-        if n_spcomms >= 3:
-            msg += ","
-        if n_spcomms >= 2:
-            msg += " and "
-        msg += f"{communicator_list[-1]['spcomm_class'].__name__}"
-        msg += f" to solve a problem with {len(opt_kwargs['all_scenario_names'])} scenarios"
-        msg += f" using {comm_world.size} MPI ranks"
+        items = (_dict['spcomm_class'].__name__ for _dict in communicator_list)
+        msg = (
+            f"Using cylinder{'s' if n_spcomms >= 2 else ''} {nice_join(items, conjunction='and')}"
+            f" to solve a problem with {len(opt_kwargs['all_scenario_names'])} scenarios"
+            f" using {comm_world.size} MPI ranks."
+        )
         global_toc(msg, comm_world.rank == 0)
 
         # Create the appropriate opt object locally
