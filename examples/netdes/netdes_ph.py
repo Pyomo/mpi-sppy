@@ -12,6 +12,7 @@ from netdes import scenario_creator, scenario_denouement
 from mpisppy.opt.ph import PH
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
 from mpisppy.extensions.xhatclosest import XhatClosest
+from mpisppy.utils import scenario_names_creator
 import os
 import sys
 
@@ -28,7 +29,7 @@ def main():
     # solver_name = 'gurobi'
     fname = "data" + os.sep + sys.argv[1] + ".dat"
     num_scen = int(fname.split('-')[2])
-    scenario_names = ['Scen' + str(i) for i in range(num_scen)]
+    scenario_names = scenario_names_creator(num_scen, prefix="Scen")
     scenario_creator_kwargs = {"path": fname}
 
     ''' Now solve with PH to see what happens (very little, I imagine) '''

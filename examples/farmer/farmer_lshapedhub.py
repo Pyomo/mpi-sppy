@@ -13,7 +13,7 @@ import farmer
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
+from mpisppy.utils import config, scenario_names_creator
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy.cylinders.hub import LShapedHub
 from mpisppy.opt.lshaped import LShapedMethod
@@ -52,7 +52,7 @@ def main():
 
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = [f"scen{sn}" for sn in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix="scen")
     scenario_creator_kwargs = {
         "use_integer": False,
         "crops_multiplier": crops_mult,

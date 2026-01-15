@@ -12,8 +12,7 @@ import uc_funcs as uc
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 from mpisppy.cylinders.hub import LShapedHub
 from mpisppy.opt.lshaped import LShapedMethod
 
@@ -48,7 +47,7 @@ def main():
     scenario_creator_kwargs = {
         "path": f"./{num_scen}scenarios_r1/"
     }
-    all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix="Scenario", start=1)
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

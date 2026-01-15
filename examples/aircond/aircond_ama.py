@@ -16,8 +16,7 @@ WARNING:
 """
 import numpy as np
 import pyomo.common.config as pyofig
-import mpisppy.utils.amalgamator as amalgamator
-import mpisppy.utils.config as config
+from  mpisppy.utils import amalgamator, config, scenario_names_creator
 import mpisppy.tests.examples.aircond as aircond
 
 def main():
@@ -37,11 +36,11 @@ def main():
         raise RuntimeError("Do not use num_scens here, we want to solve the problem for the whole sample scenario tree")
     
     num_scens = np.prod(cfg['branching_factors'])
-    scenario_names = aircond.scenario_names_creator(num_scens, 0)
+    scenario_names = scenario_names_creator(num_scens, prefix="scen")
     
-    ama =amalgamator.Amalgamator(cfg, 
-                                 scenario_names, 
-                                 aircond.scenario_creator, 
+    ama = amalgamator.Amalgamator(cfg,
+                                 scenario_names,
+                                 aircond.scenario_creator,
                                  aircond.kw_creator)
     ama.run()
     if ama.on_hub:

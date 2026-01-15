@@ -15,8 +15,7 @@ import distr
 import distr_data
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
+from mpisppy.utils import config, scenario_names_creator, sputils
 from mpisppy import MPI
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -72,7 +71,7 @@ def main():
         data_params = {"max revenue": 1200}
 
     options = {}
-    all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
+    all_scenario_names = scenario_names_creator(cfg.num_scens, prefix="Region", start=1)
     scenario_creator = distr.scenario_creator
     scenario_creator_kwargs = distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)  
     consensus_vars = distr.consensus_vars_creator(cfg.num_scens, inter_region_dict, all_scenario_names)

@@ -9,6 +9,7 @@
 ''' Solve the EF of the network problems
 '''
 from mpisppy.opt.ef import ExtensiveForm
+from mpisppy.utils import scenario_names_creator
 from netdes import scenario_creator
 import pyomo.environ as pyo
 import sys
@@ -23,7 +24,7 @@ def main():
         print("Invalid input.")
         quit()
     num_scen = int(inst.split("-")[-3])
-    scenario_names = [f"Scen{i}" for i in range(num_scen)]
+    scenario_names = scenario_names_creator(num_scen, prefix="Scen")
     path = f"./data/{inst}.dat"
     options = {"solver": "gurobi"}
     ef = ExtensiveForm(

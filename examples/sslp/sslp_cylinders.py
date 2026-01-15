@@ -11,8 +11,7 @@ import sslp
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.primal_dual_rho import PrimalDualRho
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 
 def _parse_args():
     cfg = config.Config()
@@ -70,7 +69,7 @@ def main():
     scenario_creator_kwargs = {"data_dir": f"{sslp.__file__[:-8]}/data/{inst}/scenariodata", "surrogate":cfg.surrogate_nonant}
     scenario_creator = sslp.scenario_creator
     scenario_denouement = sslp.scenario_denouement    
-    all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix="Scenario", start=1)
 
     if fixer:
         ph_ext = Fixer

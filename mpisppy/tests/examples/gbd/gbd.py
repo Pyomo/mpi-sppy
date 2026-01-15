@@ -10,12 +10,11 @@
 #From original Ferguson and Dantzig 1956
 #Extended scenarios as done in Seq Sampling by B&M
 
+import json
 import pyomo.environ as pyo
 import numpy as np
 import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
-import json
+from mpisppy.utils import amalgamator, sputils, scenario_names_creator
 
 # Use this random stream:
 gbdstream= np.random.RandomState()  # pylint: disable=no-member
@@ -200,15 +199,6 @@ def scenario_creator(sname, num_scens=None):
 
 
 #=========
-def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
-
-#=========
 def inparser_adder(inparser):
     # (only for Amalgamator): add command options unique to gbd
     pass
@@ -274,7 +264,7 @@ if __name__ == "__main__":
     solver_name = 'gurobi_direct'
     solver_options=None
     
-    scenario_names = scenario_names_creator(num_scens,start=6000)
+    scenario_names = scenario_names_creator(num_scens, prefix="scen", start=6000)
 
     ama_options = { "EF-2stage": True,
                     "EF_solver_name": solver_name,

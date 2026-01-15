@@ -8,10 +8,10 @@
 ###############################################################################
 import sizes
 
-from mpisppy.utils import config
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.extensions.fixer import Fixer
-import mpisppy.utils.cfg_vanilla as vanilla
+
 
 def _parse_args():
     cfg = config.Config()
@@ -52,7 +52,7 @@ def main():
     scenario_creator_kwargs = {"scenario_count": num_scen}
     scenario_creator = sizes.scenario_creator
     scenario_denouement = sizes.scenario_denouement
-    all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix="Scenario", start=1)
     rho_setter = sizes._rho_setter
     
     if fixer:

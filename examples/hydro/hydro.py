@@ -261,13 +261,6 @@ def inparser_adder(cfg):
 
 
 #=========
-def scenario_names_creator(num_scens,start=0):
-    # return the full list of num_scens scenario names
-    # (We hope this doesn't get used much for a multistage problem)
-    return [f"Scen{i+1}" for i in range(start, start+num_scens)]
-
-
-#=========
 def kw_creator(cfg):
     # (for Amalgamator): linked to the scenario_creator and inparser_adder
     kwargs = {"branching_factors": cfg.branching_factors,

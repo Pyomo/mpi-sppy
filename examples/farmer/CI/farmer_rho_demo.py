@@ -19,8 +19,7 @@ import farmer
 from mpisppy.spin_the_wheel import WheelSpinner
 import mpisppy.utils.sputils as sputils
 
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 
 from mpisppy.extensions.extension import MultiExtension
 
@@ -84,7 +83,7 @@ def main():
         if not cfg.use_norm_rho_updater:
             raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
         elif cfg.grad_rho:
-            raise RuntimeError("You cannot have--use-norm-rho-converger and --grad-rho-setter")            
+            raise RuntimeError("You cannot have--use-norm-rho-converger and --grad-rho-setter")
         else:
             ph_converger = NormRhoConverger
     else:
@@ -92,7 +91,7 @@ def main():
     
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = farmer.scenario_names_creator(cfg.num_scens)
+    all_scenario_names = scenario_names_creator(cfg.num_scens, prefix='scen')
     scenario_creator_kwargs = {
         'use_integer': False,
         "crops_multiplier": crops_multiplier,

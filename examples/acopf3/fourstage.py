@@ -18,6 +18,7 @@ from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import scenario_names_creator
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # the problem
@@ -120,9 +121,12 @@ def main():
                                     lines)
     scenario_creator_kwargs["acstream"] = acstream
 
-    all_scenario_names=["Scenario_"+str(i)\
-                        for i in range(1,len(scenario_creator_kwargs["etree"].\
-                                             rootnode.ScenarioList)+1)]
+    all_scenario_names = scenario_names_creator(
+        len(scenario_creator_kwargs["etree"].rootnode.ScenarioList),
+        prefix="Scenario",
+        separator="_",
+        start=1,
+    )
     all_nodenames = scenario_creator_kwargs["etree"].All_Nodenames()
 
     options = dict()

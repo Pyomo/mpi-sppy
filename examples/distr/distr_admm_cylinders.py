@@ -12,9 +12,7 @@ import distr_data
 import distr
 
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, sputils
 from mpisppy import MPI
 import time
 
@@ -83,7 +81,7 @@ def main():
     ph_converger = None
 
     options = {}
-    all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
+    all_scenario_names = scenario_names_creator(cfg.num_scens, prefix="Region", start=1)
     scenario_creator = distr.scenario_creator
     scenario_creator_kwargs = distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)  
     consensus_vars = distr.consensus_vars_creator(cfg.num_scens, inter_region_dict, all_scenario_names)

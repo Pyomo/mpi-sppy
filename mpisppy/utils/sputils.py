@@ -28,6 +28,7 @@ from pyomo.opt import SolutionStatus, TerminationCondition
 from pyomo.core.base.indexed_component_slice import IndexedComponent_slice
 
 from mpisppy import tt_timer
+from mpisppy.utils import scenario_names_creator
 
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -729,7 +730,7 @@ def scens_to_ranks(scen_count, n_proc, rank, branching_factors = None):
         # indecision as of May 2020 (delete this comment DLW)
         # just make sure things are consistent with what xhat will do...
         # TBD: streamline
-        all_scenario_names = ["ID"+str(i) for i in range(scen_count)]
+        all_scenario_names = scenario_names_creator(scen_count, prefix="ID")
         tree = _ScenTree(branching_factors, all_scenario_names)
         scenario_names_to_ranks, slices, = tree.scen_name_to_rank(n_proc, rank)
         return slices, scenario_names_to_ranks
