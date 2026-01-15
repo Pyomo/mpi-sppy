@@ -6,20 +6,17 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# Code that is producing an xhat and a confidence interval using sequantial sampling 
+# Code that is producing an xhat and a confidence interval using sequential sampling 
 # This extension of SeqSampling works for multistage, using independent 
 # scenarios instead of a single scenario tree.
 
 import pyomo.common.config as pyofig
 import mpisppy.MPI as mpi
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import amalgamator, config, scenario_names_creator, sputils, xhat_eval
 import mpisppy.confidence_intervals.confidence_config as confidence_config
-from mpisppy.utils import config
 import numpy as np
 from mpisppy import global_toc
-    
-import mpisppy.utils.amalgamator as amalgamator
-import mpisppy.utils.xhat_eval as xhat_eval
+
 import mpisppy.confidence_intervals.ciutils as ciutils
 from mpisppy.confidence_intervals.seqsampling import SeqSampling
 from mpisppy.tests.examples.aircond import xhat_generator_aircond
@@ -78,7 +75,7 @@ class IndepScens_SeqSampling(SeqSampling):
         xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
         mk = np.prod(xhat_branching_factors)
         self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
-        xhat_scenario_names = refmodel.scenario_names_creator(mk)
+        xhat_scenario_names = scenario_names_creator(mk)
 
         xgo = self.xhat_gen_kwargs.copy()
         xgo["solver_name"] = self.solver_name
@@ -94,7 +91,7 @@ class IndepScens_SeqSampling(SeqSampling):
         #Computing n_1 and associated scenario names
         
         nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
-        estimator_scenario_names = refmodel.scenario_names_creator(nk)
+        estimator_scenario_names = scenario_names_creator(nk)
         
         #Computing G_nk and s_k associated with xhat_1
         
@@ -107,7 +104,7 @@ class IndepScens_SeqSampling(SeqSampling):
         #----------------------------Step 2 -------------------------------------#
 
         while( self.stop_criterion(Gk,sk,nk) and k<maxit):
-        #----------------------------Step 3 -------------------------------------#       
+        #----------------------------Step 3 -------------------------------------#
             k+=1
             nk_m1 = nk #n_{k-1}
             lower_bound_k = self.sample_size(k, Gk, sk, nk_m1)
@@ -116,7 +113,7 @@ class IndepScens_SeqSampling(SeqSampling):
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
             mk = np.prod(xhat_branching_factors)
             self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
-            xhat_scenario_names = refmodel.scenario_names_creator(mk)
+            xhat_scenario_names = scenario_names_creator(mk)
             
             #Computing xhat_k
            
@@ -132,7 +129,7 @@ class IndepScens_SeqSampling(SeqSampling):
             
             nk = np.prod(ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])) #To ensure the same growth that in the one-tree seqsampling
             nk += self.batch_size - nk%self.batch_size
-            estimator_scenario_names = refmodel.scenario_names_creator(nk)
+            estimator_scenario_names = scenario_names_creator(nk)
             
             
             Gk, sk = self._gap_estimators_with_independent_scenarios(xhat_k,nk,estimator_scenario_names,scenario_denouement)
@@ -279,7 +276,7 @@ if __name__ == "__main__":
     import mpisppy.tests.examples.aircond
     bfs = [3,3,2]
     num_scens = np.prod(bfs)
-    scenario_names = mpisppy.tests.examples.aircond.scenario_names_creator(num_scens)
+    scenario_names = scenario_names_creator(num_scens)
     xhat_gen_kwargs = {"scenario_names": scenario_names,
                         "solver_name": solver_name,
                         "solver_options": None,

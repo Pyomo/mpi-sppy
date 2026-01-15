@@ -19,10 +19,8 @@ import numpy as np
 import scipy.stats
 import importlib
 from mpisppy import global_toc
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
+from mpisppy.utils import amalgamator, config, scenario_names_creator, solver_spec
 
-import mpisppy.utils.amalgamator as amalgamator
 import mpisppy.confidence_intervals.ciutils as ciutils
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 
@@ -174,9 +172,7 @@ class SeqSampling():
         self.xhat_gen_kwargs = cfg.get("xhat_gen_kwargs", {})
         
         #Check if refmodel has all needed attributes
-        everything = ["scenario_names_creator",
-                 "scenario_creator",
-                 "kw_creator"]  # denouement can be missing.
+        everything = ["scenario_creator", "kw_creator"]  # denouement can be missing.
         you_can_have_it_all = True
         for ething in everything:
             if not hasattr(self.refmodel, ething):
@@ -376,11 +372,11 @@ class SeqSampling():
             xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, self.cfg['branching_factors'])
             mk = np.prod(xhat_branching_factors)
             self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
-            xhat_scenario_names = refmodel.scenario_names_creator(mk)
+            xhat_scenario_names = scenario_names_creator(mk)
             
         else:
             mk = int(np.floor(mult*lower_bound_k))
-            xhat_scenario_names = refmodel.scenario_names_creator(mk, start=self.ScenCount)
+            xhat_scenario_names = scenario_names_creator(mk, start=self.ScenCount)
             self.ScenCount+=mk
 
         xgo = self.xhat_gen_kwargs.copy()
@@ -401,11 +397,11 @@ class SeqSampling():
             
             gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, self.cfg['branching_factors'])
             nk = np.prod(gap_branching_factors)
-            estimator_scenario_names = refmodel.scenario_names_creator(nk)
+            estimator_scenario_names = scenario_names_creator(nk)
             sample_options = {'branching_factors':gap_branching_factors, 'seed':self.SeedCount}
         else:
             nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
-            estimator_scenario_names = refmodel.scenario_names_creator(nk,
+            estimator_scenario_names = scenario_names_creator(nk,
                                                                        start=self.ScenCount)
             sample_options = None
             self.ScenCount+= nk
@@ -442,19 +438,19 @@ class SeqSampling():
                 xhat_branching_factors = ciutils.scalable_branching_factors(mult*lower_bound_k, lcfg['branching_factors'])
                 mk = np.prod(xhat_branching_factors)
                 self.xhat_gen_kwargs['start_seed'] = self.SeedCount #TODO: Maybe find a better way to manage seed
-                xhat_scenario_names = refmodel.scenario_names_creator(mk)
+                xhat_scenario_names = scenario_names_creator(mk)
             
             else:
                 mk = int(np.floor(mult*lower_bound_k))
                 assert mk>= mk_m1, "Our sample size should be increasing"
                 if (k%self.kf_xhat==0):
                     #We use only new scenarios to compute xhat
-                    xhat_scenario_names = refmodel.scenario_names_creator(int(mult*nk),
+                    xhat_scenario_names = scenario_names_creator(int(mult*nk),
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk
                 else:
                     #We reuse the previous scenarios
-                    xhat_scenario_names+= refmodel.scenario_names_creator(mult*(nk-nk_m1),
+                    xhat_scenario_names+= scenario_names_creator(mult*(nk-nk_m1),
                                                                           start=self.ScenCount)
                     self.ScenCount+= mk-mk_m1
             
@@ -474,20 +470,18 @@ class SeqSampling():
                 
                 gap_branching_factors = ciutils.scalable_branching_factors(lower_bound_k, lcfg['branching_factors'])
                 nk = np.prod(gap_branching_factors)
-                estimator_scenario_names = refmodel.scenario_names_creator(nk)
+                estimator_scenario_names = scenario_names_creator(nk)
                 sample_options = {'branching_factors':gap_branching_factors, 'seed':self.SeedCount}
             else:
                 nk = self.ArRP *int(np.ceil(lower_bound_k/self.ArRP))
                 assert nk>= nk_m1, "Our sample size should be increasing"
                 if (k%self.kf_GS==0):
                     #We use only new scenarios to compute gap estimators
-                    estimator_scenario_names = refmodel.scenario_names_creator(nk,
-                                                                               start=self.ScenCount)
+                    estimator_scenario_names = scenario_names_creator(nk, start=self.ScenCount)
                     self.ScenCount+=nk
                 else:
                     #We reuse the previous scenarios
-                    estimator_scenario_names+= refmodel.scenario_names_creator((nk-nk_m1),
-                                                                               start=self.ScenCount)
+                    estimator_scenario_names+= scenario_names_creator((nk-nk_m1), start=self.ScenCount)
                     self.ScenCount+= (nk-nk_m1)
                 sample_options = None
             

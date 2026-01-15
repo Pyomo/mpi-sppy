@@ -16,14 +16,12 @@ version matter a lot, so we often just do smoke tests.
 import os
 import unittest
 import csv
-from mpisppy.utils import config
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, wxbarreader, wxbarwriter
 
-import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
-import mpisppy.utils.wxbarreader as wxbarreader
-import mpisppy.utils.wxbarwriter as wxbarwriter
+
 
 __version__ = 0.2
 
@@ -31,7 +29,7 @@ solver_available,solver_name, persistent_available, persistent_solver_name= get_
 
 def _create_cfg():
     cfg = config.Config()
-    wxbarreader.add_options_to_config(cfg)        
+    wxbarreader.add_options_to_config(cfg)
     wxbarwriter.add_options_to_config(cfg)
     cfg.add_branching_factors()
     cfg.num_scens_required()
@@ -55,7 +53,7 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
-        all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
+        all_scenario_names = scenario_names_creator(self.cfg.num_scens)
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         self.cfg.max_iterations = max_iter
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)

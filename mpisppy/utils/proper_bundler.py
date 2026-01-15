@@ -11,8 +11,8 @@
 
 import os
 import numpy as np
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.pickle_bundle as pickle_bundle
+from mpisppy.utils import pickle_bundle, scenario_names_creator, sputils
+
 
 # Development notes:
 # 2 stage Cases:
@@ -53,7 +53,7 @@ class ProperBundler():
     def scenario_names_creator(self, num_scens, start=None, cfg=None):
         # no need to wrap?
         assert cfg is not None, "ProperBundler needs cfg for scenario names"
-        return cfg.model.scenario_names_creator(num_scens, start=start)
+        return scenario_names_creator(num_scens, start=start)
 
     def set_bunBFs(self, cfg):
         # utility for bundle objects. Might throw if it doesn't like the branching factors.
@@ -82,7 +82,7 @@ class ProperBundler():
         bsize = cfg.scenarios_per_bundle  # typing aid
         self.set_bunBFs(cfg)
         # We need to know if scenarios (not bundles) are one-based.
-        inum = sputils.extract_num(self.module.scenario_names_creator(1)[0])
+        inum = sputils.extract_num(scenario_names_creator(1)[0])
         names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in range(start+num_buns)]
         return names
 
@@ -114,8 +114,7 @@ class ProperBundler():
             firstnum = int(sname.split("_")[1])  # sname is a bundle name
             lastnum = int(sname.split("_")[2])
             # snames are scenario names
-            snames = self.module.scenario_names_creator(lastnum-firstnum+1,
-                                                        firstnum)
+            snames = scenario_names_creator(lastnum-firstnum+1, start=firstnum)
             kws = self.original_kwargs
             if self.bunBFs is not None:
                 # The original scenario creator needs to handle these

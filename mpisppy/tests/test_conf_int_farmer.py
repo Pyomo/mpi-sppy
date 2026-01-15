@@ -27,7 +27,7 @@ import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.ciutils as ciutils
-from mpisppy.utils import config
+from mpisppy.utils import config, scenario_names_creator
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 
 fullcomm = mpi.COMM_WORLD
@@ -153,8 +153,7 @@ class Test_confint_farmer(unittest.TestCase):
         self.assertEqual(obj, -130000)
     
 
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")      
+    @unittest.skipIf(not solver_available, "no solver is available")
     def test_xhat_eval_creator(self):
         options = self._get_xhatEval_options()
         
@@ -162,22 +161,21 @@ class Test_confint_farmer(unittest.TestCase):
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         ev = Xhat_Eval(options,
-                       farmer.scenario_names_creator(100),
+                       scenario_names_creator(100),
                        farmer.scenario_creator,
                        scenario_denouement=None,
                        scenario_creator_kwargs=scenario_creator_kwargs
                        )
         assert ev is not None
         
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")      
+    @unittest.skipIf(not solver_available, "no solver is available")
     def test_xhat_eval_evaluate(self):
         options = self._get_xhatEval_options()
         MMW_options = self._get_base_options()
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
         ev = Xhat_Eval(options,
-                   farmer.scenario_names_creator(100),
+                   scenario_names_creator(100),
                    farmer.scenario_creator,
                    scenario_denouement=None,
                    scenario_creator_kwargs=scenario_creator_kwargs
@@ -187,15 +185,14 @@ class Test_confint_farmer(unittest.TestCase):
         obj = round_pos_sig(ev.evaluate(xhat),2)
         self.assertEqual(obj, -1300000.0)
  
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")  
+    @unittest.skipIf(not solver_available, "no solver is available")
     def test_xhat_eval_evaluate_one(self):
         options = self._get_xhatEval_options()
         MMW_options = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
         scenario_creator_kwargs = MMW_options['kwargs']
         scenario_creator_kwargs['num_scens'] = MMW_options['batch_size']
-        scenario_names = farmer.scenario_names_creator(100)
+        scenario_names = scenario_names_creator(100)
         ev = Xhat_Eval(options,
                    scenario_names,
                    farmer.scenario_creator,
@@ -207,8 +204,7 @@ class Test_confint_farmer(unittest.TestCase):
         obj = round_pos_sig(obj,2)
         self.assertEqual(obj, -48000.0)
       
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")  
+    @unittest.skipIf(not solver_available, "no solver is available")
     def test_MMW_running(self):
         cfg = self._get_base_options()
         xhat = ciutils.read_xhat(self.xhat_path)
@@ -223,10 +219,9 @@ class Test_confint_farmer(unittest.TestCase):
         bound = round_pos_sig(r['gap_inner_bound'],2)
         self.assertEqual((s,bound), (1.5,96.0))
    
-    @unittest.skipIf(not solver_available,
-                     "no solver is available")
+    @unittest.skipIf(not solver_available, "no solver is available")
     def test_gap_estimators(self):
-        scenario_names = farmer.scenario_names_creator(50,start=1000)
+        scenario_names = scenario_names_creator(50, start=1000)
         estim = ciutils.gap_estimators(self.xhat,
                                        self.refmodelname,
                                        cfg=self._get_base_options(),

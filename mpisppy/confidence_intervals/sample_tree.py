@@ -12,8 +12,7 @@ import numpy as np
 import mpisppy.MPI as mpi
 import importlib
 
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
+from mpisppy.utils import amalgamator, scenario_names_creator, sputils
 import mpisppy.confidence_intervals.ciutils as ciutils
 
 fullcomm = mpi.COMM_WORLD
@@ -62,7 +61,7 @@ class SampleSubtree():
 
         self.refmodel = importlib.import_module(mname)
         #Checking that refmodel has all the needed attributes
-        attrs = ["sample_tree_scen_creator","kw_creator","scenario_names_creator"]
+        attrs = ["sample_tree_scen_creator","kw_creator"]
         for attr in attrs:
             if not hasattr(self.refmodel, attr):
                 raise RuntimeError(f"The construction of a sample subtree failed because the reference model has no {attr} function.")
@@ -146,8 +145,7 @@ class SampleSubtree():
             if "kwargs" in ama_options:
                 ama_options["branching_factors"] = ama_options["kwargs"]["branching_factors"]
             """
-        scen_names = self.refmodel.scenario_names_creator(self.numscens,
-                                                          start=self.seed)
+        scen_names = scenario_names_creator(self.numscens, start=self.seed)
         denouement = self.refmodel.scenario_denouement if hasattr(self.refmodel, 'scenario_denouement') else None
         
         self.ama = amalgamator.Amalgamator(cfg, scen_names,

@@ -45,7 +45,7 @@ import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 
 from mpisppy import MPI  # for debuggig
-from mpisppy.utils import nice_join
+from mpisppy.utils import nice_join, scenario_names_creator
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -105,8 +105,8 @@ class AMPL_guest():
 
 
     #=========
-    def scenario_names_creator(self, num_scens,start=None):
-        return self.model_module.scenario_names_creator(num_scens,start)
+    def scenario_names_creator(self, num_scens, start=None):
+        return scenario_names_creator(num_scens, start=start)
 
 
     #=========
