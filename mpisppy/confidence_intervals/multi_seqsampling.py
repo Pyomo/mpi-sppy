@@ -273,7 +273,6 @@ if __name__ == "__main__":
     # For use by confidence interval develepors who need a quick test.
     solver_name = "cplex"
     #An example of sequential sampling for the aircond model
-    import mpisppy.tests.examples.aircond
     bfs = [3,3,2]
     num_scens = np.prod(bfs)
     scenario_names = scenario_names_creator(num_scens)
