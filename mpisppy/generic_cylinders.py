@@ -110,7 +110,7 @@ def _name_lists(cfg, bundle_wrapper=None):
             "For now, stage2EFsolvern is required for multistage xhat"
     else:
         all_nodenames = None
-        num_scens = cfg.get("num_scens")  # maybe None is OK
+        num_scens = cfg.get("num_scens", 0)
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
