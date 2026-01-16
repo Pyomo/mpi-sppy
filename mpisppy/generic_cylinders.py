@@ -11,6 +11,7 @@
 import sys
 import os
 import copy
+import glob
 import numpy as np
 import pyomo.environ as pyo
 import pyomo.common.config as pyofig
@@ -110,7 +111,10 @@ def _name_lists(cfg, bundle_wrapper=None):
             "For now, stage2EFsolvern is required for multistage xhat"
     else:
         all_nodenames = None
-        num_scens = cfg.get("num_scens", 0)
+        num_scens = cfg.get("num_scens")
+        if num_scens is None:
+            mps_files = glob.glob(os.path.join(cfg.get("mps_files_directory"), "*.mps"))
+            num_scens = len(mps_files)
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
@@ -118,7 +122,7 @@ def _name_lists(cfg, bundle_wrapper=None):
         all_scenario_names = bundle_wrapper.bundle_names_creator(num_buns, cfg=cfg)
         all_nodenames = None  # This is seldom used; also, proper bundles result in two stages
     else:
-        all_scenario_names = scenario_names_creator(num_scens)
+        all_scenario_names = scenario_names_creator(num_scens, prefix='scen')
 
     return all_scenario_names, all_nodenames
 
