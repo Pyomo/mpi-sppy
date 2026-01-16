@@ -370,10 +370,7 @@ if __name__ == "__main__":
                                  lines)
     scenario_creator_kwargs["acstream"] = acstream
     scenario_names=scenario_names_creator(
-        len(scenario_creator_kwargs["etree"].rootnode.ScenarioList),
-        prefix="Scenario",
-        separator="_",
-        start=1,
+        len(scenario_creator_kwargs["etree"].rootnode.ScenarioList), prefix="Scenario_", start=1,
     )
 
     # end options

@@ -27,13 +27,6 @@ class TestScenarioNamesCeator(TestCase):
             "Should be a list with 's0', 's1' and 's2'",
         )
 
-    def test_scenario_names_creator_defining_seperator(self):
-        self.assertEqual(
-            scenario_names_creator(3, separator="_"),
-            ["scenario_0", "scenario_1", "scenario_2"],
-            "Should be a list with 'scenario_0', 'scenario_1' and 'scenario_2'",
-        )
-
     def test_scenario_names_creator_setting_start_value(self):
         self.assertEqual(
             scenario_names_creator(3, start=1),

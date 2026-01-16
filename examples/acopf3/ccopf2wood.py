@@ -114,10 +114,7 @@ def main():
     scenario_creator_kwargs["acstream"] = acstream
 
     all_scenario_names = scenario_names_creator(
-        len(scenario_creator_kwargs["etree"].rootnode.ScenarioList),
-        prefix="Scenario",
-        separator="_",
-        start=1,
+        len(scenario_creator_kwargs["etree"].rootnode.ScenarioList), prefix="Scenario_", start=1,
     )
 
     all_nodenames = scenario_creator_kwargs["etree"].All_Nodenames()
