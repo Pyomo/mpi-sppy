@@ -49,7 +49,7 @@ class Test_gradient_farmer(unittest.TestCase):
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
-        all_scenario_names = scenario_names_creator(self.cfg.num_scens)
+        all_scenario_names = scenario_names_creator(self.cfg.num_scens, prefix="scen")
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
