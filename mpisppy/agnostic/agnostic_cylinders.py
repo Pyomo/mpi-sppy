@@ -15,10 +15,10 @@ I think it can be a pretty general cylinders program?
 """
 import sys
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
-import mpisppy.utils.sputils as sputils
+from mpisppy.agnostic import agnostic
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, sputils
+
+
 
 def _setup_args(m):
     # m is the model file module
@@ -47,19 +47,19 @@ def _setup_args(m):
                       default=None,
                       argparse=True)
     cfg.add_to_config(name="solution_base_name",
-                      description="The string used fo a directory of ouput along with a csv and an npv file (default None, which means no soltion output)",
+                      description="The string used for a directory of output along with a csv and an npv file (default None, which means no solution output)",
                       domain=str,
                       default=None)
     cfg.popular_args()
     cfg.two_sided_args()
-    cfg.ph_args()    
-    cfg.aph_args()    
+    cfg.ph_args()
+    cfg.aph_args()
     cfg.xhatlooper_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
     cfg.lagranger_args()
     cfg.xhatshuffle_args()
-    return cfg    
+    return cfg
 
 def _parse_args(m):
     # m is the model file module
@@ -116,7 +116,7 @@ def main(model_fname, module, cfg):
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement   # should we go though Ag?
     # note that if you are bundling, cfg.num_scens will be a fib (numbuns)
-    all_scenario_names = module.scenario_names_creator(cfg.num_scens)
+    all_scenario_names = scenario_names_creator(cfg.num_scens)
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

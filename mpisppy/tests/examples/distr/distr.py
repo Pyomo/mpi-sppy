@@ -378,19 +378,6 @@ def consensus_vars_creator(num_scens):
         consensus_vars[region_target].append(vstr)
     return consensus_vars
 
-
-def scenario_names_creator(num_scens):
-    """Creates the name of every scenario.
-
-    Args:
-        num_scens (int): number of scenarios
-
-    Returns:
-        list (str): the list of names
-    """
-    return [f"Region{i+1}" for i in range(num_scens)]
-
-
 def kw_creator(cfg):
     """
     Args:
@@ -399,8 +386,7 @@ def kw_creator(cfg):
     Returns:
         dict (str): the kwargs that are used in distr.scenario_creator, here {"num_scens": num_scens}
     """
-    kwargs = {"num_scens" : cfg.get('num_scens', None),
-              }
+    kwargs = {"num_scens" : cfg.get('num_scens', None)}
     if kwargs["num_scens"] not in [2, 3, 4]:
         RuntimeError (f"unexpected number of regions {cfg.num_scens}, whould be in  [2, 3, 4]")
     return kwargs

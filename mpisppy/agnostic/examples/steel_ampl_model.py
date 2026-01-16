@@ -41,7 +41,7 @@ def scenario_creator(scenario_name, ampl_file_name, cfg=None):
     ampl = AMPL()
     ampl.read(ampl_file_name)
     ampl.read_data(cfg.ampl_data_file)
-    scennum = sputils.extract_num(scenario_name)     
+    scennum = sputils.extract_num(scenario_name)
     seedoffset = cfg.seed
     #steelstream.seed(scennum+seedoffset)
     np.random.seed(scennum + seedoffset)
@@ -93,12 +93,6 @@ def kw_creator(cfg):
 def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                              given_scenario=None, **scenario_creator_kwargs):
     raise RuntimeError("sample_tree_scen_creator not implemented for the steel example")
-    
-def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
+
 def scenario_denouement(rank, scenario_name, scenario):
     pass

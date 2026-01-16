@@ -13,9 +13,8 @@ mpiexec -np 2 python -m mpi4py test_with_cylinders.py
 """
 
 import unittest
-from mpisppy.utils import config
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 
-import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.tests.utils import get_solver
@@ -50,7 +49,7 @@ class Test_farmer_with_cylinders(unittest.TestCase):
         self.cfg.max_iterations = iters
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
-        all_scenario_names = farmer.scenario_names_creator(self.cfg.num_scens)
+        all_scenario_names = scenario_names_creator(self.cfg.num_scens)
         scenario_creator_kwargs = farmer.kw_creator(self.cfg)
         beans = (self.cfg, scenario_creator, scenario_denouement, all_scenario_names)
         hub_dict = vanilla.ph_hub(*beans, scenario_creator_kwargs=scenario_creator_kwargs)

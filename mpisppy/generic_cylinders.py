@@ -11,19 +11,16 @@
 import sys
 import os
 import copy
+import glob
 import numpy as np
 import pyomo.environ as pyo
 import pyomo.common.config as pyofig
 
 from mpisppy.spin_the_wheel import WheelSpinner
 
-import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.config as config
-import mpisppy.utils.sputils as sputils
+from  mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, solver_spec, sputils
 
 from mpisppy.extensions.extension import MultiExtension, Extension
-
-import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy import global_toc
 from mpisppy import MPI
@@ -102,7 +99,7 @@ def _parse_args(m):
     cfg.checker()  # looks for inconsistencies 
     return cfg
 
-def _name_lists(module, cfg, bundle_wrapper=None):
+def _name_lists(cfg, bundle_wrapper=None):
 
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
@@ -114,7 +111,10 @@ def _name_lists(module, cfg, bundle_wrapper=None):
             "For now, stage2EFsolvern is required for multistage xhat"
     else:
         all_nodenames = None
-        num_scens = cfg.get("num_scens")  # maybe None is OK
+        num_scens = cfg.get("num_scens")
+        if num_scens is None:
+            mps_files = glob.glob(os.path.join(cfg.get("mps_files_directory"), "*.mps"))
+            num_scens = len(mps_files)
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
@@ -122,7 +122,7 @@ def _name_lists(module, cfg, bundle_wrapper=None):
         all_scenario_names = bundle_wrapper.bundle_names_creator(num_buns, cfg=cfg)
         all_nodenames = None  # This is seldom used; also, proper bundles result in two stages
     else:
-        all_scenario_names = module.scenario_names_creator(num_scens)
+        all_scenario_names = scenario_names_creator(num_scens, prefix='scen')
 
     return all_scenario_names, all_nodenames
 
@@ -163,7 +163,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
     else:
         ph_converger = None
 
-    all_scenario_names, all_nodenames = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)    
+    all_scenario_names, all_nodenames = _name_lists(cfg, bundle_wrapper=bundle_wrapper)
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
@@ -482,10 +482,8 @@ def _write_scenarios(module,
 
     local_slice = slices[my_rank]
     my_start = local_slice[0]   # zero based
-    inum = sputils.extract_num(module.scenario_names_creator(1)[0])
-    
-    local_scenario_names = module.scenario_names_creator(len(local_slice),
-                                                         start=inum + my_start)
+    inum = sputils.extract_num(scenario_names_creator(1)[0])
+    local_scenario_names = scenario_names_creator(len(local_slice), start=inum + my_start)
     if my_rank == 0:
         if os.path.exists(cfg.pickle_scenarios_dir):
             shutil.rmtree(cfg.pickle_scenarios_dir)
@@ -533,7 +531,7 @@ def _write_bundles(module,
 
     local_slice = slices[my_rank]
     # We need to know if scenarios (not bundles) are one-based.
-    inum = sputils.extract_num(module.scenario_names_creator(1)[0])
+    inum = sputils.extract_num(scenario_names_creator(1)[0])
     
     local_bundle_names = [f"Bundle_{bn*bsize+inum}_{(bn+1)*bsize-1+inum}" for bn in local_slice]
     
@@ -547,14 +545,14 @@ def _write_bundles(module,
         fname = os.path.join(cfg.pickle_bundles_dir, bname+".pkl")
         pickle_bundle.dill_pickle(bundle, fname)
     global_toc(f"Bundles written to {cfg.pickle_bundles_dir}")
-        
+
 #==========
 def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
 
-    all_scenario_names, _ = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
+    all_scenario_names, _ = _name_lists(cfg, bundle_wrapper=bundle_wrapper)
     ef = sputils.create_EF(
         all_scenario_names,
-        module.scenario_creator,
+        scenario_creator,
         scenario_creator_kwargs=module.kw_creator(cfg),
     )
     
@@ -649,7 +647,7 @@ def _write_scenario_lp_mps_files_only(module,
     from mpisppy.spbase import SPBase
     from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
 
-    all_scenario_names, all_nodenames = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
+    all_scenario_names, all_nodenames = _name_lists(cfg, bundle_wrapper=bundle_wrapper)
 
     # SPBase builds the scenarios and scenario-tree bookkeeping; no solves happen here.
     sp_options = {

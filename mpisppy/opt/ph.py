@@ -11,6 +11,7 @@
 import mpisppy.phbase
 import shutil
 import mpisppy.MPI as mpi
+from  mpisppy.utils import scenario_names_creator
 
 # decorator snarfed from stack overflow - allows per-rank profile output file generation.
 def profile(filename=None, comm=mpi.COMM_WORLD):
@@ -101,7 +102,7 @@ if __name__ == "__main__":
     PHopt["iterk_solver_options"] = {"mipgap": 0.001}
 
     ScenCount = 50
-    all_scenario_names = ['scen' + str(i) for i in range(ScenCount)]
+    all_scenario_names = scenario_names_creator(ScenCount, prefix="scen")
     # end hardwire
 
     scenario_creator = refmodel.scenario_creator

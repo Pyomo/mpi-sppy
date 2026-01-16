@@ -124,12 +124,6 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
     return gd
 
 #==========
-def scenario_names_creator(num_scens,start=None):
-    if (start is None):
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-
-#==========
 def inparser_adder(cfg):
     # add options unique to farmer
     cfg.num_scens_required()

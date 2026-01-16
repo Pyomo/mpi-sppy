@@ -10,6 +10,7 @@ import farmer
 from mpisppy.opt import ef, sc
 import logging
 from mpisppy import MPI
+from mpisppy.utils import scenario_names_creator
 import sys
 import pyomo.environ as pyo
 
@@ -26,7 +27,7 @@ mpirun -np N python -m mpi4py schur_complement.py N
 
 
 def solve_with_extensive_form(scen_count):
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
+    scenario_names = scenario_names_creator(scen_count, prefix="Scenario")
     options = dict()
     options['solver'] = 'cplex_direct'
     scenario_kwargs = dict()
@@ -44,7 +45,7 @@ def solve_with_extensive_form(scen_count):
 
 
 def solve_with_sc(scen_count, linear_solver=None):
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
+    scenario_names = scenario_names_creator(scen_count, prefix="Scenario")
     options = dict()
     if linear_solver is not None:
         options['linalg'] = dict()

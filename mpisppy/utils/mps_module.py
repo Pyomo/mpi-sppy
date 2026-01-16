@@ -26,12 +26,9 @@ note to dlw from dlw:
 
 """
 import os
-import re
-import glob
 import json
 import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.mps_reader as mps_reader
+from mpisppy.utils import mps_reader, sputils
 # assume you can get the path from config, set in kw_creator as a side-effect
 mps_files_directory = None
 
@@ -86,31 +83,6 @@ def scenario_creator(sname, cfg=None):
     model._mpisppy_node_list = treeNodes
     return model
 
-
-#=========
-def scenario_names_creator(num_scens, start=None):
-    # validate the directory and use it to get names (that have to be numbered)
-    # IMPORTANT: start is zero-based even if the names are one-based!
-    mps_files = [os.path.basename(f)
-                for f in glob.glob(os.path.join(mps_files_directory, "*.mps"))]
-    mps_files.sort()
-    if start is None:
-        start = 0
-    if num_scens is None:
-        num_scens = len(mps_files) - start
-    first = re.search(r"\d+$",mps_files[0][:-4])  # first scenario number
-    try:
-        first = int(first.group())
-    except Exception as e:
-        raise RuntimeError(f'mps files in {mps_files_directory} must end with an integer'
-                           f'found file {mps_files[0]} (error was: {e})')
-    if first != 0:
-        print("WARNING: non-zero-based senario names might cause trouble"
-              f" found {first=} for dir {mps_files_directory}")
-    assert start+num_scens <= len(mps_files),\
-        f"Trying to create scenarios names with {start=}, {num_scens=} but {len(mps_files)=}"
-    retval = [fn[:-4] for fn in mps_files[start:start+num_scens]]
-    return retval
 
 #=========
 def inparser_adder(cfg):

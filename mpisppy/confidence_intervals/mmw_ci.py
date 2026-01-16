@@ -15,7 +15,7 @@ import scipy.stats
 import importlib
 from mpisppy import global_toc
     
-import mpisppy.utils.amalgamator as ama
+from mpisppy.utils import amalgamator as ama, scenario_names_creator
 import mpisppy.confidence_intervals.ciutils as ciutils
 
 fullcomm = mpi.COMM_WORLD
@@ -92,7 +92,7 @@ class MMWConfidenceIntervals():
                 "cfg should have an attribute 'EF-2stage' or 'EF-mstage' set to True")
         
         #Check if refmodel and args have all needed attributes
-        everything = ["scenario_names_creator", "scenario_creator", "kw_creator"]
+        everything = ["scenario_creator", "kw_creator"]
         if self.multistage:
             everything[0] = "sample_tree_scen_creator"
     
@@ -147,7 +147,7 @@ class MMWConfidenceIntervals():
         for i in range(num_batches) :
             scenstart = None if self.multistage else start
             gap_options = {'seed':start,'branching_factors':sampling_branching_factors} if self.multistage else None
-            scenario_names = self.refmodel.scenario_names_creator(batch_size,start=scenstart)
+            scenario_names = scenario_names_creator(batch_size, start=scenstart)
             estim = ciutils.gap_estimators(self.xhat_one, self.refmodelname,
                                            solving_type=self.type,
                                            scenario_names=scenario_names,

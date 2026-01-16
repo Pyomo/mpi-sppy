@@ -13,7 +13,7 @@ import numpy as np
 import mpisppy.tests.examples.aircond as aircond
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.confidence_config as conf_config
-from mpisppy.utils import config
+from mpisppy.utils import config, scenario_names_creator
 
 
 def main(cfg):
@@ -27,9 +27,7 @@ def main(cfg):
     BFs = cfg.branching_factors
     num_scens = np.prod(BFs)
 
-    scenario_names = ['Scenario' + str(i) for i in range(num_scens)]
-    
-    xhat_gen_kwargs = {"scenario_names": scenario_names,
+    xhat_gen_kwargs = {"scenario_names": scenario_names_creator(num_scens, prefix="Scenario"),
                         "solver_name": cfg.solver_name,
                         "solver_options": None,
                         "branching_factors" : BFs,

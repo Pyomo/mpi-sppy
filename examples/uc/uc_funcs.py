@@ -267,11 +267,6 @@ def scenario_tree_solution_writer( solution_dir, sname, scenario, bundling ):
     mds.write(file_name)
 
 #=========
-def scenario_names_creator(scnt,start=0):
-    # (only for Amalgamator): return the full list of names
-    return [F"Scenario{i+1}" for i in range(start,scnt+start)]
-
-#=========
 def inparser_adder(cfg):
     # (only for Amalgamator): add command options unique to uc
     cfg.num_scens_required()

@@ -16,9 +16,7 @@
 
 import numpy as np
 import farmer
-from mpisppy.utils import config
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.amalgamator as amalgamator
+from mpisppy.utils import amalgamator, config, scenario_names_creator, sputils
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 
@@ -94,7 +92,7 @@ def main(cfg):
     solver_name = cfg.EF_solver_name
     crops_multiplier = cfg.crops_multiplier
     
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
+    scenario_names = scenario_names_creator(scen_count, prefix='Scenario')
     
     xhat_gen_kwargs = {"scenario_names": scenario_names,
                        "solver_name": solver_name,

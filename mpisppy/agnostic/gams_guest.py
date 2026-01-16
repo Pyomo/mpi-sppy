@@ -23,7 +23,7 @@ import tempfile
 import re
 
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import scenario_names_creator, sputils
 
 from mpisppy import MPI  # for debugging
 fullcomm = MPI.COMM_WORLD
@@ -104,7 +104,7 @@ class GAMS_guest():
 
     #=========
     def scenario_names_creator(self, num_scens,start=None):
-        return self.model_module.scenario_names_creator(num_scens,start)
+        return scenario_names_creator(num_scens, start=start)
 
 
     #=========

@@ -45,3 +45,25 @@ def nice_join(
         return separator.join(seq)
     else:
         return f"{separator.join(seq[:-1])} {conjunction} {seq[-1]}"
+
+
+def scenario_names_creator(n: int, prefix: str = "scenario", start: int | None = 0) -> list[str]:
+    """Creates a list of scenario names using the pattern `{prefix}{number}` for a single scenario
+    name. The scenario names are distinguished using consecutive numbers.
+
+    Args:
+        n (int): number of wanted scenarios names
+        prefix (str, "scenario"): string to start the scenario name
+        start (int | None, 0): number to use for the first scenario name
+
+    Examples:
+
+        >>> from mpisppy.utils import scenario_names_creator
+
+        >>> scenario_names_creator(3, prefix="scen_", start=1)
+        ["scen_1", "scen_2", "scen_3"]
+    """
+    # start is also allowed to be None to avoid migration errors from earlier implementations
+    if start is None:
+        start = 0
+    return [f"{prefix}{i}" for i in range(start, start + n)]

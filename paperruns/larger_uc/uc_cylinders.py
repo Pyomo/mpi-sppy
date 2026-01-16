@@ -20,8 +20,7 @@ from mpisppy.utils.sputils import spin_the_wheel
 from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.utils import baseparsers
-from mpisppy.utils import vanilla
+from mpisppy.utils import baseparsers, cfg_vanilla as vanilla, scenario_names_creator
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 
@@ -38,7 +37,7 @@ def _parse_args():
                         help="json file with mipgap schedule (default None)",
                         dest="ph_mipgaps_json",
                         type=str,
-                        default=None)                
+                        default=None)
     
     args = parser.parse_args()
     return args
@@ -69,7 +68,7 @@ def main():
     }
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
-    all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix="Scenario", start=1)
     rho_setter = uc._rho_setter
     
     # Things needed for vanilla cylinders

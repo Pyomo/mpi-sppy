@@ -10,12 +10,11 @@ import sys
 import hydro
 import pyomo.environ as pyo
 from mpisppy.opt.ef import ExtensiveForm
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import scenario_names_creator, sputils
 
 options = {"solver": sys.argv[1]}
 num_scenarios = 9
 BFs = [3, 3]
-all_scenario_names = [f"Scen{i+1}" for i in range(num_scenarios)]
 
 # This is multi-stage, so we need to supply node names
 all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
@@ -23,7 +22,7 @@ all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 options["branching_factors"] = BFs
 ef = ExtensiveForm(
     options,
-    all_scenario_names,
+    scenario_names_creator(num_scenarios, prefix="scen", start=1),
     hydro.scenario_creator,
     scenario_creator_kwargs={"branching_factors": BFs},
     all_nodenames=all_nodenames

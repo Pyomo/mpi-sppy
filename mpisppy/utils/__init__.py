@@ -7,7 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 
-from .strings import nice_join
+from .strings import nice_join, scenario_names_creator
 
 
-__all__ = ["nice_join"]
+__all__ = ["nice_join", "scenario_names_creator"]

@@ -8,9 +8,8 @@
 ###############################################################################
 # TBD: make these tests less fragile
 import unittest
-import mpisppy.utils.admmWrapper as admmWrapper
 import mpisppy.tests.examples.distr.distr as distr
-from mpisppy.utils import config
+from mpisppy.utils import admmWrapper, config, scenario_names_creator
 from mpisppy.tests.utils import get_solver
 from mpisppy import MPI
 import subprocess
@@ -36,7 +35,7 @@ class TestAdmmWrapper(unittest.TestCase):
     def _make_admm(self, num_scens,verbose=False):
         cfg = self._cfg_creator(num_scens)
         options = {}
-        all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
+        all_scenario_names = scenario_names_creator(cfg.num_scens, prefix="Region", start=1)
         scenario_creator = distr.scenario_creator
         scenario_creator_kwargs = distr.kw_creator(cfg)
         consensus_vars = distr.consensus_vars_creator(cfg.num_scens)
@@ -56,7 +55,7 @@ class TestAdmmWrapper(unittest.TestCase):
         for i in range(3,5):
             self._make_admm(i)
 
-    def test_variable_probability(self):        
+    def test_variable_probability(self):
         admm = self._make_admm(3)
         q = dict()
         for sname, s in admm.local_scenarios.items():

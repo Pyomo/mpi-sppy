@@ -63,13 +63,6 @@ def scenario_creator(scenario_name, mi, job, cfg=None):
 
 
 #=========
-def scenario_names_creator(num_scens,start=None):
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-
-
-#=========
 def inparser_adder(cfg):
     # add options unique to transport
     cfg.num_scens_required()

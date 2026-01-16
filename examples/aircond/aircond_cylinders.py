@@ -8,19 +8,18 @@
 ###############################################################################
 # NOTE: as of March 2022, consider aircondB.py as an alternative to aircond.py
 # Use bundle_pickler.py to create bundle pickles
-# NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discusion.
+# NOTE: As of 3 March 2022, you can't compare pickle bundle problems with non-pickled. See _demands_creator in aircondB.py for more discussion.
 
 import numpy as np
 import itertools
 from mpisppy import global_toc
 from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import amalgamator, cfg_vanilla as vanilla, config, pickle_bundle, scenario_names_creator
 from mpisppy.utils.sputils import first_stage_nonant_npy_serializer, option_string_to_dict
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+
 import mpisppy.tests.examples.aircond as aircond
 import mpisppy.tests.examples.aircondB as aircondB  # pickle bundle version
-from mpisppy.utils import pickle_bundle
-from mpisppy.utils import amalgamator
+
 
 # construct a node-scenario dictionary a priori for xhatspecific_spoke,
 # according to naming convention for this problem
@@ -38,7 +37,7 @@ def make_node_scenario_dict_balanced(BFs,leaf_nodes=True,start=1):
     """
     nodenames = make_nodenames_balanced(BFs, leaf_nodes)
     num_scens = np.prod(BFs)
-    scenario_names = aircond.scenario_names_creator(num_scens, start)
+    scenario_names = scenario_names_creator(num_scens, prefix="scen", start=start)
     
     num_stages = len(BFs)+1
     node_scenario_dict ={"ROOT": scenario_names[0]}
@@ -209,10 +208,9 @@ def main():
         refmodule = aircondB
         primal_rho_setter = None
         global_toc("WARNING: not using rho setters with proper bundles")
-        
     else:
         ScenCount = np.prod(BFs)
-        all_scenario_names = [f"scen{i}" for i in range(ScenCount)] #Scens are 0-based
+        all_scenario_names = scenario_names_creator(ScenCount, prefix="scen") #Scens are 0-based
         refmodule = aircond
         primal_rho_setter = refmodule.primal_rho_setter
 
