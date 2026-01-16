@@ -54,7 +54,7 @@ def main():
 
     ScenCount = BFs[0] * BFs[1]
     scenario_creator_kwargs = {"branching_factors": BFs}
-    all_scenario_names = scenario_names_creator(ScenCount, prefix="Scen", start=1)
+    all_scenario_names = scenario_names_creator(ScenCount, prefix="scen", start=1)
     scenario_creator = hydro.scenario_creator
     scenario_denouement = hydro.scenario_denouement
     rho_setter = None

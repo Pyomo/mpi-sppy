@@ -22,7 +22,7 @@ all_nodenames = sputils.create_nodenames_from_branching_factors(BFs)
 options["branching_factors"] = BFs
 ef = ExtensiveForm(
     options,
-    scenario_names_creator(num_scenarios, prefix="Scen", start=1),
+    scenario_names_creator(num_scenarios, prefix="scen", start=1),
     hydro.scenario_creator,
     scenario_creator_kwargs={"branching_factors": BFs},
     all_nodenames=all_nodenames

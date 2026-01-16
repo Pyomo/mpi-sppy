@@ -31,7 +31,7 @@ import mpisppy.opt.aph
 import mpisppy.scenario_tree as scenario_tree
 import pyomo.environ as pyo
 from mpisppy.extensions.xhatspecific import XhatSpecific
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import scenario_names_creator, sputils
 
 ##
 ## Setting up a Model
@@ -296,9 +296,7 @@ if __name__ == "__main__":
     # branching factor (3 stages is hard-wired)
     BFs = options["branching_factors"]
     ScenCount = BFs[0] * BFs[1]
-    all_scenario_names = list()
-    for sn in range(ScenCount):
-        all_scenario_names.append("Scen"+str(sn+1))
+    all_scenario_names = scenario_names_creator(ScenCount, prefix="Scen", start=1)
     # end hardwire
 
     # This is multi-stage, so we need to supply node names
