@@ -85,6 +85,11 @@ def apply_solver_specs(name, spoke, cfg):
         options["iter0_solver_options"]["mipgap"] = cfg.get(name+"_iter0_mipgap")
     if _hasit(cfg, name+"_iterk_mipgap"):
         options["iterk_solver_options"]["mipgap"] = cfg.get(name+"_iterk_mipgap")
+    # re-apply max_solver_threads since we may have over-written the
+    # iter*_solver_options above.
+    if _hasit(cfg, "max_solver_threads"):
+        options["iter0_solver_options"]["threads"] = cfg.max_solver_threads
+        options["iterk_solver_options"]["threads"] = cfg.max_solver_threads
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     cylinder_dict = copy.deepcopy(cylinder_dict)
