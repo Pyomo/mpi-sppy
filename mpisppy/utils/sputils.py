@@ -651,6 +651,11 @@ def option_string_to_dict(ostr):
             except ValueError:
                 return s
 
+    if isinstance(ostr, dict):
+        # Allow repeated calls to this fuction
+        # especially covering the case where
+        # ostr is None.
+        return ostr
     solver_options = dict()
     if ostr is None or ostr == "":
         return solver_options
