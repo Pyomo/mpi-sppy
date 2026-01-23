@@ -19,7 +19,12 @@ import mpisppy.utils.sputils as sputils
 
 def _hasit(cfg, argname):
     # aside: Config objects act like a dict or an object
-    return cfg.get(argname) is not None
+    val = cfg.get(argname)
+    # For boolean flags, require True. For non-bool values, treat any non-None
+    # value as "set".
+    if isinstance(val, bool):
+        return val
+    return val is not None
 
 def shared_options(cfg):
     shoptions = {
