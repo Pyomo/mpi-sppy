@@ -670,6 +670,8 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=None)
 
+        self.add_solver_specs("lagrangian")
+
 
     def reduced_costs_args(self):
 
@@ -677,6 +679,8 @@ class Config(pyofig.ConfigDict):
                               description="have a reduced costs spoke",
                               domain=bool,
                               default=False)
+
+        self.add_solver_specs("reduced_costs")
         
         self.add_to_config('rc_verbose',
                             description="verbose output for reduced costs",
@@ -755,6 +759,8 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
+        self.add_solver_specs("subgradient")
+
         self.add_to_config("subgradient_iter0_mipgap",
                             description="lgr. iter0 solver option mipgap (default None)",
                             domain=float,
@@ -785,6 +791,7 @@ class Config(pyofig.ConfigDict):
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
                             default=1.0)
+        self.add_solver_specs("relaxed_ph")
 
 
     def ph_dual_args(self):
@@ -793,6 +800,9 @@ class Config(pyofig.ConfigDict):
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+
+        self.add_solver_specs("ph_dual")
+
         self.add_to_config("ph_dual_rescale_rho_factor",
                             description="Used to rescale rho initially (default=0.1)",
                             domain=float,
