@@ -653,7 +653,7 @@ def option_string_to_dict(ostr):
 
     solver_options = dict()
     if ostr is None or ostr == "":
-        return None
+        return solver_options
     for this_option_string in ostr.split():
         this_option_pieces = this_option_string.strip().split("=")
         if len(this_option_pieces) == 2:
