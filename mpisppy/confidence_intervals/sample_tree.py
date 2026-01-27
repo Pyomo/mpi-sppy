@@ -134,7 +134,15 @@ class SampleSubtree():
         cfg.quick_assign('EF-2stage', domain=str, value=len(self.original_branching_factors) <= 1)
         cfg.quick_assign('EF_solver_name', domain=str, value=self.solver_name)
         if self.solver_options is not None:
-            cfg.add_and_assign("solver_options", "solver options dict", dict, None, self.solver_options)
+            if "solver_options" not in cfg:
+                cfg.add_and_assign("solver_options", "solver options dict", dict, None, self.solver_options)
+            elif cfg.solver_options is None or len(cfg.solver_options) == 0:
+                cfg.quick_assign("solver_options", dict, self.solver_options)
+            elif len(self.solver_options) > 0:
+                raise runtime_error("competing options in _create_amalgamator")
+            else:
+                pass  # we will keep the options in cfg
+
         cfg.quick_assign('num_scens', domain=int, value=self.numscens)
         if "start_seed" not in cfg:
             cfg.add_and_assign("start_seed", description="first seed", domain=int, default=None, value=self.seed)
