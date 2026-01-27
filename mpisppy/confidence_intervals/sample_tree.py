@@ -139,7 +139,7 @@ class SampleSubtree():
             elif cfg.solver_options is None or len(cfg.solver_options) == 0:
                 cfg.quick_assign("solver_options", dict, self.solver_options)
             elif len(self.solver_options) > 0:
-                raise runtime_error("competing options in _create_amalgamator")
+                raise RuntimeError("competing options in _create_amalgamator")
             else:
                 pass  # we will keep the options in cfg
 
