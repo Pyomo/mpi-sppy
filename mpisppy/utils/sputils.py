@@ -634,9 +634,11 @@ def parent_ndn(nodename):
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
+    Jan 27, 2026: if ostr happens to be a dict already, just return it.
 
     Args:
         ostr (string): space seperated options with = for arguments
+                       (if it happens to be a dict already, just return it)
 
     Returns:
         solver_options (dict): solver options
@@ -651,6 +653,8 @@ def option_string_to_dict(ostr):
             except ValueError:
                 return s
 
+    if isinstance(ostr, dict):
+        return ostr
     solver_options = dict()
     if ostr is None or ostr == "":
         return solver_options
