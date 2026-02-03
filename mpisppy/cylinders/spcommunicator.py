@@ -31,10 +31,24 @@ from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 logger = logging.getLogger(__name__)
 
 def communicator_array(size):
-    arr = np.empty(size+1, dtype='d')
-    arr[:] = np.nan
+    # 1. Define the logical size (N + 1 for the ID field)
+    logical_size = size + 1
+    # 2. Round up to the nearest multiple of 8 (8 doubles * 8 bytes = 64 bytes)
+    # for AVX-512 and RDMA alignment safety
+    padded_size = ((logical_size + 7) // 8) * 8
+    
+    # 3. Use MPI's aligned allocator
+    itemsize = np.dtype('d').itemsize
+    mem = MPI.Alloc_mem(padded_size * itemsize)
+    
+    # 4. Create the array from the buffer and return a VIEW of the logical size
+    # This view satisfies: len(arr) == size + 1
+    full_arr = np.frombuffer(mem, dtype='d')
+    full_arr[:] = np.nan
+    
+    arr = full_arr[:logical_size] 
     arr[-1] = 0
-    return arr
+    return arr, logical_size
 
 
 class FieldArray:
@@ -47,7 +61,7 @@ class FieldArray:
     """
 
     def __init__(self, length: int):
-        self._array = communicator_array(length)
+        self._array, self._logical_size = communicator_array(length)
         self._id = 0
         return
 
@@ -67,7 +81,7 @@ class FieldArray:
         """
         Returns the numpy array for the field data without the read id
         """
-        return self._array[:-1]
+        return self._array[:self._logical_size]
 
     def id(self) -> int:
         return self._id
@@ -92,6 +106,10 @@ class SendArray(FieldArray):
         """
         self._id += 1
         self._array[-1] = self._id
+        # This ensures the update to the ID (the malloc-sensitive boundary)
+        # is pushed to the window and synchronized before any other 
+        # part of the code (like Gurobi or another MPI rank) touches it.
+        self.win.Flush(self.strata_rank)        
         return self._id
 
 
