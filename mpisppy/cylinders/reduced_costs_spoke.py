@@ -42,6 +42,8 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         for s in self.opt.local_scenarios.values():
             rbuflen += len(s._mpisppy_data.nonant_indices)
 
+        # Instead of using np.size(self.send_buffers[...].array())
+        # Use the logical length directly
         self.nonant_length = self.opt.nonant_length
 
         self._modeler_fixed_nonants = {}
@@ -58,7 +60,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         scenario_buffer_len = 0
         for s in self.opt.local_scenarios.values():
             scenario_buffer_len += len(s._mpisppy_data.nonant_indices)
-        self._scenario_rc_buffer = np.zeros(scenario_buffer_len)
+        self._scenario_rc_buffer = np.zeros(self.nonant_length)
 
         self.initialize_bound_fields()
         self.create_integer_variable_where()

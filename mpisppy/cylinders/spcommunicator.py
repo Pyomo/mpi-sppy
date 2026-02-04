@@ -31,24 +31,19 @@ from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 logger = logging.getLogger(__name__)
 
 def communicator_array(size):
-    # 1. Define the logical size (N + 1 for the ID field)
     logical_size = size + 1
-    # 2. Round up to the nearest multiple of 8 (8 doubles * 8 bytes = 64 bytes)
-    # for AVX-512 and RDMA alignment safety
     padded_size = ((logical_size + 7) // 8) * 8
     
-    # 3. Use MPI's aligned allocator
     itemsize = np.dtype('d').itemsize
     mem = MPI.Alloc_mem(padded_size * itemsize)
     
-    # 4. Create the array from the buffer and return a VIEW of the logical size
-    # This view satisfies: len(arr) == size + 1
     full_arr = np.frombuffer(mem, dtype='d')
     full_arr[:] = np.nan
     
+    # Return the full array for internal use, but record the logical size
     arr = full_arr[:logical_size] 
     arr[-1] = 0
-    return arr, logical_size
+    return arr, size  # Note: size here is the 'field_length * buffer_size'
 
 
 class FieldArray:
@@ -61,9 +56,13 @@ class FieldArray:
     """
 
     def __init__(self, length: int):
-        self._array, self._logical_size = communicator_array(length)
+        # Store both the array (logical size + 1) and the original data length
+        self._array, self._data_length = communicator_array(length)
         self._id = 0
-        return
+
+    def value_array(self) -> np.typing.NDArray:
+        """ Returns only the data portion, excluding the ID field and padding """
+        return self._array[:self._data_length]
 
     def __getitem__(self, key):
         # TODO: Should probably be hiding the read/write id field but there are many functions
