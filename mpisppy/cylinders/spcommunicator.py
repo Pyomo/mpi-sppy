@@ -30,47 +30,77 @@ from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow
 
 logger = logging.getLogger(__name__)
 
-def communicator_array(size):
-    arr = np.empty(size+1, dtype='d')
-    arr[:] = np.nan
-    arr[-1] = 0
-    return arr
+def communicator_array(data_length: int):
+    """
+    Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
+    but expose a logical view of length (data_length + 1) where the last element is
+    the read/write id.
+    Returns:
+        full_arr:  padded array (used for SPWindow put/get)
+        logical_arr: logical view (data + id), last element is id
+        data_length: number of data entries (excluding id)
+        logical_len: data_length + 1
+        padded_len: multiple-of-8 length used in the MPI window
+    """
+    logical_len = data_length + 1
+    padded_len = ((logical_len + 7) // 8) * 8
+
+    itemsize = np.dtype("d").itemsize
+    mem = MPI.Alloc_mem(padded_len * itemsize)
+
+    full_arr = np.frombuffer(mem, dtype="d", count=padded_len)
+    full_arr[:] = np.nan
+
+    logical_arr = full_arr[:logical_len]
+    logical_arr[-1] = 0.0
+
+    return full_arr, logical_arr, data_length, logical_len, padded_len
 
 
 class FieldArray:
     """
-    Notes: Buffer that tracks new/old state as well. Light-weight wrapper around a numpy array.
-
-    The intention here is that these are passive data holding classes. That is, other classes are
-    expected to update the internal fields. The lone exception to this is the read/write id field.
-    See the `SendArray` and `RecvArray` classes for how that field is updated.
+    Wrapper around an MPI-allocated numpy buffer with:
+      - a padded "window" array used for MPI RMA (Design A)
+      - a logical view used by mpi-sppy code (data + id)
     """
 
     def __init__(self, length: int):
-        self._array = communicator_array(length)
+        # length is the data length (excluding the id)
+        (self._full_array,
+         self._array,
+         self._data_length,
+         self._logical_len,
+         self._padded_len) = communicator_array(length)
         self._id = 0
-        return
 
-    def __getitem__(self, key):
-        # TODO: Should probably be hiding the read/write id field but there are many functions
-        # that expect it to be there and being able to read it is not really a problem.
-        np_array = self.array()
-        return np_array[key]
+    def window_array(self) -> np.typing.NDArray:
+        """Full padded array (used for SPWindow get/put)."""
+        return self._full_array
 
     def array(self) -> np.typing.NDArray:
-        """
-        Returns the numpy array for the field data including the read id
-        """
+        """Logical array (data + id)."""
         return self._array
 
     def value_array(self) -> np.typing.NDArray:
-        """
-        Returns the numpy array for the field data without the read id
-        """
-        return self._array[:-1]
+        """Data only (excludes id)."""
+        return self._array[:self._data_length]
+
+    def padded_len(self) -> int:
+        return self._padded_len
+
+    def logical_len(self) -> int:
+        return self._logical_len
+
+    def data_len(self) -> int:
+        return self._data_length
+
+    def __getitem__(self, key):
+        # Preserve old behavior: indexing into the logical view.
+        return self._array[key]
 
     def id(self) -> int:
         return self._id
+
 
 class SendArray(FieldArray):
 
@@ -138,7 +168,8 @@ class _CircularBuffer:
 
     def _get_value_array(self, read_write_index):
         position = read_write_index % self._buffer_size
-        return self.data._array[(position*self._field_length):((position+1)*self._field_length)]
+        arr = self.data.array()  # logical view
+        return arr[(position*self._field_length):((position+1)*self._field_length)]
 
 
 class SendCircularBuffer(_CircularBuffer):
@@ -243,13 +274,12 @@ class SPCommunicator:
         """
         return key
 
-    def _build_window_spec(self) -> dict[Field, int]:
-        """ Build dict with fields and lengths needed for local MPI window
+    def _build_window_spec(self) -> dict[Field, tuple[int, int]]:
+        """ Build dict with fields and padded lengths needed for local MPI window
         """
         window_spec = dict()
-        for (field,buf) in self.send_buffers.items():
-            window_spec[field] = np.size(buf.array())
-        ## End for
+        for (field, buf) in self.send_buffers.items():
+            window_spec[field] = (buf.logical_len(), buf.padded_len())
         return window_spec
 
     def _create_field_rank_mappings(self) -> None:
@@ -260,7 +290,9 @@ class SPCommunicator:
             if rank == self.strata_rank:
                 continue
             self.ranks_to_fields[rank] = []
-            for field in buffer_layout:
+            for field in buffer_layout.keys():
+                if field == Field.WHOLE:
+                    continue
                 if field not in self.fields_to_ranks:
                     self.fields_to_ranks[field] = []
                 self.fields_to_ranks[field].append(rank)
@@ -271,18 +303,23 @@ class SPCommunicator:
     def _validate_recv_field(self, field: Field, origin: int, length: int):
         remote_buffer_layout = self.window.strata_buffer_layouts[origin]
         if field not in remote_buffer_layout:
-            raise RuntimeError(f"{self.__class__.__name__} on local {self.strata_rank=} "
-                               f"could not find {field=} on remote rank {origin} with "
-                               f"class {self.communicators[origin]['spcomm_class']}."
-                              )
-        _, remote_length = remote_buffer_layout[field]
-        if (length + 1) != remote_length:
-            raise RuntimeError(f"{self.__class__.__name__} on local {self.strata_rank=} "
-                               f"{field=} has length {length} on local "
-                               f"{self.strata_rank=} and length {remote_length} "
-                               f"on remote rank {origin} with class "
-                               f"{self.communicators[origin]['spcomm_class']}."
-                              )
+            raise RuntimeError(
+                f"{self.__class__.__name__} on local {self.strata_rank=} "
+                f"could not find {field=} on remote rank {origin} with "
+                f"class {self.communicators[origin]['spcomm_class']}."
+            )
+
+        _, remote_logical_len, remote_padded_len = remote_buffer_layout[field]
+        expected_logical_len = length + 1
+        expected_padded_len = ((expected_logical_len + 7) // 8) * 8
+
+        if remote_logical_len != expected_logical_len or remote_padded_len != expected_padded_len:
+            raise RuntimeError(
+                f"{self.__class__.__name__} on local {self.strata_rank=} "
+                f"{field=} expects (logical={expected_logical_len}, padded={expected_padded_len}) "
+                f"but remote rank {origin} advertises (logical={remote_logical_len}, padded={remote_padded_len}) "
+                f"with class {self.communicators[origin]['spcomm_class']}."
+            )
 
     def register_recv_field(self, field: Field, origin: int, length: int = -1) -> RecvArray:
         # print(f"{self.__class__.__name__}.register_recv_field, {field=}, {origin=}")
@@ -291,7 +328,10 @@ class SPCommunicator:
             length = self._field_lengths[field]
         if key in self.receive_buffers:
             my_fa = self.receive_buffers[key]
-            assert(length + 1 == np.size(my_fa.array()))
+            expected_logical_len = length + 1
+            expected_padded_len = ((expected_logical_len + 7) // 8) * 8
+            assert expected_logical_len == my_fa.logical_len()
+            assert expected_padded_len == my_fa.padded_len()
         else:
             self._validate_recv_field(field, origin, length)
             my_fa = RecvArray(length)
@@ -390,7 +430,7 @@ class SPCommunicator:
                 if strata_rank == self.strata_rank:
                     continue
                 cls = comm["spcomm_class"]
-                if field in self.ranks_to_fields[strata_rank]:
+                if field != Field.WHOLE and field in self.ranks_to_fields[strata_rank]:
                     buff = self.register_recv_field(field, strata_rank)
                     self.receive_field_spcomms[field].append((strata_rank, cls, buff))
 
@@ -402,7 +442,7 @@ class SPCommunicator:
                 This automatically updates handles the write id.
         """
         buf._next_write_id()
-        self.window.put(buf.array(), field)
+        self.window.put(buf.window_array(), field)
         return
 
     def get_receive_buffer(self,
@@ -432,9 +472,9 @@ class SPCommunicator:
 
         last_id = buf.id()
 
-        self.window.get(buf.array(), origin, field)
+        self.window.get(buf.window_array(), origin, field)  # padded view
 
-        new_id = int(buf.array()[-1])
+        new_id = int(buf.array()[-1])  # logical view
 
         if synchronize:
             local_val = np.array((new_id,), 'i')

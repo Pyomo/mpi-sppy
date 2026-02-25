@@ -6,6 +6,10 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+
+# Feb 2026: the layout tuple is (offset, logical_len, padded_len) with offset += padded_len
+#   (we are padding to be 512 bit boundaries to avoid collisions with solvers who do that)
+
 from mpisppy import MPI
 
 import numpy as np
@@ -89,35 +93,61 @@ class FieldLengths:
         return self._field_lengths[field]
 
 
+def _padded_len_8doubles(logical_len: int) -> int:
+    """Round up length (in doubles) to a multiple of 8 doubles (64 bytes)."""
+    return ((logical_len + 7) // 8) * 8
+
+
 class SPWindow:
 
     def __init__(self, my_fields: dict, strata_comm: MPI.Comm, field_order=None):
-
+        """
+        Design A (padded transfers):
+          - Layout tuple is (offset, logical_len, padded_len) and offset advances by padded_len.
+          - put/get always transfer padded_len doubles.
+          - ID slot is at (offset + logical_len - 1).
+        """
         self.strata_comm = strata_comm
         self.strata_rank = strata_comm.Get_rank()
 
         # Sorted by the integer value of the enumeration value
         if field_order is None:
-            self.field_order = sorted(my_fields.keys())
+            self.field_order = sorted(f for f in my_fields.keys() if f != Field.WHOLE)
         else:
-            self.field_order = field_order
+            self.field_order = [f for f in field_order if f != Field.WHOLE]
 
         offset = 0
         layout = {}
-        for field in self.field_order:
-            length = my_fields[field]
-            # length += 1 # Add 1 for the read id field
-            # layout[field] = (offset, length, MPI.DOUBLE)
-            layout[field] = (offset, length)
-            offset += length
-        ## End for
 
-        # If not present already, add field for WHOLE buffer so the entire window
-        # buffer can be copied or set in one go
+        for field in self.field_order:
+            entry = my_fields[field]
+
+            # In your spcommunicator.py, entry is (logical_len, padded_len)
+            if isinstance(entry, (tuple, list)):
+                logical_len = int(entry[0])
+                padded_len = int(entry[1])
+            else:
+                # Fallback: caller provided padded only (not recommended)
+                padded_len = int(entry)
+                logical_len = padded_len
+
+            if padded_len < logical_len:
+                raise ValueError(f"{field=} has {padded_len=} < {logical_len=}")
+
+            # padded_len must be a multiple of 8 doubles (64 bytes)
+            expected_padded = _padded_len_8doubles(logical_len)
+            if padded_len != expected_padded:
+                raise ValueError(
+                    f"{field=} has {logical_len=} but {padded_len=}; expected padded_len={expected_padded}"
+                )
+
+            layout[field] = (offset, logical_len, padded_len)
+            offset += padded_len
+
+        # WHOLE covers the entire padded window extent
         if Field.WHOLE not in layout:
-            # layout[Field.WHOLE] = (0, offset, MPI.DOUBLE)
-            layout[Field.WHOLE] = (0, offset)
-        ## End if
+            total_logical = sum(layout[f][1] for f in layout.keys() if f != Field.WHOLE)
+            layout[Field.WHOLE] = (0, total_logical, offset)
 
         self.buffer_layout = layout
         total_buffer_length = offset
@@ -125,19 +155,19 @@ class SPWindow:
 
         self.buffer_length = total_buffer_length
         self.window = MPI.Win.Allocate(window_size_bytes, MPI.DOUBLE.size, comm=strata_comm)
-        # ensure the memory allocated for the window is freed
+
+        # Bind numpy view to the window memory
         self.buff = np.ndarray(dtype="d", shape=(total_buffer_length,), buffer=self.window.tomemory())
         self.buff[:] = np.nan
 
-        for field in self.buffer_layout.keys():
-            # (offset, length, mpi_type) = self.buffer_layout[field]
-            (offset, length) = self.buffer_layout[field]
-            self.buff[offset + length - 1] = 0.0
-        ## End for
+        # Initialize ID slots (logical end) to 0.0
+        for field, (off, logical_len, padded_len) in self.buffer_layout.items():
+            if field == Field.WHOLE:
+                continue
+            self.buff[off + logical_len - 1] = 0.0
 
+        # Gather layouts across ranks
         self.strata_buffer_layouts = strata_comm.allgather(self.buffer_layout)
-
-        return
 
     def free(self):
         if self.window is not None:
@@ -147,42 +177,32 @@ class SPWindow:
             self.buffer_length = 0
             self.window = None
             self.strata_buffer_layouts = None
-            self.window = None
         return
 
     #### Functions ####
     def get(self, dest: nptyping.ArrayLike, strata_rank: int, field: Field):
-
-        assert(strata_rank >= 0 and strata_rank < len(self.strata_buffer_layouts))
+        assert (0 <= strata_rank < len(self.strata_buffer_layouts))
 
         that_layout = self.strata_buffer_layouts[strata_rank]
-        assert field in that_layout.keys()
+        assert field in that_layout
 
-        # (offset, length, mpi_type) = that_layout[field]
-        (offset, length) = that_layout[field]
-        assert np.size(dest) == length
+        (offset, logical_len, padded_len) = that_layout[field]
+        assert np.size(dest) == padded_len
 
         window = self.window
         window.Lock(strata_rank, MPI.LOCK_SHARED)
-        # window.Get((dest, length, mpi_type), strata_rank, offset)
-        window.Get((dest, length, MPI.DOUBLE), strata_rank, offset)
+        window.Get((dest, padded_len, MPI.DOUBLE), strata_rank, offset)
         window.Unlock(strata_rank)
-
         return
 
     def put(self, values: nptyping.ArrayLike, field: Field):
-
-        # (offset, length, mpi_type) = self.buffer_layout[field]
-        (offset, length) = self.buffer_layout[field]
-
-        assert(np.size(values) == length)
+        (offset, logical_len, padded_len) = self.buffer_layout[field]
+        assert np.size(values) == padded_len
 
         window = self.window
         window.Lock(self.strata_rank, MPI.LOCK_EXCLUSIVE)
-        # window.Put((values, length, mpi_type), self.strata_rank, offset)
-        window.Put((values, length, MPI.DOUBLE), self.strata_rank, offset)
+        window.Put((values, padded_len, MPI.DOUBLE), self.strata_rank, offset)
         window.Unlock(self.strata_rank)
-
         return
 
 ## End SPWindow
