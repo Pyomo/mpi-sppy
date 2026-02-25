@@ -737,7 +737,7 @@ def do_mmw(module_fname, cfg, wheel=None):
 
     # Default the EF solver to the main solver when not explicitly set.
     if cfg.get("EF_solver_name") is None:
-        cfg.EF_solver_name = cfg.solver_name
+        cfg.quick_assign("EF_solver_name", str, cfg.solver_name)
 
     # Tell MMW whether this is a 2-stage or multi-stage problem.
     if cfg.get("branching_factors") is not None:
@@ -756,6 +756,7 @@ def do_mmw(module_fname, cfg, wheel=None):
     )
     result = mmw.run()
     global_toc(f"MMW CI result: {result}")
+    return result
 
 
 ##########################################################################
