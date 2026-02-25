@@ -119,4 +119,6 @@ must be present.  None of the mmw options have a default value.
    The software calls ``scenario_creator`` and ``scenario_names_creator`` from
    the model module.  If those functions create serially correlated scenarios,
    they must be written so that scenarios numbered above ``--mmw-start`` are
-   independent of those used to compute the candidate solution.
+   independent of those used to compute the candidate solution. Furthermore,
+   they need to independent enough from each other to satisfy the
+   assumptions made be Mak, Morton, and Wood.
