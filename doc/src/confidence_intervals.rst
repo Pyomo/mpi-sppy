@@ -95,3 +95,28 @@ realizations of the objective function at the candidate solution to
 construct an additional confidence interval about the mean of the
 realizations computed.
 
+Inclusion in generic_cylinders
+------------------------------
+
+MMW confidence intervals can be computed automatically at the end of a
+``generic_cylinders`` run by supplying the following options:
+
+* ``--mmw-num-batches``: number of MMW batches (required)
+* ``--mmw-batch-size``: number of scenarios per batch (required)
+* ``--mmw-start``: first scenario number used by MMW (required)
+* ``--mmw-xhat-input-file-name``: path to a ``.npy`` file with the candidate
+  solution xhat (optional).  If absent, the best xhat found during the main
+  algorithm run is used automatically.
+
+When ``mmw-xhat-input-file-name`` is omitted, all three of the other options
+must be present.  None of the mmw options have a default value.
+
+.. note::
+   MMW uses the EF solver to evaluate scenario batches.  By default it reuses
+   ``--solver-name``; supply ``--EF-solver-name`` to override.
+
+.. note::
+   The software calls ``scenario_creator`` and ``scenario_names_creator`` from
+   the model module.  If those functions create serially correlated scenarios,
+   they must be written so that scenarios numbered above ``--mmw-start`` are
+   independent of those used to compute the candidate solution.

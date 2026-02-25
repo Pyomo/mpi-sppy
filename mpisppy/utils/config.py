@@ -1129,6 +1129,34 @@ class Config(pyofig.ConfigDict):
                             domain=str,
                             default=None)
 
+    def mmw_args(self):
+        self.add_to_config(
+            "mmw_xhat_input_file_name",
+            description="Path to .npy file with xhat for MMW confidence interval"
+            " (default None; if absent and the other mmw options are given,"
+            " the best xhat from the main algorithm is used)",
+            domain=str,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_num_batches",
+            description="Number of batches for MMW confidence interval (default None)",
+            domain=int,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_batch_size",
+            description="Batch size for MMW confidence interval (default None)",
+            domain=int,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_start",
+            description="First scenario number used by MMW (default None)",
+            domain=int,
+            default=None,
+        )
+
     #================
     def create_parser(self,progname=None):
         # seldom used
