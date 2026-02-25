@@ -539,6 +539,7 @@ jobs:
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
           conda install -c conda-forge openssl
+          echo "LD_LIBRARY_PATH=${CONDA_PREFIX}/lib:${LD_LIBRARY_PATH:-}" >> $GITHUB_ENV
           python -m pip install gamspy
           python -m pip install mip
           # license?
