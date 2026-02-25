@@ -538,6 +538,7 @@ jobs:
           pip install numpy packaging
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
+          conda install -c conda-forge openssl
           python -m pip install gamspy
           python -m pip install mip
           # license?
