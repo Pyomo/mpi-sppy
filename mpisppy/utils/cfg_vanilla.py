@@ -18,9 +18,13 @@ import json
 import mpisppy.utils.sputils as sputils
 
 def _hasit(cfg, argname):
-    # aside: Config objects act like a dict or an object TBD: so why the and?
-    return cfg.get(argname) is not None and cfg[argname] is not None and \
-        cfg[argname]
+    # aside: Config objects act like a dict or an object
+    val = cfg.get(argname)
+    # For boolean flags, require True. For non-bool values, treat any non-None
+    # value as "set".
+    if isinstance(val, bool):
+        return val
+    return val is not None
 
 def shared_options(cfg):
     shoptions = {
@@ -68,6 +72,24 @@ def shared_options(cfg):
         }
 
     return shoptions
+
+def apply_solver_specs(name, spoke, cfg):
+    options = spoke["opt_kwargs"]["options"]
+    if _hasit(cfg, name+"_solver_name"):
+        options["solver_name"] = cfg.get(name+"_solver_name")
+    if _hasit(cfg, name+"_solver_options"):
+        odict = sputils.option_string_to_dict(cfg.get(name+"_solver_options"))
+        options["iter0_solver_options"] = odict
+        options["iterk_solver_options"] = copy.deepcopy(odict)
+    if _hasit(cfg, name+"_iter0_mipgap"):
+        options["iter0_solver_options"]["mipgap"] = cfg.get(name+"_iter0_mipgap")
+    if _hasit(cfg, name+"_iterk_mipgap"):
+        options["iterk_solver_options"]["mipgap"] = cfg.get(name+"_iterk_mipgap")
+    # re-apply max_solver_threads since we may have over-written the
+    # iter*_solver_options above.
+    if _hasit(cfg, "max_solver_threads"):
+        options["iter0_solver_options"]["threads"] = cfg.max_solver_threads
+        options["iterk_solver_options"]["threads"] = cfg.max_solver_threads
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     cylinder_dict = copy.deepcopy(cylinder_dict)
@@ -653,12 +675,7 @@ def lagrangian_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    if cfg.lagrangian_iter0_mipgap is not None:
-        lagrangian_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
-            ["mipgap"] = cfg.lagrangian_iter0_mipgap
-    if cfg.lagrangian_iterk_mipgap is not None:
-        lagrangian_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
-            ["mipgap"] = cfg.lagrangian_iterk_mipgap
+    apply_solver_specs("lagrangian", lagrangian_spoke, cfg)
     add_ph_tracking(lagrangian_spoke, cfg, spoke=True)
 
     return lagrangian_spoke
@@ -689,6 +706,7 @@ def reduced_costs_spoke(
         extension_kwargs=extension_kwargs,
     )
 
+    apply_solver_specs("reduced_costs", rc_spoke, cfg)
     add_ph_tracking(rc_spoke, cfg, spoke=True)
 
     return rc_spoke
@@ -760,12 +778,7 @@ def subgradient_spoke(
         extension_kwargs=extension_kwargs,
     )
     subgradient_spoke["opt_class"] = Subgradient
-    if cfg.subgradient_iter0_mipgap is not None:
-        subgradient_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
-            ["mipgap"] = cfg.subgradient_iter0_mipgap
-    if cfg.subgradient_iterk_mipgap is not None:
-        subgradient_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
-            ["mipgap"] = cfg.subgradient_iterk_mipgap
+    apply_solver_specs("subgradient", subgradient_spoke, cfg)
     if cfg.subgradient_rho_multiplier is not None:
         subgradient_spoke["opt_kwargs"]["options"]["subgradient_rho_multiplier"]\
             = cfg.subgradient_rho_multiplier
@@ -809,6 +822,7 @@ def ph_dual_spoke(
     options = ph_dual_spoke["opt_kwargs"]["options"]
     if cfg.ph_dual_rescale_rho_factor is not None:
         options["rho_factor"] = cfg.ph_dual_rescale_rho_factor
+    apply_solver_specs("ph_dual", ph_dual_spoke, cfg)
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
@@ -848,6 +862,7 @@ def relaxed_ph_spoke(
     options = relaxed_ph_spoke["opt_kwargs"]["options"]
     if cfg.relaxed_ph_rescale_rho_factor is not None:
         options["rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
+    apply_solver_specs("relaxed_ph", relaxed_ph_spoke, cfg)
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
