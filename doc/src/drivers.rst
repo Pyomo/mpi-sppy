@@ -3,8 +3,13 @@
 Drivers
 =======
 
-To make use of the hub and spoke system, you must come up with a
-driver that instantiates the objects and calls them. Nearly the
+Most new users should use ``mpisppy.generic_cylinders.py`` (see :ref:`generic_cylinders`)
+as their driver. However, advanced users might want features that are not yet
+supported in ``mpisppy.generic_cylinders.py`` and so they might want to create their
+own driver. Also, users who want to maintain, or modify a copy of ``mpisppy.generic_cylinders.py``
+may want some background on drivers, which is provided in this section.
+
+Nearly the
 last step in most drivers is a call to ``mpisppy.utils.sputils.spin_the_wheel``
 that calls the hub and spokes. Many of the example drivers take
 advantage of shared code in the ``mpisppy.utils`` directory.
@@ -40,7 +45,7 @@ Extending Examples
 Many developers
 will need to add extensions. Here are few examples:
 
-* In the ``farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario creator in the ``scenario_creator_kwargs`` dictionary.
+* In the ``examples.farmer.archive.farmer_cylinders.py`` example, there is a block of code to add a ``--crops-mult`` argument that is passed to the scenario creator in the ``scenario_creator_kwargs`` dictionary.
 
 * In the ``hydro_cylinders.py`` example (which has three stages). The branching factors are obtained from the command line and passed to the scenario constructor via ``scenario_creator_kwargs`` and also passed to ``sputils.create_nodenames_from_BFs`` to create a node list.
 

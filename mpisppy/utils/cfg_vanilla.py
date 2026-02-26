@@ -19,7 +19,8 @@ import mpisppy.utils.sputils as sputils
 
 def _hasit(cfg, argname):
     # aside: Config objects act like a dict or an object TBD: so why the and?
-    return cfg.get(argname) is not None and cfg[argname] is not None
+    return cfg.get(argname) is not None and cfg[argname] is not None and \
+        cfg[argname]
 
 def shared_options(cfg):
     shoptions = {
@@ -43,7 +44,7 @@ def shared_options(cfg):
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
         shoptions["iter0_solver_options"] = odict
-        shoptions["iterk_solver_options"] = odict
+        shoptions["iterk_solver_options"] = copy.deepcopy(odict)
     # note that specific options usch as mipgap will override        
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
@@ -609,7 +610,12 @@ def _fwph_options(cfg):
         "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
     }
 
+    # optional save_file passthrough (only if user provided it)
+    if _hasit(cfg, "fwph_save_file") and cfg.fwph_save_file:
+        fw_options["save_file"] = cfg.fwph_save_file
+
     return fw_options
+
 
 def fwph_spoke(
     cfg,

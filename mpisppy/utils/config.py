@@ -647,6 +647,11 @@ class Config(pyofig.ConfigDict):
                             description="Number of iterations to operate on LP relaxation to warmstart fwph duals",
                             domain=int,
                             default=0)
+        self.add_to_config("fwph_save_file",
+                           description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
+                           domain=str,
+                           default=None)
+        
     def cg_args(self):
 
         self.add_to_config(name="cg_hub",

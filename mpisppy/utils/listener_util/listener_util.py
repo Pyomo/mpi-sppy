@@ -323,7 +323,7 @@ class Synchronizer(object):
 
             logging.debug('  releasing lock on Rank %d' % rank)
             synchronizer.data_lock.release()
-            logging.debug('  sleep for %f on Rank %d' % (sleep_touse, rank))
+            logging.debug('  sleep for %f on Rank %d' % (sleep_touse[0], rank))
             try:
                 time.sleep(sleep_touse[0])
             except:

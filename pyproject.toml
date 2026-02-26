@@ -22,7 +22,7 @@ readme = "README.md"
 license = { file = "LICENSE.md" }
 requires-python = ">=3.9"
 dependencies = [
-    "numpy<2",
+    "numpy",
     "scipy",
     "pandas",
     "sortedcollections",
@@ -38,8 +38,9 @@ tracker = "https://github.com/Pyomo/mpi-sppy/issues"
 
 [project.optional-dependencies]
 doc = [
-    "sphinx_rtd_theme",
     "sphinx",
+    "sphinx-copybutton",
+    "sphinx_rtd_theme",
 ]
 mpi = [
     "mpi4py>=3.0.3"

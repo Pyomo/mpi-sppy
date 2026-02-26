@@ -28,6 +28,7 @@ import math
 from mpisppy import MPI
 from mpisppy import global_toc
 from pyomo.repn.standard_repn import generate_standard_repn
+from mpisppy.utils import nice_join
 from mpisppy.utils.sputils import find_active_objective
 from pyomo.core.expr.visitor import replace_expressions
 from pyomo.core.expr.numeric_expr import LinearExpression
@@ -986,7 +987,7 @@ class FWPH(mpisppy.phbase.PHBase):
                 self._scenario_cycler.begin_epoch()
                 snamedict = self._scenario_cycler.get_next()
             obj = self._xhatter._try_one(snamedict,
-                                   solver_options = self.options["iterk_solver_options"],
+                                   solver_options = self.options["iter0_solver_options"],
                                    verbose=False,
                                    restore_nonants=False,
                                    stage2EFsolvern=stage2EFsolvern,
@@ -1010,13 +1011,12 @@ class FWPH(mpisppy.phbase.PHBase):
             FW_conv_thresh      tau
         '''
         # 1. Check for required options
-        reqd_options = ['FW_iter_limit', 'FW_weight', 'FW_conv_thresh',
-                        'solver_name']
-        losers = [opt for opt in reqd_options if opt not in self.FW_options]
-        if (len(losers) > 0):
-            msg = "FW_options is missing the following key(s): " + \
-                  ", ".join(losers)
-            raise RuntimeError(msg)
+        reqd_options = ['FW_iter_limit', 'FW_weight', 'FW_conv_thresh', 'solver_name']
+        missing = [opt for opt in reqd_options if opt not in self.FW_options]
+        if missing:
+            raise RuntimeError(
+                f"FW_options misses the following key(s): {nice_join(missing, conjunction='and')}."
+            )
 
         # 3a. Check that the user did not specify the linearization of binary
         #    proximal terms (no binary variables allowed in FWPH QPs)
@@ -1059,7 +1059,7 @@ class FWPH(mpisppy.phbase.PHBase):
             with open(fname, 'a') as f:
                 f.write('{itr:s},{bound:s},{bb:s},{diff:s},{secs:s}\n'.format(
                     itr="Iteration", bound="Bound", bb="Best bound",
-                    diff="Error", secs="Time(s)"))
+                    diff="conv diff", secs="Time(s)"))
 
     def save_weights(self, fname):
         ''' Save the computed weights to the specified file.

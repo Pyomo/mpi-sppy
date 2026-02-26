@@ -259,10 +259,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
         hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
 
     if cfg.write_scenario_lp_mps_files_dir is not None:
-        from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
-        ext_classes.append(Scenario_lp_mps_files)
-        hub_dict['opt_kwargs']['options']["write_lp_mps_extension_options"]\
-            = {"write_scenario_lp_mps_files_dir": cfg.write_scenario_lp_mps_files_dir}
+        raise RuntimeError("write_scenario_lp_mps_files_dir is not currently supported in _do_decomp")
 
     if cfg.W_and_xbar_reader:
         from mpisppy.utils.wxbarreader import WXBarReader
@@ -606,11 +603,20 @@ def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_deno
         # We probably could just assign the dictionary in one line...
         for option_key,option_value in solver_options.items():
             solver.options[option_key] = option_value
+
+    solver_log_dir = cfg.get("solver_log_dir","")
+    solve_kw_args = dict()
+    if solver_log_dir and len(solver_log_dir)>0:
+        os.makedirs(solver_log_dir, exist_ok=True)
+        solve_kw_args['keepfiles'] = True
+        log_fn = "EFsolverlog.log"
+        solve_kw_args['logfile'] = os.path.join(solver_log_dir, log_fn)
+            
     if 'persistent' in solver_name:
         solver.set_instance(ef, symbolic_solver_labels=True)
-        results = solver.solve(tee=cfg.tee_EF)
+        results = solver.solve(tee=cfg.tee_EF, **solve_kw_args)
     else:
-        results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True,)
+        results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True, **solve_kw_args)
     if not pyo.check_optimal_termination(results):
         print("Warning: non-optimal solver termination")
 
@@ -668,6 +674,51 @@ def _proper_bundles(cfg):
         or cfg.get("unpickle_bundles_dir", ifmissing=False)\
         or cfg.get("scenarios_per_bundle", ifmissing=False)
 
+def _write_scenario_lp_mps_files_only(module,
+                                     cfg,
+                                     scenario_creator,
+                                     scenario_creator_kwargs,
+                                     scenario_denouement,
+                                     bundle_wrapper=None):
+    """
+    Construct scenarios (via SPBase) and write per-scenario LP/MPS + nonants JSON
+    (and rho.csv using either scenario rhos or cfg.default_rho) WITHOUT solving.
+    """
+    from mpisppy.spbase import SPBase
+    from mpisppy.extensions.scenario_lp_mps_files import Scenario_lp_mps_files
+
+    all_scenario_names, all_nodenames = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
+
+    # SPBase builds the scenarios and scenario-tree bookkeeping; no solves happen here.
+    sp_options = {
+        "verbose": cfg.verbose,
+        "toc": cfg.get("toc", True),
+    }
+
+    sp = SPBase(
+        options=sp_options,
+        all_scenario_names=all_scenario_names,
+        scenario_creator=scenario_creator,
+        scenario_denouement=scenario_denouement,
+        all_nodenames=all_nodenames,
+        mpicomm=MPI.COMM_WORLD,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+    )
+
+    # Make SPBase look PH-like for this extension
+    sp.local_subproblems = sp.local_scenarios
+    sp.options["write_lp_mps_extension_options"] = {
+        "write_scenario_lp_mps_files_dir": cfg.write_scenario_lp_mps_files_dir,
+        "cfg": cfg,   # IMPORTANT: pass cfg so extension can use default_rho
+    }
+
+    ext = Scenario_lp_mps_files(sp)
+    ext.pre_iter0()
+
+    if sp.cylinder_rank == 0:
+        global_toc(f"Wrote scenario lp/mps/nonants to {cfg.write_scenario_lp_mps_files_dir}")
+
+        
 ##########################################################################
 if __name__ == "__main__":
     if len(sys.argv) == 1:
@@ -730,6 +781,15 @@ if __name__ == "__main__":
                          scenario_creator_kwargs,
                          scenario_denouement,
                          global_comm)
+    elif cfg.write_scenario_lp_mps_files_dir is not None:
+        _write_scenario_lp_mps_files_only(
+            module,
+            cfg,
+            scenario_creator,
+            scenario_creator_kwargs,
+            scenario_denouement,
+            bundle_wrapper=bundle_wrapper,
+        )        
     elif cfg.EF:
         _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
     else:
