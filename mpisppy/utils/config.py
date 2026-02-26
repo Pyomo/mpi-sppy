@@ -651,7 +651,32 @@ class Config(pyofig.ConfigDict):
                            description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
                            domain=str,
                            default=None)
+        
+    def cg_args(self):
 
+        self.add_to_config(name="cg_hub",
+                           description="Use CG hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)
+        self.add_to_config(name="sp_solver_options",
+                           description="subproblem solver options",
+                           domain=str,
+                           default=None)
+        self.add_to_config(name="mp_solver_options",
+                           description="master problem solver options",
+                           domain=str,
+                           default=None)    
+        self.add_to_config(name="relaxed_nonant",
+                           description="solve maxter problem with relaxed nonanticipativity constraint",
+                           domain=bool,
+                           default=False)      
+        
+    def dualcg_args(self):
+
+        self.add_to_config(name="dualcg_hub",
+                           description="Use DCG hub instead of PH (default False)",
+                           domain=bool,
+                           default=False)    
 
     def lagrangian_args(self):
 
@@ -785,7 +810,26 @@ class Config(pyofig.ConfigDict):
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
                             default=1.0)
+    def ph_spoke_args(self):
 
+        self.add_to_config("ph_spoke",
+                            description="have a PH spoke",
+                            domain=bool,
+                            default=False)
+        self.add_to_config("ph_spoke_rescale_rho_factor",
+                            description="Used to rescale rho initially (default=0.1)",
+                            domain=float,
+                            default=0.1)
+        self.add_to_config("ph_spoke_rho_multiplier",
+                            description="Rescale factor for dynamic updates in ph_dual if ph_dual and a rho setter are chosen;"
+                            " note that it is not cummulative (default=1.0)",
+                            domain=float,
+                            default=1.0)
+        self.add_to_config("ph_spoke_grad_order_stat",
+                            description="Order stat for selecting rho if ph_dual and ph_dual_grad_rho are chosen;"
+                            " note that this is impacted by the multiplier (default=0.0)",
+                            domain=float,
+                            default=0.0)
 
     def ph_dual_args(self):
 
