@@ -8,8 +8,7 @@
 ###############################################################################
 
 
-import mpisppy.phbase
-import shutil
+
 import mpisppy.MPI as mpi
 import mpisppy.cgbase
 import pyomo.environ as pyo
@@ -188,9 +187,7 @@ class DCG(mpisppy.cgbase.CGBase):
         Args: None
 
         """
-        verbose = self.options["verbose"]
         dprogress = self.options["display_progress"]
-        dtiming = self.options["display_timing"]
         
         max_iterations = int(self.options["CGIterLimit"])
         
@@ -203,7 +200,7 @@ class DCG(mpisppy.cgbase.CGBase):
 
             # Solve master problem and extract duals on rank 0
             if self.cylinder_rank == 0:
-                rmp_obj=self.solve_master_problem()
+                self.solve_master_problem()
                 self.RUB=pyo.value(self.mp.mu_sum) 
                 self.pi_values, self.mu_values = self.extract_duals_from_mp()
                 
@@ -211,11 +208,6 @@ class DCG(mpisppy.cgbase.CGBase):
             self.pi_values = self.mpicomm.bcast(self.pi_values, root=0)
             self.mu_values = self.mpicomm.bcast(self.mu_values, root=0)
 
-            teeme = (
-                "tee-rank0-solves" in self.options
-                 and self.options["tee-rank0-solves"]
-                and self.cylinder_rank == 0
-            )
             # Build columns for all local scenarios
             local_results = self.build_columns()
             all_results = self.mpicomm.gather(local_results, root=0)

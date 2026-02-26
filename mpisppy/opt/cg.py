@@ -7,7 +7,6 @@
 # full copyright and license information.
 ###############################################################################
 
-import shutil
 import mpisppy.MPI as mpi
 import mpisppy.cgbase
 
