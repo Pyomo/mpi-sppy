@@ -11,7 +11,7 @@ import abc
 import logging
 import mpisppy.log
 
-from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator
+from mpisppy.cylinders.spcommunicator import RecvArray, SPCommunicator,RecvCircularBuffer
 
 from mpisppy import global_toc
 
@@ -406,6 +406,91 @@ class LShapedHub(Hub):
         self.put_send_buffer(nonant_send_buffer, Field.NONANT)
 
         return
+    
+
+
+class CGHub(Hub):
+
+    send_fields = (*Hub.send_fields, Field.NONANT,)
+    receive_fields = (*Hub.receive_fields,Field.RECENT_XHATS, Field.XFEAS )
+
+    def register_receive_fields(self):
+        super().register_receive_fields()
+        self._recent_xhat_recv_circular_buffers = [
+            (idx, cls, RecvCircularBuffer(
+                    recv_buf,
+                    self._field_lengths[Field.BEST_XHAT],
+                    self._field_lengths[Field.RECENT_XHATS] // self._field_lengths[Field.BEST_XHAT],
+                )
+            )
+            for (idx, cls, recv_buf) in self.receive_field_spcomms[Field.RECENT_XHATS] 
+        ]
+
+    def sync(self, send_nonants=True):
+        """
+        Manages communication with Bound Spokes
+        """
+        if send_nonants:
+            self.send_nonants()
+        self.sync_bounds()
+        #self.is_new_best_xhat=self.receive_best_xhat()
+        self.is_new_xfeas=self.receive_xfeas()
+        self.is_new_latest_xhat=self.receive_latest_xhat()
+        # in case CG ever gets extensions
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.sync_with_spokes()
+
+    def is_converged(self, screen_trace=True):
+        ## log some output
+        if self.global_rank == 0 and screen_trace:
+            self.screen_trace()
+        """ Returns a boolean. If True, then CG will terminate
+        """
+        if self.opt.best_bound_obj_val is not None:
+            self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
+        if self.opt.best_solution_obj_val is not None:
+            self.BestInnerBound = self.InnerBoundUpdate(self.opt.best_solution_obj_val)
+        if self.determine_termination(screen_trace):
+            return self.determine_termination(screen_trace)
+        else: 
+            LPgap_satisfied = False
+            if self.opt.conv < self.opt.options["convthresh"]:
+                LPgap_satisfied = True 
+            return LPgap_satisfied
+
+    def current_iteration(self):
+        """ Return the current CG iteration."""
+        return self.opt._CGIter
+
+    def main(self):
+        """ SPComm gets attached in self.__init__ """
+        self.opt.cg_main()
+
+    def send_nonants(self):
+        """ Gather nonants and send them to the appropriate spokes
+        """
+        ci = 0  ## index to self.nonant_send_buffer
+        nonant_send_buffer = self.send_buffers[self.nonant_field]
+        for k, s in self.opt.local_scenarios.items():
+            for xvar in s._mpisppy_data.nonant_indices.values():
+                nonant_send_buffer[ci] = xvar._value
+                ci += 1
+        logging.debug("hub is sending X nonants={}".format(nonant_send_buffer))
+
+        self.put_send_buffer(nonant_send_buffer, self.nonant_field)
+
+        return
+     
+    @property
+    def nonant_field(self):
+        return Field.NONANT 
+    
+
+class DCGHub(CGHub):
+    def main(self):
+        self.opt.dualcg_main()
+
+
 
 
 class SubgradientHub(PHHub):

@@ -493,6 +493,60 @@ class SPCommunicator:
         if bounds_modified > 0:
             global_toc(f"{self.__class__.__name__}: tightened {int(bounds_modified)} variable bounds", self.cylinder_rank == 0)
 
+    def receive_best_xhat(self):
+        """
+        Receive the BEST_XHAT buffer from spokes.
+        If new, process the xhat values (e.g., store or use them).
+        """
+        for idx, _, recv_buf in self.receive_field_spcomms.get(Field.BEST_XHAT, []):
+            is_new = self.get_receive_buffer(recv_buf, Field.BEST_XHAT, idx)
+            if is_new:
+                self.best_xhat = recv_buf.value_array().copy()
+        return is_new
+
+
+    def receive_xfeas(self):
+        """
+        Receive the  XFEAS buffer from spokes.
+        If new, process the x values (e.g., store or use them).
+        """
+        is_new=False
+        for idx, _, recv_buf in self.receive_field_spcomms.get(Field.XFEAS, []):
+            is_new = self.get_receive_buffer(recv_buf, Field.XFEAS, idx)
+            if is_new:
+                self.xfeas = recv_buf.value_array().copy()
+
+        return is_new
+
+    def receive_latest_xhat(self):
+        """
+        Receive the RECENT_XHATS circular buffer from spokes.
+        If new, extract all recent xhats via the circular buffer wrapper.
+        """
+        is_new_any = False
+        all_received_xhats = []
+
+        for idx, cls, recv_buf_circular in self._recent_xhat_recv_circular_buffers:
+            is_new = self.get_receive_buffer(recv_buf_circular.data, Field.RECENT_XHATS, idx)
+            if not is_new:
+                continue
+
+            is_new_any = True
+
+            for value_array in recv_buf_circular.most_recent_value_arrays():
+                all_received_xhats.append(value_array.copy())
+        
+        
+        if not is_new_any or not all_received_xhats:
+            self.recent_xhats_list = []
+            return False
+
+        self.recent_xhats_list = all_received_xhats
+        self.latest_xhat = all_received_xhats[-1].copy()
+
+        return True
+
+
     def receive_innerbounds(self):
         """ Get inner bounds from inner bound providers
         """

@@ -62,6 +62,8 @@ def _parse_args(m):
     cfg.popular_args()
     cfg.two_sided_args()
     cfg.ph_args()
+    cfg.cg_args()
+    cfg.dualcg_args()
     cfg.aph_args()
     cfg.subgradient_args()
     cfg.fixer_args()    
@@ -71,6 +73,7 @@ def _parse_args(m):
     cfg.gapper_args(name="lagrangian")
     cfg.ph_primal_args()
     cfg.ph_dual_args()
+    cfg.ph_spoke_args()
     cfg.relaxed_ph_args()
     cfg.fwph_args()
     cfg.lagrangian_args()
@@ -149,12 +152,12 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
         if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho:
             cfg.default_rho = 1
         else:
-            raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
+            print("Warning: No rho_setter so a default must be specified via --default-rho")
 
     if cfg.use_norm_rho_converger:
         from mpisppy.convergers.norm_rho_converger import NormRhoConverger
         if not cfg.use_norm_rho_updater:
-            raise RuntimeError("--use-norm-rho-converger requires --use-norm-rho-updater")
+            print("Warning:--use-norm-rho-converger requires --use-norm-rho-updater")
         else:
             ph_converger = NormRhoConverger
     elif cfg.primal_dual_converger:
@@ -202,6 +205,18 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
                                   ph_extensions=None,
                                   ph_converger=ph_converger,
                                   rho_setter = rho_setter,
+                                  all_nodenames = all_nodenames,
+                                  )
+    elif cfg.cg_hub:
+        #Vanilla CG Hub
+        hub_dict = vanilla.cg_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  all_nodenames = all_nodenames,
+                                  )
+    elif cfg.dualcg_hub:
+        #Dual Stabilized CG Hub
+        hub_dict = vanilla.dualcg_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
                                   all_nodenames = all_nodenames,
                                   )
     else:
@@ -363,7 +378,28 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
         if cfg.grad_rho:
             modified_cfg["grad_order_stat"] = cfg.ph_dual_grad_order_stat
             vanilla.add_grad_rho(ph_dual_spoke, modified_cfg)
-        
+    
+    # ph spoke
+    if cfg.ph_spoke:
+        ph_spoke = vanilla.ph_spoke(*beans,
+                                          scenario_creator_kwargs=scenario_creator_kwargs,
+                                          rho_setter = rho_setter,
+                                          all_nodenames = all_nodenames,
+                                          )
+        if cfg.sep_rho or cfg.coeff_rho or cfg.sensi_rho or cfg.grad_rho:
+            # Note that this deepcopy might be expensive if certain wrappers were used.
+            # (Could we do the modification to cfg in ph_dual to obviate the need?)
+            modified_cfg = copy.deepcopy(cfg)
+            modified_cfg["grad_rho_multiplier"] = cfg.ph_dual_rho_multiplier
+        if cfg.sep_rho:
+            vanilla.add_sep_rho(ph_spoke, modified_cfg)
+        if cfg.coeff_rho:
+            vanilla.add_coeff_rho(ph_spoke, modified_cfg)
+        if cfg.sensi_rho:
+            vanilla.add_sensi_rho(ph_spoke, modified_cfg)
+        if cfg.grad_rho:
+            modified_cfg["grad_order_stat"] = cfg.ph_grad_order_stat
+            vanilla.add_grad_rho(ph_spoke, modified_cfg)
 
     # relaxed ph spoke
     if cfg.relaxed_ph:
@@ -426,6 +462,8 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
         list_of_spoke_dict.append(lagrangian_spoke)
     if cfg.ph_dual:
         list_of_spoke_dict.append(ph_dual_spoke)
+    if cfg.ph_spoke:
+        list_of_spoke_dict.append(ph_spoke)   
     if cfg.relaxed_ph:
         list_of_spoke_dict.append(relaxed_ph_spoke)
     if cfg.subgradient:
