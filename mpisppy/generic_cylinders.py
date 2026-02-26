@@ -119,6 +119,11 @@ def _name_lists(module, cfg, bundle_wrapper=None):
 
     # proper bundles should be almost magic
     if cfg.unpickle_bundles_dir or cfg.scenarios_per_bundle is not None:
+        # When branching_factors are used (multi-stage), num_scens is computed locally
+        # above but cfg.num_scens is never set from it.  Fill it in so that
+        # bundle_names_creator (which asserts cfg.num_scens is not None) works.
+        if cfg.get("num_scens") is None and num_scens is not None:
+            cfg.quick_assign("num_scens", int, int(num_scens))
         num_buns = cfg.num_scens // cfg.scenarios_per_bundle
         all_scenario_names = bundle_wrapper.bundle_names_creator(num_buns, cfg=cfg)
         all_nodenames = None  # This is seldom used; also, proper bundles result in two stages
