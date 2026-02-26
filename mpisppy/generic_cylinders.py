@@ -683,10 +683,24 @@ def _write_scenario_lp_mps_files_only(module,
 
         
 def _mmw_requested(cfg):
-    """Return True iff the required MMW args (num_batches, batch_size, start) are all set."""
-    return (cfg.get("mmw_num_batches") is not None
-            and cfg.get("mmw_batch_size") is not None
-            and cfg.get("mmw_start") is not None)
+    """Return True iff the required MMW args (num_batches, batch_size, start) are all set.
+
+    Raises ValueError if only some of the three options are provided.
+    """
+    mmw_opts = {
+        "mmw_num_batches": cfg.get("mmw_num_batches"),
+        "mmw_batch_size": cfg.get("mmw_batch_size"),
+        "mmw_start": cfg.get("mmw_start"),
+    }
+    given = [k for k, v in mmw_opts.items() if v is not None]
+    if 0 < len(given) < 3:
+        missing = [k for k in mmw_opts if k not in given]
+        raise ValueError(
+            f"Partial MMW configuration: {given} provided but {missing} missing. "
+            "Either provide all three (mmw_num_batches, mmw_batch_size, mmw_start) "
+            "or none of them."
+        )
+    return len(given) == 3
 
 
 def do_mmw(module_fname, cfg, wheel=None):
