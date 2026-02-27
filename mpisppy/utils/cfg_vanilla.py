@@ -1132,7 +1132,8 @@ def ef_options(cfg,
                all_scenario_names,
                scenario_creator_kwargs=None,
                extensions=None,
-               extension_kwargs=None):
+               extension_kwargs=None,
+               all_nodenames=None):
     '''
     vanilla options for an EF object with generic_cylinders
     '''
@@ -1145,10 +1146,11 @@ def ef_options(cfg,
         "scenario_creator_kwargs": scenario_creator_kwargs,
         "scenario_denouement": scenario_denouement,
         "all_scenario_names": all_scenario_names,
+        "all_nodenames": all_nodenames,
         "options": {"solver": solver_name},
         "solver_options": solver_options,
         "extensions": extensions,
-        "extension_kwargs": extension_kwargs
+        "extension_kwargs": extension_kwargs,
         }
 
     if _hasit(cfg, "solver_log_dir"):

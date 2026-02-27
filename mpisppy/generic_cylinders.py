@@ -550,24 +550,27 @@ def _write_bundles(module,
 #==========
 def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
 
-    all_scenario_names, _ = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
+    all_scenario_names, all_nodenames = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
 
     ef_dict = vanilla.ef_options(cfg,
                                  scenario_creator,
                                  scenario_denouement,
-                                 all_scenario_names)
+                                 all_scenario_names,
+                                 scenario_creator_kwargs=scenario_creator_kwargs,
+                                 all_nodenames=all_nodenames
+                                 )
 
     # if the user dares, let them mess with the EFdict prior to solve
     if hasattr(module,'ef_dict_callback'):
         module.ef_dict_callback(ef_dict, cfg)
-    
-    
+
     ef = ExtensiveForm(ef_dict["options"],
                        ef_dict["all_scenario_names"],
                        ef_dict["scenario_creator"],
                        scenario_creator_kwargs=ef_dict["scenario_creator_kwargs"],
                        extensions=ef_dict["extensions"],
-                       extension_kwargs=ef_dict["extension_kwargs"]
+                       extension_kwargs=ef_dict["extension_kwargs"],
+                       all_nodenames=ef_dict["all_nodenames"]
                        )
 
     if ef.extensions is not None:
@@ -579,6 +582,8 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denou
     if not pyo.check_optimal_termination(results):
         print("Warning: non-optimal solver termination")
 
+    global_toc(f"EF objective: {ef.get_objective_value()}")
+    
     if ef.extensions is not None:
         results = ef.extobject.post_solve(results)
 

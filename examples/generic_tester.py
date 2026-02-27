@@ -172,7 +172,7 @@ do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline
 
 # write hydro bundles for at least some testing of multi-stage proper bundles
 # (just looking for smoke)
-hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3"
+hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3 "
             "--branching-factors '3 3' ")
 do_one("hydro", "hydro", 3, hydro_wr, xhat_baseline_dir=None)
 
