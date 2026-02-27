@@ -586,18 +586,18 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denou
         root_writer = getattr(module, "ef_root_nonants_solution_writer", None)
         tree_writer = getattr(module, "ef_tree_solution_writer", None)
         
-        sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
-        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
+        sputils.ef_nonants_csv(ef.ef, f'{cfg.solution_base_name}.csv')
+        sputils.ef_ROOT_nonants_npy_serializer(ef.ef, f'{cfg.solution_base_name}.npy')
         if root_writer is not None:
             ef.write_first_stage_solution(f'{cfg.solution_base_name}.csv',   # might overwite
                                           first_stage_solution_writer=root_writer)
         else:
-            ef.write_first_stage_solution(ef, f'{cfg.solution_base_name}.csv')
+            ef.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         if tree_writer is not None:
-            ef.write_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
+            ef.write_tree_solution(f'{cfg.solution_base_name}_soldir',
                                    scenario_tree_solution_writer=tree_writer)
         else:
-            ef.write_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
+            ef.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
 
     if hasattr(module, "custom_writer"):
