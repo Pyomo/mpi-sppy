@@ -120,6 +120,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         if "persistent" in self.options["solver"]:
             self.solver.set_instance(self.ef)
 
+
+        solve_keyword_args = dict()            
         if self.options.get("solver_log_dir", None):            
             # solver-log logic copied from spopt.py
             dir_name = self.options["solver_log_dir"]
@@ -130,7 +132,6 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 if solver_options is None:
                     solver_options = dict()
                 solver_options["LogFile"] = os.path.join(dir_name, file_name)
-                solve_keyword_args = dict()
             else:
                 solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
             
