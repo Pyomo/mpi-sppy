@@ -31,6 +31,7 @@ class Field(enum.IntEnum):
     NONANT_UPPER_BOUNDS=501
     BEST_XHAT=600 # buffer having the best xhat and its total cost per scenario
     RECENT_XHATS=601 # buffer having some recent xhats and their total cost per scenario
+    XFEAS=602 # buffer having a feasible x and its total cost per scenario
     WHOLE=1_000_000
 
 
@@ -59,7 +60,8 @@ _field_lengths = {
         Field.NONANT_UPPER_BOUNDS : field_length_components._total_number_nonants,
         Field.BEST_XHAT : field_length_components._local_nonant_length + field_length_components._local_scenario_length,
         Field.RECENT_XHATS : field_length_components.total_number_recent_xhats * (field_length_components._local_nonant_length + field_length_components._local_scenario_length),
-}
+        Field.XFEAS: field_length_components._local_nonant_length + field_length_components._local_scenario_length,
+        }
 
 
 class FieldLengths:

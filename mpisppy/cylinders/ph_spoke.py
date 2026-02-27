@@ -7,15 +7,15 @@
 # full copyright and license information.
 ###############################################################################
 
-from mpisppy.cylinders.spoke import OuterBoundSpoke, Field
+from mpisppy.cylinders.spoke import Spoke, Field
 import pyomo.environ as pyo
 
-class SubgradientOuterBound(OuterBoundSpoke):
-    send_fields = (*OuterBoundSpoke.send_fields, Field.XFEAS)
-    converger_spoke_char = 'G'
+class PHSpoke(Spoke):
+    send_fields = (*Spoke.send_fields, Field.XFEAS)
+    receive_fields = (*Spoke.receive_fields, )
 
     def update_rho(self):
-        rho_factor = self.opt.options.get("subgradient_rho_multiplier", 1.0)
+        rho_factor = self.opt.options.get("rho_factor", 1.0)
         if rho_factor == 1.0:
             return
         for s in self.opt.local_scenarios.values():
@@ -24,10 +24,9 @@ class SubgradientOuterBound(OuterBoundSpoke):
 
     def main(self):
         # setup, PH Iter0
-        if self.opt.options.get("smoothed", 0) != 0:
-            raise RuntimeError("Cannnot use smoothing with Subgradient algorithm")
-        attach_prox = False
-        self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = 0)
+        smoothed = self.options.get('smoothed', 0)
+        attach_prox = True
+        self.opt.PH_Prep(attach_prox=attach_prox, attach_smooth = smoothed)
         trivial_bound = self.opt.Iter0()
 
         # update the rho
@@ -37,12 +36,12 @@ class SubgradientOuterBound(OuterBoundSpoke):
         self.opt.iterk_loop()
 
         return self.opt.conv, None, trivial_bound
-
+    
+    
     def send_xfeas(self):
-        # sends feasible x to the hub
         xfeas_buf = self.send_buffers[Field.XFEAS]
         ci = 0
-        for sname, s in self.opt.local_scenarios.items():
+        for (sname, s) in self.opt.local_scenarios.items():
             for xvar in s._mpisppy_data.nonant_indices.values():
                 xfeas_buf[ci] = xvar._value
                 ci += 1
@@ -53,13 +52,9 @@ class SubgradientOuterBound(OuterBoundSpoke):
             ci += 1
         self.put_send_buffer(xfeas_buf, Field.XFEAS)
 
-    def sync(self):
-        if self.opt.best_bound_obj_val is None:
-            return
 
-        # Tell the hub about the most recent bound
-        self.send_bound(self.opt.best_bound_obj_val)     
-        # Send feasible x
+    def sync(self):
+       
         self.send_xfeas()
         # Update the nonant bounds, if possible
         self.receive_nonant_bounds()
@@ -69,7 +64,7 @@ class SubgradientOuterBound(OuterBoundSpoke):
             return
 
         # Tell the hub about the most recent bound
-        self.send_bound(self.opt.best_bound_obj_val)
+        #self.send_bound(self.opt.best_bound_obj_val)
         self.final_bound = self.opt.best_bound_obj_val
 
         return self.final_bound
