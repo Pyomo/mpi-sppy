@@ -10,6 +10,9 @@ import mpisppy.spbase
 import pyomo.environ as pyo
 import logging
 import mpisppy.utils.sputils as sputils
+import pathlib
+import os
+from pyomo.solvers.plugins.solvers.gurobi_direct import GurobiDirect
 
 logger = logging.getLogger("mpisppy.ef")
 
@@ -54,6 +57,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         all_nodenames=None,
         model_name=None,
         suppress_warnings=False,
+        extensions=None,
+        extension_kwargs=None,
     ):
         """ Create the EF and associated solver. """
         super().__init__(
@@ -63,12 +68,37 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             scenario_creator_kwargs=scenario_creator_kwargs,
             all_nodenames=all_nodenames
         )
+        
+        # this is copied from SPOpt, maybe move it to SPBase so it shows up here too?
+        self._save_active_objectives()
+        
         self.bundling = True
         if self.n_proc > 1 and self.cylinder_rank == 0:
             logger.warning("Creating an ExtensiveForm object in parallel. Why?")
         required = ["solver"]
         self._options_check(required, self.options)
         self.solver = pyo.SolverFactory(self.options["solver"])
+
+        self.extensions = extensions
+        self.extension_kwargs = extension_kwargs
+        
+        if (self.extensions is not None):
+            if self.extension_kwargs is None:
+                self.extobject = self.extensions(self)
+            else:
+                self.extobject = self.extensions(
+                    self, **self.extension_kwargs
+                )
+
+        if self.options.get("solver_log_dir", None):
+            if self.global_rank == 0:
+                # create the directory if not there
+                directory = self.options["solver_log_dir"]
+                try:
+                    pathlib.Path(directory).mkdir(parents=True, exist_ok=False)
+                except FileExistsError:
+                    raise FileExistsError(f"solver-log-dir={directory} already exists!")
+        
         self.ef = sputils._create_EF_from_scen_dict(self.local_scenarios,
                 EF_name=model_name)
 
@@ -89,11 +119,28 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         """
         if "persistent" in self.options["solver"]:
             self.solver.set_instance(self.ef)
+
+
+        solve_keyword_args = dict()            
+        if self.options.get("solver_log_dir", None):            
+            # solver-log logic copied from spopt.py
+            dir_name = self.options["solver_log_dir"]
+            file_name = "EF_solver_log.log"
+            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
+            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
+            if isinstance(self.solver, GurobiDirect):
+                if solver_options is None:
+                    solver_options = dict()
+                solver_options["LogFile"] = os.path.join(dir_name, file_name)
+            else:
+                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+            
         # Pass solver-specifiec (e.g. Gurobi, CPLEX) options
         if solver_options is not None:
             for (opt, value) in solver_options.items():
                 self.solver.options[opt] = value
-        results = self.solver.solve(self.ef, tee=tee, load_solutions=False)
+                
+        results = self.solver.solve(self.ef, tee=tee, load_solutions=False, **solve_keyword_args)
         if len(results.solution) > 0:
             if sputils.is_persistent(self.solver):
                 self.solver.load_vars()
@@ -118,6 +165,10 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             obj_val = pyo.value(self.ef.EF_Obj)
         except Exception as e:
             raise ValueError(f"Could not extract EF objective value with error: {str(e)}")
+
+        if (self.extensions is not None):
+            obj_val = self.extobject.get_objective_value(obj_val)
+        
         return obj_val
 
     def get_root_solution(self):
@@ -163,6 +214,15 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             scenario name, scenario instance (str, ConcreteModel)
         """
         yield from self.local_scenarios.items()
+
+    def _save_active_objectives(self):
+        """ Save the active objectives for use in PH, bundles, and calculation """
+        # maybe move it from spopt to spbase instead?
+        
+        self.saved_objectives = dict()
+        for sname, scenario_instance in self.local_scenarios.items():
+            self.saved_objectives[sname] = sputils.find_active_objective(scenario_instance)
+        
 
 
 if __name__ == "__main__":

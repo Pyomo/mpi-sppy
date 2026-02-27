@@ -16,14 +16,13 @@ import pyomo.environ as pyo
 import pyomo.common.config as pyofig
 
 from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.opt.ef import ExtensiveForm
 
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
 
 from mpisppy.extensions.extension import MultiExtension, Extension
-
-import mpisppy.utils.solver_spec as solver_spec
 
 from mpisppy import global_toc
 from mpisppy import MPI
@@ -549,61 +548,67 @@ def _write_bundles(module,
     global_toc(f"Bundles written to {cfg.pickle_bundles_dir}")
         
 #==========
-def _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
+def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=None):
 
-    all_scenario_names, _ = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
-    ef = sputils.create_EF(
-        all_scenario_names,
-        module.scenario_creator,
-        scenario_creator_kwargs=module.kw_creator(cfg),
-    )
-    
-    sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
+    all_scenario_names, all_nodenames = _name_lists(module, cfg, bundle_wrapper=bundle_wrapper)
 
-    solver = pyo.SolverFactory(solver_name)
-    if solver_options is not None:
-        # We probably could just assign the dictionary in one line...
-        for option_key,option_value in solver_options.items():
-            solver.options[option_key] = option_value
+    ef_dict = vanilla.ef_options(cfg,
+                                 scenario_creator,
+                                 scenario_denouement,
+                                 all_scenario_names,
+                                 scenario_creator_kwargs=scenario_creator_kwargs,
+                                 all_nodenames=all_nodenames
+                                 )
 
-    solver_log_dir = cfg.get("solver_log_dir","")
-    solve_kw_args = dict()
-    if solver_log_dir and len(solver_log_dir)>0:
-        os.makedirs(solver_log_dir, exist_ok=True)
-        solve_kw_args['keepfiles'] = True
-        log_fn = "EFsolverlog.log"
-        solve_kw_args['logfile'] = os.path.join(solver_log_dir, log_fn)
-            
-    if 'persistent' in solver_name:
-        solver.set_instance(ef, symbolic_solver_labels=True)
-        results = solver.solve(tee=cfg.tee_EF, **solve_kw_args)
-    else:
-        results = solver.solve(ef, tee=cfg.tee_EF, symbolic_solver_labels=True, **solve_kw_args)
+    # if the user dares, let them mess with the EFdict prior to solve
+    if hasattr(module,'ef_dict_callback'):
+        module.ef_dict_callback(ef_dict, cfg)
+
+    ef = ExtensiveForm(ef_dict["options"],
+                       ef_dict["all_scenario_names"],
+                       ef_dict["scenario_creator"],
+                       scenario_creator_kwargs=ef_dict["scenario_creator_kwargs"],
+                       extensions=ef_dict["extensions"],
+                       extension_kwargs=ef_dict["extension_kwargs"],
+                       all_nodenames=ef_dict["all_nodenames"]
+                       )
+
+    if ef.extensions is not None:
+        ef.extobject.pre_solve()
+
+    tee = ef.options.get("tee",False)
+    results = ef.solve_extensive_form(solver_options=ef_dict["solver_options"],tee = tee)
+
     if not pyo.check_optimal_termination(results):
         print("Warning: non-optimal solver termination")
 
-    global_toc(f"EF objective: {pyo.value(ef.EF_Obj)}")
+    global_toc(f"EF objective: {ef.get_objective_value()}")
+    
+    if ef.extensions is not None:
+        results = ef.extobject.post_solve(results)
 
     if cfg.solution_base_name is not None:
         root_writer = getattr(module, "ef_root_nonants_solution_writer", None)
         tree_writer = getattr(module, "ef_tree_solution_writer", None)
         
-        sputils.ef_nonants_csv(ef, f'{cfg.solution_base_name}.csv')
-        sputils.ef_ROOT_nonants_npy_serializer(ef, f'{cfg.solution_base_name}.npy')
+        sputils.ef_nonants_csv(ef.ef, f'{cfg.solution_base_name}.csv')
+        sputils.ef_ROOT_nonants_npy_serializer(ef.ef, f'{cfg.solution_base_name}.npy')
         if root_writer is not None:
-            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv',   # might overwite
-                                                  first_stage_solution_writer=root_writer)
+            ef.write_first_stage_solution(f'{cfg.solution_base_name}.csv',   # might overwite
+                                          first_stage_solution_writer=root_writer)
         else:
-            sputils.write_ef_first_stage_solution(ef, f'{cfg.solution_base_name}.csv')            
+            ef.write_first_stage_solution(f'{cfg.solution_base_name}.csv')
         if tree_writer is not None:
-            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir',
-                                          scenario_tree_solution_writer=tree_writer)
+            ef.write_tree_solution(f'{cfg.solution_base_name}_soldir',
+                                   scenario_tree_solution_writer=tree_writer)
         else:
-            sputils.write_ef_tree_solution(ef,f'{cfg.solution_base_name}_soldir')
+            ef.write_tree_solution(f'{cfg.solution_base_name}_soldir')
         global_toc("Wrote EF solution data.")
 
     if hasattr(module, "custom_writer"):
         module.custom_writer(ef, cfg)
+
+    return ef
         
 
 def _model_fname():
@@ -753,6 +758,6 @@ if __name__ == "__main__":
             bundle_wrapper=bundle_wrapper,
         )        
     elif cfg.EF:
-        _do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
+        do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)
     else:
         do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denouement, bundle_wrapper=bundle_wrapper)

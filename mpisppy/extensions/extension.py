@@ -235,3 +235,68 @@ class MultiExtension(Extension):
     def post_everything(self):
         for lobject in self.extdict.values():
             lobject.post_everything()
+
+
+class EFExtension:
+    """ Abstract base class for extensions to general EF objects when used with generic_cylinders
+    """
+
+    
+    def __init__(self, ef_object):
+        self.ef = ef_object
+
+
+    def pre_solve(self):
+        """
+        called after EF creation, before passing the model to the solver
+        """
+        pass
+
+    def post_solve(self, results):
+        """
+        called after solver returns
+        """
+        return results
+
+    def get_objective_value(self, obj_val):
+        """
+        for performing anything before returning the objective value (e.g. excluding the value of soft
+        penalties)
+        """
+        return obj_val    
+
+class EFMultiExtension(EFExtension):
+    """ Container for all the extension classes we are using, for EF objects when used with generic_cylinders
+    """
+    def __init__(self, ef_object, ext_classes):
+        super().__init__(ef_object)
+        self.extdict = dict()
+
+        # Construct multiple extension objects
+        for constr in ext_classes:
+            name = constr.__name__
+            self.extdict[name] = constr(ef_object)
+   
+    def pre_solve(self):
+        """
+        called after EF creation, before passing the model to the solver
+        """
+        for lobject in self.extdict.values():
+            lobject.pre_solve()
+
+    def post_solve(self, results):
+        """
+        called after solver returns
+        """
+        for lobject in self.extdict.values():
+            results = lobject.post_solve(results)
+        return results
+
+    def get_objective_value(self, obj_val):
+        """
+        for performing anything before returning the objective value (e.g. excluding the value of soft
+        penalties)
+        """
+        for lobject in self.extdict.values():
+            obj_val = lobject.get_objective_value(obj_val)
+        return obj_val
