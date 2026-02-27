@@ -24,8 +24,6 @@ import mpisppy.utils.sputils as sputils
 
 from mpisppy.extensions.extension import MultiExtension, Extension
 
-import mpisppy.utils.solver_spec as solver_spec
-
 from mpisppy import global_toc
 from mpisppy import MPI
 

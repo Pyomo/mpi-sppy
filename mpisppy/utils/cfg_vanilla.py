@@ -304,7 +304,7 @@ def ef_extension_adder(ef_dict, ext_class):
             ef_dict["extension_kwargs"]["ext_classes"].append(ext_class)
     elif ef_dict["extensions"] != ext_class:
         #ext_class is the second extension
-        if "extensions_kwargs" not in ef:
+        if "extensions_kwargs" not in ef_dict:
             ef_dict["extension_kwargs"] = {}
         ef_dict["extension_kwargs"]["ext_classes"] = \
             [ef_dict["extensions"], ext_class]
@@ -1136,6 +1136,7 @@ def ef_options(cfg,
     '''
     vanilla options for an EF object with generic_cylinders
     '''
+    import mpisppy.utils.solver_spec as solver_spec    
 
     sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
     
