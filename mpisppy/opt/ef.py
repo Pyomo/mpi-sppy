@@ -120,18 +120,19 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
         if "persistent" in self.options["solver"]:
             self.solver.set_instance(self.ef)
 
-        # solver-log logic copied from spopt.py
-        dir_name = self.options["solver_log_dir"]
-        file_name = "EF_solver_log.log"
-        # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
-        # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
-        if isinstance(self.solver, GurobiDirect):
-            if solver_options is None:
-                solver_options = dict()
-            solver_options["LogFile"] = os.path.join(dir_name, file_name)
-            solve_keyword_args = dict()
-        else:
-            solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
+        if self.options.get("solver_log_dir", None):            
+            # solver-log logic copied from spopt.py
+            dir_name = self.options["solver_log_dir"]
+            file_name = "EF_solver_log.log"
+            # Workaround for Pyomo/pyomo#3589: Setting 'keepfiles' to True is required
+            # for proper functionality when using the GurobiDirect / GurobiPersistent solver.
+            if isinstance(self.solver, GurobiDirect):
+                if solver_options is None:
+                    solver_options = dict()
+                solver_options["LogFile"] = os.path.join(dir_name, file_name)
+                solve_keyword_args = dict()
+            else:
+                solve_keyword_args["logfile"] = os.path.join(dir_name, file_name)
             
         # Pass solver-specifiec (e.g. Gurobi, CPLEX) options
         if solver_options is not None:
