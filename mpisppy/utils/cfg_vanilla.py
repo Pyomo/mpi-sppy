@@ -289,6 +289,28 @@ def fwph_hub(cfg,
     add_ph_tracking(hub_dict, cfg)
     return hub_dict
 
+def ef_extension_adder(ef_dict, ext_class):
+    '''
+    logic copied from extension_adder(), adatped for EFExtensions
+    '''
+    from mpisppy.extensions.extension import EFMultiExtension
+    
+    if "extensions" not in ef_dict or ef_dict["extensions"] is None:
+        ef_dict["extensions"] = ext_class
+    elif ef_dict["extensions"] == EFMultiExtension:
+        if ef_dict["extension_kwargs"] is None:
+            ef_dict["extension_kwargs"] = {"ext_classes": []}
+        if ext_class not in ef_dict["extension_kwargs"]["ext_classes"]:
+            ef_dict["extension_kwargs"]["ext_classes"].append(ext_class)
+    elif ef_dict["extensions"] != ext_class:
+        #ext_class is the second extension
+        if "extensions_kwargs" not in ef:
+            ef_dict["extension_kwargs"] = {}
+        ef_dict["extension_kwargs"]["ext_classes"] = \
+            [ef_dict["extensions"], ext_class]
+        ef_dict["extensions"] = EFMultiExtension
+    return ef_dict
+
 def extension_adder(hub_dict,ext_class):
     from mpisppy.extensions.extension import MultiExtension
     # TBD March 2023: this is not really good enough
@@ -1102,3 +1124,33 @@ def cross_scenario_cuts_spoke(
 
 # run PH with smaller rho to compute LB
 ##def ph_ob_spoke( deprecated and replaced with ph_dual
+
+
+def ef_options(cfg,
+               scenario_creator,
+               scenario_denouement,
+               all_scenario_names,
+               scenario_creator_kwargs=None,
+               extensions=None,
+               extension_kwargs=None):
+    '''
+    vanilla options for an EF object with generic_cylinders
+    '''
+
+    sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
+    
+    ef_dict = {
+        "scenario_creator": scenario_creator,
+        "scenario_creator_kwargs": scenario_creator_kwargs,
+        "scenario_denouement": scenario_denouement,
+        "all_scenario_names": all_scenario_names,
+        "options": {"solver": solver_name},
+        "solver_options": solver_options,
+        "extensions": extensions,
+        "extension_kwargs": extension_kwargs
+        }
+
+    if _hasit(cfg, "solver_log_dir"):
+        ef_dict["options"]["solver_log_dir"] = cfg.solver_log_dir
+
+    return ef_dict
