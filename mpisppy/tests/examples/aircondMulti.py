@@ -27,6 +27,17 @@ aircondstream = np.random.RandomState()  # pylint: disable=no-member
 # across any realistic tree size.
 PRODUCT_SEED_OFFSET = 100_000
 
+# Per-bundle demand seed separation.
+# When mpi-sppy builds bundles it passes sub-tree BFs (e.g. [1,2,2,2]) to
+# scenario_creator.  All bundles then share the same internal BF structure,
+# so node_idx values are identical across bundles.  bundle_idx
+# (= global scennum // sub-tree-size) is added to the seed to give each
+# bundle a unique demand realisation.
+# Must satisfy: max_bundle_idx * BUNDLE_SEED_OFFSET + max_node_idx
+#                 < PRODUCT_SEED_OFFSET = 100_000
+# Safe for up to ~999 bundles with sub-tree node counts up to ~99.
+BUNDLE_SEED_OFFSET = 100
+
 # Do not edit these defaults!
 parms = {
     "mu_dev":            (float, 0.),
@@ -73,6 +84,12 @@ def _demands_creator(product_index, sname, sample_branching_factors,
     prod    = np.prod(sample_branching_factors)
     s       = int(scennum % prod)
 
+    # bundle_idx distinguishes scenarios that belong to different bundles but
+    # share the same position within the sub-tree BFs.  When scenario_creator
+    # is called with the full BFs (no bundling), all scennum < prod, so
+    # bundle_idx == 0 and the behaviour is identical to before.
+    bundle_idx = int(scennum // prod)
+
     d         = kwargs.get("starting_d", parms["starting_d"][1]) / num_products
     demands   = [d]
     nodenames = [root_name]
@@ -87,6 +104,7 @@ def _demands_creator(product_index, sname, sample_branching_factors,
     for t in range(1, len(nodenames)):
         seed = (start_seed
                 + product_index * PRODUCT_SEED_OFFSET
+                + bundle_idx * BUNDLE_SEED_OFFSET
                 + sputils.node_idx(stagelist[:t], sample_branching_factors))
         aircondstream.seed(seed)
         d = min(max_d, max(min_d, d + aircondstream.normal(mu_dev, sigma_dev)))
