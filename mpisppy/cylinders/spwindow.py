@@ -8,7 +8,7 @@
 ###############################################################################
 
 # Feb 2026: the layout tuple is (offset, logical_len, padded_len) with offset += padded_len
-#   (we are padding to be 512 bit boundaries to avoid collisions with solvers who do that)
+#   (we are padding to 512 bit boundaries to avoid collisions with solvers who do that)
 
 from mpisppy import MPI
 
