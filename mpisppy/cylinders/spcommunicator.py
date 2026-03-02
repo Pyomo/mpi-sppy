@@ -60,7 +60,7 @@ def communicator_array(data_length: int):
 class FieldArray:
     """
     Wrapper around an MPI-allocated numpy buffer with:
-      - a padded "window" array used for MPI RMA (Design A)
+      - a padded "window" array used for MPI RMA
       - a logical view used by mpi-sppy code (data + id)
     """
 
