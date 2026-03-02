@@ -8,12 +8,13 @@
 ###############################################################################
 
 from collections.abc import Iterable
+from typing import Optional
 
 
 def nice_join(
     seq: Iterable,
     separator: str = ", ",
-    conjunction: str | None = "or",
+    conjunction: Optional[str] = "or",
     warp_in_single_quote: bool = False,
 ) -> str:
     """Joins items of a sequence into English phrases using the representation of the items and
