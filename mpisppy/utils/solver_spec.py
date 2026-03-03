@@ -66,7 +66,7 @@ def solver_specification(cfg, prefix="", name_required=True):
             solver_name = cfg[name_idx]
             options_idx = "solver_options" if sroot == "" else f"{sroot}_solver_options"
             ostr = cfg.get(options_idx)
-            solver_options = sputils.option_string_to_dict(ostr)  # will return None for None
+            solver_options = sputils.option_string_to_dict(ostr)
             break
     else:
         if name_required:
