@@ -118,6 +118,21 @@ class Test_sizes(unittest.TestCase):
         )
         assert ph is not None
 
+    def test_bundles_per_rank_raises(self):
+        options = self._copy_of_base_options()
+        options["PHIterLimit"] = 0
+        options["bundles_per_rank"] = 1
+
+        with self.assertRaises(RuntimeError) as cm:
+            mpisppy.opt.ph.PH(
+                options,
+                self.all3_scenario_names,
+                scenario_creator,
+                scenario_denouement,
+                scenario_creator_kwargs={"scenario_count": 3},
+            )
+        self.assertIn("--scenarios-per-bundle", str(cm.exception))
+
     def test_ef_constructor(self):
         ScenCount = 3
         ef = mpisppy.utils.sputils.create_EF(

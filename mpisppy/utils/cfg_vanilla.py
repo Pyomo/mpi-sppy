@@ -67,6 +67,13 @@ def shared_options(cfg):
             },
         }
 
+    if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank > 0:
+        raise RuntimeError(
+            "Loose bundling (bundles_per_rank > 0) was removed in 2026.\n"
+            "Use 'proper bundles' instead (--scenarios-per-bundle).\n"
+            "See doc/src/properbundles.rst and mpisppy/generic_cylinders.py."
+        )
+
     return shoptions
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
