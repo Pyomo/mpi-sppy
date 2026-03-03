@@ -13,12 +13,9 @@ import inspect
 import pyomo.environ as pyo
 import copy
 import pyomo.common.config as pyofig
-from mpisppy.utils import config
-import mpisppy.utils.solver_spec as solver_spec
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, solver_spec, sputils
 
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import global_toc
 
 from mpisppy.extensions.fixer import Fixer
@@ -126,10 +123,7 @@ def find_spokes(cylinders, is_multi=False):
 #==========
 def check_module_ama(module):
     # Complain if the module lacks things needed.
-    everything = ["scenario_names_creator",
-                 "scenario_creator",
-                 "inparser_adder",
-                 "kw_creator"]  # start and denouement can be missing.
+    everything = ["scenario_creator", "inparser_adder", "kw_creator"]  # start and denouement can be missing.
     you_can_have_it_all = True
     for ething in everything:
         if not hasattr(module, ething):
@@ -169,7 +163,7 @@ def from_module(mname, cfg, extraargs_fct=None, use_command_line=True):
                                  use_command_line=use_command_line)
     cfg.add_and_assign('_mpisppy_probability', description="Uniform prob.", domain=float, default=None, value= 1/cfg['num_scens'], complain=False)
     start = cfg['start'] if 'start' in cfg else 0
-    sn = m.scenario_names_creator(cfg['num_scens'], start=start)
+    sn = scenario_names_creator(cfg['num_scens'], start=start)
     dn = m.scenario_denouement if hasattr(m, "scenario_denouement") else None
     ama = Amalgamator(cfg,
                       sn,

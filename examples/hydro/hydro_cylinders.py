@@ -11,11 +11,8 @@
 
 import hydro
 
-import mpisppy.utils.sputils as sputils
-
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, sputils
 
 
 write_solution = True
@@ -57,7 +54,7 @@ def main():
 
     ScenCount = BFs[0] * BFs[1]
     scenario_creator_kwargs = {"branching_factors": BFs}
-    all_scenario_names = [f"Scen{i+1}" for i in range(ScenCount)]
+    all_scenario_names = scenario_names_creator(ScenCount, prefix="scen", start=1)
     scenario_creator = hydro.scenario_creator
     scenario_denouement = hydro.scenario_denouement
     rho_setter = None

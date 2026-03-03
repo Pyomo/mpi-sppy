@@ -210,18 +210,6 @@ def consensus_vars_creator(num_scens, inter_region_dict, all_scenario_names):
     return consensus_vars
 
 
-def scenario_names_creator(num_scens):
-    """Creates the name of every scenario.
-
-    Args:
-        num_scens (int): number of scenarios
-
-    Returns:
-        list (str): the list of names
-    """
-    return [f"Region{i+1}" for i in range(num_scens)]
-
-
 def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
     """
     Args:

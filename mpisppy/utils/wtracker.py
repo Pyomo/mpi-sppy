@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import mpisppy.opt.ph
 import mpisppy.MPI as MPI
+from mpisppy.utils import scenario_names_creator
 
 class WTracker():
     """
@@ -233,7 +234,7 @@ if __name__ == "__main__":
     options["PHIterLimit"] = 1
     ph = mpisppy.opt.ph.PH(
         options,
-        farmer.scenario_names_creator(3),
+        scenario_names_creator(3),
         farmer.scenario_creator,
         farmer.scenario_denouement,
         scenario_creator_kwargs=farmer.kw_creator(options),

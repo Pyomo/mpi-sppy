@@ -12,10 +12,8 @@ import farmer
 
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, sputils
 
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
 
 from mpisppy.extensions.norm_rho_updater import NormRhoUpdater
 from mpisppy.convergers.norm_rho_converger import NormRhoConverger
@@ -83,7 +81,7 @@ def main():
     
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix='scen')
     scenario_creator_kwargs = {
         'use_integer': False,
         "crops_multiplier": crops_multiplier,

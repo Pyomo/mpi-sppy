@@ -13,6 +13,7 @@ import mpisppy.MPI as mpi
 
 # Hub and spoke SPBase classes
 from mpisppy.opt.ph import PH
+from mpisppy.utils import scenario_names_creator
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 # Hub and spoke SPCommunicator classes
@@ -78,7 +79,7 @@ if __name__ == "__main__":
         _usage()
 
     assert (ScenCount in [3, 5, 10, 25, 50])
-    all_scenario_names = ['Scenario{}'.format(sn + 1) for sn in range(ScenCount)]
+    all_scenario_names = scenario_names_creator(ScenCount, prefix="Scenario", start=1)
     # sent to the scenario creator
     scenario_creator_kwargs = {
         "scenario_count": ScenCount,

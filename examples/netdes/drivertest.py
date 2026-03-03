@@ -20,6 +20,7 @@ from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
 from mpisppy.cylinders.hub import PHHub
 # Make it all go
 from mpisppy.spin_the_wheel import WheelSpinner
+from mpisppy.utils import scenario_names_creator
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
@@ -33,7 +34,7 @@ if __name__=="__main__":
     # Use netdes as an example
     inst = "network-10-20-L-01"
     num_scen = int(inst.split("-")[-3])
-    scenario_names = [f"Scen{i}" for i in range(num_scen)]
+    scenario_names = scenario_names_creator(num_scen, prefix="Scen")
     path = f"{netdes.__file__[:-10]}/data/{inst}.dat"
     scenario_creator = netdes.scenario_creator
     scenario_creator_kwargs = {"path": path}

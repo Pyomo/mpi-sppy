@@ -94,15 +94,6 @@ def _get_scenario_ix(sname):
     return int(sname[i:])
 
 ########## helper functions ########
-
-#=========
-def scenario_names_creator(num_scens,start=None):
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"Scenario{i}" for i in range(start,start+num_scens)]
-
-
 #=========
 def inparser_adder(cfg):
     # add options unique to sizes
@@ -111,11 +102,11 @@ def inparser_adder(cfg):
     cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
                         domain=str,
-                        default=None)                
+                        default=None)
     cfg.add_to_config("netdes_data_path",
                         description="path to detdes data (e.g., ./data)",
                         domain=str,
-                        default=None)                
+                        default=None)
 
 
 #=========

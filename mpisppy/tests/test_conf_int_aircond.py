@@ -18,17 +18,15 @@ import unittest
 
 
 from mpisppy.tests.utils import get_solver, round_pos_sig
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import amalgamator as ama, config, scenario_names_creator, sputils
 import mpisppy.tests.examples.aircond as aircond
 
 import mpisppy.confidence_intervals.mmw_ci as MMWci
-import mpisppy.utils.amalgamator as ama
 from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.confidence_intervals.seqsampling as seqsampling
 import mpisppy.confidence_intervals.multi_seqsampling as multi_seqsampling
 import mpisppy.confidence_intervals.confidence_config as confidence_config
 import mpisppy.confidence_intervals.ciutils as ciutils
-from mpisppy.utils import config
 import pyomo.common.config as pyofig
 
 __version__ = 0.4
@@ -46,7 +44,7 @@ class Test_confint_aircond(unittest.TestCase):
     def setUpClass(self):
         self.refmodelname ="mpisppy.tests.examples.aircond"  # amalgamator compatible
         # TBD: maybe this code should create the file
-        self.xhatpath = "farmer_cyl_nonants.spy.npy"      
+        self.xhatpath = "farmer_cyl_nonants.spy.npy"
 
     def _get_base_options(self):
         # Base option has batch options
@@ -79,7 +77,7 @@ class Test_confint_aircond(unittest.TestCase):
 
     def _get_xhat_gen_options(self, BFs):
         num_scens = np.prod(BFs)
-        scenario_names = aircond.scenario_names_creator(num_scens)
+        scenario_names = scenario_names_creator(num_scens)
         xhat_gen_options = {"scenario_names": scenario_names,
                             "solver_name": solver_name,
                             "solver_options": None,
@@ -107,14 +105,14 @@ class Test_confint_aircond(unittest.TestCase):
     def tearDown(self):
          os.remove(self.xhat_path)
 
-        
+
     def _eval_creator(self):
         xh_options = self._get_xhatEval_options()
         
         MMW_options, scenario_creator_kwargs = self._get_base_options()
         branching_factors= global_BFs
-        scen_count = np.prod(branching_factors)
-        all_scenario_names = aircond.scenario_names_creator(scen_count)
+        scen_count = int(np.prod(branching_factors))
+        all_scenario_names = scenario_names_creator(scen_count)
         all_nodenames = sputils.create_nodenames_from_branching_factors(branching_factors)
         ev = Xhat_Eval(xh_options,
                        all_scenario_names,
@@ -233,7 +231,7 @@ class Test_confint_aircond(unittest.TestCase):
 
         num_scens = np.prod(branching_factors)
         scenario_creator_kwargs['num_scens'] = num_scens
-        all_scenario_names = aircond.scenario_names_creator(num_scens)
+        all_scenario_names = scenario_names_creator(num_scens)
 
         k = all_scenario_names[0]
         obj = ev.evaluate_one(full_xhat,k,ev.local_scenarios[k])
@@ -262,8 +260,8 @@ class Test_confint_aircond(unittest.TestCase):
     def test_gap_estimators(self):
         options, scenario_creator_kwargs = self._get_base_options()
         branching_factors= global_BFs
-        scen_count = np.prod(branching_factors)
-        scenario_names = aircond.scenario_names_creator(scen_count, start=1000)
+        scen_count = int(np.prod(branching_factors))
+        scenario_names = scenario_names_creator(scen_count, start=1000)
         sample_options = {"seed": 0,
                           "branching_factors": global_BFs}
         estim = ciutils.gap_estimators(self.xhat,

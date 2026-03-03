@@ -13,9 +13,7 @@
 
 import sys
 import farmer
-import mpisppy.utils.sputils as sputils
-import mpisppy.utils.solver_spec as solver_spec
-from mpisppy.utils import config
+from mpisppy.utils import config, scenario_names_creator, sputils, solver_spec
 import pyomo.environ as pyo
 
 
@@ -32,13 +30,13 @@ def main_no_cfg():
     scen_count = int(sys.argv[2])
     use_integer = int(sys.argv[3])
     solver_name = sys.argv[4]
-    
+
     scenario_creator_kwargs = {
         "use_integer": use_integer,
         "crops_multiplier": crops_multiplier,
     }
 
-    scenario_names = ['Scenario' + str(i) for i in range(scen_count)]
+    scenario_names = scenario_names_creator(scen_count, prefix='Scenario')
 
     ef = sputils.create_EF(
         scenario_names,
@@ -66,7 +64,7 @@ def main_with_cfg():
     cfg.parse_command_line("farmer_ef")
 
     ef = sputils.create_EF(
-        farmer.scenario_names_creator(cfg.num_scens),
+        scenario_names_creator(cfg.num_scens, prefix="scen"),
         farmer.scenario_creator,
         scenario_creator_kwargs=farmer.kw_creator(cfg),
     )

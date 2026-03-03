@@ -81,17 +81,13 @@ def scenario_creator(scenario_name, ampl_file_name,
         print("big troubles!!; we can't find the objective function")
         raise
     return ampl, "uniform", areaVarDatas, obj_fct
-    
-#=========
-def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
 
 
 #=========
 def inparser_adder(cfg):
     farmer.inparser_adder(cfg)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator

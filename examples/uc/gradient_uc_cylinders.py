@@ -23,8 +23,7 @@ from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 from mpisppy.extensions.xhatclosest import XhatClosest
 from mpisppy.extensions.grad_rho import GradRho
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 def _parse_args():
@@ -94,7 +93,7 @@ def main():
     }
     scenario_creator = uc.scenario_creator
     scenario_denouement = uc.scenario_denouement
-    all_scenario_names = [f"Scenario{i+1}" for i in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix="Scenario", start=1)
     if cfg.use_cost_based_rho:
         rho_setter = uc._rho_setter
     else:

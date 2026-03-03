@@ -69,17 +69,12 @@ def scenario_creator(scenario_name, mi, job, cfg=None):
 
     return mi
 
-        
-#=========
-def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
-
 
 #=========
 def inparser_adder(cfg):
     farmer.inparser_adder(cfg)
 
-    
+
 #=========
 def kw_creator(cfg):
     # creates keywords for scenario creator

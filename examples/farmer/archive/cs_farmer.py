@@ -27,6 +27,7 @@ from mpisppy.cylinders.hub import PHHub
 from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
 from mpisppy.opt.lshaped import LShapedMethod
 
+from mpisppy.utils import scenario_names_creator
 from mpisppy.utils.xhat_eval import Xhat_Eval
 
 
@@ -68,7 +69,7 @@ if __name__ == "__main__":
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
 
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(scen_count)]
+    all_scenario_names = scenario_names_creator(scen_count, prefix='scen')
     rho_setter = farmer._rho_setter if hasattr(farmer, '_rho_setter') else None
     scenario_creator_kwargs = {
         'use_integer': True,

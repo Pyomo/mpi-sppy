@@ -9,8 +9,7 @@
 import netdes
 
 from mpisppy.spin_the_wheel import WheelSpinner
-from mpisppy.utils import config
-import mpisppy.utils.cfg_vanilla as vanilla
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator
 from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
 
 write_solution = True
@@ -34,7 +33,7 @@ def _parse_args():
     cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
                         domain=str,
-                        default=None)                
+                        default=None)
     cfg.parse_command_line("netdes_cylinders")
     return cfg
     
@@ -61,8 +60,8 @@ def main():
 
     path = f"{netdes.__file__[:-10]}/data/{inst}.dat"
     scenario_creator = netdes.scenario_creator
-    scenario_denouement = netdes.scenario_denouement    
-    all_scenario_names = [f"Scen{i}" for i in range(num_scen)]
+    scenario_denouement = netdes.scenario_denouement
+    all_scenario_names = scenario_names_creator(num_scen, prefix="Scen")
     scenario_creator_kwargs = {"path": path}
 
     # Things needed for vanilla cylinders
