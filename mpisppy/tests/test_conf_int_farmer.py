@@ -268,6 +268,29 @@ class Test_confint_farmer(unittest.TestCase):
         self.assertEqual((T,ub), (3, 13.0))
 
 
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_do_mmw_with_file(self):
+        """Test generic_cylinders.do_mmw using a pre-written xhat file.
+
+        Uses the same xhat, num_batches, batch_size, and start as
+        test_MMW_running so the numerical result should match.
+        """
+        from mpisppy.generic_cylinders import do_mmw
+
+        cfg = self._get_base_options()
+        cfg.mmw_args()
+        cfg.mmw_xhat_input_file_name = self.xhat_path
+        cfg.mmw_num_batches = 2
+        cfg.mmw_batch_size = 10
+        cfg.mmw_start = 12
+
+        result = do_mmw(self.refmodelname, cfg)
+
+        s = round_pos_sig(result['std'], 2)
+        bound = round_pos_sig(result['gap_inner_bound'], 2)
+        self.assertEqual((s, bound), (1.5, 96.0))
+
+
 if __name__ == '__main__':
     unittest.main()
     

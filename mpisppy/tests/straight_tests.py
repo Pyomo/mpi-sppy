@@ -108,6 +108,27 @@ if ok:
         badguys.append(f"Test failed to write {fwphSaveFile}:\n{cmdstr}")
 
 
+#####################################################
+# generic_cylinders with MMW CI (farmer, wheel-based xhat)
+gc_path = os.path.abspath(os.path.join(_tests_dir, "..", "..", "mpisppy", "generic_cylinders.py"))
+farmer_module = os.path.abspath(os.path.join(_tests_dir, "..", "..", "examples", "farmer", "farmer"))
+
+cmdstr = (
+    f"mpiexec -np 2 {pyexe} -m mpi4py {shlex.quote(gc_path)} "
+    f"--module-name {shlex.quote(farmer_module)} "
+    f"--num-scens 3 "
+    f"--solver-name {shlex.quote(solver_name)} "
+    f"--default-rho 1 "
+    f"--max-iterations 3 "
+    f"--xhatshuffle "
+    f"--mmw-num-batches 2 "
+    f"--mmw-batch-size 3 "
+    f"--mmw-start 4"
+)
+
+_doone(cmdstr)
+
+
 #######################################################
 if badguys:
     print("\nstraight_tests.py failed commands:")
