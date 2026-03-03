@@ -120,16 +120,7 @@ class SPWindow:
         layout = {}
 
         for field in self.field_order:
-            entry = my_fields[field]
-
-            # In your spcommunicator.py, entry is (logical_len, padded_len)
-            if isinstance(entry, (tuple, list)):
-                logical_len = int(entry[0])
-                padded_len = int(entry[1])
-            else:
-                # Fallback: caller provided padded only (not recommended)
-                padded_len = int(entry)
-                logical_len = padded_len
+            logical_len, padded_len = my_fields[field]
 
             if padded_len < logical_len:
                 raise ValueError(f"{field=} has {padded_len=} < {logical_len=}")
