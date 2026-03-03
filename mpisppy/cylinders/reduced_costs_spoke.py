@@ -195,7 +195,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                         rc[ci] = np.nan
 
         self._scenario_rc_buffer.fill(0)
-        assert self._scenario_rc_buffer.size == self._scenario_rc_len
+        assert self._scenario_rc_buffer.size == self.send_buffers[Field.SCENARIO_REDUCED_COST].data_len()
         ci = 0 # buffer index
         for sub in self.opt.local_subproblems.values():
             for sn in sub.scen_list:
