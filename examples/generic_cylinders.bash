@@ -81,20 +81,20 @@ cd farmer
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --solution-base-name farmer_nonants
 
 echo "^^^ sep rho not dynamic ^^^"
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sep-rho --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sep-rho --rel-gap 0.001
 
 
 echo "^^^ sep rho dynamic ^^^"
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sep-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sep-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001
 
 # now do it again, but this time using dynamic rho
 echo "^^^ grad rho dynamic ^^^"
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
 echo "^^^ sensi rho dynamic ^^^"
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sensi-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --sensi-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
 cd ..
 
@@ -151,7 +151,7 @@ mpiexec -np 3 python -m mpi4py ../mpisppy/generic_cylinders.py --module-name far
 # try a simple Hydro
 pwd
 cd hydro
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name hydro --solver-name ${SOLVER} --max-iterations 100 --bundles-per-rank=0 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors "3 3" --stage2EFsolvern ${SOLVER}
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name hydro --solver-name ${SOLVER} --max-iterations 100 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors "3 3" --stage2EFsolvern ${SOLVER}
 cd ..
 
 
@@ -188,11 +188,11 @@ exit
 cd farmer
 mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --solver-name ${SOLVER} --max-iterations 10 --max-solver-threads 4 --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01 --solution-base-name farmer_nonants
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001
 
 # now do it again, but this time using dynamic rho
 
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --bundles-per-rank=0 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --num-scens 3 --max-iterations=100 --default-rho=1 --solver-name=${SOLVER} --xhatpath=./farmer_nonants.npy --grad-order-stat 0.0 --xhatxbar --ph-ob --max-stalled-iters 5000 --grad-rho --rel-gap 0.001 --dynamic-rho-dual-crit --dynamic-rho-dual-thresh 0.1
 
 cd ..
 # end gradient based rho demo

@@ -258,7 +258,6 @@ class ReducedCostsFixer(Extension):
                     if update_var and persistent_solver:
                         sub._solver_plugin.update_var(xvar)
 
-        # Note: might count incorrectly with bundling?
         self._heuristic_fixed_vars += raw_fixed_this_iter / len(self.opt.local_scenarios)
         if self.opt.cylinder_rank == 0 and self.verbose:
             print(f"Total unique vars fixed by heuristic: {int(round(self._heuristic_fixed_vars))}/{self.nonant_length}")

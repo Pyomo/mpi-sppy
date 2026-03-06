@@ -44,10 +44,10 @@ def _common_args(inparser):
                         default=None)
 
     parser.add_argument("--bundles-per-rank",
-                        help="bundles per rank (default 0 (no bundles))",
+                        help="REMOVED: loose bundles no longer supported. Use --scenarios-per-bundle.",
                         dest="bundles_per_rank",
                         type=int,
-                        default=0)                
+                        default=0)
 
     parser.add_argument('--with-verbose',
                         help="verbose output",

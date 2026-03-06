@@ -74,7 +74,7 @@ class Scenario_lp_mps_files(mpisppy.extensions.extension.Extension):
                         rho_val = s._mpisppy_model.rho[(nd.name, i)]._value
                     else:
                         rho_val = default_rho
-                        rhoList.append((lpize(var.name), rho_val))
+                    rhoList.append((lpize(var.name), rho_val))
 
 
             scenDict["treeData"] = treeData

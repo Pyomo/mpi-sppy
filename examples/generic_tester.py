@@ -164,7 +164,7 @@ hydroef = (f"--EF --branching-factors '3 3' --EF-solver-name={solver_name}")
 do_one("hydro", "hydro", 1, hydroef, xhat_baseline_dir="test_data/hydroef_baseline")
 
 
-hydroa = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
+hydroa = ("--max-iterations 100 --default-rho 1 "
           "--lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
           f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
@@ -218,7 +218,7 @@ sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
 #rebaseline_xhat("sslp", "sslp", 3, sslp_rd, "test_data/sslp_rd_baseline")
 do_one("sslp", "sslp", 3, sslp_rd, xhat_baseline_dir="test_data/sslp_rd_baseline")
 
-hydroa_rc = ("--max-iterations 100 --bundles-per-rank=0 --default-rho 1 "
+hydroa_rc = ("--max-iterations 100 --default-rho 1 "
           "--reduced-costs --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
           "--rc-fixer --reduced-costs-rho --reduced-costs-rho-multiplier=1.0 "
           f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
@@ -236,7 +236,7 @@ if not nouc:
     # This particular sizes command line is not very deterministic, also
     # linearize prox to help xpress.
     sizesa = ("--linearize-proximal-terms "
-              " --num-scens=10 --bundles-per-rank=0 --max-iterations=5"
+              " --num-scens=10 --max-iterations=5"
               " --default-rho=5 --lagrangian --xhatshuffle"
               " --iter0-mipgap=0.01 --iterk-mipgap=0.001 --rel-gap 0.001"
               f" --solver-name={solver_name}")

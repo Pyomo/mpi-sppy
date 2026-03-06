@@ -177,8 +177,7 @@ class APH(ph_base.PHBase):
         slist = [d[0] for d in dlist]  # just the names
         if self._PHIter != 1:
             for k,s in self.local_scenarios.items():
-                if (not self.bundling and k in slist) \
-                   or (self.bundling and s._mpisppy_data.bundlename in slist):
+                if k in slist:
                     for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                         if not self.use_lag:
                             z_touse = s._mpisppy_model.z[(ndn,i)]._value
@@ -692,25 +691,11 @@ class APH(ph_base.PHBase):
     def _update_foropt(self, dlist):
         # dlist is a list of subproblem names that were dispatched
         assert self.use_lag
-        """
-        if not self.bundling:
-            phidict = self.phis
-        else:
-            phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]]}
-        """
-        if not self.bundling:
-            for dl in dlist:
-                scenario = self.local_scenarios[dl[0]]
-                for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                    scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
-                    scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
-        else:
-            for dl in dlist:
-                for sname in self.local_subproblems[dl[0]].scen_list:
-                    scenario = self.local_scenarios[sname]
-                    for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                        scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
-                        scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
+        for dl in dlist:
+            scenario = self.local_scenarios[dl[0]]
+            for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
+                scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
+                scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
 
 
     #====================================================================
@@ -753,10 +738,7 @@ class APH(ph_base.PHBase):
             phidict = self.phis
         else:
             s_source = self.local_subproblems
-            if not self.bundling:
-                phidict = self.phis
-            else:
-                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+            phidict = self.phis
         # dict(sorted(phidict.items(), key=lambda item: item[1]))
         # sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 
