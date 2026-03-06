@@ -274,16 +274,8 @@ class SPOpt(SPBase):
                     s._mpisppy_data.outer_bound = results.Problem[0].Upper_bound
                     s._mpisppy_data.inner_bound = results.Problem[0].Lower_bound
             # TBD: get this ready for IPopt (e.g., check incumbent_prob every time)
-            # propogate down
-            if self.bundling: # must be a bundle
-                for sname in s._ef_scenario_names:
-                     self.local_scenarios[sname]._mpisppy_data.solution_available\
-                         = s._mpisppy_data.solution_available
-                     if s._mpisppy_data.solution_available:
-                         self._check_staleness(self.local_scenarios[sname])
-            else:  # not a bundle
-                if s._mpisppy_data.solution_available:
-                    self._check_staleness(s)
+            if s._mpisppy_data.solution_available:
+                self._check_staleness(s)
 
         # end of Agnostic bypass
 
@@ -833,17 +825,13 @@ class SPOpt(SPBase):
 
         Warning:
             We are counting on Pyomo indices not to change order between save
-            and restoration. THIS WILL NOT WORK ON BUNDLES (Feb 2019) but
-            hopefully does not need to.
+            and restoration.
         """
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
-            if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-            else:
-                raise RuntimeError("restore_original_nonants called for a bundle")
+            if sputils.is_persistent(s._solver_plugin):
+                persistent_solver = s._solver_plugin
             for ci, vardata in enumerate(s._mpisppy_data.nonant_indices.values()):
                 vardata._value = s._mpisppy_data.original_nonants[ci]
                 vardata.fixed = s._mpisppy_data.original_fixedness[ci]
@@ -852,7 +840,7 @@ class SPOpt(SPBase):
 
 
     def _save_active_objectives(self):
-        """ Save the active objectives for use in PH, bundles, and calculation """
+        """ Save the active objectives for use in PH and calculation """
         self.saved_objectives = dict()
 
         for sname, scenario_instance in self.local_scenarios.items():
@@ -916,35 +904,16 @@ class SPOpt(SPBase):
     def _subproblem_creation(self, verbose=False):
         """ Create local subproblems (not local scenarios).
 
-        If bundles are specified, this function creates the bundles.
-        Otherwise, this function simply copies pointers to the already-created
-        `local_scenarios`.
+        This function copies pointers to the already-created `local_scenarios`.
 
         Args:
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
         """
         self.local_subproblems = dict()
-        if self.bundling:
-            rank_local = self.cylinder_rank
-            for bun in self.names_in_bundles[rank_local]:
-                sdict = dict()
-                bname = "rank" + str(self.cylinder_rank) + "bundle" + str(bun)
-                for sname in self.names_in_bundles[rank_local][bun]:
-                    if (verbose and self.cylinder_rank==0):
-                        print ("bundling "+sname+" into "+bname)
-                    scen = self.local_scenarios[sname]
-                    scen._mpisppy_data.bundlename = bname
-                    sdict[sname] = scen
-                self.local_subproblems[bname] = self.FormEF(sdict, bname)
-                self.local_subproblems[bname].scen_list = \
-                    self.names_in_bundles[rank_local][bun]
-                self.local_subproblems[bname]._mpisppy_probability = \
-                                    sum(s._mpisppy_probability for s in sdict.values())
-        else:
-            for sname, s in self.local_scenarios.items():
-                self.local_subproblems[sname] = s
-                self.local_subproblems[sname].scen_list = [sname]
+        for sname, s in self.local_scenarios.items():
+            self.local_subproblems[sname] = s
+            self.local_subproblems[sname].scen_list = [sname]
 
 
     def _create_solvers(self, presolve=True):
@@ -965,13 +934,6 @@ class SPOpt(SPBase):
                 if dtiming:
                     local_sit.append(0.0)
 
-            ## if we have bundling, attach
-            ## the solver plugin to the scenarios
-            ## as well to avoid some gymnastics
-            if self.bundling:
-                for scen_name in s.scen_list:
-                    scen = self.local_scenarios[scen_name]
-                    scen._solver_plugin = s._solver_plugin
         if dtiming:
             all_set_instance_times = self.mpicomm.gather(local_sit,
                                                      root=0)

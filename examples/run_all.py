@@ -164,35 +164,27 @@ do_one("farmer/CI", "farmer_ef.py", 1,
        "1 3 {}".format(solver_name))
 # for farmer_cylinders, the first arg is num_scens and is required
 do_one("farmer/archive", "farmer_cylinders.py",  3,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --max-iterations=50 --default-rho=1 --solver-name={} "
        "--primal-dual-converger --primal-dual-converger-tol=0.5 --lagrangian --xhatshuffle "
        "--intra-hub-conv-thresh -0.1 --rel-gap=1e-6".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py",  5,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --rel-gap=1e-6 --lagrangian --lagranger "
        "--xhatshuffle --fwph --W-fname=out_ws.txt --Xbar-fname=out_xbars.txt "
        "--ph-track-progress --track-convergence=4 --track-xbar=4 --track-nonants=4 "
        "--track-duals=4".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py",  5,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={} "
+       "--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={} "
        "--use-norm-rho-converger --use-norm-rho-updater --lagrangian --lagranger --xhatshuffle --fwph "
        "--init-W-fname=out_ws.txt --init-Xbar-fname=out_xbars.txt --ph-track-progress --track-convergence=4 "  "--track-xbar=4 --track-nonants=4 --track-duals=4 ".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
+       "--num-scens 3 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        "--xhatlshaped --max-solver-threads=1".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py", 3,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=50 "
+       "--num-scens 3 --max-iterations=50 "
        "--default-rho=1 "
        "--solver-name={} --lagranger --xhatlooper".format(solver_name))
-do_one("farmer/archive", "farmer_cylinders.py", 3,
-       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
-       "--default-rho=1 --lagrangian --xhatshuffle "
-       "--solver-name={}".format(solver_name))
-do_one("farmer/archive", "farmer_cylinders.py", 4,
-       "--num-scens 6 --bundles-per-rank=2 --max-iterations=20 "
-       "--fwph-stop-check-tol 0.1 --rel-gap 0.001 "
-       "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle --fwph".format(solver_name))
 do_one("farmer", "../../mpisppy/generic_cylinders.py", 3,
        "--module-name farmer --num-scens 6 "
        "--rel-gap 0.001 --max-iterations=50 "
@@ -215,12 +207,8 @@ do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 
-do_one("farmer/archive", "farmer_cylinders.py", 2,
-       "--num-scens 6 --bundles-per-rank=2 --max-iterations=50 "
-       "--default-rho=1 "
-       "--solver-name={} --xhatshuffle".format(solver_name))
 do_one("farmer/archive", "farmer_cylinders.py", 3,
-       "--num-scens 3 --bundles-per-rank=0 --max-iterations=1 "
+       "--num-scens 3 --max-iterations=1 "
        "--default-rho=1 --tee-rank0-solves "
        "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 time_one("FarmerLinProx", "farmer/archive", "farmer_cylinders.py", 3,
@@ -235,24 +223,15 @@ do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 do_one("farmer/archive",
        "farmer_cylinders.py",
        2,
-       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
+       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer/archive",
        "farmer_cylinders.py",
        2,
-       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
-do_one("farmer/archive",
-       "farmer_cylinders.py",
-       2,
-       f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
-
+       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer/archive",
        "farmer_cylinders.py", 4,
-       f"--num-scens 3 --bundles-per-rank=0 --max-iterations=20 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
+       f"--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
 
-do_one("farmer/archive",
-       "farmer_cylinders.py",
-       2,
-       f"--num-scens 30 --max-iterations=10 --default-rho=1.0 --display-progress  --bundles-per-rank=0 --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.5 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --bundles-per-rank=5 --solver-name={solver_name}")
 do_one("farmer/archive",
        "../../../mpisppy/generic_cylinders.py",
        4,
@@ -297,7 +276,7 @@ do_one("sizes",
        "sizes_cylinders.py",
        3,
        "--linearize-proximal-terms "
-       "--num-scens=10 --bundles-per-rank=0 --max-iterations=5 "
+       "--num-scens=10 --max-iterations=5 "
        "--default-rho=1 --lagrangian --xhatxbar "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--solver-name={}".format(solver_name))
@@ -306,7 +285,7 @@ do_one("sizes", "sizes_pysp.py", 1, "3 {}".format(solver_name))
 do_one("sslp",
        "sslp_cylinders.py",
        4,
-       "--instance-name=sslp_15_45_10 --bundles-per-rank=0 "
+       "--instance-name=sslp_15_45_10 "
        "--integer-relax-then-enforce "
        "--integer-relax-then-enforce-ratio=0.8 "
        "--lagrangian "
@@ -318,16 +297,16 @@ do_one("sslp",
        "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
-       "--branching-factors \"3 3\" --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \"3 3\" --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
-       "--branching-factors \'3 3\' --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'3 3\' --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
 
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
-       "--bundles-per-rank=0 --max-iterations=100 "
+       "--max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={}".format(solver_name))
 
@@ -335,15 +314,15 @@ do_one("hydro", "hydro_ef.py", 1, solver_name)
 
 # the next might hang with 6 ranks
 do_one("aircond", "aircond_cylinders.py", 3,
-       "--branching-factors \'4 3 2\' --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'4 3 2\' --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 do_one("aircond", "aircond_ama.py", 3,
-       "--branching-factors \'3 3\' --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'3 3\' --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
-       "--branching-factors \'3 3\' --bundles-per-rank=0 --max-iterations=100 "
+       "--branching-factors \'3 3\' --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
 
@@ -371,27 +350,18 @@ do_one_mmw("farmer/CI", "farmer", f"python farmer_ef.py 1 3 0 {solver_name}", "f
 if not nouc:
     # put a few slow runs and/or runs that are trouble on github in the uc group
 
-    do_one("sslp",
-           "sslp_cylinders.py",
-           4,
-           "--instance-name=sslp_15_45_10 --bundles-per-rank=2 "
-           "--max-iterations=5 --default-rho=1 "
-           "--subgradient --xhatshuffle --fwph  --coeff-rho "
-           "--linearize-proximal-terms "
-           "--rel-gap=0.0 "
-           "--solver-name={} --fwph-stop-check-tol 0.01".format(solver_name))
     do_one("sizes",
            "special_cylinders.py",
            3,
            "--lagrangian --xhatshuffle "
-           "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+           "--num-scens=3 --max-iterations=5 "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.001 --linearize-proximal-terms "
            "--default-rho=1 --solver-name={} --display-progress".format(solver_name))
 
     do_one("sizes",
            "sizes_cylinders.py",
            4,
-           "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+           "--num-scens=3 --max-iterations=5 "
            "--iter0-mipgap=0.01 --iterk-mipgap=0.005 "
            "--default-rho=1 --lagrangian --xhatshuffle --fwph "
            "--solver-name={} --display-progress".format(solver_name))
@@ -405,7 +375,7 @@ if not nouc:
         do_one("uc", "uc_ef.py", 1, solver_name+" 3")
 
         do_one("uc", "gradient_uc_cylinders.py", 15,
-               "--bundles-per-rank=0 --max-iterations=100 --default-rho=1 "
+               "--max-iterations=100 --default-rho=1 "
                "--xhatshuffle --lagrangian --num-scens=5 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --ph-mipgaps-json=phmipgaps.json "
                f"--solver-name={solver_name} --xhatpath uc_cyl_nonants.npy "
@@ -414,52 +384,29 @@ if not nouc:
                "--grad-dynamic-primal-crit")
 
         do_one("uc", "uc_cylinders.py", 4,
-               "--bundles-per-rank=0 --max-iterations=2 "
+               "--max-iterations=2 "
                "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --fwph "
                " --lagrangian --xhatshuffle "
                "--ph-mipgaps-json=phmipgaps.json "
                "--solver-name={}".format(solver_name))
         do_one("uc", "uc_lshaped.py", 2,
-               "--bundles-per-rank=0 --max-iterations=5 "
+               "--max-iterations=5 "
                "--default-rho=1 --num-scens=3 --xhatlshaped "
                "--solver-name={} --max-solver-threads=1".format(solver_name))
         do_one("uc", "uc_cylinders.py", 3,
-               "--run-aph --bundles-per-rank=0 --max-iterations=2 "
+               "--run-aph --max-iterations=2 "
                "--default-rho=1 --num-scens=3 --max-solver-threads=2 "
                "--lagrangian-iter0-mipgap=1e-7 --lagrangian --xhatshuffle "
                "--ph-mipgaps-json=phmipgaps.json "
                "--solver-name={}".format(solver_name))
         # as of May 2022, this one works well, but outputs some crazy messages
         do_one("uc", "uc_ama.py", 3,
-              "--bundles-per-rank=0 --max-iterations=2 "
+              "--max-iterations=2 "
                "--default-rho=1 --num-scens=3 "
                "--fixer-tol=1e-2 --lagranger --xhatshuffle "
                "--solver-name={}".format(solver_name))
 
-        # 10-scenario UC
-        time_one("UC_cylinder10scen", "uc", "uc_cylinders.py", 3,
-                 "--bundles-per-rank=5 --max-iterations=2 "
-                 "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-                 "--lagrangian-iter0-mipgap=1e-7 "
-                 "--ph-mipgaps-json=phmipgaps.json "
-                 "--lagrangian --xhatshuffle "
-                 "--solver-name={}".format(solver_name))
-        # note that fwph takes a long time to do one iteration
-        do_one("uc", "uc_cylinders.py", 4,
-               "--bundles-per-rank=5 --max-iterations=2 "
-               "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-               " --lagrangian --xhatshuffle --fwph "
-               "--lagrangian-iter0-mipgap=1e-7 "
-               "--ph-mipgaps-json=phmipgaps.json "
-               "--solver-name={}".format(solver_name))
-        do_one("uc", "uc_cylinders.py", 5,
-               "--bundles-per-rank=5 --max-iterations=2 "
-               "--default-rho=1 --num-scens=10 --max-solver-threads=2 "
-               " --lagrangian --xhatshuffle --fwph "
-               "--lagrangian-iter0-mipgap=1e-7 --cross-scenario-cuts "
-               "--ph-mipgaps-json=phmipgaps.json --cross-scenario-iter-cnt=4 "
-               "--solver-name={}".format(solver_name))
         do_one("sizes", "sizes_demo.py", 1, " {}".format(solver_name))
 
 if len(badguys) > 0:

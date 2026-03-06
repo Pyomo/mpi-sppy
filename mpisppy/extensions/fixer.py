@@ -8,7 +8,6 @@
 ###############################################################################
 
 import pyomo.environ as pyo
-import mpisppy.utils.sputils as sputils
 import mpisppy.extensions.extension
 
 """ Code for WW style fixing of integers. This can be used
@@ -138,27 +137,16 @@ class Fixer(mpisppy.extensions.extension.Extension):
                     
     def iter0(self, local_scenarios):
 
-        # first, do some persistent solver with bundles gymnastics        
-        have_bundles = self.ph.bundling # indicates bundles
-        if have_bundles:
-            subpname = next(iter(self.ph.local_subproblems))
-            subp = self.ph.local_subproblems[subpname]
-            solver_is_persistent = isinstance(subp._solver_plugin,
-            pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
-            if solver_is_persistent:
-                vars_to_update = {}
-
         # modelers might have already fixed variables - count those up and output the result
         raw_fixed_on_arrival = 0
-        raw_fixed_this_iter = 0   
+        raw_fixed_this_iter = 0
         for sname,s in self.ph.local_scenarios.items():
             if self.iter0_fixer_tuples[s] is None:
                 print ("WARNING: No Iter0 fixer tuple for s.name=",s.name)
                 return
-            
-            if not have_bundles:
-                solver_is_persistent = isinstance(s._solver_plugin,
-                    pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
+
+            solver_is_persistent = isinstance(s._solver_plugin,
+                pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
 
             for (varid, th, nb, lb, ub) in self.iter0_fixer_tuples[s]:
                 was_fixed = False
@@ -199,34 +187,21 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
                     if was_fixed:
                         raw_fixed_this_iter += 1
-                        if not have_bundles and solver_is_persistent:
+                        if solver_is_persistent:
                             s._solver_plugin.update_var(xvar)
-                        if have_bundles and solver_is_persistent:
-                            if sname not in vars_to_update:
-                                vars_to_update[sname] = []
-                            vars_to_update[sname].append(xvar)
                 else:
                     # TODO: a paranoid would and should put a check to ensure
                     # that variables are fixed in all scenarios and are fixed
                     # to the same value.
                     raw_fixed_on_arrival += 1
 
-        if have_bundles and solver_is_persistent:
-            for k,subp in self.ph.local_subproblems.items():
-                subpnum = sputils.extract_num(k)
-                rank_local = self.ph.cylinder_rank
-                for sname in self.ph.names_in_bundles[rank_local][subpnum]:
-                    if sname in vars_to_update:
-                        for xvar in vars_to_update[sname]:
-                            subp._solver_plugin.update_var(xvar)
-                        
         self.fixed_prior_iter0 += raw_fixed_on_arrival / len(local_scenarios)
         self.fixed_so_far += raw_fixed_this_iter / len(local_scenarios)
         self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))
         if raw_fixed_this_iter % len(local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios detected "
                                 "in fixer.py (iter0)")
-            # maybe to do mpicomm.abort()        
+            # maybe to do mpicomm.abort()
         if raw_fixed_on_arrival % len(local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios prior to iteration 0 detected "
                                 "in fixer.py (iter0)")        
@@ -235,24 +210,13 @@ class Fixer(mpisppy.extensions.extension.Extension):
     def iterk(self, PHIter):
         """ Before iter k>1 solves, but after x-bar update.
         """
-        # first, do some persistent solver with bundles gymnastics        
-        have_bundles = self.ph.bundling # indicates bundles
-        if have_bundles:
-            subpname = next(iter(self.ph.local_subproblems))
-            subp = self.ph.local_subproblems[subpname]
-            solver_is_persistent = isinstance(subp._solver_plugin,
-            pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
-            if solver_is_persistent:
-                vars_to_update = {}
-
         raw_fixed_this_iter = 0
         self._update_fix_counts()
         for sname,s in self.local_scenarios.items():
             if self.fixer_tuples[s] is None:
                 print ("MAJOR WARNING: No Iter k fixer tuple for s.name=",s.name)
                 return
-            if not have_bundles:
-                solver_is_persistent = isinstance(s._solver_plugin, pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
+            solver_is_persistent = isinstance(s._solver_plugin, pyo.pyomo.solvers.plugins.solvers.persistent_solver.PersistentSolver)
             for (varid, th, nb, lb, ub) in self.fixer_tuples[s]:
                 was_fixed = False
                 try:
@@ -289,25 +253,11 @@ class Fixer(mpisppy.extensions.extension.Extension):
 
                     if was_fixed:
                         raw_fixed_this_iter += 1
-                        if not have_bundles and solver_is_persistent:
+                        if solver_is_persistent:
                             s._solver_plugin.update_var(xvar)
-                        if have_bundles and solver_is_persistent:
-                            if sname not in vars_to_update:
-                                vars_to_update[sname] = []
-                            vars_to_update[sname].append(xvar)
-
-
-        if have_bundles and solver_is_persistent:
-            for k,subp in self.ph.local_subproblems.items():
-                subpnum = sputils.extract_num(k)
-                rank_local = self.ph.cylinder_rank
-                for sname in self.ph.names_in_bundles[rank_local][subpnum]:
-                    if sname in vars_to_update:
-                        for xvar in vars_to_update[sname]:
-                            subp._solver_plugin.update_var(xvar)
 
         self.fixed_so_far += raw_fixed_this_iter / len(self.local_scenarios)
-        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))        
+        self._dp("Unique vars fixed so far - %d (%d prior to iteration 0)" % (self.fixed_so_far+self.fixed_prior_iter0, self.fixed_prior_iter0))
         if raw_fixed_this_iter % len(self.local_scenarios) != 0:
             raise RuntimeError ("Variation in fixing across scenarios detected "
                                 "in fixer.py")

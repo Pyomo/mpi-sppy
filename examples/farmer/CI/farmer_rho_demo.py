@@ -9,7 +9,7 @@
 # This program can be used in two different ways:
 # Compute gradient-based cost and rho for a given problem
 # Use the gradient-based rho setter which sets adaptative gradient rho for PH.
-# mpiexec -np 2 python -m mpi4py farmer_rho_demo.py  --num-scens 3 --bundles-per-rank=0 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
+# mpiexec -np 2 python -m mpi4py farmer_rho_demo.py  --num-scens 3 --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --xhatpath=./xhat.npy --rhopath= --rho-setter --order-stat=
 # Edited by DLW Oct 2023
 # Note: norm_rho_updater is the Gabe thing
 

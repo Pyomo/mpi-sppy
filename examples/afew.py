@@ -49,11 +49,11 @@ def do_one(dirname, progname, np, argstring):
 
 # for farmer, the first arg is num_scens and is required
 do_one("farmer", "farmer_lshapedhub.py", 2,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
+       "--num-scens=3 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        " --xhatlshaped --max-solver-threads=1".format(solver_name))
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
-       "--bundles-per-rank=0 --max-iterations=10000 "
+       "--max-iterations=10000 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--abs-gap=0 --rel-gap=0 --time-limit=2 "
        "--solver-name={}".format(solver_name))

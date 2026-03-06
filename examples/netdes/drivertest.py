@@ -116,7 +116,6 @@ if __name__=="__main__":
 
     # xhat looper bound spoke
     xhat_options = hub_ph_options.copy()
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhat_options["xhat_looper_options"] =  {"xhat_solver_options":\
                                           ph_options["iterk_solver_options"],
                                           "scen_limit": 3,

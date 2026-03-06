@@ -71,7 +71,6 @@ class SPBase:
         self.local_scenarios = dict()
         self.local_scenario_names = list()
         self.E1_tolerance = E1_tolerance  # probs must sum to almost 1
-        self.names_in_bundles = None
         self.scenarios_constructed = False
         if all_nodenames is None:
             self.all_nodenames = ["ROOT"]
@@ -109,17 +108,13 @@ class SPBase:
                                f" ({len(self.all_scenario_names)})")
 
         self._calculate_scenario_ranks()
-        # Put the deprecation message in the init so they should only see it once per rank
         if "bundles_per_rank" in self.options and self.options["bundles_per_rank"] > 0:
-            self._assign_bundles()
-            self.bundling = True
-            print("WARNING: The bundles-per-rank is now called `loose bundling' and\n"
-                  "loose bundling will be deprecated in the next release\n."
-                  "You should switch to the use of 'proper bundles'.\n"
-                  " See the documentation and also misppy.generic_cylinders.py"
-                  )
-        else:
-            self.bundling = False
+            raise RuntimeError(
+                "Loose bundling (bundles_per_rank > 0) was removed in 2026.\n"
+                "Use 'proper bundles' instead (--scenarios-per-bundle).\n"
+                "See doc/src/properbundles.rst and mpisppy/generic_cylinders.py."
+            )
+        self.bundling = False
         self._create_scenarios(scenario_creator_kwargs)
         self._look_and_leap()
         self._compute_unconditional_node_probabilities()
@@ -232,42 +227,6 @@ class SPBase:
             self.all_scenario_names[i] for i in self._rank_slices[self.cylinder_rank]
         ]
 
-
-    def _assign_bundles(self):
-        """ Create self.names_in_bundles, a dict of dicts
-            
-            self.names_in_bundles[rank number][bundle number] = 
-                    list of scenarios in that bundle
-
-        """
-        scen_count = len(self.all_scenario_names)
-
-        if self.options["verbose"] and self.cylinder_rank == 0:
-            print("(rank0)", self.options["bundles_per_rank"], "bundles per rank")
-        if self.n_proc * self.options["bundles_per_rank"] > scen_count:
-            raise RuntimeError(
-                "Not enough scenarios to satisfy the bundles_per_rank requirement"
-            )
-
-        # dict: rank number --> list of scenario names owned by rank
-        names_at_rank = {
-            curr_rank: [self.all_scenario_names[i] for i in slc]
-            for (curr_rank, slc) in enumerate(self._rank_slices)
-        }
-
-        self.names_in_bundles = dict()
-        num_bundles = self.options["bundles_per_rank"]
-
-        for curr_rank in range(self.n_proc):
-            scen_count = len(names_at_rank[curr_rank])
-            avg = scen_count / num_bundles
-            slices = [
-                range(int(i * avg), int((i + 1) * avg)) for i in range(num_bundles)
-            ]
-            self.names_in_bundles[curr_rank] = {
-                curr_bundle: [names_at_rank[curr_rank][i] for i in slc]
-                for (curr_bundle, slc) in enumerate(slices)
-            }
 
     def _create_scenarios(self, scenario_creator_kwargs):
         """ Call the scenario_creator for every local scenario, and store the

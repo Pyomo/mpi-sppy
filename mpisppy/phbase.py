@@ -555,7 +555,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                 The scenario solver options.
             use_scenarios_not_subproblems (boolean, optional):
                 If True, solves individual scenario problems, not subproblems.
-                This distinction matters when using bundling. Default is False.
+                Default is False.
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
             dis_W (boolean, optional):
@@ -624,7 +624,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         update proximal term approximation by potentially
         adding a linear cut near each current xvar value
 
-        NOTE: This is badly inefficient for bundles, but works
         """
         tol = self.prox_approx_tol
         for sn, s in self.local_scenarios.items():
