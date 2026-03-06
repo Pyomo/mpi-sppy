@@ -33,7 +33,7 @@ class RelaxedPHFixer(Extension):
                 if xvar.fixed:
                     self._modeler_fixed_nonants.add(ndn_i)
 
-        for k,sub in self.opt.local_subproblems.items():
+        for k,sub in self.opt.local_scenarios.items():
             self._heuristic_fixed_vars[k] = 0
 
     def iter0_post_solver_creation(self):
@@ -69,7 +69,7 @@ class RelaxedPHFixer(Extension):
 
     def relaxed_ph_fixing(self, relaxed_solution, pre_iter0 = False):
 
-        for k, sub in self.opt.local_subproblems.items():
+        for k, sub in self.opt.local_scenarios.items():
             raw_fixed_this_iter = 0
             persistent_solver = is_persistent(sub._solver_plugin)
             for sn in sub.scen_list:

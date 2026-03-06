@@ -129,7 +129,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         attach the reduced cost suffix
         """
         relax_integer_vars = pyo.TransformationFactory("core.relax_integer_vars")
-        for s in self.opt.local_subproblems.values():
+        for s in self.opt.local_scenarios.values():
             relax_integer_vars.apply_to(s)
             s.rc = pyo.Suffix(direction=pyo.Suffix.IMPORT)
         super().lagrangian_prep()
@@ -160,7 +160,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         # would probably need additional info about where scenarios disagree
         rc = np.zeros(self.nonant_length)
 
-        for sub in self.opt.local_subproblems.values():
+        for sub in self.opt.local_scenarios.values():
             if is_persistent(sub._solver_plugin):
                 # Note: what happens with non-persistent solvers?
                 # - if rc is accepted as a model suffix by the solver (e.g. gurobi shell), it is loaded in postsolve
@@ -197,7 +197,7 @@ class ReducedCostsSpoke(LagrangianOuterBound):
         self._scenario_rc_buffer.fill(0)
         assert self._scenario_rc_buffer.size == self.send_buffers[Field.SCENARIO_REDUCED_COST].data_len()
         ci = 0 # buffer index
-        for sub in self.opt.local_subproblems.values():
+        for sub in self.opt.local_scenarios.values():
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]
                 for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():

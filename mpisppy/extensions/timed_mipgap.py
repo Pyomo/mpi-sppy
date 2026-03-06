@@ -54,7 +54,7 @@ class TimedMIPGapCB(mpisppy.extensions.extension.Extension):
 
     def iter0_post_solver_creation(self):
         ph = self.ph
-        for sname, s in ph.local_subproblems.items():
+        for sname, s in ph.local_scenarios.items():
             if not hasattr(s, '_solver_plugin'):
                 raise RuntimeError('Solver must be created before calling callback extension')
             if not (sputils.is_persistent(s._solver_plugin)):

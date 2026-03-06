@@ -533,7 +533,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def solve_loop(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
                    dtiming=False,
                    dis_W=False,
                    dis_prox=False,
@@ -543,7 +542,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                    verbose=False,
                    need_solution=True,
                    warmstart=sputils.WarmstartStatus.FALSE):
-        """ Loop over `local_subproblems` and solve them in a manner
+        """ Loop over `local_scenarios` and solve them in a manner
         dicated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
@@ -553,9 +552,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         Args:
             solver_options (dict, optional):
                 The scenario solver options.
-            use_scenarios_not_subproblems (boolean, optional):
-                If True, solves individual scenario problems, not subproblems.
-                Default is False.
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
             dis_W (boolean, optional):
@@ -602,7 +598,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         super().solve_loop(
             solver_options,
-            use_scenarios_not_subproblems,
             dtiming,
             gripe,
             disable_pyomo_signal_handling,

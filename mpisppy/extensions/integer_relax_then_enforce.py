@@ -33,7 +33,7 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
         self._integers_relaxed = True
 
     def _unrelax_integers(self):
-        for sub in self.opt.local_subproblems.values():
+        for sub in self.opt.local_scenarios.values():
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]
                 subproblem_solver = sub._solver_plugin

@@ -39,7 +39,7 @@ class NetworkDesignTracker(Extension):
 
         bundling = not hasattr(arb_model, '_solver_plugin')
         if (bundling):
-            arb_bundle_model = get_arb_elt(self.ph.local_subproblems)
+            arb_bundle_model = get_arb_elt(self.ph.local_scenarios)
             persistent = sputils.is_persistent(arb_bundle_model._solver_plugin)
         else:
             persistent = sputils.is_persistent(arb_model._solver_plugin)
@@ -82,7 +82,7 @@ class NetworkDesignTracker(Extension):
         if (bunnum is None):
             raise RuntimeError(f'Could not find {sname}')
         bname = f'rank{rank}bundle{bunnum}'
-        return self.ph.local_subproblems[bname]._solver_plugin
+        return self.ph.local_scenarios[bname]._solver_plugin
 
     def enditer(self):
         ''' Variable fixing must be done in miditer, so that a solve takes

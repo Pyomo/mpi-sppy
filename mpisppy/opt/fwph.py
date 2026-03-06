@@ -119,7 +119,7 @@ class FWPH(mpisppy.phbase.PHBase):
             total_iterations = self.options["PHIterLimit"]
             self.options["PHIterLimit"] = lp_iterations
             integer_relaxer = pyo.TransformationFactory('core.relax_integer_vars')
-            for s in self.local_subproblems.values():
+            for s in self.local_scenarios.values():
                 integer_relaxer.apply_to(s)
                 if sputils.is_persistent(s._solver_plugin):
                     for v,_ in s._relaxed_integer_vars[None].values():
@@ -128,7 +128,7 @@ class FWPH(mpisppy.phbase.PHBase):
             self._reenable_prox()
             super().iterk_loop()
             self._disable_prox()
-            for s in self.local_subproblems.values():
+            for s in self.local_scenarios.values():
                 for v, d in s._relaxed_integer_vars[None].values():
                     v.domain = d
                     if sputils.is_persistent(s._solver_plugin):
@@ -302,14 +302,14 @@ class FWPH(mpisppy.phbase.PHBase):
             _sdm_generators = {}
             stop = False
             best_bound_update = self._can_update_best_bound()
-            for name in self.local_subproblems:
+            for name in self.local_scenarios:
                 _sdm_generators[name] = self.SDM(name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update)
                 try:
                     dual_bound = next(_sdm_generators[name])
                 except StopIteration as e:
                     dual_bound = e.value
                     stop = True
-                self._local_bound += self.local_subproblems[name]._mpisppy_probability * \
+                self._local_bound += self.local_scenarios[name]._mpisppy_probability * \
                                      dual_bound
             self._update_dual_bounds()
             self._PHIter += 1
@@ -336,7 +336,7 @@ class FWPH(mpisppy.phbase.PHBase):
 
             # Re-set the mip._mpisppy_model.W so that the QP objective
             # is correct in the next major iteration
-            for model_name, mip in self.local_subproblems.items():
+            for model_name, mip in self.local_scenarios.items():
                 qp  = self.local_QP_subproblems[model_name]
                 scen_mip = self.local_scenarios[model_name]
                 for (node_name, ix) in scen_mip._mpisppy_data.nonant_indices:
@@ -367,7 +367,7 @@ class FWPH(mpisppy.phbase.PHBase):
     def SDM(self, model_name, mip_solver_options, dtiming, tee, verbose, sdm_iter_limit, FW_conv_thresh, best_bound_update):
         '''  Algorithm 2 in Boland et al. (with small tweaks)
         '''
-        mip = self.local_subproblems[model_name]
+        mip = self.local_scenarios[model_name]
         qp  = self.local_QP_subproblems[model_name]
     
         # Set the QP dual weights to the correct values.
@@ -474,7 +474,7 @@ class FWPH(mpisppy.phbase.PHBase):
     def _add_shared_columns(self, shared_columns):
         self.mpicomm.Barrier()
         self._disable_W()
-        for s in self.local_subproblems.values():
+        for s in self.local_scenarios.values():
             if sputils.is_persistent(s._solver_plugin):
                 active_objective_datas = list(s.component_data_objects(
                      pyo.Objective, active=True, descend_into=True))
@@ -508,7 +508,7 @@ class FWPH(mpisppy.phbase.PHBase):
         ''' Add a column to the QP, with values taken from the most recent MIP
             solve. Assumes the inner_bound is up-to-date in the MIP model.
         '''
-        mip = self.local_subproblems[model_name]
+        mip = self.local_scenarios[model_name]
         qp  = self.local_QP_subproblems[model_name]
         solver = qp._solver_plugin
         persistent = sputils.is_persistent(solver)
@@ -617,15 +617,14 @@ class FWPH(mpisppy.phbase.PHBase):
 
     def _attach_indices(self):
         ''' Attach the fields x_indices to the model objects in
-            self.local_subproblems (not self.local_scenarios, nor
-            self.local_QP_subproblems).
+            self.local_scenarios (not self.local_QP_subproblems).
 
             x_indices is a list of tuples of the form...
                 (node name, variable index)
             
             Must be called after the subproblems (MIPs AND QPs) are created.
         '''
-        for mip in self.local_subproblems.values():
+        for mip in self.local_scenarios.values():
             x_indices = mip._mpisppy_data.nonant_indices.keys()
 
             x_indices = pyo.Set(initialize=x_indices)
@@ -636,8 +635,8 @@ class FWPH(mpisppy.phbase.PHBase):
         ''' Create dictionaries that map MIP variable ids to their QP
             counterparts, and vice versa.
         '''
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
+        for name in self.local_scenarios.keys():
+            mip = self.local_scenarios[name]
             qp  = self.local_QP_subproblems[name]
 
             mip._mpisppy_data.mip_to_qp = {id(mip._mpisppy_data.nonant_vars[key]): qp.x[key]
@@ -675,8 +674,8 @@ class FWPH(mpisppy.phbase.PHBase):
     def fwph_convergence_diff(self):
         ''' Perform the convergence check of Algorithm 3 in Boland et al. '''
         diff = 0.
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
+        for name in self.local_scenarios.keys():
+            mip = self.local_scenarios[name]
             qp  = self.local_QP_subproblems[name]
             xbars = mip._mpisppy_model.xbars
             diff_s = mip._mpisppy_probability * sum((qp.x[idx]._value - xbars[idx]._value)**2
@@ -798,7 +797,7 @@ class FWPH(mpisppy.phbase.PHBase):
             iteration this way).
         '''
         self.local_QP_subproblems = dict()
-        for (name, model) in self.local_subproblems.items():
+        for (name, model) in self.local_scenarios.items():
             nonant_indices = model._mpisppy_data.nonant_indices.keys()
 
             ''' Convex comb. coefficients '''
@@ -837,8 +836,8 @@ class FWPH(mpisppy.phbase.PHBase):
 
                 Must be called after Iter0().
         '''
-        for name in self.local_subproblems.keys():
-            mip = self.local_subproblems[name]
+        for name in self.local_scenarios.keys():
+            mip = self.local_scenarios[name]
             qp  = self.local_QP_subproblems[name]
 
             for key in mip._mpisppy_model.x_indices:
@@ -903,7 +902,7 @@ class FWPH(mpisppy.phbase.PHBase):
                                    stage2EFsolvern=stage2EFsolvern,
                                    branching_factors=branching_factors)
             if obj is not None:
-                for model_name in self.local_subproblems:
+                for model_name in self.local_scenarios:
                     self._add_QP_column(model_name)
                 # self._restore_nonants()
                 number_points += 1
@@ -1014,7 +1013,7 @@ class FWPH(mpisppy.phbase.PHBase):
             QP dual weights are initialized to the MIP dual weights.
         '''
 
-        for name, mip in self.local_subproblems.items():
+        for name, mip in self.local_scenarios.items():
             QP = self.local_QP_subproblems[name]
 
             obj, new = self._extract_nonant_objective(mip)
@@ -1068,7 +1067,7 @@ class FWPH(mpisppy.phbase.PHBase):
     def _cache_nonant_var_swap_qp(self):
         """ cache the lists used for the nonant var swap """
 
-        for (name, model) in self.local_subproblems.items():
+        for (name, model) in self.local_scenarios.items():
             scenario = self.local_scenarios[name]
             num_nonant_vars = scenario._mpisppy_data.nlens
             node_list = scenario._mpisppy_node_list
