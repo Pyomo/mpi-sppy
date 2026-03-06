@@ -624,7 +624,7 @@ class PHBase(mpisppy.spopt.SPOpt):
         update proximal term approximation by potentially
         adding a linear cut near each current xvar value
 
-        NOTE: This is badly inefficient, but works
+        NOTE: This is expensive, but works
         """
         tol = self.prox_approx_tol
         for sn, s in self.local_scenarios.items():
