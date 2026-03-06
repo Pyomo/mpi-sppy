@@ -50,7 +50,7 @@ print("** Starting regular sizes **")
 do_one("sizes",
        "sizes_cylinders.py",
        4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--num-scens=3 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 
@@ -58,7 +58,7 @@ print("** Starting special sizes **")
 do_one("sizes",
        "special_cylinders.py",
        4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--num-scens=3 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 

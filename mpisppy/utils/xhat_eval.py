@@ -345,16 +345,14 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
     #======================================================================
     def _fix_nonants_at_value(self):
         """ Fix the Vars subject to non-anticipativity at their current values.
-            Loop over the scenarios to restore, but loop over subproblems
-            to alert persistent solvers.
+            Loop over the scenarios to restore and alert persistent solvers.
         """
         rounding_bias = self.options.get("rounding_bias", 0.0)
         for k,s in self.local_scenarios.items():
 
             persistent_solver = None
-            if not self.bundling:
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
+            if sputils.is_persistent(s._solver_plugin):
+                persistent_solver = s._solver_plugin
 
             for var in s._mpisppy_data.nonant_indices.values():
                 if var in s._mpisppy_data.all_surrogate_nonants:
@@ -362,27 +360,8 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                 if var.is_binary() or var.is_integer():
                     var._value = round(var._value + rounding_bias)
                 var.fix()
-                if not self.bundling and persistent_solver is not None:
+                if persistent_solver is not None:
                     persistent_solver.update_var(var)
-
-        if self.bundling:  # we might need to update persistent solvers
-            rank_local = self.cylinder_rank
-            for k,s in self.local_subproblems.items():
-                if (sputils.is_persistent(s._solver_plugin)):
-                    persistent_solver = s._solver_plugin
-                else:
-                    break  # all solvers should be the same
-
-                # the bundle number is the last number in the name
-                bunnum = sputils.extract_num(k)
-                # for the scenarios in this bundle, update Vars
-                for sname, scen in self.local_scenarios.items():
-                    if sname not in self.names_in_bundles[rank_local][bunnum]:
-                        break
-                    for var in scen._mpisppy_data.nonant_indices.values():
-                        if var in scen._mpisppy_data.all_surrogate_nonants:
-                            continue
-                        persistent_solver.update_var(var)
 
     def calculate_incumbent(self, fix_nonants=True, verbose=False):
         """

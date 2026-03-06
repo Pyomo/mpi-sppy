@@ -1,4 +1,5 @@
 #!/bin/bash
+# NOTE: This script used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 # three stage version
 
 # TBD: aircond uses start-seed (but seed is allowed as an arg that is ignored).
@@ -26,7 +27,7 @@ echo "-------- EF Directly"
 python aircond_cylinders.py --EF-directly --solver-name=${SOLVERNAME} --branching-factors "$BF1 $BF2" $EC
 
 echo "***** Cylinders with no bundles"
-mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME}  --rel-gap 0.01  --max-solver-threads 2 --start-seed $SS --lagrangian --xhatshuffle --bundles-per-rank=0  --write-solution --intra-hub-conv-thresh 0 --branching-factors "$BF1 $BF2" $EC
+mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME}  --rel-gap 0.01  --max-solver-threads 2 --start-seed $SS --lagrangian --xhatshuffle  --write-solution --intra-hub-conv-thresh 0 --branching-factors "$BF1 $BF2" $EC
 
 echo "======== Cylinders with ${BF1} bundles per rank (not proper bundles)"
 mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME}  --rel-gap 0.01  --max-solver-threads 2 --start-seed $SS  --lagrangian --xhatshuffle --bundles-per-rank=$BF1  --write-solution --intra-hub-conv-thresh 0 --branching-factors "$BF1 $BF2" $EC
@@ -42,7 +43,7 @@ echo "This will NOT match the others"
 echo ""
 # It is entirely up to the user to make sure that the scenario count and scenarios per bundle match between creating the pickles and using them
 # (the costs and the start-seed probably don't matter, since the pickle has it all)
-mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --branching-factors $PBF --rel-gap 0.01 --max-solver-threads 2 --start-seed $SS  --lagrangian --xhatshuffle --bundles-per-rank=0  --scenarios-per-bundle=$SPB --write-solution --intra-hub-conv-thresh 0 --unpickle-bundles-dir="." $EC
+mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --branching-factors $PBF --rel-gap 0.01 --max-solver-threads 2 --start-seed $SS  --lagrangian --xhatshuffle  --scenarios-per-bundle=$SPB --write-solution --intra-hub-conv-thresh 0 --unpickle-bundles-dir="." $EC
 
 echo ""
 echo "The pickle bundle objective  should NOT have matched the others"

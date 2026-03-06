@@ -19,10 +19,6 @@ class XhatInnerBoundBase(spoke.InnerBoundNonantSpoke):
     
 
     def xhat_prep(self):
-        if "bundles_per_rank" in self.opt.options\
-           and self.opt.options["bundles_per_rank"] != 0:
-            raise RuntimeError("xhat spokes cannot have bundles (yet)")
-
         ## for later
         self.verbose = self.opt.options["verbose"] # typing aid  
 

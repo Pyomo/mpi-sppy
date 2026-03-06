@@ -71,6 +71,13 @@ def shared_options(cfg):
             },
         }
 
+    if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank > 0:
+        raise RuntimeError(
+            "Loose bundling (bundles_per_rank > 0) was removed in 2026.\n"
+            "Use 'proper bundles' instead (--scenarios-per-bundle).\n"
+            "See doc/src/properbundles.rst and mpisppy/generic_cylinders.py."
+        )
+
     return shoptions
 
 def apply_solver_specs(name, spoke, cfg):
@@ -120,7 +127,7 @@ def ph_hub(
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
-    options["bundles_per_rank"] = cfg.bundles_per_rank
+
     options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
@@ -238,7 +245,7 @@ def subgradient_hub(cfg,
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
-    options["bundles_per_rank"] = cfg.bundles_per_rank
+
     options["smoothed"] = 0
 
     hub_dict = {
@@ -282,7 +289,7 @@ def fwph_hub(cfg,
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
-    options["bundles_per_rank"] = cfg.bundles_per_rank
+
     options["smoothed"] = 0
 
     options.update(_fwph_options(cfg))
@@ -897,7 +904,6 @@ def xhatlooper_spoke(
         extension_kwargs=extension_kwargs,
     )
 
-    xhatlooper_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": xhatlooper_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "scen_limit": cfg.xhat_scen_limit,
@@ -932,7 +938,6 @@ def xhatxbar_spoke(
         all_nodenames=all_nodenames,
     )
 
-    xhatxbar_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
     xhatxbar_dict["opt_kwargs"]["options"]["xhat_xbar_options"] = {
         "xhat_solver_options": xhatxbar_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
@@ -967,7 +972,6 @@ def xhatshuffle_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    xhatshuffle_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
     xhatshuffle_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": xhatshuffle_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
@@ -1004,7 +1008,6 @@ def xhatspecific_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    xhatspecific_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat    
     return xhatspecific_dict
 
 def xhatlshaped_spoke(
@@ -1028,8 +1031,6 @@ def xhatlshaped_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    xhatlshaped_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat    
-
     return xhatlshaped_dict
 
 def slammax_spoke(
@@ -1051,7 +1052,6 @@ def slammax_spoke(
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
     )
-    slammax_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for slamming
     return slammax_dict
 
 def slammin_spoke(
@@ -1072,7 +1072,6 @@ def slammin_spoke(
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
     )
-    slammin_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for slamming
     return slammin_dict
 
 

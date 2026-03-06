@@ -1,4 +1,5 @@
 #!/bin/bash
+# NOTE: This script used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 
 #SBATCH -N 12
 #SBATCH -J 100scen_fw_bundles

@@ -42,10 +42,8 @@ def check_args(cfg):
     has all the appropriate fields."""
     assert cfg.get("pickle_bundles_dir") is None or cfg.get("unpickle_bundles_dir") is None
     assert cfg.get("pickle_scenarios_dir") is None or cfg.get("unpickle_scenarios_dir") is None
-    assert cfg.get("unpickle_scenarios_dir") is None or cfg.get("bundles_per_rank") != 0, "Unpickled scenarios in proper bundles are not supported"
-    if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank != 0:
-        raise RuntimeError("For proper bundles, --scenarios-per-bundle must be specified "
-                           "and --bundles-per-rank, which is for loose bundles, cannot be")
+    if cfg.get("unpickle_scenarios_dir") is not None and have_proper_bundles(cfg):
+        raise RuntimeError("Unpickled scenarios in proper bundles are not supported")
     if cfg.get("unpickle_bundles_dir") is not None and not os.path.isdir(cfg.unpickle_bundles_dir):
         raise RuntimeError(f"Directory to load pickled bundle files from not found: {cfg.unpickle_bundles_dir}")
     if cfg.get("unpickle_scenarios_dir") is not None and not os.path.isdir(cfg.unpickle_scenarios_dir):
