@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# NOTE: This example used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 # updated april 26
 # mpiexec -np 2 python -m mpi4py ccopf2wood.py 2 3
 # (see the first lines of main() to change instances)
@@ -194,7 +195,6 @@ def main():
     }
 
     xhat_options = options.copy()
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhat_options["xhat_specific_options"] = {"xhat_solver_options":
                                           options["iterk_solver_options"],
                                           "xhat_scenario_dict": xhat_dict,

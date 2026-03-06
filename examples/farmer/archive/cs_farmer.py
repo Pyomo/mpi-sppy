@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# NOTE: This example used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 import datetime
 import logging
 import sys
@@ -115,7 +116,6 @@ if __name__ == "__main__":
     # TBD: this should have a different rho setter than the optimizer
 
     options = copy.deepcopy(hub_ph_options)  # many will not be used
-    options['bundles_per_rank'] = 0 # no bundles for xhat
     options["xhat_looper_options"] = \
         {
             "xhat_solver_options": None,

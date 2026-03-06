@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# NOTE: This example used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 # updated 23 April 2020
 # Serial (not cylinders)
 

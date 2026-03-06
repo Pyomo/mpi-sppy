@@ -391,7 +391,6 @@ class LShapedHub(Hub):
 
     def send_nonants(self):
         """ Gather nonants and send them to the appropriate spokes
-            TODO: Will likely fail with bundling
         """
         ci = 0  ## index to self.nonant_send_buffer
         nonant_send_buffer = self.send_buffers[Field.NONANT]

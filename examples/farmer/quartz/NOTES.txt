@@ -3,10 +3,10 @@ Simple interactive test on pdebug queue:
 srun -p pdebug -N 1 -n 1 python farmer_ef.py 1 3 gurobi
 
 # basic PH 
-srun -p pdebug -N 1 -n 6 python farmer_cylinders.py 3 --max-iterations=1000 --default-rho=1.0 --with-display-progress --solver=gurobi_persistent --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --with-display-convergence-detail
+srun -p pdebug -N 1 -n 6 python farmer_cylinders.py 3 --max-iterations=1000 --default-rho=1.0 --with-display-progress --solver=gurobi_persistent --no-lagrangian --no-xhatlooper --no-fwph --with-display-convergence-detail
 
 # async PH
-srun -p pdebug -N 1 -n 6 python farmer_cylinders.py 3 --max-iterations=1000 --default-rho=1.0 --with-display-progress --solver=gurobi_persistent --bundles-per-rank=0 --no-lagrangian --no-xhatlooper --no-fwph --with-display-convergence-detail
+srun -p pdebug -N 1 -n 6 python farmer_cylinders.py 3 --max-iterations=1000 --default-rho=1.0 --with-display-progress --solver=gurobi_persistent --no-lagrangian --no-xhatlooper --no-fwph --with-display-convergence-detail
 
 
 
