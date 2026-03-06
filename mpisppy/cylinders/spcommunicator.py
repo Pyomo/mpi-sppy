@@ -26,7 +26,7 @@ import numpy as np
 from math import inf
 
 from mpisppy import MPI, global_toc
-from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow, _padded_len_n_doubles
+from mpisppy.cylinders.spwindow import Field, FieldLengths, SPWindow, padded_len_n_doubles
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ def communicator_array(data_length: int):
         padded_len: multiple-of-8 length used in the MPI window
     """
     logical_len = data_length + 1
-    padded_len = _padded_len_n_doubles(logical_len)
+    padded_len = padded_len_n_doubles(logical_len)
 
     itemsize = np.dtype("d").itemsize
     mem = MPI.Alloc_mem(padded_len * itemsize)
@@ -314,7 +314,7 @@ class SPCommunicator:
 
         _, remote_logical_len, remote_padded_len = remote_buffer_layout[field]
         expected_logical_len = length + 1
-        expected_padded_len = _padded_len_n_doubles(expected_logical_len)
+        expected_padded_len = padded_len_n_doubles(expected_logical_len)
 
         if remote_logical_len != expected_logical_len or remote_padded_len != expected_padded_len:
             raise RuntimeError(
@@ -332,7 +332,7 @@ class SPCommunicator:
         if key in self.receive_buffers:
             my_fa = self.receive_buffers[key]
             expected_logical_len = length + 1
-            expected_padded_len = _padded_len_n_doubles(expected_logical_len)
+            expected_padded_len = padded_len_n_doubles(expected_logical_len)
             assert expected_logical_len == my_fa.logical_len()
             assert expected_padded_len == my_fa.padded_len()
         else:

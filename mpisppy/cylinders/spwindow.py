@@ -93,9 +93,14 @@ class FieldLengths:
         return self._field_lengths[field]
 
 
-def _padded_len_n_doubles(logical_len: int, n: int = 8) -> int:
-    """Round up length (in doubles) to a multiple of n doubles (n*8 bytes)."""
-    return ((logical_len + n - 1) // n) * n
+PAD_N_DOUBLES = 8  # padding granularity in doubles (PAD_N_DOUBLES*8 bytes)
+
+
+def padded_len_n_doubles(logical_len: int) -> int:
+    """Round up length (in doubles) to a multiple of PAD_N_DOUBLES doubles (PAD_N_DOUBLES*8 bytes)."""
+    if PAD_N_DOUBLES < 1:
+        raise ValueError(f"PAD_N_DOUBLES must be >= 1, got {PAD_N_DOUBLES}")
+    return ((logical_len + PAD_N_DOUBLES - 1) // PAD_N_DOUBLES) * PAD_N_DOUBLES
 
 
 class SPWindow:
@@ -126,7 +131,7 @@ class SPWindow:
                 raise ValueError(f"{field=} has {padded_len=} < {logical_len=}")
 
             # padded_len must be a multiple of 8 doubles (64 bytes)
-            expected_padded = _padded_len_n_doubles(logical_len)
+            expected_padded = padded_len_n_doubles(logical_len)
             if padded_len != expected_padded:
                 raise ValueError(
                     f"{field=} has {logical_len=} but {padded_len=}; expected padded_len={expected_padded}"
