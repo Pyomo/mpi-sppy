@@ -13,6 +13,7 @@ import time
 import logging
 import weakref
 import numpy as np
+import array
 import pyomo.environ as pyo
 from mpisppy.utils import nice_join, sputils
 from mpisppy import global_toc
@@ -127,7 +128,7 @@ class SPBase:
         self._attach_nonant_indices()
         self._attach_varid_to_nonant_index()
         self._create_communicators()
-        self._verify_nonant_lengths()
+        self._verify_nonants()
         self._set_sense()
         self._use_variable_probability_setter()
         self._set_solution_cache()
@@ -164,7 +165,7 @@ class SPBase:
                 "model sense (minimize or maximize)"
             )
 
-    def _verify_nonant_lengths(self):
+    def _verify_nonants(self):
         local_node_nonant_lengths = {}   # keys are tree node names
 
         # we need to accumulate all local contributions before the reduce
@@ -190,7 +191,37 @@ class SPBase:
             if val != int(max_val[0]):
                 raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
                         f"variables: {val} vs. max {max_val[0]}")
-                
+
+        # compare node names (reduction)
+        local_nonant_char_array = {}
+        for k,s in self.local_scenarios.items():
+            nlens = s._mpisppy_data.nlens
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                if ndn not in local_nonant_char_array:
+                    local_nonant_char_array[ndn] = {}
+                for i, var in enumerate(node.nonant_vardata_list):
+                    if i in local_nonant_char_array[ndn]:
+                        if var.name != local_nonant_char_array[ndn][i]:
+                            raise RuntimeError(f"[rank {self.global_rank}] Tree node {ndn} has different non-anticipative "
+                                               f"variables in position {i}, scenario {s} has name "
+                                               f"{var.name}, some other scenario has name "
+                                               f"{local_nonant_char_array[ndn][i]}")
+                    else:
+                        local_nonant_char_array[ndn][i] = var.name
+
+        for ndn, var_names in local_nonant_char_array.items():
+            a = array.array("u")
+            for i, vname in var_names.items():
+                a.extend(vname)
+            localnames = np.array( array.array("i", a.tobytes()) )
+            globalnames = np.zeros( len(localnames), "i" )
+            self.comms[ndn].Allreduce([localnames, MPI.INT],
+                                      [globalnames, MPI.INT],
+                                      op=MPI.MAX)
+            if not np.all(localnames == globalnames):
+                raise RuntimeError(f"For node {ndn}, non-anticipative variable lists do not match! ")
+
     def _check_nodenames(self):
         for ndn in self.all_nodenames:
             if ndn != 'ROOT' and sputils.parent_ndn(ndn) not in self.all_nodenames:
