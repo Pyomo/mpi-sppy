@@ -289,7 +289,6 @@ class SPOpt(SPBase):
 
 
     def solve_loop(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
                    dtiming=False,
                    gripe=False,
                    disable_pyomo_signal_handling=False,
@@ -298,7 +297,7 @@ class SPOpt(SPBase):
                    need_solution=True,
                    warmstart=sputils.WarmstartStatus.FALSE,
                    ):
-        """ Loop over `local_subproblems` and solve them in a manner
+        """ Loop over `local_scenarios` and solve them in a manner
         dicated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
@@ -308,9 +307,6 @@ class SPOpt(SPBase):
         Args:
             solver_options (dict, optional):
                 The scenario solver options.
-            use_scenarios_not_subproblems (boolean, optional):
-                If True, solves individual scenario problems, not subproblems.
-                This distinction matters when using bundling. Default is False.
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
             gripe (boolean, optional):
@@ -348,13 +344,8 @@ class SPOpt(SPBase):
         if self.extensions is not None:
                 self.extobject.pre_solve_loop()
 
-        # note that when there is no bundling, scenarios are subproblems
-        if use_scenarios_not_subproblems:
-            s_source = self.local_scenarios
-        else:
-            s_source = self.local_subproblems
         pyomo_solve_times = list()
-        for k,s in s_source.items():
+        for k,s in self.local_scenarios.items():
             logger.debug("  in loop solve_loop k={}, rank={}".format(k, self.cylinder_rank))
             if tee:
                 print(f"Tee solve for {k} on global rank {self.global_rank}")
@@ -444,7 +435,7 @@ class SPOpt(SPBase):
                 The expected objective outer bound.
         """
         local_Ebounds = []
-        for k,s in self.local_subproblems.items():
+        for k,s in self.local_scenarios.items():
             logger.debug("  in loop Ebound k={}, rank={}".format(k, self.cylinder_rank))
             try:
                 eb = s._mpisppy_probability * float(s._mpisppy_data.outer_bound)
@@ -902,25 +893,21 @@ class SPOpt(SPBase):
 
 
     def _subproblem_creation(self, verbose=False):
-        """ Create local subproblems (not local scenarios).
-
-        This function copies pointers to the already-created `local_scenarios`.
+        """ Attach scen_list to each local scenario.
 
         Args:
             verbose (boolean, optional):
                 If True, displays verbose output. Default False.
         """
-        self.local_subproblems = dict()
         for sname, s in self.local_scenarios.items():
-            self.local_subproblems[sname] = s
-            self.local_subproblems[sname].scen_list = [sname]
+            s.scen_list = [sname]
 
 
     def _create_solvers(self, presolve=True):
 
         dtiming = ("display_timing" in self.options) and self.options["display_timing"]
         local_sit = [] # Local set instance time for time tracking
-        for sname, s in self.local_subproblems.items(): # solver creation
+        for sname, s in self.local_scenarios.items(): # solver creation
             s._solver_plugin = SolverFactory(self.options["solver_name"])
             if (sputils.is_persistent(s._solver_plugin)):
                 if dtiming:
@@ -964,12 +951,9 @@ class SPOpt(SPBase):
         """
         Iterate over every scenario, yielding the
         subproblem_name, subproblem, scenario_name, scenario.
-
-        Useful for managing bundles
         """
-        for sub_name, sub in self.local_subproblems.items():
-            for s_name in sub.scen_list:
-                yield sub_name, sub, s_name, self.local_scenarios[s_name]
+        for s_name, s in self.local_scenarios.items():
+            yield s_name, s, s_name, s
 
 
 # these parameters should eventually be promoted to a non-PH

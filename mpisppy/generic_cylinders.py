@@ -673,8 +673,6 @@ def _write_scenario_lp_mps_files_only(module,
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
 
-    # Make SPBase look PH-like for this extension
-    sp.local_subproblems = sp.local_scenarios
     sp.options["write_lp_mps_extension_options"] = {
         "write_scenario_lp_mps_files_dir": cfg.write_scenario_lp_mps_files_dir,
         "cfg": cfg,   # IMPORTANT: pass cfg so extension can use default_rho

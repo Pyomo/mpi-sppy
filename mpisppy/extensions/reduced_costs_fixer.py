@@ -181,7 +181,7 @@ class ReducedCostsFixer(Extension):
 
         raw_fixed_this_iter = 0
 
-        for sub in self.opt.local_subproblems.values():
+        for sub in self.opt.local_scenarios.values():
             persistent_solver = is_persistent(sub._solver_plugin)
             for sn in sub.scen_list:
                 s = self.opt.local_scenarios[sn]

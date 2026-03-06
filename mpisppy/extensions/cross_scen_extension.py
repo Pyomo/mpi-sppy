@@ -82,7 +82,7 @@ class CrossScenarioExtension(Extension):
 
         cached_ph_obj = dict()
 
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
             phobj = find_active_objective(s)
             phobj.deactivate()
             cached_ph_obj[k] = phobj
@@ -102,8 +102,8 @@ class CrossScenarioExtension(Extension):
                 need_solution=False,
         )
 
-        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_subproblems.values()),
-                                dtype="d", count=len(opt.local_subproblems))
+        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_scenarios.values()),
+                                dtype="d", count=len(opt.local_scenarios))
 
         local_ob = np.empty(1)
         if opt.is_minimizing:
@@ -122,7 +122,7 @@ class CrossScenarioExtension(Extension):
 
         opt.spcomm.BestOuterBound = opt.spcomm.OuterBoundUpdate(global_ob[0], char='C')
 
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
             s._mpisppy_model.EF_Obj.deactivate()
             cached_ph_obj[k].activate()
 
@@ -178,7 +178,7 @@ class CrossScenarioExtension(Extension):
         outer_iter = int(coefs[-1])
 
         if opt.bundling:
-            for bn,b in opt.local_subproblems.items():
+            for bn,b in opt.local_scenarios.items():
                 persistent_solver = sputils.is_persistent(b._solver_plugin)
                 ## get an arbitrary scenario
                 s = opt.local_scenarios[b.scen_list[0]]
@@ -206,7 +206,7 @@ class CrossScenarioExtension(Extension):
                         b._solver_plugin.add_constraint(b._mpisppy_model.benders_cuts[outer_iter, k])
 
         else:
-            for sn,s in opt.local_subproblems.items():
+            for sn,s in opt.local_scenarios.items():
                 persistent_solver = sputils.is_persistent(s._solver_plugin)
                 for idx, k in enumerate(opt.all_scenario_names):
                     row = coefs[row_len*idx:row_len*(idx+1)]
@@ -239,7 +239,7 @@ class CrossScenarioExtension(Extension):
         if add_cut:
             self.best_inner_bound = ib
             self.best_outer_bound = ob
-            for sn,s in opt.local_subproblems.items():
+            for sn,s in opt.local_scenarios.items():
                 persistent_solver = sputils.is_persistent(s._solver_plugin)
                 prior_outer_iter = list(s._mpisppy_model.inner_bound_constr.keys())
                 s._mpisppy_model.inner_bound_constr[outer_iter] = (ob, s._mpisppy_model.EF_obj, ib)
@@ -328,7 +328,7 @@ class CrossScenarioExtension(Extension):
 
         # eta is attached to each subproblem, regardless of bundles
         bundling = opt.bundling
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
             s._mpisppy_model.eta = pyo.Var(opt.all_scenario_names, initialize=_eta_init, bounds=_eta_bounds)
             if sputils.is_persistent(s._solver_plugin):
                 for var in s._mpisppy_model.eta.values():
@@ -341,7 +341,7 @@ class CrossScenarioExtension(Extension):
         ## hold the PH object harmless
         self._disable_W_and_prox()
 
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
 
             obj = find_active_objective(s)
 
