@@ -582,7 +582,7 @@ def do_EF(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_denou
     if ef.extensions is not None:
         ef.extobject.pre_solve()
 
-    tee = ef.options.get("tee",False)
+    tee = cfg.tee_EF
     results = ef.solve_extensive_form(solver_options=ef_dict["solver_options"],tee = tee)
 
     if not pyo.check_optimal_termination(results):

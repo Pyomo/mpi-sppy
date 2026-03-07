@@ -320,7 +320,7 @@ def fwph_hub(cfg,
 
 def ef_extension_adder(ef_dict, ext_class):
     '''
-    logic copied from extension_adder(), adatped for EFExtensions
+    logic copied from extension_adder(), adapted for EFExtensions
     '''
     from mpisppy.extensions.extension import EFMultiExtension
     
@@ -333,7 +333,7 @@ def ef_extension_adder(ef_dict, ext_class):
             ef_dict["extension_kwargs"]["ext_classes"].append(ext_class)
     elif ef_dict["extensions"] != ext_class:
         #ext_class is the second extension
-        if "extensions_kwargs" not in ef_dict:
+        if "extension_kwargs" not in ef_dict:
             ef_dict["extension_kwargs"] = {}
         ef_dict["extension_kwargs"]["ext_classes"] = \
             [ef_dict["extensions"], ext_class]
