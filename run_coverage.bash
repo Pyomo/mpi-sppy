@@ -15,7 +15,9 @@
 #
 #   SOLVER defaults to "cplex" (matches CI). Use e.g. "xpress" or "gurobi".
 #
-# Tests that require unavailable dependencies are skipped automatically.
+# Tests that require unavailable optional dependencies (amplpy, parapint, mip)
+# are either skipped automatically via has_module checks or fail gracefully
+# through run_phase (which continues to the next phase on error).
 #
 # Results are written to htmlcov/index.html
 
