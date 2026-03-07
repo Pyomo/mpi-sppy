@@ -105,16 +105,16 @@ run_phase "straight_tests.py (spawns mpiexec)" \
 # ---------- Example-based tests ----------
 
 run_phase "examples/afew.py $SOLVER_PERSISTENT" \
-    bash -c "cd examples && coverage run --rcfile=$PROJ_DIR/.coveragerc afew.py $SOLVER_PERSISTENT"
+    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' afew.py '$SOLVER_PERSISTENT'"
 
 run_phase "examples/run_all.py $SOLVER_PERSISTENT nouc" \
-    bash -c "cd examples && coverage run --rcfile=$PROJ_DIR/.coveragerc run_all.py $SOLVER_PERSISTENT '' nouc"
+    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' run_all.py '$SOLVER_PERSISTENT' '' nouc"
 
 run_phase "examples/run_all.py $SOLVER_DIRECT nouc" \
-    bash -c "cd examples && coverage run --rcfile=$PROJ_DIR/.coveragerc run_all.py $SOLVER_DIRECT '' nouc"
+    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' run_all.py '$SOLVER_DIRECT' '' nouc"
 
 run_phase "examples/generic_tester.py ${SOLVER}_direct nouc" \
-    bash -c "cd examples && coverage run --rcfile=$PROJ_DIR/.coveragerc generic_tester.py ${SOLVER}_direct '' nouc"
+    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' generic_tester.py '${SOLVER}_direct' '' nouc"
 
 # ---------- Optional tests (skip if deps missing) ----------
 
@@ -123,7 +123,7 @@ if has_module amplpy; then
         coverage run --rcfile=.coveragerc mpisppy/tests/test_agnostic.py
 
     run_phase "afew_agnostic.py" \
-        bash -c "cd mpisppy/agnostic/examples && coverage run --rcfile=$PROJ_DIR/.coveragerc afew_agnostic.py"
+        bash -c "cd '$PROJ_DIR/mpisppy/agnostic/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' afew_agnostic.py"
 else
     echo ""
     echo "=== SKIPPED: agnostic tests (amplpy not installed) ==="
