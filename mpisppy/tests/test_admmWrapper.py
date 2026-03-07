@@ -115,7 +115,11 @@ class TestAdmmWrapper(unittest.TestCase):
             command = command_line_pair[0].split()
             
             result = subprocess.run(command, capture_output=True, text=True)
-            if result.stderr:
+            # Filter out harmless MPI warnings from stderr
+            stderr_lines = [line for line in result.stderr.splitlines()
+                            if line.strip() and "btl_tcp" not in line
+                            and "osc_ucx" not in line] if result.stderr else []
+            if stderr_lines:
                 print("Error output:")
                 raise RuntimeError(result.stderr)
                 
