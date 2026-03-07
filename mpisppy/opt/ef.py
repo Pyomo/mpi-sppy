@@ -67,11 +67,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             scenario_creator,
             scenario_creator_kwargs=scenario_creator_kwargs,
             all_nodenames=all_nodenames
-        )
-        
-        # this is copied from SPOpt, maybe move it to SPBase so it shows up here too?
-        self._save_active_objectives()
-        
+        )        
+
         self.bundling = True
         if self.n_proc > 1 and self.cylinder_rank == 0:
             logger.warning("Creating an ExtensiveForm object in parallel. Why?")
@@ -218,15 +215,6 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             scenario name, scenario instance (str, ConcreteModel)
         """
         yield from self.local_scenarios.items()
-
-    def _save_active_objectives(self):
-        """ Save the active objectives for use in PH, bundles, and calculation """
-        # maybe move it from spopt to spbase instead?
-        
-        self.saved_objectives = dict()
-        for sname, scenario_instance in self.local_scenarios.items():
-            self.saved_objectives[sname] = sputils.find_active_objective(scenario_instance)
-        
 
 
 if __name__ == "__main__":
