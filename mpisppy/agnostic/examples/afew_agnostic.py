@@ -7,12 +7,14 @@
 # full copyright and license information.
 ###############################################################################
 # Run a few examples; dlw Nov 2024; user-unfriendly
-# Assumes you run from the agnostic/examples directory.
 # python run_agnostic.py
 # python run_agnostic.py --oversubscribe
 
 import os
 import sys
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_AGNOSTIC_CYLINDERS = os.path.join(_THIS_DIR, "..", "agnostic_cylinders.py")
 
 pyomo_solver_name = "cplex_direct"
 ampl_solver_name = "gurobi"
@@ -28,7 +30,7 @@ if len(sys.argv) == 2:
 badguys = list()
 
 def do_one(np, argstring):
-    runstring = f"mpiexec -np {np} {mpiexec_arg} python -m mpi4py ../agnostic_cylinders.py {argstring}"
+    runstring = f"mpiexec -np {np} {mpiexec_arg} python -m mpi4py {_AGNOSTIC_CYLINDERS} {argstring}"
     print(runstring)
     code = os.system(runstring)
     if code != 0:
