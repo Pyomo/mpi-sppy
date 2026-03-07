@@ -141,7 +141,8 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 self.solver.options[opt] = value
                 
         results = self.solver.solve(self.ef, tee=tee, load_solutions=False, **solve_keyword_args)
-        if len(results.solution) > 0:
+        if len(results.problem) > 0 and \
+           results.problem[0]['Number of solutions'] > 0:
             if sputils.is_persistent(self.solver):
                 self.solver.load_vars()
             else:
@@ -161,10 +162,13 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
             ValueError:
                 If optimal objective value could not be retrieved.
         """
-        try:
-            obj_val = pyo.value(self.ef.EF_Obj)
-        except Exception as e:
-            raise ValueError(f"Could not extract EF objective value with error: {str(e)}")
+        if not self.tree_solution_available:
+            obj_val = None
+        else:        
+            try:
+                obj_val = pyo.value(self.ef.EF_Obj)
+            except Exception as e:
+                raise ValueError(f"Could not extract EF objective value with error: {str(e)}")
 
         if (self.extensions is not None):
             obj_val = self.extobject.get_objective_value(obj_val)
