@@ -7,12 +7,16 @@
 # full copyright and license information.
 ###############################################################################
 # test mps utilities
+import os
 import unittest
 from mip import OptimizationStatus
 import mpisppy.utils.mps_reader as mps_reader
 from mpisppy.tests.utils import get_solver
 import pyomo.environ as pyo
 import mip  # pip install mip (from coin-or)
+
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_EXAMPLES_DIR = os.path.join(_THIS_DIR, "examples")
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver(persistent_OK=False)
 
@@ -51,13 +55,13 @@ class TestMPSReader(unittest.TestCase):
                                delta=None, msg=None)
         
     def test_mps_reader_scen0_densenames(self):
-        self._reader_body("examples/scen0_densenames.mps")
-        
+        self._reader_body(os.path.join(_EXAMPLES_DIR, "scen0_densenames.mps"))
+
     def test_mps_reader_test1(self):
-        self._reader_body("examples/test1.mps")
-        
+        self._reader_body(os.path.join(_EXAMPLES_DIR, "test1.mps"))
+
     def test_mps_reader_sizes1(self):
-        self._reader_body("examples/sizes1.mps")
+        self._reader_body(os.path.join(_EXAMPLES_DIR, "sizes1.mps"))
 
 if __name__ == '__main__':
     unittest.main()

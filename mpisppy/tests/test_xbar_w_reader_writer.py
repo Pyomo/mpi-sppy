@@ -18,6 +18,9 @@ import unittest
 import csv
 from mpisppy.utils import config
 
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_W_TEST_DATA_DIR = os.path.join(_THIS_DIR, "examples", "w_test_data")
+
 import mpisppy.utils.cfg_vanilla as vanilla
 import mpisppy.tests.examples.farmer as farmer
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -48,10 +51,10 @@ class Test_xbar_w_reader_writer_farmer(unittest.TestCase):
     """ Test the gradient code using farmer."""
 
     def _create_ph_farmer(self, ph_extensions=None, max_iter=100):
-        self.w_file_name = './examples/w_test_data/w_file.csv'
-        self.temp_w_file_name = './examples/w_test_data/_temp_w_file.csv'
-        self.xbar_file_name = './examples/w_test_data/xbar_file.csv'
-        self.temp_xbar_file_name = './examples/w_test_data/_temp_xbar_file.csv'
+        self.w_file_name = os.path.join(_W_TEST_DATA_DIR, 'w_file.csv')
+        self.temp_w_file_name = os.path.join(_W_TEST_DATA_DIR, '_temp_w_file.csv')
+        self.xbar_file_name = os.path.join(_W_TEST_DATA_DIR, 'xbar_file.csv')
+        self.temp_xbar_file_name = os.path.join(_W_TEST_DATA_DIR, '_temp_xbar_file.csv')
         self.cfg.num_scens = 3
         scenario_creator = farmer.scenario_creator
         scenario_denouement = farmer.scenario_denouement
