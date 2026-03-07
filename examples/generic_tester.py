@@ -151,6 +151,10 @@ farmeref = (f"--EF --num-scens 3 --EF-solver-name={solver_name}")
 #rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
 do_one("farmer", "farmer", 1, farmeref, xhat_baseline_dir = "test_data/farmeref_baseline")
 
+farmeref_ext = (f"--EF --num-scens 3 --EF-solver-name={solver_name} --min-wheat 500")
+#rebaseline_xhat("farmer", "farmer", 1, farmeref, "test_data/farmeref_baseline")
+do_one("farmer", "farmer_ef_ext", 1, farmeref_ext, xhat_baseline_dir = None)
+
 # we need slammax and cross-scenario to make this work well
 netdesC = (f"--max-iterations=60 --instance-name=network-10-20-L-01 --netdes-data-path ./data "
            f"--solver-name={solver_name} --rel-gap=0.0 --default-rho=10000 --presolve "
@@ -172,7 +176,7 @@ do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline
 
 # write hydro bundles for at least some testing of multi-stage proper bundles
 # (just looking for smoke)
-hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3"
+hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3 "
             "--branching-factors '3 3' ")
 do_one("hydro", "hydro", 3, hydro_wr, xhat_baseline_dir=None)
 
