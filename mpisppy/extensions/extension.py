@@ -258,7 +258,7 @@ class EFExtension:
         """
         return results
 
-    def get_objective_value(self, obj_val):
+    def get_objective_value(self, obj_val, **kwargs):
         """
         for performing anything before returning the objective value (e.g. excluding the value of soft
         penalties)
@@ -292,11 +292,11 @@ class EFMultiExtension(EFExtension):
             results = lobject.post_solve(results)
         return results
 
-    def get_objective_value(self, obj_val):
+    def get_objective_value(self, obj_val, **kwargs):
         """
         for performing anything before returning the objective value (e.g. excluding the value of soft
         penalties)
         """
         for lobject in self.extdict.values():
-            obj_val = lobject.get_objective_value(obj_val)
+            obj_val = lobject.get_objective_value(obj_val, **kwargs)
         return obj_val
