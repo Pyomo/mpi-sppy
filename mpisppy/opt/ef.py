@@ -138,14 +138,18 @@ class ExtensiveForm(mpisppy.spbase.SPBase):
                 self.solver.options[opt] = value
                 
         results = self.solver.solve(self.ef, tee=tee, load_solutions=False, **solve_keyword_args)
-        if len(results.problem) > 0 and \
-           results.problem[0]['Number of solutions'] > 0:
-            if sputils.is_persistent(self.solver):
-                self.solver.load_vars()
-            else:
-                self.ef.solutions.load_from(results)
-            self.first_stage_solution_available = True
-            self.tree_solution_available = True
+        if sputils.not_good_enough_results(results):
+            # this should catch infeasible and unbounded cases
+            return results
+        
+        if sputils.is_persistent(self.solver):
+            self.solver.load_vars()
+        else:
+            self.ef.solutions.load_from(results)
+
+        self.first_stage_solution_available = True
+        self.tree_solution_available = True
+        
         return results
 
     def get_objective_value(self):
