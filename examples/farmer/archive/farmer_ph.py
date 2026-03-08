@@ -11,6 +11,7 @@
 
 from mpisppy.opt.ph import PH
 from mpisppy.convergers.primal_dual_converger import PrimalDualConverger
+from mpisppy.utils import scenario_names_creator
 import farmer
 from mpisppy.extensions.xhatclosest import XhatClosest
 import sys
@@ -59,7 +60,7 @@ def main():
     }
     scenario_creator = farmer.scenario_creator
     scenario_denouement = farmer.scenario_denouement
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(num_scen)]
+    all_scenario_names = scenario_names_creator(num_scen, prefix='scen')
     scenario_creator_kwargs = {
         'use_integer': use_int,
         "crops_multiplier": crops_multiplier,

@@ -28,11 +28,11 @@ def inparser_adder(cfg):
     cfg.add_to_config("instance_name",
                         description="netdes instance name (e.g., network-10-20-L-01)",
                         domain=str,
-                        default=None)                
+                        default=None)
     cfg.add_to_config("netdes_data_path",
                         description="path to detdes data (e.g., ./data)",
                         domain=str,
-                        default=None)                
+                        default=None)
 
 
 def get_mpisppy_helper_object(cfg):
@@ -126,15 +126,6 @@ class NetDes:
 
 
     ########## helper functions ########
-
-    #=========
-    def scenario_names_creator(self, num_scens,start=None):
-        # if start!=None, the list starts with the 'start' labeled scenario
-        if (start is None) :
-            start=0
-        return [f"Scenario{i}" for i in range(start,start+num_scens)]
-
-
     #=========
     def kw_creator(self, cfg):
         # linked to the scenario_creator and inparser_adder

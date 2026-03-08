@@ -48,10 +48,6 @@ def scenario_creator(scenario_name, use_integer=False, sense=GRB.MINIMIZE, crops
     return gd
 
 #==========
-def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
-
-#==========
 def inparser_adder(cfg):
     return farmer.inparser_adder(cfg)
 

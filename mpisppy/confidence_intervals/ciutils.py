@@ -15,7 +15,7 @@ import numpy as np
 import mpisppy.MPI as mpi
 import pyomo.environ as pyo
 
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import scenario_names_creator, sputils
 from mpisppy import global_toc
 import mpisppy.utils.xhat_eval as xhat_eval
 import mpisppy.utils.amalgamator as ama
@@ -176,8 +176,7 @@ def _fct_check(module, fct):
 def pyomo_opt_sense(module_name, cfg):
     """ update cfg to have the optimization sense"""
     module = importlib.import_module(module_name)
-    _fct_check(module, "scenario_names_creator")
-    sn = module.scenario_names_creator(1)  # an arbitrary scenario name
+    sn = scenario_names_creator(1)  # an arbitrary scenario name
     _fct_check(module, "kw_creator")
     kw = module.kw_creator(cfg)
     m = module.scenario_creator(sn[0], **kw)

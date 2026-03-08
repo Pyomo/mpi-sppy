@@ -17,17 +17,6 @@ are documented in `the admm wrapper documentation <admmWrapper.rst#sectiondatafo
         dict (str): the dictionary of key word arguments that is used in ``scenario_creator``
 
 
-.. py:function:: scenario_names_creator(num_scens, start=0)
-
-    Creates the name of the ``num_scens`` scenarios starting from ``start``
-
-    Args:
-        num_scens (int): number of scenarios
-        start (int): starting index for the names
-
-    Returns:
-        list (str): the list of names
-
 .. py:function:: inparser_adder(cfg)
     
     Adds arguments to the config object which are specific to the problem

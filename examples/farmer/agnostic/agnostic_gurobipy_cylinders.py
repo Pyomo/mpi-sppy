@@ -10,10 +10,8 @@
 
 import farmer_gurobipy_agnostic
 from mpisppy.spin_the_wheel import WheelSpinner
-import mpisppy.utils.cfg_vanilla as vanilla
-import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
-import mpisppy.utils.sputils as sputils
+from mpisppy.agnostic import agnostic
+from mpisppy.utils import cfg_vanilla as vanilla, config, scenario_names_creator, sputils
 
 def _farmer_parse_args():
     # create a config object and parse JUST FOR TESTING
@@ -43,7 +41,7 @@ if __name__ == "__main__":
 
     scenario_creator = Ag.scenario_creator
     scenario_denouement = farmer_gurobipy_agnostic.scenario_denouement   # should we go though Ag?
-    all_scenario_names = ['scen{}'.format(sn) for sn in range(cfg.num_scens)]
+    all_scenario_names = scenario_names_creator(cfg.num_scens, prefix="scen")
 
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)

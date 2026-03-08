@@ -213,15 +213,6 @@ def scenario_creator(
 
 # begin helper functions
 #=========
-def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
-
-#=========
 def inparser_adder(cfg):
     # add options unique to farmer
     cfg.num_scens_required()

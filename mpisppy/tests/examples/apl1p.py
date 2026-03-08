@@ -180,15 +180,6 @@ def scenario_creator(sname, num_scens=None):
 
 
 #=========
-def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
-
-#=========
 def inparser_adder(inparser):
     # (only for Amalgamator): add command options unique to apl1p
     pass

@@ -367,16 +367,7 @@ def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
                                                 starting_stage=stage)
     
     return model
-                
 
-#=========
-def scenario_names_creator(num_scens,start=None):
-    # (only for Amalgamator): return the full list of num_scens scenario names
-    # if start!=None, the list starts with the 'start' labeled scenario
-    if (start is None) :
-        start=0
-    return [f"scen{i}" for i in range(start,start+num_scens)]
-        
 
 #=========
 def inparser_adder(cfg):

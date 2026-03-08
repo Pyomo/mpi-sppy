@@ -13,7 +13,7 @@ import egret.models.acopf as eac
 import egret.models.ac_relaxations as eac_relax
 from egret.parsers.matpower_parser import create_ModelData
 import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import sputils, scenario_names_creator
 
 import ACtree as ET
 
@@ -369,10 +369,10 @@ if __name__ == "__main__":
                                  repair_fct,
                                  lines)
     scenario_creator_kwargs["acstream"] = acstream
-    scenario_names=["Scenario_"+str(i)\
-                    for i in range(1,len(scenario_creator_kwargs["etree"].rootnode.ScenarioList)+1)]
+    scenario_names=scenario_names_creator(
+        len(scenario_creator_kwargs["etree"].rootnode.ScenarioList), prefix="Scenario_", start=1,
+    )
 
-    
     # end options
     ef = sputils.create_EF(scenario_names,
                              pysp2_callback,

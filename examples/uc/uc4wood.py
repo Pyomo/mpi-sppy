@@ -31,6 +31,7 @@ from mpisppy.extensions.extension import MultiExtension
 from mpisppy.extensions.fixer import Fixer
 from mpisppy.extensions.mipgapper import Gapper
 # Make it all go
+from mpisppy.utils import scenario_names_creator
 from mpisppy.spin_the_wheel import WheelSpinner
 from mpisppy.log import setup_logger
 
@@ -77,7 +78,7 @@ if __name__ == "__main__":
         _usage()
         
     assert(ScenCount in [3,5,10,25,50])
-    all_scenario_names = ['Scenario{}'.format(sn+1) for sn in range(ScenCount)]
+    all_scenario_names = scenario_names_creator(ScenCount, prefix="Scenario", start=1)
     scenario_creator_kwargs = {
         "scenario_count": ScenCount,
         "path": str(ScenCount) + "scenarios_r1",

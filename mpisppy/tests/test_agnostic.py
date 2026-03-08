@@ -13,10 +13,9 @@ import unittest
 import math
 import mpisppy.opt.ph
 from mpisppy.tests.utils import get_solver
-import mpisppy.utils.config as config
-import mpisppy.agnostic.agnostic as agnostic
-import mpisppy.agnostic.agnostic_cylinders as agnostic_cylinders
-import mpisppy.utils.sputils as sputils
+from mpisppy.utils import config, sputils, scenario_names_creator
+from mpisppy.agnostic import agnostic, agnostic_cylinders
+
 
 sys.path.insert(0, "../../examples/farmer/agnostic")
 import farmer_pyomo_agnostic
@@ -34,7 +33,7 @@ try:
     import farmer_gurobipy_agnostic
     have_gurobipy = True
 except ModuleNotFoundError:
-    have_gurobipy = False    
+    have_gurobipy = False
 
 __version__ = 0.2
 
@@ -101,7 +100,7 @@ class Test_Agnostic_pyomo(unittest.TestCase):
         phoptions = _get_ph_base_options()
         ph = mpisppy.opt.ph.PH(
             phoptions,
-            farmer_pyomo_agnostic.scenario_names_creator(num_scens=3),
+            scenario_names_creator(3),
             Ag.scenario_creator,
             farmer_pyomo_agnostic.scenario_denouement,
             scenario_creator_kwargs=None,   # agnostic.py takes care of this
@@ -116,7 +115,7 @@ class Test_Agnostic_pyomo(unittest.TestCase):
         s1 = Ag.scenario_creator("scen1")  # average case
         phoptions = _get_ph_base_options()
         phoptions["Ag"] = Ag  # this is critical
-        scennames = farmer_pyomo_agnostic.scenario_names_creator(num_scens=3)
+        scennames = scenario_names_creator(3)
         ph = mpisppy.opt.ph.PH(
             phoptions,
             scennames,
@@ -150,7 +149,7 @@ class Test_Agnostic_AMPL(unittest.TestCase):
         phoptions = _get_ph_base_options()
         phoptions["Ag"] = Ag  # this is critical
         phoptions["solver_name"] = "gurobi"  # need an ampl solver
-        scennames = farmer_ampl_agnostic.scenario_names_creator(num_scens=3)
+        scennames = scenario_names_creator(3)
         ph = mpisppy.opt.ph.PH(
             phoptions,
             scennames,
@@ -224,7 +223,7 @@ class Test_Agnostic_gurobipy(unittest.TestCase):
         phoptions = _get_ph_base_options()
         ph = mpisppy.opt.ph.PH(
             phoptions,
-            farmer_gurobipy_agnostic.scenario_names_creator(num_scens=3),
+            scenario_names_creator(3),
             Ag.scenario_creator,
             farmer_gurobipy_agnostic.scenario_denouement,
             scenario_creator_kwargs=None,  # agnostic.py takes care of this
@@ -240,7 +239,7 @@ class Test_Agnostic_gurobipy(unittest.TestCase):
         s1 = Ag.scenario_creator("scen1")  # average case
         phoptions = _get_ph_base_options()
         phoptions["Ag"] = Ag  # this is critical
-        scennames = farmer_gurobipy_agnostic.scenario_names_creator(num_scens=3)
+        scennames = scenario_names_creator(3)
         ph = mpisppy.opt.ph.PH(
             phoptions,
             scennames,

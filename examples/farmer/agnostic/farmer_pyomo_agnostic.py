@@ -61,10 +61,6 @@ def scenario_creator(
         "BFs": None
         }
     return gd
-    
-#=========
-def scenario_names_creator(num_scens,start=None):
-    return farmer.scenario_names_creator(num_scens,start)
 
 
 #=========
