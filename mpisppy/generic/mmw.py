@@ -8,8 +8,6 @@
 ###############################################################################
 """MMW confidence interval computation for generic_cylinders."""
 
-import os
-
 import mpisppy.utils.sputils as sputils
 from mpisppy import global_toc, MPI
 
@@ -39,13 +37,19 @@ def do_mmw(module_fname, cfg, wheel=None):
     """Run an MMW confidence interval computation after the main algorithm.
 
     Args:
-        module_fname (str): importable module base name (e.g. 'farmer')
+        module_fname (str): module name or path (e.g. 'farmer' or '/path/to/farmer')
         cfg (Config): config with mmw_* and EF_* options; modified in place
         wheel (WheelSpinner or None): if None, cfg.mmw_xhat_input_file_name must be set
     """
+    import os
     import tempfile
     from mpisppy.confidence_intervals import mmw_ci
     from mpisppy.confidence_intervals import ciutils
+
+    # MMWConfidenceIntervals expects an importable module name, not a file path.
+    # load_module (in parsing.py) already added the directory to sys.path,
+    # so the basename is importable.
+    module_fname = os.path.basename(module_fname)
 
     global_comm = MPI.COMM_WORLD
     global_rank = global_comm.Get_rank()
