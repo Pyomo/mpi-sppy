@@ -3,12 +3,12 @@ Proper Bundles
 
 Prior to 2024, bundles were constructed for the purpose of solves, but
 all other processing (e.g., computing W values) was done on individual
-scenarios. We will refer to these as `loose bundles`. This bundling scheme
-is very flexible with respect to the numbers of scenarios in each bundle.
-There are various if-blocks in the mpisppy code to support this type of bundle.
+scenarios. These were called `loose bundles`.
 
 .. Warning::
-   In relase 1.0, loose bundles scheduled to be deprecated.
+   Loose bundles (``--bundles-per-rank``) were removed in 2026.
+   Setting ``bundles_per_rank > 0`` now raises a ``RuntimeError``.
+   Use proper bundles (``--scenarios-per-bundle``) instead.
 
 In 2024, `proper bundles` were supported. After the extensive form
 for a proper bundle is created, the original scenarios are more or less
@@ -19,7 +19,7 @@ and randomizing the assignment of scenarios to bundles is left to the
 user (e.g., by using a pseudo-random vector to provide one level
 of indirection for the scenario number in the ``scenario_creator`` function).
 As of the time of this writing, only two-stage problems are easily supported.
-Proper bundles result in faster execution than loose bundles.
+Proper bundles result in faster execution.
 
 See ``mpisppy.generic_cylinders.py`` for an example of their use in
 code and see ``examples.generic_cylinders.bash`` for a few proper
@@ -37,8 +37,7 @@ reading).
    options related to anything other than proper bundles are ignored.
 
 .. Note::
-   Reading and writing bundle pickle files only works with proper bundles, not
-   loose bundles.
+   Reading and writing bundle pickle files only works with proper bundles.
 
 .. Note::
    If you do pseudo random number generation on-the-fly during scenario creation,

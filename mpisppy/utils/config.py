@@ -156,9 +156,6 @@ class Config(pyofig.ConfigDict):
                 or self.get("reduced_costs_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
                 _bad_options("dynamic rho only works with an automated rho setter")
-        if self.get("grad_rho") and self.get("bundles_per_rank") != 0:
-            _bad_options("Grad rho does not work with loose bundling (--bundles-per-rank).\n "
-                         "Also note that loose bundling is being deprecated in favor of proper bundles.")
 
         if self.get("ph_primal_hub")\
            and not (self.get("ph_dual") or self.get("relaxed_ph")):
@@ -240,7 +237,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="Loose bundles per rank (default 0 (no bundles)) WILL BE DEPRECATED",
+                            description="REMOVED: loose bundles no longer supported. Use --scenarios-per-bundle.",
                             domain=int,
                             default=0)
 

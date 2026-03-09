@@ -6,6 +6,7 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+# NOTE: This example used loose bundles, which are no longer supported. See doc/src/properbundles.rst for proper bundles.
 # updated 23April2020
 # dlw August 2019: 3driver caller for the uc example; unix path names
 
@@ -148,7 +149,6 @@ if __name__ == "__main__":
 
     # maybe we should copy the options sometimes
     xhat_options = hub_ph_options.copy()
-    xhat_options['bundles_per_rank'] = 0 #  no bundles for xhat
     xhat_options["xhat_looper_options"] =\
     {
         "xhat_solver_options": {

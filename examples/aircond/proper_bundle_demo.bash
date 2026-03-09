@@ -17,4 +17,4 @@ BI=50
 python bundle_pickler.py --branching-factors "$BF1 $BF2 $BF3" --pickle-bundles-dir="." --scenarios-per-bundle=$SPB --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory $BI --mu-dev 0 --sigma-dev 40 --start-seed 0 
 
 # It is entirely up to the user to make sure that the scenario count and scenarios per bundle match between creating the pickles and using them.
-mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --branching-factors $SC --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory $BI --rel-gap 0.01 --mu-dev 0 --sigma-dev 40 --max-solver-threads 2 --start-seed 0 --xhatshuffle --lagrangian --start-ups --bundles-per-rank=0 --unpickle-bundles-dir="." --scenarios-per-bundle=$SPB
+mpiexec --oversubscribe -np 3 python -m mpi4py aircond_cylinders.py --max-iterations=10 --default-rho=1 --solver-name=${SOLVERNAME} --branching-factors $SC --Capacity 200 --QuadShortCoeff 0.3  --BeginInventory $BI --rel-gap 0.01 --mu-dev 0 --sigma-dev 40 --max-solver-threads 2 --start-seed 0 --xhatshuffle --lagrangian --start-ups --unpickle-bundles-dir="." --scenarios-per-bundle=$SPB
