@@ -37,12 +37,7 @@ class NetworkDesignTracker(Extension):
         edges = arb_model.edges
         num_scenarios = len(sols)
 
-        bundling = not hasattr(arb_model, '_solver_plugin')
-        if (bundling):
-            arb_bundle_model = get_arb_elt(self.ph.local_scenarios)
-            persistent = sputils.is_persistent(arb_bundle_model._solver_plugin)
-        else:
-            persistent = sputils.is_persistent(arb_model._solver_plugin)
+        persistent = sputils.is_persistent(arb_model._solver_plugin)
 
         for edge in edges:
             if (arb_model.x[edge].fixed): # Fixed in one model = fixed in all
@@ -59,30 +54,11 @@ class NetworkDesignTracker(Extension):
                 for (sname, model) in models.items():
                     model.x[edge].fix(1.0)
                     if (persistent):
-                        if (bundling):
-                            solver = self.get_solver(sname) 
-                        else:
-                            solver = model._solver_plugin
+                        solver = model._solver_plugin
                         solver.update_var(model.x[edge])
 
         fixed_edges = [edge for edge in edges if arb_model.x[edge].fixed]
         print(f'Fixed {len(fixed_edges)} total edges')
-
-    def get_solver(self, sname):
-        ''' Move this to PHBase if it is successful 
-            Need to add some checks for bundling first 
-        '''
-        rank = self.cylinder_rank
-        names = self.ph.names_in_bundles[rank]
-        bunnum = None
-        for (num, scens) in names.items():
-            if (sname in scens):
-                bunnum = num
-                break
-        if (bunnum is None):
-            raise RuntimeError(f'Could not find {sname}')
-        bname = f'rank{rank}bundle{bunnum}'
-        return self.ph.local_scenarios[bname]._solver_plugin
 
     def enditer(self):
         ''' Variable fixing must be done in miditer, so that a solve takes

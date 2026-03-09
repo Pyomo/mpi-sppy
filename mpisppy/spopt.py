@@ -61,7 +61,7 @@ class SPOpt(SPBase):
             variable_probability=variable_probability,
         )
         self._save_active_objectives()
-        self._subproblem_creation(options.get("verbose", False))
+        self._attach_scen_lists(options.get("verbose", False))
         if options.get("presolve", False):
             # NOTE: This creates another representation
             #       of each scenario subproblem in C++
@@ -298,7 +298,7 @@ class SPOpt(SPBase):
                    warmstart=sputils.WarmstartStatus.FALSE,
                    ):
         """ Loop over `local_scenarios` and solve them in a manner
-        dicated by the arguments.
+        dictated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
         also updates the `_PySP_feas_indictor` to indicate which scenarios were
@@ -892,7 +892,7 @@ class SPOpt(SPBase):
         return EF_instance
 
 
-    def _subproblem_creation(self, verbose=False):
+    def _attach_scen_lists(self, verbose=False):
         """ Attach scen_list to each local scenario.
 
         Args:

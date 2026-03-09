@@ -597,14 +597,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._update_prox_approx()
 
         super().solve_loop(
-            solver_options,
-            dtiming,
-            gripe,
-            disable_pyomo_signal_handling,
-            tee,
-            verbose,
-            need_solution,
-            warmstart,
+            solver_options=solver_options,
+            dtiming=dtiming,
+            gripe=gripe,
+            disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+            tee=tee,
+            verbose=verbose,
+            need_solution=need_solution,
+            warmstart=warmstart,
         )
 
         if dis_W and dis_prox:
