@@ -1,82 +1,80 @@
 Quick Start
 ===========
 
-If you installed from github, install from source using pip in editable mode from the mpi-sppy repo root directory.
+Installation
+------------
+
+Install from source using pip in editable mode from the mpi-sppy repo root directory:
 
 ::
-   
+
    pip install -e .
 
-This step is not needed if you installed using pip, but we recommend against installing using pip because
-the software is under active development and the pip version is almost always out of date.
-You can also include the extras flag ``docs`` to install documentation dependencies from pip.
+We recommend installing from GitHub rather than pip, because
+the software is under active development and the pip version is almost
+always out of date. You can also include the extras flag ``docs`` to
+install documentation dependencies.
 
 
-Verify installation
+Verify Installation
 -------------------
 
-Getting started depends on how you intend to use ``mpi-sppy`` but
-verifying installation is a common task. If you installed ``mpi-sppy`` from
-github, you can verify that you installed it and a solver by starting a
-terminal. Then cd to the `mpi-sppy` directory and issue the following
-terminal commands:
+Verify that mpi-sppy and a solver are installed by running:
 
-::
+.. code-block:: bash
 
-   cd examples
-   cd farmer
-   python ../../mpisppy/generic_cylinders.py --module-name farmer --help
+   cd examples/farmer
+   python -m mpisppy.generic_cylinders --module-name farmer --help
 
 
-If you intend to use any parallel features, you should verify that you
-have a *proper* installation of MPI and ``mpi4py``; see the section
-:ref:`Install mpi4py`. If you are intending only to solve the
-extensive form directly without decomposition, then you do not need to
-concern yourself with MPI.
+If you intend to use decomposition (PH, APH, etc.), you also need a
+working installation of MPI and ``mpi4py``; see :ref:`Install mpi4py`.
+If you only need to solve the extensive form directly, MPI is not required.
 
 
-Pyomo Users who want to add stochastics
----------------------------------------
+What You Need to Provide
+-------------------------
 
-Users of ``mpi-sppy`` are viewed as developers, not as
-end-users. Consequently, some Python programming is required.  The
-first thing is to code a scenario creation function. See
-:ref:`scenario_creator` for more information.
-If you create a few more helper functions
-(see :ref:`helper_functions`),
-you can make use of the ``generic_cylinders`` program (see :ref:`generic_cylinders`) to use the hub and spoke system or to solve the the EF directly.
+To use mpi-sppy, you create a Python module with the following functions:
 
-You might want to start with the farmer example. See the `farmer` directory in the `examples` directory for the
-files `farmer.py` and `farmer_generic.bash`. For more information see :ref:`Examples`.
-     
-PySP Users
-----------
+- ``scenario_creator`` -- builds a Pyomo model for one scenario (see :ref:`scenario_creator`)
+- ``scenario_names_creator`` -- returns the list of scenario names (see :ref:`helper_functions`)
+- ``kw_creator`` -- returns keyword arguments for the scenario creator (see :ref:`helper_functions`)
+- ``inparser_adder`` -- adds problem-specific command-line arguments (see :ref:`helper_functions`)
+- ``scenario_denouement`` -- called at termination (can be ``None``; see :ref:`helper_functions`)
 
-If you are already using ``PySP`` for a stochastic program, getting started
-with ``mpi-sppy`` is straightforward; however, unlike in ``PySP``, you will
-be required to create a Python program. Many of the advanced features
-of ``PySP`` are supported by ``mpi-sppy`` but they required creating Python
-code to access them. The basic vehicle for a quick-start with ``PySP`` models is
-``mpisppy.utils.pysp_model.PySPModel`` but the exact steps depend on
-how you represented your model in ``PySP``.
-
-Here are the general steps:
-
-# Construct a ``PySPModel`` object giving its constructor information about your PySP model.
-
-These steps alone will not result in use of the hub-spoke features of
-`mpi-sppy`, but they will get your PySP model running in
-``mpi-sppy``. See ``examples/farmer/from_pysp`` for some
-examples and see :ref:`PySP conversion` for more details.
-For an example with the hub-spoke features of `mpi-sppy`,
-see ``examples/hydro/hydro_cylinders_pysp.py``.
+Once you have these functions, you can use ``generic_cylinders.py``
+(see :ref:`generic_cylinders`) to solve your problem using the EF or
+the hub-and-spoke system. See the ``farmer`` directory in ``examples``
+for a complete working example (``farmer.py`` and ``farmer_generic.bash``).
 
 
-Researchers who want to compare with mpi-sppy
----------------------------------------------
+Running the Farmer Example
+---------------------------
 
-The quickest thing to do is to run one of the canned examples that
-comes with ``mpi-sppy``. They are in subdirectories of
-``examples`` and sample commands can be obtained by looking at
-the code in ``examples.runall.py``. There is a table in the
-mpi-sppy paper in MPC that gives references for some of the examples.
+**Solve the EF** (no MPI needed):
+
+.. code-block:: bash
+
+   python -m mpisppy.generic_cylinders --module-name farmer \
+       --num-scens 3 --EF --EF-solver-name gurobi
+
+**Run PH with spokes** (requires MPI):
+
+.. code-block:: bash
+
+   mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+       --module-name farmer --num-scens 3 \
+       --solver-name gurobi_persistent --max-iterations 10 \
+       --default-rho 1 --lagrangian --xhatshuffle --rel-gap 0.01
+
+For more detail, see :ref:`generic_cylinders` and :ref:`Examples`.
+
+
+Researchers Who Want to Compare with mpi-sppy
+----------------------------------------------
+
+The quickest approach is to run one of the canned examples in
+subdirectories of ``examples``. Sample commands can be found in
+``examples.runall.py``. The mpi-sppy paper in MPC provides references
+for many of the examples.

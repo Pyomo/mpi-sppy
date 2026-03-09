@@ -4,7 +4,10 @@ Spokes
 ======
 
 In this section we provide an overview of some of the spoke classes
-that are part of the ``mpi-sppy`` release.
+that are part of the ``mpi-sppy`` release. When using ``generic_cylinders.py``
+(see :ref:`generic_cylinders`), spokes are enabled with command-line flags
+such as ``--lagrangian``, ``--xhatshuffle``, ``--xhatxbar``, ``--fwph``,
+``--subgradient``, ``--ph-dual``, ``--relaxed-ph``, and ``--reduced-costs``.
 
 
 Outer Bound
