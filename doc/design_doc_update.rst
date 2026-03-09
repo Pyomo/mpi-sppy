@@ -4,8 +4,8 @@ Documentation Restructuring Design
 This document outlines the planned reorganization of the mpi-sppy
 RST documentation. The overarching goal is to make ``generic_cylinders.py``
 the clear, primary entry point and to demote custom drivers and legacy
-workflows (PySP, Amalgamator, old ``*_cylinders.py`` scripts) to
-appendix/developer material.
+workflows (PySP, old ``*_cylinders.py`` scripts) to appendix/developer
+material and to clarify that Amalgamator is internal/advanced.
 
 Guiding Principles
 ------------------
@@ -17,9 +17,11 @@ Guiding Principles
 2. **Layered depth.** Quick start -> model file howto -> choosing
    algorithms/spokes -> advanced topics -> developer internals.
 
-3. **Remove or downgrade stale content.** PySP conversion, Amalgamator,
+3. **Remove or downgrade stale content.** PySP conversion,
    hand-rolled drivers, and the "alpha-release" caveat on
-   generic_cylinders are all outdated.
+   generic_cylinders are all outdated. Amalgamator is still used
+   internally (e.g., by confidence interval code) so it stays but
+   is marked as internal/advanced.
 
 4. **Add missing topics.** The Config system, rho-setting strategies,
    and multistage-specific guidance are under-documented.
@@ -40,7 +42,8 @@ Below is the new ``index.rst`` toctree, with notes on each entry.
   Part II -- Building Your Model
   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   scenario_creator.rst     (REVISE - tighten, add multistage guidance)
-  helper_functions.rst     (REVISE - clarify required vs optional functions)
+  helper_functions.rst     (REVISE - clarify required vs optional functions;
+                             move early because users need this before running)
 
   Part III -- Running with generic_cylinders
   ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -83,7 +86,7 @@ Below is the new ``index.rst`` toctree, with notes on each entry.
                              add clear note that this is rarely needed)
   internals.rst            (keep)
   contributors.rst         (keep)
-  amalgamator.rst          (REVISE - mark as legacy/deprecated)
+  amalgamator.rst          (REVISE - mark as internal/advanced, not deprecated)
   pysp.rst                 (REVISE - mark as legacy)
 
   References
@@ -179,7 +182,9 @@ Consolidate rho documentation into one page:
 - ``--use-norm-rho-updater``: norm-based adaptive
 - ``--use-primal-dual-rho-updater``: primal-dual adaptive
 - ``--dynamic-rho``: dynamic updates
-- Guidance on when to use which strategy.
+- Document each strategy's mechanism and required inputs, but do
+  **not** attempt to provide general guidance on when to use which
+  strategy (too problem-dependent to give reliable advice).
 
 Keep grad_rho.rst as a redirect/stub pointing to rho_setting.rst,
 or remove it from toctree.
@@ -222,8 +227,11 @@ ef.rst
 amalgamator.rst
 ^^^^^^^^^^^^^^^
 
-- Add deprecation notice: "The Amalgamator is a legacy wrapper.
-  New users should use ``generic_cylinders.py`` instead."
+- Add note that Amalgamator is used internally by the confidence
+  interval code, so it is **not deprecated**.
+- However, new users should use ``generic_cylinders.py`` for running
+  decomposition; Amalgamator is not the recommended entry point.
+- Frame as: "internal/advanced — most users do not need this directly."
 
 pysp.rst
 ^^^^^^^^
@@ -262,7 +270,7 @@ Suggested order of implementation:
 4. Revise ``quick_start.rst``.
 5. Revise ``overview.rst``, ``drivers.rst``, ``examples.rst``.
 6. Revise ``helper_functions.rst``, ``ef.rst``.
-7. Add legacy notices to ``amalgamator.rst``, ``pysp.rst``.
+7. Add internal/advanced notice to ``amalgamator.rst``; add legacy notice to ``pysp.rst``.
 8. Update ``hubs.rst``, ``spokes.rst``, ``extensions.rst`` with
    command-line flag references.
 9. Minor updates to remaining files.
