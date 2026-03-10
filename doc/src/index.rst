@@ -14,7 +14,7 @@ MPI is used.
 
 .. toctree::
    :maxdepth: 2
-   :caption: Building Your Model
+   :caption: Building Your Model File
 
    scenario_creator.rst
    helper_functions.rst

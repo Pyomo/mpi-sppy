@@ -7,6 +7,7 @@ The :ref:`scenario_creator` function is required, but
 ``generic_cylinders.py`` (see :ref:`generic_cylinders`) also needs
 several helper functions in the model file.
 
+xxxxxxxxxxxxxx not a good example here xxxxxxx
 All these functions can be found in the example ``examples.distr.distr.py`` and
 are documented in `the admm wrapper documentation <admmWrapper.rst#sectiondatafordriver>`_.
 

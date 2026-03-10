@@ -4,7 +4,7 @@ Quick Start
 Installation
 ------------
 
-Install from source using pip in editable mode from the mpi-sppy repo root directory:
+Install from source by giving this command from the mpi-sppy repo root directory:
 
 ::
 
@@ -52,7 +52,7 @@ for a complete working example (``farmer.py`` and ``farmer_generic.bash``).
 Running the Farmer Example
 ---------------------------
 
-**Solve the EF** (no MPI needed):
+**Solve the EF** (does not use MPI):
 
 .. code-block:: bash
 
