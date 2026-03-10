@@ -73,8 +73,8 @@ The cross scenario hub supports only two-stage problems at this time.
 APH
 ---
 
-The implementation of Asynchronous Projective Hedging is described in a
-forthcoming paper.
+An implementation of Asynchronous Projective Hedging as described in an OR
+paper by Eckstein, Watson, and Woodruff.
 
 Subgradient
 -----------

@@ -11,7 +11,10 @@ other features without requiring you to write a driver program.
 Your Model File (Module)
 ------------------------
 
-To use ``generic_cylinders.py``, you need a Python module that provides
+Pyomo Models
+^^^^^^^^^^^^
+
+Pyomo modellers use ``generic_cylinders.py`` by creating a Python module that provides
 certain functions. The module name is given (without the ``.py`` extension)
 as the ``--module-name`` argument, and it should be the first argument.
 It is needed even with ``--help``:
@@ -32,6 +35,12 @@ Optional functions include ``_rho_setter``, ``id_fix_list_fct``,
 ``hub_and_spoke_dict_callback``, ``custom_writer``, and
 ``get_mpisppy_helper_object``. See :ref:`helper_functions` for details.
 
+non-Pyomo Models
+^^^^^^^^^^^^^^^^
+
+To use mpi-sppy for models not written in Pyomo, scenarios and scenario tree information
+can be provided in files. See :ref:`loose_integration` for more information.
+
 
 Solving the Extensive Form
 --------------------------
@@ -51,7 +60,7 @@ To solve the EF directly (no MPI required):
 Running PH with Spokes
 -----------------------
 
-To run Progressive Hedging with bound-computing spokes, use ``mpiexec``:
+To run Progressive Hedging with bound-computing spokes, use ``mpiexec`` (or ``mpirun``):
 
 .. code-block:: bash
 

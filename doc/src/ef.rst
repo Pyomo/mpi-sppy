@@ -32,6 +32,25 @@ function as a hub.
 
       
 
+EF Extensions
+-------------
+
+The ``ExtensiveForm`` class supports extensions via the ``extensions`` and
+``extension_kwargs`` constructor arguments. EF extensions inherit from
+``mpisppy.extensions.extension.EFExtension`` and can override two hooks:
+
+- ``pre_solve()``: called after EF creation, before passing the model to the solver.
+- ``post_solve(results)``: called after the solver returns; must return results.
+
+When using ``generic_cylinders.py``, extensions are injected by defining an
+``ef_dict_callback(ef_dict, cfg)`` function in the model module. This callback
+can modify ``ef_dict`` to add extensions before the EF is solved. Use
+``cfg_vanilla.ef_extension_adder(ef_dict, ext_class)`` to add extension classes
+(multiple extensions are handled automatically via ``EFMultiExtension``).
+
+See ``examples/farmer/farmer_ef_ext.py`` for a complete example that adds
+a minimum expected wheat production constraint to the EF.
+
 .. _sputils.create_EF:
 
 Other method: ``mpisppy.utils.sputils.create_EF``

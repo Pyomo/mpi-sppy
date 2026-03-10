@@ -93,7 +93,7 @@ xhat_specific_bounder
 At construction, this spoke takes a specification of a scenario per
 non-leaf node of the scenario tree (so for a two-stage problem, one
 scenario), which are used at every iteration of the hub algorithm as
-trial values for :math:`\hat{x}`.
+trial values for :math:`\hat{x}`. This bounder is mainly useful for debugging and testing.
 
 xhatshufflelooper_bounder
 ^^^^^^^^^^^^^^^^^^^^^^^^^
@@ -109,7 +109,7 @@ solutions can be tried before receiving new x values from the hub.
 This spoke also supports multistage problems. It does not try every subproblem, but
 shuffles the scenarios and loops over the shuffled list.
 At each step, it takes the first-stage solution specified by a scenario, 
-and then uses the scenarios that follows in the shuffled loop to get the 
+and then uses the scenarios that follow in the shuffled loop to get the 
 values of the non-first-stage variables that were not fixed before.
 
 xhatxbar_bounder

@@ -58,6 +58,7 @@ MPI is used.
    aph.rst
    nompi4py.rst
    secretmenu.rst
+   pysp.rst
 
 .. toctree::
    :maxdepth: 2
@@ -67,7 +68,6 @@ MPI is used.
    internals.rst
    contributors.rst
    amalgamator.rst
-   pysp.rst
 
 .. toctree::
    :maxdepth: 2

@@ -323,6 +323,10 @@ A simple example that uses a few of the options is shown in ``aircond_zhat.bash`
 also calls the ``xhat4xhat`` program to estimate confidence intervals for the solution
 obtained.
 
+aircondMulti
+------------
+
+This is a multi-product version of aircond. It is also in the tests examples directory.
 
 hydro
 -----

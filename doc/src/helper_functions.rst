@@ -7,9 +7,7 @@ The :ref:`scenario_creator` function is required, but
 ``generic_cylinders.py`` (see :ref:`generic_cylinders`) also needs
 several helper functions in the model file.
 
-xxxxxxxxxxxxxx not a good example here xxxxxxx
-All these functions can be found in the example ``examples.distr.distr.py`` and
-are documented in `the admm wrapper documentation <admmWrapper.rst#sectiondatafordriver>`_.
+All these functions can be found in the example ``examples/farmer/farmer.py``. For many applications, scenario_denouement just has a pass.
 
 Required Functions
 ------------------
@@ -24,7 +22,7 @@ These functions are required by ``generic_cylinders.py``:
         cfg (config object): specifications for the problem
 
     Returns:
-        dict (str): the dictionary of key word arguments that is used in ``scenario_creator``
+        dict (str): the dictionary of keyword arguments that is used in ``scenario_creator``
 
 
 .. py:function:: scenario_names_creator(num_scens, start=0)

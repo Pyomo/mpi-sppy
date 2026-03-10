@@ -28,8 +28,8 @@ Multi-stage problems are discussed below.
 Examples
 --------
 
-In the `farmer.py` example, the `scenario_creator` function calls
-`pysp2_callback` and in this example, the scenario name is presumed to
+In the `farmer.py` example, the `scenario_creator` function
+builds the model directly. The scenario name is presumed to
 be of the form "scen" with a trailing number. The trailing number is
 used in a problem-specific way to create a "farmer" problem
 instance. The concrete model instance is created and returned.
