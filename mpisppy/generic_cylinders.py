@@ -20,7 +20,7 @@ from mpisppy.generic.mmw import do_mmw  # noqa: F401
 
 from mpisppy.generic.parsing import model_fname, load_module, parse_args, proper_bundles
 from mpisppy.generic.ef import do_EF
-from mpisppy.generic.solution_io import (write_bundles, write_scenarios,
+from mpisppy.generic.scenario_io import (write_bundles, write_scenarios,
                                           read_pickled_scenario,
                                           write_scenario_lp_mps_files_only)
 from mpisppy.generic.mmw import mmw_requested
