@@ -82,7 +82,7 @@ class CrossScenarioExtension(Extension):
 
         cached_ph_obj = dict()
 
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
             phobj = find_active_objective(s)
             phobj.deactivate()
             cached_ph_obj[k] = phobj
@@ -102,8 +102,8 @@ class CrossScenarioExtension(Extension):
                 need_solution=False,
         )
 
-        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_subproblems.values()),
-                                dtype="d", count=len(opt.local_subproblems))
+        local_obs = np.fromiter((s._mpisppy_data.outer_bound for s in opt.local_scenarios.values()),
+                                dtype="d", count=len(opt.local_scenarios))
 
         local_ob = np.empty(1)
         if opt.is_minimizing:
@@ -122,7 +122,7 @@ class CrossScenarioExtension(Extension):
 
         opt.spcomm.BestOuterBound = opt.spcomm.OuterBoundUpdate(global_ob[0], char='C')
 
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
             s._mpisppy_model.EF_Obj.deactivate()
             cached_ph_obj[k].activate()
 
@@ -177,55 +177,26 @@ class CrossScenarioExtension(Extension):
         row_len = 1+1+self.nonant_len
         outer_iter = int(coefs[-1])
 
-        if opt.bundling:
-            for bn,b in opt.local_subproblems.items():
-                persistent_solver = sputils.is_persistent(b._solver_plugin)
-                ## get an arbitrary scenario
-                s = opt.local_scenarios[b.scen_list[0]]
-                for idx, k in enumerate(opt.all_scenario_names):
-                    row = coefs[row_len*idx:row_len*(idx+1)]
-                    # the row could be all zeros,
-                    # which doesn't do anything
-                    if (row == 0.).all():
-                        continue
-                    # rows are:
-                    # [ const, eta_coeff, *nonant_coeffs ]
-                    linear_const = row[0]
-                    linear_coefs = list(row[1:])
-                    linear_vars = [b._mpisppy_model.eta[k]]
+        for sn,s in opt.local_scenarios.items():
+            persistent_solver = sputils.is_persistent(s._solver_plugin)
+            for idx, k in enumerate(opt.all_scenario_names):
+                row = coefs[row_len*idx:row_len*(idx+1)]
+                # the row could be all zeros,
+                # which doesn't do anything
+                if (row == 0.).all():
+                    continue
+                # rows are:
+                # [ const, eta_coeff, *nonant_coeffs ]
+                linear_const = row[0]
+                linear_coefs = list(row[1:])
+                linear_vars = [s._mpisppy_model.eta[k]]
+                linear_vars.extend(s._mpisppy_data.nonant_indices.values())
 
-                    for ndn_i in s._mpisppy_data.nonant_indices:
-                        ## for bundles, we add the constrains only
-                        ## to the reference first stage variables
-                        linear_vars.append(b.ref_vars[ndn_i])
-
-                    cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
-                                                linear_vars=linear_vars)
-                    b._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0)
-                    if persistent_solver:
-                        b._solver_plugin.add_constraint(b._mpisppy_model.benders_cuts[outer_iter, k])
-
-        else:
-            for sn,s in opt.local_subproblems.items():
-                persistent_solver = sputils.is_persistent(s._solver_plugin)
-                for idx, k in enumerate(opt.all_scenario_names):
-                    row = coefs[row_len*idx:row_len*(idx+1)]
-                    # the row could be all zeros,
-                    # which doesn't do anything
-                    if (row == 0.).all():
-                        continue
-                    # rows are:
-                    # [ const, eta_coeff, *nonant_coeffs ]
-                    linear_const = row[0]
-                    linear_coefs = list(row[1:])
-                    linear_vars = [s._mpisppy_model.eta[k]]
-                    linear_vars.extend(s._mpisppy_data.nonant_indices.values())
-
-                    cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
-                                                linear_vars=linear_vars)
-                    s._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0.)
-                    if persistent_solver:
-                        s._solver_plugin.add_constraint(s._mpisppy_model.benders_cuts[outer_iter, k])
+                cut_expr = LinearExpression(constant=linear_const, linear_coefs=linear_coefs,
+                                            linear_vars=linear_vars)
+                s._mpisppy_model.benders_cuts[outer_iter, k] = (None, cut_expr, 0.)
+                if persistent_solver:
+                    s._solver_plugin.add_constraint(s._mpisppy_model.benders_cuts[outer_iter, k])
 
         # NOTE: the LShaped code negates the objective, so
         #       we do the same here for consistency
@@ -239,7 +210,7 @@ class CrossScenarioExtension(Extension):
         if add_cut:
             self.best_inner_bound = ib
             self.best_outer_bound = ob
-            for sn,s in opt.local_subproblems.items():
+            for sn,s in opt.local_scenarios.items():
                 persistent_solver = sputils.is_persistent(s._solver_plugin)
                 prior_outer_iter = list(s._mpisppy_model.inner_bound_constr.keys())
                 s._mpisppy_model.inner_bound_constr[outer_iter] = (ob, s._mpisppy_model.EF_obj, ib)
@@ -326,22 +297,17 @@ class CrossScenarioExtension(Extension):
             def _eta_bounds(m, k):
                 return lb, None
 
-        # eta is attached to each subproblem, regardless of bundles
-        bundling = opt.bundling
-        for k,s in opt.local_subproblems.items():
+        # eta is attached to each subproblem
+        for k,s in opt.local_scenarios.items():
             s._mpisppy_model.eta = pyo.Var(opt.all_scenario_names, initialize=_eta_init, bounds=_eta_bounds)
             if sputils.is_persistent(s._solver_plugin):
                 for var in s._mpisppy_model.eta.values():
                     s._solver_plugin.add_var(var)
-            if bundling: ## create a refence to eta on each subproblem
-                for sn in s.scen_list:
-                    scenario = opt.local_scenarios[sn]
-                    scenario._mpisppy_model.eta = { k : s._mpisppy_model.eta[k] for k in opt.all_scenario_names }
 
         ## hold the PH object harmless
         self._disable_W_and_prox()
 
-        for k,s in opt.local_subproblems.items():
+        for k,s in opt.local_scenarios.items():
 
             obj = find_active_objective(s)
 
@@ -349,17 +315,7 @@ class CrossScenarioExtension(Extension):
             if len(repn.nonlinear_vars) > 0:
                 raise ValueError("CrossScenario does not support models with nonlinear objective functions")
 
-            if bundling:
-                ## NOTE: this is slighly wasteful, in that for a bundle
-                ##       the first-stage cost appears len(s.scen_list) times
-                ##       If this really made a difference, we could use s.ref_vars
-                ##       to do the substitution
-                nonant_vardata_list = list()
-                for sn in s.scen_list:
-                    nonant_vardata_list.extend( \
-                            opt.local_scenarios[sn]._mpisppy_node_list[0].nonant_vardata_list)
-            else:
-                nonant_vardata_list = s._mpisppy_node_list[0].nonant_vardata_list
+            nonant_vardata_list = s._mpisppy_node_list[0].nonant_vardata_list
 
             nonant_ids = set((id(var) for var in nonant_vardata_list))
 
@@ -390,10 +346,7 @@ class CrossScenarioExtension(Extension):
                     quadratic_coefs[i] = -coef
 
             # add the other etas
-            if bundling:
-                these_scenarios = set(s.scen_list)
-            else:
-                these_scenarios = [k]
+            these_scenarios = [k]
 
             eta_scenarios = list()
             for sn in opt.all_scenario_names:
