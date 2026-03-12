@@ -543,7 +543,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                    need_solution=True,
                    warmstart=sputils.WarmstartStatus.FALSE):
         """ Loop over `local_scenarios` and solve them in a manner
-        dicated by the arguments.
+        dictated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
         also updates the `_PySP_feas_indictor` to indicate which scenarios were

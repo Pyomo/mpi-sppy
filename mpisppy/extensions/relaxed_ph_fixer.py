@@ -132,7 +132,7 @@ class RelaxedPHFixer(Extension):
                         pass
 
                 if update_var and persistent_solver:
-                        sub._solver_plugin.update_var(xvar)
+                    sub._solver_plugin.update_var(xvar)
 
             # Note: might count incorrectly with bundling?
             self._heuristic_fixed_vars[k] += raw_fixed_this_iter

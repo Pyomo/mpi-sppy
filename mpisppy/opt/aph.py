@@ -706,10 +706,10 @@ class APH(ph_base.PHBase):
                        tee=False,
                        verbose=False,
                        dispatch_frac=1):
-        """See phbase.solve_loop. Loop over self.local_scenarios and solve
-            them in a manner dicated by the arguments. In addition to
-            changing the Var values in the scenarios, update
-            _PySP_feas_indictor for each.
+        """See phbase.solve_loop. Loop over ``self.local_scenarios`` and solve
+        them in a manner dictated by the arguments. In addition to changing
+        the Var values in the scenarios, it updates per-scenario solution
+        status (for example via ``scenario._mpisppy_data.solution_available``).
 
         Args:
             solver_options (dict or None): the scenario solver options

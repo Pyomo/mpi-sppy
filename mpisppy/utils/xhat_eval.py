@@ -115,7 +115,7 @@ class Xhat_Eval(mpisppy.spopt.SPOpt):
                    warmstart=sputils.WarmstartStatus.USER_SOLUTION,  # 1 Sep 2025,
                    need_solution=False,):
         """ Loop over self.local_scenarios and solve them in a manner
-            dicated by the arguments. In addition to changing the Var
+            dictated by the arguments. In addition to changing the Var
             values in the scenarios, update _PySP_feas_indictor for each.
 
         ASSUMES:
