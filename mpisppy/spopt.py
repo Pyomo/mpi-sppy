@@ -61,7 +61,6 @@ class SPOpt(SPBase):
             variable_probability=variable_probability,
         )
         self._save_active_objectives()
-        self._attach_scen_lists(options.get("verbose", False))
         if options.get("presolve", False):
             # NOTE: This creates another representation
             #       of each scenario subproblem in C++
@@ -892,16 +891,6 @@ class SPOpt(SPBase):
         return EF_instance
 
 
-    def _attach_scen_lists(self, verbose=False):
-        """ Attach scen_list to each local scenario.
-
-        Args:
-            verbose (boolean, optional):
-                If True, displays verbose output. Default False.
-        """
-        for sname, s in self.local_scenarios.items():
-            s.scen_list = [sname]
-
 
     def _create_solvers(self, presolve=True):
 
@@ -946,14 +935,6 @@ class SPOpt(SPBase):
                     if v not in self._initial_fixed_varibles:
                         return False
         return True
-
-    def subproblem_scenario_generator(self):
-        """
-        Iterate over every scenario, yielding the
-        subproblem_name, subproblem, scenario_name, scenario.
-        """
-        for s_name, s in self.local_scenarios.items():
-            yield s_name, s, s_name, s
 
 
 # these parameters should eventually be promoted to a non-PH

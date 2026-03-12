@@ -102,8 +102,8 @@ class _SPIntervalTightenerBase(_SPPresolver):
                 update = True
 
                 # update the bounds if changed
-                for sub_n, _, k, s in self.opt.subproblem_scenario_generator():
-                    feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
+                for k, s in self.opt.local_scenarios.items():
+                    feas_tol = self.subproblem_tighteners[k].config.feasibility_tol
                     for node in s._mpisppy_node_list:
                         node_comm = self.opt.comms[node.name]
                         for var, lb, ub in zip(

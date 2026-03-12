@@ -34,16 +34,14 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
 
     def _unrelax_integers(self):
         for sub in self.opt.local_scenarios.values():
-            for sn in sub.scen_list:
-                s = self.opt.local_scenarios[sn]
-                subproblem_solver = sub._solver_plugin
-                vlist = None
-                if is_persistent(subproblem_solver):
-                    vlist = list(v for v,d in s._relaxed_integer_vars[None].values())
-                self.integer_relaxer.apply_to(s, options={"undo":True}) 
-                if is_persistent(subproblem_solver):
-                    for v in vlist:
-                        subproblem_solver.update_var(v)
+            subproblem_solver = sub._solver_plugin
+            vlist = None
+            if is_persistent(subproblem_solver):
+                vlist = list(v for v,d in sub._relaxed_integer_vars[None].values())
+            self.integer_relaxer.apply_to(sub, options={"undo":True})
+            if is_persistent(subproblem_solver):
+                for v in vlist:
+                    subproblem_solver.update_var(v)
         self._integers_relaxed = False
 
     def miditer(self):

@@ -168,45 +168,41 @@ class ReducedCostsSpoke(LagrangianOuterBound):
                 # - direct solvers seem to behave the same as persistent solvers
                 # GurobiDirect needs vars_to_load argument
                 # XpressDirect loads for all vars by default - TODO: should notify someone of this inconsistency
-                vars_to_load = [x for sn in sub.scen_list for _, x in self.opt.local_scenarios[sn]._mpisppy_data.nonant_indices.items()]
+                vars_to_load = [x for _, x in sub._mpisppy_data.nonant_indices.items()]
                 sub._solver_plugin.load_rc(vars_to_load=vars_to_load)
 
-            for sn in sub.scen_list:
-                s = self.opt.local_scenarios[sn]
-                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
-                    # fixed by modeler
-                    if ndn_i in self._modeler_fixed_nonants[s]:
-                        rc[ci] = np.nan
-                        continue
-                    xb = s._mpisppy_model.xbars[ndn_i].value
-                    # check variance of xb to determine if consensus achieved
-                    var_xb = pyo.value(s._mpisppy_model.xsqbars[ndn_i]) - xb * xb
+            for ci, (ndn_i, xvar) in enumerate(sub._mpisppy_data.nonant_indices.items()):
+                # fixed by modeler
+                if ndn_i in self._modeler_fixed_nonants[sub]:
+                    rc[ci] = np.nan
+                    continue
+                xb = sub._mpisppy_model.xbars[ndn_i].value
+                # check variance of xb to determine if consensus achieved
+                var_xb = pyo.value(sub._mpisppy_model.xsqbars[ndn_i]) - xb * xb
 
-                    if var_xb  > self.consensus_threshold * self.consensus_threshold:
-                        rc[ci] = np.nan
-                        continue
+                if var_xb  > self.consensus_threshold * self.consensus_threshold:
+                    rc[ci] = np.nan
+                    continue
 
-                    # solver takes care of sign of rc, based on lb, ub and max,min
-                    # rc can be of wrong sign if numerically 0 - accepted here, checked in extension
-                    if (xvar.lb is not None and xb - xvar.lb <= self.bound_tol) or (xvar.ub is not None and xvar.ub - xb <= self.bound_tol):
-                        rc[ci] += sub._mpisppy_probability * sub.rc[xvar]
-                    # not close to either bound -> rc = nan
-                    else:
-                        rc[ci] = np.nan
+                # solver takes care of sign of rc, based on lb, ub and max,min
+                # rc can be of wrong sign if numerically 0 - accepted here, checked in extension
+                if (xvar.lb is not None and xb - xvar.lb <= self.bound_tol) or (xvar.ub is not None and xvar.ub - xb <= self.bound_tol):
+                    rc[ci] += sub._mpisppy_probability * sub.rc[xvar]
+                # not close to either bound -> rc = nan
+                else:
+                    rc[ci] = np.nan
 
         self._scenario_rc_buffer.fill(0)
         assert self._scenario_rc_buffer.size == self.send_buffers[Field.SCENARIO_REDUCED_COST].data_len()
         ci = 0 # buffer index
         for sub in self.opt.local_scenarios.values():
-            for sn in sub.scen_list:
-                s = self.opt.local_scenarios[sn]
-                for ndn_i, xvar in s._mpisppy_data.nonant_indices.items():
-                    # fixed by modeler
-                    if ndn_i in self._modeler_fixed_nonants[s]:
-                        self._scenario_rc_buffer[ci] = np.nan
-                    else:
-                        self._scenario_rc_buffer[ci] = sub.rc[xvar]
-                    ci += 1
+            for ndn_i, xvar in sub._mpisppy_data.nonant_indices.items():
+                # fixed by modeler
+                if ndn_i in self._modeler_fixed_nonants[sub]:
+                    self._scenario_rc_buffer[ci] = np.nan
+                else:
+                    self._scenario_rc_buffer[ci] = sub.rc[xvar]
+                ci += 1
         self.rc_scenario = self._scenario_rc_buffer
         # print(f"In ReducedCostsSpoke; {self.rc_scenario=}")
 
