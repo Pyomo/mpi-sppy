@@ -14,11 +14,10 @@ from pyomo.contrib.pynumero.linalg.scipy_interface import ScipyLU
 
 from mpisppy.utils.kkt.interface import InteriorPointInterface
 
-def nonant_sensitivies(s, ph):
+def nonant_sensitivies(s):
     """ Compute the sensitivities of noants (w.r.t. the Lagrangian for s)
         Args:
             s: (Pyomo ConcreteModel): the scenario
-           ph: (PHBase Object): the PH object
         Returns:
             nonant_sensis (dict): [ndn_i]: sensitivity for the Var
     """
