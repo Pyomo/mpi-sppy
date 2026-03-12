@@ -45,7 +45,6 @@ class Subgradient(mpisppy.opt.ph.PH):
 
     def solve_loop(self,
                    solver_options=None,
-                   use_scenarios_not_subproblems=False,
                    dtiming=False,
                    dis_W=False,
                    dis_prox=False,
@@ -56,8 +55,8 @@ class Subgradient(mpisppy.opt.ph.PH):
                    need_solution=True,
                    warmstart=False,
                    ):
-        """ Loop over `local_subproblems` and solve them in a manner
-        dicated by the arguments.
+        """ Loop over `local_scenarios` and solve them in a manner
+        dictated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
         also updates the `_PySP_feas_indictor` to indicate which scenarios were
@@ -66,9 +65,6 @@ class Subgradient(mpisppy.opt.ph.PH):
         Args:
             solver_options (dict, optional):
                 The scenario solver options.
-            use_scenarios_not_subproblems (boolean, optional):
-                If True, solves individual scenario problems, not subproblems.
-                This distinction matters when using bundling. Default is False.
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
             dis_W (boolean, optional):
@@ -94,7 +90,6 @@ class Subgradient(mpisppy.opt.ph.PH):
         """
         super().solve_loop(
             solver_options=solver_options,
-            use_scenarios_not_subproblems=use_scenarios_not_subproblems,
             dtiming=dtiming,
             dis_W=dis_W,
             dis_prox=dis_prox,

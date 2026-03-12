@@ -79,7 +79,7 @@ class ReducedCostsRho(_SensiRhoBase):
         # dict of dicts [s][ndn_i]
         nonant_sensis = {}
         ci = 0
-        for s in self.ph.local_subproblems.values():
+        for s in self.ph.local_scenarios.values():
             nonant_sensis[s] = {}
             for ndn_i in s._mpisppy_data.nonant_indices:
                 nonant_sensis[s][ndn_i] = self._scenario_rc_buffer[ci]

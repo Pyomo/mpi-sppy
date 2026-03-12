@@ -33,7 +33,7 @@ class RelaxedPHFixer(Extension):
                 if xvar.fixed:
                     self._modeler_fixed_nonants.add(ndn_i)
 
-        for k,sub in self.opt.local_subproblems.items():
+        for k,sub in self.opt.local_scenarios.items():
             self._heuristic_fixed_vars[k] = 0
 
     def iter0_post_solver_creation(self):
@@ -69,72 +69,70 @@ class RelaxedPHFixer(Extension):
 
     def relaxed_ph_fixing(self, relaxed_solution, pre_iter0 = False):
 
-        for k, sub in self.opt.local_subproblems.items():
+        for k, sub in self.opt.local_scenarios.items():
             raw_fixed_this_iter = 0
             persistent_solver = is_persistent(sub._solver_plugin)
-            for sn in sub.scen_list:
-                s = self.opt.local_scenarios[sn]
-                for ci, (ndn_i, xvar) in enumerate(s._mpisppy_data.nonant_indices.items()):
-                    if ndn_i in self._modeler_fixed_nonants:
-                        continue
-                    if xvar in s._mpisppy_data.all_surrogate_nonants:
-                        continue
-                    relaxed_val = relaxed_solution[ci]
-                    xvar_value = xvar._value
-                    update_var = False
-                    xb = s._mpisppy_model.xbars[ndn_i]._value
-                    if xvar.fixed:
-                        if abs(relaxed_val - xvar_value) > self.bound_tol:
-                            xvar.unfix()
-                            update_var = True
-                            raw_fixed_this_iter -= 1
-                            if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"{k}: unfixing var {xvar.name}; {relaxed_val=} is different from {xvar_value=}")
-                        # in case somebody else unfixs a variable in another rank...
-                        if abs(xb - xvar_value) > self.bound_tol:
-                            xvar.unfix()
-                            update_var = True
-                            raw_fixed_this_iter -= 1
-                            if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"{k}: unfixing var {xvar.name}; xbar {xb} differs from the fixed value {xvar_value}")
-                    elif pre_iter0:
-                        if (relaxed_val - xvar.lb) <= self.bound_tol:
-                            xvar.fix(xvar.lb)
-                            if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"{k}: fixing var {xvar.name} to lb {xvar.lb}; {relaxed_val=}")
-                            update_var = True
-                            raw_fixed_this_iter += 1
-                        if (xvar.ub - relaxed_val) <= self.bound_tol:
-                            xvar.fix(xvar.ub)
-                            if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"{k}: fixing var {xvar.name} to ub {xvar.ub}; {relaxed_val=}")
-                            update_var = True
-                            raw_fixed_this_iter += 1
-                    # xbar, xhat, and relaxed_xhat all agree
-                    elif (abs(xb - xvar_value) <= self.bound_tol) and (abs(relaxed_val - xvar_value) <= self.bound_tol):
-                        if ( xvar_value - xvar.lb <= self.bound_tol ):
-                            xvar.fix(xvar.lb)
-                            if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"{k}: fixing var {xvar.name} to lb {xvar.lb}; {relaxed_val=}, var value is {xvar_value}")
-                            update_var = True
-                            raw_fixed_this_iter += 1
-                        elif ( xvar.ub - xvar_value <= self.bound_tol ):
-                            xvar.fix(xvar.ub)
-                            if self.debug and self.opt.cylinder_rank == 0:
-                                print(f"{k}: fixing var {xvar.name} to ub {xvar.ub}; {relaxed_val=}, var value is {xvar_value}")
-                            update_var = True
-                            raw_fixed_this_iter += 1
-                        else:
-                            # # TODO: should we fix in this case? To xbar? What about integers? Maybe option-drive??
-                            # xvar.fix(xb)
-                            # if self.debug and self.opt.cylinder_rank == 0:
-                            #     print(f"{k}: fixing var {xvar.name} to xbar {xb}; {relaxed_val=}, var value is {xvar_value}")
-                            # update_var = True
-                            # raw_fixed_this_iter += 1
-                            pass
+            for ci, (ndn_i, xvar) in enumerate(sub._mpisppy_data.nonant_indices.items()):
+                if ndn_i in self._modeler_fixed_nonants:
+                    continue
+                if xvar in sub._mpisppy_data.all_surrogate_nonants:
+                    continue
+                relaxed_val = relaxed_solution[ci]
+                xvar_value = xvar._value
+                update_var = False
+                xb = sub._mpisppy_model.xbars[ndn_i]._value
+                if xvar.fixed:
+                    if abs(relaxed_val - xvar_value) > self.bound_tol:
+                        xvar.unfix()
+                        update_var = True
+                        raw_fixed_this_iter -= 1
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"{k}: unfixing var {xvar.name}; {relaxed_val=} is different from {xvar_value=}")
+                    # in case somebody else unfixs a variable in another rank...
+                    if abs(xb - xvar_value) > self.bound_tol:
+                        xvar.unfix()
+                        update_var = True
+                        raw_fixed_this_iter -= 1
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"{k}: unfixing var {xvar.name}; xbar {xb} differs from the fixed value {xvar_value}")
+                elif pre_iter0:
+                    if (relaxed_val - xvar.lb) <= self.bound_tol:
+                        xvar.fix(xvar.lb)
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"{k}: fixing var {xvar.name} to lb {xvar.lb}; {relaxed_val=}")
+                        update_var = True
+                        raw_fixed_this_iter += 1
+                    if (xvar.ub - relaxed_val) <= self.bound_tol:
+                        xvar.fix(xvar.ub)
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"{k}: fixing var {xvar.name} to ub {xvar.ub}; {relaxed_val=}")
+                        update_var = True
+                        raw_fixed_this_iter += 1
+                # xbar, xhat, and relaxed_xhat all agree
+                elif (abs(xb - xvar_value) <= self.bound_tol) and (abs(relaxed_val - xvar_value) <= self.bound_tol):
+                    if ( xvar_value - xvar.lb <= self.bound_tol ):
+                        xvar.fix(xvar.lb)
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"{k}: fixing var {xvar.name} to lb {xvar.lb}; {relaxed_val=}, var value is {xvar_value}")
+                        update_var = True
+                        raw_fixed_this_iter += 1
+                    elif ( xvar.ub - xvar_value <= self.bound_tol ):
+                        xvar.fix(xvar.ub)
+                        if self.debug and self.opt.cylinder_rank == 0:
+                            print(f"{k}: fixing var {xvar.name} to ub {xvar.ub}; {relaxed_val=}, var value is {xvar_value}")
+                        update_var = True
+                        raw_fixed_this_iter += 1
+                    else:
+                        # # TODO: should we fix in this case? To xbar? What about integers? Maybe option-drive??
+                        # xvar.fix(xb)
+                        # if self.debug and self.opt.cylinder_rank == 0:
+                        #     print(f"{k}: fixing var {xvar.name} to xbar {xb}; {relaxed_val=}, var value is {xvar_value}")
+                        # update_var = True
+                        # raw_fixed_this_iter += 1
+                        pass
 
-                    if update_var and persistent_solver:
-                        sub._solver_plugin.update_var(xvar)
+                if update_var and persistent_solver:
+                    sub._solver_plugin.update_var(xvar)
 
             # Note: might count incorrectly with bundling?
             self._heuristic_fixed_vars[k] += raw_fixed_this_iter

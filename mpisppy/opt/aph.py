@@ -163,7 +163,7 @@ class APH(ph_base.PHBase):
     #============================
     def setup_dispatchrecord(self):
         # Start with a small number for iteration to randomize fist dispatch.
-        for sname in self.local_subproblems:
+        for sname in self.local_scenarios:
             r = np.random.rand()
             self.dispatchrecord[sname] = [(r,0)]
 
@@ -700,24 +700,22 @@ class APH(ph_base.PHBase):
 
     #====================================================================
     def APH_solve_loop(self, solver_options=None,
-                       use_scenarios_not_subproblems=False,
                        dtiming=False,
                        gripe=False,
                        disable_pyomo_signal_handling=False,
                        tee=False,
                        verbose=False,
                        dispatch_frac=1):
-        """See phbase.solve_loop. Loop over self.local_subproblems and solve
-            them in a manner dicated by the arguments. In addition to
-            changing the Var values in the scenarios, update
-            _PySP_feas_indictor for each.
+        """See phbase.solve_loop. Loop over ``self.local_scenarios`` and solve
+        them in a manner dictated by the arguments. In addition to changing
+        the Var values in the scenarios, it updates per-scenario solution
+        status (for example via ``scenario._mpisppy_data.solution_available``).
 
         Args:
             solver_options (dict or None): the scenario solver options
-            use_scenarios_not_subproblems (boolean): for use by bounds
             dtiming (boolean): indicates that timing should be reported
             gripe (boolean): output a message if a solve fails
-            disable_pyomo_signal_handling (boolean): set to true for asynch, 
+            disable_pyomo_signal_handling (boolean): set to true for asynch,
                                                      ignored for persistent solvers.
             tee (boolean): show solver output to screen if possible
             verbose (boolean): indicates verbose output
@@ -727,18 +725,13 @@ class APH(ph_base.PHBase):
             dlist (list of (str, float): (dispatched name, phi )
         """
         #==========
-        def _vb(msg): 
+        def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(cylinder rank {}) {}".format(self.cylinder_rank, msg))
         _vb("Entering solve_loop function.")
 
-
-        if use_scenarios_not_subproblems:
-            s_source = self.local_scenarios
-            phidict = self.phis
-        else:
-            s_source = self.local_subproblems
-            phidict = self.phis
+        s_source = self.local_scenarios
+        phidict = self.phis
         # dict(sorted(phidict.items(), key=lambda item: item[1]))
         # sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 
