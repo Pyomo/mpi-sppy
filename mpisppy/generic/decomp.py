@@ -49,8 +49,11 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
+    variable_probability = cfg.get("variable_probability", ifmissing=None)
+
     hub_dict = build_hub_dict(cfg, beans, scenario_creator_kwargs,
-                              rho_setter, all_nodenames, ph_converger)
+                              rho_setter, all_nodenames, ph_converger,
+                              variable_probability=variable_probability)
     configure_extensions(hub_dict, module, cfg)
 
     # reduced cost fixer options setup (needs hub_dict before building spokes)
@@ -59,7 +62,8 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
         vanilla.add_reduced_costs_fixer(hub_dict, cfg)
 
     list_of_spoke_dict = build_spoke_list(cfg, beans, scenario_creator_kwargs,
-                                          rho_setter, all_nodenames)
+                                          rho_setter, all_nodenames,
+                                          variable_probability=variable_probability)
 
     # if the user dares, let them mess with the hubdict prior to solve
     if hasattr(module, 'hub_and_spoke_dict_callback'):
