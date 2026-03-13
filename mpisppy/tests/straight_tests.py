@@ -14,6 +14,8 @@ import shlex
 import subprocess
 import sys
 
+from mpisppy.tests.utils import get_solver
+
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""
 _remaining = []
@@ -28,8 +30,6 @@ while _i < len(sys.argv):
         _remaining.append(sys.argv[_i])
     _i += 1
 sys.argv = [sys.argv[0]] + _remaining
-
-from mpisppy.tests.utils import get_solver
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
 
