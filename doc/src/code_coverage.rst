@@ -81,9 +81,11 @@ Tips
 
 * Use ``--source=mpisppy`` (or rely on ``.coveragerc``) to limit coverage to
   the library itself and avoid instrumenting Pyomo, numpy, etc.
-* Coverage data files land in whatever directory the subprocess ``chdir``\ s
-  to before running. Use ``coverage combine`` with a ``.coveragerc`` or
-  ``[tool.coverage.paths]`` setting if you need to remap paths, or copy the
-  ``.coverage.*`` files to one directory before combining.
+* The launcher scripts ``chdir`` into subdirectories before spawning
+  subprocesses. When running coverage manually with ``--python-args``, use
+  ``--data-file`` with an absolute path so all ``.coverage.*`` files land in
+  one place, e.g.
+  ``--python-args="-m coverage run --parallel-mode --data-file=/abs/path/.coverage --source=mpisppy"``.
+  ``run_coverage.bash`` handles this automatically.
 * For a quick smoke test, ``afew.py`` finishes in under a minute and still
   exercises the core hub-and-spoke machinery.

@@ -206,12 +206,12 @@ do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_
 
 ### combined runs to test mps files ####
 # Make sure sizes_expression still exists and lpfiles still executes.
-sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
+sizese = ("--num-scens 3 --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
-          " --write-scenario-lp-mps-files")
+          " --write-scenario-lp-mps-files-dir .")
 do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
 # just smoke for now
-sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
+sizesMPS = ("--default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
           " --mps-files-directory=.")   # we will be in the sizes dir
 do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
@@ -227,7 +227,7 @@ sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
 do_one("sslp", "sslp", 3, sslp_pb, xhat_baseline_dir="test_data/sslp_pb_baseline")
 
 # write, then read, pickled bundles
-sslp_wr = "--module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 --default-rho 1"
+sslp_wr = "--sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 --default-rho 1"
 do_one("sslp", "sslp", 2, sslp_wr, xhat_baseline_dir=None)
 sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
            "--unpickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 "

@@ -101,7 +101,7 @@ run_phase "test_with_cylinders (mpiexec -np 2)" \
 
 # ---------- Tests that spawn mpiexec internally ----------
 
-PYARGS="-m coverage run --parallel-mode --rcfile=$PROJ_DIR/.coveragerc"
+PYARGS="-m coverage run --parallel-mode --rcfile=$PROJ_DIR/.coveragerc --data-file=$PROJ_DIR/.coverage"
 
 run_phase "straight_tests.py (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/straight_tests.py --python-args="$PYARGS"
