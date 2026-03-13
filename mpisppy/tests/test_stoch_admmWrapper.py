@@ -8,11 +8,27 @@
 ###############################################################################
 import unittest
 import subprocess
+import sys
 import mpisppy.tests.examples.stoch_distr.stoch_distr_admm_cylinders as stoch_distr_admm_cylinders
 import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
 from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
 import os
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
@@ -103,12 +119,12 @@ class TestStochAdmmWrapper(unittest.TestCase):
 
 
     def test_values(self):
-        command_line_pairs = [(f"mpiexec -np 3 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
-                         , f"python stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stages 3"), \
-                         (f"mpiexec -np 3 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
-                         , f"python stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
-                              (f"mpiexec -np 6 python -u -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
-                         , f"python stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 4 --num-admm-subproblems 5 --mnpr 5 --scalable --ensure-xhat-feas")  ]
+        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 10 --num-admm-subproblems 2 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.001 --num-stages 3" \
+                         , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 10 --num-admm-subproblems 2 --num-stages 3"), \
+                         (f"mpiexec -np 3 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 5 --num-admm-subproblems 3 --default-rho 5 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+                         , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 5 --num-admm-subproblems 3 --ensure-xhat-feas"), \
+                              (f"mpiexec -np 6 python -u {python_args} -m mpi4py stoch_distr_admm_cylinders.py --num-stoch-scens 4 --num-admm-subproblems 5 --default-rho 15 --solver-name {solver_name} --max-iterations 30 --xhatxbar --lagrangian --mnpr 5 --scalable --ensure-xhat-feas" \
+                         , f"python {python_args} stoch_distr_ef.py --solver-name {solver_name} --num-stoch-scens 4 --num-admm-subproblems 5 --mnpr 5 --scalable --ensure-xhat-feas")  ]
         #command_line = f"mpiexec -np 6 python -m mpi4py examples/stoch_distr/stoch_distr_admm_cylinders.py --num-admm-subproblems 2 --num-stoch-scens 4 --default-rho 10 --solver-name {solver_name} --max-iterations 100 --xhatxbar --lagrangian"
         original_dir = os.getcwd()
         for j in range(len(command_line_pairs)):

@@ -15,6 +15,22 @@ from mpisppy.tests.utils import get_solver
 from mpisppy import MPI
 import subprocess
 import os
+import sys
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
@@ -104,10 +120,10 @@ class TestAdmmWrapper(unittest.TestCase):
                                f" in this output {line=}")
 
     def test_values(self):
-        command_line_pairs = [(f"mpiexec -np 3 python -u -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
-                         , f"python distr_ef.py --solver-name {solver_name} --num-scens 3 --ensure-xhat-feas"), \
-                         (f"mpiexec -np 6 python -u -m mpi4py distr_admm_cylinders.py --num-scens 5 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --mnpr 6 --rel-gap 0.05 --scalable --ensure-xhat-feas" \
-                         , f"python distr_ef.py --solver-name {solver_name} --num-scens 5 --ensure-xhat-feas --mnpr 6 --scalable")]
+        command_line_pairs = [(f"mpiexec -np 3 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 3 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --rel-gap 0.01 --ensure-xhat-feas" \
+                         , f"python {python_args} distr_ef.py --solver-name {solver_name} --num-scens 3 --ensure-xhat-feas"), \
+                         (f"mpiexec -np 6 python -u {python_args} -m mpi4py distr_admm_cylinders.py --num-scens 5 --default-rho 10 --solver-name {solver_name} --max-iterations 50 --xhatxbar --lagrangian --mnpr 6 --rel-gap 0.05 --scalable --ensure-xhat-feas" \
+                         , f"python {python_args} distr_ef.py --solver-name {solver_name} --num-scens 5 --ensure-xhat-feas --mnpr 6 --scalable")]
         original_dir = os.getcwd()
         for command_line_pair in command_line_pairs:
             os.chdir(_DISTR_DIR)
