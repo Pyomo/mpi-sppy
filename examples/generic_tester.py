@@ -21,12 +21,28 @@
 #      python generic_tester.py gurobi_persistent --oversubscribe
 #      python generic_tester.py gurobi_persistent -envall nouc
 #      (envall does nothing; it is just a place-holder)
+# For coverage: python generic_tester.py gurobi_persistent "" "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import sys
 import shutil
 import numpy as np
 from numpy.linalg import norm
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 # Write solutions here, then delete. (.. makes it local to examples)
 XHAT_TEMP = os.path.join("..","AAA_delete_this_from_generic_tester")
@@ -123,8 +139,8 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
         # we might be making a baseline, or just not using one
         fullarg = argstring
 
-    runstring = "mpiexec {} -np {} python -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
-                format(mpiexec_arg, np, modname, fullarg)
+    runstring = "mpiexec {} -np {} python {} -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
+                format(mpiexec_arg, np, python_args, modname, fullarg)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
     code = os.system("echo {} && {}".format(runstring, runstring))
