@@ -82,7 +82,7 @@ def nonant_sensitivies(s):
         sensitivity = grad_vec_kkt_inv @ -e_x
         nonant_sensis[ndn_i] = sensitivity
 
-    relax_int.apply_to(s, options={"undo":True})
+    relax_int.apply_to(s, options={"reverse":True})
     assert not hasattr(s, "_relaxed_integer_vars")
     del s.ipopt_zL_out
     del s.ipopt_zU_out

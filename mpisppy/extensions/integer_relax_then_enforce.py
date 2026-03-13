@@ -38,7 +38,7 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
             vlist = None
             if is_persistent(subproblem_solver):
                 vlist = list(v for v,d in sub._relaxed_integer_vars[None].values())
-            self.integer_relaxer.apply_to(sub, options={"undo":True})
+            self.integer_relaxer.apply_to(sub, options={"reverse":True})
             if is_persistent(subproblem_solver):
                 for v in vlist:
                     subproblem_solver.update_var(v)
