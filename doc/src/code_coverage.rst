@@ -52,7 +52,7 @@ becomes:
 
 .. code-block:: text
 
-   mpiexec -np 3 python -m coverage run --parallel-mode --source=mpisppy -u -m mpi4py farmer_cylinders.py --num-scens 3 ...
+   mpiexec -np 3 python -u -m coverage run --parallel-mode --source=mpisppy -m mpi4py farmer_cylinders.py --num-scens 3 ...
 
 Because ``--parallel-mode`` is used, each MPI rank writes its own
 ``.coverage.<hostname>.<pid>`` file. After the run, ``coverage combine``

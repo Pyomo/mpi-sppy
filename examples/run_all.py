@@ -80,7 +80,7 @@ def egret_avail():
 def do_one(dirname, progname, np, argstring):
     """ return the code"""
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python {} -u -m mpi4py {} {}".\
+    runstring = "mpiexec {} -np {} python -u {} -m mpi4py {} {}".\
                 format(mpiexec_arg, np, python_args, progname, argstring)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug

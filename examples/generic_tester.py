@@ -139,7 +139,7 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
         # we might be making a baseline, or just not using one
         fullarg = argstring
 
-    runstring = "mpiexec {} -np {} python {} -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
+    runstring = "mpiexec {} -np {} python -u {} -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
                 format(mpiexec_arg, np, python_args, modname, fullarg)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
