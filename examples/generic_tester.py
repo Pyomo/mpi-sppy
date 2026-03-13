@@ -218,8 +218,6 @@ do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir
 
 ### end combined mps file runs ###
 
-quit()
-
 # proper bundles
 sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
            "--scenarios-per-bundle 1 --default-rho 1 "
