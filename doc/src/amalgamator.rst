@@ -1,11 +1,14 @@
 .. _Amalgamator:
 
-Amalgamator
-===========
+Amalgamator (Internal/Advanced)
+================================
 
-.. Note::
-   This is an advanced topic, probably of interest only to maintainers of
-   confidence interfal and related code.
+.. note::
+   Amalgamator is used internally by the confidence interval code and
+   is not deprecated. However, most users should use
+   ``generic_cylinders.py`` (see :ref:`generic_cylinders`) as their
+   entry point. This section is primarily of interest to maintainers of
+   confidence interval and related code.
 
 The file ``amalgamator.py``
 provides several drivers to solve a problem without writing a program

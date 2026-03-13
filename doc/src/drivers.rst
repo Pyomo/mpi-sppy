@@ -1,10 +1,14 @@
 .. _Drivers:
 
-Drivers
-=======
+Writing Custom Drivers (Advanced)
+=================================
 
-Most new users should use ``mpisppy.generic_cylinders.py`` (see :ref:`generic_cylinders`)
-as their driver. However, advanced users might want features that are not yet
+.. note::
+   Most users should use ``generic_cylinders.py`` (see :ref:`generic_cylinders`).
+   This section is for developers who need features not yet exposed through
+   ``generic_cylinders.py`` or who want to understand the internal architecture.
+
+Advanced users might want features that are not yet
 supported in ``mpisppy.generic_cylinders.py`` and so they might want to create their
 own driver. Also, users who want to maintain, or modify a copy of ``mpisppy.generic_cylinders.py``
 may want some background on drivers, which is provided in this section.
