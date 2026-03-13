@@ -11,7 +11,6 @@
 # Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper
 
-import mpisppy.tests.examples.distr.distr_data as distr_data
 import stoch_distr
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -59,17 +58,17 @@ def _count_cylinders(cfg):
     return count
 
 
-def _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params, verbose=None):
+def _make_admm(cfg, n_cylinders, verbose=None):
     options = {}
 
     admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(cfg.num_admm_subproblems)
     stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(num_stoch_scens=cfg.num_stoch_scens)
     all_admm_stoch_subproblem_scenario_names = stoch_distr.admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names,stoch_scenario_names)
-    
+
     split_admm_stoch_subproblem_scenario_name = stoch_distr.split_admm_stoch_subproblem_scenario_name
-    
+
     scenario_creator = stoch_distr.scenario_creator
-    scenario_creator_kwargs = stoch_distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)
+    scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0] # choice of any scenario
     consensus_vars = stoch_distr.consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
     admm = stoch_admmWrapper.Stoch_AdmmWrapper(options,
@@ -157,31 +156,8 @@ def main(cfg):
     if cfg.default_rho is None: # and rho_setter is None
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
-    if cfg.scalable:
-        import json
-        json_file_path = cfg.json_file_path
-
-        # Read the JSON file
-        with open(json_file_path, 'r') as file:
-
-            data_params = json.load(file)
-            # In distr_data num_admm_subproblems is called num_scens
-            cfg.add_to_config("num_scens",
-                      description="num admm subproblems",
-                      domain=int,
-                      default=cfg.num_admm_subproblems)
-            
-            all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
-            all_DC_nodes = [DC_node for region in all_nodes_dict for DC_node in all_nodes_dict[region]["distribution center nodes"]]
-            inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
-
-    else:
-        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_admm_subproblems)
-        all_nodes_dict = None
-        data_params = {"max revenue": 1200} # hard-coded because the model is hard-coded
-
     n_cylinders = _count_cylinders(cfg)
-    admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params)
+    admm, all_admm_stoch_subproblem_scenario_names = _make_admm(cfg, n_cylinders)
     
     scenario_creator = admm.admmWrapper_scenario_creator # scenario_creator used locally (i.e., in this file)
     #note that the stoch_admmWrapper scenario_creator wrapper doesn't take any arguments

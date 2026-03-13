@@ -1,0 +1,310 @@
+.. _generic_admm:
+
+ADMM with ``generic_cylinders``
+================================
+
+The ``--admm`` and ``--stoch-admm`` flags allow ADMM-based decomposition
+to be used with any compatible model module through ``generic_cylinders.py``,
+eliminating the need for a bespoke driver script per problem.
+
+There are two modes:
+
+- **Deterministic ADMM** (``--admm``): Decomposes a deterministic problem into
+  coupled subproblems that share consensus variables. Each subproblem is treated
+  as a "scenario" by mpi-sppy.
+
+- **Stochastic ADMM** (``--stoch-admm``): Combines ADMM decomposition with
+  stochastic programming. Each ADMM subproblem has its own set of stochastic
+  scenarios, yielding composite "ADMM-stochastic" scenario names.
+
+.. Note::
+   ADMM uses ``variable_probability`` internally, which is incompatible with
+   FWPH. If both ``--admm`` (or ``--stoch-admm``) and ``--fwph`` are specified,
+   an error is raised. Proper bundles are also not supported with ADMM.
+
+
+Tutorial: Running the ``distr`` Example
+-----------------------------------------
+
+The ``examples/distr/`` directory contains a distribution network problem
+that is naturally decomposed by region. Each region is an ADMM subproblem
+with consensus variables on the inter-region flows.
+
+Prerequisite: mpi-sppy must be installed (``pip install -e .[mpi]``) with
+a working MPI installation and a solver (e.g., cplex, gurobi, or xpress).
+
+Running deterministic ADMM
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+From the ``examples/distr/`` directory:
+
+.. code-block:: bash
+
+   mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py \
+       --module-name distr --admm --num-scens 3 \
+       --default-rho 10 --max-iterations 50 --solver-name cplex \
+       --lagrangian --xhatxbar --rel-gap 0.01 --ensure-xhat-feas
+
+Here:
+
+- ``--module-name distr`` loads ``distr.py`` as the model module.
+- ``--admm`` enables deterministic ADMM decomposition.
+- ``--num-scens 3`` specifies three subproblems (regions).
+- ``--lagrangian --xhatxbar`` add outer-bound and inner-bound spokes.
+- ``-np 3`` is one MPI rank per cylinder (1 hub + 2 spokes).
+
+The output will show PH iterations with bounds converging, just as with
+a bespoke ADMM driver.
+
+
+Running stochastic ADMM
+^^^^^^^^^^^^^^^^^^^^^^^^
+
+The ``examples/stoch_distr/`` directory extends the distribution problem
+with stochastic scenarios (random production losses). From that directory:
+
+.. code-block:: bash
+
+   mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py \
+       --module-name stoch_distr --stoch-admm \
+       --num-admm-subproblems 3 --num-stoch-scens 3 \
+       --default-rho 10 --max-iterations 50 --solver-name cplex \
+       --lagrangian --xhatxbar --rel-gap 0.01
+
+Here:
+
+- ``--stoch-admm`` enables stochastic ADMM.
+- ``--num-admm-subproblems 3`` specifies three ADMM subproblems (regions).
+- ``--num-stoch-scens 3`` specifies three stochastic scenarios per region.
+- The total number of "scenarios" seen by mpi-sppy is
+  ``num_admm_subproblems * num_stoch_scens = 9``.
+
+
+Model Module Interface
+-----------------------
+
+To use ``--admm`` or ``--stoch-admm`` with ``generic_cylinders``, your model
+module must provide the standard functions required by ``generic_cylinders``
+plus additional ADMM-specific functions.
+
+Standard functions (always required)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+These are the same functions required by any ``generic_cylinders`` model:
+
+- ``scenario_creator(scenario_name, **kwargs)``
+- ``scenario_names_creator(num_scens)``
+- ``scenario_denouement(rank, scenario_name, scenario)``
+- ``kw_creator(cfg)`` — returns a dict of keyword arguments for ``scenario_creator``
+- ``inparser_adder(cfg)`` — registers model-specific command-line arguments
+
+See :ref:`scenario_creator` and :ref:`helper_functions` for details.
+
+
+Additional functions for ``--admm``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. py:function:: consensus_vars_creator(num_scens, all_scenario_names, **scenario_creator_kwargs)
+
+   Creates the consensus variables dictionary.
+
+   :param int num_scens: number of subproblems
+   :param list all_scenario_names: list of all scenario (subproblem) name strings
+   :param scenario_creator_kwargs: keyword arguments from ``kw_creator(cfg)``,
+       passed via ``**``
+   :returns: dict mapping subproblem names to lists of consensus variable
+       name strings (e.g., ``{"Region1": ["flow[('DC1', 'DC2')]", ...], ...}``)
+
+The consensus variable names must match the Pyomo variable names on the
+scenario models exactly.
+
+
+Additional functions for ``--stoch-admm``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+.. py:function:: consensus_vars_creator(admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
+
+   Creates the consensus variables dictionary for stochastic ADMM.
+
+   :param list admm_subproblem_names: list of ADMM subproblem name strings
+   :param str stoch_scenario_name: name of any one stochastic scenario
+       (used to inspect the model for consensus variable names)
+   :param scenario_creator_kwargs: keyword arguments from ``kw_creator(cfg)``
+   :returns: dict mapping subproblem names to lists of
+       ``(variable_name, stage)`` tuples
+
+.. py:function:: admm_subproblem_names_creator(num_admm_subproblems)
+
+   :param int num_admm_subproblems: number of ADMM subproblems
+   :returns: list of ADMM subproblem name strings
+
+.. py:function:: stoch_scenario_names_creator(num_stoch_scens)
+
+   :param int num_stoch_scens: number of stochastic scenarios
+   :returns: list of stochastic scenario name strings
+
+.. py:function:: admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names, stoch_scenario_names)
+
+   Creates composite names for all ADMM-stochastic combinations.
+
+   :param list admm_subproblem_names: from ``admm_subproblem_names_creator``
+   :param list stoch_scenario_names: from ``stoch_scenario_names_creator``
+   :returns: list of composite name strings
+
+.. py:function:: split_admm_stoch_subproblem_scenario_name(name)
+
+   The inverse of the combining function used to create composite names.
+
+   :param str name: a composite ADMM-stochastic scenario name
+   :returns: tuple ``(admm_subproblem_name, stoch_scenario_name)``
+
+
+Creating Your Own ADMM Model
+------------------------------
+
+The easiest way to create an ADMM model for use with ``generic_cylinders`` is
+to start from one of the ``distr`` examples and adapt it. The steps below
+use deterministic ADMM as the starting point; stochastic ADMM follows the
+same pattern with additional functions.
+
+Step 1: Copy the template
+^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Copy ``examples/distr/distr.py`` (and ``examples/distr/distr_data.py`` if you
+want to keep data in a separate file) to a new directory for your model.
+
+Step 2: Define your subproblems
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Each ADMM subproblem corresponds to a "scenario" in mpi-sppy. In
+``scenario_names_creator``, return a list of names for your subproblems:
+
+.. code-block:: python
+
+   def scenario_names_creator(num_scens):
+       return [f"Subproblem{i+1}" for i in range(num_scens)]
+
+Step 3: Implement ``scenario_creator``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Your ``scenario_creator`` builds a Pyomo ``ConcreteModel`` for one subproblem.
+The model must include all variables that appear in the consensus (coupling)
+constraints.
+
+.. code-block:: python
+
+   def scenario_creator(scenario_name, **kwargs):
+       cfg = kwargs["cfg"]
+       model = build_my_model(scenario_name, cfg)
+       # Attach a trivial root node (ADMM wrapper will handle consensus)
+       varlist = list()
+       sputils.attach_root_node(model, model.Obj, varlist)
+       return model
+
+.. Note::
+   Pass an empty ``varlist`` to ``attach_root_node``. The ADMM wrapper
+   automatically manages which variables are non-anticipative (the consensus
+   variables).
+
+Step 4: Implement ``consensus_vars_creator``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This function tells the ADMM wrapper which variables must agree across
+subproblems. Return a dict mapping each subproblem name to a list of
+Pyomo variable name strings:
+
+.. code-block:: python
+
+   def consensus_vars_creator(num_scens, all_scenario_names, **kwargs):
+       consensus_vars = {}
+       # Example: subproblems share a variable "x[link]"
+       for name in all_scenario_names:
+           consensus_vars[name] = ["x[link_A]", "x[link_B]"]
+       return consensus_vars
+
+The variable name strings must exactly match ``var.name`` as it appears on
+the Pyomo model (e.g., ``"flow[('DC1', 'DC2')]"``).
+
+Step 5: Implement ``kw_creator`` and ``inparser_adder``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+``kw_creator(cfg)`` returns a dictionary that will be unpacked as keyword
+arguments to both ``scenario_creator`` and ``consensus_vars_creator``. Put
+any data your model needs into this dictionary:
+
+.. code-block:: python
+
+   def kw_creator(cfg):
+       my_data = load_data(cfg)
+       return {"cfg": cfg, "my_data": my_data}
+
+   def inparser_adder(cfg):
+       cfg.num_scens_required()
+       cfg.add_to_config("my_param",
+                         description="A model-specific parameter",
+                         domain=float, default=1.0)
+
+Step 6: Implement ``scenario_denouement``
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+This function is called for each scenario at the end of the solve. It can
+be a no-op:
+
+.. code-block:: python
+
+   def scenario_denouement(rank, scenario_name, scenario):
+       pass
+
+Step 7: Run
+^^^^^^^^^^^^
+
+.. code-block:: bash
+
+   mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+       --module-name my_model --admm --num-scens 4 \
+       --default-rho 1.0 --max-iterations 100 --solver-name cplex \
+       --lagrangian --xhatxbar
+
+
+Extending to Stochastic ADMM
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+To support ``--stoch-admm``, additionally implement:
+
+1. ``admm_subproblem_names_creator(num_admm_subproblems)``
+2. ``stoch_scenario_names_creator(num_stoch_scens)``
+3. ``admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names, stoch_scenario_names)``
+4. ``split_admm_stoch_subproblem_scenario_name(name)``
+
+These functions define the naming convention for composite scenarios. See
+``examples/stoch_distr/stoch_distr.py`` for a complete working example.
+
+Your ``scenario_creator`` will receive composite names and must split them
+to determine both which ADMM subproblem and which stochastic scenario to build.
+Your ``consensus_vars_creator`` returns ``(variable_name, stage)`` tuples
+instead of plain strings.
+
+Register ``num_admm_subproblems`` and ``num_stoch_scens`` in your
+``inparser_adder`` so users can specify them on the command line.
+
+
+Reference: CLI Arguments
+--------------------------
+
+The following arguments are added by the ADMM support in ``generic_cylinders``:
+
+==========================================  ===========  ============================================
+Argument                                    Domain       Description
+==========================================  ===========  ============================================
+``--admm``                                  bool         Enable deterministic ADMM decomposition
+``--stoch-admm``                            bool         Enable stochastic ADMM decomposition
+``--num-admm-subproblems``                  int          Number of ADMM subproblems (stoch-admm)
+``--num-stoch-scens``                       int          Number of stochastic scenarios (stoch-admm)
+==========================================  ===========  ============================================
+
+.. Note::
+   For deterministic ADMM, the number of subproblems is given by ``--num-scens``,
+   which should be registered by the model's ``inparser_adder``.
+   For stochastic ADMM, ``--num-admm-subproblems`` and ``--num-stoch-scens``
+   may be registered by either the model's ``inparser_adder`` or automatically
+   by the generic framework (if not already present).

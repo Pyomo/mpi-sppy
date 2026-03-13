@@ -14,17 +14,23 @@ from mpisppy.utils.stoch_admmWrapper import Stoch_AdmmWrapper
 
 
 def admm_args(cfg):
-    """Register ADMM-specific config args."""
+    """Register ADMM-specific config args.
+
+    Note: num_admm_subproblems and num_stoch_scens may already be registered
+    by the model's inparser_adder; we only add them if not already present.
+    """
     cfg.add_to_config("admm", description="Use ADMM decomposition",
                       domain=bool, default=False)
     cfg.add_to_config("stoch_admm", description="Use stochastic ADMM decomposition",
                       domain=bool, default=False)
-    cfg.add_to_config("num_admm_subproblems",
-                      description="Number of ADMM subproblems (stoch-admm only)",
-                      domain=int, default=None)
-    cfg.add_to_config("num_stoch_scens",
-                      description="Number of stochastic scenarios (stoch-admm only)",
-                      domain=int, default=None)
+    if "num_admm_subproblems" not in cfg:
+        cfg.add_to_config("num_admm_subproblems",
+                          description="Number of ADMM subproblems (stoch-admm only)",
+                          domain=int, default=None)
+    if "num_stoch_scens" not in cfg:
+        cfg.add_to_config("num_stoch_scens",
+                          description="Number of stochastic scenarios (stoch-admm only)",
+                          domain=int, default=None)
 
 
 def _count_cylinders(cfg):
