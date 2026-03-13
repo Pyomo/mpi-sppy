@@ -49,7 +49,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs,
     # Things needed for vanilla cylinders
     beans = (cfg, scenario_creator, scenario_denouement, all_scenario_names)
 
-    variable_probability = cfg.get("variable_probability", ifmissing=None)
+    variable_probability = getattr(cfg, "_admm_variable_probability", None)
 
     hub_dict = build_hub_dict(cfg, beans, scenario_creator_kwargs,
                               rho_setter, all_nodenames, ph_converger,

@@ -141,9 +141,9 @@ def name_lists(module, cfg, bundle_wrapper=None):
         tuple: (all_scenario_names, all_nodenames)
     """
     # ADMM wrappers provide their own scenario names and nodenames
-    admm_names = cfg.get("admm_scenario_names", ifmissing=None)
+    admm_names = getattr(cfg, "_admm_scenario_names", None)
     if admm_names is not None:
-        all_nodenames = cfg.get("admm_nodenames", ifmissing=None)
+        all_nodenames = getattr(cfg, "_admm_nodenames", None)
         return admm_names, all_nodenames
 
     # Note: high level code like this assumes there are branching factors for

@@ -85,8 +85,9 @@ def setup_admm(module, cfg, n_cylinders):
         scenario_creator_kwargs=scenario_creator_kwargs,
     )
 
-    cfg.quick_assign("variable_probability", object, admm.var_prob_list)
-    cfg.quick_assign("admm_scenario_names", object, all_scenario_names)
+    # Store on cfg as plain attributes (Pyomo Config can't handle these types)
+    object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
+    object.__setattr__(cfg, "_admm_scenario_names", all_scenario_names)
 
     return (admm.admmWrapper_scenario_creator, None,
             all_scenario_names, None)
@@ -125,9 +126,10 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         BFs=None,
     )
 
-    cfg.quick_assign("variable_probability", object, admm.var_prob_list)
-    cfg.quick_assign("admm_scenario_names", object, all_names)
-    cfg.quick_assign("admm_nodenames", object, admm.all_nodenames)
+    # Store on cfg as plain attributes (Pyomo Config can't handle these types)
+    object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
+    object.__setattr__(cfg, "_admm_scenario_names", all_names)
+    object.__setattr__(cfg, "_admm_nodenames", admm.all_nodenames)
 
     return (admm.admmWrapper_scenario_creator, None,
             all_names, admm.all_nodenames)
