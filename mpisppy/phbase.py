@@ -533,7 +533,6 @@ class PHBase(mpisppy.spopt.SPOpt):
 
 
     def solve_loop(self, solver_options=None,
-                   use_scenarios_not_subproblems=False,
                    dtiming=False,
                    dis_W=False,
                    dis_prox=False,
@@ -543,8 +542,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                    verbose=False,
                    need_solution=True,
                    warmstart=sputils.WarmstartStatus.FALSE):
-        """ Loop over `local_subproblems` and solve them in a manner
-        dicated by the arguments.
+        """ Loop over `local_scenarios` and solve them in a manner
+        dictated by the arguments.
 
         In addition to changing the Var values in the scenarios, this function
         also updates the `_PySP_feas_indictor` to indicate which scenarios were
@@ -553,9 +552,6 @@ class PHBase(mpisppy.spopt.SPOpt):
         Args:
             solver_options (dict, optional):
                 The scenario solver options.
-            use_scenarios_not_subproblems (boolean, optional):
-                If True, solves individual scenario problems, not subproblems.
-                Default is False.
             dtiming (boolean, optional):
                 If True, reports solve timing information. Default is False.
             dis_W (boolean, optional):
@@ -601,15 +597,14 @@ class PHBase(mpisppy.spopt.SPOpt):
             self._update_prox_approx()
 
         super().solve_loop(
-            solver_options,
-            use_scenarios_not_subproblems,
-            dtiming,
-            gripe,
-            disable_pyomo_signal_handling,
-            tee,
-            verbose,
-            need_solution,
-            warmstart,
+            solver_options=solver_options,
+            dtiming=dtiming,
+            gripe=gripe,
+            disable_pyomo_signal_handling=disable_pyomo_signal_handling,
+            tee=tee,
+            verbose=verbose,
+            need_solution=need_solution,
+            warmstart=warmstart,
         )
 
         if dis_W and dis_prox:

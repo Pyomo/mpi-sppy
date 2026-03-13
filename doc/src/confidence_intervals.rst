@@ -1,6 +1,6 @@
 .. _MMW Confidence Intervals:
 
-MMW confidence interval:
+MMW confidence intervals:
 ========================
 
 If we want to assess the quality of a given candidate solution ``xhat_one`` 
@@ -10,6 +10,39 @@ at ``xhat_one`` and the value of the solution to the problem.
 The class ``MMWConfidenceIntervals`` computes an estimator of the optimality gap
 as described in [mmw1999]_ (Section 3.2) and an asymptotic confidence interval for
 this gap. 
+
+Inclusion in generic_cylinders
+------------------------------
+
+MMW confidence intervals can be computed automatically at the end of a
+``generic_cylinders`` run by supplying the following options:
+
+* ``--mmw-num-batches``: number of MMW batches (required)
+* ``--mmw-batch-size``: number of scenarios per batch (required)
+* ``--mmw-start``: first scenario number used by MMW (required)
+* ``--mmw-xhat-input-file-name``: path to a ``.npy`` file with the candidate
+  solution xhat (optional).  If absent, the best xhat found during the main
+  algorithm run is used automatically.  Such a file can be produced by a
+  previous ``generic_cylinders`` run using the ``--solution-base-name`` option,
+  which writes ``<base-name>.npy``.
+
+The option ``mmw-xhat-input-file-name`` can be omitted, but all three of the other options
+must be present.  None of the mmw options have a default value.
+
+.. note::
+   MMW uses the EF solver to evaluate scenario batches.  By default it reuses
+   ``--solver-name``; supply ``--EF-solver-name`` to override.
+
+.. note::
+   The software calls ``scenario_creator`` and ``scenario_names_creator`` from
+   the model module.  If those functions create serially correlated scenarios,
+   they must be written so that scenarios numbered above ``--mmw-start`` are
+   independent of those used to compute the candidate solution. Furthermore,
+   they need to independent enough from each other to satisfy the
+   assumptions made be Mak, Morton, and Wood.
+
+For Programmers
+---------------
 
 We will document two steps in the process : finding a candidate solution 
 ``xhat_one``, and evaluating it.
@@ -21,7 +54,7 @@ Sequential sampling is also supported; see :ref:`Sequential Sampling Confidence 
    (i.e., they are not ordered by scenario number).
 
 Finding a candidate solution
-----------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Computing this confidence interval means that we need to find a solution to 
 an approximate problem, and evaluate how good a solution to this approximate problem ``xhat_one`` is.
@@ -35,7 +68,7 @@ can be given as the ``first_stage_solution_writer`` argument to the function
 and ``farmer_ef.py`` examples. The ``uc_cylinders.py`` file also shows an example.
 
 Evaluating a candidate solution
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 To evaluate a candidate solution with some scenarios, one might
 create a ``Xhat_Eval`` object and call its ``evaluate`` method 
@@ -48,19 +81,19 @@ dictionary can be computed using the function ``walking_tree_xhats``
 
 
 Computing a confidence interval
--------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 The first step in computing a confidence interval is creating a ``MMWConfidenceIntervals`` object
 that takes as an argument an ``xhat_one`` and options.
 This object has a ``run`` method that returns a gap estimator and a confidence interval on the gap.
 
 Examples
---------
+^^^^^^^^
 
 There are example scripts for sequential sampling in both ``farmer/CI`` and ``aircond``.
 
 Using stand-alone ``mmw_conf.py``
----------------------------------
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 (The stand-alone module is currently for use with 2-stage problem only; for multi-stage problems, instantiate an ``MMWConfidenceIntervals`` object directly)
 
@@ -95,30 +128,3 @@ realizations of the objective function at the candidate solution to
 construct an additional confidence interval about the mean of the
 realizations computed.
 
-Inclusion in generic_cylinders
-------------------------------
-
-MMW confidence intervals can be computed automatically at the end of a
-``generic_cylinders`` run by supplying the following options:
-
-* ``--mmw-num-batches``: number of MMW batches (required)
-* ``--mmw-batch-size``: number of scenarios per batch (required)
-* ``--mmw-start``: first scenario number used by MMW (required)
-* ``--mmw-xhat-input-file-name``: path to a ``.npy`` file with the candidate
-  solution xhat (optional).  If absent, the best xhat found during the main
-  algorithm run is used automatically.
-
-When ``mmw-xhat-input-file-name`` is omitted, all three of the other options
-must be present.  None of the mmw options have a default value.
-
-.. note::
-   MMW uses the EF solver to evaluate scenario batches.  By default it reuses
-   ``--solver-name``; supply ``--EF-solver-name`` to override.
-
-.. note::
-   The software calls ``scenario_creator`` and ``scenario_names_creator`` from
-   the model module.  If those functions create serially correlated scenarios,
-   they must be written so that scenarios numbered above ``--mmw-start`` are
-   independent of those used to compute the candidate solution. Furthermore,
-   they need to independent enough from each other to satisfy the
-   assumptions made be Mak, Morton, and Wood.

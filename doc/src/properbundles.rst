@@ -18,7 +18,8 @@ the number of scenarios per bundle must divide the number of scenarios
 and randomizing the assignment of scenarios to bundles is left to the
 user (e.g., by using a pseudo-random vector to provide one level
 of indirection for the scenario number in the ``scenario_creator`` function).
-As of the time of this writing, only two-stage problems are easily supported.
+As of the time of this writing, proper bundles always result in two-stage problems once the
+bundles are created, even for problems that are multi-stage before bundling.
 Proper bundles result in faster execution.
 
 See ``mpisppy.generic_cylinders.py`` for an example of their use in
@@ -35,9 +36,6 @@ reading).
    When writing bundles in ``mpisppy.generic_cylinders.py``, all
    ranks are used for forming and writing bundles. Command line
    options related to anything other than proper bundles are ignored.
-
-.. Note::
-   Reading and writing bundle pickle files only works with proper bundles.
 
 .. Note::
    If you do pseudo random number generation on-the-fly during scenario creation,
@@ -70,14 +68,16 @@ there are two modules that have most of the support for proper bundles:
 Multistage
 ----------
 
+There is support for multi-stage bundles in ``generic_cylinders.py``,
+but the bundles must span the same number of entire second stage
+nodes.
+
 The most flexible way to create proper bundles is to write
 your own problem-specific code to do it. The
 file ``aircond_cylinders.py`` in the aircond example directory
 provides an example.  The latter part of the ``allways.bash`` script
 demonstrates how to run it.
 
-There is support for multi-stage bundles in mpi-sppy, but the bundles must span the same number
-of entire second stage nodes.
 
 Notes
 -----

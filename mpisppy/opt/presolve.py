@@ -102,8 +102,8 @@ class _SPIntervalTightenerBase(_SPPresolver):
                 update = True
 
                 # update the bounds if changed
-                for sub_n, _, k, s in self.opt.subproblem_scenario_generator():
-                    feas_tol = self.subproblem_tighteners[sub_n].config.feasibility_tol
+                for k, s in self.opt.local_scenarios.items():
+                    feas_tol = self.subproblem_tighteners[k].config.feasibility_tol
                     for node in s._mpisppy_node_list:
                         node_comm = self.opt.comms[node.name]
                         for var, lb, ub in zip(
@@ -379,7 +379,7 @@ class SPFBBT(_SPIntervalTightenerBase):
         super().__init__(spbase, verbose)
 
         self._subproblem_tighteners = {}
-        for k, s in self.opt.local_subproblems.items():
+        for k, s in self.opt.local_scenarios.items():
             try:
                 self._subproblem_tighteners[k] = it = IntervalTightener()
             except DeferredImportError as e:
@@ -407,8 +407,8 @@ class SPFBBT(_SPIntervalTightenerBase):
     def _tighten_intervals(self):
         big_iters = 0.0
         for k, it in self.subproblem_tighteners.items():
-            n_iters = it.perform_fbbt(self.opt.local_subproblems[k])
-            self._check_bounds(self.opt.local_subproblems[k])
+            n_iters = it.perform_fbbt(self.opt.local_scenarios[k])
+            self._check_bounds(self.opt.local_scenarios[k])
             # get the number of constraints after we do
             # FBBT so we get any updates on the subproblem
             big_iters = max(big_iters, n_iters / len(it._cmodel.constraints))
@@ -445,9 +445,9 @@ class SPOBBT(_SPIntervalTightenerBase):
     def _tighten_intervals(self):
 
         for k, it in self.fbbt().subproblem_tighteners.items():
-            s = self.opt.local_subproblems[k]
-            it.perform_fbbt(self.opt.local_subproblems[k])
-            self._check_bounds(self.opt.local_subproblems[k])
+            s = self.opt.local_scenarios[k]
+            it.perform_fbbt(self.opt.local_scenarios[k])
+            self._check_bounds(self.opt.local_scenarios[k])
 
             if self.nonant_variables:
                 bounds = obbt_analysis(s, variables=s._mpisppy_data.nonant_indices.values(), solver=self.solver,
@@ -458,8 +458,8 @@ class SPOBBT(_SPIntervalTightenerBase):
                         lb, ub = bounds[var]
                         var.bounds = (lb, ub)
 
-                it.perform_fbbt(self.opt.local_subproblems[k])
-                self._check_bounds(self.opt.local_subproblems[k])
+                it.perform_fbbt(self.opt.local_scenarios[k])
+                self._check_bounds(self.opt.local_scenarios[k])
 
             else:
                 bounds = obbt_analysis(s, variables=None, solver=self.solver, solver_options=self.solver_options)
