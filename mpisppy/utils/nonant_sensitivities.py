@@ -29,7 +29,7 @@ def nonant_sensitivies(s):
     for var in s.component_data_objects(pyo.Var):
         solution_cache[var] = var._value
     relax_int = pyo.TransformationFactory('core.relax_integer_vars')
-    relax_int.apply_to(s)
+    reverse_token = relax_int.apply_to(s)
 
     assert hasattr(s, "_relaxed_integer_vars")
 
@@ -82,7 +82,7 @@ def nonant_sensitivies(s):
         sensitivity = grad_vec_kkt_inv @ -e_x
         nonant_sensis[ndn_i] = sensitivity
 
-    relax_int.apply_to(s, options={"undo":True})
+    relax_int.apply_to(s, options={"reverse": reverse_token})
     assert not hasattr(s, "_relaxed_integer_vars")
     del s.ipopt_zL_out
     del s.ipopt_zU_out
