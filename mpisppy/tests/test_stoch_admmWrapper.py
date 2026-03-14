@@ -14,6 +14,11 @@ from mpisppy.utils import config
 from mpisppy.tests.utils import get_solver
 import os
 
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
+_TEST_STOCH_DISTR_DIR = os.path.join(_THIS_DIR, "examples", "stoch_distr")
+_STOCH_DISTR_DIR = os.path.join(_PROJECT_ROOT, "examples", "stoch_distr")
+
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 class TestStochAdmmWrapper(unittest.TestCase):
@@ -108,15 +113,19 @@ class TestStochAdmmWrapper(unittest.TestCase):
         original_dir = os.getcwd()
         for j in range(len(command_line_pairs)):
             if j == 0: # The first line is executed in the test directory because it has a 3-stage problem. This one does not insure xhatfeasibility but luckily works
-                target_directory = 'examples/stoch_distr'
-            if j != 0: # The other lines are executed in the real directory because it ensures xhat feasibility
-                target_directory = '../../examples/stoch_distr'
+                target_directory = _TEST_STOCH_DISTR_DIR
+            else: # The other lines are executed in the real directory because it ensures xhat feasibility
+                target_directory = _STOCH_DISTR_DIR
             os.chdir(target_directory)
             objectives = {}
             command = command_line_pairs[j][0].split()
             
             result = subprocess.run(command, capture_output=True, text=True)
-            if result.stderr:
+            # Filter out harmless MPI warnings from stderr
+            stderr_lines = [line for line in result.stderr.splitlines()
+                            if line.strip() and "btl_tcp" not in line
+                            and "osc_ucx" not in line] if result.stderr else []
+            if stderr_lines:
                 print("Error output:")
                 print(result.stderr)
                 raise RuntimeError("Error encountered as shown above.")
