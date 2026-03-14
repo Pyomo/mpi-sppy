@@ -28,17 +28,18 @@ class IntegerRelaxThenEnforce(mpisppy.extensions.extension.Extension):
 
     def pre_iter0(self):
         global_toc(f"{self.__class__.__name__}: relaxing integrality constraints", self.opt.cylinder_rank == 0)
-        for s in self.opt.local_scenarios.values():
-            self.integer_relaxer.apply_to(s) 
+        self._reverse_tokens = {}
+        for sname, s in self.opt.local_scenarios.items():
+            self._reverse_tokens[sname] = self.integer_relaxer.apply_to(s)
         self._integers_relaxed = True
 
     def _unrelax_integers(self):
-        for sub in self.opt.local_scenarios.values():
+        for sname, sub in self.opt.local_scenarios.items():
             subproblem_solver = sub._solver_plugin
             vlist = None
             if is_persistent(subproblem_solver):
                 vlist = list(v for v,d in sub._relaxed_integer_vars[None].values())
-            self.integer_relaxer.apply_to(sub, options={"reverse":True})
+            self.integer_relaxer.apply_to(sub, options={"reverse": self._reverse_tokens[sname]})
             if is_persistent(subproblem_solver):
                 for v in vlist:
                     subproblem_solver.update_var(v)
