@@ -58,6 +58,19 @@ if __name__ == "__main__":
         scenario_creator = module.scenario_creator
         scenario_creator_kwargs = module.kw_creator(cfg)
 
+    # ADMM setup: wraps scenario_creator and attaches variable_probability to cfg
+    if cfg.get("admm", ifmissing=False) or cfg.get("stoch_admm", ifmissing=False):
+        from mpisppy.generic.admm import setup_admm, setup_stoch_admm, \
+            _count_cylinders, _check_admm_compatibility
+        _check_admm_compatibility(cfg)
+        n_cylinders = _count_cylinders(cfg)
+        if cfg.admm:
+            scenario_creator, scenario_creator_kwargs, _, _ = \
+                setup_admm(module, cfg, n_cylinders)
+        else:
+            scenario_creator, scenario_creator_kwargs, _, _ = \
+                setup_stoch_admm(module, cfg, n_cylinders)
+
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
 
