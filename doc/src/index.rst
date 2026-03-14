@@ -68,6 +68,7 @@ MPI is used.
    internals.rst
    contributors.rst
    amalgamator.rst
+   code_coverage.rst
 
 .. toctree::
    :maxdepth: 2

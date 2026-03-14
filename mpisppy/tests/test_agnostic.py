@@ -6,8 +6,9 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-# ruff: noqa: F841
+# ruff: noqa: F841, E402
 
+import os
 import sys
 import unittest
 import math
@@ -18,7 +19,9 @@ import mpisppy.agnostic.agnostic as agnostic
 import mpisppy.agnostic.agnostic_cylinders as agnostic_cylinders
 import mpisppy.utils.sputils as sputils
 
-sys.path.insert(0, "../../examples/farmer/agnostic")
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
+sys.path.insert(0, os.path.join(_PROJECT_ROOT, "examples", "farmer", "agnostic"))
 import farmer_pyomo_agnostic
 try:
     import mpisppy.agnostic.gams_guest
