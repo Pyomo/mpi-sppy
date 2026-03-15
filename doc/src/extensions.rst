@@ -19,9 +19,18 @@ Note that some things (e.g. some xhatters) can be used as a cylinder
 or as an extension. A few other things (e.g., cross scenario cuts) need
 both an extension and a cylinder.
 
-Many extensions are supported in :ref:`generic_cylinders`. The rest of
-this help file describes extensions released with mpisppy along with
-some hints for including them in your own cylinders driver program.
+Many extensions are supported in :ref:`generic_cylinders` via
+command-line flags:
+
+- ``--fixer`` -- activates the fixer extension
+- ``--mipgaps-json <file>`` -- activates the mipgapper extension
+- ``--user-defined-extensions <module>`` -- loads a custom extension
+- ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
+- ``--use-norm-rho-updater`` -- activates the norm rho updater
+- ``--use-primal-dual-rho-updater`` -- activates the primal-dual rho updater
+
+The rest of this help file describes extensions released with mpisppy along
+with some hints for including them in your own cylinders driver program.
 
 Multiple Extensions
 -------------------

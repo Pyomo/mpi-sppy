@@ -15,11 +15,27 @@
 #      python run_all.py gurobi_persistent --oversubscribe
 #      python run_all.py gurobi_persistent -envall nouc
 #      (envall does nothing; it is just a place-holder; might not work with your mpiexec)
+# For coverage: python run_all.py gurobi_persistent "" "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import sys
 import pandas as pd
 from datetime import datetime as dt
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -64,8 +80,8 @@ def egret_avail():
 def do_one(dirname, progname, np, argstring):
     """ return the code"""
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -u -m mpi4py {} {}".\
-                format(mpiexec_arg, np, progname, argstring)
+    runstring = "mpiexec {} -np {} python -u {} -m mpi4py {} {}".\
+                format(mpiexec_arg, np, python_args, progname, argstring)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
     code = os.system("echo {} && {}".format(runstring, runstring))
@@ -138,6 +154,8 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
 
     os.chdir(dirname)
     # solve ef, save .npy file (file name hardcoded in progname at the moment)
+    if python_args:
+        runefstring = runefstring.replace("python ", f"python {python_args} ", 1)
     code = os.system("echo {} && {}".format(runefstring, runefstring))
 
     if code!=0:
@@ -147,8 +165,8 @@ def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
             badguys[dirname].append(runefstring)
     # run mmw, remove .npy file
     else:
-        runstring = "python -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} {}".\
-                    format(modname, npyfile, mmwargstring)
+        runstring = "python {} -m mpisppy.confidence_intervals.mmw_conf {} --xhatpath {} {}".\
+                    format(python_args, modname, npyfile, mmwargstring)
         code = os.system("echo {} && {}".format(runstring, runstring))
         if code != 0:
             if dirname not in badguys:

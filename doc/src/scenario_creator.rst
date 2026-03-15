@@ -5,14 +5,14 @@
 
 This function instantiates models for scenarios and usually attaches
 some information about the scenario tree. It is required, but can have
-any name, and its first argument must be the scenario name. The other
-two arguments are optional. The `scenario_creator_kwargs` option specifies data that is
-passed through from the calling program.
-`scenario_creator_kwargs` must be a dictionary, and might give, e.g., a data
-directory name or probability distribution information.  The
+any name, and its first argument must be the scenario name. Additional
+arguments are optional. The `scenario_creator_kwargs` option specifies
+data that is passed through from the calling program.
+`scenario_creator_kwargs` must be a dictionary, and might give, e.g.,
+a data directory name or probability distribution information.  The
 `scenario_creator` function returns an instantiated model for the
-instance. I.e., it either creates a `ConcreteModel` or else it creates
-and instantiates an `AbstractModel`.
+instance. I.e., it either creates a `ConcreteModel` or else it
+instantiates an `AbstractModel`.
 
 Scenario Tree Information
 -------------------------
@@ -21,22 +21,21 @@ The `scenario_creator` function somehow needs to create a list of
 non-leaf tree node objects that are constructed by calling
 `scenario_tree.ScenarioNode` which is not very hard for two stage
 problems, because there is only one non-leaf node and it must be
-called "ROOT". There is a helper function ``mpisppy.sputils.attach_root_node``
+called "ROOT". There is a helper function ``mpisppy.sputils.attach_root_node`` that does it.
 
 Multi-stage problems are discussed below.
 
 Examples
 --------
 
-In the `farmer.py` example, the `scenario_creator` function calls
-`pysp2_callback` and in this example, the scenario name is presumed to
+In the `farmer.py` example, the `scenario_creator` function
+builds the model directly. The scenario name is presumed to
 be of the form "scen" with a trailing number. The trailing number is
 used in a problem-specific way to create a "farmer" problem
-instance. The concrete model instance is created.
+instance. The concrete model instance is created and returned.
 
-The scenario creator
-function in ``examples.netdes.netdes.py`` is very simple and
-illustrates use of the utility function
+The scenario creator function in ``examples.netdes.netdes.py`` is very
+simple and illustrates use of the utility function
 (``mpisppy.utils.sputils.attach_root_node``) that attaches the node
 list for you.
 
@@ -58,10 +57,11 @@ Scenario Probability
 --------------------
 
 The scenario probability should be attached by `scenario_creator` as
-``_mpisppy_probability``. However, if you don't attach it, the scenarios are
-assumed to be equally likely. If the scenarios are equally likely, you
-can avoid a warning by assigning the string "uniform" to the
-``_mpisppy_probability`` attribute of the scenario model.
+``_mpisppy_probability``. However, if you don't attach it, the
+scenarios are assumed to be equally likely. If the scenarios are
+equally likely, you can avoid a warning by assigning the string
+"uniform" to the ``_mpisppy_probability`` attribute of the scenario
+model.
 
 EF Supplement List
 ------------------
@@ -112,7 +112,8 @@ up by pickling your base model. Your `scenario_creator` function can
 load the pickle file quickly, then make the modifications to the base
 model according to the scenario. You should probably use the `dill`
 package if you do this.  Note that if you run the same large base
-model every time you run, this might be a very significant speed-up. (To be
-extra clear: this suggestion is not related to pickling scenarios, but
-rather to pickling a common base model).
+model every time you run, this might be a very significant
+speed-up. (To be extra clear: this suggestion is not related to
+pickling scenarios using mpisppy, but rather to a modeler pickling a
+common base model and using it).
 

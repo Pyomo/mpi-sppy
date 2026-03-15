@@ -3,14 +3,18 @@
 Examples
 ========
 
-If you installed directly from GitHub, the top
-level directory  ``examples`` 
-contains some sub-directories with examples.
+If you installed directly from GitHub, the top-level ``examples``
+directory contains sub-directories with examples. Each example can
+be run via ``generic_cylinders.py`` (see :ref:`generic_cylinders`).
 
-If you did not get the code from GitHub (e.g., if
-you installed with pip), you will need to
-get the examples from:
+If you did not get the code from GitHub (e.g., if you installed with pip),
+you will need to get the examples from:
 https://github.com/Pyomo/mpi-sppy/tree/master/examples
+
+.. note::
+   Some examples also have historical ``*_cylinders.py`` driver scripts.
+   These are retained for reference but ``generic_cylinders.py`` is the
+   recommended way to run all examples.
 
 
 Tutorial: Farmer Example
@@ -319,6 +323,10 @@ A simple example that uses a few of the options is shown in ``aircond_zhat.bash`
 also calls the ``xhat4xhat`` program to estimate confidence intervals for the solution
 obtained.
 
+aircondMulti
+------------
+
+This is a multi-product version of aircond. It is also in the tests examples directory.
 
 hydro
 -----

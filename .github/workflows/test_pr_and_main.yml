@@ -386,7 +386,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11 mip
 
       - name: Build pyomo extensions
         run: |

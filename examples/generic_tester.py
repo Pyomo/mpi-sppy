@@ -21,12 +21,28 @@
 #      python generic_tester.py gurobi_persistent --oversubscribe
 #      python generic_tester.py gurobi_persistent -envall nouc
 #      (envall does nothing; it is just a place-holder)
+# For coverage: python generic_tester.py gurobi_persistent "" "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import sys
 import shutil
 import numpy as np
 from numpy.linalg import norm
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 # Write solutions here, then delete. (.. makes it local to examples)
 XHAT_TEMP = os.path.join("..","AAA_delete_this_from_generic_tester")
@@ -123,8 +139,8 @@ def do_one(dirname, modname, np, argstring, xhat_baseline_dir=None, tol=1e-6):
         # we might be making a baseline, or just not using one
         fullarg = argstring
 
-    runstring = "mpiexec {} -np {} python -u -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
-                format(mpiexec_arg, np, modname, fullarg)
+    runstring = "mpiexec {} -np {} python -u {} -m mpi4py -m mpisppy.generic_cylinders --module-name {} {}".\
+                format(mpiexec_arg, np, python_args, modname, fullarg)
     # The top process output seems to be cached by github actions
     # so we need oputput in the system call to help debug
     code = os.system("echo {} && {}".format(runstring, runstring))
@@ -177,7 +193,7 @@ do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline
 # write hydro bundles for at least some testing of multi-stage proper bundles
 # (just looking for smoke)
 hydro_wr = ("--pickle-bundles-dir hydro_pickles --scenarios-per-bundle 3 "
-            "--branching-factors '3 3' ")
+            "--branching-factors '3 3' --num-scens 9 ")
 do_one("hydro", "hydro", 3, hydro_wr, xhat_baseline_dir=None)
 
 # write, then read, pickled scenarios
@@ -190,18 +206,34 @@ do_one("farmer", "farmer", 3, farmer_rd, xhat_baseline_dir="test_data/farmer_rd_
 
 ### combined runs to test mps files ####
 # Make sure sizes_expression still exists and lpfiles still executes.
-sizese = ("--module-name sizes_expression --num-scens 3 --default-rho 1"
+_lp_mps_dir = "_lp_mps_temp"
+sizese = ("--num-scens 3 --default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
-          " --write-scenario-lp-mps-files")
+          f" --write-scenario-lp-mps-files-dir {_lp_mps_dir}")
 do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
-# just smoke for now
-sizesMPS = ("--module-name ../../mpisppy/utils/mps_module --default-rho 1"
+# just smoke for now (requires the 'mip' package; installed in CI)
+sizesMPS = ("--default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
-          " --mps-files-directory=.")   # we will be in the sizes dir
+          f" --mps-files-directory={_lp_mps_dir}")
 do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
+# clean up lp/mps temp dir
+_lp_mps_path = os.path.join("sizes", _lp_mps_dir)
+if os.path.exists(_lp_mps_path):
+    shutil.rmtree(_lp_mps_path)
 
 ### end combined mps file runs ###
 
+# reduced costs test (hydro)
+hydroa_rc = ("--max-iterations 100 --default-rho 1 "
+          "--reduced-costs --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
+          "--rc-fixer --reduced-costs-rho --reduced-costs-rho-multiplier=1.0 "
+          f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
+#rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
+do_one("hydro", "hydro", 3, hydroa_rc, xhat_baseline_dir = "test_data/hydroa_baseline")
+
+# Tests below here are known to have issues in CI; leave them disabled for now.
+# - sslp proper bundles: scenarios-per-bundle=1 requires write-then-read
+# - sslp write/read pickled bundles: same issue
 quit()
 
 # proper bundles
@@ -213,7 +245,7 @@ sslp_pb = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
 do_one("sslp", "sslp", 3, sslp_pb, xhat_baseline_dir="test_data/sslp_pb_baseline")
 
 # write, then read, pickled bundles
-sslp_wr = "--module-name sslp --sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 --default-rho 1"
+sslp_wr = "--sslp-data-path ./data --instance-name sslp_15_45_10 --pickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 --default-rho 1"
 do_one("sslp", "sslp", 2, sslp_wr, xhat_baseline_dir=None)
 sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
            "--unpickle-bundles-dir sslp_pickles --scenarios-per-bundle 1 "
@@ -221,13 +253,6 @@ sslp_rd = ("--sslp-data-path ./data --instance-name sslp_15_45_10 "
            "--max-iterations 5 --lagrangian --xhatshuffle --rel-gap 0.001")
 #rebaseline_xhat("sslp", "sslp", 3, sslp_rd, "test_data/sslp_rd_baseline")
 do_one("sslp", "sslp", 3, sslp_rd, xhat_baseline_dir="test_data/sslp_rd_baseline")
-
-hydroa_rc = ("--max-iterations 100 --default-rho 1 "
-          "--reduced-costs --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
-          "--rc-fixer --reduced-costs-rho --reduced-costs-rho-multiplier=1.0 "
-          f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
-#rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
-do_one("hydro", "hydro", 3, hydroa_rc, xhat_baseline_dir = "test_data/hydroa_baseline")
 
 
 if not nouc:

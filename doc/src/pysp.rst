@@ -1,8 +1,13 @@
 .. _PySP conversion:
 
-PySP conversion
-===============
+PySP Conversion (Legacy)
+=========================
 
+.. note::
+   PySP support is maintained for backward compatibility. New projects
+   should write a ``scenario_creator`` function directly
+   (see :ref:`scenario_creator`) and use ``generic_cylinders.py``
+   (see :ref:`generic_cylinders`).
 
 Details
 ^^^^^^^
