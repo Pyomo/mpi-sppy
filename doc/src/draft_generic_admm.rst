@@ -147,18 +147,67 @@ Additional functions for ``--stoch-admm``
 
 .. py:function:: admm_stoch_subproblem_scenario_names_creator(admm_subproblem_names, stoch_scenario_names)
 
-   Creates composite names for all ADMM-stochastic combinations.
+   Creates the list of composite names for all (subproblem, stochastic scenario)
+   pairs.  These composite names are what mpi-sppy treats as "scenario names"
+   internally.  The ordering matters: all subproblems for a given stochastic
+   scenario should appear consecutively so that scenarios from the same
+   stochastic path are grouped together.
 
    :param list admm_subproblem_names: from ``admm_subproblem_names_creator``
    :param list stoch_scenario_names: from ``stoch_scenario_names_creator``
    :returns: list of composite name strings
 
+   Example implementation (from ``stoch_distr.py``):
+
+   .. code-block:: python
+
+      def admm_stoch_subproblem_scenario_names_creator(
+              admm_subproblem_names, stoch_scenario_names):
+          return [combining_names(sub, stoch)
+                  for stoch in stoch_scenario_names
+                  for sub in admm_subproblem_names]
+
+   With 2 subproblems (``Region1``, ``Region2``) and 3 stochastic scenarios,
+   this produces::
+
+      ["ADMM_STOCH_Region1_StochasticScenario1",
+       "ADMM_STOCH_Region2_StochasticScenario1",
+       "ADMM_STOCH_Region1_StochasticScenario2",
+       "ADMM_STOCH_Region2_StochasticScenario2",
+       "ADMM_STOCH_Region1_StochasticScenario3",
+       "ADMM_STOCH_Region2_StochasticScenario3"]
+
+   Note the nesting order: the outer loop is over stochastic scenarios and
+   the inner loop is over subproblems.  This groups all subproblems for the
+   same stochastic scenario together, which is required for correct scenario
+   distribution across MPI ranks.
+
 .. py:function:: split_admm_stoch_subproblem_scenario_name(name)
 
-   The inverse of the combining function used to create composite names.
+   The inverse of the combining function: given a composite name, returns
+   the original subproblem name and stochastic scenario name.  This function
+   must be consistent with ``combining_names`` and
+   ``admm_stoch_subproblem_scenario_names_creator``.
 
    :param str name: a composite ADMM-stochastic scenario name
    :returns: tuple ``(admm_subproblem_name, stoch_scenario_name)``
+
+   Example implementation (from ``stoch_distr.py``):
+
+   .. code-block:: python
+
+      def split_admm_stoch_subproblem_scenario_name(name):
+          # name is e.g. "ADMM_STOCH_Region1_StochasticScenario1"
+          parts = name.split('_')
+          admm_subproblem_name = parts[2]       # "Region1"
+          stoch_scenario_name = parts[3]         # "StochasticScenario1"
+          return admm_subproblem_name, stoch_scenario_name
+
+   .. Warning::
+      This example relies on subproblem and scenario names not containing
+      underscores.  If your names contain underscores, use a different
+      delimiter or a more robust parsing strategy in both ``combining_names``
+      and ``split_admm_stoch_subproblem_scenario_name``.
 
 
 Creating Your Own ADMM Model
