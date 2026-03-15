@@ -227,6 +227,17 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                                 f"in the model, but not in consensus var: \n {error_list2}")
 
 
+    def get_scenario_unscaled(self, sname):
+        """Return pre-created scenario without objective scaling (for bundling).
+
+        Args:
+            sname (str): scenario name
+
+        Returns:
+            Pyomo ConcreteModel: the scenario model (not objective-scaled)
+        """
+        return self.local_admm_stoch_subproblem_scenarios[sname]
+
     def admmWrapper_scenario_creator(self, admm_stoch_subproblem_scenario_name):
         scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 

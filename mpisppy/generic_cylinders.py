@@ -61,18 +61,28 @@ if __name__ == "__main__":
     # ADMM setup: wraps scenario_creator and attaches variable_probability to cfg
     if cfg.get("admm", ifmissing=False) or cfg.get("stoch_admm", ifmissing=False):
         from mpisppy.generic.admm import setup_admm, setup_stoch_admm, \
-            _count_cylinders, _check_admm_compatibility
+            setup_stoch_admm_with_bundles, _count_cylinders, _check_admm_compatibility
         _check_admm_compatibility(cfg)
         n_cylinders = _count_cylinders(cfg)
         if cfg.admm:
             scenario_creator, scenario_creator_kwargs, _, _ = \
                 setup_admm(module, cfg, n_cylinders)
+        elif cfg.get("scenarios_per_bundle") is not None:
+            scenario_creator, scenario_creator_kwargs, _, _ = \
+                setup_stoch_admm_with_bundles(module, cfg, n_cylinders)
         else:
             scenario_creator, scenario_creator_kwargs, _, _ = \
                 setup_stoch_admm(module, cfg, n_cylinders)
 
     assert hasattr(module, "scenario_denouement"), "The model file must have a scenario_denouement function"
     scenario_denouement = module.scenario_denouement
+    # Bundle models are EFs, not individual scenarios — the module's denouement
+    # won't work on them. Skip denouement for bundles.
+    if proper_bundles(cfg):
+        _original_denouement = scenario_denouement
+        def scenario_denouement(rank, sname, s):
+            if "Bundle" not in sname:
+                _original_denouement(rank, sname, s)
 
     if cfg.pickle_bundles_dir is not None:
         global_comm = MPI.COMM_WORLD

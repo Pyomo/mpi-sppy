@@ -57,7 +57,9 @@ def _check_admm_compatibility(cfg):
     if cfg.get("fwph", ifmissing=False):
         raise RuntimeError("FWPH does not work with ADMM (variable_probability)")
     if cfg.get("scenarios_per_bundle") is not None:
-        raise RuntimeError("Proper bundles are not supported with ADMM")
+        if cfg.get("admm", ifmissing=False):
+            raise RuntimeError("Proper bundles are not supported with deterministic ADMM")
+        # stoch_admm + bundles is OK — handled by AdmmBundler
 
 
 def setup_admm(module, cfg, n_cylinders):
@@ -133,3 +135,46 @@ def setup_stoch_admm(module, cfg, n_cylinders):
 
     return (admm.admmWrapper_scenario_creator, None,
             all_names, admm.all_nodenames)
+
+
+def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
+    """Create AdmmBundler for stochastic ADMM with proper bundles.
+
+    The AdmmBundler creates scenarios on-the-fly (like ProperBundler),
+    so PH can distribute bundles across ranks independently.
+
+    Modifies cfg by attaching variable_probability and bundle names.
+
+    Returns:
+        tuple: (scenario_creator, scenario_creator_kwargs,
+                all_bundle_names, all_nodenames)
+    """
+    from mpisppy.utils.admm_bundler import AdmmBundler
+
+    admm_subproblem_names = module.admm_subproblem_names_creator(cfg.num_admm_subproblems)
+    stoch_scenario_names = module.stoch_scenario_names_creator(cfg.num_stoch_scens)
+
+    scenario_creator_kwargs = module.kw_creator(cfg)
+    stoch_scenario_name = stoch_scenario_names[0]
+    consensus_vars = module.consensus_vars_creator(
+        admm_subproblem_names, stoch_scenario_name, **scenario_creator_kwargs)
+
+    bundler = AdmmBundler(
+        module=module,
+        scenarios_per_bundle=cfg.scenarios_per_bundle,
+        admm_subproblem_names=admm_subproblem_names,
+        stoch_scenario_names=stoch_scenario_names,
+        consensus_vars=consensus_vars,
+        combining_fn=module.combining_names,
+        split_fn=module.split_admm_stoch_subproblem_scenario_name,
+        scenario_creator_kwargs=scenario_creator_kwargs,
+    )
+    bundle_names = bundler.bundle_names_creator()
+
+    # Store on cfg as plain attributes (Pyomo Config can't handle these types)
+    object.__setattr__(cfg, "_admm_variable_probability", bundler.var_prob_list)
+    object.__setattr__(cfg, "_admm_scenario_names", bundle_names)
+    object.__setattr__(cfg, "_admm_nodenames", None)  # bundles flatten to 2-stage
+
+    return (bundler.scenario_creator, None,
+            bundle_names, None)

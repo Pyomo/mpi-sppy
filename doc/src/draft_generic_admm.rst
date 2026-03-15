@@ -20,7 +20,9 @@ There are two modes:
 .. Note::
    ADMM uses ``variable_probability`` internally, which is incompatible with
    FWPH. If both ``--admm`` (or ``--stoch-admm``) and ``--fwph`` are specified,
-   an error is raised. Proper bundles are also not supported with ADMM.
+   an error is raised. Proper bundles are not supported with deterministic
+   ADMM (``--admm``), but are supported with stochastic ADMM
+   (``--stoch-admm``); see :ref:`admm_bundling` below.
 
 
 Tutorial: Running the ``distr`` Example
@@ -288,6 +290,88 @@ Register ``num_admm_subproblems`` and ``num_stoch_scens`` in your
 ``inparser_adder`` so users can specify them on the command line.
 
 
+.. _admm_bundling:
+
+Bundling with Stochastic ADMM
+-------------------------------
+
+Stochastic ADMM creates one "virtual scenario" per (subproblem, stochastic
+scenario) pair.  For problems with many stochastic scenarios, this can mean
+a large number of PH scenarios.  **Bundling** groups all stochastic scenarios
+within the same subproblem into a single EF bundle, reducing the number of
+PH scenarios to one per subproblem.
+
+To enable bundling, add ``--scenarios-per-bundle`` to a ``--stoch-admm`` run.
+Currently, full bundling is required: ``--scenarios-per-bundle`` must equal
+``--num-stoch-scens``.
+
+.. code-block:: bash
+
+   mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py \
+       --module-name stoch_distr --stoch-admm \
+       --num-admm-subproblems 2 --num-stoch-scens 4 \
+       --default-rho 10 --max-iterations 50 --solver-name cplex \
+       --lagrangian --scenarios-per-bundle 4
+
+With ``--num-admm-subproblems 2`` and ``--scenarios-per-bundle 4``, PH sees
+only 2 bundles (one per subproblem) instead of 8 virtual scenarios.
+
+How it works
+^^^^^^^^^^^^^
+
+The ``AdmmBundler`` (in ``mpisppy/utils/admm_bundler.py``) creates scenarios
+on-the-fly inside its ``scenario_creator``, following the same pattern as
+``ProperBundler``.  For each bundle it:
+
+1. Creates the constituent stochastic scenarios via the module's
+   ``scenario_creator``.
+2. Adds dummy consensus variables and computes variable probabilities
+   (the same processing that ``Stoch_AdmmWrapper`` performs).
+3. Builds an EF from the scenarios using
+   ``nonant_for_fixed_vars=True`` so all bundles have identical nonant
+   structure.
+4. Flattens all consensus variables from all tree levels into a single
+   ROOT node.
+
+Because each bundle contains scenarios from only one subproblem, all
+scenarios within a bundle share the same real/dummy variable pattern,
+ensuring consistent PH coordination.
+
+Model module requirements
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+Bundled stochastic ADMM requires two additional functions in the model
+module beyond the standard ``--stoch-admm`` interface:
+
+.. py:function:: combining_names(admm_subproblem_name, stoch_scenario_name)
+
+   Creates a composite virtual scenario name from a subproblem and
+   stochastic scenario.
+
+   :param str admm_subproblem_name: e.g. ``"Region1"``
+   :param str stoch_scenario_name: e.g. ``"StochasticScenario1"``
+   :returns: str, e.g. ``"ADMM_STOCH_Region1_StochasticScenario1"``
+
+These are the same functions used by ``Stoch_AdmmWrapper`` and are already
+present in the ``stoch_distr`` example.
+
+Limitations
+^^^^^^^^^^^^
+
+- **Full bundling only**: ``--scenarios-per-bundle`` must equal
+  ``--num-stoch-scens``.  Partial bundling (where some but not all stochastic
+  scenarios are grouped) is not supported because different stochastic paths
+  cannot be correctly coordinated after flattening to ROOT.
+
+- **Deterministic ADMM**: Bundling is not supported with ``--admm``
+  (only with ``--stoch-admm``).
+
+- **Inner bounds**: The ``xhatxbar`` and ``xhatshuffle`` spokes may report
+  ``inf`` when used with bundles, because the bundle EF models do not have
+  the same structure as individual scenarios.  The Lagrangian outer bound
+  works correctly.
+
+
 Reference: CLI Arguments
 --------------------------
 
@@ -300,6 +384,7 @@ Argument                                    Domain       Description
 ``--stoch-admm``                            bool         Enable stochastic ADMM decomposition
 ``--num-admm-subproblems``                  int          Number of ADMM subproblems (stoch-admm)
 ``--num-stoch-scens``                       int          Number of stochastic scenarios (stoch-admm)
+``--scenarios-per-bundle``                  int          Bundle stochastic scenarios (stoch-admm only)
 ==========================================  ===========  ============================================
 
 .. Note::
