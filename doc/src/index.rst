@@ -53,6 +53,7 @@ MPI is used.
 
    properbundles.rst
    agnostic.rst
+   generic_admm.rst
    admmWrapper.rst
    stoch_admmWrapper.rst
    aph.rst

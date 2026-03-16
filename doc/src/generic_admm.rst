@@ -4,7 +4,8 @@ ADMM with ``generic_cylinders``
 ================================
 
 The ``--admm`` and ``--stoch-admm`` flags allow ADMM-based decomposition
-to be used with any compatible model module through ``generic_cylinders.py``,
+to be used with any compatible model module through
+:ref:`generic_cylinders <generic_cylinders>`,
 eliminating the need for a bespoke driver script per problem.
 
 There are two modes:
@@ -348,7 +349,7 @@ Stochastic ADMM creates one "virtual scenario" per (subproblem, stochastic
 scenario) pair.  For problems with many stochastic scenarios, this can mean
 a large number of PH scenarios.  **Bundling** groups all stochastic scenarios
 within the same subproblem into a single EF bundle, reducing the number of
-PH scenarios to one per subproblem.
+PH scenarios to one per subproblem.  
 
 To enable bundling, add ``--scenarios-per-bundle`` to a ``--stoch-admm`` run.
 Currently, full bundling is required: ``--scenarios-per-bundle`` must equal
