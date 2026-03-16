@@ -10,6 +10,7 @@
 
 import os
 import time
+import hashlib
 import logging
 import weakref
 import numpy as np
@@ -123,6 +124,8 @@ class SPBase:
         self._attach_varid_to_nonant_index()
         self._create_communicators()
         self._verify_nonant_lengths()
+        if not self.options.get("turn_off_names_check", False):
+            self._verify_nonant_names()
         self._set_sense()
         self._use_variable_probability_setter()
         self._set_solution_cache()
@@ -185,7 +188,58 @@ class SPBase:
             if val != int(max_val[0]):
                 raise RuntimeError(f"Tree node {ndn} has scenarios with different numbers of non-anticipative "
                         f"variables: {val} vs. max {max_val[0]}")
-                
+
+    def _verify_nonant_names(self):
+        """Verify that nonant variable names match across scenarios.
+
+        For each tree node, all scenarios must list the same nonant
+        variables in the same order.  A local (same-rank) check compares
+        names directly; a cross-rank check uses a deterministic hash
+        with MPI allreduce (MAX vs MIN) to detect mismatches.
+        """
+        # --- local check (within this rank) ---
+        local_node_names = {}  # ndn -> list of var names (from first seen scenario)
+        for k, s in self.local_scenarios.items():
+            for node in s._mpisppy_node_list:
+                ndn = node.name
+                names = [var.name for var in node.nonant_vardata_list]
+                if ndn not in local_node_names:
+                    local_node_names[ndn] = (names, k)
+                else:
+                    ref_names, ref_scen = local_node_names[ndn]
+                    if names != ref_names:
+                        # Find the first mismatch for a helpful message
+                        for i, (a, b) in enumerate(zip(ref_names, names)):
+                            if a != b:
+                                raise RuntimeError(
+                                    f"Tree node {ndn}: nonant variable name "
+                                    f"mismatch at position {i}. "
+                                    f"Scenario {ref_scen} has '{a}', "
+                                    f"scenario {k} has '{b}'.")
+                        # Length mismatch (should be caught by _verify_nonant_lengths)
+                        raise RuntimeError(
+                            f"Tree node {ndn}: nonant variable list length "
+                            f"mismatch between scenarios {ref_scen} and {k}.")
+
+        # --- cross-rank check (via deterministic hash) ---
+        for ndn, (names, _) in local_node_names.items():
+            name_str = ",".join(names)
+            h = hashlib.sha256(name_str.encode()).digest()[:8]
+            local_hash = np.frombuffer(h, dtype=np.int64).copy()
+            max_hash = np.zeros(1, dtype=np.int64)
+            min_hash = np.zeros(1, dtype=np.int64)
+            self.comms[ndn].Allreduce([local_hash, MPI.LONG],
+                                      [max_hash, MPI.LONG],
+                                      op=MPI.MAX)
+            self.comms[ndn].Allreduce([local_hash, MPI.LONG],
+                                      [min_hash, MPI.LONG],
+                                      op=MPI.MIN)
+            if max_hash[0] != min_hash[0]:
+                raise RuntimeError(
+                    f"Tree node {ndn}: nonant variable names do not "
+                    f"match across ranks. Check that all scenarios "
+                    f"list nonant variables in the same order.")
+
     def _check_nodenames(self):
         for ndn in self.all_nodenames:
             if ndn != 'ROOT' and sputils.parent_ndn(ndn) not in self.all_nodenames:
