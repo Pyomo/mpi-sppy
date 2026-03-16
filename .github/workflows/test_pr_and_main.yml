@@ -259,7 +259,7 @@ jobs:
           # envall does nothing
           python test_admmWrapper.py
           python test_stoch_admmWrapper.py
-          python -m pytest test_admm_bundler.py
+          python test_admm_bundler.py
 
   aph:
     name: aph tests
