@@ -339,6 +339,32 @@ jobs:
           cd mpisppy/tests
           python test_mps.py
 
+  smps:
+    name: SMPS tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex mip
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run SMPS tests
+        timeout-minutes: 2
+        run: |
+          cd mpisppy/tests
+          python -m pytest test_smps.py -v
+
   confidence-intervals:
     name: confidence intervals tests
     runs-on: ubuntu-latest
