@@ -7,6 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 # general example driver for stoch_distr with cylinders
+# Consider using generic_cylinders.py with --stoch-admm instead.
 
 # Driver file for stochastic admm
 import mpisppy.utils.stoch_admmWrapper as stoch_admmWrapper

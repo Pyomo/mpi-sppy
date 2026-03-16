@@ -9,6 +9,7 @@
 # This file is used in the tests and should not be modified!
 
 # general example driver for stoch_distr with cylinders
+# Consider using generic_cylinders.py with --stoch-admm instead.
 
 # This file is used for the example! It is slightly
 # different from the one in the examples outside of the tests
