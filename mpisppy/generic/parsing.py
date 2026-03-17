@@ -21,8 +21,8 @@ import mpisppy.utils.sputils as sputils
 
 
 _IMPLICIT_MODULES = {
-    "--smps-dir": "mpisppy.utils.smps_module",
-    "--mps-files-directory": "mpisppy.utils.mps_module",
+    "--smps-dir": "mpisppy.problem_io.smps_module",
+    "--mps-files-directory": "mpisppy.problem_io.mps_module",
 }
 
 def model_fname():

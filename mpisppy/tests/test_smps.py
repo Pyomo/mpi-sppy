@@ -20,8 +20,8 @@ import os
 import pyomo.environ as pyo
 from pyomo.common.config import ConfigDict, ConfigValue
 
-import mpisppy.utils.smps_reader as smps_reader
-import mpisppy.utils.smps_module as smps_module
+import mpisppy.problem_io.smps_reader as smps_reader
+import mpisppy.problem_io.smps_module as smps_module
 import mpisppy.opt.ef
 from mpisppy.tests.utils import get_solver, round_pos_sig
 

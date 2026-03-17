@@ -9,8 +9,8 @@
 """Module interface for SMPS format problems, for use with generic_cylinders.py.
 
 Usage:
-    python -m mpisppy.generic_cylinders --module-name mpisppy.utils.smps_module \
-        --smps-dir examples/sizes/SMPS --solver-name cplex --EF
+    python -m mpisppy.generic_cylinders --smps-dir examples/sizes/SMPS \
+        --solver-name cplex --EF
 
 The --smps-dir should point to a directory containing .cor, .tim, and .sto files.
 Only SCENARIOS DISCRETE format is supported.
@@ -18,8 +18,8 @@ Only SCENARIOS DISCRETE format is supported.
 import os
 import tempfile
 import mpisppy.scenario_tree as scenario_tree
-import mpisppy.utils.smps_reader as smps_reader
-import mpisppy.utils.mps_reader as mps_reader
+import mpisppy.problem_io.smps_reader as smps_reader
+import mpisppy.problem_io.mps_reader as mps_reader
 
 # Module-level state set by kw_creator
 _smps_dir = None

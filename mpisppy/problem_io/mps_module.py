@@ -31,7 +31,7 @@ import glob
 import json
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.sputils as sputils
-import mpisppy.utils.mps_reader as mps_reader
+import mpisppy.problem_io.mps_reader as mps_reader
 # assume you can get the path from config, set in kw_creator as a side-effect
 mps_files_directory = None
 

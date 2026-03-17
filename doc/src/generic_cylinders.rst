@@ -48,8 +48,8 @@ As an exception to the ``--module-name`` requirement, the following flags
 can be used as the first argument and the appropriate module will be
 inferred automatically:
 
-- ``--smps-dir`` — uses ``mpisppy.utils.smps_module`` (see :doc:`smps`)
-- ``--mps-files-directory`` — uses ``mpisppy.utils.mps_module`` (see :ref:`loose_integration`)
+- ``--smps-dir`` — uses ``mpisppy.problem_io.smps_module`` (see :doc:`smps`)
+- ``--mps-files-directory`` — uses ``mpisppy.problem_io.mps_module`` (see :ref:`loose_integration`)
 
 For example:
 

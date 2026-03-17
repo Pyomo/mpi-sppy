@@ -22,7 +22,7 @@ Usage
 
 Use ``generic_cylinders.py`` with ``--smps-dir`` as the first argument,
 pointing to the directory containing the three SMPS files. The appropriate
-module (``mpisppy.utils.smps_module``) is inferred automatically, so
+module (``mpisppy.problem_io.smps_module``) is inferred automatically, so
 ``--module-name`` is not needed:
 
 .. code-block:: bash
