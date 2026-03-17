@@ -217,6 +217,35 @@ def get_rhs_name_from_mps(mps_path):
     return None
 
 
+def get_bounds_name_from_mps(mps_path):
+    """Extract the BOUNDS name from the MPS file.
+
+    Args:
+        mps_path (str): path to the MPS (.cor) file
+
+    Returns:
+        str or None: the bounds name (e.g., "BND1"), or None if no BOUNDS section
+    """
+    section = None
+    with open(mps_path, "r", errors="replace") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("*"):
+                continue
+            parts = line.split()
+            tok0 = parts[0]
+            if tok0 == "BOUNDS":
+                section = "BOUNDS"
+                continue
+            if section == "BOUNDS":
+                if tok0 == "ENDATA":
+                    break
+                # Bounds lines: type name var_name [value]
+                # The name is in parts[1]
+                return parts[1]
+    return None
+
+
 def partition_vars_by_stage(var_order, stages):
     """Partition variables into stages based on .tim boundaries.
 

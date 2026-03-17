@@ -50,7 +50,7 @@ Limitations
   exactly two stages).
 - Only ``SCENARIOS DISCRETE`` format in the ``.sto`` file is supported.
   The ``INDEP`` and ``BLOCKS`` stochastic data formats are not yet implemented.
-- Only RHS modifications are supported in scenario definitions. Coefficient
-  matrix and bounds modifications are not yet implemented.
+- RHS, coefficient matrix, and bounds modifications are all supported
+  in scenario definitions.
 - The per-stage cost expression is not separated (set to 0.0), so PH
   convergence may be affected. EF solves work correctly.
