@@ -224,15 +224,15 @@ class SPBase:
         # --- cross-rank check (via deterministic hash) ---
         for ndn, (names, _) in local_node_names.items():
             name_str = ",".join(names)
-            h = hashlib.sha256(name_str.encode()).digest()[:8]
-            local_hash = np.frombuffer(h, dtype=np.int64).copy()
-            max_hash = np.zeros(1, dtype=np.int64)
-            min_hash = np.zeros(1, dtype=np.int64)
-            self.comms[ndn].Allreduce([local_hash, MPI.LONG],
-                                      [max_hash, MPI.LONG],
+            h = hashlib.sha256(name_str.encode()).digest()[:4]
+            local_hash = np.frombuffer(h, dtype=np.int32).copy()
+            max_hash = np.zeros(1, dtype=np.int32)
+            min_hash = np.zeros(1, dtype=np.int32)
+            self.comms[ndn].Allreduce([local_hash, MPI.INT],
+                                      [max_hash, MPI.INT],
                                       op=MPI.MAX)
-            self.comms[ndn].Allreduce([local_hash, MPI.LONG],
-                                      [min_hash, MPI.LONG],
+            self.comms[ndn].Allreduce([local_hash, MPI.INT],
+                                      [min_hash, MPI.INT],
                                       op=MPI.MIN)
             if max_hash[0] != min_hash[0]:
                 raise RuntimeError(
