@@ -11,7 +11,7 @@ import unittest
 import pyomo.environ as pyo
 
 import mpisppy.opt.ef
-from mpisppy.tests.utils import get_solver, round_pos_sig
+from mpisppy.tests.utils import get_solver
 from examples.farmer import farmer, bad_farmer
 
 solver_available, solver_name, persistent_available, persistent_solver_name = get_solver()
@@ -52,7 +52,7 @@ class TestNonantNameValidation(unittest.TestCase):
         """bad_farmer with turn_off_names_check should not raise."""
         options = {"solver": solver_name, "turn_off_names_check": True}
         all_scenario_names = bad_farmer.scenario_names_creator(3)
-        ef = mpisppy.opt.ef.ExtensiveForm(
+        mpisppy.opt.ef.ExtensiveForm(
             options,
             all_scenario_names,
             bad_farmer.scenario_creator,
