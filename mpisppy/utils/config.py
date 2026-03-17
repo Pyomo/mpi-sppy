@@ -218,6 +218,12 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("turn_off_names_check",
+                           description="Turn off the check that nonant variable names "
+                           "match across scenarios (automatically turned off for proper bundles).",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("user_warmstart",
                            description="Will pass the user provided solution as a warmstart for "
                            "each initial subproblem solve.",

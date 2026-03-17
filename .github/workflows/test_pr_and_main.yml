@@ -88,6 +88,10 @@ jobs:
         run: |
           pytest mpisppy/tests/test_component_map_usage.py
 
+      - name: Test nonant name validation
+        run: |
+          pytest mpisppy/tests/test_nonant_validation.py -v
+
       - name: Test docs
         run: |
           cd ./doc/
