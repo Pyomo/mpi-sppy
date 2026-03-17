@@ -252,5 +252,96 @@ class TestStochAdmmWrapper(unittest.TestCase):
             os.chdir(original_dir)
 
 
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_bundled_vs_unbundled(self):
+        """Run the same stochastic ADMM problem with and without bundling.
+
+        Both should produce outer bounds close to the EF objective.
+        This verifies that bundling does not change the answer.
+        """
+        target_dir = os.path.join(_REPO_ROOT, 'examples', 'stoch_distr')
+        generic_cyl = os.path.join(_REPO_ROOT, 'mpisppy', 'generic_cylinders.py')
+        original_dir = os.getcwd()
+        os.chdir(target_dir)
+        try:
+            clean_env = {k: v for k, v in os.environ.items()
+                         if not k.startswith(('OMPI_', 'PMIX_', 'PMI_'))}
+
+            num_stoch_scens = 4
+            num_admm = 2
+            common_args = (
+                f"--stoch-admm --num-stoch-scens {num_stoch_scens} "
+                f"--num-admm-subproblems {num_admm} "
+                f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-iterations 30 --lagrangian"
+            )
+
+            # --- unbundled run ---
+            unbundled_cmd = (
+                f"mpiexec -np 2 python -u -m mpi4py {generic_cyl} "
+                f"--module-name stoch_distr {common_args}"
+            ).split()
+            unbundled_result = subprocess.run(
+                unbundled_cmd, capture_output=True, text=True,
+                timeout=120, env=clean_env)
+            if unbundled_result.returncode != 0:
+                raise RuntimeError(
+                    f"Unbundled run failed (rc={unbundled_result.returncode})\n"
+                    f"STDOUT: {unbundled_result.stdout[-1000:]}\n"
+                    f"STDERR: {unbundled_result.stderr[-1000:]}")
+            unbundled_bound = self._extracting_outer_bound(unbundled_result.stdout)
+            self.assertIsNotNone(unbundled_bound,
+                                 "Could not extract outer bound from unbundled run")
+
+            # --- bundled run ---
+            bundled_cmd = (
+                f"mpiexec -np 2 python -u -m mpi4py {generic_cyl} "
+                f"--module-name stoch_distr {common_args} "
+                f"--scenarios-per-bundle {num_stoch_scens}"
+            ).split()
+            bundled_result = subprocess.run(
+                bundled_cmd, capture_output=True, text=True,
+                timeout=120, env=clean_env)
+            if bundled_result.returncode != 0:
+                raise RuntimeError(
+                    f"Bundled run failed (rc={bundled_result.returncode})\n"
+                    f"STDOUT: {bundled_result.stdout[-1000:]}\n"
+                    f"STDERR: {bundled_result.stderr[-1000:]}")
+            bundled_bound = self._extracting_outer_bound(bundled_result.stdout)
+            self.assertIsNotNone(bundled_bound,
+                                 "Could not extract outer bound from bundled run")
+
+            # --- EF reference ---
+            ef_cmd = (
+                f"python stoch_distr_ef.py --solver-name {solver_name} "
+                f"--num-stoch-scens {num_stoch_scens} "
+                f"--num-admm-subproblems {num_admm}"
+            ).split()
+            ef_result = subprocess.run(ef_cmd, capture_output=True, text=True)
+            ef_obj = None
+            for line in ef_result.stdout.strip().split('\n'):
+                if "EF objective" in line:
+                    ef_obj = float(line.split(': ')[1])
+            self.assertIsNotNone(ef_obj, "Could not extract EF objective")
+
+            # Both bounds should be close to EF objective (within 5%)
+            tol = abs(ef_obj) * 0.05
+            self.assertAlmostEqual(
+                unbundled_bound, ef_obj, delta=tol,
+                msg=f"Unbundled bound {unbundled_bound} not close to EF {ef_obj}")
+            self.assertAlmostEqual(
+                bundled_bound, ef_obj, delta=tol,
+                msg=f"Bundled bound {bundled_bound} not close to EF {ef_obj}")
+
+            # And they should be close to each other (within 2%)
+            self.assertAlmostEqual(
+                unbundled_bound, bundled_bound,
+                delta=abs(ef_obj) * 0.02,
+                msg=f"Unbundled {unbundled_bound} vs bundled {bundled_bound} "
+                    f"differ too much (EF={ef_obj})")
+        finally:
+            os.chdir(original_dir)
+
+
 if __name__ == '__main__':
     unittest.main()
