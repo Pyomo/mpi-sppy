@@ -53,4 +53,4 @@ Limitations
 - RHS, coefficient matrix, and bounds modifications are all supported
   in scenario definitions.
 - The per-stage cost expression is not separated (set to 0.0), so PH
-  convergence may be affected. EF solves work correctly.
+  convergence reports may be affected.
