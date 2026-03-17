@@ -123,7 +123,8 @@ class TestSmpsModule(unittest.TestCase):
         """Solve EF on the sizes SMPS instance and check the objective."""
         cfg = self._make_cfg()
         smps_module.kw_creator(cfg)
-        scenario_names = smps_module.scenario_names_creator(num_scens=None)
+        # Use 3 scenarios to stay within CPLEX Community Edition limits
+        scenario_names = smps_module.scenario_names_creator(num_scens=3)
 
         options = {"solver": solver_name}
         ef = mpisppy.opt.ef.ExtensiveForm(
@@ -135,10 +136,9 @@ class TestSmpsModule(unittest.TestCase):
         results = ef.solve_extensive_form(tee=False)
         pyo.assert_optimal_termination(results)
         objval = pyo.value(ef.ef.EF_Obj)
-        # Known optimal for sizes with 10 scenarios is 224706.
-        # Use 2 significant figures to allow for solver tolerance.
+        # Known optimal for sizes with 3 scenarios is ~179765.
         sig2obj = round_pos_sig(objval, 2)
-        self.assertEqual(sig2obj, 220000.0)
+        self.assertEqual(sig2obj, 180000.0)
 
 
 if __name__ == "__main__":
