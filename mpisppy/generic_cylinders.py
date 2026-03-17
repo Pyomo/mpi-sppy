@@ -43,6 +43,9 @@ if __name__ == "__main__":
 
     bundle_wrapper = None  # the default
     if proper_bundles(cfg):
+        # Nonant name validation will fail with proper bundles because
+        # bundled scenarios have different nonant structure.
+        cfg.quick_assign("turn_off_names_check", bool, True)
         import mpisppy.utils.proper_bundler as proper_bundler
         bundle_wrapper = proper_bundler.ProperBundler(module)
         bundle_wrapper.set_bunBFs(cfg)
