@@ -6,7 +6,15 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
-"""Tests for SMPS reader using the sizes example."""
+"""Tests for SMPS reader using the sizes example.
+
+The sizes SMPS instance (examples/sizes/SMPS) has 10 scenarios each
+with probability 0.1.  The parsing tests use all 10 scenarios, but
+the EF solve test uses only 3 to stay within CPLEX Community Edition
+problem size limits.  The 3-scenario subset has probabilities that
+don't sum to 1.0, but the EF weights by given probabilities so the
+solve is still valid for testing the read-solve pipeline.
+"""
 import unittest
 import os
 import pyomo.environ as pyo
