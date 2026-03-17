@@ -16,9 +16,7 @@ The --smps-dir should point to a directory containing .cor, .tim, and .sto files
 Only SCENARIOS DISCRETE format is supported.
 """
 import os
-import shutil
 import tempfile
-import pyomo.environ as pyo
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.utils.smps_reader as smps_reader
 import mpisppy.utils.mps_reader as mps_reader
