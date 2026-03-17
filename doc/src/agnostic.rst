@@ -17,9 +17,9 @@ nonant file) that can be created however you like. This is refered to as
 Loose integration
 ^^^^^^^^^^^^^^^^^
 
-You can use ``generic_cylinders.py`` and give it the module
-``mpisppy.utils.mps_module`` (you will need to specify the path to
-this module) and the ``--mps-files-directory`` option.  Note that at
+You can use ``generic_cylinders.py`` with ``--mps-files-directory``
+as the first argument (the module ``mpisppy.utils.mps_module`` is
+inferred automatically, so ``--module-name`` is not needed).  Note that at
 the time of this writing, the number of scenarios is obtained by
 counting the mps files in the directory given. (It would require
 only a small amount of programming to support lp files.)
