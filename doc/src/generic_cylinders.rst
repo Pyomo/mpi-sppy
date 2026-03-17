@@ -251,7 +251,7 @@ validation.
 
 .. note::
    This check is automatically disabled when proper bundles are used,
-   because bundled scenarios have a different nonant structure.
+   because bundled scenarios are EFs that have different names across bundles.
 
 Presolve (FBBT and OBBT)
 -------------------------
