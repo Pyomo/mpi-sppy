@@ -273,7 +273,8 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 f"--stoch-admm --num-stoch-scens {num_stoch_scens} "
                 f"--num-admm-subproblems {num_admm} "
                 f"--default-rho 10 --solver-name {solver_name} "
-                f"--max-iterations 30 --lagrangian"
+                f"--max-iterations 30 --lagrangian "
+                f"--turn-off-names-check"
             )
 
             # --- unbundled run ---
