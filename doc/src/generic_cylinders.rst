@@ -247,6 +247,19 @@ This option causes subproblem solves to be given the previous iteration
 solution as a warm-start. This is particularly important when using an
 option to linearize proximal terms.
 
+``turn-off-names-check``
+--------------------------
+
+By default, mpi-sppy verifies that all scenarios list the same
+non-anticipative variables in the same order.  This catches a common bug
+where a ``scenario_creator`` provides variables in an inconsistent order
+across scenarios.  Use ``--turn-off-names-check`` to disable this
+validation.
+
+.. note::
+   This check is automatically disabled when proper bundles are used,
+   because bundled scenarios are EFs that have different names across bundles.
+
 Presolve (FBBT and OBBT)
 -------------------------
 

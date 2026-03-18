@@ -76,6 +76,10 @@ def main():
                            scenario_creator_kwargs=scenario_creator_kwargs,
                            )
 
+    # ADMM creates scenarios with different variable naming conventions,
+    # so nonant name validation must be disabled.
+    cfg.quick_assign("turn_off_names_check", bool, True)
+
     # Things needed for vanilla cylinders
     scenario_creator = admm.admmWrapper_scenario_creator ##change needed because of the wrapper
     scenario_creator_kwargs = None
