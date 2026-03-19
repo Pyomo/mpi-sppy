@@ -17,7 +17,7 @@ defaults:
     shell: bash -l {0}
 
 env:
-  COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage"
+  COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy"
 
 jobs:
   ruff:
@@ -706,6 +706,9 @@ jobs:
         with:
           pattern: coverage-*
           merge-multiple: true
+
+      - name: List coverage files
+        run: ls -la .coverage* || echo "No .coverage files found"
 
       - name: Combine and report
         run: |

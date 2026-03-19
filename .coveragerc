@@ -1,5 +1,5 @@
 [run]
-source_pkgs = mpisppy
+source = mpisppy
 parallel = true
 concurrency = multiprocessing
 
