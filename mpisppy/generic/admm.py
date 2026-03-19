@@ -59,7 +59,37 @@ def _check_admm_compatibility(cfg):
     if cfg.get("scenarios_per_bundle") is not None:
         if cfg.get("admm", ifmissing=False):
             raise RuntimeError("Proper bundles are not supported with deterministic ADMM")
-        # stoch_admm + bundles is OK — handled by AdmmBundler
+        # stoch_admm + bundles is OK for in-memory operation — handled by AdmmBundler
+        if cfg.get("stoch_admm", ifmissing=False):
+            # The generic pickling paths assume standard bundle names like
+            # "Bundle_<i>_<j>", which are incompatible with AdmmBundler's
+            # "Bundle_ADMM_<sub>_<k>" naming and can cause internal errors.
+            pickling_opts = (
+                "pickle_bundles_dir",
+                "unpickle_bundles_dir",
+                "pickle_scenarios_dir",
+                "unpickle_scenarios_dir",
+            )
+            for opt in pickling_opts:
+                if cfg.get(opt, ifmissing=None) is not None:
+                    raise RuntimeError(
+                        "Option '--{}' is not supported together with "
+                        "'--stoch-admm' and '--scenarios-per-bundle'. "
+                        "ADMM bundling uses a different naming scheme for "
+                        "bundles/scenarios, which is incompatible with the "
+                        "generic pickling/unpickling paths.".format(
+                            opt.replace("_", "-")
+                        )
+                    )
+    # Pickling is also unsupported for ADMM without bundles (the IO paths
+    # use module.scenario_names_creator which won't match ADMM wrapper names).
+    pickling_opts = ("pickle_bundles_dir", "unpickle_bundles_dir",
+                     "pickle_scenarios_dir", "unpickle_scenarios_dir")
+    for opt in pickling_opts:
+        if cfg.get(opt, ifmissing=None) is not None:
+            raise RuntimeError(
+                f"--{opt.replace('_', '-')} is not supported with ADMM"
+            )
 
 
 def setup_admm(module, cfg, n_cylinders):
@@ -91,7 +121,7 @@ def setup_admm(module, cfg, n_cylinders):
     object.__setattr__(cfg, "_admm_variable_probability", admm.var_prob_list)
     object.__setattr__(cfg, "_admm_scenario_names", all_scenario_names)
 
-    return (admm.admmWrapper_scenario_creator, None,
+    return (admm.admmWrapper_scenario_creator, {},
             all_scenario_names, None)
 
 
@@ -133,7 +163,7 @@ def setup_stoch_admm(module, cfg, n_cylinders):
     object.__setattr__(cfg, "_admm_scenario_names", all_names)
     object.__setattr__(cfg, "_admm_nodenames", admm.all_nodenames)
 
-    return (admm.admmWrapper_scenario_creator, None,
+    return (admm.admmWrapper_scenario_creator, {},
             all_names, admm.all_nodenames)
 
 
@@ -176,5 +206,5 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
     object.__setattr__(cfg, "_admm_scenario_names", bundle_names)
     object.__setattr__(cfg, "_admm_nodenames", None)  # bundles flatten to 2-stage
 
-    return (bundler.scenario_creator, None,
+    return (bundler.scenario_creator, {},
             bundle_names, None)

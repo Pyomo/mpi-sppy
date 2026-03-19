@@ -190,6 +190,7 @@ class TestStochAdmmWrapper(unittest.TestCase):
                 in_results = False
         return outer_bound
 
+    @unittest.skipUnless(solver_available, "no solver available")
     def test_bundled_admm_via_generic_cylinders(self):
         """Test stochastic ADMM with proper bundles via generic_cylinders.
 
