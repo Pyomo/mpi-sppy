@@ -36,6 +36,10 @@ _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
 _DISTR_DIR = os.path.join(_PROJECT_ROOT, "examples", "distr")
 
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
+_DISTR_DIR = os.path.join(_PROJECT_ROOT, "examples", "distr")
+
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
 class TestAdmmWrapper(unittest.TestCase):

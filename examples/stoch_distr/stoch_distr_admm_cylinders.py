@@ -89,6 +89,10 @@ def _make_admm(cfg, n_cylinders, all_nodes_dict, inter_region_dict, data_params,
     
 
 def _wheel_creator(cfg, n_cylinders, scenario_creator, variable_probability, all_nodenames, all_admm_stoch_subproblem_scenario_names, scenario_creator_kwargs=None): #the wrapper doesn't need any kwarg
+    # ADMM creates scenarios with different variable naming conventions,
+    # so nonant name validation must be disabled.
+    cfg.quick_assign("turn_off_names_check", bool, True)
+
     ph_converger = None
     #Things needed for vanilla cylinders
     scenario_denouement = stoch_distr.scenario_denouement

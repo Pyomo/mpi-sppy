@@ -30,6 +30,7 @@ while _i < len(sys.argv):
     _i += 1
 sys.argv = [sys.argv[0]] + _remaining
 
+
 _THIS_DIR = os.path.dirname(os.path.abspath(__file__))
 _PROJECT_ROOT = os.path.normpath(os.path.join(_THIS_DIR, "..", ".."))
 _TEST_STOCH_DISTR_DIR = os.path.join(_THIS_DIR, "examples", "stoch_distr")
