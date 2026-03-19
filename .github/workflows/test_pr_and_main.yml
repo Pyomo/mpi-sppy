@@ -108,6 +108,7 @@ jobs:
           name: coverage-regression
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   runall_persistent:
     name: run_all.py persistent solver
@@ -149,6 +150,7 @@ jobs:
           name: coverage-runall-persistent
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   runall:
     name: run_all.py direct solver
@@ -189,6 +191,7 @@ jobs:
           name: coverage-runall-direct
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   schur-complement:
     name: schur-complement
@@ -268,6 +271,7 @@ jobs:
           name: coverage-straight-tests
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   admm-wrapper:
     name: admm wrapper tests
@@ -305,6 +309,7 @@ jobs:
           name: coverage-admm-wrapper
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   aph:
     name: aph tests
@@ -339,6 +344,7 @@ jobs:
           name: coverage-aph
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   pickled-bundles:
     name: pickled bundles tests
@@ -374,6 +380,7 @@ jobs:
           name: coverage-pickled-bundles
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   mps:
     name: MPS tests
@@ -401,6 +408,10 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_mps.py
 
+      - name: List coverage files (debug)
+        if: always()
+        run: ls -la ${{ github.workspace }}/.coverage* || echo "No .coverage files found"
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
@@ -408,6 +419,7 @@ jobs:
           name: coverage-mps
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   confidence-intervals:
     name: confidence intervals tests
@@ -448,6 +460,7 @@ jobs:
           name: coverage-confidence-intervals
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   test-generic-pyomo-released:
     name: generic_tester.py
@@ -488,6 +501,7 @@ jobs:
           name: coverage-generic-tester
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   test-gradient-rho:
     name: gradient and rho tests
@@ -527,6 +541,7 @@ jobs:
           name: coverage-gradient-rho
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   test-headers:
     name: header test
@@ -592,6 +607,7 @@ jobs:
           name: coverage-pysp
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   test-cylinders:
     name: tests on some cylinders
@@ -626,6 +642,7 @@ jobs:
           name: coverage-cylinders
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
+          include-hidden-files: true
 
   test-agnostic:
     name: tests on agnostic
