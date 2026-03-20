@@ -41,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install sphinx sphinx_rtd_theme cplex
-          pip install xpress pandas dill
+          pip install xpress pandas dill coverage
 
       - name: setup the program
         run: |
@@ -50,7 +50,16 @@ jobs:
       - name: PH EF tests
         run: |
           cd mpisppy/tests
-          python test_ef_ph.py
+          coverage run $COV_ARGS test_ef_ph.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-nompi4py
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   regression:
     name: Basic regression tests
@@ -214,7 +223,7 @@ jobs:
         shell: bash -l {0}
         run: |
           python -m pip install --upgrade pip
-          pip install pytest pytest-cov pybind11
+          pip install pytest pytest-cov pybind11 coverage
           conda install -y conda-forge::libstdcxx-ng
           conda install -y openmpi pymumps --no-update-deps
           pip install mpi4py pandas
@@ -231,12 +240,21 @@ jobs:
       - name: Test with pytest (serial)
         shell: bash -l {0}
         run: |
-          pytest -q -vv mpisppy/tests/test_sc.py
+          coverage run $COV_ARGS -m pytest -q -vv mpisppy/tests/test_sc.py
 
       - name: Test with pytest under MPI
         shell: bash -l {0}
         run: |
-          mpirun -np 3 -oversubscribe python -m pytest -q -vv mpisppy/tests/test_sc.py
+          mpirun -np 3 -oversubscribe coverage run $COV_ARGS -m pytest -q -vv mpisppy/tests/test_sc.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-schur-complement
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   straight-tests:
     name: straight_tests.py
@@ -417,6 +435,45 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: coverage-mps
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  smps:
+    name: SMPS tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex mip pytest coverage
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run SMPS tests
+        timeout-minutes: 2
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS -m pytest test_smps.py -v
+
+      - name: List coverage files (debug)
+        if: always()
+        run: ls -la ${{ github.workspace }}/.coverage* || echo "No .coverage files found"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-smps
           path: ${{ github.workspace }}/.coverage.*
           if-no-files-found: ignore
           include-hidden-files: true
@@ -658,7 +715,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex
+          pip install pyomo xpress cplex coverage
           pip install numpy packaging
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
@@ -676,13 +733,13 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_agnostic.py
+          coverage run $COV_ARGS test_agnostic.py
 
       - name: run agnostic cylinders
         timeout-minutes: 10
         run: |
           cd mpisppy/agnostic/examples
-          python afew_agnostic.py
+          coverage run $COV_ARGS afew_agnostic.py
 
       - name: run loose AMPL
         timeout-minutes: 10
@@ -693,23 +750,36 @@ jobs:
           #cd ../GAMS
           #bash farmer_example.bash
 
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-agnostic
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   coverage-report:
     name: Coverage Report
     runs-on: ubuntu-latest
     needs:
+      - nompi4py
       - regression
       - runall_persistent
       - runall
+      - schur-complement
       - straight-tests
       - admm-wrapper
       - aph
       - pickled-bundles
       - mps
+      - smps
       - confidence-intervals
       - test-generic-pyomo-released
       - test-gradient-rho
       - test-pysp
       - test-cylinders
+      - test-agnostic
     if: always()
     steps:
       - uses: actions/checkout@v3

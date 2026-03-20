@@ -37,7 +37,7 @@ def _read_obj_terms_from_mps(mps_path: str):
             if tok0 in ("RHS", "RANGES", "BOUNDS", "ENDATA"):
                 section = None
                 if tok0 != "COLUMNS":
-                    # Once we reach RHS, we’re done collecting objective terms
+                    # Once we reach RHS, we're done collecting objective terms
                     if tok0 in ("RHS", "ENDATA"):
                         break
                 continue
@@ -69,14 +69,24 @@ def _read_obj_terms_from_mps(mps_path: str):
 
 
 
-def read_mps_and_create_pyomo_model(mps_path):
-    """
-    Reads an MPS file using mip and converts it into a Pyomo ConcreteModel.
-    
-    :param mps_path: Path to the MPS file.
-    :return: Pyomo ConcreteModel.
+def read_mps_to_mip_model(mps_path):
+    """Read an MPS file and return a coin-or mip Model.
 
-    aside: Chatgpt was almost negative help with this function...
+    :param mps_path: Path to the MPS file (must have .mps extension).
+    :return: mip.Model
+    """
+    m = mip.Model(solver_name="cbc")
+    m.read(mps_path)
+    return m
+
+
+def mip_model_to_pyomo(m, mps_path=None):
+    """Convert a coin-or mip Model into a Pyomo ConcreteModel.
+
+    :param m: mip.Model (possibly modified after reading).
+    :param mps_path: original MPS path, used only for fallback objective
+        parsing and error messages.
+    :return: Pyomo ConcreteModel.
     """
 
     def _domain_lookup(v):
@@ -94,10 +104,6 @@ def read_mps_and_create_pyomo_model(mps_path):
             raise RuntimeError(f"Unknown type from coin mip {v.var_type=}")
         # BTW: I don't know how to query the mip object for SOS sets
         #      (maybe it transforms them?)
-    
-    # Read the MPS file and call the coin-mip model m
-    m = mip.Model(solver_name="cbc")
-    m.read(mps_path)
 
     # Create a Pyomo model
     model = pyo.ConcreteModel()
@@ -108,13 +114,12 @@ def read_mps_and_create_pyomo_model(mps_path):
         vname = v.name.replace("(","_").replace(")","_")
         varDict[v] = pyo.Var(domain=_domain_lookup(v), bounds=(v.lb, v.ub))
         setattr(model, vname, varDict[v])
-    #print(f"{dir(v)=}")
 
     # Add constraints
     for c in m.constrs:
         # Extract terms correctly from LinExpr
         body = sum(coeff * varDict[var] for var, coeff in c.expr.expr.items())
-        
+
         if c.expr.sense == "=":
             pyomoC = pyo.Constraint(expr=(c.rhs, body, c.rhs))
         elif c.expr.sense == ">":
@@ -134,17 +139,33 @@ def read_mps_and_create_pyomo_model(mps_path):
         obj_items = list(m.objective.expr.items())  # usual path
         obj_expr = sum(coeff * varDict[vname] for vname, coeff in obj_items if vname in varDict)
     except ParameterNotAvailable:
-        # CBC didn’t expose objective coefficients — fall back to parsing the file
+        # CBC didn't expose objective coefficients -- fall back to parsing the file
+        if mps_path is None:
+            raise RuntimeError("Could not retrieve objective coefficients from CBC"
+                               " and no MPS path provided for fallback parsing.")
         obj_items = _read_obj_terms_from_mps(mps_path)
         if not obj_items:
             raise RuntimeError("Could not retrieve objective coefficients from CBC or MPS file.")
-        obj_expr = sum(coeff * varDict[vname] for vname, coeff in obj_items if vname in varDict)    
+        obj_expr = sum(coeff * varDict[vname] for vname, coeff in obj_items if vname in varDict)
     if m.sense == mip.MINIMIZE:
         model.objective = pyo.Objective(expr=obj_expr, sense=pyo.minimize)
     else:
         model.objective = pyo.Objective(expr=obj_expr, sense=pyo.maximize)
 
     return model
+
+
+def read_mps_and_create_pyomo_model(mps_path):
+    """
+    Reads an MPS file using mip and converts it into a Pyomo ConcreteModel.
+
+    :param mps_path: Path to the MPS file.
+    :return: Pyomo ConcreteModel.
+
+    aside: Chatgpt was almost negative help with this function...
+    """
+    m = read_mps_to_mip_model(mps_path)
+    return mip_model_to_pyomo(m, mps_path=mps_path)
 
 
 if __name__ == "__main__":

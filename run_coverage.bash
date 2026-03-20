@@ -80,6 +80,9 @@ run_phase "test_pickle_bundle (spawns mpiexec)" \
 run_phase "test_mps (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_mps.py
 
+run_phase "test_smps (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_smps.py -v
+
 run_phase "test_conf_int_farmer (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_farmer.py
 

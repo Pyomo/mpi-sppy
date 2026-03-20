@@ -20,14 +20,27 @@ import mpisppy.utils.config as config
 import mpisppy.utils.sputils as sputils
 
 
+_IMPLICIT_MODULES = {
+    "--smps-dir": "mpisppy.problem_io.smps_module",
+    "--mps-files-directory": "mpisppy.problem_io.mps_module",
+}
+
 def model_fname():
-    """Extract the module name from the first CLI argument (--module-name)."""
+    """Extract the module name from the first CLI argument (--module-name).
+
+    As an exception, ``--smps-dir`` and ``--mps-files-directory`` may be
+    used instead of ``--module-name``; the appropriate module is inferred
+    automatically.  Using ``--module-name`` together with one of these
+    implicit-module flags is an error.
+    """
     def _bad_news():
         raise RuntimeError("Unable to parse module name from first argument"
                            " (for module foo.py, we want, e.g.\n"
                            "--module-name foo\n"
                            "or\n"
-                           "--module-name=foo")
+                           "--module-name=foo\n"
+                           "Alternatively, use --smps-dir or"
+                           " --mps-files-directory as the first argument.")
     def _len_check(needed_length):
         if len(sys.argv) <= needed_length:
             _bad_news()
@@ -35,12 +48,29 @@ def model_fname():
             return True
 
     _len_check(1)
-    assert sys.argv[1][:13] == "--module-name", f"The first command argument must start with'--module-name' but you gave {sys.argv[1]}"
-    if sys.argv[1] == "--module-name":
+
+    # Check for implicit module flags (--smps-dir, --mps-files-directory)
+    first_arg = sys.argv[1]
+    # Handle both --flag value and --flag=value forms
+    first_flag = first_arg.split("=")[0]
+
+    if first_flag in _IMPLICIT_MODULES:
+        # Error if --module-name also appears on the command line
+        for arg in sys.argv[2:]:
+            if arg.startswith("--module-name"):
+                raise RuntimeError(
+                    f"Cannot use both {first_flag} and --module-name."
+                    f" {first_flag} implies --module-name"
+                    f" {_IMPLICIT_MODULES[first_flag]}")
+        return _IMPLICIT_MODULES[first_flag]
+
+    if not first_arg.startswith("--module-name"):
+        _bad_news()
+    if first_arg == "--module-name":
         _len_check(2)
         return sys.argv[2]
     else:
-        parts = sys.argv[1].split("=")
+        parts = first_arg.split("=")
         if len(parts) != 2:
             _bad_news()
         return parts[1]

@@ -52,6 +52,7 @@ MPI is used.
    :caption: Advanced Topics
 
    properbundles.rst
+   smps.rst
    agnostic.rst
    admmWrapper.rst
    stoch_admmWrapper.rst

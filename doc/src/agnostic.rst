@@ -18,7 +18,7 @@ Loose integration
 ^^^^^^^^^^^^^^^^^
 
 You can use ``generic_cylinders.py`` and give it the module
-``mpisppy.utils.mps_module`` (you will need to specify the path to
+``mpisppy.problem_io.mps_module`` (you will need to specify the path to
 this module) and the ``--mps-files-directory`` option.  Note that at
 the time of this writing, the number of scenarios is obtained by
 counting the mps files in the directory given. (It would require
@@ -52,7 +52,7 @@ programming applications.
 
 There is low-level support for `.lp` files instead of `.mps` files.
 Code for creating a
-Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
+Pyomo model from an mps file is in ``mpisppy.problem_io.mps_reader.py``,
 
 JSON file format
 ----------------

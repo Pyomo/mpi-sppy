@@ -31,6 +31,8 @@ if __name__ == "__main__":
     if len(sys.argv) == 1:
         print("The python model file module name (no .py) must be given.")
         print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
+        print("For SMPS format, use --smps-dir instead of --module-name:")
+        print("  python -m mpisppy.generic_cylinders --smps-dir path/to/smps --solver-name cplex --EF")
         quit()
     fname = model_fname()
     module = load_module(fname)

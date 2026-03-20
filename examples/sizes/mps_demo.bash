@@ -18,6 +18,5 @@ SOLVER=cplex
 # assumes we are in the sizes directory and don't mind polluting it with a directory
 python ../../mpisppy/generic_cylinders.py --module-name sizes_expression --num-scens 3 --default-rho 1 --solver-name ${SOLVER} --max-iterations 0 --write-scenario-lp-mps-files-dir _delme_lp_mps_dir
 
-# By specifying the module to be mps_module we will read files for the problem
-#  from the specified mps-files-directory.
-mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name ../../mpisppy/utils/mps_module --xhatshuffle --lagrangian --default-rho 1 --solver-name ${SOLVER} --max-iterations 10 --mps-files-directory=_delme_lp_mps_dir
+# --mps-files-directory as the first arg infers the module automatically.
+mpiexec -np 3 python -m mpi4py ../../mpisppy/generic_cylinders.py --mps-files-directory=_delme_lp_mps_dir --xhatshuffle --lagrangian --default-rho 1 --solver-name ${SOLVER} --max-iterations 10
