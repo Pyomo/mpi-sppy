@@ -1,7 +1,7 @@
 .. _MMW Confidence Intervals:
 
 MMW confidence intervals:
-========================
+=========================
 
 If we want to assess the quality of a given candidate solution ``xhat_one`` 
 (a first stage solution), we could try and evaluate the optimality gap, i.e. 
