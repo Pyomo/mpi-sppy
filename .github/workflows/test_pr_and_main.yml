@@ -323,7 +323,7 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_admmWrapper.py --python-args="$PYARGS"
           coverage run $COV_ARGS test_stoch_admmWrapper.py --python-args="$PYARGS"
-          coverage run $COV_ARGS test_admm_bundler.py --python-args="$PYARGS"
+          coverage run $COV_ARGS test_admm_bundler.py
 
       - name: Upload coverage data
         if: always()
