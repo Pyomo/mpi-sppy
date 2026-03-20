@@ -158,5 +158,107 @@ class TestAdmmBundler(unittest.TestCase):
             )
 
 
+class TestAdmmArgs(unittest.TestCase):
+    """Test admm_args, _count_cylinders, and _check_admm_compatibility."""
+
+    def test_admm_args_registers_flags(self):
+        from mpisppy.generic.admm import admm_args
+        cfg = config.Config()
+        admm_args(cfg)
+        self.assertIn("admm", cfg)
+        self.assertIn("stoch_admm", cfg)
+        self.assertIn("num_admm_subproblems", cfg)
+        self.assertIn("num_stoch_scens", cfg)
+
+    def test_admm_args_skips_existing(self):
+        """admm_args should not re-register keys already present."""
+        from mpisppy.generic.admm import admm_args
+        cfg = config.Config()
+        cfg.add_to_config("num_admm_subproblems",
+                          description="pre-existing", domain=int, default=5)
+        admm_args(cfg)
+        # The pre-existing default should be preserved
+        self.assertEqual(cfg["num_admm_subproblems"], 5)
+
+    def test_count_cylinders_hub_only(self):
+        from mpisppy.generic.admm import _count_cylinders
+        cfg = config.Config()
+        self.assertEqual(_count_cylinders(cfg), 1)
+
+    def test_count_cylinders_with_spokes(self):
+        from mpisppy.generic.admm import _count_cylinders
+        cfg = config.Config()
+        cfg.add_to_config("lagrangian", description="", domain=bool, default=True)
+        cfg.add_to_config("xhatshuffle", description="", domain=bool, default=True)
+        self.assertEqual(_count_cylinders(cfg), 3)
+
+    def test_check_both_admm_and_stoch_admm(self):
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("admm", description="", domain=bool, default=True)
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        with self.assertRaises(RuntimeError):
+            _check_admm_compatibility(cfg)
+
+    def test_check_fwph_incompatible(self):
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("admm", description="", domain=bool, default=True)
+        cfg.add_to_config("fwph", description="", domain=bool, default=True)
+        with self.assertRaises(RuntimeError):
+            _check_admm_compatibility(cfg)
+
+    def test_check_admm_bundles_incompatible(self):
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("admm", description="", domain=bool, default=True)
+        cfg.add_to_config("scenarios_per_bundle", description="", domain=int, default=2)
+        with self.assertRaises(RuntimeError):
+            _check_admm_compatibility(cfg)
+
+    def test_check_stoch_admm_bundles_with_pickling(self):
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        cfg.add_to_config("scenarios_per_bundle", description="", domain=int, default=4)
+        cfg.add_to_config("pickle_bundles_dir", description="", domain=str, default="/tmp")
+        with self.assertRaises(RuntimeError):
+            _check_admm_compatibility(cfg)
+
+    def test_check_admm_pickling_without_bundles(self):
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("admm", description="", domain=bool, default=True)
+        cfg.add_to_config("unpickle_scenarios_dir", description="", domain=str, default="/tmp")
+        with self.assertRaises(RuntimeError):
+            _check_admm_compatibility(cfg)
+
+    def test_check_stoch_admm_no_bundles_ok(self):
+        """stoch_admm without bundles or pickling should pass."""
+        from mpisppy.generic.admm import _check_admm_compatibility
+        cfg = config.Config()
+        cfg.add_to_config("stoch_admm", description="", domain=bool, default=True)
+        # Should not raise
+        _check_admm_compatibility(cfg)
+
+
+class TestNameListsAdmmPath(unittest.TestCase):
+    """Test the ADMM early-return path in parsing.name_lists."""
+
+    def test_admm_names_returned(self):
+        from mpisppy.generic.parsing import name_lists
+        cfg = config.Config()
+        cfg.num_scens_required()
+        cfg.quick_assign("num_scens", int, 3)
+        names = ["Region1", "Region2"]
+        nodenames = ["ROOT"]
+        object.__setattr__(cfg, "_admm_scenario_names", names)
+        object.__setattr__(cfg, "_admm_nodenames", nodenames)
+        result_names, result_nodes = name_lists(stoch_distr, cfg)
+        self.assertEqual(result_names, names)
+        self.assertEqual(result_nodes, nodenames)
+
+
+
 if __name__ == '__main__':
     unittest.main()

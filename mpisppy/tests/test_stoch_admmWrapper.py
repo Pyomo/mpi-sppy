@@ -95,6 +95,12 @@ class TestStochAdmmWrapper(unittest.TestCase):
         self.assertTrue(q.y__DC1DC2__.is_fixed())
         self.assertFalse(q.y["DC3_1DC1"].is_fixed())
     
+    def test_get_scenario_unscaled(self):
+        admm = self._make_admm(4, 3)
+        sname = "ADMM_STOCH_Region1_StochasticScenario1"
+        scenario = admm.get_scenario_unscaled(sname)
+        self.assertIs(scenario, admm.local_admm_stoch_subproblem_scenarios[sname])
+
     def _slack_name(self, dummy_node):
         return f"y[{dummy_node}]"
 
