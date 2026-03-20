@@ -33,6 +33,8 @@ if __name__ == "__main__":
         print("usage, e.g.: python -m mpi4py ../../mpisppy/generic_cylinders.py --module-name farmer --help")
         print("For SMPS format, use --smps-dir instead of --module-name:")
         print("  python -m mpisppy.generic_cylinders --smps-dir path/to/smps --solver-name cplex --EF")
+        print("For MPS files, use --mps-files-directory instead of --module-name:")
+        print("  python -m mpisppy.generic_cylinders --mps-files-directory path/to/mps --solver-name cplex --EF")
         quit()
     fname = model_fname()
     module = load_module(fname)
