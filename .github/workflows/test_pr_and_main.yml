@@ -16,6 +16,9 @@ defaults:
   run:
     shell: bash -l {0}
 
+env:
+  COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy"
+
 jobs:
   ruff:
     name: Ruff Linting
@@ -38,7 +41,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install sphinx sphinx_rtd_theme cplex
-          pip install xpress pandas dill
+          pip install xpress pandas dill coverage
 
       - name: setup the program
         run: |
@@ -47,7 +50,16 @@ jobs:
       - name: PH EF tests
         run: |
           cd mpisppy/tests
-          python test_ef_ph.py
+          coverage run $COV_ARGS test_ef_ph.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-nompi4py
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   regression:
     name: Basic regression tests
@@ -64,7 +76,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme sphinx-copybutton dill gridx-egret cplex pybind11
-          pip install xpress
+          pip install xpress coverage
 
       - name: Build pyomo extensions
         run: |
@@ -77,25 +89,39 @@ jobs:
 
       - name: Test EF/PH
         run: |
-          python mpisppy/tests/test_ef_ph.py
+          coverage run $COV_ARGS mpisppy/tests/test_ef_ph.py
 
       - name: Test afew
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          python afew.py xpress_persistent
+          coverage run $COV_ARGS afew.py xpress_persistent "" --python-args="$PYARGS"
 
       - name: Test ComponentMap
         run: |
-          pytest mpisppy/tests/test_component_map_usage.py
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_component_map_usage.py
 
       - name: Test nonant name validation
         run: |
-          pytest mpisppy/tests/test_nonant_validation.py -v
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_nonant_validation.py -v
+
+      - name: Test generic_cylinders usage
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_generic_cylinders.py -v
 
       - name: Test docs
         run: |
           cd ./doc/
           make doctest
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-regression
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   runall_persistent:
     name: run_all.py persistent solver
@@ -113,7 +139,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress
+          pip install xpress coverage
 
       - name: Build pyomo extensions
         run: |
@@ -126,8 +152,18 @@ jobs:
 
       - name: Test run_all nouc
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          python run_all.py xpress_persistent "" nouc
+          coverage run $COV_ARGS run_all.py xpress_persistent "" nouc --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-runall-persistent
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   runall:
     name: run_all.py direct solver
@@ -144,7 +180,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11
-          pip install xpress
+          pip install xpress coverage
 
       - name: Build pyomo extensions
         run: |
@@ -157,8 +193,18 @@ jobs:
 
       - name: Test run_all nouc
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          python run_all.py xpress_direct "" nouc
+          coverage run $COV_ARGS run_all.py xpress_direct "" nouc --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-runall-direct
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   schur-complement:
     name: schur-complement
@@ -181,14 +227,10 @@ jobs:
         shell: bash -l {0}
         run: |
           python -m pip install --upgrade pip
-          # Test tooling
-          pip install pytest pytest-cov
-          # Core build/test deps
-          pip install pybind11
+          pip install pytest pytest-cov pybind11 coverage
           conda install -y conda-forge::libstdcxx-ng
           conda install -y openmpi pymumps --no-update-deps
           pip install mpi4py pandas
-          # pyutilib / pyomo / parapint
           pip install git+https://github.com/pyutilib/pyutilib.git
           git clone https://github.com/pyomo/pyomo.git
           cd pyomo/
@@ -197,18 +239,26 @@ jobs:
           pyomo build-extensions
           cd ../
           pip install git+https://github.com/parapint/parapint.git
-          # Install this repo (editable)
           pip install -e .
 
       - name: Test with pytest (serial)
         shell: bash -l {0}
         run: |
-          pytest -q -vv mpisppy/tests/test_sc.py
+          coverage run $COV_ARGS -m pytest -q -vv mpisppy/tests/test_sc.py
 
       - name: Test with pytest under MPI
         shell: bash -l {0}
         run: |
-          mpirun -np 3 -oversubscribe python -m pytest -q -vv mpisppy/tests/test_sc.py
+          mpirun -np 3 -oversubscribe coverage run $COV_ARGS -m pytest -q -vv mpisppy/tests/test_sc.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-schur-complement
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   straight-tests:
     name: straight_tests.py
@@ -224,7 +274,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex dill matplotlib
+          pip install pyomo xpress cplex dill matplotlib coverage
 
       - name: setup the program
         run: |
@@ -232,8 +282,18 @@ jobs:
 
       - name: mpi tests
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd mpisppy/tests
-          python straight_tests.py
+          coverage run $COV_ARGS straight_tests.py --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-straight-tests
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   admm-wrapper:
     name: admm wrapper tests
@@ -250,7 +310,7 @@ jobs:
         run: |
           conda install mpi4py pandas setuptools
           pip install pyomo xpress cplex
-          pip install numpy packaging
+          pip install numpy packaging coverage
 
       - name: setup the program
         run: |
@@ -259,11 +319,20 @@ jobs:
       - name: run tests
         timeout-minutes: 10
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd mpisppy/tests
-          # envall does nothing
-          python test_admmWrapper.py
-          python test_stoch_admmWrapper.py
-          python test_admm_bundler.py
+          coverage run $COV_ARGS test_admmWrapper.py --python-args="$PYARGS"
+          coverage run $COV_ARGS test_stoch_admmWrapper.py --python-args="$PYARGS"
+          coverage run $COV_ARGS test_admm_bundler.py --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-admm-wrapper
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   aph:
     name: aph tests
@@ -279,7 +348,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex
+          pip install pyomo xpress cplex coverage
 
       - name: setup the program
         run: |
@@ -289,8 +358,16 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          # envall does nothing
-          python test_aph.py
+          coverage run $COV_ARGS test_aph.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-aph
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   pickled-bundles:
     name: pickled bundles tests
@@ -306,7 +383,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas packaging
+          pip install pyomo pandas xpress cplex scipy sympy dill PyYAML Pympler networkx pandas packaging coverage
 
       - name: setup the program
         run: |
@@ -315,8 +392,18 @@ jobs:
       - name: run pickled bundles tests
         timeout-minutes: 10
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd mpisppy/tests
-          python test_pickle_bundle.py
+          coverage run $COV_ARGS test_pickle_bundle.py --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-pickled-bundles
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   mps:
     name: MPS tests
@@ -332,7 +419,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex mip
+          pip install pyomo xpress cplex mip coverage
 
       - name: setup the program
         run: |
@@ -342,7 +429,59 @@ jobs:
         timeout-minutes: 2
         run: |
           cd mpisppy/tests
-          python test_mps.py
+          coverage run $COV_ARGS test_mps.py
+
+      - name: List coverage files (debug)
+        if: always()
+        run: ls -la ${{ github.workspace }}/.coverage* || echo "No .coverage files found"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-mps
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  smps:
+    name: SMPS tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex mip pytest coverage
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run SMPS tests
+        timeout-minutes: 2
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS -m pytest test_smps.py -v
+
+      - name: List coverage files (debug)
+        if: always()
+        run: ls -la ${{ github.workspace }}/.coverage* || echo "No .coverage files found"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-smps
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   confidence-intervals:
     name: confidence intervals tests
@@ -358,7 +497,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy sympy dill packaging
+          pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
 
       - name: setup the program
         run: |
@@ -368,13 +507,22 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_conf_int_farmer.py
+          coverage run $COV_ARGS test_conf_int_farmer.py
 
       - name: run aircond tests
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_conf_int_aircond.py
+          coverage run $COV_ARGS test_conf_int_aircond.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-confidence-intervals
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   test-generic-pyomo-released:
     name: generic_tester.py
@@ -391,7 +539,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11 mip
+          pip install pyomo sphinx sphinx_rtd_theme dill gridx-egret cplex pybind11 mip coverage
 
       - name: Build pyomo extensions
         run: |
@@ -404,8 +552,18 @@ jobs:
 
       - name: Test test_generic nouc
         run: |
+          PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          python generic_tester.py cplex_direct "" nouc
+          coverage run $COV_ARGS generic_tester.py cplex_direct "" nouc --python-args="$PYARGS"
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-generic-tester
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   test-gradient-rho:
     name: gradient and rho tests
@@ -423,12 +581,9 @@ jobs:
 
       - name: Install dependencies
         run: |
-          # Core runtime + MPI stack (must match mpi4py)
           conda install -y conda-forge::libstdcxx-ng
           conda install -y -c conda-forge openmpi mpi4py "numpy" setuptools cmake
-
-          # Python deps needed by the tests
-          pip install pyomo pandas xpress cplex scipy sympy dill packaging
+          pip install pyomo pandas xpress cplex scipy sympy dill packaging coverage
 
       - name: setup the program
         run: |
@@ -438,8 +593,17 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_gradient_rho.py
-          python test_xbar_w_reader_writer.py
+          coverage run $COV_ARGS test_gradient_rho.py
+          coverage run $COV_ARGS test_xbar_w_reader_writer.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-gradient-rho
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   test-headers:
     name: header test
@@ -480,7 +644,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools pytest pyyaml networkx
-          pip install pyomo xpress cplex
+          pip install pyomo xpress cplex coverage
 
       - name: setup the program
         run: |
@@ -490,14 +654,22 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          # envall does nothing
-          python test_pysp_model.py
+          coverage run $COV_ARGS test_pysp_model.py
 
       - name: run pysp unit tests
         timeout-minutes: 10
         run: |
           cd mpisppy/utils/pysp_model
-          pytest -v .
+          coverage run $COV_ARGS -m pytest -v .
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-pysp
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   test-cylinders:
     name: tests on some cylinders
@@ -513,7 +685,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py "numpy" setuptools
-          pip install pyomo pandas xpress cplex scipy packaging
+          pip install pyomo pandas xpress cplex scipy packaging coverage
 
       - name: setup the program
         run: |
@@ -523,7 +695,16 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          mpiexec -np 2 python -m mpi4py test_with_cylinders.py
+          mpiexec -np 2 coverage run $COV_ARGS -m mpi4py test_with_cylinders.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-cylinders
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
 
   test-agnostic:
     name: tests on agnostic
@@ -539,7 +720,7 @@ jobs:
       - name: Install dependencies
         run: |
           conda install mpi4py pandas setuptools
-          pip install pyomo xpress cplex
+          pip install pyomo xpress cplex coverage
           pip install numpy packaging
           python -m pip install amplpy --upgrade
           python -m amplpy.modules install highs cbc gurobi
@@ -557,13 +738,13 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          python test_agnostic.py 
+          coverage run $COV_ARGS test_agnostic.py
 
       - name: run agnostic cylinders
         timeout-minutes: 10
         run: |
           cd mpisppy/agnostic/examples
-          python afew_agnostic.py
+          coverage run $COV_ARGS afew_agnostic.py
 
       - name: run loose AMPL
         timeout-minutes: 10
@@ -573,3 +754,67 @@ jobs:
           # GAMS is not tested because I don't want to deal with the license
           #cd ../GAMS
           #bash farmer_example.bash
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-agnostic
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs:
+      - nompi4py
+      - regression
+      - runall_persistent
+      - runall
+      - schur-complement
+      - straight-tests
+      - admm-wrapper
+      - aph
+      - pickled-bundles
+      - mps
+      - smps
+      - confidence-intervals
+      - test-generic-pyomo-released
+      - test-gradient-rho
+      - test-pysp
+      - test-cylinders
+      - test-agnostic
+    if: always()
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+
+      - name: Install coverage
+        run: pip install coverage
+
+      - name: Download all coverage artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: coverage-*
+          merge-multiple: true
+
+      - name: List coverage files
+        run: ls -la .coverage* || echo "No .coverage files found"
+
+      - name: Combine and report
+        run: |
+          coverage combine --rcfile=.coveragerc
+          coverage xml --rcfile=.coveragerc -o coverage.xml
+          coverage report --rcfile=.coveragerc --show-missing | head -150
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: coverage.xml
+          fail_ci_if_error: false
+          token: ${{ secrets.CODECOV_TOKEN }}
