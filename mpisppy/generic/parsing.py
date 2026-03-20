@@ -64,7 +64,8 @@ def model_fname():
                     f" {_IMPLICIT_MODULES[first_flag]}")
         return _IMPLICIT_MODULES[first_flag]
 
-    assert first_arg[:13] == "--module-name", f"The first command argument must start with'--module-name' but you gave {first_arg}"
+    if not first_arg.startswith("--module-name"):
+        _bad_news()
     if first_arg == "--module-name":
         _len_check(2)
         return sys.argv[2]

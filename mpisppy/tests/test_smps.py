@@ -149,5 +149,97 @@ class TestSmpsModule(unittest.TestCase):
         self.assertEqual(sig2obj, 180000.0)
 
 
+class TestSmpsModifications(unittest.TestCase):
+    """Test coefficient and bounds modifications using a tiny synthetic model.
+
+    The synthetic SMPS instance (tests/examples/smps_synthetic) has two
+    variables (X, Y), two constraints (C1, C2), and two scenarios:
+      SCEN1: RHS modification only (C2 RHS -> 30)
+      SCEN2: coefficient change (Y in C2 -> 4), upper bound on X -> 50,
+             lower bound on Y -> 8
+    """
+    _synth_dir = os.path.join(_this_dir, "examples", "smps_synthetic")
+
+    def setUp(self):
+        """Reset the cached parse state so each test starts clean."""
+        smps_module._parsed = None
+
+    def _make_cfg(self):
+        cfg = ConfigDict()
+        cfg.declare("smps_dir", ConfigValue(default=None, domain=str))
+        cfg.smps_dir = self._synth_dir
+        if solver_available:
+            cfg.declare("solver_name", ConfigValue(default=solver_name, domain=str))
+        return cfg
+
+    def test_bounds_modification_up(self):
+        """Upper-bound modification (X has UP bound in .cor)."""
+        cfg = self._make_cfg()
+        smps_module.kw_creator(cfg)
+        model = smps_module.scenario_creator("SCEN2", cfg=cfg)
+        x = model.find_component("X")
+        self.assertEqual(x.ub, 50.0)
+
+    def test_bounds_modification_lo(self):
+        """Lower-bound modification (Y has LO bound in .cor)."""
+        cfg = self._make_cfg()
+        smps_module.kw_creator(cfg)
+        model = smps_module.scenario_creator("SCEN2", cfg=cfg)
+        y = model.find_component("Y")
+        self.assertEqual(y.lb, 8.0)
+
+    def test_coefficient_modification(self):
+        """Coefficient of Y in C2 changes from 3 to 4 in SCEN2."""
+        cfg = self._make_cfg()
+        smps_module.kw_creator(cfg)
+        model = smps_module.scenario_creator("SCEN2", cfg=cfg)
+        # Check that the constraint C2 body includes Y with coefficient 4
+        c2 = model.find_component("C2")
+        body = c2.body
+        y = model.find_component("Y")
+        # Evaluate body with X=0, Y=1 to extract Y's coefficient
+        x = model.find_component("X")
+        x.value = 0.0
+        y.value = 1.0
+        coeff_y = pyo.value(body)
+        self.assertAlmostEqual(coeff_y, 4.0)
+
+    def test_rhs_modification(self):
+        """RHS of C2 changes to 30 in SCEN1."""
+        cfg = self._make_cfg()
+        smps_module.kw_creator(cfg)
+        model = smps_module.scenario_creator("SCEN1", cfg=cfg)
+        c2 = model.find_component("C2")
+        # For >= constraints, check the lower bound
+        self.assertAlmostEqual(pyo.value(c2.lower), 30.0)
+
+    def test_unmodified_bounds_unchanged(self):
+        """SCEN1 has no bounds mods; X and Y keep original bounds."""
+        cfg = self._make_cfg()
+        smps_module.kw_creator(cfg)
+        model = smps_module.scenario_creator("SCEN1", cfg=cfg)
+        x = model.find_component("X")
+        y = model.find_component("Y")
+        self.assertEqual(x.ub, 100.0)
+        self.assertEqual(y.lb, 5.0)
+
+    @unittest.skipIf(not solver_available, "no solver is available")
+    def test_solve_with_modifications(self):
+        """Solve both synthetic scenarios as EF and verify feasibility."""
+        cfg = self._make_cfg()
+        smps_module.kw_creator(cfg)
+        scenario_names = smps_module.scenario_names_creator(num_scens=None)
+
+        options = {"solver": solver_name}
+        ef = mpisppy.opt.ef.ExtensiveForm(
+            options,
+            scenario_names,
+            smps_module.scenario_creator,
+            scenario_creator_kwargs={"cfg": cfg},
+        )
+        results = ef.solve_extensive_form(tee=False)
+        pyo.assert_optimal_termination(results)
+
+
 if __name__ == "__main__":
     unittest.main()

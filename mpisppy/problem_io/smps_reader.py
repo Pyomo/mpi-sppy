@@ -246,6 +246,44 @@ def get_bounds_name_from_mps(mps_path):
     return None
 
 
+def get_bound_types_from_mps(mps_path, bounds_name):
+    """Extract bound types for each variable from the MPS BOUNDS section.
+
+    In SMPS SCENARIOS DISCRETE, bounds modifications replace the bound value
+    but don't specify the bound type; that comes from the .cor file.
+
+    Args:
+        mps_path (str): path to the MPS (.cor) file
+        bounds_name (str): the bounds vector name (e.g., "BND1")
+
+    Returns:
+        dict: var_name -> bound_type (e.g., "LO", "UP", "FX")
+              If a variable has multiple bound entries, the last one wins.
+    """
+    bound_types = {}
+    section = None
+    with open(mps_path, "r", errors="replace") as f:
+        for raw in f:
+            line = raw.strip()
+            if not line or line.startswith("*"):
+                continue
+            parts = line.split()
+            tok0 = parts[0]
+            if tok0 == "BOUNDS":
+                section = "BOUNDS"
+                continue
+            if section == "BOUNDS":
+                if tok0 == "ENDATA":
+                    break
+                # Bounds lines: type name var_name [value]
+                btype = parts[0]
+                bname = parts[1]
+                vname = parts[2]
+                if bname == bounds_name:
+                    bound_types[vname] = btype
+    return bound_types
+
+
 def partition_vars_by_stage(var_order, stages):
     """Partition variables into stages based on .tim boundaries.
 

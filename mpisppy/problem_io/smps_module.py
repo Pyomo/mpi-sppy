@@ -16,6 +16,7 @@ The --smps-dir should point to a directory containing .cor, .tim, and .sto files
 Only SCENARIOS DISCRETE format is supported.
 """
 import os
+import shutil
 import tempfile
 import mpisppy.scenario_tree as scenario_tree
 import mpisppy.problem_io.smps_reader as smps_reader
@@ -34,11 +35,17 @@ def _ensure_parsed(smps_dir):
 
     cor_path, tim_path, sto_path = smps_reader._find_smps_files(smps_dir)
     stages = smps_reader.parse_tim(tim_path)
+    if len(stages) != 2:
+        raise RuntimeError(
+            f"Only two-stage problems are supported, but the .tim file "
+            f"defines {len(stages)} stages: {[s[0] for s in stages]}")
     scenarios = smps_reader.parse_sto_discrete(sto_path)
     var_order = smps_reader.get_var_order_from_mps(cor_path)
     vars_by_stage = smps_reader.partition_vars_by_stage(var_order, stages)
     rhs_name = smps_reader.get_rhs_name_from_mps(cor_path)
     bounds_name = smps_reader.get_bounds_name_from_mps(cor_path)
+    bound_types = (smps_reader.get_bound_types_from_mps(cor_path, bounds_name)
+                   if bounds_name is not None else {})
 
     _parsed = {
         "smps_dir": smps_dir,
@@ -49,12 +56,14 @@ def _ensure_parsed(smps_dir):
         "vars_by_stage": vars_by_stage,
         "rhs_name": rhs_name,
         "bounds_name": bounds_name,
+        "bound_types": bound_types,
         "scen_by_name": {s["name"]: s for s in scenarios},
     }
     return _parsed
 
 
-def _apply_modifications_to_mip(mip_model, modifications, rhs_name, bounds_name):
+def _apply_modifications_to_mip(mip_model, modifications, rhs_name, bounds_name,
+                                bound_types=None):
     """Apply SMPS scenario modifications to a mip Model.
 
     Supports RHS, coefficient, and bounds modifications.
@@ -64,7 +73,11 @@ def _apply_modifications_to_mip(mip_model, modifications, rhs_name, bounds_name)
         modifications: list of (col_name, row_name, value) tuples
         rhs_name (str): the RHS vector name from the MPS file (e.g., "RHS1")
         bounds_name (str or None): the bounds name from the MPS file (e.g., "BND1")
+        bound_types (dict or None): var_name -> bound type (e.g., "LO", "UP", "FX")
+            from the .cor file's BOUNDS section
     """
+    if bound_types is None:
+        bound_types = {}
     import mip as miplib
 
     for col_name, row_name, value in modifications:
@@ -81,11 +94,18 @@ def _apply_modifications_to_mip(mip_model, modifications, rhs_name, bounds_name)
             if var is None:
                 raise RuntimeError(
                     f"Variable {col_name} not found in model for bounds modification")
-            # In SMPS DISCRETE format, bounds modifications replace the bound value.
-            # The bound type (LO/UP/FX) is implicit from context; we set both
-            # to handle the general case. If more precision is needed, the .sto
-            # parser would need to track bound types.
-            var.ub = value
+            # Apply based on the bound type from the .cor file
+            btype = bound_types.get(col_name, "UP")
+            if btype == "UP":
+                var.ub = value
+            elif btype == "LO":
+                var.lb = value
+            elif btype == "FX":
+                var.lb = value
+                var.ub = value
+            else:
+                raise RuntimeError(
+                    f"Unsupported bound type '{btype}' for variable {col_name}")
         else:
             # Coefficient modification: col_name is the variable, row_name is the constraint
             var = mip_model.var_by_name(col_name)
@@ -133,15 +153,19 @@ def scenario_creator(scenario_name, cfg=None):
             f"Available: {list(parsed['scen_by_name'].keys())}")
 
     # Read the core model into a mip Model, apply modifications, then convert
-    # The mip library requires .mps extension, so symlink if needed
+    # The mip library requires .mps extension, so symlink/copy if needed
     cor_path = parsed["cor_path"]
     if not cor_path.lower().endswith(".mps"):
         mps_link = parsed.get("_mps_link")
         if mps_link is None or not os.path.exists(mps_link):
-            tmpdir = tempfile.mkdtemp()
-            mps_link = os.path.join(tmpdir, "core.mps")
-            os.symlink(os.path.abspath(cor_path), mps_link)
+            tmpdir_obj = tempfile.TemporaryDirectory()
+            mps_link = os.path.join(tmpdir_obj.name, "core.mps")
+            try:
+                os.symlink(os.path.abspath(cor_path), mps_link)
+            except OSError:
+                shutil.copy2(cor_path, mps_link)
             parsed["_mps_link"] = mps_link
+            parsed["_tmpdir"] = tmpdir_obj  # prevent cleanup until _parsed is GC'd
         cor_path = mps_link
 
     mip_model = mps_reader.read_mps_to_mip_model(cor_path)
@@ -152,6 +176,7 @@ def scenario_creator(scenario_name, cfg=None):
         scen_data["modifications"],
         parsed["rhs_name"],
         parsed["bounds_name"],
+        parsed["bound_types"],
     )
 
     model = mps_reader.mip_model_to_pyomo(mip_model, mps_path=cor_path)
@@ -210,8 +235,10 @@ def scenario_names_creator(num_scens, start=None):
     if num_scens is None:
         num_scens = len(all_names) - start
 
-    assert start + num_scens <= len(all_names), \
-        f"Requested {start=}, {num_scens=} but only {len(all_names)} scenarios available"
+    if start + num_scens > len(all_names):
+        raise ValueError(
+            f"Requested {start=}, {num_scens=} but only {len(all_names)} scenarios available"
+        )
 
     return all_names[start:start + num_scens]
 
