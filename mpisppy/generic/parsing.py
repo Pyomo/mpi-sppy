@@ -21,15 +21,17 @@ import mpisppy.utils.sputils as sputils
 
 
 _IMPLICIT_MODULES = {
-    "--mps-files-directory": "mpisppy.utils.mps_module",
+    "--smps-dir": "mpisppy.problem_io.smps_module",
+    "--mps-files-directory": "mpisppy.problem_io.mps_module",
 }
 
 def model_fname():
     """Extract the module name from the first CLI argument (--module-name).
 
-    As an exception, ``--mps-files-directory`` may be used instead of
-    ``--module-name``; the appropriate module is inferred automatically.
-    Using ``--module-name`` together with this flag is an error.
+    As an exception, ``--smps-dir`` and ``--mps-files-directory`` may be
+    used instead of ``--module-name``; the appropriate module is inferred
+    automatically.  Using ``--module-name`` together with one of these
+    implicit-module flags is an error.
     """
     def _bad_news():
         raise RuntimeError("Unable to parse module name from first argument"
@@ -37,8 +39,8 @@ def model_fname():
                            "--module-name foo\n"
                            "or\n"
                            "--module-name=foo\n"
-                           "Alternatively, use --mps-files-directory"
-                           " as the first argument.")
+                           "Alternatively, use --smps-dir or"
+                           " --mps-files-directory as the first argument.")
     def _len_check(needed_length):
         if len(sys.argv) <= needed_length:
             _bad_news()
@@ -47,8 +49,9 @@ def model_fname():
 
     _len_check(1)
 
-    # Check for implicit module flags (e.g., --mps-files-directory)
+    # Check for implicit module flags (--smps-dir, --mps-files-directory)
     first_arg = sys.argv[1]
+    # Handle both --flag value and --flag=value forms
     first_flag = first_arg.split("=")[0]
 
     if first_flag in _IMPLICIT_MODULES:
@@ -61,7 +64,8 @@ def model_fname():
                     f" {_IMPLICIT_MODULES[first_flag]}")
         return _IMPLICIT_MODULES[first_flag]
 
-    assert first_arg[:13] == "--module-name", f"The first command argument must start with'--module-name' but you gave {first_arg}"
+    if not first_arg.startswith("--module-name"):
+        _bad_news()
     if first_arg == "--module-name":
         _len_check(2)
         return sys.argv[2]

@@ -35,6 +35,7 @@ def communicator_array(data_length: int):
     Allocate an MPI memory region with a padded length (multiple of 8 doubles = 64B),
     but expose a logical view of length (data_length + 1) where the last element is
     the read/write id.
+
     Returns:
         full_arr:  padded array (used for SPWindow put/get)
         logical_arr: logical view (data + id), last element is id

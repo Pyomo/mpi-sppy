@@ -41,20 +41,25 @@ non-Pyomo Models
 To use mpi-sppy for models not written in Pyomo, scenarios and scenario tree information
 can be provided in files. See :ref:`loose_integration` for more information.
 
-Standard Formats (MPS)
-^^^^^^^^^^^^^^^^^^^^^^^
+Standard Formats (SMPS, MPS)
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-As an exception to the ``--module-name`` requirement,
-``--mps-files-directory`` can be used as the first argument and the
-appropriate module (``mpisppy.utils.mps_module``) will be inferred
-automatically. For example:
+As an exception to the ``--module-name`` requirement, the following flags
+can be used as the first argument and the appropriate module will be
+inferred automatically:
+
+- ``--smps-dir`` — uses ``mpisppy.problem_io.smps_module`` (see :doc:`smps`)
+- ``--mps-files-directory`` — uses ``mpisppy.problem_io.mps_module`` (see :ref:`loose_integration`)
+
+For example:
 
 .. code-block:: bash
 
-    python -m mpisppy.generic_cylinders --mps-files-directory path/to/mps \
+    python -m mpisppy.generic_cylinders --smps-dir examples/sizes/SMPS \
         --solver-name cplex --EF
 
-Using ``--module-name`` together with ``--mps-files-directory`` is an error.
+Using ``--module-name`` together with ``--smps-dir`` or
+``--mps-files-directory`` is an error.
 
 
 Solving the Extensive Form

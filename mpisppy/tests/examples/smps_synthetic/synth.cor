@@ -1,0 +1,19 @@
+NAME          SYNTH
+ROWS
+ N  OBJ
+ G  C1
+ G  C2
+COLUMNS
+    X         OBJ            1.0
+    X         C1             1.0
+    X         C2             1.0
+    Y         OBJ            2.0
+    Y         C1             1.0
+    Y         C2             3.0
+RHS
+    RHS1      C1            10.0
+    RHS1      C2            20.0
+BOUNDS
+ UP BND1      X           100.0
+ LO BND1      Y             5.0
+ENDATA

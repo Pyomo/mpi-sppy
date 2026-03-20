@@ -215,7 +215,7 @@ do_one("sizes", "sizes_expression", 3, sizese, xhat_baseline_dir=None)
 sizesMPS = ("--default-rho 1"
           f" --solver-name {solver_name} --max-iterations 0"
           f" --mps-files-directory={_lp_mps_dir}")
-do_one("sizes", "../../mpisppy/utils/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
+do_one("sizes", "../../mpisppy/problem_io/mps_module", 1, sizesMPS, xhat_baseline_dir=None)
 # clean up lp/mps temp dir
 _lp_mps_path = os.path.join("sizes", _lp_mps_dir)
 if os.path.exists(_lp_mps_path):

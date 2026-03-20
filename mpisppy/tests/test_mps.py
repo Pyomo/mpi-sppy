@@ -10,7 +10,7 @@
 import os
 import unittest
 from mip import OptimizationStatus
-import mpisppy.utils.mps_reader as mps_reader
+import mpisppy.problem_io.mps_reader as mps_reader
 from mpisppy.tests.utils import get_solver
 import pyomo.environ as pyo
 import mip  # pip install mip (from coin-or)
