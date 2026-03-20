@@ -12,12 +12,28 @@
 """
 
 import os
+import sys
 import tempfile
 import unittest
 
 import mpisppy.MPI as mpi
 
 from mpisppy.tests.utils import get_solver
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 
 fullcomm = mpi.COMM_WORLD
@@ -65,19 +81,19 @@ class Test_pickle_bundles(unittest.TestCase):
 
 
     def test_pickle_bundler(self):
-        cmdstr = f"python bundle_pickler.py {self.BF_str} --pickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC}"
+        cmdstr = f"python {python_args} bundle_pickler.py {self.BF_str} --pickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC}"
         ret = os.system(cmdstr)
         if ret != 0:
             raise RuntimeError(f"Test run failed with code {ret}")
 
     def test_chain(self):
         # run the pickle bundler then aircond_cylinders
-        cmdstr = f"python bundle_pickler.py {self.BF_str} --pickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC}"
+        cmdstr = f"python {python_args} bundle_pickler.py {self.BF_str} --pickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC}"
         ret = os.system(cmdstr)
         if ret != 0:
             raise RuntimeError(f"pickler part of test run failed with code {ret}")
-        
-        cmdstr = f"python aircond_cylinders.py --branching-factors=\"{self.BPF}\" --unpickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC} "+\
+
+        cmdstr = f"python {python_args} aircond_cylinders.py --branching-factors=\"{self.BPF}\" --unpickle-bundles-dir={self.tempdir_name} --scenarios-per-bundle={self.SPB} {self.EC} "+\
                  f"--default-rho=1 --max-solver-threads=2 --bundles-per-rank=0 --max-iterations=2 --solver-name={solver_name}"
         ret = os.system(cmdstr)
         if ret != 0:
