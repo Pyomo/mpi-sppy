@@ -18,6 +18,7 @@ defaults:
 
 env:
   COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy"
+  EX_COV_ARGS: "--parallel-mode --rcfile=${{ github.workspace }}/.coveragerc --data-file=${{ github.workspace }}/.coverage --source=${{ github.workspace }}/mpisppy,${{ github.workspace }}/examples"
 
 jobs:
   ruff:
@@ -95,7 +96,7 @@ jobs:
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $COV_ARGS afew.py xpress_persistent "" --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS afew.py xpress_persistent "" --python-args="$PYARGS"
 
       - name: Test ComponentMap
         run: |
@@ -154,7 +155,7 @@ jobs:
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $COV_ARGS run_all.py xpress_persistent "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS run_all.py xpress_persistent "" nouc --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
@@ -195,7 +196,7 @@ jobs:
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $COV_ARGS run_all.py xpress_direct "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS run_all.py xpress_direct "" nouc --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
@@ -623,7 +624,7 @@ jobs:
         run: |
           PYARGS="-m coverage run $COV_ARGS"
           cd examples
-          coverage run $COV_ARGS generic_tester.py cplex_direct "" nouc --python-args="$PYARGS"
+          coverage run $EX_COV_ARGS generic_tester.py cplex_direct "" nouc --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
@@ -880,8 +881,8 @@ jobs:
       - name: Combine and report
         run: |
           coverage combine --rcfile=.coveragerc
-          coverage xml --rcfile=.coveragerc -o coverage.xml
-          coverage report --rcfile=.coveragerc --show-missing | head -150
+          coverage xml --rcfile=.coveragerc --include='mpisppy/*,examples/*.py' -o coverage.xml
+          coverage report --rcfile=.coveragerc --include='mpisppy/*,examples/*.py' --show-missing | head -150
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
