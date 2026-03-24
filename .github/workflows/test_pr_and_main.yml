@@ -368,6 +368,41 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  ph-main:
+    name: PH ph_main tests
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo xpress cplex coverage
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_ph_main.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-ph-main
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   pickled-bundles:
     name: pickled bundles tests
     runs-on: ubuntu-latest
@@ -775,6 +810,7 @@ jobs:
       - straight-tests
       - admm-wrapper
       - aph
+      - ph-main
       - pickled-bundles
       - mps
       - smps
