@@ -67,6 +67,9 @@ run_phase "test_nonant_validation (serial)" \
 run_phase "test_ph_main (serial)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
 
+run_phase "test_ph_extensions (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
+
 run_phase "test_admmWrapper (serial, spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_admmWrapper.py
 
