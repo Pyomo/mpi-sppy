@@ -882,7 +882,7 @@ jobs:
         run: |
           coverage combine --rcfile=.coveragerc
           coverage xml --rcfile=.coveragerc --include='mpisppy/*,examples/*.py' -o coverage.xml
-          coverage report --rcfile=.coveragerc --include='mpisppy/*,examples/*.py' --show-missing | head -150 || true
+          coverage report --rcfile=.coveragerc --include='mpisppy/*,examples/*.py' --show-missing 2>&1 | head -150 || true
 
       - name: Upload to Codecov
         uses: codecov/codecov-action@v4
