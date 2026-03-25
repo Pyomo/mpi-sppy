@@ -518,7 +518,7 @@ jobs:
         timeout-minutes: 10
         run: |
           cd mpisppy/tests
-          coverage run $COV_ARGS -m pytest test_mrp_generic.py -v
+          coverage run $COV_ARGS test_mrp_generic.py
 
       - name: Upload coverage data
         if: always()

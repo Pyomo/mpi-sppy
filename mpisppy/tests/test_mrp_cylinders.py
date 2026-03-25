@@ -109,7 +109,7 @@ def _get_cylinder_cfg():
 
     # PH settings
     cfg.default_rho = 1.0
-    cfg.max_iterations = 3
+    cfg.max_iterations = 10
 
     # Enable lagrangian spoke and xhatshuffle
     cfg.lagrangian = True
