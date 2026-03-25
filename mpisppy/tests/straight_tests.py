@@ -145,6 +145,17 @@ cmdstr = (
 _doone(cmdstr)
 
 
+#####################################################
+# mrp_generic: cylinder xhat generator (farmer, PH + lagrangian)
+mrp_cyl_path = os.path.abspath(os.path.join(_tests_dir, "test_mrp_cylinders.py"))
+
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(mrp_cyl_path)}"
+)
+
+_doone(cmdstr)
+
+
 #######################################################
 if badguys:
     print("\nstraight_tests.py failed commands:")
