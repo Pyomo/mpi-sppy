@@ -11,7 +11,8 @@ from mpisppy.opt.ef import ExtensiveForm
 def scenario_creator(scenario_name,
                      network_data=dict(),
                      candidates_data=dict(),
-                     num_scens=None):
+                     num_scens=None
+                     ):
     m = pyo.ConcreteModel(scenario_name)
 
     with open(f"{scenario_name}.json",'r') as f:
@@ -186,29 +187,26 @@ def scenario_creator(scenario_name,
 
 def scenario_names_creator(num_scens, start=None):
     start = 0 if start is None else start
+    # For this small example, we have a fixed number of scenarios: 3    
+    num_scens = 3
     return [f"scen{i}" for i in range(start, start + num_scens)]
 
 
 def inparser_adder(cfg):
-    cfg.num_scens_required()
+    # No additional args
+    pass
 
 def kw_creator(cfg):
     with open('network_data.json','r') as f:
         network_data = json.load(f)
     with open('candidates_data.json','r') as f:
         candidates_data = json.load(f)
-    
-    return {"num_scens": cfg.get("num_scens", None),
+
+    # For this small example, we have a fixed number of scenarios: 3
+    return {"num_scens": cfg.get("num_scens", 3), 
             "network_data":network_data,
             "candidates_data":candidates_data
             }
-
-
-def sample_tree_scen_creator(sname, stage, sample_branching_factors, seed,
-                             given_scenario=None, **scenario_creator_kwargs):
-    sca = scenario_creator_kwargs.copy()
-    sca["num_scens"] = sample_branching_factors[0]
-    return scenario_creator(sname, **sca)
 
 
 def scenario_denouement(rank, scenario_name, scenario):
