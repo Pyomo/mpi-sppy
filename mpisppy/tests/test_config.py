@@ -252,5 +252,243 @@ class TestConfigAddSolverSpecs(unittest.TestCase):
         self.assertIsNone(self.cfg.solver_options)
 
 
+class TestConfigPhArgs(unittest.TestCase):
+    """Tests for Config.ph_args()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.ph_args()
+
+    def test_linearize_binary_proximal_terms_added(self):
+        self.assertIn("linearize_binary_proximal_terms", self.cfg)
+
+    def test_linearize_binary_proximal_terms_default_false(self):
+        self.assertFalse(self.cfg.linearize_binary_proximal_terms)
+
+    def test_linearize_proximal_terms_added(self):
+        self.assertIn("linearize_proximal_terms", self.cfg)
+
+    def test_linearize_proximal_terms_default_false(self):
+        self.assertFalse(self.cfg.linearize_proximal_terms)
+
+    def test_proximal_linearization_tolerance_added(self):
+        self.assertIn("proximal_linearization_tolerance", self.cfg)
+
+    def test_proximal_linearization_tolerance_default(self):
+        self.assertAlmostEqual(self.cfg.proximal_linearization_tolerance, 1e-1)
+
+
+class TestConfigAphArgs(unittest.TestCase):
+    """Tests for Config.aph_args()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.aph_args()
+
+    def test_aph_flag_added(self):
+        self.assertIn("APH", self.cfg)
+
+    def test_aph_flag_default_false(self):
+        self.assertFalse(self.cfg.APH)
+
+    def test_aph_gamma_default(self):
+        self.assertAlmostEqual(self.cfg.aph_gamma, 1.0)
+
+    def test_aph_nu_default(self):
+        self.assertAlmostEqual(self.cfg.aph_nu, 1.0)
+
+    def test_aph_frac_needed_default(self):
+        self.assertAlmostEqual(self.cfg.aph_frac_needed, 1.0)
+
+    def test_aph_dispatch_frac_default(self):
+        self.assertAlmostEqual(self.cfg.aph_dispatch_frac, 1.0)
+
+    def test_aph_sleep_seconds_default(self):
+        self.assertAlmostEqual(self.cfg.aph_sleep_seconds, 0.01)
+
+
+class TestConfigTwoSidedArgs(unittest.TestCase):
+    """Tests for Config.two_sided_args()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.two_sided_args()
+
+    def test_rel_gap_added(self):
+        self.assertIn("rel_gap", self.cfg)
+
+    def test_rel_gap_default(self):
+        self.assertAlmostEqual(self.cfg.rel_gap, 0.05)
+
+    def test_abs_gap_added(self):
+        self.assertIn("abs_gap", self.cfg)
+
+    def test_abs_gap_default(self):
+        self.assertAlmostEqual(self.cfg.abs_gap, 0.0)
+
+    def test_max_stalled_iters_added(self):
+        self.assertIn("max_stalled_iters", self.cfg)
+
+    def test_max_stalled_iters_default(self):
+        self.assertEqual(self.cfg.max_stalled_iters, 100)
+
+
+class TestConfigAddMipgapSpecs(unittest.TestCase):
+    """Tests for Config.add_mipgap_specs()."""
+
+    def setUp(self):
+        self.cfg = Config()
+        self.cfg.add_mipgap_specs()
+
+    def test_iter0_mipgap_added(self):
+        self.assertIn("iter0_mipgap", self.cfg)
+
+    def test_iter0_mipgap_default_none(self):
+        self.assertIsNone(self.cfg.iter0_mipgap)
+
+    def test_iterk_mipgap_added(self):
+        self.assertIn("iterk_mipgap", self.cfg)
+
+    def test_iterk_mipgap_default_none(self):
+        self.assertIsNone(self.cfg.iterk_mipgap)
+
+    def test_prefix_mipgap_specs(self):
+        cfg2 = Config()
+        cfg2.add_mipgap_specs(prefix="EF")
+        self.assertIn("EF_iter0_mipgap", cfg2)
+        self.assertIn("EF_iterk_mipgap", cfg2)
+
+
+class TestConfigNumScens(unittest.TestCase):
+    """Tests for Config.num_scens_optional() and num_scens_required()."""
+
+    def test_num_scens_optional_adds_entry(self):
+        cfg = Config()
+        cfg.num_scens_optional()
+        self.assertIn("num_scens", cfg)
+
+    def test_num_scens_optional_default_none(self):
+        cfg = Config()
+        cfg.num_scens_optional()
+        self.assertIsNone(cfg.num_scens)
+
+    def test_num_scens_optional_can_be_set(self):
+        cfg = Config()
+        cfg.num_scens_optional()
+        cfg.num_scens = 10
+        self.assertEqual(cfg.num_scens, 10)
+
+    def test_num_scens_required_adds_entry(self):
+        cfg = Config()
+        cfg.num_scens_required()
+        self.assertIn("num_scens", cfg)
+
+
+class TestConfigChecker(unittest.TestCase):
+    """Tests for Config.checker()."""
+
+    def _make_rho_cfg(self, **flags):
+        """Build a Config with rho-setter flags.
+
+        Note: the key lists below mirror the checks inside Config.checker().
+        If new rho setters are added to checker(), this helper must be updated
+        to match.
+        """
+        cfg = Config()
+        # Rho-setter keys checked by checker() via get() -- keep in sync with
+        # the condition in Config.checker()
+        rho_keys = ["grad_rho", "sensi_rho", "coeff_rho",
+                    "reduced_costs_rho", "sep_rho"]
+        dynamic_keys = ["dynamic_rho_primal_crit", "dynamic_rho_dual_crit"]
+        other_keys = ["ph_primal_hub", "ph_dual", "relaxed_ph",
+                      "rc_fixer", "reduced_costs"]
+        for k in rho_keys + dynamic_keys + other_keys:
+            cfg.add_to_config(k, description=k, domain=bool,
+                              default=flags.get(k, False), argparse=False)
+        return cfg
+
+    def test_valid_config_does_not_raise(self):
+        cfg = self._make_rho_cfg()
+        # all flags False => no conflict => should not raise
+        cfg.checker()
+
+    def test_two_rho_setters_raises(self):
+        cfg = self._make_rho_cfg(grad_rho=True, sensi_rho=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_dynamic_rho_without_setter_raises(self):
+        cfg = self._make_rho_cfg(dynamic_rho_primal_crit=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_dynamic_rho_with_setter_does_not_raise(self):
+        cfg = self._make_rho_cfg(grad_rho=True, dynamic_rho_primal_crit=True)
+        # grad_rho is set so dynamic_rho is allowed
+        cfg.checker()
+
+    def test_ph_primal_hub_without_ph_dual_raises(self):
+        cfg = self._make_rho_cfg(ph_primal_hub=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_ph_primal_hub_with_ph_dual_does_not_raise(self):
+        cfg = self._make_rho_cfg(ph_primal_hub=True, ph_dual=True)
+        cfg.checker()
+
+    def test_rc_fixer_without_reduced_costs_raises(self):
+        cfg = self._make_rho_cfg(rc_fixer=True)
+        with self.assertRaises(ValueError):
+            cfg.checker()
+
+    def test_rc_fixer_with_reduced_costs_does_not_raise(self):
+        cfg = self._make_rho_cfg(rc_fixer=True, reduced_costs=True)
+        cfg.checker()
+
+
+class TestConfigFixerArgs(unittest.TestCase):
+    """Tests for Config.fixer_args() and related extension args."""
+
+    def test_fixer_args_adds_fixer(self):
+        cfg = Config()
+        cfg.fixer_args()
+        self.assertIn("fixer", cfg)
+
+    def test_fixer_default_false(self):
+        cfg = Config()
+        cfg.fixer_args()
+        self.assertFalse(cfg.fixer)
+
+    def test_fixer_tol_default(self):
+        cfg = Config()
+        cfg.fixer_args()
+        self.assertAlmostEqual(cfg.fixer_tol, 1e-4)
+
+    def test_grad_rho_args_added(self):
+        cfg = Config()
+        cfg.gradient_args()
+        self.assertIn("grad_rho", cfg)
+
+    def test_sep_rho_args_added(self):
+        cfg = Config()
+        cfg.sep_rho_args()
+        self.assertIn("sep_rho", cfg)
+
+    def test_sep_rho_multiplier_default(self):
+        cfg = Config()
+        cfg.sep_rho_args()
+        self.assertAlmostEqual(cfg.sep_rho_multiplier, 1.0)
+
+    def test_sensi_rho_args_added(self):
+        cfg = Config()
+        cfg.sensi_rho_args()
+        self.assertIn("sensi_rho", cfg)
+
+    def test_coeff_rho_args_added(self):
+        cfg = Config()
+        cfg.coeff_rho_args()
+        self.assertIn("coeff_rho", cfg)
+
+
 if __name__ == "__main__":
     unittest.main()
