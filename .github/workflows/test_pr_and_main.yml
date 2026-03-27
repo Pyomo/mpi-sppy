@@ -514,6 +514,12 @@ jobs:
           cd mpisppy/tests
           coverage run $COV_ARGS test_conf_int_aircond.py
 
+      - name: run mrp tests
+        timeout-minutes: 10
+        run: |
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_mrp_generic.py
+
       - name: Upload coverage data
         if: always()
         uses: actions/upload-artifact@v4
