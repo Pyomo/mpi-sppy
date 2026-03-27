@@ -59,6 +59,8 @@ def solver_specification(cfg, prefix="", name_required=True):
         root_list = [prefix, ]
 
     idx_list = list()
+    solver_name = None
+    solver_options = {}
     for sroot in root_list:
         name_idx = "solver_name" if sroot == "" else f"{sroot}_solver_name"
         idx_list.append(name_idx)

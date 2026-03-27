@@ -77,8 +77,8 @@ class ScenarioNode:
                                                          self.nonant_list)
         else:
             logger.warning(
-                f"nonant_list is empty for node {name},",
-                "No nonanticipativity will be enforced at this node by default",
+                f"nonant_list is empty for node {name},"
+                " No nonanticipativity will be enforced at this node by default"
             )
             self.nonant_vardata_list = []
 

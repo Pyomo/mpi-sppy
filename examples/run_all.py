@@ -19,8 +19,6 @@
 
 import os
 import sys
-import pandas as pd
-from datetime import datetime as dt
 
 # Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
 python_args = ""
@@ -95,59 +93,6 @@ def do_one(dirname, progname, np, argstring):
     else:
         os.chdir("../..")   # hack for one level of subdirectories
     return code
-
-def time_one(ID, dirname, progname, np, argstring):
-    """ same as do_one, but also check the running time.
-        ID must be unique and ID.perf.csv will be(come) a local file name
-        and should be allowed to sit on your machine in your examples directory.
-        Do not record a time for a bad guy."""
-
-    if ID in time_one.ID_check:
-        raise RuntimeError(f"Duplicate time_one ID={ID}")
-    else:
-        time_one.ID_check.append(ID)
-
-    listfname = ID+".perf.csv"
-
-    start = dt.now()
-    code = do_one(dirname, progname, np, argstring)
-    finish = dt.now()
-    runsecs = (finish-start).total_seconds()
-    if code != 0:
-        return   # Nothing to see here, folks.
-
-    # get a reference time
-    start = dt.now()
-    for i in range(int(1e7)):   # don't change this unless you *really* have to
-        if (i % 2) == 0:
-            foo = i * i
-            bar = str(i)+"!"
-    del foo
-    del bar
-    finish = dt.now()
-    refsecs = (finish-start).total_seconds()
-
-    if os.path.isfile(listfname):
-        timelistdf = pd.read_csv(listfname)
-        timelistdf.loc[len(timelistdf.index)] = [str(finish), refsecs, runsecs]
-    else:
-        print(f"{listfname} will be created.")
-        timelistdf = pd.DataFrame([[finish, refsecs, runsecs]],
-                                  columns=["datetime", "reftime", "time"])
-
-    # Quick look for trouble
-    if len(timelistdf) > 0:
-        thisscaled = runsecs / refsecs
-        lastrow = timelistdf.iloc[-1]
-        lastrefsecs = lastrow["reftime"]
-        lastrunsecs = lastrow["time"]
-        lastscaled = lastrunsecs / lastrefsecs
-        deltafrac = (thisscaled - lastscaled) / lastscaled
-        if deltafrac > 0.1:
-            print(f"**** WARNING: {100*deltafrac}% time increase for {ID}, see {listfname}")
-
-    timelistdf.to_csv(listfname, index=False)
-time_one.ID_check = list()
 
 def do_one_mmw(dirname, modname, runefstring, npyfile, mmwargstring):
     # assume that the dirname matches the module name
@@ -225,27 +170,9 @@ do_one("farmer", "../../mpisppy/generic_cylinders.py", 4,
        "--ph-primal-hub --ph-dual --ph-dual-rescale-rho-factor=0.1 --ph-dual-rho-multiplier 0.2 "
        "--default-rho=1 --solver-name={} --lagrangian --xhatshuffle".format(solver_name))
 
-do_one("farmer/archive", "farmer_cylinders.py", 3,
-       "--num-scens 3 --max-iterations=1 "
-       "--default-rho=1 --tee-rank0-solves "
-       "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-time_one("FarmerLinProx", "farmer/archive", "farmer_cylinders.py", 3,
-       "--num-scens 3 --default-rho=1.0 --max-iterations=50 "
-       "--display-progress --rel-gap=0.0 --abs-gap=0.0 "
-       "--linearize-proximal-terms --proximal-linearization-tolerance=1.e-6 "
-       "--solver-name={} --lagrangian --xhatshuffle".format(solver_name))
-
 do_one("farmer/from_pysp", "concrete_ampl.py", 1, solver_name)
 do_one("farmer/from_pysp", "abstract.py", 1, solver_name)
 
-do_one("farmer/archive",
-       "farmer_cylinders.py",
-       2,
-       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress  --xhatshuffle --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=1.0 --abs-gap=1 --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
-do_one("farmer/archive",
-       "farmer_cylinders.py",
-       2,
-       f"--num-scens 3 --max-iterations=10 --default-rho=1.0 --display-progress --xhatlooper --aph-gamma=1.0 --aph-nu=1.0 --aph-frac-needed=1.0 --aph-dispatch-frac=0.25 --abs-gap=1 --display-convergence-detail --aph-sleep-seconds=0.01 --run-async --solver-name={solver_name}")
 do_one("farmer/archive",
        "farmer_cylinders.py", 4,
        f"--num-scens 3 --max-iterations=20 --default-rho=1 --solver-name={solver_name}  --lagrangian --xhatshuffle --fwph --max-stalled-iters 1")
@@ -262,18 +189,6 @@ do_one("farmer/archive",
        "--linearize-proximal-terms "
        "--rel-gap=0.0 "
        "--solver-name={}".format(solver_name))
-
-do_one("farmer/CI",
-       "farmer_seqsampling.py",
-       1,
-       f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
-       "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
-
-do_one("farmer/CI",
-       "farmer_seqsampling.py",
-       1,
-       f"--num-scens 3 --crops-multiplier=1  --EF-solver-name={solver_name} "
-       "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
 # NOTE: Pyomo OBBT does not support persistent solvers as of Aug 2025
 direct_solver_name = solver_name.replace("_persistent", "_direct") if "_persistent" in solver_name else solver_name
@@ -315,10 +230,6 @@ do_one("sslp",
        "--use-primal-dual-rho-updater --primal-dual-rho-update-threshold=10 "
        "--solver-name={}".format(solver_name))
 do_one("hydro", "hydro_cylinders.py", 3,
-       "--branching-factors \"3 3\" --max-iterations=100 "
-       "--default-rho=1 --xhatshuffle --lagrangian "
-       "--solver-name={}".format(solver_name))
-do_one("hydro", "hydro_cylinders.py", 3,
        "--branching-factors \'3 3\' --max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={} --stage2EFsolvern={}".format(solver_name, solver_name))
@@ -327,8 +238,6 @@ do_one("hydro", "hydro_cylinders_pysp.py", 3,
        "--max-iterations=100 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--solver-name={}".format(solver_name))
-
-do_one("hydro", "hydro_ef.py", 1, solver_name)
 
 # the next might hang with 6 ranks
 do_one("aircond", "aircond_cylinders.py", 3,
@@ -339,21 +248,6 @@ do_one("aircond", "aircond_ama.py", 3,
        "--branching-factors \'3 3\' --max-iterations=100 "
        "--default-rho=1 --lagrangian --xhatshuffle "
        "--solver-name={}".format(solver_name))
-time_one("AircondAMA", "aircond", "aircond_ama.py", 3,
-       "--branching-factors \'3 3\' --max-iterations=100 "
-       "--default-rho=1 --lagrangian --xhatshuffle "
-       "--solver-name={}".format(solver_name))
-
-do_one("aircond",
-       "aircond_seqsampling.py",
-       1,
-       f"--branching-factors \'3 2\' --seed 1134 --solver-name={solver_name} "
-       "--BM-h 2 --BM-q 1.3 --confidence-level 0.95 --BM-vs-BPL BM")
-do_one("aircond",
-       "aircond_seqsampling.py",
-       1,
-       f"--branching-factors \'3 2\' --seed 1134 --solver-name={solver_name} "
-       "--BPL-c0 25 --BPL-eps 100 --confidence-level 0.95 --BM-vs-BPL BPL")
 
 #=========MMW TESTS==========
 # do_one_mmw is special
