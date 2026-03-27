@@ -115,6 +115,8 @@ def parse_args(m):
     # maybe it should just require it.
 
     cfg.EF_base()  # If EF is slected, most other options will be moot
+    cfg.lshaped_args()
+    cfg.xhatlshaped_args()        
     # There are some arguments here that will not make sense for all models
     cfg.popular_args()
     cfg.two_sided_args()

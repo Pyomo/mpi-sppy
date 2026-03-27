@@ -440,6 +440,15 @@ class Config(pyofig.ConfigDict):
         self.EF_base()
         # branching factors???
 
+    ##### Lshaped #####        
+
+    def lshaped_args(self):
+
+        self.add_to_config(name="lshaped_hub",
+                           description="Use LShaped Hub (default False)",
+                           domain=bool,
+                           default=False)        
+
     ##### common additions to the command line #####
 
     def two_sided_args(self):

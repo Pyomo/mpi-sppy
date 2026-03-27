@@ -59,6 +59,11 @@ def build_hub_dict(cfg, beans, scenario_creator_kwargs,
                                   rho_setter=rho_setter,
                                   all_nodenames=all_nodenames,
                                   )
+    elif cfg.lshaped_hub:
+        # Vanilla LShaped hub
+        hub_dict = vanilla.lshaped_hub(*beans,
+                                  scenario_creator_kwargs=scenario_creator_kwargs,
+                                  )        
     else:
         hub_dict = vanilla.ph_hub(*beans,
                                   scenario_creator_kwargs=scenario_creator_kwargs,
