@@ -561,5 +561,117 @@ class TestDeactAndReactivateObjs(unittest.TestCase):
         self.assertEqual(obj_list, [])
 
 
+class TestReactivateObjs(unittest.TestCase):
+    """Tests for reactivate_objs() after stash_ref_objs()."""
+
+    def _make_model_with_mpisppy_data(self):
+        """Create a minimal model with the _mpisppy_data attribute that
+        stash_ref_objs() and reactivate_objs() expect."""
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.obj = pyo.Objective(expr=m.x, sense=pyo.minimize)
+
+        class _Data:
+            pass
+
+        m._mpisppy_data = _Data()
+        return m
+
+    def test_reactivate_after_stash_and_deact(self):
+        m = self._make_model_with_mpisppy_data()
+        # Stash then deactivate
+        sputils.stash_ref_objs(m)
+        sputils.deact_objs(m)
+        self.assertFalse(m.obj.active)
+        # Reactivate
+        sputils.reactivate_objs(m)
+        self.assertTrue(m.obj.active)
+
+    def test_reactivate_without_stash_raises(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.obj = pyo.Objective(expr=m.x)
+
+        class _Data:
+            pass
+
+        m._mpisppy_data = _Data()
+        # No stash_ref_objs call → should raise RuntimeError
+        with self.assertRaises(RuntimeError):
+            sputils.reactivate_objs(m)
+
+
+class TestModelsHaveSameSense(unittest.TestCase):
+    """Tests for _models_have_same_sense()."""
+
+    def _make_minimize_model(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.obj = pyo.Objective(expr=m.x, sense=pyo.minimize)
+        return m
+
+    def _make_maximize_model(self):
+        m = pyo.ConcreteModel()
+        m.x = pyo.Var()
+        m.obj = pyo.Objective(expr=m.x, sense=pyo.maximize)
+        return m
+
+    def test_empty_dict_returns_true_true(self):
+        is_min, check = sputils._models_have_same_sense({})
+        self.assertTrue(is_min)
+        self.assertTrue(check)
+
+    def test_all_minimize_returns_true_true(self):
+        models = {"s1": self._make_minimize_model(),
+                  "s2": self._make_minimize_model()}
+        is_min, check = sputils._models_have_same_sense(models)
+        self.assertTrue(is_min)
+        self.assertTrue(check)
+
+    def test_all_maximize_returns_false_true(self):
+        models = {"s1": self._make_maximize_model(),
+                  "s2": self._make_maximize_model()}
+        is_min, check = sputils._models_have_same_sense(models)
+        self.assertFalse(is_min)
+        self.assertTrue(check)
+
+    def test_mixed_sense_returns_none_false(self):
+        models = {"s1": self._make_minimize_model(),
+                  "s2": self._make_maximize_model()}
+        is_min, check = sputils._models_have_same_sense(models)
+        self.assertIsNone(is_min)
+        self.assertFalse(check)
+
+    def test_single_minimize_model(self):
+        models = {"s1": self._make_minimize_model()}
+        is_min, check = sputils._models_have_same_sense(models)
+        self.assertTrue(is_min)
+        self.assertTrue(check)
+
+
+class TestTicTocOutput(unittest.TestCase):
+    """Tests for disable_tictoc_output() and reenable_tictoc_output()."""
+
+    def test_disable_and_reenable_do_not_raise(self):
+        # These functions mutate a global timer object; just verify they
+        # can be called in sequence without throwing.
+        sputils.disable_tictoc_output()
+        sputils.reenable_tictoc_output()
+
+    def test_double_reenable_after_disable(self):
+        sputils.disable_tictoc_output()
+        sputils.reenable_tictoc_output()
+        # Calling disable/reenable again should still work
+        sputils.disable_tictoc_output()
+        sputils.reenable_tictoc_output()
+
+
+class TestNotGoodEnoughResults(unittest.TestCase):
+    """Tests for not_good_enough_results()."""
+
+    def test_none_results_is_not_good_enough(self):
+        self.assertTrue(sputils.not_good_enough_results(None))
+
+
 if __name__ == "__main__":
     unittest.main()
