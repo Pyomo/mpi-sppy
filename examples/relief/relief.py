@@ -5,8 +5,6 @@
 import pyomo.environ as pyo
 import mpisppy.utils.sputils as sputils
 import json
-from mpisppy.opt.ef import ExtensiveForm
-
 
 def scenario_creator(scenario_name,
                      network_data=dict(),
@@ -210,9 +208,11 @@ def kw_creator(cfg):
 
 
 def scenario_denouement(rank, scenario_name, scenario):
-    if rank!=0:
-        return
-    sname = scenario_name
+    # No special reporting function
+    pass
+
+
+def print_investment( file_name, scenario, bundling ):
     sc = scenario
     print("Investment plan")
     print("Facilities built: ")
@@ -222,20 +222,9 @@ def scenario_denouement(rank, scenario_name, scenario):
     print("Roads built: ")
     for r in sc.R_all:
         if pyo.value(sc.x_road[r])>0.5:
-            print(f"{r}. From: {sc.road_from[r]}. To: {sc.road_to[r]}. Capacity: {sc.road_cap[r]}")
+            print(f"{r}. From: {sc.road_from[r]}. To: {sc.road_to[r]}. Capacity: {sc.road_cap[r]}")    
 
+def custom_writer(sp_obj, cfg):
+    # Solution is printed to the terminal
+    sp_obj.write_first_stage_solution("",first_stage_solution_writer=print_investment)
 
-def custom_writer(ef, cfg):
-    if not isinstance(ef, ExtensiveForm):
-        return
-
-    sc_name,sc = next(ef.scenarios())    
-    print("Investment plan")
-    print("Facilities built: ")
-    for f in sc.F_all:
-        if pyo.value(sc.x_fac[f])>0.5:
-            print(f"{f}. Node: {sc.fac_node[f]}. Capacity: {sc.fac_cap[f]}")
-    print("Roads built: ")
-    for r in sc.R_all:
-        if pyo.value(sc.x_road[r])>0.5:
-            print(f"{r}. From: {sc.road_from[r]}. To: {sc.road_to[r]}. Capacity: {sc.road_cap[r]}")
