@@ -1,0 +1,9 @@
+{
+  "demands": {
+    "D1": { "node": "1", "demand": 5 },
+    "D2": { "node": "2", "demand": 5 },
+    "D3": { "node": "3", "demand": 5 }
+  },
+  "facilities": {},
+  "roads": {}
+}

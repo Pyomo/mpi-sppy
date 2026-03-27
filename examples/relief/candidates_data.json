@@ -1,0 +1,34 @@
+{
+  "facilities": {
+    "F1_5":  { "node": "1", "capacity": 5,  "inv_cost_per_unit": 20, "oper_cost": 1 },
+    "F1_10": { "node": "1", "capacity": 10, "inv_cost_per_unit": 20, "oper_cost": 1 },
+    "F1_15": { "node": "1", "capacity": 15, "inv_cost_per_unit": 20, "oper_cost": 1 },
+
+    "F2_5":  { "node": "2", "capacity": 5,  "inv_cost_per_unit": 20, "oper_cost": 1 },
+    "F2_10": { "node": "2", "capacity": 10, "inv_cost_per_unit": 20, "oper_cost": 1 },
+    "F2_15": { "node": "2", "capacity": 15, "inv_cost_per_unit": 20, "oper_cost": 1 },
+
+    "F3_5":  { "node": "3", "capacity": 5,  "inv_cost_per_unit": 20, "oper_cost": 1 },
+    "F3_10": { "node": "3", "capacity": 10, "inv_cost_per_unit": 20, "oper_cost": 1 },
+    "F3_15": { "node": "3", "capacity": 15, "inv_cost_per_unit": 20, "oper_cost": 1 }
+  },
+  "roads": {
+    "R1_2_5":  { "from_node": "1", "to_node": "2", "capacity": 5,  "inv_cost": 25, "oper_cost": 1 },
+    "R1_2_10": { "from_node": "1", "to_node": "2", "capacity": 10, "inv_cost": 50, "oper_cost": 1 },
+
+    "R2_1_5":  { "from_node": "2", "to_node": "1", "capacity": 5,  "inv_cost": 25, "oper_cost": 1 },
+    "R2_1_10": { "from_node": "2", "to_node": "1", "capacity": 10, "inv_cost": 50, "oper_cost": 1 },
+
+    "R1_3_5":  { "from_node": "1", "to_node": "3", "capacity": 5,  "inv_cost": 25, "oper_cost": 1 },
+    "R1_3_10": { "from_node": "1", "to_node": "3", "capacity": 10, "inv_cost": 50, "oper_cost": 1 },
+
+    "R3_1_5":  { "from_node": "3", "to_node": "1", "capacity": 5,  "inv_cost": 25, "oper_cost": 1 },
+    "R3_1_10": { "from_node": "3", "to_node": "1", "capacity": 10, "inv_cost": 50, "oper_cost": 1 },
+
+    "R2_3_5":  { "from_node": "2", "to_node": "3", "capacity": 5,  "inv_cost": 25, "oper_cost": 1 },
+    "R2_3_10": { "from_node": "2", "to_node": "3", "capacity": 10, "inv_cost": 50, "oper_cost": 1 },
+
+    "R3_2_5":  { "from_node": "3", "to_node": "2", "capacity": 5,  "inv_cost": 25, "oper_cost": 1 },
+    "R3_2_10": { "from_node": "3", "to_node": "2", "capacity": 10, "inv_cost": 50, "oper_cost": 1 }
+  }
+}
