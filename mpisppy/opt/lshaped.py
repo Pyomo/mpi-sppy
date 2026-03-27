@@ -659,8 +659,8 @@ class LShapedMethod(spbase.SPBase):
                             f"Time spent verifying second stage: {t2:7.2f} "
                             f"Final Objective: {m.obj.expr():7.2f}"
                         )
-                        self.first_stage_solution_available = True
-                        self.tree_solution_available = True
+                    self.first_stage_solution_available = True
+                    self.tree_solution_available = True
                     break
                 if verbose and self.iter == max_iter - 1:
                     print("WARNING MAX ITERATION LIMIT REACHED !!! ")
