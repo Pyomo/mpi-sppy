@@ -64,6 +64,11 @@ run_phase "test_component_map_usage (serial)" \
 run_phase "test_nonant_validation (serial)" \
     coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_nonant_validation.py -v
 
+run_phase "test_ph_main (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_main.py
+
+run_phase "test_ph_extensions (serial)" \
+    coverage run --rcfile=.coveragerc mpisppy/tests/test_ph_extensions.py
 
 run_phase "test_admmWrapper (serial, spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_admmWrapper.py
@@ -117,18 +122,22 @@ run_phase "straight_tests.py (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/straight_tests.py --python-args="$PYARGS"
 
 # ---------- Example-based tests ----------
+# Use --source with absolute paths so both mpisppy and the example test
+# harnesses (generic_tester.py, run_all.py, afew.py) are tracked.
+EX_SRC="--source=$PROJ_DIR/mpisppy,$PROJ_DIR/examples"
+EX_COV="coverage run $EX_SRC --data-file=$PROJ_DIR/.coverage --rcfile=$PROJ_DIR/.coveragerc"
 
 run_phase "examples/afew.py $SOLVER_PERSISTENT" \
-    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' afew.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
+    bash -c "cd '$PROJ_DIR/examples' && $EX_COV afew.py '$SOLVER_PERSISTENT' '' --python-args='$PYARGS'"
 
 run_phase "examples/run_all.py $SOLVER_PERSISTENT nouc" \
-    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' run_all.py '$SOLVER_PERSISTENT' '' nouc --python-args='$PYARGS'"
+    bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_all.py '$SOLVER_PERSISTENT' '' nouc --python-args='$PYARGS'"
 
 run_phase "examples/run_all.py $SOLVER_DIRECT nouc" \
-    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' run_all.py '$SOLVER_DIRECT' '' nouc --python-args='$PYARGS'"
+    bash -c "cd '$PROJ_DIR/examples' && $EX_COV run_all.py '$SOLVER_DIRECT' '' nouc --python-args='$PYARGS'"
 
 run_phase "examples/generic_tester.py ${SOLVER}_direct nouc" \
-    bash -c "cd '$PROJ_DIR/examples' && coverage run --rcfile='$PROJ_DIR/.coveragerc' generic_tester.py '${SOLVER}_direct' '' nouc --python-args='$PYARGS'"
+    bash -c "cd '$PROJ_DIR/examples' && $EX_COV generic_tester.py '${SOLVER}_direct' '' nouc --python-args='$PYARGS'"
 
 # ---------- Optional tests (skip if deps missing) ----------
 
@@ -159,8 +168,8 @@ fi
 echo ""
 echo "=== Combining and reporting ==="
 coverage combine --rcfile=.coveragerc
-coverage report --rcfile=.coveragerc --show-missing | head -120
-coverage html --rcfile=.coveragerc
+coverage report --rcfile=.coveragerc --include='mpisppy/*,examples/*.py' --show-missing | head -150
+coverage html --rcfile=.coveragerc --include='mpisppy/*,examples/*.py'
 
 echo ""
 echo "HTML report: file://$PROJ_DIR/htmlcov/index.html"
