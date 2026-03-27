@@ -834,6 +834,46 @@ jobs:
           if-no-files-found: ignore
           include-hidden-files: true
 
+  unit-tests:
+    name: unit tests (no solver required)
+    runs-on: ubuntu-latest
+    needs: [ruff]
+    steps:
+      - uses: actions/checkout@v3
+      - uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: test_env
+          python-version: 3.11
+          auto-activate-base: false
+      - name: Install dependencies
+        run: |
+          conda install mpi4py pandas setuptools
+          pip install pyomo pytest coverage
+
+      - name: setup the program
+        run: |
+          pip install -e .
+
+      - name: run unit tests
+        run: |
+          coverage run $COV_ARGS -m pytest -v \
+            mpisppy/tests/test_sputils.py \
+            mpisppy/tests/test_config.py \
+            mpisppy/tests/test_log.py \
+            mpisppy/tests/test_scenario_tree.py \
+            mpisppy/tests/test_nice_join.py \
+            mpisppy/tests/test_solver_spec.py \
+            mpisppy/tests/test_extensions.py
+
+      - name: Upload coverage data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-unit-tests
+          path: ${{ github.workspace }}/.coverage.*
+          if-no-files-found: ignore
+          include-hidden-files: true
+
   coverage-report:
     name: Coverage Report
     runs-on: ubuntu-latest
@@ -857,6 +897,7 @@ jobs:
       - test-pysp
       - test-cylinders
       - test-agnostic
+      - unit-tests
     if: always()
     steps:
       - uses: actions/checkout@v3
