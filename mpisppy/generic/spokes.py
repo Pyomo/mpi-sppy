@@ -14,7 +14,8 @@ import mpisppy.utils.cfg_vanilla as vanilla
 
 
 def build_spoke_list(cfg, beans, scenario_creator_kwargs,
-                     rho_setter, all_nodenames):
+                     rho_setter, all_nodenames,
+                     variable_probability=None):
     """Build and return the list of spoke dicts for WheelSpinner.
 
     Args:
@@ -23,6 +24,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
         scenario_creator_kwargs: dict for scenario creator
         rho_setter: rho setter function or None
         all_nodenames: list of node names or None
+        variable_probability: variable probability list or None (used by ADMM)
 
     Returns:
         list: list of spoke dicts
@@ -108,6 +110,7 @@ def build_spoke_list(cfg, beans, scenario_creator_kwargs,
     if cfg.xhatxbar:
         xhatxbar_spoke = vanilla.xhatxbar_spoke(*beans,
                                                    scenario_creator_kwargs=scenario_creator_kwargs,
+                                                   variable_probability=variable_probability,
                                                    all_nodenames=all_nodenames)
 
     # reduced cost fixer options setup
