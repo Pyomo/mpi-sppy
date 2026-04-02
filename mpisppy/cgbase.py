@@ -201,13 +201,19 @@ class CGBase(mpisppy.spopt.SPOpt):
         rmp.Convexity = pyo.Constraint(rmp.scen, rule=_convexity_rule)
 
         # Objective
-        # Assumes master problem is a minimization problem     
-        expr = sum(self.nonant_obj_coef[idx] * rmp.xbar[idx] for idx in self.nonant_indices)
-        rmp.obj = pyo.Objective(rule=expr+sum(
-            rmp.col_cost[s, c] * rmp.col_is_active[s, c] * rmp.w[s, c]
-            for s in rmp.scen
-            for c in rmp.cols), sense=pyo.minimize)
-        
+        # Assumes master problem is a minimization problem
+        rmp.obj = pyo.Objective(
+            expr=sum(
+                self.nonant_obj_coef[idx] * rmp.xbar[idx]
+                for idx in self.nonant_indices
+            ) + sum(
+                rmp.col_cost[s, c] * rmp.col_is_active[s, c] * rmp.w[s, c]
+                for s in rmp.scen
+                for c in rmp.cols
+            ),
+            sense=pyo.minimize,
+        )
+
         return rmp
     
     def compute_nonant_obj_coefs(self):
@@ -322,9 +328,10 @@ class CGBase(mpisppy.spopt.SPOpt):
         c = self.next_col[sname]
 
         if c not in self.cols:
+            max_cols = len(self.cols)
             raise RuntimeError(
                 f"No free column slots for scenario {sname}. "
-                f"Max columns per scenario: {len(self.C)}"
+                f"Allocated column capacity per scenario: {max_cols}."
             )
 
  
@@ -418,8 +425,8 @@ class CGBase(mpisppy.spopt.SPOpt):
         red_cost=None
         if hasattr(model, "base_obj_expr"):
             scen_cost = pyo.value(model.base_obj_expr)
-        if hasattr(model, "base_obj_expr"):
-            red_cost =  model._mpisppy_data.outer_bound
+        if hasattr(model._mpisppy_data, "outer_bound"):
+            red_cost = model._mpisppy_data.outer_bound
         x_vec = {ndn_i: pyo.value(xvar) for ndn_i, xvar in scenario._mpisppy_data.nonant_indices.items()}
         return sname, red_cost, scen_cost,x_vec
 

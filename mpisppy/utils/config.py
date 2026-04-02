@@ -667,7 +667,7 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)    
         self.add_to_config(name="relaxed_nonant",
-                           description="solve maxter problem with relaxed nonanticipativity constraint",
+                           description="solve master problem with relaxed nonanticipativity constraint",
                            domain=bool,
                            default=False)      
         

@@ -146,10 +146,12 @@ def cg_hub(
 
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)# most of them are not needed but otherwise cep_cylinder crashes
-    odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
-    options["sp_solver_options"] = odictsp
-    odictmp = sputils.option_string_to_dict(cfg.mp_solver_options)
-    options["mp_solver_options"] = odictmp
+    if _hasit(cfg, "sp_solver_options"):
+        odictsp = sputils.option_string_to_dict(cfg.sp_solver_options)
+        options["sp_solver_options"] = odictsp
+    if _hasit(cfg, "mp_solver_options"):
+        odictmp = sputils.option_string_to_dict(cfg.mp_solver_options)
+        options["mp_solver_options"] = odictmp
     options["convthresh"] = cfg.intra_hub_conv_thresh
     options["bundles_per_rank"] = cfg.bundles_per_rank
     options["CGIterLimit"]=cfg.max_iterations  

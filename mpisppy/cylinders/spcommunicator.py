@@ -498,6 +498,7 @@ class SPCommunicator:
         Receive the BEST_XHAT buffer from spokes.
         If new, process the xhat values (e.g., store or use them).
         """
+        is_new = False
         for idx, _, recv_buf in self.receive_field_spcomms.get(Field.BEST_XHAT, []):
             is_new = self.get_receive_buffer(recv_buf, Field.BEST_XHAT, idx)
             if is_new:
@@ -510,7 +511,7 @@ class SPCommunicator:
         Receive the  XFEAS buffer from spokes.
         If new, process the x values (e.g., store or use them).
         """
-        is_new=False
+        is_new = False
         for idx, _, recv_buf in self.receive_field_spcomms.get(Field.XFEAS, []):
             is_new = self.get_receive_buffer(recv_buf, Field.XFEAS, idx)
             if is_new:

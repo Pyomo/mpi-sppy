@@ -135,7 +135,7 @@ class DCG(mpisppy.cgbase.CGBase):
             for i in m.nonant_indices:
                 m.bundle_center_pi[s, i] = pyo.value(m.pi[s, i])
 
-        self.last_serious_LB = self.LB_current
+        self.LB_past = self.LB_current
     
     def extract_duals_from_mp(self):
         """
@@ -173,6 +173,7 @@ class DCG(mpisppy.cgbase.CGBase):
 
         expr = self.mp.mu[sname] + sum(x_vec[i] * self.mp.pi[sname, i] for i in self.nonant_indices)
         self.mp.cuts.add(expr <= cost)
+        return True
 
     def iterk_loop(self):
         """ Perform all CG iterations after iteration 0.

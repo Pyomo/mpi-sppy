@@ -450,8 +450,9 @@ class CGHub(Hub):
             self.BestOuterBound = self.OuterBoundUpdate(self.opt.best_bound_obj_val)
         if self.opt.best_solution_obj_val is not None:
             self.BestInnerBound = self.InnerBoundUpdate(self.opt.best_solution_obj_val)
-        if self.determine_termination(screen_trace):
-            return self.determine_termination(screen_trace)
+        terminate = self.determine_termination(screen_trace)
+        if terminate:
+            return terminate
         else: 
             LPgap_satisfied = False
             if self.opt.conv < self.opt.options["convthresh"]:

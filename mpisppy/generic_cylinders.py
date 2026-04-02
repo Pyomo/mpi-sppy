@@ -387,7 +387,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
             # Note that this deepcopy might be expensive if certain wrappers were used.
             # (Could we do the modification to cfg in ph_dual to obviate the need?)
             modified_cfg = copy.deepcopy(cfg)
-            modified_cfg["grad_rho_multiplier"] = cfg.ph_dual_rho_multiplier
+            modified_cfg["grad_rho_multiplier"] = cfg.ph_spoke_rho_multiplier
         if cfg.sep_rho:
             vanilla.add_sep_rho(ph_spoke, modified_cfg)
         if cfg.coeff_rho:
@@ -395,7 +395,7 @@ def do_decomp(module, cfg, scenario_creator, scenario_creator_kwargs, scenario_d
         if cfg.sensi_rho:
             vanilla.add_sensi_rho(ph_spoke, modified_cfg)
         if cfg.grad_rho:
-            modified_cfg["grad_order_stat"] = cfg.ph_grad_order_stat
+            modified_cfg["grad_order_stat"] = cfg.ph_spoke_grad_order_stat
             vanilla.add_grad_rho(ph_spoke, modified_cfg)
 
     # relaxed ph spoke
