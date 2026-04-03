@@ -10,7 +10,7 @@
 from math import isclose
 from array import array
 from bisect import bisect
-from scipy.optimize import least_squares
+from pyomo.common.dependencies import scipy
 from pyomo.core.expr.numeric_expr import LinearExpression
 
 # helpers for distance from y = x**2
@@ -199,7 +199,7 @@ class _ProxApproxManager:
         # We project the point x_pnt, y_pnt onto
         # the curve y = x**2 by finding the minimum distance
         # between y = x**2 and x_pnt, y_pnt.
-        res = least_squares(_f_ls, x_pnt, args=(x_pnt, y_pnt), jac=_df_ls, method="lm", x_scale="jac")
+        res = scipy.optimize.least_squares(_f_ls, x_pnt, args=(x_pnt, y_pnt), jac=_df_ls, method="lm", x_scale="jac")
         if not res.success:
             raise RuntimeError(f"Error in projecting {(x_pnt, y_pnt)} onto parabola for "
                                f"proximal approximation. Message: {res.message}")
