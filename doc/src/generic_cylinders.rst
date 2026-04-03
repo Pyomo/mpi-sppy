@@ -127,6 +127,13 @@ Spokes provide bounds and heuristic solutions. Enable them with flags:
 
 See :ref:`Spokes` for details on each spoke type.
 
+ADMM Decomposition
+-------------------
+
+``generic_cylinders`` supports ADMM-based decomposition via the ``--admm``
+and ``--stoch-admm`` flags. See :ref:`generic_admm` for full details,
+including model module requirements, bundling support, and examples.
+
 Rho Settings
 -------------
 

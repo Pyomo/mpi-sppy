@@ -98,6 +98,12 @@ class TestAdmmWrapper(unittest.TestCase):
     def _slack_name(self, dummy_node):
         return f"y[{dummy_node}]"
 
+    def test_get_scenario_unscaled(self):
+        admm = self._make_admm(3)
+        sname = "Region1"
+        scenario = admm.get_scenario_unscaled(sname)
+        self.assertIs(scenario, admm.local_scenarios[sname])
+
     def test_assign_variable_probs_error1(self):
         admm = self._make_admm(3)
         admm.consensus_vars["Region1"].append(self._slack_name("DC2DC3"))
