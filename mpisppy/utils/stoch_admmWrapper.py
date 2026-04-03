@@ -80,9 +80,10 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         cylinder_rank = mpicomm.Get_rank() // n_cylinders
         
         # taken from spbase
-        self.local_admm_stoch_subproblem_scenarios_names = [
-            all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
-        ]
+        # self.local_admm_stoch_subproblem_scenarios_names = [
+        #     all_admm_stoch_subproblem_scenario_names[i] for i in _rank_slices[cylinder_rank]
+        # ]
+        self.local_admm_stoch_subproblem_scenarios_names = all_admm_stoch_subproblem_scenario_names
     
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
@@ -252,6 +253,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
 
 
     def admmWrapper_scenario_creator(self, admm_stoch_subproblem_scenario_name):
+
         scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 
         # Although every stage is already multiplied earlier, we must still multiply the overall objective function

@@ -14,6 +14,7 @@ import numpy as np
 import mpisppy.MPI as MPI
 
 import pyomo.environ as pyo
+from pyomo.core.expr import clone_expression
 
 import mpisppy.utils.sputils as sputils
 import mpisppy.spopt
@@ -103,7 +104,6 @@ def _Compute_Xbar(opt, verbose=False):
 
             xbars = global_concats[ndn][:nlen]
             xsqbars = global_concats[ndn][nlen:]
-
             for i in range(nlen):
                 s._mpisppy_model.xbars[(ndn,i)]._value = xbars[i]
                 s._mpisppy_model.xsqbars[(ndn,i)]._value = xsqbars[i]
@@ -717,12 +717,14 @@ class PHBase(mpisppy.spopt.SPOpt):
         else:
             self._prox_approx = False
 
+        self.original_objectives = dict()
         for (sname, scenario) in self.local_scenarios.items():
             """Attach the dual and prox terms to the objective.
             """
             if ((not add_duals) and (not add_prox)):
                 return
             objfct = self.saved_objectives[sname]
+            self.original_objectives[sname] = clone_expression(objfct.expr) # save original expression for reference
             is_min_problem = objfct.is_minimizing()
 
             xbars = scenario._mpisppy_model.xbars

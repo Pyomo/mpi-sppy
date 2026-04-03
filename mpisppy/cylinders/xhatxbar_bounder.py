@@ -79,6 +79,15 @@ class XhatXbarInnerBound(XhatInnerBoundBase):
                 self.opt._restore_nonants(update_persistent=False)
                 innerbound = xhatter.xhat_tryit(restore_nonants=False)
 
+                def _vb(msg):
+                    if self.verbose and self.opt.cylinder_rank == 0:
+                        print ("(rank0) " + msg)
+
+                if innerbound is None:
+                    _vb(f"    Infeasible xbar")
+                else:
+                    _vb(f"    Feasible xbar, innerbound: {innerbound}")
+
                 self.update_if_improving(innerbound)
 
             ib_iter += 1
