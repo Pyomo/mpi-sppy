@@ -11,7 +11,7 @@
 
 import mpisppy.MPI as mpi
 import numpy as np
-import scipy.stats
+from pyomo.common.dependencies import scipy
 import importlib
 from mpisppy import global_toc
     

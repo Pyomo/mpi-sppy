@@ -7,7 +7,7 @@
 # full copyright and license information.
 ###############################################################################
 
-import pandas as pd
+from pyomo.common.dependencies import pandas as pd
 
 def rhos_to_csv(s, filename):
     """ write the rho values to a csv "fullname", rho
