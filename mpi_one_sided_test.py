@@ -19,9 +19,14 @@
 import mpi4py.MPI as mpi
 import numpy as np
 import time
+import sys
 
 def main():
-    assert(mpi.COMM_WORLD.Get_size() == 2)
+    if mpi.COMM_WORLD.Get_size() == 1:
+        print("ERROR: This script must be run with multiple MPI processes using mpirun or mpiexec, e.g.:", file=sys.stderr)
+        print("       mpirun -n 2 python -m mpi4py mpi_one_sided_test.py", file=sys.stderr)
+        sys.exit(2) # Exit status 2: command line usage error
+    
     rank = mpi.COMM_WORLD.Get_rank()
 
     array_size = 10

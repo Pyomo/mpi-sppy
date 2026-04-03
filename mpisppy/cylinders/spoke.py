@@ -29,7 +29,7 @@ class Spoke(SPCommunicator):
         self.get_receive_buffer(shutdown_buf, Field.SHUTDOWN, 0, synchronize=False)
         return self.allreduce_or(shutdown_buf[0] == 1.0)
 
-    def is_converged(self):
+    def is_converged(self, screen_trace=False):
         """ Alias for got_kill_signal; useful for algorithms working as both
             hub and spoke
         """
@@ -191,7 +191,6 @@ class InnerBoundSpoke(_BoundSpoke):
 
     def send_best_xhat(self):
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
-        # NOTE: this does not work with "loose" bundles
         ci = 0
         for s in self.opt.local_scenarios.values():
             solution_cache = s._mpisppy_data.best_solution_cache._dict

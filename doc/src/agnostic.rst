@@ -5,64 +5,94 @@ The mpi-sppy package provides callouts so that algebraic modeling languages
 (AMLs) other than Pyomo can be used. A growing number of AMLs are supported
 as `guest` languages (we refer to mpi-sppy as the `host`). This code is
 in an alpha-release state; use with extreme caution.  This is referred to
-as `tight` integration with the guest. It is also possible to simply read
+as `tight` integration with the guest.
+
+It is also possible to simply read
 scenario data from an mps file and the mps file (and the associated json
-nonant file) that can be created however you like. 
+nonant file) that can be created however you like. This is refered to as
+`loose` integration and seems to be fairly robust.
+
+.. _loose_integration:
 
 Loose integration
 ^^^^^^^^^^^^^^^^^
 
-Code for creating a
-Pyomo model from an mps file is in ``mpisppy.utils.mps_reader.py``,
-but you can also just use ``generic_cylinders.py`` and give
-it the module ``mpisppy.utils.mps_module`` (you will need to specify
-that path to this module) and the ``--mps-files-directory``
-option.  Note
-that at the time of this writing, the number of scenarios is obtained
-by counting the mps files in the directory given.
+You can use ``generic_cylinders.py`` with ``--mps-files-directory``
+as the first argument (the module ``mpisppy.problem_io.mps_module`` is
+inferred automatically, so ``--module-name`` is not needed).  Note that at
+the time of this writing, the number of scenarios is obtained by
+counting the mps files in the directory given. (It would require
+only a small amount of programming to support lp files.)
 
-The file ``examples.sizes.mps_demo.bash`` has two commands. The second illustrates
-how to instruction ``MPI-SPPY`` to read mps/json file pairs for each scenario from a
-directory. The first command illustrates how to use ``MPI-SPPY`` to write
-them in the first place (but if ``MPI-SPPY`` can get your scenarios, there
-is probably no reason to write them and then read them again!). This
-functionality is intended to be used by users of other AMLs or other
-scenario-based stochastic programming applications.
+The file ``examples.loose_agnostic.AMPL.farmer_example.bash`` has three
+commands.  The second illustrates how to instruct ``MPI-SPPY`` to read
+mps/json file pairs for each scenario from a directory. The first runs
+an `AMPLpy` program that creates the scenario files.  This program is
+in ``examples.loose_agnostic.AMPL.farmer_writer.py`` and, apart from
+the `scenario_creator` function, is pretty general for two-stage
+problems.  You be able to copy the program and
+write a `scenario_creator` function for your two-stage problem.
+The third command runs a script that illustrates how to map column
+names created by the MPS writer back to AMPL variable names.
+
+The file ``examples.loose_agnostic.GAMS.farmer_example.bash`` has
+three commands that mimic the commands for AMPL. The GAMS bash script
+is not part of the automated tests because I don't want to deal with
+the license.
+
+A somewhat strange example is in the file
+``examples.sizes.mps_demo.bash`` has two commands. The second
+illustrates how to instruct ``MPI-SPPY`` to read mps/json file pairs
+for each scenario from a directory. The first command illustrates how
+to use ``MPI-SPPY`` to write them in the first place (but if
+``MPI-SPPY`` can get your scenarios, there is probably no reason to
+write them and then read them again!). This functionality is intended
+to be used by users of other AMLs or other scenario-based stochastic
+programming applications.
+
+There is low-level support for `.lp` files instead of `.mps` files.
+Code for creating a
+Pyomo model from an mps file is in ``mpisppy.problem_io.mps_reader.py``,
 
 JSON file format
 ----------------
 
 The directory named in the ``--mps-files-directory`` needs to have
-two files for each scenario: and mps file and a json file. The json
+two files for each scenario: a mps file and a json file. The json
 file need to have certain literal strings as well as scenario-specific
 data. In this specification, scenario specific data is named with underscores.
+Note that the total number of tree nodes is given as an integer, but the file
+only contains the data for nodes for the single scenario.
 
-.. code-block:: json
-		
-{
-  "scenarioData": {
-    "name": scenario_name,
-    "scenProb": scenario_probability
-  },
-  "treeData": {
-    "ROOT": {
-      "condProb": 1.0,
-      "nonAnts": [
-        "first_root_node_nonant_name",
-        "second_root_node_nonant_name",
-        ...
-      ]
-    }
-    "ROOT_i": {
-      "condProb": conditional_probability_of_second_stage_node_i,
-      "nonAnts": [
-        first_nonant_name_at_node,
-        second_node_nonant_name_at_node,
-        ...
-      ]
+.. code-block:: python
+
+  {
+    "scenarioData": {
+      "name": scenario_name,
+      "scenProb": scenario_probability,
+    },
+    "treeData": {
+      "globalNodeCount": number_of_nodes_in_entire_tree,
+      "nodes: {
+        "ROOT": {
+          "condProb": 1.0,
+          "nonAnts": [
+            "first_root_node_nonant_name",
+            "second_root_node_nonant_name",
+            #...
+          ]
+        }
+        "ROOT_i": {
+          "condProb": conditional_probability_of_second_stage_node_i,
+          "nonAnts": [
+            first_nonant_name_at_node,
+            second_node_nonant_name_at_node,
+            #...
+          ]
+        }
+      }
     }
   }
-}  
 
 Two-stage JSON example
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -70,26 +100,31 @@ Two-stage JSON example
 Two-stage problems are simple because there is only one node in the scenario tree and its name
 must be ROOT. Here is an example
 
-.. code-block:: json
+.. code-block:: python
+
   {
     "scenarioData": {
-      "name": "Scenario1",
+      "name": "unknown",
       "scenProb": 0.3333333333333333
     },
     "treeData": {
-      "ROOT": {
-        "condProb": 1.0,
-        "nonAnts": [
-          "NumProducedFirstStage(1)",
-          "NumProducedFirstStage(2)",
-          "NumProducedFirstStage(3)",
-          "NumProducedFirstStage(4)",
-          ...
-          "NumUnitsCutFirstStage(10_10)"
-        ]
+      "globalNodeCount": 1,
+      "nodes": {
+        "ROOT": {
+          "serialNumber": 0,
+          "condProb": 1.0,
+          "nonAnts": [
+            "NumProducedFirstStage(1)",
+            "NumProducedFirstStage(2)",
+            "NumProducedFirstStage(3)",
+            # ...
+            "NumUnitsCutFirstStage(10_10)",
+          ]
+        }
       }
     }
-  }  
+  }
+
 
 Naming Conventions
 ~~~~~~~~~~~~~~~~~~
@@ -121,7 +156,8 @@ Assuming support has been added for the desired AML, the modeler supplies
 two files:
 
 - a model file with the model written in the guest AML (AMPL example: ``mpisppy.agnostic.examples.farmer.mod``)
-- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``). This thin python wrapper is model specific.
+- a thin model wrapper for the model file written in Python (AMPL example: ``mpisppy.agnostic.examples.farmer_ampl_model.py``).
+  This thin python wrapper is model specific.
 
 There can be a little confusion if there are error messages because
 both files are sometimes refered to as the `model file.`
@@ -158,11 +194,11 @@ original model when updating the objective function. If this is an issue,
 you might want to write a problem-specific module to replace the guest
 interface and the model wrapper with a single module. For an example, see
 ``examples.farmer.agnostic.farmer_xxxx_agnostic``, where xxxx is replaced,
-e.g., by ampl. 
+e.g., by ampl.
 
 Architecture
 ^^^^^^^^^^^^
-The following picture presents the architecture of the files. 
+The following picture presents the architecture of the files.
 
 .. image:: images/agnostic_architecture.png
    :alt: Architecture of the agnostic files
@@ -192,7 +228,7 @@ The use of scenario bundles can dramatically improve the performance
 of scenario decomposition algorithms such as PH and APH. Although mpi-sppy
 has facitilites for forming bundles, the mpi-sppy
 ``agnostic`` package assumes that bundles will be completely handled
-by the guest.  Bundles will be returned by the scenario creator function
+by the guest. Bundles will be returned by the scenario creator function
 as if they are a scenario. Although it seems sort of like a trick, it is
 really the way bundles are intended to operate so we sometimes refer to 
 `true` bundles, which are used in non-agnostic way as briefly
@@ -223,18 +259,19 @@ Some notes
 ^^^^^^^^^^
 
 - The helper function called ``scenario_names_creator`` needs to be co-opted
-to instead create bundle names and the code in the scenario_creator function
-then needs to create its own scenario names for bundles. At the time
-of this writing this results in a major hack being needed in order to
-get bundle information to the names creator in the Pyomo example described
-below. You need to supply a function called ``bundle_hack`` in your python model file that
-does whatever needs to be done to alert the names creator that there
-bundles. The function takes the config object as an argument.
-See ``mpisppy.agnostic.farmer4agnostic.py``
+  to instead create bundle names and the code in the scenario_creator function
+  then needs to create its own scenario names for bundles. At the time
+  of this writing this results in a major hack being needed in order to
+  get bundle information to the names creator in the Pyomo example described
+  below. You need to supply a function called ``bundle_hack`` in your python model file that
+  does whatever needs to be done to alert the names creator that there
+  bundles. The function takes the config object as an argument.
+  See ``mpisppy.agnostic.farmer4agnostic.py``
 - There is a heavy bias toward uniform probabilities in the examples and in
   the mpi-sppy utilities. Scenario probabilities are attached to the scenario
   as ``_mpisppy_probability`` so if your probabilities are not uniform, you will
-  need to calculate them for each bundle (your EF maker code can do that for you).  Note that even if probabilities are uniform for the scenarios, they won't
+  need to calculate them for each bundle (your EF maker code can do that for you).
+  Note that even if probabilities are uniform for the scenarios, they won't
   be uniform for the bundles unless you require that the bundle size divides
   the number of scenarios.
 - There is a similar bias toward two stage problems, which is

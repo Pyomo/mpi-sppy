@@ -6,6 +6,8 @@
 # All rights reserved. Please see the files COPYRIGHT.md and LICENSE.md for
 # full copyright and license information.
 ###############################################################################
+from __future__ import annotations  # avoid potential troubles with mpi4py
+
 from pyomo.common.timing import TicTocTimer as _TTT
 from pyomo.common.dependencies import numpy_available as _np_avail
 

@@ -41,6 +41,7 @@
 import os
 import numpy as np
 import pyomo.environ as pyo
+from mpisppy.utils import nice_join
 from pyomo.common.collections import ComponentSet
 
 ''' W utilities '''
@@ -215,10 +216,12 @@ def _parse_W_csv(fname, scenario_names_local, scenario_names_global, rank):
             else:
                 seen[sname] = True
                 results[sname] = {vname: wval}
-    missing = [name for (name,is_seen) in seen.items() if not is_seen]
-    if (missing):
-        raise RuntimeError('rank ' + str(rank) +' could not find the following '
-                'scenarios in the provided weight file: ' + ', '.join(missing)) 
+    missing = [name for (name, is_seen) in seen.items() if is_seen is False]
+    if missing:
+        raise RuntimeError(
+            f"rank {rank} could not find the following scenarios in the provided weight file: "
+            f"{nice_join(missing, conjunction=None)}."
+        )
         
     return results
             
@@ -244,12 +247,13 @@ def _check_W(w_val_dict, PHB, rank):
                                  for var  in node.nonant_vardata_list])
         vn_provided = set(w_val_dict[sname].keys())
         diff = vn_model.difference(vn_provided)
-        if (diff):
-            raise RuntimeError(sname + ' is missing '
-                'the following variables: ' + ', '.join(list(diff)))
+        if diff:
+            raise RuntimeError(
+                f'{sname} misses the following variables: {nice_join(diff, conjunction=None)}.'
+            )
         diff = vn_provided.difference(vn_model)
-        if (diff):
-            print('Removing unknown variables:', ', '.join(list(diff)))
+        if diff:
+            print(f'Removing unknown variables: {nice_join(diff, conjunction=None)}.')
             for vname in diff:
                 w_val_dict[sname].pop(vname, None)
         
@@ -367,13 +371,17 @@ def _check_xbar(xbar_val_dict, PHB):
                           for var  in node.nonant_vardata_list])
     provided_vars = set(xbar_val_dict.keys())
     set1 = var_names.difference(provided_vars)
-    if (set1):
-        raise RuntimeError('Could not find the following required variable '
-            'values in the provided input file: ' + ', '.join([v for v in set1]))
+    if set1:
+        raise RuntimeError(
+            "Could not find the following required variable values in the provided input file:"
+            f" {nice_join(set1, conjunction='and', warp_in_single_quote=True)}."
+        )
     set2 = provided_vars.difference(var_names)
-    if (set2):
-        print('Ignoring the following variables values provided in the '
-              'input file: ' + ', '.join([v for v in set2]))
+    if set2:
+        print(
+            "Ignoring the following variables values provided in the input file: "
+            f" {nice_join(set2, conjunction='and', warp_in_single_quote=True)}."
+        )
 
 
 def ROOT_xbar_npy_serializer(PHB, fname):

@@ -15,10 +15,10 @@ filled by one person, or multiple people):
 - *Developer*: writes the program that the end-user runs and uses the model(s) created by the modeler.
 - *Contributors to mpi-sppy*: the creators of, and contributors to, the mpi-sppy library.
 
-If you are reading this document, we assume that you are doing so in your
-role as a developer, or perhaps in your role as a modeler. Neither this
-document, nor ``mpi-sppy`` are written with the intention that they will
-be employed directly by end-users.
+With ``generic_cylinders.py`` (see :ref:`generic_cylinders`), modelers
+can often serve as their own end-users without writing a custom driver
+program. Developers who need features not yet exposed through
+``generic_cylinders.py`` can write custom drivers (see :ref:`Drivers`).
 
 Basics
 ------

@@ -163,7 +163,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
     try:
         gs.optimize()
     except gp.GurobiError as e:
-        s._mpisppy_data.scenario_feasible = False
+        s._mpisppy_data.solution_available = False
         solver_exception = e
         if gripe:
             print(f"Solve failed with error {str(e)} for scenario {s.name}")
@@ -174,12 +174,12 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee, need_solution=True):
         raise solver_exception
 
     if gs.status != gp.GRB.Status.OPTIMAL:
-        s._mpisppy_data.scenario_feasible = False
+        s._mpisppy_data.solution_available = False
         if gripe:
             print(f"Solve failed for scenario {s.name}")
         return
 
-    s._mpisppy_data.scenario_feasible = True
+    s._mpisppy_data.solution_available = True
     
     # Objective value extraction
     objval = gs.getObjective().getValue()

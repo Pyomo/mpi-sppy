@@ -7,8 +7,8 @@
 # full copyright and license information.
 ###############################################################################
 # general example driver for distr with cylinders
+# Consider using generic_cylinders.py with --admm instead.
 import mpisppy.utils.admmWrapper as admmWrapper
-import distr_data
 import distr
 
 from mpisppy.spin_the_wheel import WheelSpinner
@@ -16,7 +16,6 @@ import mpisppy.utils.sputils as sputils
 from mpisppy.utils import config
 import mpisppy.utils.cfg_vanilla as vanilla
 from mpisppy import MPI
-import time
 
 global_rank = MPI.COMM_WORLD.Get_rank()
 
@@ -32,7 +31,6 @@ def _parse_args():
     cfg.aph_args()
     cfg.xhatxbar_args()
     cfg.lagrangian_args()
-    cfg.ph_ob_args()
     cfg.tracking_args()
     cfg.add_to_config("run_async",
                          description="Run with async projective hedging instead of progressive hedging",
@@ -46,7 +44,7 @@ def _parse_args():
 # This need to be executed long before the cylinders are created
 def _count_cylinders(cfg): 
     count = 1
-    cfglist = ["xhatxbar", "lagrangian", "ph_ob"] # All the cfg arguments that create a new cylinders
+    cfglist = ["xhatxbar", "lagrangian"] # All the cfg arguments that create a new cylinders
     # Add to this list any cfg attribute that would create a spoke
     for cylname in cfglist:
         if cfg[cylname]:
@@ -61,33 +59,13 @@ def main():
     if cfg.default_rho is None: # and rho_setter is None
         raise RuntimeError("No rho_setter so a default must be specified via --default-rho")
 
-    if cfg.scalable:
-        import json
-        json_file_path = "data_params.json"
-
-        # Read the JSON file
-        with open(json_file_path, 'r') as file:
-            start_time_creating_data = time.time()
-
-            data_params = json.load(file)
-            all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
-            all_DC_nodes = [DC_node for region in all_nodes_dict for DC_node in all_nodes_dict[region]["distribution center nodes"]]
-            inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
-            end_time_creating_data = time.time()
-            creating_data_time = end_time_creating_data - start_time_creating_data
-            print(f"{creating_data_time=}")
-    else:
-        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_scens)
-        all_nodes_dict = None
-        data_params = {"max revenue": 1200} # hard-coded because the model is hard-coded
-
     ph_converger = None
 
     options = {}
     all_scenario_names = distr.scenario_names_creator(num_scens=cfg.num_scens)
     scenario_creator = distr.scenario_creator
-    scenario_creator_kwargs = distr.kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params)  
-    consensus_vars = distr.consensus_vars_creator(cfg.num_scens, inter_region_dict, all_scenario_names)
+    scenario_creator_kwargs = distr.kw_creator(cfg)
+    consensus_vars = distr.consensus_vars_creator(cfg.num_scens, all_scenario_names, **scenario_creator_kwargs)
     n_cylinders = _count_cylinders(cfg)
     admm = admmWrapper.AdmmWrapper(options,
                            all_scenario_names, 
@@ -97,6 +75,10 @@ def main():
                            mpicomm=MPI.COMM_WORLD,
                            scenario_creator_kwargs=scenario_creator_kwargs,
                            )
+
+    # ADMM creates scenarios with different variable naming conventions,
+    # so nonant name validation must be disabled.
+    cfg.quick_assign("turn_off_names_check", bool, True)
 
     # Things needed for vanilla cylinders
     scenario_creator = admm.admmWrapper_scenario_creator ##change needed because of the wrapper
@@ -133,12 +115,7 @@ def main():
                                               rho_setter = None)
 
 
-    # ph outer bounder spoke
-    if cfg.ph_ob:
-        ph_ob_spoke = vanilla.ph_ob_spoke(*beans,
-                                          scenario_creator_kwargs=scenario_creator_kwargs,
-                                          rho_setter = None,
-                                          variable_probability=variable_probability)
+    # ph outer bounder spoke removed August 2025 (use ph_dual)
 
     # xhat looper bound spoke
     if cfg.xhatxbar:
@@ -147,8 +124,6 @@ def main():
     list_of_spoke_dict = list()
     if cfg.lagrangian:
         list_of_spoke_dict.append(lagrangian_spoke)
-    if cfg.ph_ob:
-        list_of_spoke_dict.append(ph_ob_spoke)
     if cfg.xhatxbar:
         list_of_spoke_dict.append(xhatxbar_spoke)
 

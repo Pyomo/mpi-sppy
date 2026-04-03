@@ -10,12 +10,28 @@
 # See also runall.py
 # Assumes you run from the examples directory.
 # Optional command line arguments: solver_name mpiexec_arg
-# E.g. python run_all.py
-#      python run_all.py cplex
-#      python run_all.py gurobi_persistent --oversubscribe
+# E.g. python afew.py
+#      python afew.py cplex
+#      python afew.py gurobi_persistent --oversubscribe
+# For coverage: python afew.py gurobi_persistent "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import sys
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -32,8 +48,8 @@ badguys = dict()
 
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
-                format(mpiexec_arg, np, progname, argstring)
+    runstring = "mpiexec {} -np {} python {} -m mpi4py {} {}".\
+                format(mpiexec_arg, np, python_args, progname, argstring)
     print(runstring)
     code = os.system(runstring)
     if code != 0:
@@ -48,16 +64,12 @@ def do_one(dirname, progname, np, argstring):
 
 
 # for farmer, the first arg is num_scens and is required
-do_one("farmer/archive", "farmer_cylinders.py", 3,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
-       "--default-rho=1 --sep-rho --display-convergence-detail "
-       "--solver-name={} --xhatshuffle --lagrangian --use-norm-rho-updater".format(solver_name))
 do_one("farmer", "farmer_lshapedhub.py", 2,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=50 "
+       "--num-scens=3 --max-iterations=50 "
        "--solver-name={} --rel-gap=0.0 "
        " --xhatlshaped --max-solver-threads=1".format(solver_name))
 do_one("hydro", "hydro_cylinders_pysp.py", 3,
-       "--bundles-per-rank=0 --max-iterations=10000 "
+       "--max-iterations=10000 "
        "--default-rho=1 --xhatshuffle --lagrangian "
        "--abs-gap=0 --rel-gap=0 --time-limit=2 "
        "--solver-name={}".format(solver_name))

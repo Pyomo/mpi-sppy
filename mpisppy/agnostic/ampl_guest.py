@@ -45,6 +45,7 @@ import mpisppy.utils.sputils as sputils
 import pyomo.environ as pyo
 
 from mpisppy import MPI  # for debuggig
+from mpisppy.utils import nice_join
 fullcomm = MPI.COMM_WORLD
 global_rank = fullcomm.Get_rank()
 
@@ -185,10 +186,7 @@ class AMPL_guest():
         def _vname(i):
             vname, varidx = gd['nonant_names'][('ROOT',i)]
             if bool(varidx):
-                if isinstance(varidx, str):
-                    varidx = f"'{varidx}'"
-                else:
-                    varidx = ",".join(f"'{idx}'" for idx in varidx)
+                varidx = nice_join(varidx, separator=",", conjunction=None, warp_in_single_quote=True)
                 return f"{vname}[{varidx}]"
             else:
                 return vname
@@ -222,7 +220,7 @@ class AMPL_guest():
         objstr = objstr.replace(f"minimize {objname}", "minimize phobj:")
         obj_fct.drop()
         gs.eval(objstr)
-        gs.eval("delete minus_profit;")    
+        gs.eval("delete minus_profit;")
         currentobj = gs.get_current_objective()
         # see _copy_Ws_...  see also the gams version
         WParamDatas = list(gs.get_parameter("W").instances())
@@ -273,7 +271,7 @@ class AMPL_guest():
             solver_exception = e
 
         if gs.solve_result != "solved":
-            s._mpisppy_data.scenario_feasible = False
+            s._mpisppy_data.solution_available = False
             if gripe:
                 print (f"Solve failed for scenario {s.name} on rank {global_rank}")
                 print(f"{gs.solve_result =}")
@@ -281,7 +279,7 @@ class AMPL_guest():
             return
 
         else:
-            s._mpisppy_data.scenario_feasible = True
+            s._mpisppy_data.solution_available = True
 
         if solver_exception is not None and need_solution:
             raise solver_exception

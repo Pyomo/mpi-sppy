@@ -42,7 +42,6 @@ def main():
         'display_timing'       : True,
         'iter0_solver_options' : {"threads": 1},
         'iterk_solver_options' : {"threads": 1},
-        'bundles_per_rank'     : 0, # 0 = no bundles
         "display_convergence_detail": False,
         'xhat_closest_options' : {'xhat_solver_options': {}, 'keep_solution':True},
         "smoothed": int(sys.argv[4]),

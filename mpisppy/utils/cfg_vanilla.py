@@ -15,48 +15,16 @@ import copy
 import json
 
 # Hub and spoke SPBase classes
-from mpisppy.phbase import PHBase
-from mpisppy.opt.ph import PH
-from mpisppy.opt.aph import APH
-from mpisppy.opt.lshaped import LShapedMethod
-from mpisppy.opt.subgradient import Subgradient
-from mpisppy.opt.fwph import FWPH
-from mpisppy.utils.xhat_eval import Xhat_Eval
 import mpisppy.utils.sputils as sputils
-from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
-from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
-from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
-from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
-# from mpisppy.cylinders.ph_ob import PhOuterBound
-from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
-from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
-from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
-from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
-from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
-from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic, SlamMinHeuristic
-from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
-from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
-from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
-from mpisppy.cylinders.ph_dual_spoke import PHDualSpoke
-from mpisppy.cylinders.hub import PHPrimalHub, PHHub, SubgradientHub, APHHub, FWPHHub
-from mpisppy.extensions.extension import MultiExtension
-from mpisppy.extensions.fixer import Fixer
-from mpisppy.extensions.mipgapper import Gapper
-from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
-from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
-from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
-from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
-from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
-from mpisppy.extensions.sep_rho import SepRho
-from mpisppy.extensions.grad_rho import GradRho
-from mpisppy.extensions.coeff_rho import CoeffRho
-from mpisppy.extensions.sensi_rho import SensiRho
-from mpisppy.utils.wxbarreader import WXBarReader
-from mpisppy.utils.wxbarwriter import WXBarWriter
 
 def _hasit(cfg, argname):
-    # aside: Config objects act like a dict or an object TBD: so why the and?
-    return cfg.get(argname) is not None and cfg[argname] is not None
+    # aside: Config objects act like a dict or an object
+    val = cfg.get(argname)
+    # For boolean flags, require True. For non-bool values, treat any non-None
+    # value as "set".
+    if isinstance(val, bool):
+        return val
+    return val is not None
 
 def shared_options(cfg):
     shoptions = {
@@ -76,11 +44,13 @@ def shared_options(cfg):
         "rounding_bias" : cfg.rounding_bias,
         "warmstart_subproblems" : cfg.warmstart_subproblems,
         "user_warmstart" : cfg.user_warmstart,
+        "turn_off_names_check" : cfg.turn_off_names_check
+                                or cfg.get("scenarios_per_bundle") is not None,
     }
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)
         shoptions["iter0_solver_options"] = odict
-        shoptions["iterk_solver_options"] = odict
+        shoptions["iterk_solver_options"] = copy.deepcopy(odict)
     # note that specific options usch as mipgap will override        
     if _hasit(cfg, "max_solver_threads"):
         shoptions["iter0_solver_options"]["threads"] = cfg.max_solver_threads
@@ -93,8 +63,42 @@ def shared_options(cfg):
         shoptions["rc_bound_tol"] = cfg.rc_bound_tol
     if _hasit(cfg, "solver_log_dir"):
         shoptions["solver_log_dir"] = cfg.solver_log_dir
+    if _hasit(cfg, "obbt"):
+        shoptions["presolve_options"] = {
+            "obbt" : cfg.obbt,
+            "obbt_options" : {
+                "nonant_variables_only" : not cfg.full_obbt,
+                "solver_name": cfg.solver_name if cfg.obbt_solver is None else cfg.obbt_solver,
+                "solver_options" : sputils.option_string_to_dict(cfg.obbt_solver_options)
+            },
+        }
+
+    if cfg.get("bundles_per_rank") is not None and cfg.bundles_per_rank > 0:
+        raise RuntimeError(
+            "Loose bundling (bundles_per_rank > 0) was removed in 2026.\n"
+            "Use 'proper bundles' instead (--scenarios-per-bundle).\n"
+            "See doc/src/properbundles.rst and mpisppy/generic_cylinders.py."
+        )
 
     return shoptions
+
+def apply_solver_specs(name, spoke, cfg):
+    options = spoke["opt_kwargs"]["options"]
+    if _hasit(cfg, name+"_solver_name"):
+        options["solver_name"] = cfg.get(name+"_solver_name")
+    if _hasit(cfg, name+"_solver_options"):
+        odict = sputils.option_string_to_dict(cfg.get(name+"_solver_options"))
+        options["iter0_solver_options"] = odict
+        options["iterk_solver_options"] = copy.deepcopy(odict)
+    if _hasit(cfg, name+"_iter0_mipgap"):
+        options["iter0_solver_options"]["mipgap"] = cfg.get(name+"_iter0_mipgap")
+    if _hasit(cfg, name+"_iterk_mipgap"):
+        options["iterk_solver_options"]["mipgap"] = cfg.get(name+"_iterk_mipgap")
+    # re-apply max_solver_threads since we may have over-written the
+    # iter*_solver_options above.
+    if _hasit(cfg, "max_solver_threads"):
+        options["iter0_solver_options"]["threads"] = cfg.max_solver_threads
+        options["iterk_solver_options"]["threads"] = cfg.max_solver_threads
 
 def add_multistage_options(cylinder_dict,all_nodenames,branching_factors):
     cylinder_dict = copy.deepcopy(cylinder_dict)
@@ -120,10 +124,12 @@ def ph_hub(
         variable_probability=None,
         all_nodenames=None,
 ):
+    from mpisppy.opt.ph import PH
+    from mpisppy.cylinders.hub import PHHub
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
-    options["bundles_per_rank"] = cfg.bundles_per_rank
+
     options["linearize_binary_proximal_terms"] = cfg.linearize_binary_proximal_terms
     options["linearize_proximal_terms"] = cfg.linearize_proximal_terms
     options["proximal_linearization_tolerance"] = cfg.proximal_linearization_tolerance
@@ -169,6 +175,7 @@ def ph_primal_hub(
         variable_probability=None,
         all_nodenames=None,
 ):
+    from mpisppy.cylinders.hub import PHPrimalHub
     hub_dict = ph_hub(
         cfg,
         scenario_creator,
@@ -197,6 +204,8 @@ def aph_hub(cfg,
     variable_probability=None,
     all_nodenames=None,
 ):
+    from mpisppy.opt.aph import APH
+    from mpisppy.cylinders.hub import APHHub
     # TBD: March 2023: multiple extensions needs work
     hub_dict = ph_hub(cfg,
                       scenario_creator,
@@ -233,10 +242,12 @@ def subgradient_hub(cfg,
     variable_probability=None,
     all_nodenames=None,
 ):
+    from mpisppy.opt.subgradient import Subgradient
+    from mpisppy.cylinders.hub import SubgradientHub
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
-    options["bundles_per_rank"] = cfg.bundles_per_rank
+
     options["smoothed"] = 0
 
     hub_dict = {
@@ -275,10 +286,12 @@ def fwph_hub(cfg,
     variable_probability=None,
     all_nodenames=None,
 ):
+    from mpisppy.opt.fwph import FWPH
+    from mpisppy.cylinders.hub import FWPHHub
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
     options["convthresh"] = cfg.intra_hub_conv_thresh
-    options["bundles_per_rank"] = cfg.bundles_per_rank
+
     options["smoothed"] = 0
 
     options.update(_fwph_options(cfg))
@@ -307,7 +320,30 @@ def fwph_hub(cfg,
     add_ph_tracking(hub_dict, cfg)
     return hub_dict
 
+def ef_extension_adder(ef_dict, ext_class):
+    '''
+    logic copied from extension_adder(), adapted for EFExtensions
+    '''
+    from mpisppy.extensions.extension import EFMultiExtension
+    
+    if "extensions" not in ef_dict or ef_dict["extensions"] is None:
+        ef_dict["extensions"] = ext_class
+    elif ef_dict["extensions"] == EFMultiExtension:
+        if ef_dict["extension_kwargs"] is None:
+            ef_dict["extension_kwargs"] = {"ext_classes": []}
+        if ext_class not in ef_dict["extension_kwargs"]["ext_classes"]:
+            ef_dict["extension_kwargs"]["ext_classes"].append(ext_class)
+    elif ef_dict["extensions"] != ext_class:
+        #ext_class is the second extension
+        if "extension_kwargs" not in ef_dict:
+            ef_dict["extension_kwargs"] = {}
+        ef_dict["extension_kwargs"]["ext_classes"] = \
+            [ef_dict["extensions"], ext_class]
+        ef_dict["extensions"] = EFMultiExtension
+    return ef_dict
+
 def extension_adder(hub_dict,ext_class):
+    from mpisppy.extensions.extension import MultiExtension
     # TBD March 2023: this is not really good enough
     if "extensions" not in hub_dict["opt_kwargs"] or \
         hub_dict["opt_kwargs"]["extensions"] is None:
@@ -327,6 +363,7 @@ def extension_adder(hub_dict,ext_class):
     return hub_dict
 
 def add_gapper(hub_dict, cfg, name=None):
+    from mpisppy.extensions.mipgapper import Gapper
     hub_dict = extension_adder(hub_dict, Gapper)
     if name is None and cfg.mipgaps_json is not None:
         with open(cfg.mipgaps_json) as fin:
@@ -349,6 +386,7 @@ def add_fixer(hub_dict,
               cfg,
               module,
               ):
+    from mpisppy.extensions.fixer import Fixer
     hub_dict = extension_adder(hub_dict,Fixer)
     hub_dict["opt_kwargs"]["options"]["fixeroptions"] = {"verbose":cfg.verbose,
                                                          "boundtol": cfg.fixer_tol,
@@ -358,27 +396,33 @@ def add_fixer(hub_dict,
 def add_integer_relax_then_enforce(hub_dict,
               cfg,
               ):
+    from mpisppy.extensions.integer_relax_then_enforce import IntegerRelaxThenEnforce
     hub_dict = extension_adder(hub_dict,IntegerRelaxThenEnforce)
     hub_dict["opt_kwargs"]["options"]["integer_relax_then_enforce_options"] = {"ratio":cfg.integer_relax_then_enforce_ratio}
     return hub_dict
 
 def add_reduced_costs_rho(hub_dict, cfg):
+    from mpisppy.extensions.reduced_costs_rho import ReducedCostsRho
     hub_dict = extension_adder(hub_dict,ReducedCostsRho)
     hub_dict["opt_kwargs"]["options"]["reduced_costs_rho_options"] = {"multiplier" : cfg.reduced_costs_rho_multiplier, "cfg": cfg}
 
 def add_sep_rho(hub_dict, cfg):
+    from mpisppy.extensions.sep_rho import SepRho
     hub_dict = extension_adder(hub_dict,SepRho)
     hub_dict["opt_kwargs"]["options"]["sep_rho_options"] = {"multiplier" : cfg.sep_rho_multiplier, "cfg": cfg}
 
 def add_grad_rho(hub_dict, cfg):
+    from mpisppy.extensions.grad_rho import GradRho
     hub_dict = extension_adder(hub_dict,GradRho)
     hub_dict['opt_kwargs']['options']['grad_rho_options'] = {'cfg': cfg}
 
 def add_coeff_rho(hub_dict, cfg):
+    from mpisppy.extensions.coeff_rho import CoeffRho
     hub_dict = extension_adder(hub_dict,CoeffRho)
     hub_dict["opt_kwargs"]["options"]["coeff_rho_options"] = {"multiplier" : cfg.coeff_rho_multiplier}
 
 def add_sensi_rho(hub_dict, cfg):
+    from mpisppy.extensions.sensi_rho import SensiRho
     hub_dict = extension_adder(hub_dict,SensiRho)
     hub_dict["opt_kwargs"]["options"]["sensi_rho_options"] = {"multiplier" : cfg.sensi_rho_multiplier, "cfg": cfg}
 
@@ -386,6 +430,7 @@ def add_cross_scenario_cuts(hub_dict,
                             cfg,
                             ):
     #WARNING: Do not use without a cross_scenario_cuts spoke
+    from mpisppy.extensions.cross_scen_extension import CrossScenarioExtension
     hub_dict = extension_adder(hub_dict, CrossScenarioExtension)
     hub_dict["opt_kwargs"]["options"]["cross_scen_options"]\
             = {"check_bound_improve_iterations" : cfg.cross_scenario_iter_cnt}
@@ -395,6 +440,7 @@ def add_reduced_costs_fixer(hub_dict,
                             cfg,
                             ):
     #WARNING: Do not use without a reduced_costs_spoke spoke
+    from mpisppy.extensions.reduced_costs_fixer import ReducedCostsFixer
     hub_dict = extension_adder(hub_dict, ReducedCostsFixer)
 
     hub_dict["opt_kwargs"]["options"]["rc_options"] = {
@@ -414,6 +460,7 @@ def add_relaxed_ph_fixer(hub_dict,
                             cfg,
                             ):
     #WARNING: Do not use without a reduced_costs_spoke spoke
+    from mpisppy.extensions.relaxed_ph_fixer import RelaxedPHFixer
     hub_dict = extension_adder(hub_dict, RelaxedPHFixer)
 
     hub_dict["opt_kwargs"]["options"]["relaxed_ph_fixer_options"] = {
@@ -431,6 +478,7 @@ def add_wxbar_read_write(hub_dict, cfg):
     but are 'loose' in the hub options dict
     """
     if _hasit(cfg, 'init_W_fname') or _hasit(cfg, 'init_Xbar_fname'):
+        from mpisppy.utils.wxbarreader import WXBarReader
         hub_dict = extension_adder(hub_dict, WXBarReader)
         hub_dict["opt_kwargs"]["options"].update(
             {"init_W_fname" : cfg.init_W_fname,
@@ -438,6 +486,7 @@ def add_wxbar_read_write(hub_dict, cfg):
              "init_separate_W_files" : cfg.init_separate_W_files
             })
     if _hasit(cfg, 'W_fname') or _hasit(cfg, 'Xbar_fname'):
+        from mpisppy.utils.wxbarwriter import WXBarWriter
         hub_dict = extension_adder(hub_dict, WXBarWriter)
         hub_dict["opt_kwargs"]["options"].update(
             {"W_fname" : cfg.W_fname,
@@ -523,9 +572,15 @@ def _fwph_options(cfg):
         "FW_verbose": cfg.verbose,
         "mip_solver_options": mip_solver_options,
         "qp_solver_options": qp_solver_options,
+        "FW_LP_start_iterations": cfg.fwph_lp_start_iterations,
     }
 
+    # optional save_file passthrough (only if user provided it)
+    if _hasit(cfg, "fwph_save_file") and cfg.fwph_save_file:
+        fw_options["save_file"] = cfg.fwph_save_file
+
     return fw_options
+
 
 def fwph_spoke(
     cfg,
@@ -536,6 +591,8 @@ def fwph_spoke(
     all_nodenames=None,
     rho_setter=None,
 ):
+    from mpisppy.opt.fwph import FWPH
+    from mpisppy.cylinders.fwph_spoke import FrankWolfeOuterBound
     shoptions = shared_options(cfg)
     options = copy.deepcopy(shoptions)
 
@@ -570,6 +627,7 @@ def _PHBase_spoke_foundation(
         ph_extensions=None,
         extension_kwargs=None,
         ):
+    from mpisppy.phbase import PHBase
     # only the shared options
     shoptions = shared_options(cfg)
     my_options = copy.deepcopy(shoptions)  # extra safe...    
@@ -607,6 +665,7 @@ def _Xhat_Eval_spoke_foundation(
         ph_extensions=None,
         extension_kwargs=None,
         ):
+    from mpisppy.utils.xhat_eval import Xhat_Eval
     spoke_dict = _PHBase_spoke_foundation(
         spoke_class,
         cfg,
@@ -634,6 +693,7 @@ def lagrangian_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
+    from mpisppy.cylinders.lagrangian_bounder import LagrangianOuterBound
     lagrangian_spoke = _PHBase_spoke_foundation(
         LagrangianOuterBound,
         cfg,
@@ -646,12 +706,7 @@ def lagrangian_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    if cfg.lagrangian_iter0_mipgap is not None:
-        lagrangian_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
-            ["mipgap"] = cfg.lagrangian_iter0_mipgap
-    if cfg.lagrangian_iterk_mipgap is not None:
-        lagrangian_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
-            ["mipgap"] = cfg.lagrangian_iterk_mipgap
+    apply_solver_specs("lagrangian", lagrangian_spoke, cfg)
     add_ph_tracking(lagrangian_spoke, cfg, spoke=True)
 
     return lagrangian_spoke
@@ -668,6 +723,7 @@ def reduced_costs_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
+    from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
     rc_spoke = _PHBase_spoke_foundation(
         ReducedCostsSpoke,
         cfg,
@@ -681,13 +737,14 @@ def reduced_costs_spoke(
         extension_kwargs=extension_kwargs,
     )
 
+    apply_solver_specs("reduced_costs", rc_spoke, cfg)
     add_ph_tracking(rc_spoke, cfg, spoke=True)
 
     return rc_spoke
 
 
 # special lagrangian: computes its own xhat and W (does not seem to work well)
-# ph_ob_spoke is probably better
+# ph_dual is probably better
 def lagranger_spoke(
     cfg,
     scenario_creator,
@@ -699,6 +756,7 @@ def lagranger_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
+    from mpisppy.cylinders.lagranger_bounder import LagrangerOuterBound
     lagranger_spoke = _PHBase_spoke_foundation(
         LagrangerOuterBound,
         cfg,
@@ -736,6 +794,8 @@ def subgradient_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
+    from mpisppy.opt.subgradient import Subgradient
+    from mpisppy.cylinders.subgradient_bounder import SubgradientOuterBound
     subgradient_spoke = _PHBase_spoke_foundation(
         SubgradientOuterBound,
         cfg,
@@ -749,12 +809,7 @@ def subgradient_spoke(
         extension_kwargs=extension_kwargs,
     )
     subgradient_spoke["opt_class"] = Subgradient
-    if cfg.subgradient_iter0_mipgap is not None:
-        subgradient_spoke["opt_kwargs"]["options"]["iter0_solver_options"]\
-            ["mipgap"] = cfg.subgradient_iter0_mipgap
-    if cfg.subgradient_iterk_mipgap is not None:
-        subgradient_spoke["opt_kwargs"]["options"]["iterk_solver_options"]\
-            ["mipgap"] = cfg.subgradient_iterk_mipgap
+    apply_solver_specs("subgradient", subgradient_spoke, cfg)
     if cfg.subgradient_rho_multiplier is not None:
         subgradient_spoke["opt_kwargs"]["options"]["subgradient_rho_multiplier"]\
             = cfg.subgradient_rho_multiplier
@@ -782,6 +837,7 @@ def ph_dual_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
+    from mpisppy.cylinders.ph_dual_spoke import PHDualSpoke
     ph_dual_spoke = _PHBase_spoke_foundation(
         PHDualSpoke,
         cfg,
@@ -797,6 +853,7 @@ def ph_dual_spoke(
     options = ph_dual_spoke["opt_kwargs"]["options"]
     if cfg.ph_dual_rescale_rho_factor is not None:
         options["rho_factor"] = cfg.ph_dual_rescale_rho_factor
+    apply_solver_specs("ph_dual", ph_dual_spoke, cfg)
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
@@ -820,6 +877,7 @@ def relaxed_ph_spoke(
     ph_extensions=None,
     extension_kwargs=None,
 ):
+    from mpisppy.cylinders.relaxed_ph_spoke import RelaxedPHSpoke
     relaxed_ph_spoke = _PHBase_spoke_foundation(
         RelaxedPHSpoke,
         cfg,
@@ -835,6 +893,7 @@ def relaxed_ph_spoke(
     options = relaxed_ph_spoke["opt_kwargs"]["options"]
     if cfg.relaxed_ph_rescale_rho_factor is not None:
         options["rho_factor"] = cfg.relaxed_ph_rescale_rho_factor
+    apply_solver_specs("relaxed_ph", relaxed_ph_spoke, cfg)
 
     # make sure this spoke doesn't hit the time or iteration limit
     options["time_limit"] = None
@@ -857,6 +916,7 @@ def xhatlooper_spoke(
     extension_kwargs=None,
 ):
 
+    from mpisppy.cylinders.xhatlooper_bounder import XhatLooperInnerBound
     xhatlooper_dict = _Xhat_Eval_spoke_foundation(
         XhatLooperInnerBound,        
         cfg,
@@ -868,7 +928,6 @@ def xhatlooper_spoke(
         extension_kwargs=extension_kwargs,
     )
 
-    xhatlooper_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0 #  no bundles for xhat
     xhatlooper_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": xhatlooper_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "scen_limit": cfg.xhat_scen_limit,
@@ -890,6 +949,7 @@ def xhatxbar_spoke(
         extension_kwargs=None,
         all_nodenames=None,
 ):
+    from mpisppy.cylinders.xhatxbar_bounder import XhatXbarInnerBound
     xhatxbar_dict = _Xhat_Eval_spoke_foundation(
         XhatXbarInnerBound,
         cfg,
@@ -902,7 +962,6 @@ def xhatxbar_spoke(
         all_nodenames=all_nodenames,
     )
 
-    xhatxbar_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
     xhatxbar_dict["opt_kwargs"]["options"]["xhat_xbar_options"] = {
         "xhat_solver_options": xhatxbar_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
@@ -925,6 +984,7 @@ def xhatshuffle_spoke(
     extension_kwargs=None,
 ):
 
+    from mpisppy.cylinders.xhatshufflelooper_bounder import XhatShuffleInnerBound
     xhatshuffle_dict = _Xhat_Eval_spoke_foundation(
         XhatShuffleInnerBound,        
         cfg,
@@ -936,7 +996,6 @@ def xhatshuffle_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    xhatshuffle_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat
     xhatshuffle_dict["opt_kwargs"]["options"]["xhat_looper_options"] = {
         "xhat_solver_options": xhatshuffle_dict["opt_kwargs"]["options"]["iterk_solver_options"],
         "dump_prefix": "delme",
@@ -962,6 +1021,7 @@ def xhatspecific_spoke(
     extension_kwargs=None,
 ):
 
+    from mpisppy.cylinders.xhatspecific_bounder import XhatSpecificInnerBound
     xhatspecific_dict = _Xhat_Eval_spoke_foundation(
         XhatSpecificInnerBound,        
         cfg,
@@ -972,7 +1032,6 @@ def xhatspecific_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    xhatspecific_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat    
     return xhatspecific_dict
 
 def xhatlshaped_spoke(
@@ -985,6 +1044,7 @@ def xhatlshaped_spoke(
     extension_kwargs=None,
 ):
 
+    from mpisppy.cylinders.lshaped_bounder import XhatLShapedInnerBound
     xhatlshaped_dict = _Xhat_Eval_spoke_foundation(
         XhatLShapedInnerBound,
         cfg,
@@ -995,8 +1055,6 @@ def xhatlshaped_spoke(
         ph_extensions=ph_extensions,
         extension_kwargs=extension_kwargs,
     )
-    xhatlshaped_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for xhat    
-
     return xhatlshaped_dict
 
 def slammax_spoke(
@@ -1008,6 +1066,7 @@ def slammax_spoke(
     ph_extensions=None,
 ):
 
+    from mpisppy.cylinders.slam_heuristic import SlamMaxHeuristic
     slammax_dict = _Xhat_Eval_spoke_foundation(
         SlamMaxHeuristic,
         cfg,
@@ -1017,7 +1076,6 @@ def slammax_spoke(
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
     )
-    slammax_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for slamming
     return slammax_dict
 
 def slammin_spoke(
@@ -1028,6 +1086,7 @@ def slammin_spoke(
     scenario_creator_kwargs=None,
     ph_extensions=None,
 ):
+    from mpisppy.cylinders.slam_heuristic import SlamMinHeuristic
     slammin_dict = _Xhat_Eval_spoke_foundation(
         SlamMinHeuristic,
         cfg,
@@ -1037,7 +1096,6 @@ def slammin_spoke(
         scenario_creator_kwargs=scenario_creator_kwargs,
         ph_extensions=ph_extensions,
     )
-    slammin_dict["opt_kwargs"]["options"]['bundles_per_rank'] = 0  # no bundles for slamming
     return slammin_dict
 
 
@@ -1050,6 +1108,8 @@ def cross_scenario_cuts_spoke(
     all_nodenames=None,
 ):
 
+    from mpisppy.opt.lshaped import LShapedMethod
+    from mpisppy.cylinders.cross_scen_spoke import CrossScenarioCutSpoke
     if _hasit(cfg, "max_solver_threads"):
         sp_solver_options = {"threads":cfg.max_solver_threads}
     else:
@@ -1079,43 +1139,37 @@ def cross_scenario_cuts_spoke(
     return cut_spoke
 
 # run PH with smaller rho to compute LB
-def ph_ob_spoke(
-    cfg,
-    scenario_creator,
-    scenario_denouement,
-    all_scenario_names,
-    scenario_creator_kwargs=None,
-    rho_setter=None,
-    all_nodenames=None,
-    variable_probability=None,
-):
-    shoptions = shared_options(cfg)
-    ph_ob_spoke = {
-        "spoke_class": PhOuterBound,
-        "opt_class": PHBase,
-        "opt_kwargs": {
-            "options": shoptions,
-            "all_scenario_names": all_scenario_names,
-            "scenario_creator": scenario_creator,
-            "scenario_creator_kwargs": scenario_creator_kwargs,
-            'scenario_denouement': scenario_denouement,
-            "rho_setter": rho_setter,
-            "all_nodenames": all_nodenames,
-            "variable_probability": variable_probability,
-        }
-    }
-    if cfg.ph_ob_rho_rescale_factors_json is not None:
-        ph_ob_spoke["opt_kwargs"]["options"]\
-            ["ph_ob_rho_rescale_factors_json"]\
-            = cfg.ph_ob_rho_rescale_factors_json
-    ph_ob_spoke["opt_kwargs"]["options"]["ph_ob_initial_rho_rescale_factor"]\
-        = cfg.ph_ob_initial_rho_rescale_factor
-    if cfg.ph_ob_gradient_rho:
-        ph_ob_spoke["opt_kwargs"]["options"]\
-            ["ph_ob_gradient_rho"]\
-            = dict()
-        ph_ob_spoke["opt_kwargs"]["options"]\
-            ["ph_ob_gradient_rho"]["cfg"]\
-            = cfg
+##def ph_ob_spoke( deprecated and replaced with ph_dual
 
-    return ph_ob_spoke
+
+def ef_options(cfg,
+               scenario_creator,
+               scenario_denouement,
+               all_scenario_names,
+               scenario_creator_kwargs=None,
+               extensions=None,
+               extension_kwargs=None,
+               all_nodenames=None):
+    '''
+    vanilla options for an EF object with generic_cylinders
+    '''
+    import mpisppy.utils.solver_spec as solver_spec    
+
+    sroot, solver_name, solver_options = solver_spec.solver_specification(cfg, "EF")
+    
+    ef_dict = {
+        "scenario_creator": scenario_creator,
+        "scenario_creator_kwargs": scenario_creator_kwargs,
+        "scenario_denouement": scenario_denouement,
+        "all_scenario_names": all_scenario_names,
+        "all_nodenames": all_nodenames,
+        "options": {"solver": solver_name},
+        "solver_options": solver_options,
+        "extensions": extensions,
+        "extension_kwargs": extension_kwargs,
+        }
+
+    if _hasit(cfg, "solver_log_dir"):
+        ef_dict["options"]["solver_log_dir"] = cfg.solver_log_dir
+
+    return ef_dict

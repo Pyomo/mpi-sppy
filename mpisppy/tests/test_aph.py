@@ -99,24 +99,6 @@ class Test_aph_sizes(unittest.TestCase):
         print ("objthing={}, (was=-2435908)".format(obj))
         print ("tbound ={} (was=224106)".format(tbound))
 
-    def test_bundles(self):
-        options = self._copy_of_base_options()
-        options["PHIterLimit"] = 2
-        options["bundles_per_rank"] = 2
-        options["async_frac_needed"] = 0.5
-        options["async_sleep_secs"] = 0.5
-        aph = mpisppy.opt.aph.APH(
-            options,
-            self.all10_scenario_names,
-            scenario_creator,
-            scenario_denouement,
-            scenario_creator_kwargs={"scenario_count": 10},
-        )
-        conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("bundle objthing={}, (was=224712.9)".format(obj))
-        print ("bundle tbound ={} (was=223168.5)".format(tbound))
-
-        
     @unittest.skipIf(not solver_available,
                      "%s solver is not available" % (solver_name,))
     def test_APHgamma(self):
@@ -178,24 +160,6 @@ class Test_aph_sizes(unittest.TestCase):
         )
         conv, obj, tbound = aph.APH_main(spcomm=None)
 
-
-    def test_lags_bundles(self):
-        options = self._copy_of_base_options()
-        options["PHIterLimit"] = 2
-        options["bundles_per_rank"] = 2
-        options["async_frac_needed"] = 0.5
-        options["async_sleep_secs"] = 0.5
-        options["APHuse_lag"] = True
-        aph = mpisppy.opt.aph.APH(
-            options,
-            self.all10_scenario_names,
-            scenario_creator,
-            scenario_denouement,
-            scenario_creator_kwargs={"scenario_count": 10},
-        )
-        conv, obj, tbound = aph.APH_main(spcomm=None)
-        print ("uselag bundle objthing={}, (pre-lag was=224712.9)".format(obj))
-        print ("bundle tbound ={} (was=223168.5)".format(tbound))
 
 #*****************************************************************************
 class Test_aph_farmer(unittest.TestCase):
@@ -283,35 +247,6 @@ class Test_aph_farmer(unittest.TestCase):
         objgot = self.round_pos_sig(-obj, digits)
         self.assertEqual(objgot, objtarget)
 
-
-    @unittest.skipIf(not solver_available,
-                     "%s solver is not available" % (solver_name,))
-    def test_aph_farmer_dispatch_bundles(self):
-        Aoptions = self._copy_of_base_options()
-        Aoptions["PHIterLimit"] = 2
-        Aoptions["dispatch_frac"] = 0.25
-        Aoptions["async_frac_needed"] = 1
-        Aoptions["async_sleep_secs"] = 0.01
-        Aoptions["aph_gamma"] = 1
-        Aoptions["bundles_per_rank"] = 5
-        
-        aph = mpisppy.opt.aph.APH(
-            Aoptions,
-            self._make_scenario_names(30),
-            farmer.scenario_creator,
-            farmer.scenario_denouement,
-            scenario_creator_kwargs={"crops_multiplier": 1},
-        )
-
-        conv, obj, tbound = aph.APH_main(spcomm=None)
-        digits=3
-        tbtarget = self.round_pos_sig(133005, digits)
-        boundgot = self.round_pos_sig(-tbound, digits)
-        self.assertEqual(tbtarget, boundgot)
-        # Note: this is not a valid xhat obj, it is weighted
-        objtarget = self.round_pos_sig(132959, digits)
-        objgot = self.round_pos_sig(-obj, digits)
-        self.assertEqual(objgot, objtarget)
 
 
 if __name__ == '__main__':

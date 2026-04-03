@@ -81,9 +81,6 @@ class SchurComplement(SPBase):
                                               all_nodenames=all_nodenames,
                                               mpicomm=mpicomm)
 
-        if self.bundling:
-            raise ValueError('The Schur-Complement method does not support bundling')
-
         ownership_map = dict()
         for _rank, scenario_index_list in enumerate(self._rank_slices):
             for _scenario_ndx in scenario_index_list:

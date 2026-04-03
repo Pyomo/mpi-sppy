@@ -1,0 +1,9 @@
+STOCH         SYNTH
+SCENARIOS     DISCRETE
+ SC SCEN1     ROOT          0.500000   STAGE-2
+    RHS1      C2            30.0
+ SC SCEN2     ROOT          0.500000   STAGE-2
+    Y         C2             4.0
+    X         BND1          50.0
+    Y         BND1           8.0
+ENDATA

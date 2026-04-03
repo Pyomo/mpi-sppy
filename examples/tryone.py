@@ -10,12 +10,28 @@
 # See also runall.py
 # Assumes you run from the examples directory.
 # Optional command line arguments: solver_name mpiexec_arg
-# E.g. python run_all.py
-#      python run_all.py cplex
-#      python run_all.py gurobi_persistent --oversubscribe
+# E.g. python tryone.py
+#      python tryone.py cplex
+#      python tryone.py gurobi_persistent --oversubscribe
+# For coverage: python tryone.py gurobi_persistent "" --python-args="-m coverage run --parallel-mode --source=mpisppy"
 
 import os
 import sys
+
+# Parse --python-args (extra args inserted after "python" in subcommands, e.g. for coverage)
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
 
 solver_name = "gurobi_persistent"
 if len(sys.argv) > 1:
@@ -32,8 +48,8 @@ badguys = dict()
 
 def do_one(dirname, progname, np, argstring):
     os.chdir(dirname)
-    runstring = "mpiexec {} -np {} python -m mpi4py {} {}".\
-                format(mpiexec_arg, np, progname, argstring)
+    runstring = "mpiexec {} -np {} python {} -m mpi4py {} {}".\
+                format(mpiexec_arg, np, python_args, progname, argstring)
     print(runstring)
     code = os.system(runstring)
     if code != 0:
@@ -50,7 +66,7 @@ print("** Starting regular sizes **")
 do_one("sizes",
        "sizes_cylinders.py",
        4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--num-scens=3 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 
@@ -58,7 +74,7 @@ print("** Starting special sizes **")
 do_one("sizes",
        "special_cylinders.py",
        4,
-       "--num-scens=3 --bundles-per-rank=0 --max-iterations=5 "
+       "--num-scens=3 --max-iterations=5 "
        "--iter0-mipgap=0.01 --iterk-mipgap=0.001 "
        "--default-rho=1 --solver-name={} --with-display-progress".format(solver_name))
 

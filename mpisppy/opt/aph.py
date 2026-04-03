@@ -163,7 +163,7 @@ class APH(ph_base.PHBase):
     #============================
     def setup_dispatchrecord(self):
         # Start with a small number for iteration to randomize fist dispatch.
-        for sname in self.local_subproblems:
+        for sname in self.local_scenarios:
             r = np.random.rand()
             self.dispatchrecord[sname] = [(r,0)]
 
@@ -177,8 +177,7 @@ class APH(ph_base.PHBase):
         slist = [d[0] for d in dlist]  # just the names
         if self._PHIter != 1:
             for k,s in self.local_scenarios.items():
-                if (not self.bundling and k in slist) \
-                   or (self.bundling and s._mpisppy_data.bundlename in slist):
+                if k in slist:
                     for (ndn,i), xvar in s._mpisppy_data.nonant_indices.items():
                         if not self.use_lag:
                             z_touse = s._mpisppy_model.z[(ndn,i)]._value
@@ -692,47 +691,31 @@ class APH(ph_base.PHBase):
     def _update_foropt(self, dlist):
         # dlist is a list of subproblem names that were dispatched
         assert self.use_lag
-        """
-        if not self.bundling:
-            phidict = self.phis
-        else:
-            phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]]}
-        """
-        if not self.bundling:
-            for dl in dlist:
-                scenario = self.local_scenarios[dl[0]]
-                for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                    scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
-                    scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
-        else:
-            for dl in dlist:
-                for sname in self.local_subproblems[dl[0]].scen_list:
-                    scenario = self.local_scenarios[sname]
-                    for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
-                        scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
-                        scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
+        for dl in dlist:
+            scenario = self.local_scenarios[dl[0]]
+            for (ndn,i), xvar in scenario._mpisppy_data.nonant_indices.items():
+                scenario._mpisppy_model.z_foropt[(ndn,i)] = scenario._mpisppy_model.z[(ndn,i)]
+                scenario._mpisppy_model.W_foropt[(ndn,i)] = scenario._mpisppy_model.W[(ndn,i)]
 
 
     #====================================================================
     def APH_solve_loop(self, solver_options=None,
-                       use_scenarios_not_subproblems=False,
                        dtiming=False,
                        gripe=False,
                        disable_pyomo_signal_handling=False,
                        tee=False,
                        verbose=False,
                        dispatch_frac=1):
-        """See phbase.solve_loop. Loop over self.local_subproblems and solve
-            them in a manner dicated by the arguments. In addition to
-            changing the Var values in the scenarios, update
-            _PySP_feas_indictor for each.
+        """See phbase.solve_loop. Loop over ``self.local_scenarios`` and solve
+        them in a manner dictated by the arguments. In addition to changing
+        the Var values in the scenarios, it updates per-scenario solution
+        status (for example via ``scenario._mpisppy_data.solution_available``).
 
         Args:
             solver_options (dict or None): the scenario solver options
-            use_scenarios_not_subproblems (boolean): for use by bounds
             dtiming (boolean): indicates that timing should be reported
             gripe (boolean): output a message if a solve fails
-            disable_pyomo_signal_handling (boolean): set to true for asynch, 
+            disable_pyomo_signal_handling (boolean): set to true for asynch,
                                                      ignored for persistent solvers.
             tee (boolean): show solver output to screen if possible
             verbose (boolean): indicates verbose output
@@ -742,21 +725,13 @@ class APH(ph_base.PHBase):
             dlist (list of (str, float): (dispatched name, phi )
         """
         #==========
-        def _vb(msg): 
+        def _vb(msg):
             if verbose and self.cylinder_rank == 0:
                 print ("(cylinder rank {}) {}".format(self.cylinder_rank, msg))
         _vb("Entering solve_loop function.")
 
-
-        if use_scenarios_not_subproblems:
-            s_source = self.local_scenarios
-            phidict = self.phis
-        else:
-            s_source = self.local_subproblems
-            if not self.bundling:
-                phidict = self.phis
-            else:
-                phidict = {k: self.phis[self.local_subproblems[k].scen_list[0]] for k in s_source.keys()}
+        s_source = self.local_scenarios
+        phidict = self.phis
         # dict(sorted(phidict.items(), key=lambda item: item[1]))
         # sortedbyphi = {k: v for k, v in sorted(phidict.items(), key=lambda item: item[1])}
 

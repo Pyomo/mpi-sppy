@@ -19,9 +19,18 @@ Note that some things (e.g. some xhatters) can be used as a cylinder
 or as an extension. A few other things (e.g., cross scenario cuts) need
 both an extension and a cylinder.
 
-Many extensions are supported in :ref:`generic_cylinders`. The rest of
-this help file describes extensions released with mpisppy along with
-some hints for including them in your own cylinders driver program.
+Many extensions are supported in :ref:`generic_cylinders` via
+command-line flags:
+
+- ``--fixer`` -- activates the fixer extension
+- ``--mipgaps-json <file>`` -- activates the mipgapper extension
+- ``--user-defined-extensions <module>`` -- loads a custom extension
+- ``--grad-rho`` -- activates gradient-based rho (see :ref:`rho_setting`)
+- ``--use-norm-rho-updater`` -- activates the norm rho updater
+- ``--use-primal-dual-rho-updater`` -- activates the primal-dual rho updater
+
+The rest of this help file describes extensions released with mpisppy along
+with some hints for including them in your own cylinders driver program.
 
 Multiple Extensions
 -------------------
@@ -194,7 +203,7 @@ CoeffRho
 ^^^^^^^^
 
 Set per variable rho values proportional to the cost coefficient on each non-anticipative variable,
-with an optional multiplier (default = 1.0). If the coefficient is 0, the default rho value is used instead.
+with an optional multiplier (default = 1.0) that is applied to the computed value. If the coefficient is 0, the default rho value is used instead.
 
 primal_dual_rho
 ^^^^^^^^^^^^^^^
@@ -228,7 +237,7 @@ There are options in ``cfg`` to control dynamic updates.
 mult_rho_updater
 ^^^^^^^^^^^^^^^^
 
-This extension does a simple multiplicative update of rho.
+This extension does a simple multiplicative update of rho; consequently, the update is cumulative.
 
 cross-scenario cuts
 ^^^^^^^^^^^^^^^^^^^

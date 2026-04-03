@@ -1,5 +1,6 @@
-Gradient-based rho
+Gradient-based Rho
 ==================
-You can find a detailed example using this code in ``examples.farmer.CI.farmer_rho_demo.py``.
 
-Grad-rho is also supported in ``generic_cylinders.py``.
+Gradient-based rho documentation has been consolidated into
+:ref:`rho_setting`. See the "Gradient-based Rho" and "Dynamic Rho Updates"
+sections there.

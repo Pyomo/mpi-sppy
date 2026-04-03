@@ -1,14 +1,16 @@
+.. _Pickled-Bundles:
+
 Proper Bundles
 ==============
 
 Prior to 2024, bundles were constructed for the purpose of solves, but
 all other processing (e.g., computing W values) was done on individual
-scenarios. We will refer to these as `loose bundles`. This bundling scheme
-is very flexible with respect to the numbers of scenarios in each bundle.
-There are various if-blocks in the mpisppy code to support this type of bundle.
+scenarios. These were called `loose bundles`.
 
 .. Warning::
-   In relase 1.0, loose bundles scheduled to be deprecated.
+   Loose bundles (``--bundles-per-rank``) were removed in 2026.
+   Setting ``bundles_per_rank > 0`` now raises a ``RuntimeError``.
+   Use proper bundles (``--scenarios-per-bundle``) instead.
 
 In 2024, `proper bundles` were supported. After the extensive form
 for a proper bundle is created, the original scenarios are more or less
@@ -18,8 +20,9 @@ the number of scenarios per bundle must divide the number of scenarios
 and randomizing the assignment of scenarios to bundles is left to the
 user (e.g., by using a pseudo-random vector to provide one level
 of indirection for the scenario number in the ``scenario_creator`` function).
-As of the time of this writing, only two-stage problems are easily supported.
-Proper bundles result in faster execution than loose bundles.
+As of the time of this writing, proper bundles always result in two-stage problems once the
+bundles are created, even for problems that are multi-stage before bundling.
+Proper bundles result in faster execution.
 
 See ``mpisppy.generic_cylinders.py`` for an example of their use in
 code and see ``examples.generic_cylinders.bash`` for a few proper
@@ -35,10 +38,6 @@ reading).
    When writing bundles in ``mpisppy.generic_cylinders.py``, all
    ranks are used for forming and writing bundles. Command line
    options related to anything other than proper bundles are ignored.
-
-.. Note::
-   Reading and writing bundle pickle files only works with proper bundles, not
-   loose bundles.
 
 .. Note::
    If you do pseudo random number generation on-the-fly during scenario creation,
@@ -61,15 +60,19 @@ Modules
 -------
 
 In addition to command line options specified in ``mpisppy.utils.config.py``
-and supported in ``mpisppy.generic_cylinders.py'',
+and supported in ``mpisppy.generic_cylinders.py``,
 there are two modules that have most of the support for proper bundles:
 
-  - ``mpisppy.utils.pickle_bundle.py`` has miscellaneous utilities related to picking and other data processing
-  - ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
+- ``mpisppy.utils.pickle_bundle.py`` has miscellaneous utilities related to picking and other data processing
+- ``mpisppy.utils.proper_bundler.py`` has wrappers for cylinder programs
 
 
 Multistage
 ----------
+
+There is support for multi-stage bundles in ``generic_cylinders.py``,
+but the bundles must span the same number of entire second stage
+nodes.
 
 The most flexible way to create proper bundles is to write
 your own problem-specific code to do it. The
@@ -77,8 +80,6 @@ file ``aircond_cylinders.py`` in the aircond example directory
 provides an example.  The latter part of the ``allways.bash`` script
 demonstrates how to run it.
 
-There is support for multi-stage bundles in mpi-sppy, but the bundles must span the same number
-of entire second stage nodes.
 
 Notes
 -----

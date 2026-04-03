@@ -35,12 +35,8 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.opt = opt
         self.alpha = cfg.grad_order_stat
         assert (self.alpha >= 0 and self.alpha <= 1), f"For grad_order_stat 0 is the min, 0.5 the average, 1 the max; {self.alpha=} is invalid."
-        self.multiplier = 1.0
-
-        if (
-            cfg.grad_rho_multiplier
-        ):
-            self.multiplier = cfg.grad_rho_multiplier
+        self.multiplier = cfg.grad_rho_multiplier
+        self.denom_bound = 1/cfg.grad_rho_relative_bound
 
         self.eval_at_xhat = cfg.eval_at_xhat
         self.indep_denom = cfg.indep_denom
@@ -66,9 +62,10 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         denom_max = max(scen_dep_denom.values())
 
         for ndn_i, v in s._mpisppy_data.nonant_indices.items():
-            if scen_dep_denom[ndn_i] <= self.opt.E1_tolerance:
-                scen_dep_denom[ndn_i] = max(denom_max, self.opt.E1_tolerance)
-        
+            if (scen_dep_denom[ndn_i]) <= self.denom_bound * v._value:
+                # denom_max is over all nonants, so if not >0 we will stop
+                scen_dep_denom[ndn_i] = max(denom_max, self.denom_bound * v._value)
+
         return scen_dep_denom
 
     def _scen_indep_denom(self):
@@ -118,10 +115,16 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
                 op=MPI.SUM,
             )
 
+        # max over *all* nodes
+        denom_max = max(max(denom) for denom in global_denoms.values())
         scen_indep_denom = {}
         for ndn, global_denom in global_denoms.items():
-            for i, v in enumerate(global_denom):
-                scen_indep_denom[ndn, i] = v
+            for i, denom in enumerate(global_denom):
+                # xbar is for rescaling, e.g., if the variable value is "naturally" small
+                if denom <= self.denom_bound * xbars[ndn, i]._value:
+                    scen_indep_denom[ndn, i] = max(denom_max, self.denom_bound * xbars[ndn, i]._value)
+                else:
+                    scen_indep_denom[ndn, i] = denom
 
         return scen_indep_denom
 

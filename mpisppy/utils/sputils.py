@@ -329,7 +329,7 @@ def _create_EF_from_scen_dict(scen_dict, EF_name=None,
     # of single scenarios and bundles when convenient
     EF_instance._mpisppy_data = pyo.Block(name="For non-Pyomo mpi-sppy data")
     EF_instance._mpisppy_model = pyo.Block(name="For mpi-sppy Pyomo additions to the scenario model")
-    EF_instance._mpisppy_data.scenario_feasible = None
+    EF_instance._mpisppy_data.solution_available = None
 
     EF_instance._ef_scenario_names = []
     EF_instance._mpisppy_probability = 0
@@ -634,9 +634,11 @@ def parent_ndn(nodename):
 def option_string_to_dict(ostr):
     """ Convert a string to the standard dict for solver options.
     Intended for use in the calling program; not internal use here.
+    Jan 27, 2026: if ostr happens to be a dict already, just return it.
 
     Args:
         ostr (string): space seperated options with = for arguments
+                       (if it happens to be a dict already, just return it)
 
     Returns:
         solver_options (dict): solver options
@@ -651,9 +653,11 @@ def option_string_to_dict(ostr):
             except ValueError:
                 return s
 
+    if isinstance(ostr, dict):
+        return ostr
     solver_options = dict()
     if ostr is None or ostr == "":
-        return None
+        return solver_options
     for this_option_string in ostr.split():
         this_option_pieces = this_option_string.strip().split("=")
         if len(this_option_pieces) == 2:

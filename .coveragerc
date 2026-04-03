@@ -1,0 +1,12 @@
+[run]
+source = mpisppy
+parallel = true
+concurrency = multiprocessing
+
+[report]
+omit =
+    mpisppy/tests/*
+    */site-packages/*
+
+[html]
+directory = htmlcov

@@ -97,7 +97,7 @@ class XhatXbar(mpisppy.extensions.xhatbase.XhatBase):
                             need_solution=False,
                             )
 
-        infeasP = self.opt.infeas_prob()
+        infeasP = self.opt.no_incumbent_prob()
         if infeasP != 0.:
             if restore_nonants:
                 self.opt._restore_nonants()

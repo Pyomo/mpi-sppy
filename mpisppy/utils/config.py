@@ -143,32 +143,54 @@ class Config(pyofig.ConfigDict):
     def checker(self):
         """Verify that options *selected* make sense with respect to each other
         """
-        def _bad_rho_setters(msg):
-            raise ValueError("Rho setter options do not make sense together:\n"
+        def _bad_options(msg):
+            raise ValueError("Options do not make sense together:\n"
                              f"{msg}")
-        
-        if self.get("grad_rho") and self.get("sensi_rho"):
-            _bad_rho_setters("Only one rho setter can be active.")
+
+        # remember that True is 1 and False is 0
+        if (self.get("grad_rho") + self.get("sensi_rho") + self.get("coeff_rho") + self.get("reduced_costs_rho") + self.get("sep_rho")) > 1:
+            _bad_options("Only one rho setter can be active.")
         if not (self.get("grad_rho")
                 or self.get("sensi_rho")
                 or self.get("sep_rho")
                 or self.get("reduced_costs_rho")):
             if self.get("dynamic_rho_primal_crit") or self.get("dynamic_rho_dual_crit"):
-                _bad_rho_setters("dynamic rho only works with grad-, sensi-, and sep-rho")
+                _bad_options("dynamic rho only works with an automated rho setter")
+
+        if self.get("ph_primal_hub")\
+           and not (self.get("ph_dual") or self.get("relaxed_ph")):
+            _bad_options("--ph-primal-hub is used only when there is a cylinder that provideds Ws "
+                         "such as --ph-dual or --relaxed-ph")
+        
         if self.get("rc_fixer") and not self.get("reduced_costs"):
-            _bad_rho_setters("--rc-fixer requires --reduced-costs")
-                                                                          
+            _bad_options("--rc-fixer requires --reduced-costs")
 
     def add_solver_specs(self, prefix=""):
-        sstr = f"{prefix}_solver" if prefix != "" else "solver"
+        sstr = f"{prefix}_solver" if prefix else "solver"
+        if prefix:
+            prefix += " "
         self.add_to_config(f"{sstr}_name",
-                            description= "solver name (default None)",
+                            description= f"{prefix}solver name (default None)",
                             domain = str,
                             default=None)
 
         self.add_to_config(f"{sstr}_options",
-                            description= "solver options; space delimited with = for values (default None)",
+                            description= f"{prefix}solver options; space delimited with = for values (default None)",
                             domain = str,
+                            default=None)
+
+    def add_mipgap_specs(self, prefix=""):
+        sstr = f"{prefix}_" if prefix else ""
+        if prefix:
+            prefix += " "
+        self.add_to_config(f"{sstr}iter0_mipgap",
+                            description=f"{prefix}mip gap option for iteration 0 (default None)",
+                            domain=float,
+                            default=None)
+
+        self.add_to_config(f"{sstr}iterk_mipgap",
+                            description=f"{prefix}mip gap option non-zero iterations (default None)",
+                            domain=float,
                             default=None)
 
     def _common_args(self):
@@ -196,13 +218,19 @@ class Config(pyofig.ConfigDict):
                            domain=bool,
                            default=False)
 
+        self.add_to_config("turn_off_names_check",
+                           description="Turn off the check that nonant variable names "
+                           "match across scenarios (automatically turned off for proper bundles).",
+                           domain=bool,
+                           default=False)
+
         self.add_to_config("user_warmstart",
                            description="Will pass the user provided solution as a warmstart for "
                            "each initial subproblem solve.",
                            domain=bool,
                            default=False)
 
-        self.add_solver_specs(prefix="")
+        self.add_solver_specs()
 
         self.add_to_config("seed",
                             description="Seed for random numbers (default is 1134)",
@@ -215,7 +243,7 @@ class Config(pyofig.ConfigDict):
                             default=None)
 
         self.add_to_config("bundles_per_rank",
-                            description="Loose bundles per rank (default 0 (no bundles)) WILL BE DEPRECATED",
+                            description="REMOVED: loose bundles no longer supported. Use --scenarios-per-bundle.",
                             domain=int,
                             default=0)
 
@@ -263,7 +291,7 @@ class Config(pyofig.ConfigDict):
 
         self.add_to_config("presolve",
                            description="Run the distributed presolver. "
-                           "Currently only does distributed feasibility-based bounds tightening.",
+                           "Performs distributed feasibility-based bounds tightening and optimization-based bounds tightening.",
                            domain=bool,
                            default=False)
 
@@ -277,6 +305,28 @@ class Config(pyofig.ConfigDict):
                            description="Path to file containing config options",
                            domain=str,
                            default='')
+
+    def presolve_args(self):
+        self.add_to_config("obbt",
+                           description="Use the optimization-based bounds tightening as part of the presolver",
+                           domain=bool,
+                           default=False,
+                           )
+        self.add_to_config("full_obbt",
+                           description="Run OBBT on *all* variables, not just the nonanticipative variables",
+                           domain=bool,
+                           default=False,
+                          )
+        self.add_to_config("obbt_solver",
+                           description="OBBT solver",
+                           domain=str,
+                           default=None,
+                           )
+        self.add_to_config("obbt_solver_options",
+                           description="OBBT solver options",
+                           domain=str,
+                           default=None,
+                           )
 
     def ph_args(self):
         self.add_to_config("linearize_binary_proximal_terms",
@@ -425,16 +475,7 @@ class Config(pyofig.ConfigDict):
                            default="0.05:600")
 
     def mip_options(self):
-
-        self.add_to_config("iter0_mipgap",
-                            description="mip gap option for iteration 0 (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("iterk_mipgap",
-                            description="mip gap option non-zero iterations (default None)",
-                            domain=float,
-                            default=None)
+        self.add_mipgap_specs()
 
     def aph_args(self):
         
@@ -612,6 +653,15 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1e-4)
 
+        self.add_to_config("fwph_lp_start_iterations",
+                            description="Number of iterations to operate on LP relaxation to warmstart fwph duals",
+                            domain=int,
+                            default=0)
+        self.add_to_config("fwph_save_file",
+                           description="If provided, passed to FWPH as options['save_file'] (cylinder rank 0 writes).",
+                           domain=str,
+                           default=None)
+
 
     def lagrangian_args(self):
 
@@ -620,15 +670,8 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
-        self.add_to_config("lagrangian_iter0_mipgap",
-                            description="lgr. iter0 solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("lagrangian_iterk_mipgap",
-                            description="lgr. iterk solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
+        self.add_solver_specs("lagrangian")
+        self.add_mipgap_specs("lagrangian")
 
 
     def reduced_costs_args(self):
@@ -637,6 +680,8 @@ class Config(pyofig.ConfigDict):
                               description="have a reduced costs spoke",
                               domain=bool,
                               default=False)
+
+        self.add_solver_specs("reduced_costs")
         
         self.add_to_config('rc_verbose',
                             description="verbose output for reduced costs",
@@ -691,16 +736,7 @@ class Config(pyofig.ConfigDict):
                             description="have a special lagranger spoke",
                               domain=bool,
                               default=False)
-
-        self.add_to_config("lagranger_iter0_mipgap",
-                            description="lagranger iter0 mipgap (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("lagranger_iterk_mipgap",
-                            description="lagranger iterk mipgap (default None)",
-                            domain=float,
-                            default=None)
+        self.add_mipgap_specs("lagranger")
 
         self.add_to_config("lagranger_rho_rescale_factors_json",
                             description="json file: rho rescale factors (default None)",
@@ -715,15 +751,8 @@ class Config(pyofig.ConfigDict):
                               domain=bool,
                               default=False)
 
-        self.add_to_config("subgradient_iter0_mipgap",
-                            description="lgr. iter0 solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
-
-        self.add_to_config("subgradient_iterk_mipgap",
-                            description="lgr. iterk solver option mipgap (default None)",
-                            domain=float,
-                            default=None)
+        self.add_solver_specs("subgradient")
+        self.add_mipgap_specs("subgradient")
 
         self.add_to_config("subgradient_rho_multiplier",
                            description="rescale rho (update step size) by this factor",
@@ -732,24 +761,8 @@ class Config(pyofig.ConfigDict):
 
 
     def ph_ob_args(self):
-
-        self.add_to_config("ph_ob",
-                            description="use PH to compute outer bound",
-                            domain=bool,
-                            default=False)
-        self.add_to_config("ph_ob_rho_rescale_factors_json",
-                            description="json file with {iternum: rho rescale factor} (default None)",
-                            domain=str,
-                            default=None)
-        self.add_to_config("ph_ob_initial_rho_rescale_factor",
-                            description="Used to rescale rho initially (will be done regardless of other rescaling (default 0.1)",
-                            domain=float,
-                            default=0.1)
-        self.add_to_config("ph_ob_gradient_rho",
-                            description="use gradient-based rho in PH OB",
-                            domain=bool,
-                            default=False)
-
+        raise RuntimeError("ph_ob (the --ph-ob option) and ph_ob_args were deprecated and replaced with ph_dual August 2025\n"
+                           "To get the same effect as ph_ob, use --ph-dual with --ph-dual-grad-rho")
 
     def relaxed_ph_args(self):
 
@@ -761,6 +774,7 @@ class Config(pyofig.ConfigDict):
                             description="Used to rescale rho initially (default=1.0)",
                             domain=float,
                             default=1.0)
+        self.add_solver_specs("relaxed_ph")
 
 
     def ph_dual_args(self):
@@ -769,10 +783,23 @@ class Config(pyofig.ConfigDict):
                             description="have a dual PH spoke",
                             domain=bool,
                             default=False)
+
+        self.add_solver_specs("ph_dual")
+
         self.add_to_config("ph_dual_rescale_rho_factor",
-                            description="Used to rescale rho initially (default=1.0)",
+                            description="Used to rescale rho initially (default=0.1)",
+                            domain=float,
+                            default=0.1)
+        self.add_to_config("ph_dual_rho_multiplier",
+                            description="Rescale factor for dynamic updates in ph_dual if ph_dual and a rho setter are chosen;"
+                            " note that it is not cummulative (default=1.0)",
                             domain=float,
                             default=1.0)
+        self.add_to_config("ph_dual_grad_order_stat",
+                            description="Order stat for selecting rho if ph_dual and ph_dual_grad_rho are chosen;"
+                            " note that this is impacted by the multiplier (default=0.0)",
+                            domain=float,
+                            default=0.0)
 
 
     def xhatlooper_args(self):
@@ -943,7 +970,6 @@ class Config(pyofig.ConfigDict):
                            description="evaluate the gradient at xhat whenever available (default False)",
                            domain=bool,
                            default=False)
-
         self.add_to_config("indep_denom",
                            description="evaluate rho using scenario independent denominator (default False)",
                            domain=bool,
@@ -955,14 +981,14 @@ class Config(pyofig.ConfigDict):
                            default=False)
 
         self.add_to_config("grad_order_stat",
-                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 iis the average",
+                           description="order statistic for rho: must be between 0 (the min) and 1 (the max); 0.5 is the average (default 0.5)",
                            domain=float,
-                           default=-1.0)
+                           default=0.5)
 
         self.add_to_config("grad_rho_relative_bound",
                            description="factor that bounds rho/cost",
                            domain=float,
-                           default=1e3)
+                           default=1e2)
 
     def dynamic_rho_args(self): # AKA adaptive
 
@@ -1095,6 +1121,34 @@ class Config(pyofig.ConfigDict):
                             description="Read individual scenarios_per_bundle from a dill pickle files in this dir; (default None)",
                             domain=str,
                             default=None)
+
+    def mmw_args(self):
+        self.add_to_config(
+            "mmw_xhat_input_file_name",
+            description="Path to .npy file with xhat for MMW confidence interval"
+            " (default None; if absent and the other mmw options are given,"
+            " the best xhat from the main algorithm is used)",
+            domain=str,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_num_batches",
+            description="Number of batches for MMW confidence interval (default None)",
+            domain=int,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_batch_size",
+            description="Batch size for MMW confidence interval (default None)",
+            domain=int,
+            default=None,
+        )
+        self.add_to_config(
+            "mmw_start",
+            description="First scenario number used by MMW (default None)",
+            domain=int,
+            default=None,
+        )
 
     #================
     def create_parser(self,progname=None):

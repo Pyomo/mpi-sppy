@@ -206,7 +206,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False, need_solution=True):
             (results.solver.termination_condition == TerminationCondition.infeasibleOrUnbounded) or \
             (results.solver.termination_condition == TerminationCondition.unbounded):
 
-        s._mpisppy_data.scenario_feasible = False
+        s._mpisppy_data.solution_available = False
 
         if gripe:
             print (f"Solve failed for scenario {s.name} on rank {global_rank}")
@@ -219,7 +219,7 @@ def solve_one(Ag, s, solve_keyword_args, gripe, tee=False, need_solution=True):
             raise solver_exception
 
     else:
-        s._mpisppy_data.scenario_feasible = True
+        s._mpisppy_data.solution_available = True
         if gd["sense"] == pyo.minimize:
             s._mpisppy_data.outer_bound = results.Problem[0].Lower_bound
         else:

@@ -10,10 +10,8 @@
 from pyomo.environ import value
 from mpisppy import haveMPI, global_toc, MPI
 
-from mpisppy.utils.sputils import (
-        first_stage_nonant_writer,
-        scenario_tree_solution_writer,
-        )
+from mpisppy.utils import nice_join
+from mpisppy.utils.sputils import first_stage_nonant_writer, scenario_tree_solution_writer
 
 class WheelSpinner:
 
@@ -118,6 +116,15 @@ class WheelSpinner:
         opt_class = spcomm_dict["opt_class"]
         opt_kwargs = spcomm_dict["opt_kwargs"]
 
+        # print a message for the user about the configuration
+        items = (_dict['spcomm_class'].__name__ for _dict in communicator_list)
+        msg = (
+            f"Using cylinder{'s' if n_spcomms >= 2 else ''} {nice_join(items, conjunction='and')}"
+            f" to solve a problem with {len(opt_kwargs['all_scenario_names'])} scenarios"
+            f" using {comm_world.size} MPI ranks."
+        )
+        global_toc(msg, comm_world.rank == 0)
+
         # Create the appropriate opt object locally
         opt_kwargs["mpicomm"] = cylinder_comm
         opt = opt_class(**opt_kwargs)
@@ -133,7 +140,7 @@ class WheelSpinner:
         if strata_rank == 0:
             spcomm.setup_hub()
 
-        global_toc("Starting spcomm.main()")
+        global_toc("Starting spcomm.main()", comm_world.rank == 0)
         spcomm.main()
         if strata_rank == 0: # If this is the hub
             spcomm.send_terminate()
@@ -143,7 +150,7 @@ class WheelSpinner:
 
         # to ensure the messages below are True
         cylinder_comm.Barrier()
-        global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization")
+        global_toc(f"Hub algorithm {opt_class.__name__} complete, waiting for spoke finalization", comm_world.rank == 0)
         global_toc(f"Spoke {sp_class.__name__} finalized", (cylinder_rank == 0 and strata_rank != 0))
 
         fullcomm.Barrier()
@@ -153,7 +160,7 @@ class WheelSpinner:
         spcomm.free_windows()
 
         fullcomm.Barrier()
-        global_toc("Cylinder finalization complete")
+        global_toc("Cylinder finalization complete", comm_world.rank == 0)
 
 
         self.spcomm = spcomm
