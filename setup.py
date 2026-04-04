@@ -38,7 +38,7 @@ setup(
         'sortedcollections',
         'numpy',
         'scipy',
-        'pyomo>=6.4',
+        'pyomo>=6.9.3',
     ],
     extras_require={
         'doc': [
