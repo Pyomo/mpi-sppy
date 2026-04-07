@@ -22,7 +22,6 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
     """
     Args:
         ph (PH object): the calling object
-        rank (int): mpi process rank of currently running process
     """
     def __init__(self, ph):
         dirname = ph.options["diagnoser_options"]["diagnoser_outdir"]
@@ -35,21 +34,15 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
             os.mkdir(dirname) # just let it crash
 
         super().__init__(ph)
-        self.options = self.ph.options["diagnoser_options"]
+        self.options = self.opt.options["diagnoser_options"]
         self.dirname = self.options["diagnoser_outdir"]
 
     def write_loop(self):
-        """ Bundles are special. Also: this code needs help
-        from the ph object to be more efficient...
-        """
-        for sname, s in self.ph.local_scenarios.items():
-            bundling = self.ph.bundling
+        for sname, s in self.opt.local_scenarios.items():
             fname = self.dirname+os.sep+sname+".dag"
             with open(fname, "a") as f:
-                f.write(str(self.ph._PHIter)+",")
-                objfct = self.ph.saved_objectives[sname]
-                if bundling:
-                    f.write("Bundling"+",")
+                f.write(str(self.opt._PHIter)+",")
+                objfct = self.opt.saved_objectives[sname]
                 f.write(str(pyo.value(objfct)))
                 f.write("\n")
 
@@ -57,18 +50,18 @@ class Diagnoser(mpisppy.extensions.xhatbase.XhatBase):
         return
 
     def post_iter0(self):
-        for sname, s in self.ph.local_scenarios.items():
+        for sname, s in self.opt.local_scenarios.items():
             fname = self.dirname+os.sep+sname+".dag"
             with open(fname, "w") as f:
                 f.write(str(dt.datetime.now())+", diagnoser\n")
 
         self.write_loop()
         
-    def miditer(self, PHIter, conv):
+    def miditer(self):
         return
 
-    def enditer(self, PHIter):
+    def enditer(self):
         self.write_loop()
 
-    def post_everything(self, PHIter, conv):
+    def post_everything(self):
         return
