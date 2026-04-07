@@ -1,7 +1,7 @@
 mpi-sppy
 ========
 
-Optimization under uncertainty for [Pyomo](https://pyomo.org) models.
+Optimization under uncertainty for [Pyomo](https://pyomo.org) and other models.
 
 [Documentation is available at readthedocs](https://mpi-sppy.readthedocs.io/en/latest/) and
 there is a [paper](https://link.springer.com/article/10.1007/s12532-023-00247-3).
