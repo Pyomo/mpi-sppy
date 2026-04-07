@@ -13,7 +13,7 @@ import pyomo.environ as pyo
 # NOTE: a caller attaches the comms (e.g. pre_iter0)
 
 import mpisppy.extensions.extension
-import mpisppy.utils.wxbarutils as wxbarutils
+import mpisppy.utils.w_utils.wxbarutils as wxbarutils
 import mpisppy.utils.sputils as sputils
 
 
