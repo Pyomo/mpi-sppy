@@ -38,6 +38,10 @@ _STOCH_DISTR_DIR = os.path.join(_PROJECT_ROOT, "examples", "stoch_distr")
 
 solver_available, solver_name, persistent_available, persistent_solver_name= get_solver()
 
+# Resolve paths at module load time (before any test changes cwd)
+_THIS_DIR = os.path.dirname(os.path.abspath(__file__))
+_REPO_ROOT = os.path.abspath(os.path.join(_THIS_DIR, '..', '..'))
+
 class TestStochAdmmWrapper(unittest.TestCase):
     def setUp(self):
         pass
@@ -91,6 +95,12 @@ class TestStochAdmmWrapper(unittest.TestCase):
         self.assertTrue(q.y__DC1DC2__.is_fixed())
         self.assertFalse(q.y["DC3_1DC1"].is_fixed())
     
+    def test_get_scenario_unscaled(self):
+        admm = self._make_admm(4, 3)
+        sname = "ADMM_STOCH_Region1_StochasticScenario1"
+        scenario = admm.get_scenario_unscaled(sname)
+        self.assertIs(scenario, admm.local_admm_stoch_subproblem_scenarios[sname])
+
     def _slack_name(self, dummy_node):
         return f"y[{dummy_node}]"
 
@@ -182,6 +192,180 @@ class TestStochAdmmWrapper(unittest.TestCase):
             assert correct_order, f' We obtained {objectives["outer bound"]=}, {objectives["EF objective"]=}, {objectives["inner bound"]=}'
             os.chdir(original_dir)
     
+
+
+    def _extracting_outer_bound(self, stdout):
+        """Extract the last outer bound from PH output."""
+        import re
+        target_line = "Iter.           Best Bound  Best Incumbent      Rel. Gap        Abs. Gap"
+        result_by_line = stdout.strip().split('\n')
+        outer_bound = None
+        in_results = False
+        for line in result_by_line:
+            if target_line in line:
+                in_results = True
+                continue
+            if in_results:
+                # Match a line with iteration number and bounds
+                match = re.search(r'\[\s*\d+\.\d+\]\s+\d+\s+(?:L\s*B?|B\s*L?)?\s+([-.\d]+)', line)
+                if match:
+                    outer_bound = float(match.group(1))
+                in_results = False
+        return outer_bound
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_bundled_admm_via_generic_cylinders(self):
+        """Test stochastic ADMM with proper bundles via generic_cylinders.
+
+        Runs with --scenarios-per-bundle equal to --num-stoch-scens
+        (full bundling: one bundle per ADMM subproblem). Verifies that
+        the Lagrangian outer bound matches the EF objective.
+        """
+        target_dir = os.path.join(_REPO_ROOT, 'examples', 'stoch_distr')
+        generic_cyl = os.path.join(_REPO_ROOT, 'mpisppy', 'generic_cylinders.py')
+        original_dir = os.getcwd()
+        os.chdir(target_dir)
+        try:
+            # Run bundled stochastic ADMM via generic_cylinders
+            ph_command = (
+                f"mpiexec -np 2 python -u -m mpi4py "
+                f"{generic_cyl} "
+                f"--module-name stoch_distr "
+                f"--stoch-admm --num-stoch-scens 4 --num-admm-subproblems 2 "
+                f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-iterations 30 --lagrangian "
+                f"--scenarios-per-bundle 4"
+            ).split()
+            # Clean MPI env vars that get set by the singleton MPI init
+            # from module imports — they interfere with mpiexec subprocesses.
+            clean_env = {k: v for k, v in os.environ.items()
+                         if not k.startswith(('OMPI_', 'PMIX_', 'PMI_'))}
+            result = subprocess.run(ph_command, capture_output=True, text=True,
+                                    timeout=120, env=clean_env)
+            if result.returncode != 0:
+                raise RuntimeError(
+                    f"Bundled ADMM run failed (rc={result.returncode})\n"
+                    f"CMD: {' '.join(ph_command)}\n"
+                    f"CWD: {os.getcwd()}\n"
+                    f"STDOUT: {result.stdout[-1500:]}\n"
+                    f"STDERR: {result.stderr[-1500:]}"
+                )
+
+            outer_bound = self._extracting_outer_bound(result.stdout)
+            self.assertIsNotNone(outer_bound, "Could not extract outer bound from output")
+
+            # Run EF for comparison
+            ef_command = (
+                f"python stoch_distr_ef.py --solver-name {solver_name} "
+                f"--num-stoch-scens 4 --num-admm-subproblems 2"
+            ).split()
+            ef_result = subprocess.run(ef_command, capture_output=True, text=True)
+            ef_obj = None
+            for line in ef_result.stdout.strip().split('\n'):
+                if "EF objective" in line:
+                    ef_obj = float(line.split(': ')[1])
+            self.assertIsNotNone(ef_obj, "Could not extract EF objective")
+
+            # Lagrangian outer bound should be close to EF objective
+            # (within 1% for this small problem)
+            self.assertAlmostEqual(
+                outer_bound, ef_obj, delta=abs(ef_obj) * 0.01,
+                msg=f"Outer bound {outer_bound} != EF objective {ef_obj}"
+            )
+        finally:
+            os.chdir(original_dir)
+
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_bundled_vs_unbundled(self):
+        """Run the same stochastic ADMM problem with and without bundling.
+
+        Both should produce outer bounds close to the EF objective.
+        This verifies that bundling does not change the answer.
+        """
+        target_dir = os.path.join(_REPO_ROOT, 'examples', 'stoch_distr')
+        generic_cyl = os.path.join(_REPO_ROOT, 'mpisppy', 'generic_cylinders.py')
+        original_dir = os.getcwd()
+        os.chdir(target_dir)
+        try:
+            clean_env = {k: v for k, v in os.environ.items()
+                         if not k.startswith(('OMPI_', 'PMIX_', 'PMI_'))}
+
+            num_stoch_scens = 4
+            num_admm = 2
+            common_args = (
+                f"--stoch-admm --num-stoch-scens {num_stoch_scens} "
+                f"--num-admm-subproblems {num_admm} "
+                f"--default-rho 10 --solver-name {solver_name} "
+                f"--max-iterations 30 --lagrangian "
+                f"--turn-off-names-check"
+            )
+
+            # --- unbundled run ---
+            unbundled_cmd = (
+                f"mpiexec -np 2 python -u -m mpi4py {generic_cyl} "
+                f"--module-name stoch_distr {common_args}"
+            ).split()
+            unbundled_result = subprocess.run(
+                unbundled_cmd, capture_output=True, text=True,
+                timeout=120, env=clean_env)
+            if unbundled_result.returncode != 0:
+                raise RuntimeError(
+                    f"Unbundled run failed (rc={unbundled_result.returncode})\n"
+                    f"STDOUT: {unbundled_result.stdout[-1000:]}\n"
+                    f"STDERR: {unbundled_result.stderr[-1000:]}")
+            unbundled_bound = self._extracting_outer_bound(unbundled_result.stdout)
+            self.assertIsNotNone(unbundled_bound,
+                                 "Could not extract outer bound from unbundled run")
+
+            # --- bundled run ---
+            bundled_cmd = (
+                f"mpiexec -np 2 python -u -m mpi4py {generic_cyl} "
+                f"--module-name stoch_distr {common_args} "
+                f"--scenarios-per-bundle {num_stoch_scens}"
+            ).split()
+            bundled_result = subprocess.run(
+                bundled_cmd, capture_output=True, text=True,
+                timeout=120, env=clean_env)
+            if bundled_result.returncode != 0:
+                raise RuntimeError(
+                    f"Bundled run failed (rc={bundled_result.returncode})\n"
+                    f"STDOUT: {bundled_result.stdout[-1000:]}\n"
+                    f"STDERR: {bundled_result.stderr[-1000:]}")
+            bundled_bound = self._extracting_outer_bound(bundled_result.stdout)
+            self.assertIsNotNone(bundled_bound,
+                                 "Could not extract outer bound from bundled run")
+
+            # --- EF reference ---
+            ef_cmd = (
+                f"python stoch_distr_ef.py --solver-name {solver_name} "
+                f"--num-stoch-scens {num_stoch_scens} "
+                f"--num-admm-subproblems {num_admm}"
+            ).split()
+            ef_result = subprocess.run(ef_cmd, capture_output=True, text=True)
+            ef_obj = None
+            for line in ef_result.stdout.strip().split('\n'):
+                if "EF objective" in line:
+                    ef_obj = float(line.split(': ')[1])
+            self.assertIsNotNone(ef_obj, "Could not extract EF objective")
+
+            # Both bounds should be close to EF objective (within 5%)
+            tol = abs(ef_obj) * 0.05
+            self.assertAlmostEqual(
+                unbundled_bound, ef_obj, delta=tol,
+                msg=f"Unbundled bound {unbundled_bound} not close to EF {ef_obj}")
+            self.assertAlmostEqual(
+                bundled_bound, ef_obj, delta=tol,
+                msg=f"Bundled bound {bundled_bound} not close to EF {ef_obj}")
+
+            # And they should be close to each other (within 2%)
+            self.assertAlmostEqual(
+                unbundled_bound, bundled_bound,
+                delta=abs(ef_obj) * 0.02,
+                msg=f"Unbundled {unbundled_bound} vs bundled {bundled_bound} "
+                    f"differ too much (EF={ef_obj})")
+        finally:
+            os.chdir(original_dir)
 
 
 if __name__ == '__main__':

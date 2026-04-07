@@ -155,6 +155,9 @@ def parse_args(m):
 
     cfg.mmw_args()
 
+    from mpisppy.generic.admm import admm_args
+    admm_args(cfg)
+
     cfg.parse_command_line(f"mpi-sppy for {cfg.module_name}")
 
     cfg.checker()  # looks for inconsistencies
@@ -167,6 +170,12 @@ def name_lists(module, cfg, bundle_wrapper=None):
     Returns:
         tuple: (all_scenario_names, all_nodenames)
     """
+    # ADMM wrappers provide their own scenario names and nodenames
+    admm_names = getattr(cfg, "_admm_scenario_names", None)
+    if admm_names is not None:
+        all_nodenames = getattr(cfg, "_admm_nodenames", None)
+        return admm_names, all_nodenames
+
     # Note: high level code like this assumes there are branching factors for
     # multi-stage problems. For other trees, you will need lower-level code
     if cfg.get("branching_factors") is not None:

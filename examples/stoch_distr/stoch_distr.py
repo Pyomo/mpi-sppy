@@ -326,14 +326,34 @@ def split_admm_stoch_subproblem_scenario_name(admm_stoch_subproblem_scenario_nam
     return admm_subproblem_name, stoch_scenario_name
 
 
-def kw_creator(all_nodes_dict, cfg, inter_region_dict, data_params):
+def kw_creator(cfg):
     """
     Args:
         cfg (config): specifications for the problem given on the command line
 
     Returns:
-        dict (str): the kwargs that are used in distr.scenario_creator, which are included in cfg.
+        dict (str): the kwargs that are used in stoch_distr.scenario_creator
     """
+    if cfg.scalable:
+        import json
+        json_file_path = cfg.get("json_file_path", ifmissing="../distr/data_params.json")
+        with open(json_file_path, 'r') as file:
+            data_params = json.load(file)
+        # In distr_data num_admm_subproblems is called num_scens
+        if cfg.get("num_scens") is None:
+            cfg.add_to_config("num_scens",
+                      description="num admm subproblems",
+                      domain=int,
+                      default=cfg.num_admm_subproblems)
+        all_nodes_dict = distr_data.all_nodes_dict_creator(cfg, data_params)
+        all_DC_nodes = [DC_node for region in all_nodes_dict
+                        for DC_node in all_nodes_dict[region]["distribution center nodes"]]
+        inter_region_dict = distr_data.scalable_inter_region_dict_creator(all_DC_nodes, cfg, data_params)
+    else:
+        inter_region_dict = distr_data.inter_region_dict_creator(num_scens=cfg.num_admm_subproblems)
+        all_nodes_dict = None
+        data_params = {"max revenue": 1200}
+
     kwargs = {
         "all_nodes_dict" : all_nodes_dict,
         "inter_region_dict" : inter_region_dict,
