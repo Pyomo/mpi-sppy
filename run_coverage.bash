@@ -100,6 +100,9 @@ run_phase "test_conf_int_farmer (spawns mpiexec)" \
 run_phase "test_conf_int_aircond (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_conf_int_aircond.py
 
+run_phase "test_mrp_generic (serial)" \
+    coverage run --rcfile=.coveragerc -m pytest mpisppy/tests/test_mrp_generic.py -v
+
 run_phase "test_gradient_rho (spawns mpiexec)" \
     coverage run --rcfile=.coveragerc mpisppy/tests/test_gradient_rho.py
 
