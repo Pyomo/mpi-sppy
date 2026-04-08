@@ -221,17 +221,35 @@ the pickled model.
 How Downstream Runs Use the Iter0 Solution
 """""""""""""""""""""""""""""""""""""""""""
 
-There are two tiers of consumption:
+There are two ways to consume the pickled iter0 solution:
 
 1. **Warm start (default).** PH still runs iter0 on the unpickled
    models, but each subproblem solve now starts from pre-populated
    variable values. For MIPs this becomes a MIP start and is usually a
    significant speedup; for LPs it is less useful without a basis.
-2. **Skip iter0 entirely.** A follow-up flag ``--iter0-from-pickle``
-   tells PH to read the variable values from the unpickled scenarios,
-   compute ``xbar`` directly, perform the first ``W`` update, and go
-   straight to iter1. The PH side detects this case via a flag stored
-   inside ``_mpisppy_data`` on the model when the pickle was written.
+2. **Skip iter0 entirely** with ``--iter0-from-pickle``. PH reads the
+   variable values from the unpickled scenarios, treats them as the
+   iter0 result, and goes straight to the first ``W`` update and
+   iter1. ``PHBase.Iter0`` skips its solver loop entirely. The
+   downstream run validates that every local scenario actually carries
+   ``_mpisppy_data.pickle_metadata['iter0_before_pickle'] == True``;
+   if any does not, the run hard-fails rather than fabricating solver
+   state. So the contract is: pickle with ``--iter0-before-pickle``,
+   run with ``--iter0-from-pickle``, or get an error.
+
+.. code-block:: bash
+
+   # 1. Pay iter0 once at pickle time
+   python -m mpisppy.generic_cylinders --module-name farmer --num-scens 12 \
+       --pickle-bundles-dir farmer_pickles --scenarios-per-bundle 3 \
+       --solver-name gurobi --iter0-before-pickle
+
+   # 2. Every later run skips iter0 entirely
+   mpiexec -np 3 python -m mpi4py mpisppy/generic_cylinders.py \
+       --module-name farmer --num-scens 12 \
+       --unpickle-bundles-dir farmer_pickles --scenarios-per-bundle 3 \
+       --solver-name gurobi --default-rho 1 --max-iterations 50 \
+       --lagrangian --xhatshuffle --iter0-from-pickle
 
 Pickle Metadata
 ^^^^^^^^^^^^^^^
