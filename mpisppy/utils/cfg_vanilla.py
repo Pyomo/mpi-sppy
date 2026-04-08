@@ -46,6 +46,7 @@ def shared_options(cfg):
         "user_warmstart" : cfg.user_warmstart,
         "turn_off_names_check" : cfg.turn_off_names_check
                                 or cfg.get("scenarios_per_bundle") is not None,
+        "iter0_from_pickle": cfg.get("iter0_from_pickle", False),
     }
     if _hasit(cfg, "solver_options"):
         odict = sputils.option_string_to_dict(cfg.solver_options)

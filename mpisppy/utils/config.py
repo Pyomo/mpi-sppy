@@ -1182,6 +1182,17 @@ class Config(pyofig.ConfigDict):
                            domain=str,
                            default=None)
 
+        self.add_to_config("iter0_from_pickle",
+                           description="Trust the iter0 solution baked into "
+                           "the pickle by --iter0-before-pickle and skip "
+                           "PHBase.Iter0's solve loop entirely. Requires "
+                           "every local scenario / bundle to carry "
+                           "_mpisppy_data.pickle_metadata['iter0_before_pickle']"
+                           " == True; otherwise PHBase will hard-fail. "
+                           "(default False)",
+                           domain=bool,
+                           default=False)
+
     def mmw_args(self):
         self.add_to_config(
             "mmw_xhat_input_file_name",
