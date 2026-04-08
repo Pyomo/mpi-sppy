@@ -498,11 +498,14 @@ jobs:
 
       - name: run pre-pickle pipeline tests
         timeout-minutes: 10
+        # Run the test file directly via unittest.main rather than via
+        # pytest, because the --python-args shim used to inject coverage
+        # into spawned subprocesses must reach the test file's sys.argv.
+        # pytest would consume / reject --python-args itself.
         run: |
           PYARGS="-m coverage run $COV_ARGS"
-          coverage run $COV_ARGS -m pytest -v \
-            mpisppy/tests/test_pre_pickle_pipeline.py \
-            --python-args="$PYARGS"
+          cd mpisppy/tests
+          coverage run $COV_ARGS test_pre_pickle_pipeline.py --python-args="$PYARGS"
 
       - name: Upload coverage data
         if: always()
