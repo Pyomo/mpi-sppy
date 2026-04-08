@@ -30,20 +30,40 @@ from mpisppy.generic.scenario_io import _run_pre_pickle_pipeline
 import mpisppy.MPI as mpi
 
 
+# Parse --python-args (extra args inserted after "python" in subcommands so
+# the dedicated coverage CI job can capture coverage from the subprocesses
+# spawned by TestEndToEnd). This mirrors the shim in test_pickle_bundle.py.
+python_args = ""
+_remaining = []
+_i = 1
+while _i < len(sys.argv):
+    if sys.argv[_i].startswith("--python-args="):
+        python_args = sys.argv[_i].split("=", 1)[1]
+    elif sys.argv[_i] == "--python-args" and _i + 1 < len(sys.argv):
+        _i += 1
+        python_args = sys.argv[_i]
+    else:
+        _remaining.append(sys.argv[_i])
+    _i += 1
+sys.argv = [sys.argv[0]] + _remaining
+
+
 fullcomm = mpi.COMM_WORLD
 solver_available, solver_name, _, _ = get_solver()
 
 
 # ---------------------------------------------------------------------------
-# Module-level callback used by tests via dotted name.
+# Module-level callback used by tests via dotted name. We assert against
+# a per-model marker (not a module-level list) so the test still works
+# when the file is run as __main__ (the dotted name then resolves to a
+# *different* module object from the runner's __main__, and any global
+# state in __main__ would not be observed).
 # ---------------------------------------------------------------------------
-_callback_calls = []
 
 
 def record_callback(model, cfg):
     """Recorded callback used to test ``--pre-pickle-function`` resolution."""
     model._test_callback_marker = True
-    _callback_calls.append(getattr(model, "name", None))
 
 
 def make_infeasible_callback(model, cfg):
@@ -98,9 +118,6 @@ def _make_cfg(**overrides):
 class TestPipelineUnit(unittest.TestCase):
     """Programmatic tests against ``_run_pre_pickle_pipeline``."""
 
-    def setUp(self):
-        _callback_calls.clear()
-
     def test_no_flags_attaches_metadata_only(self):
         sp = _build_farmer_spbase()
         cfg = _make_cfg()
@@ -117,10 +134,11 @@ class TestPipelineUnit(unittest.TestCase):
         sp = _build_farmer_spbase()
         cfg = _make_cfg(pre_pickle_function="mpisppy.tests.test_pre_pickle_pipeline.record_callback")
         _run_pre_pickle_pipeline(sp, cfg)
-        for m in sp.local_scenarios.values():
-            self.assertTrue(getattr(m, "_test_callback_marker", False))
-        # one call per local scenario
-        self.assertEqual(len(_callback_calls), len(sp.local_scenarios))
+        # The callback marks each model it sees; we verify at least one
+        # local scenario was marked (rank-aware: one might have zero).
+        marked = sum(1 for m in sp.local_scenarios.values()
+                     if getattr(m, "_test_callback_marker", False))
+        self.assertEqual(marked, len(sp.local_scenarios))
 
     def test_user_callback_bad_dotted_name_raises(self):
         sp = _build_farmer_spbase()
@@ -218,7 +236,8 @@ class TestEndToEnd(unittest.TestCase):
             try:
                 os.chdir(self._farmer_dir())
                 cmd_pickle = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-scenarios-dir {pickle_dir} "
                     f"--solver-name {solver_name} "
@@ -232,7 +251,8 @@ class TestEndToEnd(unittest.TestCase):
                                     for f in os.listdir(pickle_dir)))
 
                 cmd_run = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
                     f"--solver-name {solver_name} --default-rho 1 --max-iterations 2"
@@ -253,7 +273,8 @@ class TestEndToEnd(unittest.TestCase):
             try:
                 os.chdir(self._farmer_dir())
                 cmd_pickle = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-bundles-dir {pickle_dir} --scenarios-per-bundle 3 "
                     f"--solver-name {solver_name} "
@@ -267,7 +288,8 @@ class TestEndToEnd(unittest.TestCase):
                                     for f in os.listdir(pickle_dir)))
 
                 cmd_run = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-bundles-dir {pickle_dir} --scenarios-per-bundle 3 "
                     f"--solver-name {solver_name} --default-rho 1 --max-iterations 2"
