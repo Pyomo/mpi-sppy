@@ -201,31 +201,22 @@ class TestPipelineUnit(unittest.TestCase):
 
 
 class TestEndToEnd(unittest.TestCase):
-    """End-to-end subprocess test: pickle farmer scenarios, unpickle, solve.
+    """End-to-end subprocess tests: pickle farmer, unpickle, solve."""
 
-    Uses ``--pickle-scenarios-dir`` (not ``--pickle-bundles-dir``) because
-    the bundle pickling path on main has a pre-existing bug where
-    ``proper_bundler.scenario_creator`` leaks ``cfg`` through to the
-    underlying scenario_creator for any module that does not accept
-    ``**kwargs``. That bug is out of scope for the pre-pickle pipeline work.
-    """
+    def _farmer_dir(self):
+        return os.path.abspath(os.path.join(
+            os.path.dirname(os.path.abspath(__file__)),
+            "..", "..", "examples", "farmer",
+        ))
 
     @unittest.skipUnless(solver_available, "no solver available")
     def test_pickle_scenarios_then_solve_with_all_stages(self):
-        # Run from the farmer example directory so ``--module-name farmer``
-        # resolves the local farmer.py.
-        farmer_dir = os.path.join(
-            os.path.dirname(os.path.abspath(__file__)),
-            "..", "..", "examples", "farmer",
-        )
-        farmer_dir = os.path.abspath(farmer_dir)
         cwd = os.getcwd()
         with tempfile.TemporaryDirectory() as tmpdir:
             pickle_dir = os.path.join(tmpdir, "farmer_pickles")
             python = sys.executable
             try:
-                os.chdir(farmer_dir)
-                # 1. Pickle scenarios with all three pre-pickle stages enabled.
+                os.chdir(self._farmer_dir())
                 cmd_pickle = (
                     f"{python} -m mpisppy.generic_cylinders --module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
@@ -240,11 +231,45 @@ class TestEndToEnd(unittest.TestCase):
                 self.assertTrue(any(f.endswith(".pkl")
                                     for f in os.listdir(pickle_dir)))
 
-                # 2. Unpickle and run a couple of PH iterations.
                 cmd_run = (
                     f"{python} -m mpisppy.generic_cylinders --module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
+                    f"--solver-name {solver_name} --default-rho 1 --max-iterations 2"
+                )
+                ret = os.system(cmd_run)
+                self.assertEqual(ret, 0,
+                                 f"Unpickle+solve step failed: {cmd_run}")
+            finally:
+                os.chdir(cwd)
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_pickle_bundles_then_solve_with_all_stages(self):
+        """Same coverage as above but exercising the proper-bundle path."""
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pickle_dir = os.path.join(tmpdir, "farmer_bundles")
+            python = sys.executable
+            try:
+                os.chdir(self._farmer_dir())
+                cmd_pickle = (
+                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"--num-scens 6 --crops-mult 1 "
+                    f"--pickle-bundles-dir {pickle_dir} --scenarios-per-bundle 3 "
+                    f"--solver-name {solver_name} "
+                    f"--presolve-before-pickle --iter0-before-pickle"
+                )
+                ret = os.system(cmd_pickle)
+                self.assertEqual(ret, 0,
+                                 f"Pickling step failed: {cmd_pickle}")
+                self.assertTrue(os.path.isdir(pickle_dir))
+                self.assertTrue(any(f.endswith(".pkl")
+                                    for f in os.listdir(pickle_dir)))
+
+                cmd_run = (
+                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"--num-scens 6 --crops-mult 1 "
+                    f"--unpickle-bundles-dir {pickle_dir} --scenarios-per-bundle 3 "
                     f"--solver-name {solver_name} --default-rho 1 --max-iterations 2"
                 )
                 ret = os.system(cmd_run)

@@ -95,6 +95,12 @@ def _build_pickle_pipeline_spbase(module, cfg, scenario_creator,
     pickle_solver = cfg.get("pickle_solver_name") or cfg.get("solver_name")
     if pickle_solver is not None:
         sp_options["solver_name"] = pickle_solver
+    # Bundles produce per-scenario nonant names that differ across bundles
+    # (each EF prefixes them by scenario), so the same nonant-names check
+    # that the cylinder driver disables via cfg.turn_off_names_check must
+    # also be disabled here.
+    if cfg.get("turn_off_names_check"):
+        sp_options["turn_off_names_check"] = True
     sp = SPBase(
         options=sp_options,
         all_scenario_names=all_scenario_names,
