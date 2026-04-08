@@ -176,18 +176,17 @@ MMW confidence intervals can be computed directly via generic_cylinders
 flags such as ``--mmw-num-batches``. See :ref:`MMW Confidence Intervals`
 for details.
 
-Pickled Scenarios
------------------
+Pickled Scenarios and Bundles
+-----------------------------
 
 The ``generic_cylinders`` program supports pickling and unpickling
-scenarios. When pickling, all ranks are used for pickling, no other
-processing is done and command line arguments other than
-``pickle-scenarios-dir`` are ignored.
-
-.. note::
-   When unpickling, ``num_scens`` might be needed on ``cfg`` so
-   ``--num-scens`` is probably needed on the command line. Consistency
-   with the files in the pickle directory might not be checked.
+scenarios and proper bundles, optionally with presolve, a user-supplied
+cleanup callback, and an iteration 0 solve baked into the pickle. See
+:ref:`pickling` for the full workflow, including the
+:ref:`tuning workflow <pickling_tuning_workflow>` and the
+:ref:`single-run case <pickling_iter0_parallelism>` where pickling iter0
+can be faster than not pickling because all ranks are available during
+the pickling phase.
 
 Advanced: ``hub_and_spoke_dict_callback``
 -----------------------------------------
