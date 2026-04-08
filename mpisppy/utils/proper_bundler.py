@@ -101,9 +101,16 @@ class ProperBundler():
         NOTE: has early returns
         """
         cfg = kwargs["cfg"]
+        # cfg is bookkeeping for *this* wrapper -- the underlying module's
+        # scenario_creator does not (and should not need to) accept it.
+        # Strip cfg before forwarding so creators without **kwargs work too.
+        forward_kwargs = {k: v for k, v in kwargs.items() if k != "cfg"}
+
         if "scen" in sname or "Scen" in sname:
             # In case the user passes in kwargs from scenario_creator_kwargs.
-            return self.module.scenario_creator(sname, **{**self.original_kwargs, **kwargs})
+            return self.module.scenario_creator(
+                sname, **{**self.original_kwargs, **forward_kwargs}
+            )
 
         elif "Bundle" in sname and cfg.get("unpickle_bundles_dir") is not None:
             fname = os.path.join(cfg.unpickle_bundles_dir, sname+".pkl")
@@ -116,16 +123,17 @@ class ProperBundler():
             # snames are scenario names
             snames = self.module.scenario_names_creator(lastnum-firstnum+1,
                                                         firstnum)
-            kws = self.original_kwargs
+            # Copy so we never mutate self.original_kwargs across calls.
+            kws = dict(self.original_kwargs)
             if self.bunBFs is not None:
                 # The original scenario creator needs to handle these
                 kws["branching_factors"] = self.bunBFs
 
             # We are assuming seeds are managed by the *scenario* creator.
             bundle = sputils.create_EF(snames, self.module.scenario_creator,
-                                       scenario_creator_kwargs={**kwargs, **kws},
+                                       scenario_creator_kwargs={**forward_kwargs, **kws},
                                        EF_name=sname,
-                                       suppress_warnings=True,                                       
+                                       suppress_warnings=True,
                                        nonant_for_fixed_vars = False,
                                        total_number_of_scenarios = cfg.num_scens,
             )
