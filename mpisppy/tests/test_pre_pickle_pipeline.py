@@ -279,5 +279,112 @@ class TestEndToEnd(unittest.TestCase):
                 os.chdir(cwd)
 
 
+# ---------------------------------------------------------------------------
+
+
+class TestADMMBundlePipeline(unittest.TestCase):
+    """Resolved decision #8: pre-pickle pipeline must not break ADMM models.
+
+    Builds a small ``AdmmBundler`` over the stoch_distr test example,
+    constructs an ``SPBase`` whose scenarios are ADMM bundles (each with
+    consensus constraints, augmented scenario tree, and a per-scenario
+    variable_probability list), and runs ``_run_pre_pickle_pipeline``
+    with all stages enabled. The test passes if the pipeline completes
+    and the iter0 solve produces values on the bundle without tripping
+    over consensus structure.
+    """
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_pipeline_runs_on_admm_bundles(self):
+        # Imports inside the test so the module loads even if stoch_distr
+        # is missing on a given environment.
+        import mpisppy.tests.examples.stoch_distr.stoch_distr as stoch_distr
+        from mpisppy.utils.admm_bundler import AdmmBundler
+
+        admm_cfg = config.Config()
+        stoch_distr.inparser_adder(admm_cfg)
+        admm_cfg.num_stoch_scens = 4
+        admm_cfg.num_admm_subproblems = 2
+
+        admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(
+            admm_cfg.num_admm_subproblems)
+        stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(
+            admm_cfg.num_stoch_scens)
+        scenario_creator_kwargs = stoch_distr.kw_creator(admm_cfg)
+        consensus_vars = stoch_distr.consensus_vars_creator(
+            admm_subproblem_names, stoch_scenario_names[0],
+            **scenario_creator_kwargs)
+
+        bundler = AdmmBundler(
+            module=stoch_distr,
+            scenarios_per_bundle=admm_cfg.num_stoch_scens,  # full bundling
+            admm_subproblem_names=admm_subproblem_names,
+            stoch_scenario_names=stoch_scenario_names,
+            consensus_vars=consensus_vars,
+            combining_fn=stoch_distr.combining_names,
+            split_fn=stoch_distr.split_admm_stoch_subproblem_scenario_name,
+            scenario_creator_kwargs=scenario_creator_kwargs,
+        )
+        bundle_names = bundler.bundle_names_creator()
+        self.assertGreater(len(bundle_names), 0)
+
+        # SPBase wants a scenario_creator with signature fn(name, **kwargs);
+        # AdmmBundler.scenario_creator already has that.
+        sp_options = {
+            "verbose": False,
+            "toc": False,
+            "solver_name": solver_name,
+            # Bundles produce per-scenario nonant names that differ across
+            # bundles; ADMM also requires per-bundle variable_probability,
+            # so disable both spbase consistency checks for this test.
+            "turn_off_names_check": True,
+            "do_not_check_variable_probabilities": True,
+        }
+        sp = SPBase(
+            options=sp_options,
+            all_scenario_names=bundle_names,
+            scenario_creator=bundler.scenario_creator,
+            scenario_denouement=None,
+            all_nodenames=None,
+            mpicomm=fullcomm,
+            scenario_creator_kwargs={},
+            variable_probability=bundler.var_prob_list,
+        )
+
+        # Now run the pre-pickle pipeline with all three stages enabled.
+        cfg = _make_cfg(
+            presolve_before_pickle=True,
+            pre_pickle_function="mpisppy.tests.test_pre_pickle_pipeline.record_callback",
+            iter0_before_pickle=True,
+        )
+        _run_pre_pickle_pipeline(sp, cfg)
+
+        # Each local bundle should now have:
+        # - the user callback marker
+        # - dual + rc suffixes
+        # - pickle metadata reflecting all three stages
+        # - at least one nonant variable with a numeric value
+        for bname, bundle in sp.local_scenarios.items():
+            self.assertTrue(getattr(bundle, "_test_callback_marker", False),
+                            f"{bname} missing user callback marker")
+            self.assertTrue(hasattr(bundle, "dual"))
+            self.assertTrue(hasattr(bundle, "rc"))
+            md = bundle._mpisppy_data.pickle_metadata
+            self.assertTrue(md["presolve_before_pickle"])
+            self.assertTrue(md["iter0_before_pickle"])
+            self.assertIsNotNone(md["pre_pickle_function"])
+
+            any_value = False
+            for nd in bundle._mpisppy_node_list:
+                for v in nd.nonant_vardata_list:
+                    if v.value is not None:
+                        any_value = True
+                        break
+                if any_value:
+                    break
+            self.assertTrue(any_value,
+                            f"{bname} has no nonant values after iter0")
+
+
 if __name__ == "__main__":
     unittest.main()
