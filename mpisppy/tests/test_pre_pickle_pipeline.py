@@ -279,7 +279,8 @@ class TestEndToEnd(unittest.TestCase):
             try:
                 os.chdir(self._farmer_dir())
                 cmd_pickle = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-scenarios-dir {pickle_dir} "
                     f"--solver-name {solver_name} --iter0-before-pickle"
@@ -289,7 +290,8 @@ class TestEndToEnd(unittest.TestCase):
                                  f"Pickling step failed: {cmd_pickle}")
 
                 cmd_run = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
                     f"--solver-name {solver_name} --default-rho 1 "
@@ -319,7 +321,8 @@ class TestEndToEnd(unittest.TestCase):
                 os.chdir(self._farmer_dir())
                 # Pickle WITHOUT --iter0-before-pickle
                 cmd_pickle = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--pickle-scenarios-dir {pickle_dir} "
                     f"--solver-name {solver_name}"
@@ -329,7 +332,8 @@ class TestEndToEnd(unittest.TestCase):
                                  f"Pickling step failed: {cmd_pickle}")
 
                 cmd_run = (
-                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"{python} {python_args} -m mpisppy.generic_cylinders "
+                    f"--module-name farmer "
                     f"--num-scens 6 --crops-mult 1 "
                     f"--unpickle-scenarios-dir {pickle_dir} "
                     f"--solver-name {solver_name} --default-rho 1 "
