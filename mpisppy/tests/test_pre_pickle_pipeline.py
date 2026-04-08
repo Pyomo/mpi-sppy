@@ -264,6 +264,91 @@ class TestEndToEnd(unittest.TestCase):
                 os.chdir(cwd)
 
     @unittest.skipUnless(solver_available, "no solver available")
+    def test_iter0_from_pickle_skips_solve_loop(self):
+        """Round-trip with --iter0-from-pickle: pickle, then unpickle and run.
+
+        Asserts that the second run completes (so PHBase.Iter0 successfully
+        consumed the pickled iter0 solution) and that the "Skipping" toc
+        message appears in stdout.
+        """
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pickle_dir = os.path.join(tmpdir, "farmer_pickles_iter0")
+            run_log = os.path.join(tmpdir, "run.log")
+            python = sys.executable
+            try:
+                os.chdir(self._farmer_dir())
+                cmd_pickle = (
+                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"--num-scens 6 --crops-mult 1 "
+                    f"--pickle-scenarios-dir {pickle_dir} "
+                    f"--solver-name {solver_name} --iter0-before-pickle"
+                )
+                ret = os.system(cmd_pickle)
+                self.assertEqual(ret, 0,
+                                 f"Pickling step failed: {cmd_pickle}")
+
+                cmd_run = (
+                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"--num-scens 6 --crops-mult 1 "
+                    f"--unpickle-scenarios-dir {pickle_dir} "
+                    f"--solver-name {solver_name} --default-rho 1 "
+                    f"--max-iterations 2 --iter0-from-pickle "
+                    f"> {run_log} 2>&1"
+                )
+                ret = os.system(cmd_run)
+                self.assertEqual(ret, 0,
+                                 f"Unpickle+iter0_from_pickle step failed: "
+                                 f"{cmd_run}")
+                with open(run_log) as f:
+                    log = f.read()
+                self.assertIn("Skipping PHBase.Iter0 solve loop", log,
+                              "Did not see iter0 skip message in run output")
+            finally:
+                os.chdir(cwd)
+
+    @unittest.skipUnless(solver_available, "no solver available")
+    def test_iter0_from_pickle_without_pickled_iter0_fails(self):
+        """If the pickle has no iter0 solution, --iter0-from-pickle must fail."""
+        cwd = os.getcwd()
+        with tempfile.TemporaryDirectory() as tmpdir:
+            pickle_dir = os.path.join(tmpdir, "farmer_pickles_no_iter0")
+            run_log = os.path.join(tmpdir, "run.log")
+            python = sys.executable
+            try:
+                os.chdir(self._farmer_dir())
+                # Pickle WITHOUT --iter0-before-pickle
+                cmd_pickle = (
+                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"--num-scens 6 --crops-mult 1 "
+                    f"--pickle-scenarios-dir {pickle_dir} "
+                    f"--solver-name {solver_name}"
+                )
+                ret = os.system(cmd_pickle)
+                self.assertEqual(ret, 0,
+                                 f"Pickling step failed: {cmd_pickle}")
+
+                cmd_run = (
+                    f"{python} -m mpisppy.generic_cylinders --module-name farmer "
+                    f"--num-scens 6 --crops-mult 1 "
+                    f"--unpickle-scenarios-dir {pickle_dir} "
+                    f"--solver-name {solver_name} --default-rho 1 "
+                    f"--max-iterations 2 --iter0-from-pickle "
+                    f"> {run_log} 2>&1"
+                )
+                ret = os.system(cmd_run)
+                self.assertNotEqual(
+                    ret, 0,
+                    "--iter0-from-pickle should have hard-failed because the "
+                    "pickle has no iter0 solution"
+                )
+                with open(run_log) as f:
+                    log = f.read()
+                self.assertIn("do not carry an iter0 solution from pickle time", log)
+            finally:
+                os.chdir(cwd)
+
+    @unittest.skipUnless(solver_available, "no solver available")
     def test_pickle_bundles_then_solve_with_all_stages(self):
         """Same coverage as above but exercising the proper-bundle path."""
         cwd = os.getcwd()
