@@ -133,14 +133,19 @@ def _solve_iter0_for_pickle(sp, cfg):
     solver_options = (sputils.option_string_to_dict(options_str)
                       if options_str else None)
 
-    solver = pyo.SolverFactory(solver_name)
-    if solver_options:
-        for k, v in solver_options.items():
-            solver.options[k] = v
-
     for sname, model in sp.local_scenarios.items():
         _attach_dual_suffixes(model)
-        results = solver.solve(model, load_solutions=True)
+        # A fresh solver per scenario keeps persistent solver bookkeeping
+        # simple and avoids any cross-scenario state leakage.
+        solver = pyo.SolverFactory(solver_name)
+        if solver_options:
+            for k, v in solver_options.items():
+                solver.options[k] = v
+        if hasattr(solver, "set_instance"):
+            solver.set_instance(model)
+            results = solver.solve(load_solutions=True)
+        else:
+            results = solver.solve(model, load_solutions=True)
         tc = results.solver.termination_condition
         if tc != pyo.TerminationCondition.optimal:
             raise RuntimeError(
