@@ -40,13 +40,13 @@ class XhatShuffleInnerBound(XhatInnerBoundBase):
         """ wrapper for _try_one"""
         snamedict = xhat_scenario_dict
 
-        stage2EFsolvern = self.opt.options.get("stage2EFsolvern", None)
+        stage2_ef_solver_name = self.opt.options.get("stage2_ef_solver_name", None)
         branching_factors = self.opt.options.get("branching_factors", None)  # for stage2ef
         obj = self.xhatter._try_one(snamedict,
                                     solver_options = self.solver_options,
                                     verbose=False,
                                     restore_nonants=True,
-                                    stage2EFsolvern=stage2EFsolvern,
+                                    stage2_ef_solver_name=stage2_ef_solver_name,
                                     branching_factors=branching_factors)
         def _vb(msg):
             if self.verbose and self.opt.cylinder_rank == 0:
