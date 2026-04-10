@@ -182,8 +182,9 @@ def name_lists(module, cfg, bundle_wrapper=None):
         all_nodenames = sputils.create_nodenames_from_branching_factors(
                                     cfg.branching_factors)
         num_scens = np.prod(cfg.branching_factors)
-        assert not cfg.xhatshuffle or cfg.get("stage2EFsolvern") is not None,\
-            "For now, stage2EFsolvern is required for multistage xhat"
+        if cfg.xhatshuffle and cfg.get("stage2_ef_solver_name") is None:
+            import warnings
+            warnings.warn("stage2_ef_solver_name is recommended for multistage xhatshuffle")
     else:
         all_nodenames = None
         num_scens = cfg.get("num_scens")  # maybe None is OK

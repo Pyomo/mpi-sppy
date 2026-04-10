@@ -831,6 +831,11 @@ class Config(pyofig.ConfigDict):
                            domain=int,
                            default=None)
 
+        self.add_to_config('stage2_ef_solver_name',
+                           description="Solver for stage 2 EF in multistage xhat (default None)",
+                           domain=str,
+                           default=None)
+
 
     def mult_rho_args(self):
 

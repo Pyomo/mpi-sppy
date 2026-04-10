@@ -186,7 +186,7 @@ do_one("hydro", "hydro", 1, hydroef, xhat_baseline_dir="test_data/hydroef_baseli
 
 hydroa = ("--max-iterations 100 --default-rho 1 "
           "--lagrangian --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
-          f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
+          f"--stage2-ef-solver-name {solver_name} --solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
 do_one("hydro", "hydro", 3, hydroa, xhat_baseline_dir="test_data/hydroa_baseline")
 
@@ -227,7 +227,7 @@ if os.path.exists(_lp_mps_path):
 hydroa_rc = ("--max-iterations 100 --default-rho 1 "
           "--reduced-costs --xhatshuffle --rel-gap 0.001 --branching-factors '3 3' "
           "--rc-fixer --reduced-costs-rho --reduced-costs-rho-multiplier=1.0 "
-          f"--stage2EFsolvern {solver_name} --solver-name={solver_name}")
+          f"--stage2-ef-solver-name {solver_name} --solver-name={solver_name}")
 #rebaseline_xhat("hydro", "hydro", 3, hydroa, "test_data/hydroa_baseline")
 do_one("hydro", "hydro", 3, hydroa_rc, xhat_baseline_dir = "test_data/hydroa_baseline")
 
