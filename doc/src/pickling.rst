@@ -93,8 +93,9 @@ is preserved: presolve runs before the user callback, the callback runs
 before the iter0 solve, and pickling is the last step.
 
 For proper bundles, every stage operates on the **bundled extensive
-form** (i.e., on whatever is in ``local_subproblems``). Intra-bundle
-cross-scenario propagation in presolve happens automatically.
+form model** returned by the bundle ``scenario_creator``; this is the
+model that is ultimately pickled. Intra-bundle cross-scenario
+propagation in presolve happens automatically on that bundled EF model.
 
 Stage 1: ``--presolve-before-pickle``
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
