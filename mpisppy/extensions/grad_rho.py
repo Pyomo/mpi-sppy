@@ -134,7 +134,6 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.grad_exprs = dict()
 
         for s in self.opt.local_scenarios.values():
-            obj = sputils.find_active_objective(s)
             self.grad_exprs[s] = differentiate(sputils.find_active_objective(s),
                                 wrt_list=s._mpisppy_data.nonant_indices.values(),
                                 mode=Modes.reverse_symbolic,
@@ -291,7 +290,6 @@ class GradRho(mpisppy.extensions.dyn_rho_base.Dyn_Rho_extension_base):
         self.compute_and_update_rho()
 
     def miditer(self):
-        self._get_grad_exprs()
         self.update_caches()
         self.opt.spcomm.get_receive_buffer(
             self.best_xhat_buf,

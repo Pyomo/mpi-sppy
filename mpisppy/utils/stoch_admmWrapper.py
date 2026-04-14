@@ -87,13 +87,12 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         for sname in self.local_admm_stoch_subproblem_scenarios_names:
             s = scenario_creator(sname, **scenario_creator_kwargs)
             self.local_admm_stoch_subproblem_scenarios[sname] = s
-            # we are not collecting instantiation time
+        # we are not collecting instantiation time
 
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
         self.consensus_vars = consensus_vars
         self.verbose = verbose
         self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
-
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
         self.BFs = BFs
@@ -193,10 +192,10 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                     else:
                         error_list2.append((sname,vstr))
                 varlist[stage-1].append(v)
-            
+
             # Create the new scenario tree node for admm_consensus
             assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
-            parent = s._mpisppy_node_list[-1] # investment vars
+            parent = s._mpisppy_node_list[-1]
             admm_subproblem_name, stoch_scenario_name = self.split_admm_stoch_subproblem_scenario_name(sname)
             num_scen = self.stoch_scenario_names.index(stoch_scenario_name)
             if self.BFs is not None:
@@ -249,7 +248,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         return self.local_admm_stoch_subproblem_scenarios[sname]
 
     def admmWrapper_scenario_creator(self, admm_stoch_subproblem_scenario_name):
-        
+
         scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 
         # Although every stage is already multiplied earlier, we must still multiply the overall objective function
