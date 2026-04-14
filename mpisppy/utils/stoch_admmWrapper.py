@@ -254,7 +254,6 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         # Although every stage is already multiplied earlier, we must still multiply the overall objective function
         # Grabs the objective function and multiplies its value by the number of scenarios to compensate for the probabilities
         obj = sputils.find_active_objective(scenario)
-
         obj.expr = obj.expr * self.number_admm_subproblems
 
         return scenario
