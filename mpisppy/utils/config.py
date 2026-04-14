@@ -398,7 +398,12 @@ class Config(pyofig.ConfigDict):
                             description="Spaces delimited branching factors (e.g., 2 2)",
                             domain=pyofig.ListOf(int, pyofig.PositiveInt),
                             default=None)
-
+    
+    def add_stage2EF(self):
+        self.add_to_config("stage2EFsolvern",
+                           description="Solver to use for xhatlooper stage2ef option (default None)",
+                           domain=str,
+                           default=None)
 
     def make_multistage_parser(self, progname=None):
         raise RuntimeError("make_multistage_parser is no longer used. See comments at top of config.py")
@@ -406,6 +411,7 @@ class Config(pyofig.ConfigDict):
     def multistage(self):
         self.add_branching_factors()
         self.popular_args()
+        self.add_stage2EF()
 
 
     #### EF ####

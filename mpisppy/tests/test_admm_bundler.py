@@ -25,9 +25,9 @@ class TestAdmmBundler(unittest.TestCase):
         cfg.num_admm_subproblems = num_admm_subproblems
 
         admm_subproblem_names = stoch_distr.admm_subproblem_names_creator(
-            num_admm_subproblems)
+            cfg)
         stoch_scenario_names = stoch_distr.stoch_scenario_names_creator(
-            num_stoch_scens)
+            cfg)
         scenario_creator_kwargs = stoch_distr.kw_creator(cfg)
         stoch_scenario_name = stoch_scenario_names[0]
         consensus_vars = stoch_distr.consensus_vars_creator(

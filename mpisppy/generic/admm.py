@@ -31,6 +31,9 @@ def admm_args(cfg):
         cfg.add_to_config("num_stoch_scens",
                           description="Number of stochastic scenarios (stoch-admm only)",
                           domain=int, default=None)
+    
+    cfg.add_branching_factors()
+    cfg.add_stage2EF()
 
 
 def _count_cylinders(cfg):
@@ -134,8 +137,8 @@ def setup_stoch_admm(module, cfg, n_cylinders):
         tuple: (scenario_creator, scenario_creator_kwargs,
                 all_scenario_names, all_nodenames)
     """
-    admm_subproblem_names = module.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = module.stoch_scenario_names_creator(cfg.num_stoch_scens)
+    admm_subproblem_names = module.admm_subproblem_names_creator(cfg)
+    stoch_scenario_names = module.stoch_scenario_names_creator(cfg)
     all_names = module.admm_stoch_subproblem_scenario_names_creator(
         admm_subproblem_names, stoch_scenario_names)
 
@@ -181,8 +184,8 @@ def setup_stoch_admm_with_bundles(module, cfg, n_cylinders):
     """
     from mpisppy.utils.admm_bundler import AdmmBundler
 
-    admm_subproblem_names = module.admm_subproblem_names_creator(cfg.num_admm_subproblems)
-    stoch_scenario_names = module.stoch_scenario_names_creator(cfg.num_stoch_scens)
+    admm_subproblem_names = module.admm_subproblem_names_creator(cfg)
+    stoch_scenario_names = module.stoch_scenario_names_creator(cfg)
 
     scenario_creator_kwargs = module.kw_creator(cfg)
     stoch_scenario_name = stoch_scenario_names[0]
