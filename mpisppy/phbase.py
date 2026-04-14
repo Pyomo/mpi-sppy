@@ -104,6 +104,7 @@ def _Compute_Xbar(opt, verbose=False):
 
             xbars = global_concats[ndn][:nlen]
             xsqbars = global_concats[ndn][nlen:]
+            
             for i in range(nlen):
                 s._mpisppy_model.xbars[(ndn,i)]._value = xbars[i]
                 s._mpisppy_model.xsqbars[(ndn,i)]._value = xsqbars[i]

@@ -30,7 +30,6 @@ def _consensus_vars_number_creator(consensus_vars):
             if var not in consensus_vars_number: # instantiates consensus_vars_number[var]
                 consensus_vars_number[var] = 0
             consensus_vars_number[var] += 1
-    # print(f'{consensus_vars_number=}')
     return consensus_vars_number
 
 class Stoch_AdmmWrapper(): #add scenario_tree
@@ -90,16 +89,11 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             self.local_admm_stoch_subproblem_scenarios[sname] = s
             # we are not collecting instantiation time
 
-        # print(f'{self.local_admm_stoch_subproblem_scenarios_names=}')
-        # print(f'{consensus_vars=}')
-        # print(f'{check_admm_subproblems=}')
-
         self.split_admm_stoch_subproblem_scenario_name = split_admm_stoch_subproblem_scenario_name
         self.consensus_vars = consensus_vars
         self.verbose = verbose
         self.consensus_vars_number = _consensus_vars_number_creator(consensus_vars)
 
-        # print(f'{self.consensus_vars_number=}')
         self.admm_subproblem_names = admm_subproblem_names
         self.stoch_scenario_names = stoch_scenario_names
         self.BFs = BFs
@@ -149,7 +143,6 @@ class Stoch_AdmmWrapper(): #add scenario_tree
             admm_subproblem_name = self.split_admm_stoch_subproblem_scenario_name(sname)[0]
             # varlist[stage] will contain the variables at each stage
             depth = len(s._mpisppy_node_list)+1
-            # print(f'{s._mpisppy_node_list=}')
             varlist = [[] for _ in range(depth)]
 
             assert hasattr(s,"_mpisppy_probability"), f"the scenario {sname} doesn't have any _mpisppy_probability attribute"
@@ -182,7 +175,6 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                         # stochastic scenario
                     else:
                         error_list1.append((sname,vstr))
-
                 else:
                     if v is None:
                         # This var will not be indexed but that might not matter??
@@ -201,12 +193,6 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                     else:
                         error_list2.append((sname,vstr))
                 varlist[stage-1].append(v)
-            
-            # print('Error list 1: ',error_list1)
-            # print('Error list 2: ',error_list2)
-            # print(f'{self.varprob_dict[s]=}')
-            # print('Stage 1:',str([v.name for v in varlist[0]]))
-            # print('Stage 2:', str([v.name for v in varlist[1]]))
             
             # Create the new scenario tree node for admm_consensus
             assert hasattr(s,"_mpisppy_node_list"), f"the scenario {sname} doesn't have any _mpisppy_node_list attribute"
@@ -229,7 +215,6 @@ class Stoch_AdmmWrapper(): #add scenario_tree
                 s)
             )
             s._mpisppy_probability /= self.number_admm_subproblems
-            # print(s._mpisppy_probability)
 
             # underscores have a special signification in the tree
             for stage in range(1, depth):
@@ -264,7 +249,7 @@ class Stoch_AdmmWrapper(): #add scenario_tree
         return self.local_admm_stoch_subproblem_scenarios[sname]
 
     def admmWrapper_scenario_creator(self, admm_stoch_subproblem_scenario_name):
-
+        
         scenario = self.local_admm_stoch_subproblem_scenarios[admm_stoch_subproblem_scenario_name]
 
         # Although every stage is already multiplied earlier, we must still multiply the overall objective function

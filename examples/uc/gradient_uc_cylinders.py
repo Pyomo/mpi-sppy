@@ -181,7 +181,6 @@ def main():
     # ph outer bounder spoke removed August 2025
 
 
-
     # xhat shuffle bound spoke
     if xhatshuffle:
         xhatshuffle_spoke = vanilla.xhatshuffle_spoke(*beans, scenario_creator_kwargs=scenario_creator_kwargs)
