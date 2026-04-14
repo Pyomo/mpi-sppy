@@ -17,7 +17,7 @@
 """
 
 import numpy as np
-import pandas as pd
+from pyomo.common.dependencies import pandas as pd
 import mpisppy.opt.ph
 import mpisppy.MPI as MPI
 
