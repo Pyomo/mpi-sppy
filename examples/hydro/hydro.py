@@ -250,7 +250,7 @@ def scenario_denouement(rank, scenario_name, scenario):
 #=========
 def inparser_adder(cfg):
     cfg.multistage()
-    cfg.add_to_config(name ="stage2EFsolvern",
+    cfg.add_to_config(name ="stage2_ef_solver_name",
                       description="Solver to use for xhatlooper stage2ef option (default None)",
                       domain = str,
                       default=None)
